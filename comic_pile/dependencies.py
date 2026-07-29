@@ -5,13 +5,14 @@ from collections import defaultdict, deque
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cache import TTL, cached
 from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.thread import Thread
 
 
-async def get_blocked_thread_ids(user_id: int, db: AsyncSession) -> set[int]:
-    """Return thread IDs blocked by unsatisfied issue-level dependencies for a user."""
+async def _get_blocked_thread_ids_uncached(user_id: int, db: AsyncSession) -> set[int]:
+    """Read blocked thread IDs directly from the current database transaction."""
     source_issue = Issue.__table__.alias("source_issue")
     next_unread_issue = Issue.__table__.alias("next_unread_issue")
     target_thread = Thread.__table__.alias("target_thread")
@@ -33,6 +34,12 @@ async def get_blocked_thread_ids(user_id: int, db: AsyncSession) -> set[int]:
         .distinct()
     )
     return {row[0] for row in issue_result.all()}
+
+
+@cached(ttl=TTL.SHORT)
+async def get_blocked_thread_ids(user_id: int, db: AsyncSession) -> set[int]:
+    """Return cached blocked thread IDs for non-transactional reads."""
+    return await _get_blocked_thread_ids_uncached(user_id, db)
 
 
 async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSession) -> list[str]:
@@ -215,7 +222,7 @@ async def get_dependency_order_conflicts(
 
 async def update_thread_blocked_status(thread_id: int, user_id: int, db: AsyncSession) -> None:
     """Recalculate one thread's denormalized blocked flag."""
-    blocked_ids = await get_blocked_thread_ids(user_id, db)
+    blocked_ids = await _get_blocked_thread_ids_uncached(user_id, db)
     await db.execute(
         update(Thread)
         .where(Thread.id == thread_id)
@@ -225,8 +232,8 @@ async def update_thread_blocked_status(thread_id: int, user_id: int, db: AsyncSe
 
 
 async def refresh_user_blocked_status(user_id: int, db: AsyncSession) -> None:
-    """Recalculate blocked flags for all threads of a user."""
-    blocked_ids = await get_blocked_thread_ids(user_id, db)
+    """Recalculate blocked flags without caching uncommitted transaction state."""
+    blocked_ids = await _get_blocked_thread_ids_uncached(user_id, db)
 
     await db.execute(update(Thread).where(Thread.user_id == user_id).values(is_blocked=False))
 

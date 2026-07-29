@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
+from app.cache import TTL, cached, invalidate_cache
 from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Issue, Session as SessionModel, Snapshot, Thread, User
@@ -28,8 +29,15 @@ from comic_pile.session import get_current_die, get_or_create, is_active
 
 router = APIRouter(tags=["sessions"])
 
-clear_cache = None
-get_current_session_cached = None
+
+async def _invalidate_session_caches(user_id: int) -> None:
+    await asyncio.gather(
+        invalidate_cache(f"cache:get_current_session:User:{user_id}:"),
+        invalidate_cache(f"cache:list_sessions:User:{user_id}:*"),
+        invalidate_cache(f"cache:get_session:*:User:{user_id}:"),
+        invalidate_cache(f"cache:get_session_details:*:User:{user_id}:"),
+        invalidate_cache(f"cache:get_session_snapshots:*:User:{user_id}:"),
+    )
 
 
 async def _fetch_thread_issue_metadata(
@@ -295,6 +303,7 @@ async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadIn
 
 
 @router.get("/current/")
+@cached(ttl=TTL.SHORT)
 @limiter.limit("200/minute")
 async def get_current_session(
     request: Request,
@@ -322,11 +331,6 @@ async def get_current_session(
 
     while retries < max_retries:
         try:
-            if get_current_session_cached:
-                cached = get_current_session_cached(db)
-                if cached:
-                    return SessionResponse(**cached)
-
             active_sessions_result = await db.execute(
                 select(SessionModel)
                 .where(SessionModel.user_id == current_user.id)
@@ -398,6 +402,7 @@ async def get_current_session(
 
 
 @router.get("/", response_model=SessionListResponse)
+@cached(ttl=TTL.SHORT)
 async def list_sessions(
     current_user: Annotated[User, Depends(get_current_user)],
     page_size: int = Query(
@@ -588,6 +593,7 @@ async def list_sessions(
 
 
 @router.get("/{session_id}")
+@cached(ttl=TTL.SHORT)
 async def get_session(
     session_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -635,6 +641,7 @@ async def get_session(
 
 
 @router.get("/{session_id}/details")
+@cached(ttl=TTL.SHORT)
 async def get_session_details(
     session_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -719,6 +726,7 @@ async def get_session_details(
 
 
 @router.get("/{session_id}/snapshots")
+@cached(ttl=TTL.SHORT)
 async def get_session_snapshots(
     session_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -958,8 +966,14 @@ async def restore_session_start(
             await db.commit()
             await db.refresh(session)
 
-            if clear_cache:
-                clear_cache()
+            await asyncio.gather(
+                _invalidate_session_caches(current_user.id),
+                invalidate_cache(f"cache:list_threads:User:{current_user.id}:*"),
+                invalidate_cache(f"cache:get_thread:*:User:{current_user.id}:"),
+                invalidate_cache(f"cache:list_issues:*:User:{current_user.id}:*"),
+                invalidate_cache(f"cache:get_issue:*:User:{current_user.id}:"),
+                invalidate_cache(f"cache:get_blocked_thread_ids:{current_user.id}:"),
+            )
 
             from sqlalchemy import func
 

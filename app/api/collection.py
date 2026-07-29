@@ -1,5 +1,6 @@
 """Collection API endpoints."""
 
+import asyncio
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -8,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.auth import get_current_user
+from app.cache import TTL, cached, invalidate_cache
 from app.database import get_db
 from app.models import Collection
 from app.models.user import User
@@ -20,6 +22,13 @@ from app.schemas.collection import (
 from app.services.ownership import get_owned_collection_or_404
 
 router = APIRouter(tags=["collections"])
+
+
+async def _invalidate_collection_caches(user_id: int, collection_id: int | None = None) -> None:
+    coros = [invalidate_cache(f"cache:list_collections:User:{user_id}:*")]
+    if collection_id is not None:
+        coros.append(invalidate_cache(f"cache:get_collection:{collection_id}:User:{user_id}:"))
+    await asyncio.gather(*coros)
 
 
 @router.post("/", response_model=CollectionResponse, status_code=status.HTTP_201_CREATED)
@@ -57,6 +66,8 @@ async def create_collection(
     new_collection_position = new_collection.position
     new_collection_created_at = new_collection.created_at
 
+    await _invalidate_collection_caches(current_user.id)
+
     return CollectionResponse(
         id=new_collection_id,
         name=new_collection_name,
@@ -68,6 +79,7 @@ async def create_collection(
 
 
 @router.get("/", response_model=CollectionListResponse)
+@cached(ttl=TTL.SHORT)
 async def list_collections(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -149,6 +161,7 @@ async def list_collections(
 
 
 @router.get("/{collection_id}", response_model=CollectionResponse)
+@cached(ttl=TTL.SHORT)
 async def get_collection(
     collection_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -218,6 +231,7 @@ async def update_collection(
     collection_created_at = collection.created_at
 
     await db.commit()
+    await _invalidate_collection_caches(current_user.id, collection_id)
 
     return CollectionResponse(
         id=collection_id_val,
@@ -268,6 +282,7 @@ async def patch_collection(
     collection_created_at = collection.created_at
 
     await db.commit()
+    await _invalidate_collection_caches(current_user.id, collection_id)
 
     return CollectionResponse(
         id=collection_id_val,
@@ -317,3 +332,8 @@ async def delete_collection(
 
     await db.delete(collection)
     await db.commit()
+    await asyncio.gather(
+        _invalidate_collection_caches(current_user.id, collection_id),
+        invalidate_cache(f"cache:list_threads:User:{current_user.id}:*"),
+        invalidate_cache(f"cache:get_thread:*:User:{current_user.id}:"),
+    )

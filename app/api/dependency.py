@@ -1,5 +1,6 @@
 """Dependency API endpoints (/api/v1)."""
 
+import asyncio
 from typing import Annotated, TypedDict
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -8,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
+from app.cache import TTL, cached, invalidate_cache
 from app.database import get_db
 from app.models import Dependency, Issue, Thread
 from app.models.user import User
@@ -44,6 +46,20 @@ class _ConnectedThreadEntry(TypedDict):
 
 
 router = APIRouter(tags=["dependencies"])
+
+
+async def _invalidate_dependency_caches(user_id: int, dependency_id: int | None = None) -> None:
+    coros = [
+        invalidate_cache(f"cache:get_blocked_thread_ids:{user_id}:"),
+        invalidate_cache(f"cache:list_thread_dependencies:*:User:{user_id}:"),
+        invalidate_cache(f"cache:list_issue_dependencies:*:User:{user_id}:"),
+        invalidate_cache(f"cache:get_thread_blocking_info:*:User:{user_id}:"),
+        invalidate_cache(f"cache:check_thread_dependency_order:*:User:{user_id}:"),
+        invalidate_cache(f"cache:get_thread_connected_threads:*:User:{user_id}:"),
+    ]
+    if dependency_id is not None:
+        coros.append(invalidate_cache(f"cache:get_dependency:{dependency_id}:User:{user_id}:"))
+    await asyncio.gather(*coros)
 
 
 async def enrich_dependencies(deps: list[Dependency], db: AsyncSession) -> list[DependencyResponse]:
@@ -128,6 +144,7 @@ async def get_all_blocked_thread_ids(
 
 
 @router.get("/threads/{thread_id}/dependencies", response_model=ThreadDependenciesResponse)
+@cached(ttl=TTL.MEDIUM)
 async def list_thread_dependencies(
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -169,6 +186,7 @@ async def list_thread_dependencies(
 
 
 @router.get("/issues/{issue_id}/dependencies", response_model=IssueDependenciesResponse)
+@cached(ttl=TTL.MEDIUM)
 async def list_issue_dependencies(
     issue_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -265,6 +283,7 @@ async def list_issue_dependencies(
 
 
 @router.post("/threads/{thread_id}:getBlockingInfo", response_model=BlockingExplanation)
+@cached(ttl=TTL.SHORT)
 async def get_thread_blocking_info(
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -389,6 +408,8 @@ async def create_dependency(
 
     db.add(dependency)
 
+    # Invalidate before refresh so blocked-status recalc reads fresh data
+    await invalidate_cache(f"cache:get_blocked_thread_ids:{current_user.id}:")
     await refresh_user_blocked_status(current_user.id, db)
 
     try:
@@ -403,6 +424,7 @@ async def create_dependency(
         raise
 
     await db.refresh(dependency)
+    await _invalidate_dependency_caches(current_user.id)
 
     response = (await enrich_dependencies([dependency], db))[0]
     response.warning = warning
@@ -410,6 +432,7 @@ async def create_dependency(
 
 
 @router.get("/dependencies/{dependency_id}", response_model=DependencyResponse)
+@cached(ttl=TTL.MEDIUM)
 async def get_dependency(
     dependency_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -453,6 +476,7 @@ async def update_dependency_note(
     dependency.note = data.note
     await db.commit()
     await db.refresh(dependency)
+    await _invalidate_dependency_caches(current_user.id, dependency_id)
 
     return (await enrich_dependencies([dependency], db))[0]
 
@@ -477,8 +501,11 @@ async def delete_dependency(
         )
 
     await db.delete(dependency)
+    # Invalidate before refresh so blocked-status recalc reads fresh data
+    await invalidate_cache(f"cache:get_blocked_thread_ids:{current_user.id}:")
     await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
+    await _invalidate_dependency_caches(current_user.id)
     return {"message": "Dependency deleted"}
 
 
@@ -486,6 +513,7 @@ async def delete_dependency(
     "/threads/{thread_id}/dependency-order-check",
     response_model=ThreadDependencyOrderCheckResponse,
 )
+@cached(ttl=TTL.MEDIUM)
 async def check_thread_dependency_order(
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -525,6 +553,7 @@ async def check_thread_dependency_order(
     "/threads/{thread_id}/connected",
     response_model=ThreadConnectedResponse,
 )
+@cached(ttl=TTL.MEDIUM)
 async def get_thread_connected_threads(
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],

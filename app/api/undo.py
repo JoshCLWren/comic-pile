@@ -1,5 +1,6 @@
 """Undo API endpoints."""
 
+import asyncio
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -7,7 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.session import _invalidate_session_caches
 from app.auth import get_current_user
+from app.cache import invalidate_cache
 from app.database import get_db
 from app.models import Event, Issue, Snapshot, Thread
 from app.models import Session as SessionModel
@@ -16,8 +19,6 @@ from app.schemas import ActiveThreadInfo, SessionResponse
 from comic_pile.session import get_current_die
 
 router = APIRouter(tags=["undo"])
-
-clear_cache = None
 
 
 @router.post("/{session_id}/undo/{snapshot_id}")
@@ -39,11 +40,10 @@ async def undo_to_snapshot(
         SessionResponse with restored session details.
 
     Raises:
-        HTTPException: If session or snapshot not found.
         RuntimeError: If failed after max retries.
     """
     from sqlalchemy.exc import OperationalError
-    import asyncio
+
 
     max_retries = 3
     initial_delay = 0.1
@@ -225,8 +225,14 @@ async def undo_to_snapshot(
             await db.commit()
             await db.refresh(session)
 
-            if clear_cache:
-                clear_cache()
+            await asyncio.gather(
+                _invalidate_session_caches(current_user.id),
+                invalidate_cache(f"cache:list_threads:User:{current_user.id}:*"),
+                invalidate_cache(f"cache:get_thread:*:User:{current_user.id}:"),
+                invalidate_cache(f"cache:list_issues:*:User:{current_user.id}:*"),
+                invalidate_cache(f"cache:get_issue:*:User:{current_user.id}:"),
+                invalidate_cache(f"cache:get_blocked_thread_ids:{current_user.id}:"),
+            )
 
             result = await db.execute(
                 select(Event)

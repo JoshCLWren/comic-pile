@@ -1,5 +1,6 @@
 """Rate API endpoint."""
 
+import asyncio
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -7,7 +8,9 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
 
+from app.api.session import _invalidate_session_caches
 from app.auth import get_current_user
+from app.cache import invalidate_cache
 from app.config import get_rating_settings
 from app.database import get_db
 from app.middleware import limiter
@@ -106,9 +109,6 @@ async def snapshot_thread_states(
     db.add(snapshot)
     if commit:
         await db.commit()
-
-
-clear_cache = None
 
 
 def _get_rating_limits() -> tuple[float, float, float]:
@@ -383,9 +383,6 @@ async def rate_thread(
         current_session.ended_at = datetime.now(UTC)
         current_session.snoozed_thread_ids = None
 
-    if clear_cache:
-        clear_cache()
-
     current_session.pending_thread_id = None
     current_session.pending_thread_updated_at = None
 
@@ -393,6 +390,14 @@ async def rate_thread(
     event_id = event.id
     await snapshot_thread_states(db, current_session_id, event_id, user_id, commit=False)
     await db.commit()
+
+    await asyncio.gather(
+        _invalidate_session_caches(user_id),
+        invalidate_cache(f"cache:list_threads:User:{user_id}:*"),
+        invalidate_cache(f"cache:get_thread:{thread_id}:User:{user_id}:"),
+        invalidate_cache(f"cache:list_issues:{thread_id}:*"),
+        invalidate_cache(f"cache:get_blocked_thread_ids:{user_id}:"),
+    )
 
     result = await db.execute(
         select(Thread).where(Thread.id == thread_id).where(Thread.user_id == user_id)

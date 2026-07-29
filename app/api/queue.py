@@ -1,5 +1,6 @@
 """Queue API routes."""
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 from typing import Annotated
@@ -9,12 +10,13 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.session import _invalidate_session_caches
+from app.api.thread import _invalidate_thread_caches, thread_to_response
 from app.auth import get_current_user
 from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Thread, User
 from app.schemas import ThreadResponse
-from app.api.thread import thread_to_response
 from comic_pile.queue import move_to_back, move_to_front, move_to_position, shuffle_queue
 
 logger = logging.getLogger(__name__)
@@ -22,7 +24,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-clear_cache = None
+
+async def _invalidate_queue_caches(user_id: int) -> None:
+    """Invalidate every cached view affected by queue reordering."""
+    await asyncio.gather(
+        _invalidate_thread_caches(user_id, all_details=True),
+        _invalidate_session_caches(user_id),
+    )
 
 
 class PositionRequest(BaseModel):
@@ -102,8 +110,7 @@ async def move_thread_position(
         await db.commit()
         await db.refresh(thread)
 
-    if clear_cache:
-        clear_cache()
+    await _invalidate_queue_caches(current_user.id)
 
     return await thread_to_response(thread, db)
 
@@ -154,8 +161,7 @@ async def move_thread_front(
         await db.commit()
         await db.refresh(thread)
 
-    if clear_cache:
-        clear_cache()
+    await _invalidate_queue_caches(current_user.id)
 
     return await thread_to_response(thread, db)
 
@@ -206,8 +212,7 @@ async def move_thread_back(
         await db.commit()
         await db.refresh(thread)
 
-    if clear_cache:
-        clear_cache()
+    await _invalidate_queue_caches(current_user.id)
 
     return await thread_to_response(thread, db)
 
@@ -236,8 +241,6 @@ async def shuffle_threads(
     )
 
     await shuffle_queue(current_user.id, db)
-
-    if clear_cache:
-        clear_cache()
+    await _invalidate_queue_caches(current_user.id)
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
