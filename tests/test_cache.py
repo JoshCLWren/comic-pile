@@ -39,7 +39,7 @@ async def _reinitialize_cache() -> AsyncIterator[None]:
             cache._initialized = False
     settings = get_redis_settings()
     if not settings.redis_url:
-        pytest.skip(reason="REDIS_URL is required for cache regression tests")
+        assert settings.redis_url is not None, "REDIS_URL is required for cache regression tests"
     await cache.initialize(local_url=settings.redis_url)
     assert cache.is_initialized, "Cache failed to initialize for cache regression tests"
     yield

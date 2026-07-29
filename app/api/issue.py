@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependency import _invalidate_dependency_caches
+from app.api.session import _invalidate_session_caches
 from app.auth import get_current_user
 from app.cache import TTL, cached, invalidate_cache
 from app.database import get_db
@@ -42,6 +43,7 @@ async def _invalidate_issue_caches(
     issue_id: int | None = None,
 ) -> None:
     coros = [
+        _invalidate_session_caches(user_id),
         invalidate_cache(f"cache:list_issues:{thread_id}:*"),
         invalidate_cache(f"cache:validate_issue_order:{thread_id}:User:{user_id}:"),
         invalidate_cache(f"cache:get_thread:{thread_id}:User:{user_id}:"),
