@@ -115,6 +115,24 @@ it('supports search/collection pagination, explicit refetch, empty ids, and fail
   await act(async () => stale.result.current.refetch())
 })
 
+it('reports and rethrows thread-list refetch failures', async () => {
+  const { result } = renderHook(() => useThreads(), { wrapper: CacheProvider })
+  await waitFor(() => expect(result.current.data).toEqual([{ id: 1 }]))
+
+  mockedThreadsApi.list.mockRejectedValueOnce(new Error('refetch failed'))
+  let refetchError: unknown
+  await act(async () => {
+    try {
+      await result.current.refetch()
+    } catch (error) {
+      refetchError = error
+    }
+  })
+  expect(refetchError).toBeInstanceOf(Error)
+  expect((refetchError as Error).message).toBe('refetch failed')
+  expect(result.current.isError).toBe(true)
+})
+
 it('marks all thread mutations as errors and resets pending state', async () => {
   mockedThreadsApi.create.mockRejectedValueOnce(new Error('create failed'))
   mockedThreadsApi.update.mockRejectedValueOnce(new Error('update failed'))
