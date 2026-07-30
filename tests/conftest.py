@@ -324,7 +324,12 @@ async def initialize_test_cache() -> AsyncIterator[None]:
         pytest.fail("REDIS_URL is configured but the cache failed to initialize")
     yield
     if cache.is_initialized:
-        await cache.close()
+        try:
+            await cache.close()
+        except RuntimeError:
+            # The async Redis client can outlive the loop used by a function-scoped test.
+            cache._client = None
+            cache._initialized = False
 
 
 @pytest_asyncio.fixture(scope="function", autouse=True)

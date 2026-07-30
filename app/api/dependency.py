@@ -51,6 +51,7 @@ router = APIRouter(tags=["dependencies"])
 async def _invalidate_dependency_caches(user_id: int, dependency_id: int | None = None) -> None:
     coros = [
         invalidate_cache(f"cache:get_blocked_thread_ids:{user_id}:"),
+        invalidate_cache(f"cache:list_threads:User:{user_id}:*"),
         invalidate_cache(f"cache:list_thread_dependencies:*:User:{user_id}:"),
         invalidate_cache(f"cache:list_issue_dependencies:*:User:{user_id}:"),
         invalidate_cache(f"cache:get_thread_blocking_info:*:User:{user_id}:"),

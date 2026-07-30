@@ -424,12 +424,13 @@ describe('RollPage parent handlers', () => {
     await waitFor(() => expect(screen.getByTestId('rating-thread-metadata')).toHaveTextContent('Saga'))
   })
 
-  it('uses stale roll-result fallback and displays blocking reasons', async () => {
+  it('uses stale roll-result fallback without loading hidden blocking reasons', async () => {
     staleData = [{ id: 7, title: 'Old', format: 'Comic', status: 'active', is_blocked: false, created_at: '2000-01-01' }] as never[]
     threadData.push({ id: 2, title: 'Blocked', format: 'Comic', status: 'active', is_blocked: true })
     spies.setPending.mockResolvedValueOnce({ thread_id: 7, title: 'Old', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: null, last_rolled_result: 5 })
     render(<RollPage />)
-    await waitFor(() => expect(relatedApi.blockingInfo).toHaveBeenCalledWith(2))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'read stale' })).toBeInTheDocument())
+    expect(relatedApi.blockingInfo).not.toHaveBeenCalled()
     await userEvent.setup().click(screen.getByRole('button', { name: 'read stale' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
     expect(spies.setPending).toHaveBeenCalledWith(7)

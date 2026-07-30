@@ -84,8 +84,8 @@ export function useThreads(searchTermOrOptions?: string | UseThreadsOptions, col
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, cid]);
 
-  const refetch = useCallback((pageToken?: string) => {
-    fetchData(pageToken);
+  const refetch = useCallback((pageToken?: string): Promise<void> => {
+    return fetchData(pageToken);
   }, [fetchData]);
 
   return { data, isPending, isError, refetch, nextPageToken };

@@ -12,7 +12,7 @@ import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } fro
 import { useCreateThread, useDeleteThread, useReactivateThread, useThreads, useUpdateThread } from '../../hooks/useThread'
 import { useSession } from '../../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
-import { dependenciesApi, threadsApi } from '../../services/api'
+import { threadsApi } from '../../services/api'
 import { issuesApi } from '../../services/api-issues'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import { useCollections } from '../../contexts/CollectionContext'
@@ -60,47 +60,12 @@ export default function QueuePage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [showMigrationDialog, setShowMigrationDialog] = useState(false)
   const [threadToMigrate, setThreadToMigrate] = useState<Thread | null>(null)
-  const [blockedThreadIds, setBlockedThreadIds] = useState<number[]>([])
-  const [blockingReasonMap, setBlockingReasonMap] = useState<Record<number, string[]>>({})
   const [dependencyThread, setDependencyThread] = useState<Thread | null>(null)
   const [isDependencyBuilderOpen, setIsDependencyBuilderOpen] = useState(false)
   const [issuePreview, setIssuePreview] = useState<number | null>(null)
   const [issueParseError, setIssueParseError] = useState<string | null>(null)
 
   const isAnyModalOpen = isCreateOpen || isEditOpen || isReactivateOpen || isCollectionDialogOpen || isDependencyBuilderOpen || showMigrationDialog
-
-  async function refreshBlockedState() {
-    try {
-      const blockedIds = await dependenciesApi.listBlockedThreadIds()
-      setBlockedThreadIds(blockedIds)
-
-      if (blockedIds.length === 0) {
-        setBlockingReasonMap({})
-        return
-      }
-
-      const details: Array<[number, string[]]> = await Promise.all(
-        blockedIds.map(async (threadId) => {
-          try {
-            const info = await dependenciesApi.getBlockingInfo(threadId)
-            return [threadId, info.blocking_reasons || []]
-          } catch {
-            return [threadId, []]
-          }
-        })
-      )
-
-      setBlockingReasonMap(Object.fromEntries(details))
-    } catch {
-      setBlockedThreadIds([])
-      setBlockingReasonMap({})
-    }
-  }
-
-  useEffect(() => {
-    if (!threads) return
-    refreshBlockedState()
-  }, [threads])
 
   useEffect(() => {
     let cancelled = false
@@ -455,10 +420,9 @@ export default function QueuePage() {
 
   async function handleActionForThread(thread: Thread) {
     try {
-      const isBlocked = blockedThreadIds.includes(thread.id) || thread.is_blocked
+      const isBlocked = thread.is_blocked
       if (isBlocked) {
-        const reasons = blockingReasonMap[thread.id] || ['This thread is blocked by a dependency.']
-        alert(`Cannot read yet:\n\n${reasons.join('\n')}`)
+        alert('Cannot read yet:\n\nThis thread is blocked by a dependency.')
         return
       }
 
@@ -493,8 +457,8 @@ export default function QueuePage() {
   // future handler change only needs one edit.
   function renderThreadCard(thread: Thread, index: number) {
     const isDragOver = dragOverThreadId === thread.id
-    const isBlocked = blockedThreadIds.includes(thread.id) || thread.is_blocked
-    const blockingReasons = blockingReasonMap[thread.id] || []
+    const isBlocked = thread.is_blocked
+    const blockingReasons: string[] = []
     const isSnoozed = session?.snoozed_threads?.some((t) => t.id === thread.id) ?? false
     const snoozeIcon = isSnoozed ? '🔔' : '😴'
     const snoozeLabel = isSnoozed ? 'Unsnooze' : 'Snooze'
@@ -925,7 +889,6 @@ export default function QueuePage() {
         }}
         onChanged={async () => {
           await refetch()
-          await refreshBlockedState()
         }}
       />
 

@@ -58,7 +58,6 @@ export default function RollPage() {
     isActionSheetOpen, setIsActionSheetOpen,
     activeRatingThread, setActiveRatingThread,
     isCollectionDialogOpen, setIsCollectionDialogOpen,
-    blockingReasonMap, setBlockingReasonMap,
     showMigrationDialog, setShowMigrationDialog,
     threadToMigrate, setThreadToMigrate,
     showSimpleMigration, setShowSimpleMigration,
@@ -347,25 +346,6 @@ case 'read': {
     threadToMigrate,
   ])
 
-
-useEffect(() => {
-  const fetchBlockingReasons = async () => {
-    if (!blockedThreads.length) {
-      setBlockingReasonMap({})
-      return
-    }
-    const details: Array<[number, string[]]> = await Promise.all(
-      blockedThreads.map(async (thread) => {
-        try {
-          const info = await dependenciesApi.getBlockingInfo(thread.id)
-          return [thread.id, info.blocking_reasons || []]
-        } catch { return [thread.id, []] }
-      })
-    )
-    setBlockingReasonMap(Object.fromEntries(details))
-  }
-  fetchBlockingReasons()
-}, [blockedThreads, setBlockingReasonMap])
 
 useEffect(() => {
   if (session?.current_die) setCurrentDie(session.current_die)
@@ -793,7 +773,7 @@ useEffect(() => {
   <ThreadPool
     pool={pool}
     blockedThreads={blockedThreads}
-    blockingReasonMap={blockingReasonMap}
+    blockingReasonMap={{}}
     isRatingView={isRatingView}
     isRolling={isRolling}
     rolledResult={rolledResult}

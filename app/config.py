@@ -283,17 +283,17 @@ class RedisSettings(BaseSettings):
     )
     # Cache TTL tiers (in seconds)
     cache_ttl_short: int = Field(
-        default=30,
+        default=90,
         description="Short TTL for high-frequency queries",
         json_schema_extra={"env": "CACHE_TTL_SHORT"},
     )
     cache_ttl_medium: int = Field(
-        default=60,
+        default=180,
         description="Medium TTL for moderate-frequency queries",
         json_schema_extra={"env": "CACHE_TTL_MEDIUM"},
     )
     cache_ttl_long: int = Field(
-        default=120,
+        default=360,
         description="Long TTL for low-frequency queries",
         json_schema_extra={"env": "CACHE_TTL_LONG"},
     )
