@@ -68,10 +68,11 @@ export function useThreads(searchTermOrOptions?: string | UseThreadsOptions, col
         setNextPageToken(nextToken);
         invalidateQueries(['threads']);
       }
-    } catch (_err) {
+    } catch (error) {
       if (!cancelled) {
         setIsError(true);
       }
+      throw error;
     } finally {
       if (!cancelled) {
         setIsPending(false);
@@ -80,7 +81,7 @@ export function useThreads(searchTermOrOptions?: string | UseThreadsOptions, col
   }, [searchTerm, cid, invalidateQueries]);
 
   useEffect(() => {
-    fetchData();
+    void fetchData().catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, cid]);
 

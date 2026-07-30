@@ -58,6 +58,7 @@ export default function RollPage() {
     isActionSheetOpen, setIsActionSheetOpen,
     activeRatingThread, setActiveRatingThread,
     isCollectionDialogOpen, setIsCollectionDialogOpen,
+    blockingReasonMap, setBlockingReasonMap,
     showMigrationDialog, setShowMigrationDialog,
     threadToMigrate, setThreadToMigrate,
     showSimpleMigration, setShowSimpleMigration,
@@ -155,6 +156,23 @@ export default function RollPage() {
   function handleThreadClick(thread: Thread) {
     setSelectedThread(thread)
     setIsActionSheetOpen(true)
+  }
+
+  async function handleToggleBlocked() {
+    if (!blockedExpanded) {
+      const details = await Promise.all(
+        blockedThreads.map(async (thread): Promise<[number, string[]]> => {
+          try {
+            const info = await dependenciesApi.getBlockingInfo(thread.id)
+            return [thread.id, info.blocking_reasons ?? []]
+          } catch {
+            return [thread.id, []]
+          }
+        }),
+      )
+      setBlockingReasonMap(Object.fromEntries(details))
+    }
+    setBlockedExpanded(!blockedExpanded)
   }
 
   const enterRatingView = useCallback(async (threadId: number | null, result: number | null = null, threadMetadata: ThreadMetadata | null = null) => {
@@ -773,7 +791,7 @@ useEffect(() => {
   <ThreadPool
     pool={pool}
     blockedThreads={blockedThreads}
-    blockingReasonMap={{}}
+    blockingReasonMap={blockingReasonMap}
     isRatingView={isRatingView}
     isRolling={isRolling}
     rolledResult={rolledResult}
@@ -787,7 +805,7 @@ useEffect(() => {
     onUnsnooze={handleUnsnooze}
     onReadStale={handleReadStale}
     onToggleSnoozed={() => setSnoozedExpanded(!snoozedExpanded)}
-    onToggleBlocked={() => setBlockedExpanded(!blockedExpanded)}
+    onToggleBlocked={handleToggleBlocked}
     onShuffle={handleShufflePool}
     unsnoozeIsPending={unsnoozeMutation.isPending}
     shuffleIsPending={shuffleQueueMutation.isPending}
