@@ -158,6 +158,23 @@ export default function RollPage() {
     setIsActionSheetOpen(true)
   }
 
+  async function handleToggleBlocked() {
+    if (!blockedExpanded) {
+      const details = await Promise.all(
+        blockedThreads.map(async (thread): Promise<[number, string[]]> => {
+          try {
+            const info = await dependenciesApi.getBlockingInfo(thread.id)
+            return [thread.id, info.blocking_reasons ?? []]
+          } catch {
+            return [thread.id, []]
+          }
+        }),
+      )
+      setBlockingReasonMap(Object.fromEntries(details))
+    }
+    setBlockedExpanded(!blockedExpanded)
+  }
+
   const enterRatingView = useCallback(async (threadId: number | null, result: number | null = null, threadMetadata: ThreadMetadata | null = null) => {
     const ratingThread = buildRatingThread(threadId, result, threadMetadata, session?.active_thread)
     if (!ratingThread) {
@@ -347,25 +364,6 @@ case 'read': {
     threadToMigrate,
   ])
 
-
-useEffect(() => {
-  const fetchBlockingReasons = async () => {
-    if (!blockedThreads.length) {
-      setBlockingReasonMap({})
-      return
-    }
-    const details: Array<[number, string[]]> = await Promise.all(
-      blockedThreads.map(async (thread) => {
-        try {
-          const info = await dependenciesApi.getBlockingInfo(thread.id)
-          return [thread.id, info.blocking_reasons || []]
-        } catch { return [thread.id, []] }
-      })
-    )
-    setBlockingReasonMap(Object.fromEntries(details))
-  }
-  fetchBlockingReasons()
-}, [blockedThreads, setBlockingReasonMap])
 
 useEffect(() => {
   if (session?.current_die) setCurrentDie(session.current_die)
@@ -807,7 +805,7 @@ useEffect(() => {
     onUnsnooze={handleUnsnooze}
     onReadStale={handleReadStale}
     onToggleSnoozed={() => setSnoozedExpanded(!snoozedExpanded)}
-    onToggleBlocked={() => setBlockedExpanded(!blockedExpanded)}
+    onToggleBlocked={handleToggleBlocked}
     onShuffle={handleShufflePool}
     unsnoozeIsPending={unsnoozeMutation.isPending}
     shuffleIsPending={shuffleQueueMutation.isPending}

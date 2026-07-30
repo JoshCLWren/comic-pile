@@ -50,7 +50,7 @@ vi.mock('../components/Modal', () => ({ default: ({ isOpen, title, children, onC
 vi.mock('../components/CollectionDialog', () => ({ default: ({ collection }: { collection: { name?: string } | null }) => <div data-testid="collection-dialog">collection dialog {collection?.name ?? 'new'}</div> }))
 vi.mock('../components/MigrationDialog', () => ({ default: ({ onComplete, onSkip, onClose }: { onComplete: (thread: unknown) => void; onSkip: () => void; onClose: () => void }) => <div><button onClick={onSkip}>skip migration</button><button onClick={onClose}>close migration</button><button onClick={() => onComplete({ id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10 })}>complete migration</button></div> }))
 vi.mock('../components/SimpleMigrationDialog', () => ({ default: ({ onComplete, onClose }: { onComplete: (issue: string) => void; onClose: () => void }) => <div><button onClick={() => onComplete('1')}>complete simple</button><button onClick={onClose}>close simple</button></div> }))
-vi.mock('../pages/RollPage/components/ThreadPool', () => ({ ThreadPool: (props: Record<string, unknown>) => <div><button onClick={() => (props.onThreadClick as (thread: unknown) => void)({ id: 1, title: 'Saga', format: 'Comic' })}>thread</button><button onClick={props.onShuffle as () => void}>shuffle pool</button><button onClick={props.onReadStale as () => void}>read stale</button><button onClick={props.onUnsnooze as () => void}>unsnooze</button><button onClick={props.onToggleSnoozed as () => void}>toggle snoozed</button><button onClick={props.onToggleBlocked as () => void}>toggle blocked</button></div> }))
+vi.mock('../pages/RollPage/components/ThreadPool', () => ({ ThreadPool: (props: Record<string, unknown>) => <div><button onClick={() => (props.onThreadClick as (thread: unknown) => void)({ id: 1, title: 'Saga', format: 'Comic' })}>thread</button><button onClick={props.onShuffle as () => void}>shuffle pool</button><button onClick={props.onReadStale as () => void}>read stale</button><button onClick={props.onUnsnooze as () => void}>unsnooze</button><button onClick={props.onToggleSnoozed as () => void}>toggle snoozed</button><button onClick={props.onToggleBlocked as () => void}>toggle blocked</button><span>{JSON.stringify(props.blockingReasonMap)}</span></div> }))
 vi.mock('../pages/RollPage/components/RatingView', () => ({ RatingView: (props: Record<string, unknown>) => {
   const thread = props.activeRatingThread as { title?: string; issue_number?: string | null } | null
   return <div>
@@ -424,15 +424,28 @@ describe('RollPage parent handlers', () => {
     await waitFor(() => expect(screen.getByTestId('rating-thread-metadata')).toHaveTextContent('Saga'))
   })
 
-  it('uses stale roll-result fallback and displays blocking reasons', async () => {
+  it('uses stale roll-result fallback without loading hidden blocking reasons', async () => {
     staleData = [{ id: 7, title: 'Old', format: 'Comic', status: 'active', is_blocked: false, created_at: '2000-01-01' }] as never[]
     threadData.push({ id: 2, title: 'Blocked', format: 'Comic', status: 'active', is_blocked: true })
     spies.setPending.mockResolvedValueOnce({ thread_id: 7, title: 'Old', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: null, last_rolled_result: 5 })
     render(<RollPage />)
-    await waitFor(() => expect(relatedApi.blockingInfo).toHaveBeenCalledWith(2))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'read stale' })).toBeInTheDocument())
+    expect(relatedApi.blockingInfo).not.toHaveBeenCalled()
     await userEvent.setup().click(screen.getByRole('button', { name: 'read stale' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
     expect(spies.setPending).toHaveBeenCalledWith(7)
+  })
+
+  it('loads blocked reasons only when the blocked pool is expanded', async () => {
+    threadData.push({ id: 2, title: 'Blocked', format: 'Comic', status: 'active', is_blocked: true })
+    relatedApi.blockingInfo.mockReset().mockResolvedValue({ blocking_reasons: ['Read the prerequisite first'] })
+    render(<RollPage />)
+    expect(relatedApi.blockingInfo).not.toHaveBeenCalled()
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'toggle blocked' }))
+
+    await waitFor(() => expect(relatedApi.blockingInfo).toHaveBeenCalledWith(2))
+    expect(screen.getByText(/Read the prerequisite first/)).toBeInTheDocument()
   })
 
   it('uses the safe die fallback when a pending session has an invalid die', async () => {

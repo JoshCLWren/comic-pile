@@ -529,16 +529,14 @@ it('creates a literal issue range and reports create failures', async () => {
   await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('create failed')))
 })
 
-it('loads blocking reasons, reads a thread, opens dependencies, and handles edit failure', async () => {
+it('uses thread blocked state without loading dependency details, and handles edit failure', async () => {
   const user = userEvent.setup()
   const update = vi.fn().mockRejectedValue(new Error('update failed'))
   mockedUseUpdateThread.mockReturnValue({ mutate: update, isPending: false })
-  mockedDependenciesApi.listBlockedThreadIds.mockResolvedValue([2])
-  mockedDependenciesApi.getBlockingInfo.mockRejectedValueOnce(new Error('details failed'))
-  mockedUseThreads.mockReturnValue({ data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 2, total_issues: null }], isPending: false, refetch: vi.fn() })
+  mockedUseThreads.mockReturnValue({ data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', is_blocked: true, queue_position: 1, issues_remaining: 2, total_issues: null }], isPending: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  await user.click(screen.getByLabelText('Read'))
-  expect(mockedThreadsApi.setPending).toHaveBeenCalledWith(1)
+  expect(mockedDependenciesApi.listBlockedThreadIds).not.toHaveBeenCalled()
+  expect(mockedDependenciesApi.getBlockingInfo).not.toHaveBeenCalled()
   await user.click(screen.getByRole('button', { name: /thread actions/i }))
   await user.click(screen.getByRole('menuitem', { name: /dependencies/i }))
   expect(screen.getByRole('heading', { name: /dependencies:/i })).toBeInTheDocument()
@@ -606,7 +604,7 @@ it('handles reactivation success and failure from completed threads', async () =
   await waitFor(() => expect(screen.getByRole('heading', { name: /reactivate thread/i })).toBeInTheDocument())
 })
 
-it('uses the virtualized queue for large collections and exposes blocked reasons', async () => {
+it('uses the virtualized queue without loading hidden blocked-thread reasons', async () => {
   vi.stubGlobal('ResizeObserver', class {
     observe() {}
     unobserve() {}
@@ -624,10 +622,10 @@ it('uses the virtualized queue for large collections and exposes blocked reasons
     is_blocked: index === 0,
   }))
   mockedUseThreads.mockReturnValue({ data: manyThreads, isPending: false, refetch: vi.fn() })
-  mockedDependenciesApi.listBlockedThreadIds.mockResolvedValue([1])
-  mockedDependenciesApi.getBlockingInfo.mockResolvedValue({ blocking_reasons: ['Read prerequisite'] })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await waitFor(() => expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument())
   expect(screen.getByRole('list', { name: 'Thread queue' })).toBeInTheDocument()
+  expect(mockedDependenciesApi.listBlockedThreadIds).not.toHaveBeenCalled()
+  expect(mockedDependenciesApi.getBlockingInfo).not.toHaveBeenCalled()
   vi.unstubAllGlobals()
 })
