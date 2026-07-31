@@ -30,6 +30,9 @@ jobs:
       - name: Materialize verified source files
         run: python tmp-production-profile/materialize.py
 
+      - name: Install focused test dependency
+        run: python -m pip install pytest
+
       - name: Verify manifest builder tests
         run: python -m pytest -q tests/test_build_production_profile_manifest.py
 
