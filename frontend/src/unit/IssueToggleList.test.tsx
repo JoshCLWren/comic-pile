@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IssueToggleList } from '../pages/QueuePage/IssueToggleList'
-import { dependenciesApi } from '../services/api'
+import { issueDependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
 import type { Issue, IssueListResponse } from '../types'
 
@@ -19,14 +19,14 @@ vi.mock('../services/api-issues', () => ({
   },
 }))
 
-vi.mock('../services/api', () => ({
-  dependenciesApi: {
-    getIssueDependencies: vi.fn(),
+vi.mock('../services/api-dependencies', () => ({
+  issueDependenciesApi: {
+    listForThread: vi.fn(),
   },
 }))
 
 const mockedIssuesApi = vi.mocked(issuesApi, { deep: true })
-const mockedDependenciesApi = vi.mocked(dependenciesApi, { deep: true })
+const mockedIssueDependenciesApi = vi.mocked(issueDependenciesApi, { deep: true })
 
 const BASE_ISSUES: Issue[] = [
   {
@@ -114,11 +114,10 @@ beforeEach(() => {
   mockedIssuesApi.markUnread.mockResolvedValue()
   mockedIssuesApi.reorder.mockResolvedValue()
   mockedIssuesApi.delete.mockResolvedValue()
-  mockedDependenciesApi.getIssueDependencies.mockImplementation(async (issueId: number) => ({
-    issue_id: issueId,
-    incoming: [],
-    outgoing: [],
-  }))
+  mockedIssueDependenciesApi.listForThread.mockResolvedValue({
+    thread_id: 99,
+    issues: [],
+  })
 })
 describe('IssueToggleList', () => {
   it('uses the timeout focus fallback when animation frames are unavailable', async () => {
@@ -577,9 +576,32 @@ describe('IssueToggleList', () => {
   })
 
   it('shows dependency details and closes the dependency modal', async () => {
-    mockedDependenciesApi.getIssueDependencies.mockImplementation(async (issueId: number) => issueId === 1
-      ? { issue_id: issueId, incoming: [{ dependency_id: 10, source_issue_id: 2, source_thread_id: 20, source_thread_title: 'Before', source_issue_number: '2' }], outgoing: [{ dependency_id: 11, source_issue_id: 3, source_thread_id: 30, source_thread_title: 'After', source_issue_number: '3' }] }
-      : { issue_id: issueId, incoming: [], outgoing: [] })
+    mockedIssueDependenciesApi.listForThread.mockResolvedValue({
+      thread_id: 99,
+      issues: [
+        {
+          issue_id: 1,
+          incoming: [
+            {
+              dependency_id: 10,
+              source_issue_id: 2,
+              source_thread_id: 20,
+              source_thread_title: 'Before',
+              source_issue_number: '2',
+            },
+          ],
+          outgoing: [
+            {
+              dependency_id: 11,
+              source_issue_id: 3,
+              source_thread_id: 30,
+              source_thread_title: 'After',
+              source_issue_number: '3',
+            },
+          ],
+        },
+      ],
+    })
     await renderIssueToggleList()
     fireEvent.click(screen.getByRole('button', { name: 'View dependencies for issue #1' }))
     expect(screen.getByText('Dependencies for Issue #1')).toBeInTheDocument()
@@ -614,7 +636,7 @@ describe('IssueToggleList', () => {
 
   it('handles dependency fetch errors, no-op moves, and successful additions', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    mockedDependenciesApi.getIssueDependencies.mockRejectedValue(new Error('dependency lookup failed'))
+    mockedIssueDependenciesApi.listForThread.mockRejectedValue(new Error('dependency lookup failed'))
     mockedIssuesApi.create.mockResolvedValue(buildListResponse(BASE_ISSUES))
     await renderIssueToggleList()
     await waitFor(() => expect(errorSpy).toHaveBeenCalled())
@@ -641,7 +663,7 @@ describe('IssueToggleList', () => {
     await waitFor(() => expect(screen.queryByText('Loading issues…')).not.toBeInTheDocument())
   })
 
-  it('uses the timeout focus fallback and renders an empty dependency view', async () => {
+  it('uses the timeout focus fallback after rerendering', async () => {
     const originalRaf = window.requestAnimationFrame
     Object.defineProperty(window, 'requestAnimationFrame', { configurable: true, value: undefined })
     await renderIssueToggleList()

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import type { DragEvent } from 'react'
 import type { Issue, IssueDependenciesResponse } from '../../types'
 import { issuesApi } from '../../services/api-issues'
-import { dependenciesApi } from '../../services/api'
+import { issueDependenciesApi } from '../../services/api-dependencies'
 import { getApiErrorDetail } from '../../utils/apiError'
 import Tooltip from '../../components/Tooltip'
 import Modal from '../../components/Modal'
@@ -38,6 +38,7 @@ export function IssueToggleList({ threadId }: {
   const pendingMutationsRef = useRef<IssueMutation[]>([])
   const isProcessingMutationsRef = useRef(false)
   const nextMutationIdRef = useRef(1)
+  const loadGenerationRef = useRef(0)
 
   const getNextUnreadIssueId = useCallback(() => {
     return issues.find((issue) => issue.status === 'unread')?.id ?? null
@@ -95,22 +96,26 @@ export function IssueToggleList({ threadId }: {
     }
   }, [threadId])
 
-  const fetchDependencies = useCallback(async (issueList: Issue[]) => {
-    const depsMap: Record<number, IssueDependenciesResponse> = {}
-    await Promise.all(
-      issueList.map(async (issue) => {
-        try {
-          const deps = await dependenciesApi.getIssueDependencies(issue.id)
-          if (deps.incoming.length > 0 || deps.outgoing.length > 0) {
-            depsMap[issue.id] = deps
-          }
-        } catch (error) {
-          console.error(`Failed to load dependencies for issue ${issue.id}:`, error)
+  const fetchDependencies = useCallback(async (): Promise<Record<number, IssueDependenciesResponse>> => {
+    try {
+      const response = await issueDependenciesApi.listForThread(threadId)
+      const depsMap: Record<number, IssueDependenciesResponse> = {}
+
+      for (const issueDependencies of response.issues) {
+        if (
+          issueDependencies.incoming.length > 0
+          || issueDependencies.outgoing.length > 0
+        ) {
+          depsMap[issueDependencies.issue_id] = issueDependencies
         }
-      })
-    )
-    setDependencies(depsMap)
-  }, [])
+      }
+
+      return depsMap
+    } catch (error) {
+      console.error(`Failed to load dependencies for thread ${threadId}:`, error)
+      return {}
+    }
+  }, [threadId])
 
   const focusMoveControl = useCallback((issueId: number, direction: 'up' | 'down') => {
     const focusTarget = () => {
@@ -217,20 +222,39 @@ export function IssueToggleList({ threadId }: {
   }, [enqueueIssueMutation, focusMoveControl, issues])
 
   const loadIssues = useCallback(async () => {
+    const loadGeneration = ++loadGenerationRef.current
     setIsLoading(true)
+
     try {
-      baseIssuesRef.current = await fetchAllIssues()
-      syncOptimisticIssues(baseIssuesRef.current, pendingMutationsRef.current)
-      await fetchDependencies(baseIssuesRef.current)
+      const nextIssues = await fetchAllIssues()
+      if (loadGeneration !== loadGenerationRef.current) {
+        return
+      }
+
+      baseIssuesRef.current = nextIssues
+      syncOptimisticIssues(nextIssues, pendingMutationsRef.current)
+
+      const nextDependencies = await fetchDependencies()
+      if (loadGeneration !== loadGenerationRef.current) {
+        return
+      }
+
+      setDependencies(nextDependencies)
     } catch {
       // Non-critical
     } finally {
-      setIsLoading(false)
+      if (loadGeneration === loadGenerationRef.current) {
+        setIsLoading(false)
+      }
     }
   }, [fetchAllIssues, fetchDependencies, syncOptimisticIssues])
 
   useEffect(() => {
-    loadIssues()
+    void loadIssues()
+
+    return () => {
+      loadGenerationRef.current += 1
+    }
   }, [loadIssues])
 
   function handleToggle(issue: Issue) {
