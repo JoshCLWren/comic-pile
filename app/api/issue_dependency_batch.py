@@ -90,25 +90,30 @@ async def list_thread_issue_dependencies(
     }
 
     for dependency in dependencies:
+        source_issue_id = dependency.source_issue_id
+        target_issue_id = dependency.target_issue_id
+
         if (
-            dependency.target_issue_id in incoming_by_issue
-            and dependency.source_issue_id is not None
+            target_issue_id is not None
+            and target_issue_id in incoming_by_issue
+            and source_issue_id is not None
         ):
-            source_issue = issue_map.get(dependency.source_issue_id)
+            source_issue = issue_map.get(source_issue_id)
             source_thread = thread_map.get(source_issue.thread_id) if source_issue else None
             if source_issue is not None and source_thread is not None:
-                incoming_by_issue[dependency.target_issue_id].append(
+                incoming_by_issue[target_issue_id].append(
                     _dependency_edge(source_issue, source_thread, dependency.id)
                 )
 
         if (
-            dependency.source_issue_id in outgoing_by_issue
-            and dependency.target_issue_id is not None
+            source_issue_id is not None
+            and source_issue_id in outgoing_by_issue
+            and target_issue_id is not None
         ):
-            target_issue = issue_map.get(dependency.target_issue_id)
+            target_issue = issue_map.get(target_issue_id)
             target_thread = thread_map.get(target_issue.thread_id) if target_issue else None
             if target_issue is not None and target_thread is not None:
-                outgoing_by_issue[dependency.source_issue_id].append(
+                outgoing_by_issue[source_issue_id].append(
                     _dependency_edge(target_issue, target_thread, dependency.id)
                 )
 
