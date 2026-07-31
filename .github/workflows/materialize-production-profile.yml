@@ -1,0 +1,39 @@
+name: Materialize production profile source
+
+on:
+  push:
+    branches:
+      - test/faithful-real-user-production-profile
+    paths:
+      - tmp-production-profile/**
+      - .github/workflows/materialize-production-profile.yml
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test/faithful-real-user-production-profile
+          fetch-depth: 0
+
+      - name: Materialize verified source files
+        run: python tmp-production-profile/materialize.py
+
+      - name: Verify manifest builder tests
+        run: python -m pytest -q tests/test_build_production_profile_manifest.py
+
+      - name: Commit materialized source and remove bridge
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git rm -r tmp-production-profile .github/workflows/materialize-production-profile.yml
+          git add frontend/src/test/production-profile-real-user-support.ts
+          git add frontend/src/test/production-profile-real-user.spec.ts
+          git add scripts/build_production_profile_manifest.py
+          git add tests/test_build_production_profile_manifest.py
+          git commit -m "Add faithful real-user production profile implementation"
+          git push origin HEAD:test/faithful-real-user-production-profile
