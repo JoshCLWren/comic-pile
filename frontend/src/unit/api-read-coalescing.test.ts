@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ThreadListResponse } from '../types'
+import type { SessionCurrent, ThreadListResponse } from '../types'
 
 const apiMocks = vi.hoisted(() => ({
   getAccessToken: vi.fn<() => string | null>(() => 'token-a'),
@@ -19,7 +19,7 @@ vi.mock('../services/api', () => ({
   },
 }))
 
-import { threadsApi } from '../services/api'
+import { sessionApi, threadsApi } from '../services/api'
 import {
   clearCoalescedReads,
   coalesceRead,
@@ -28,9 +28,12 @@ import {
 
 const emptyThreadResponse: ThreadListResponse = {
   threads: [],
-  total_count: 0,
-  page_size: 200,
   next_page_token: null,
+}
+
+const currentSession: SessionCurrent = {
+  id: 1,
+  current_die: 20,
 }
 
 describe('API read coalescing', () => {
@@ -89,6 +92,45 @@ describe('API read coalescing', () => {
       resolve(emptyThreadResponse)
     }
     await Promise.all([first, second])
+  })
+
+  it('coalesces stale-thread and current-session reads', async () => {
+    let resolveStaleThreads: ((value: []) => void) | undefined
+    let resolveCurrentSession: ((value: SessionCurrent) => void) | undefined
+    const staleThreadsRequest = new Promise<[]>((resolve) => {
+      resolveStaleThreads = resolve
+    })
+    const currentSessionRequest = new Promise<SessionCurrent>((resolve) => {
+      resolveCurrentSession = resolve
+    })
+    apiMocks.listStaleThreads.mockReturnValue(staleThreadsRequest)
+    apiMocks.getCurrentSession.mockReturnValue(currentSessionRequest)
+
+    const firstStale = threadsApi.listStale(45)
+    const secondStale = threadsApi.listStale(45)
+    const firstSession = sessionApi.getCurrent()
+    const secondSession = sessionApi.getCurrent()
+
+    expect(firstStale).toBe(secondStale)
+    expect(firstSession).toBe(secondSession)
+    expect(apiMocks.listStaleThreads).toHaveBeenCalledTimes(1)
+    expect(apiMocks.getCurrentSession).toHaveBeenCalledTimes(1)
+
+    resolveStaleThreads?.([])
+    resolveCurrentSession?.(currentSession)
+    await Promise.all([firstStale, secondStale, firstSession, secondSession])
+  })
+
+  it('does not wrap the API methods more than once', () => {
+    const installedThreadsList = threadsApi.list
+    const installedStaleThreads = threadsApi.listStale
+    const installedCurrentSession = sessionApi.getCurrent
+
+    installApiReadCoalescing()
+
+    expect(threadsApi.list).toBe(installedThreadsList)
+    expect(threadsApi.listStale).toBe(installedStaleThreads)
+    expect(sessionApi.getCurrent).toBe(installedCurrentSession)
   })
 
   it('evicts a failed request so a retry can run', async () => {
