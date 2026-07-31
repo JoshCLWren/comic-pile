@@ -38,6 +38,7 @@ export function IssueToggleList({ threadId }: {
   const pendingMutationsRef = useRef<IssueMutation[]>([])
   const isProcessingMutationsRef = useRef(false)
   const nextMutationIdRef = useRef(1)
+  const loadGenerationRef = useRef(0)
 
   const getNextUnreadIssueId = useCallback(() => {
     return issues.find((issue) => issue.status === 'unread')?.id ?? null
@@ -95,7 +96,7 @@ export function IssueToggleList({ threadId }: {
     }
   }, [threadId])
 
-  const fetchDependencies = useCallback(async () => {
+  const fetchDependencies = useCallback(async (): Promise<Record<number, IssueDependenciesResponse>> => {
     try {
       const response = await issueDependenciesApi.listForThread(threadId)
       const depsMap: Record<number, IssueDependenciesResponse> = {}
@@ -109,10 +110,10 @@ export function IssueToggleList({ threadId }: {
         }
       }
 
-      setDependencies(depsMap)
+      return depsMap
     } catch (error) {
       console.error(`Failed to load dependencies for thread ${threadId}:`, error)
-      setDependencies({})
+      return {}
     }
   }, [threadId])
 
@@ -221,20 +222,39 @@ export function IssueToggleList({ threadId }: {
   }, [enqueueIssueMutation, focusMoveControl, issues])
 
   const loadIssues = useCallback(async () => {
+    const loadGeneration = ++loadGenerationRef.current
     setIsLoading(true)
+
     try {
-      baseIssuesRef.current = await fetchAllIssues()
-      syncOptimisticIssues(baseIssuesRef.current, pendingMutationsRef.current)
-      await fetchDependencies()
+      const nextIssues = await fetchAllIssues()
+      if (loadGeneration !== loadGenerationRef.current) {
+        return
+      }
+
+      baseIssuesRef.current = nextIssues
+      syncOptimisticIssues(nextIssues, pendingMutationsRef.current)
+
+      const nextDependencies = await fetchDependencies()
+      if (loadGeneration !== loadGenerationRef.current) {
+        return
+      }
+
+      setDependencies(nextDependencies)
     } catch {
       // Non-critical
     } finally {
-      setIsLoading(false)
+      if (loadGeneration === loadGenerationRef.current) {
+        setIsLoading(false)
+      }
     }
   }, [fetchAllIssues, fetchDependencies, syncOptimisticIssues])
 
   useEffect(() => {
-    loadIssues()
+    void loadIssues()
+
+    return () => {
+      loadGenerationRef.current += 1
+    }
   }, [loadIssues])
 
   function handleToggle(issue: Issue) {
