@@ -202,3 +202,11 @@ opencode.json
 prod_backup_*.json
 .vercel
 .env*
+
+# Credential-bearing production-profile inputs and generated artifacts
+*.har
+*.har.gz
+**/storage-state*.json
+frontend/.auth/
+production-profile-output/
+test-results-prod-profile/
