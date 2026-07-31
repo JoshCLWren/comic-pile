@@ -61,7 +61,7 @@ def _before_cursor_execute(
 ) -> None:
     """Start timing a SQL statement after a connection has been acquired."""
     del connection, cursor, statement, parameters, executemany
-    setattr(context, "_comic_pile_query_started_at", time.perf_counter())
+    vars(context)["_comic_pile_query_started_at"] = time.perf_counter()
 
 
 @event.listens_for(async_engine.sync_engine, "after_cursor_execute")
@@ -75,7 +75,7 @@ def _after_cursor_execute(
 ) -> None:
     """Record SQL execution time in the active request diagnostics context."""
     del connection, cursor, statement, parameters, executemany
-    started_at = getattr(context, "_comic_pile_query_started_at", None)
+    started_at = vars(context).get("_comic_pile_query_started_at")
     if isinstance(started_at, float):
         record_database_query((time.perf_counter() - started_at) * 1000)
 
