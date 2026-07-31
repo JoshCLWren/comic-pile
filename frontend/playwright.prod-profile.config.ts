@@ -1,39 +1,40 @@
 import { defineConfig, devices } from '@playwright/test'
 
 const prodBaseUrl = process.env.PROD_BASE_URL ?? process.env.BASE_URL
+const storageState = process.env.PROD_PROFILE_STORAGE_STATE
 
 if (!prodBaseUrl) {
-  throw new Error('Set PROD_BASE_URL (or BASE_URL) to run the production profile.')
+  throw new Error('Set PROD_BASE_URL (or BASE_URL) to run the real-user production profile.')
 }
 
 export default defineConfig({
-  metadata: { productionProfile: true },
+  metadata: { productionRealUserProfile: true },
   testDir: './src/test',
-  testMatch: 'production-profile.spec.ts',
+  testMatch: 'production-profile-real-user.spec.ts',
   fullyParallel: false,
   retries: 0,
   workers: 1,
-  // The journey may take longer during production cold starts, while the
-  // individual request budget remains capped separately at five seconds.
-  timeout: 300 * 1000,
+  timeout: 20 * 60 * 1000,
+  outputDir: '../test-results-prod-profile',
   reporter: [
     ['list'],
     ['html', { open: 'never', outputFolder: '../playwright-report-prod-profile' }],
   ],
   use: {
     baseURL: prodBaseUrl,
+    ...(storageState ? { storageState } : {}),
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'off',
-    actionTimeout: 30000,
-    navigationTimeout: 30000,
+    actionTimeout: 30_000,
+    navigationTimeout: 30_000,
   },
   expect: {
-    timeout: 15000,
+    timeout: 15_000,
   },
   projects: [
     {
-      name: 'chromium',
+      name: 'chromium-real-user-profile',
       use: { ...devices['Desktop Chrome'] },
     },
   ],
