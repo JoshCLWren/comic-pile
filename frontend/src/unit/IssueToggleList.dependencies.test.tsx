@@ -68,6 +68,11 @@ describe('IssueToggleList dependency loading', () => {
             },
           ],
         },
+        {
+          issue_id: 2,
+          incoming: [],
+          outgoing: [],
+        },
       ],
     })
   })
@@ -85,5 +90,8 @@ describe('IssueToggleList dependency loading', () => {
     expect(
       screen.getByRole('button', { name: 'View dependencies for issue #1' }),
     ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'View dependencies for issue #2' }),
+    ).not.toBeInTheDocument()
   })
 })
