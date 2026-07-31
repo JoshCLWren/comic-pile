@@ -9,24 +9,29 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.head_ref == 'test/har-production-profile'
     name: Production Profile (Chromium)
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/joshclwren/comic-pile@sha256:3670d8ace7fca4515dfd38291994f60ca7d0cb5cb75baa9d7c3b076cc1c3f5f9
-      options: --shm-size=2gb
     timeout-minutes: 15
     env:
-      PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
-      PLAYWRIGHT_BROWSERS_PATH: /root/.cache/ms-playwright
       PROD_BASE_URL: https://comic-pile.vercel.app
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Restore frontend toolchain from CI image
-        run: |
-          mkdir -p static
-          rm -rf frontend/node_modules static/react
-          cp -a /opt/ci-assets/static/react static/react
-          pnpm install --frozen-lockfile
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm --filter frontend exec playwright install --with-deps chromium
 
       - name: Run production profile
         run: pnpm --filter frontend run test:e2e:prod-profile
