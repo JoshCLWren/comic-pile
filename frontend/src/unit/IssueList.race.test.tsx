@@ -203,6 +203,33 @@ describe('IssueList request races and rollback isolation', () => {
     errorSpy.mockRestore()
   })
 
+  it('reinserts a filtered issue and restores the count when its toggle fails', async () => {
+    const toggle = createDeferred<void>()
+    const issue = buildIssue(1, 99, '1')
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    mockedIssuesApi.list.mockResolvedValue(buildListResponse([issue]))
+    mockedIssuesApi.markRead.mockImplementationOnce(() => toggle.promise)
+
+    render(<IssueList thread={buildThread(99)} />)
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+
+    await userEvent.selectOptions(screen.getByRole('combobox'), 'unread')
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByText('#1'))
+    await waitFor(() => expect(screen.getByText('No issues found')).toBeInTheDocument())
+
+    await act(async () => {
+      toggle.reject(new Error('toggle failed'))
+      await toggle.promise.catch(() => undefined)
+    })
+
+    expect(screen.getByText('#1').closest('.issue-item')).toHaveClass('unread')
+    expect(screen.getByText('Read 0 of 1 (0%)')).toBeInTheDocument()
+    errorSpy.mockRestore()
+  })
+
   it('preserves a newly appended page when an earlier toggle rolls back', async () => {
     const firstToggle = createDeferred<void>()
     const firstIssue = buildIssue(1, 99, '1')
