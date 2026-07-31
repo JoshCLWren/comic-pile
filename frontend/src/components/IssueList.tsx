@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { issuesApi } from '../services/api-issues'
-import { dependenciesApi } from '../services/api'
+import { issueDependenciesApi } from '../services/api-dependencies'
 import type { Issue, IssueDependenciesResponse, Thread } from '../types'
 import Tooltip from './Tooltip'
 import { getDependencyTooltip } from '../utils/dependencyHelpers'
@@ -12,66 +12,127 @@ interface IssueListProps {
 }
 
 export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
-   const [issues, setIssues] = useState<Issue[]>([])
-   const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all')
-   const [isLoading, setIsLoading] = useState(true)
-   const [isLoadingMore, setIsLoadingMore] = useState(false)
-   const [nextPageToken, setNextPageToken] = useState<string | null>(null)
-   const [totalCount, setTotalCount] = useState<number>(0)
-   const [dependencies, setDependencies] = useState<Record<number, IssueDependenciesResponse>>({})
-   const abortControllerRef = useRef<AbortController | null>(null)
+  const [issues, setIssues] = useState<Issue[]>([])
+  const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all')
+  const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null)
+  const [totalCount, setTotalCount] = useState<number>(0)
+  const [dependencies, setDependencies] = useState<Record<number, IssueDependenciesResponse>>({})
   const filterRef = useRef<'all' | 'unread' | 'read'>('all')
+  const threadIdRef = useRef(thread.id)
+  const mountedRef = useRef(true)
+  const issueLoadRequestRef = useRef(0)
+  const dependencyLoadRequestRef = useRef(0)
+  const issueMutationRequestRef = useRef<Record<number, number>>({})
+
   filterRef.current = filter
+  threadIdRef.current = thread.id
+
+  useEffect(() => {
+    mountedRef.current = true
+
+    return () => {
+      mountedRef.current = false
+      issueLoadRequestRef.current += 1
+      dependencyLoadRequestRef.current += 1
+    }
+  }, [])
 
   const loadIssues = useCallback(async (append = false, pageToken?: string | null) => {
+    const requestId = ++issueLoadRequestRef.current
+    const requestedThreadId = thread.id
+    const requestedFilter = filterRef.current
+
     if (append) {
       setIsLoadingMore(true)
     } else {
       setIsLoading(true)
     }
+
     try {
-      const response = await issuesApi.list(thread.id, {
-        status: filterRef.current === 'all' ? undefined : filterRef.current,
+      const response = await issuesApi.list(requestedThreadId, {
+        status: requestedFilter === 'all' ? undefined : requestedFilter,
         page_size: 50,
         page_token: pageToken ?? undefined,
       })
 
-      setIssues(prev => append ? [...prev, ...response.issues] : response.issues)
+      if (
+        !mountedRef.current
+        || requestId !== issueLoadRequestRef.current
+        || requestedThreadId !== threadIdRef.current
+        || requestedFilter !== filterRef.current
+      ) {
+        return
+      }
+
+      setIssues((previous) => append ? [...previous, ...response.issues] : response.issues)
       setTotalCount(response.total_count)
       setNextPageToken(response.next_page_token)
-
-      await Promise.all(
-        response.issues.map(async (issue) => {
-          try {
-            const deps = await dependenciesApi.getIssueDependencies(issue.id)
-            setDependencies((prev) => {
-              if (deps.incoming.length > 0 || deps.outgoing.length > 0) {
-                return { ...prev, [issue.id]: deps }
-              }
-              const next = { ...prev }
-              delete next[issue.id]
-              return next
-            })
-          } catch (error) {
-            console.error(`Failed to load dependencies for issue ${issue.id}:`, error)
-          }
-        })
-      )
     } catch (error) {
-      console.error('Failed to load issues:', error)
+      if (
+        mountedRef.current
+        && requestId === issueLoadRequestRef.current
+        && requestedThreadId === threadIdRef.current
+        && requestedFilter === filterRef.current
+      ) {
+        console.error('Failed to load issues:', error)
+      }
     } finally {
-      setIsLoading(false)
-      setIsLoadingMore(false)
+      if (
+        mountedRef.current
+        && requestId === issueLoadRequestRef.current
+        && requestedThreadId === threadIdRef.current
+        && requestedFilter === filterRef.current
+      ) {
+        setIsLoading(false)
+        setIsLoadingMore(false)
+      }
+    }
+  }, [thread.id])
+
+  const loadDependencies = useCallback(async () => {
+    const requestId = ++dependencyLoadRequestRef.current
+    const requestedThreadId = thread.id
+    setDependencies({})
+
+    try {
+      const response = await issueDependenciesApi.listForThread(requestedThreadId)
+
+      if (
+        !mountedRef.current
+        || requestId !== dependencyLoadRequestRef.current
+        || requestedThreadId !== threadIdRef.current
+      ) {
+        return
+      }
+
+      const nextDependencies: Record<number, IssueDependenciesResponse> = {}
+
+      for (const issueDependencies of response.issues) {
+        if (
+          issueDependencies.incoming.length > 0
+          || issueDependencies.outgoing.length > 0
+        ) {
+          nextDependencies[issueDependencies.issue_id] = issueDependencies
+        }
+      }
+
+      setDependencies(nextDependencies)
+    } catch (error) {
+      if (
+        mountedRef.current
+        && requestId === dependencyLoadRequestRef.current
+        && requestedThreadId === threadIdRef.current
+      ) {
+        console.error(`Failed to load dependencies for thread ${requestedThreadId}:`, error)
+      }
     }
   }, [thread.id])
 
   useEffect(() => {
-    abortControllerRef.current = new AbortController()
-    loadIssues(false)
-    return () => {
-      abortControllerRef.current?.abort()
-    }
-  }, [loadIssues])
+    void Promise.all([loadIssues(false), loadDependencies()])
+  }, [loadDependencies, loadIssues])
 
   const handleFilterChange = (newFilter: 'all' | 'unread' | 'read') => {
     filterRef.current = newFilter
@@ -81,6 +142,34 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
   }
 
   const toggleIssueStatus = async (issue: Issue) => {
+    const mutationThreadId = thread.id
+    const mutationFilter = filterRef.current
+    const mutationRequestId = (issueMutationRequestRef.current[issue.id] ?? 0) + 1
+    const originalIndex = issues.findIndex((currentIssue) => currentIssue.id === issue.id)
+    const nextStatus = issue.status === 'read' ? 'unread' : 'read'
+    const shouldRemoveFromFilter = mutationFilter !== 'all' && mutationFilter !== nextStatus
+    const updatedIssue: Issue = {
+      ...issue,
+      status: nextStatus,
+      read_at: nextStatus === 'read' ? new Date().toISOString() : null,
+    }
+
+    issueMutationRequestRef.current[issue.id] = mutationRequestId
+
+    setIssues((currentIssues) => {
+      if (shouldRemoveFromFilter) {
+        return currentIssues.filter((currentIssue) => currentIssue.id !== issue.id)
+      }
+
+      return currentIssues.map((currentIssue) =>
+        currentIssue.id === issue.id ? updatedIssue : currentIssue
+      )
+    })
+
+    if (shouldRemoveFromFilter) {
+      setTotalCount((currentTotal) => Math.max(0, currentTotal - 1))
+    }
+
     try {
       if (issue.status === 'read') {
         await issuesApi.markUnread(issue.id)
@@ -88,15 +177,41 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
         await issuesApi.markRead(issue.id)
       }
 
-      if (onThreadUpdated) {
-        onThreadUpdated(thread.id)
+      onThreadUpdated?.(mutationThreadId)
+      window.dispatchEvent(new CustomEvent('thread-updated', { detail: { threadId: mutationThreadId } }))
+    } catch (error) {
+      console.error('Failed to toggle issue status:', error)
+
+      if (
+        issueMutationRequestRef.current[issue.id] !== mutationRequestId
+        || threadIdRef.current !== mutationThreadId
+        || filterRef.current !== mutationFilter
+      ) {
+        return
       }
 
-      window.dispatchEvent(new CustomEvent('thread-updated', { detail: { threadId: thread.id } }))
+      setIssues((currentIssues) => {
+        const existingIndex = currentIssues.findIndex(
+          (currentIssue) => currentIssue.id === issue.id,
+        )
 
-       await loadIssues(false)
-     } catch (error) {
-      console.error('Failed to toggle issue status:', error)
+        if (existingIndex >= 0) {
+          return currentIssues.map((currentIssue) =>
+            currentIssue.id === issue.id ? issue : currentIssue
+          )
+        }
+
+        const insertionIndex = Math.max(0, Math.min(originalIndex, currentIssues.length))
+        return [
+          ...currentIssues.slice(0, insertionIndex),
+          issue,
+          ...currentIssues.slice(insertionIndex),
+        ]
+      })
+
+      if (shouldRemoveFromFilter) {
+        setTotalCount((currentTotal) => currentTotal + 1)
+      }
     }
   }
 
@@ -114,7 +229,7 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
   }
 
   const nextUnreadId = thread.next_unread_issue_id
-  const readCount = issues.filter((i) => i.status === 'read').length
+  const readCount = issues.filter((issue) => issue.status === 'read').length
   const progressPercent = totalCount > 0 ? Math.round((readCount / totalCount) * 100) : 0
 
   return (
@@ -123,7 +238,7 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
         <h3>Issues</h3>
         <select
           value={filter}
-          onChange={(e) => handleFilterChange(e.target.value as 'all' | 'unread' | 'read')}
+          onChange={(event) => handleFilterChange(event.target.value as 'all' | 'unread' | 'read')}
         >
           <option value="all">All</option>
           <option value="unread">Unread</option>
@@ -133,7 +248,7 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
 
       <div className="issues">
         {issues.map((issue) => {
-          const hasDeps = dependencies[issue.id] !== undefined
+          const hasDependencies = dependencies[issue.id] !== undefined
           const tooltipContent = getDependencyTooltip(dependencies[issue.id])
 
           return (
@@ -144,11 +259,11 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
             >
               <span className="issue-icon">{getStatusIcon(issue)}</span>
               <span className="issue-number">#{issue.issue_number}</span>
-              {hasDeps && tooltipContent && (
+              {hasDependencies && tooltipContent && (
                 <Tooltip content={tooltipContent}>
                   <span
                     className="dependency-indicator"
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
                     title="Has dependencies"
                   >
                     🔗
