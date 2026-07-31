@@ -7,6 +7,12 @@ on:
     paths:
       - tmp-production-profile-review-fixes/**
       - .github/workflows/materialize-production-profile-review-fixes.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - tmp-production-profile-review-fixes/**
+      - .github/workflows/materialize-production-profile-review-fixes.yml
   workflow_dispatch:
 
 permissions:
@@ -14,6 +20,7 @@ permissions:
 
 jobs:
   materialize:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
