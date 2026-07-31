@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - ops/run-production-profile-20260731
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -76,7 +79,7 @@ jobs:
             throw new Error('Playwright JSON report did not contain production-profile.json')
           }
 
-          let candidates = []
+          const candidates = []
           if (typeof attachment.body === 'string') {
             candidates.push(Buffer.from(attachment.body, 'base64').toString('utf8'))
             candidates.push(attachment.body)
