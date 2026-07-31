@@ -10,7 +10,7 @@ jobs:
     name: Production Profile (Chromium)
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/joshclwren/comic-pile:6a877fa8339c3e688c8eef2281fe59ea4fe4f5dd
+      image: ghcr.io/joshclwren/comic-pile@sha256:3670d8ace7fca4515dfd38291994f60ca7d0cb5cb75baa9d7c3b076cc1c3f5f9
       options: --shm-size=2gb
     timeout-minutes: 15
     env:
