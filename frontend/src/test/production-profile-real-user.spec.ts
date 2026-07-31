@@ -1,59 +1,135 @@
-import { expect, test, type BrowserContext, type Page, type TestInfo } from '@playwright/test'
+import {
+  expect,
+  test,
+  type BrowserContext,
+  type Dialog,
+  type Locator,
+  type Page,
+  type Response,
+  type TestInfo,
+} from '@playwright/test'
+import { setRangeInput } from './helpers'
 import {
   type WorkloadScope,
-  type ActionGroup,
-  type ApiRecord,
   type ActionTimelineEntry,
-  type BrowserApiResult,
   type Thread,
   type ThreadListResponse,
-  type Issue,
-  type IssueListResponse,
   type SessionCurrent,
-  type SessionListResponse,
-  type AnalyticsMetrics,
-  type RollResponse,
-  type Dependency,
-  type ThreadDependenciesResponse,
-  type FixtureState,
   type AccountComplexitySnapshot,
   type RatingOutcome,
   type CleanupReport,
-  type NetworkProfile,
-  BrowserApiError,
   manifest,
   actionById,
   expectedActionIds,
-  fixturePrefix,
   defaultUsername,
-  requestTimeoutMs,
   numericEnvironmentValue,
   percentile,
-  normalizeRoute,
-  safeBodyShape,
-  shapeOf,
-  parseDatabaseQueryCount,
   errorText,
-  isApiRequest,
-  loadHarCookies,
   installCredentialSource,
   installNetworkProfile,
   waitForCapturedAuth,
   workloadRoutes,
   browserApi,
   ensureCsrfCookie,
-  createThread,
-  listIssues,
   setupFixture,
   unrelatedThreadFingerprint,
-  compareThreadFingerprints,
   captureAccountComplexity,
-  rateWithReconciliation,
   cleanupFixture,
   routeSummary,
   duplicateGetBursts,
+  shapeOf,
   attachJson,
 } from './production-profile-real-user-support'
+
+const MAIN_DIE = '#main-die-3d'
+const RATING_INPUT = '#rating-input'
+const RATING_ERROR = '#error-message'
+const QUEUE_SEARCH = 'input[placeholder="Search..."]'
+
+async function waitForRollView(page: Page): Promise<void> {
+  await expect(page.locator(MAIN_DIE)).toBeVisible({ timeout: 20_000 })
+}
+
+async function waitForRatingView(page: Page, expectedTitle?: string): Promise<void> {
+  await expect(page.locator(RATING_INPUT)).toBeVisible({ timeout: 20_000 })
+  if (expectedTitle) {
+    await expect(page.locator('#thread-info')).toContainText(expectedTitle, { timeout: 10_000 })
+  }
+}
+
+async function selectPoolThread(page: Page, title: string): Promise<void> {
+  await waitForRollView(page)
+  const pool = page.locator('[data-roll-pool]')
+  const thread = pool.locator('[role="button"]').filter({ hasText: title }).first()
+  await expect(thread, `Fixture ${title} must be in the visible roll pool`).toBeVisible({ timeout: 15_000 })
+  await thread.click()
+  await expect(page.getByRole('dialog')).toContainText(title)
+  await page.getByRole('button', { name: 'Read Now' }).click()
+  await waitForRatingView(page, title)
+}
+
+async function cancelRatingView(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Cancel' }).click()
+  await waitForRollView(page)
+}
+
+async function rollAndCancel(page: Page): Promise<void> {
+  await waitForRollView(page)
+  await page.locator(MAIN_DIE).click()
+  await waitForRatingView(page)
+  await cancelRatingView(page)
+}
+
+async function gotoQueue(page: Page): Promise<void> {
+  await page.goto('/queue', { waitUntil: 'domcontentloaded' })
+  await expect(page.getByRole('heading', { name: 'Read Queue' })).toBeVisible({ timeout: 20_000 })
+}
+
+async function filteredQueueCard(page: Page, title: string): Promise<Locator> {
+  await gotoQueue(page)
+  const search = page.locator(QUEUE_SEARCH)
+  await search.fill(title)
+  const card = page.getByTestId('queue-thread-item').filter({ hasText: title }).first()
+  await expect(card).toBeVisible({ timeout: 15_000 })
+  return card
+}
+
+async function openQueueAction(page: Page, title: string, actionName: string): Promise<void> {
+  const card = await filteredQueueCard(page, title)
+  await card.getByRole('button', { name: 'Thread actions' }).click()
+  const menu = page.getByRole('menu', { name: 'Thread actions' })
+  await expect(menu).toBeVisible()
+  await menu.getByRole('menuitem', { name: actionName }).click()
+}
+
+async function openPrimaryEditModal(page: Page, title: string): Promise<Locator> {
+  const card = await filteredQueueCard(page, title)
+  await card.getByRole('button', { name: 'Thread actions' }).click()
+  await page.getByRole('menuitem', { name: 'Edit thread' }).click()
+  const dialog = page.getByRole('dialog').filter({ hasText: 'Edit Thread' })
+  await expect(dialog).toBeVisible({ timeout: 15_000 })
+  return dialog
+}
+
+async function ensureExpandedIssueList(dialog: Locator, issueCount: number): Promise<void> {
+  const showAll = dialog.getByRole('button', { name: `Show all ${issueCount}` })
+  if (await showAll.count()) await showAll.click()
+}
+
+async function waitForMutationResponse(
+  page: Page,
+  method: string,
+  route: RegExp,
+  action: () => Promise<void>,
+  timeout = 15_000,
+): Promise<Response | null> {
+  const responsePromise = page.waitForResponse((response: Response) => {
+    const url = new URL(response.url())
+    return response.request().method() === method && route.test(url.pathname + url.search)
+  }, { timeout }).catch(() => null)
+  await action()
+  return responsePromise
+}
 
 test('faithful real-user HAR workload profiles the existing production account', async (
   { page, context }: { page: Page; context: BrowserContext },
@@ -78,8 +154,9 @@ test('faithful real-user HAR workload profiles the existing production account',
   let currentScope: WorkloadScope = 'workload'
   const timeline: ActionTimelineEntry[] = []
   const ratingOutcomes: RatingOutcome[] = []
-  let fixture: FixtureState | null = null
+  let fixture: Awaited<ReturnType<typeof setupFixture>> | null = null
   let beforeFingerprint = new Map<number, string>()
+  let initialSession: SessionCurrent | null = null
   let cleanupReport: CleanupReport = {
     attempted: false,
     dependencyIdsDeleted: [],
@@ -144,6 +221,127 @@ test('faithful real-user HAR workload profiles the existing production account',
   let accessToken = ''
   let accountComplexity: AccountComplexitySnapshot | null = null
   let bugReportConstruction: unknown = null
+  let dependencyId: number | null = null
+  let addedIssueId: number | null = null
+
+  const rateThroughUi = async (
+    actionId: string,
+    threadId: number,
+    threadTitle: string,
+    rating: number,
+  ): Promise<RatingOutcome> => {
+    await selectPoolThread(page, threadTitle)
+    await setRangeInput(page, RATING_INPUT, String(rating))
+
+    const response = await waitForMutationResponse(
+      page,
+      'POST',
+      /^\/api\/rate\/$/,
+      async () => page.getByTestId('save-and-continue').click(),
+      12_000,
+    )
+
+    let detail = 'Rating request did not produce an HTTP response before the client timeout.'
+    let authoritativeStateChecked = false
+    let authoritativeRating: number | null = null
+    let classification: RatingOutcome['classification'] = 'unknown-outcome'
+
+    if (response) {
+      if (response.ok()) {
+        classification = 'definite-success'
+        detail = 'The actual frontend rating POST returned a successful HTTP response.'
+      } else {
+        classification = 'definite-failure'
+        detail = `The actual frontend rating POST returned HTTP ${response.status()}.`
+      }
+    } else {
+      currentScope = 'reconciliation'
+      authoritativeStateChecked = true
+      await page.waitForTimeout(750)
+      try {
+        const authoritative = (await browserApi<Thread>(
+          page,
+          accessToken,
+          `/api/threads/${threadId}`,
+        )).body
+        authoritativeRating = typeof authoritative.last_rating === 'number'
+          ? authoritative.last_rating
+          : null
+        if (authoritativeRating === rating) {
+          classification = 'definite-success'
+          detail = 'The client timed out, but authoritative thread state confirms the rating committed.'
+        } else {
+          detail = 'The client timed out and authoritative state could not prove whether the write committed.'
+        }
+      } catch (error) {
+        detail = `Rating transport failed and reconciliation also failed: ${errorText(error)}`
+      } finally {
+        currentScope = 'workload'
+      }
+    }
+
+    const mainDie = page.locator(MAIN_DIE)
+    const errorMessage = page.locator(RATING_ERROR)
+    await Promise.race([
+      mainDie.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => undefined),
+      errorMessage.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => undefined),
+    ])
+    if (await errorMessage.isVisible().catch(() => false)) {
+      const uiError = (await errorMessage.textContent())?.trim()
+      if (uiError) detail = `${detail} UI message: ${uiError}`
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      await waitForRollView(page)
+    }
+
+    return {
+      actionId,
+      threadId,
+      rating,
+      requestStatus: response?.status() ?? null,
+      classification,
+      authoritativeStateChecked,
+      authoritativeRating,
+      detail,
+    }
+  }
+
+  const restoreSessionState = async (): Promise<void> => {
+    if (!initialSession || !accessToken) return
+    currentActionId = 'cleanup-session-state'
+    currentScope = 'cleanup'
+
+    try {
+      const current = (await browserApi<SessionCurrent>(page, accessToken, '/api/sessions/current/')).body
+      if (current.pending_thread_id) {
+        await browserApi(page, accessToken, '/api/roll/dismiss-pending', { method: 'POST' })
+      }
+    } catch (error) {
+      cleanupReport.errors.push(`dismiss current pending state: ${errorText(error)}`)
+    }
+
+    try {
+      if (initialSession.manual_die !== null && initialSession.manual_die !== undefined) {
+        await browserApi(page, accessToken, `/api/roll/set-die?die=${initialSession.manual_die}`, { method: 'POST' })
+      } else {
+        await browserApi(page, accessToken, '/api/roll/clear-manual-die', { method: 'POST' })
+      }
+    } catch (error) {
+      cleanupReport.errors.push(`restore manual die: ${errorText(error)}`)
+    }
+
+    if (initialSession.pending_thread_id) {
+      try {
+        await browserApi(
+          page,
+          accessToken,
+          `/api/threads/${initialSession.pending_thread_id}/set-pending`,
+          { method: 'POST' },
+        )
+      } catch (error) {
+        cleanupReport.errors.push(`restore original pending thread: ${errorText(error)}`)
+      }
+    }
+  }
 
   try {
     await runAction('cold-authenticated-start', async () => {
@@ -151,12 +349,17 @@ test('faithful real-user HAR workload profiles the existing production account',
       await waitForCapturedAuth(profile, page)
       accessToken = profile.getCapturedAccessToken() ?? ''
       expect(profile.getAuthenticatedUsername()).toBe(expectedUsername)
+      await expect(page.locator('#root')).toBeVisible()
     })
 
     currentActionId = 'fixture-setup'
     currentScope = 'fixture-setup'
     await ensureCsrfCookie(page, accessToken)
     accountComplexity = await captureAccountComplexity(page, accessToken)
+    initialSession = (await browserApi<SessionCurrent>(page, accessToken, '/api/sessions/current/')).body
+    if (initialSession.pending_thread_id) {
+      await browserApi(page, accessToken, '/api/roll/dismiss-pending', { method: 'POST' })
+    }
     const beforeThreads = (await browserApi<ThreadListResponse>(
       page,
       accessToken,
@@ -164,266 +367,230 @@ test('faithful real-user HAR workload profiles the existing production account',
     )).body.threads
     beforeFingerprint = unrelatedThreadFingerprint(beforeThreads)
     fixture = await setupFixture(page, accessToken, runId)
+    await browserApi(page, accessToken, `/api/queue/threads/${fixture.primary.id}/front/`, { method: 'PUT' })
 
     await runAction('home-revisit', async () => {
-      await Promise.all([
-        browserApi<ThreadListResponse>(page, accessToken, '/api/threads/?page_size=200'),
-        browserApi<SessionCurrent>(page, accessToken, '/api/sessions/current/'),
-      ])
+      await page.goto('/', { waitUntil: 'domcontentloaded' })
+      await waitForRollView(page)
     })
 
     await runAction('session-history', async () => {
-      await browserApi<SessionListResponse>(page, accessToken, '/api/sessions/')
+      await page.goto('/history', { waitUntil: 'domcontentloaded' })
+      await expect(page.locator('#root')).toBeVisible()
     })
 
     await runAction('analytics-first', async () => {
-      await browserApi<AnalyticsMetrics>(page, accessToken, '/api/analytics/metrics')
+      await page.goto('/analytics', { waitUntil: 'domcontentloaded' })
+      await expect(page.locator('#root')).toBeVisible()
     })
 
     await runAction('rating-first', async () => {
-      const unread = (await listIssues(page, accessToken, fixture!.primary.id))
-        .find((issue) => issue.status === 'unread')
-      if (!unread) throw new Error('Primary fixture has no unread issue for rating.')
-      await browserApi(page, accessToken, `/api/threads/${fixture!.primary.id}/set-pending`, { method: 'POST' })
-      ratingOutcomes.push(await rateWithReconciliation(
-        page,
-        accessToken,
+      await page.goto('/', { waitUntil: 'domcontentloaded' })
+      ratingOutcomes.push(await rateThroughUi(
         'rating-first',
         fixture!.primary.id,
-        unread.issue_number,
+        fixture!.primary.title,
         3.5,
       ))
-      await Promise.all([
-        browserApi<SessionCurrent>(page, accessToken, '/api/sessions/current/'),
-        browserApi<ThreadListResponse>(page, accessToken, '/api/threads/?page_size=200'),
-        browserApi<Thread[]>(page, accessToken, '/api/threads/stale?days=7'),
-      ])
     })
 
     await runAction('roll-rate', async () => {
-      const roll = (await browserApi<RollResponse>(page, accessToken, '/api/roll/', { method: 'POST' })).body
-      await Promise.all([
-        browserApi(page, accessToken, `/api/v1/threads/${roll.thread_id}/reading-orders`),
-        browserApi(page, accessToken, `/api/v1/threads/${roll.thread_id}/connected`),
-      ])
-      await browserApi(page, accessToken, '/api/roll/dismiss-pending', { method: 'POST' })
-      const unread = (await listIssues(page, accessToken, fixture!.primary.id))
-        .find((issue) => issue.status === 'unread')
-      if (!unread) throw new Error('Primary fixture has no unread issue for roll-rate.')
-      await browserApi(page, accessToken, `/api/threads/${fixture!.primary.id}/set-pending`, { method: 'POST' })
-      ratingOutcomes.push(await rateWithReconciliation(
-        page,
-        accessToken,
+      await rollAndCancel(page)
+      ratingOutcomes.push(await rateThroughUi(
         'roll-rate',
         fixture!.primary.id,
-        unread.issue_number,
+        fixture!.primary.title,
         4,
       ))
-      await Promise.all([
-        browserApi<SessionCurrent>(page, accessToken, '/api/sessions/current/'),
-        browserApi<ThreadListResponse>(page, accessToken, '/api/threads/?page_size=200'),
-        browserApi<Thread[]>(page, accessToken, '/api/threads/stale?days=7'),
-      ])
     })
 
     await runAction('roll-snooze', async () => {
-      const roll = (await browserApi<RollResponse>(page, accessToken, '/api/roll/', { method: 'POST' })).body
-      await Promise.all([
-        browserApi(page, accessToken, `/api/v1/threads/${roll.thread_id}/reading-orders`),
-        browserApi(page, accessToken, `/api/v1/threads/${roll.thread_id}/connected`),
-      ])
-      await browserApi(page, accessToken, '/api/roll/dismiss-pending', { method: 'POST' })
-      await browserApi(page, accessToken, `/api/threads/${fixture!.primary.id}/set-pending`, { method: 'POST' })
-      await browserApi(page, accessToken, '/api/snooze/', { method: 'POST' })
-      await Promise.all([
-        browserApi<SessionCurrent>(page, accessToken, '/api/sessions/current/'),
-        browserApi<ThreadListResponse>(page, accessToken, '/api/threads/?page_size=200'),
-      ])
-      await browserApi(page, accessToken, `/api/snooze/${fixture!.primary.id}/unsnooze`, { method: 'POST' })
+      await rollAndCancel(page)
+      await selectPoolThread(page, fixture!.primary.title)
+      await page.getByRole('button', { name: 'Snooze' }).click()
+      await waitForRollView(page)
+      await page.getByRole('button', { name: /Snoozed \(/ }).click()
+      const snoozedRow = page.locator('div').filter({ hasText: fixture!.primary.title })
+        .filter({ has: page.getByRole('button', { name: 'Unsnooze this comic' }) }).last()
+      await expect(snoozedRow).toBeVisible()
+      await snoozedRow.getByRole('button', { name: 'Unsnooze this comic' }).click()
+      await expect(snoozedRow).toHaveCount(0)
     })
 
     await runAction('roll-dismiss-pending', async () => {
-      const roll = (await browserApi<RollResponse>(page, accessToken, '/api/roll/', { method: 'POST' })).body
-      await Promise.all([
-        browserApi(page, accessToken, `/api/v1/threads/${roll.thread_id}/reading-orders`),
-        browserApi(page, accessToken, `/api/v1/threads/${roll.thread_id}/connected`),
-      ])
-      await browserApi(page, accessToken, '/api/roll/dismiss-pending', { method: 'POST' })
-      await Promise.all([
-        browserApi<SessionCurrent>(page, accessToken, '/api/sessions/current/'),
-        browserApi<ThreadListResponse>(page, accessToken, '/api/threads/?page_size=200'),
-      ])
+      await rollAndCancel(page)
     })
 
     await runAction('roll-set-pending', async () => {
-      const roll = (await browserApi<RollResponse>(page, accessToken, '/api/roll/', { method: 'POST' })).body
-      await Promise.all([
-        browserApi(page, accessToken, `/api/v1/threads/${roll.thread_id}/reading-orders`),
-        browserApi(page, accessToken, `/api/v1/threads/${roll.thread_id}/connected`),
-      ])
-      await browserApi(page, accessToken, '/api/roll/dismiss-pending', { method: 'POST' })
-      await browserApi(page, accessToken, `/api/threads/${fixture!.primary.id}/set-pending`, { method: 'POST' })
-      await Promise.all([
-        browserApi(page, accessToken, `/api/v1/threads/${fixture!.primary.id}/reading-orders`),
-        browserApi(page, accessToken, `/api/v1/threads/${fixture!.primary.id}/connected`),
-      ])
-      await browserApi(page, accessToken, '/api/roll/dismiss-pending', { method: 'POST' })
+      await rollAndCancel(page)
+      await selectPoolThread(page, fixture!.primary.title)
+      await cancelRatingView(page)
     })
 
     await runAction('queue-front', async () => {
-      await browserApi(page, accessToken, `/api/queue/threads/${fixture!.primary.id}/front/`, { method: 'PUT' })
-      await Promise.all([
-        browserApi<SessionCurrent>(page, accessToken, '/api/sessions/current/'),
-        browserApi<ThreadListResponse>(page, accessToken, '/api/threads/?page_size=200'),
-      ])
+      const response = await waitForMutationResponse(
+        page,
+        'PUT',
+        new RegExp(`^/api/queue/threads/${fixture!.primary.id}/front/$`),
+        async () => openQueueAction(page, fixture!.primary.title, 'Move to front'),
+      )
+      expect(response?.ok()).toBe(true)
     })
 
     await runAction('open-large-thread', async () => {
-      await Promise.all([
-        browserApi<IssueListResponse>(
-          page,
-          accessToken,
-          `/api/v1/threads/${fixture!.primary.id}/issues?page_size=100`,
-        ),
-        browserApi(
-          page,
-          accessToken,
-          `/api/v1/threads/${fixture!.primary.id}/issue-dependencies`,
-        ),
-      ])
+      const card = await filteredQueueCard(page, fixture!.primary.title)
+      await card.locator('.queue-thread-card').click()
+      await page.waitForURL(new RegExp(`/thread/${fixture!.primary.id}$`), { timeout: 15_000 })
+      await expect(page.getByRole('heading', { name: fixture!.primary.title })).toBeVisible()
+      await page.getByRole('button', { name: 'Expand' }).click()
+      await expect(page.getByText('#40', { exact: true })).toBeVisible()
+      await page.getByRole('button', { name: 'Edit', exact: true }).click()
+      const dialog = page.getByRole('dialog').filter({ hasText: 'Edit Thread' })
+      await expect(dialog).toBeVisible()
+      await ensureExpandedIssueList(dialog, 40)
     })
+
+    const initiallyUnread = fixture.primaryIssues.find((issue) => issue.status === 'unread')
+    const initiallyRead = fixture.primaryIssues.find((issue) => issue.status === 'read')
+    if (!initiallyUnread || !initiallyRead) {
+      throw new Error('Fixture must contain both read and unread issues.')
+    }
 
     await runAction('mark-read', async () => {
-      const unread = (await listIssues(page, accessToken, fixture!.primary.id))
-        .find((issue) => issue.status === 'unread')
-      if (!unread) throw new Error('Primary fixture has no unread issue to mark read.')
-      await browserApi(page, accessToken, `/api/v1/issues/${unread.id}:markRead`, { method: 'POST' })
+      const dialog = page.getByRole('dialog').filter({ hasText: 'Edit Thread' })
+      const response = await waitForMutationResponse(
+        page,
+        'POST',
+        new RegExp(`^/api/v1/issues/${initiallyUnread.id}:markRead$`),
+        async () => dialog.getByTestId(`issue-toggle-${initiallyUnread.id}`).click(),
+      )
+      expect(response?.ok()).toBe(true)
     })
 
-    let addedIssueId: number | null = null
     await runAction('add-issue', async () => {
-      await browserApi(page, accessToken, `/api/v1/threads/${fixture!.primary.id}/issues`, {
-        method: 'POST',
-        body: { issue_range: '41' },
-      })
-      const issues = await listIssues(page, accessToken, fixture!.primary.id)
-      addedIssueId = issues.find((issue) => issue.issue_number === '41')?.id ?? null
-      if (!addedIssueId) throw new Error('Added issue was not returned by the issue list.')
-      await browserApi(page, accessToken, `/api/v1/threads/${fixture!.primary.id}/issue-dependencies`)
+      const dialog = page.getByRole('dialog').filter({ hasText: 'Edit Thread' })
+      await dialog.getByTestId('issue-add-input').fill('41')
+      const response = await waitForMutationResponse(
+        page,
+        'POST',
+        new RegExp(`^/api/v1/threads/${fixture!.primary.id}/issues$`),
+        async () => dialog.getByTestId('issue-add-button').click(),
+      )
+      expect(response?.ok()).toBe(true)
+      const pill = dialog.locator('[data-issue-number="41"]')
+      await expect(pill).toBeVisible({ timeout: 15_000 })
+      const testId = await pill.getAttribute('data-testid')
+      const match = testId?.match(/^issue-pill-(\d+)$/)
+      if (!match) throw new Error('Could not resolve the dynamically created issue ID from the UI.')
+      addedIssueId = Number(match[1])
     })
 
     await runAction('reorder-issues', async () => {
-      const issues = await listIssues(page, accessToken, fixture!.primary.id)
-      if (!addedIssueId) throw new Error('No added issue is available for reordering.')
-      const issueIds = [addedIssueId, ...issues.filter((issue) => issue.id !== addedIssueId).map((issue) => issue.id)]
-      await browserApi(page, accessToken, `/api/v1/threads/${fixture!.primary.id}/issues:reorder`, {
-        method: 'POST',
-        body: { issue_ids: issueIds },
-      })
+      if (!addedIssueId) throw new Error('Added issue ID is unavailable for reorder.')
+      const dialog = page.getByRole('dialog').filter({ hasText: 'Edit Thread' })
+      const response = await waitForMutationResponse(
+        page,
+        'POST',
+        new RegExp(`^/api/v1/threads/${fixture!.primary.id}/issues:reorder$`),
+        async () => dialog.getByTestId(`issue-move-up-${addedIssueId}`).click(),
+      )
+      expect(response?.ok()).toBe(true)
     })
 
     await runAction('delete-issue', async () => {
-      if (!addedIssueId) throw new Error('No added issue is available for deletion.')
-      await browserApi(page, accessToken, `/api/v1/issues/${addedIssueId}`, { method: 'DELETE' })
+      if (!addedIssueId) throw new Error('Added issue ID is unavailable for deletion.')
+      page.once('dialog', (dialog: Dialog) => dialog.accept())
+      const editDialog = page.getByRole('dialog').filter({ hasText: 'Edit Thread' })
+      const response = await waitForMutationResponse(
+        page,
+        'DELETE',
+        new RegExp(`^/api/v1/issues/${addedIssueId}$`),
+        async () => editDialog.getByTestId(`issue-delete-${addedIssueId}`).click(),
+      )
+      expect(response?.ok()).toBe(true)
+      addedIssueId = null
     })
 
     await runAction('edit-thread', async () => {
-      await browserApi(page, accessToken, `/api/threads/${fixture!.primary.id}`, {
-        method: 'PUT',
-        body: {
-          title: fixture!.primary.title,
-          format: 'Comics',
-          notes: 'Faithful profile fixture, edited reversibly during the workload.',
-        },
-      })
-      await browserApi<ThreadListResponse>(page, accessToken, '/api/threads/?page_size=200')
+      const dialog = page.getByRole('dialog').filter({ hasText: 'Edit Thread' })
+      await dialog.getByLabel('Notes').fill('Faithful real-user production profile fixture, edited through the production UI.')
+      const response = await waitForMutationResponse(
+        page,
+        'PUT',
+        new RegExp(`^/api/threads/${fixture!.primary.id}$`),
+        async () => dialog.getByRole('button', { name: 'Save Changes' }).click(),
+      )
+      expect(response?.ok()).toBe(true)
+      await expect(dialog).toHaveCount(0)
     })
 
     await runAction('queue-back-dependencies', async () => {
-      await browserApi(page, accessToken, `/api/queue/threads/${fixture!.primary.id}/back/`, { method: 'PUT' })
-      await Promise.all([
-        browserApi<ThreadListResponse>(page, accessToken, '/api/threads/?page_size=200'),
-        browserApi<ThreadDependenciesResponse>(
-          page,
-          accessToken,
-          `/api/v1/threads/${fixture!.primary.id}/dependencies`,
-        ),
-      ])
+      const moveResponse = await waitForMutationResponse(
+        page,
+        'PUT',
+        new RegExp(`^/api/queue/threads/${fixture!.primary.id}/back/$`),
+        async () => openQueueAction(page, fixture!.primary.title, 'Move to back'),
+      )
+      expect(moveResponse?.ok()).toBe(true)
+      await openQueueAction(page, fixture!.primary.title, 'Manage dependencies')
+      await expect(page.getByRole('dialog')).toContainText(/Dependencies/)
     })
 
     await runAction('progressive-search', async () => {
-      for (const search of ['AAS', 'AA', 'SP', 'sp']) {
-        await browserApi<ThreadListResponse>(
-          page,
-          accessToken,
-          `/api/threads/?search=${encodeURIComponent(search)}`,
-        )
+      await page.getByRole('button', { name: 'Close' }).click()
+      const search = page.locator(QUEUE_SEARCH)
+      for (const query of ['AAS', 'AA', 'SP', 'sp']) {
+        await search.fill(query)
+        await page.waitForTimeout(350)
       }
+      await search.fill(fixture!.primary.title)
     })
 
-    let dependencyId: number | null = null
     await runAction('create-dependency', async () => {
-      await Promise.all([
-        browserApi<IssueListResponse>(
-          page,
-          accessToken,
-          `/api/v1/threads/${fixture!.primary.id}/issues?page_size=100&status=unread`,
-        ),
-        browserApi<IssueListResponse>(
-          page,
-          accessToken,
-          `/api/v1/threads/${fixture!.dependencyTarget.id}/issues?page_size=100&status=unread`,
-        ),
-      ])
-      const dependency = (await browserApi<Dependency>(page, accessToken, '/api/v1/dependencies/', {
-        method: 'POST',
-        body: {
-          source_type: 'thread',
-          source_id: fixture!.primary.id,
-          target_type: 'thread',
-          target_id: fixture!.dependencyTarget.id,
-        },
-      })).body
-      dependencyId = dependency.id
-      fixture!.createdDependencyIds.add(dependency.id)
-      await Promise.all([
-        browserApi<ThreadDependenciesResponse>(
-          page,
-          accessToken,
-          `/api/v1/threads/${fixture!.primary.id}/dependencies`,
-        ),
-        browserApi<ThreadListResponse>(page, accessToken, '/api/threads/?page_size=200'),
-      ])
+      await openQueueAction(page, fixture!.primary.title, 'Manage dependencies')
+      const dialog = page.getByRole('dialog').filter({ hasText: /Dependencies/ })
+      const search = dialog.getByLabel('Search prerequisite thread')
+      await search.fill(fixture!.dependencyTarget.title)
+      const candidate = dialog.getByRole('button').filter({ hasText: fixture!.dependencyTarget.title }).first()
+      await expect(candidate).toBeVisible({ timeout: 15_000 })
+      await candidate.click()
+      await expect(dialog.getByLabel('Prerequisite issue')).toBeEnabled({ timeout: 15_000 })
+      await expect(dialog.getByLabel('Target issue')).toBeEnabled({ timeout: 15_000 })
+      const response = await waitForMutationResponse(
+        page,
+        'POST',
+        /^\/api\/v1\/dependencies\/$/,
+        async () => dialog.getByRole('button', { name: /^Block issue/ }).click(),
+      )
+      expect(response?.ok()).toBe(true)
+      const created = response ? await response.json() as { id?: number } : null
+      dependencyId = created?.id ?? null
+      if (!dependencyId) throw new Error('Dependency response did not include an ID.')
+      fixture!.createdDependencyIds.add(dependencyId)
+      await expect(dialog.getByRole('button', { name: 'Remove' }).first()).toBeVisible()
     })
 
     await runAction('dependency-management', async () => {
-      await Promise.all([
-        browserApi<ThreadDependenciesResponse>(
-          page,
-          accessToken,
-          `/api/v1/threads/${fixture!.primary.id}/dependencies`,
-        ),
-        browserApi<ThreadDependenciesResponse>(
-          page,
-          accessToken,
-          `/api/v1/threads/${fixture!.dependencyTarget.id}/dependencies`,
-        ),
-        browserApi<number[]>(page, accessToken, '/api/v1/dependencies/blocked'),
-        browserApi<ThreadListResponse>(page, accessToken, '/api/threads/'),
-      ])
       if (!dependencyId) throw new Error('Dependency was not created.')
-      await browserApi(page, accessToken, `/api/v1/dependencies/${dependencyId}`, { method: 'DELETE' })
-      fixture!.createdDependencyIds.delete(dependencyId)
-      dependencyId = null
-      await Promise.all([
-        browserApi<ThreadDependenciesResponse>(
+      const dialog = page.getByRole('dialog').filter({ hasText: /Dependencies/ })
+      await dialog.getByRole('button', { name: 'Remove' }).first().click()
+      await page.getByRole('button', { name: 'Close' }).click()
+      await expect(dialog).toHaveCount(0)
+      currentScope = 'reconciliation'
+      try {
+        const dependencies = (await browserApi<{ blocking: Array<{ id: number }>; blocked_by: Array<{ id: number }> }>(
           page,
           accessToken,
           `/api/v1/threads/${fixture!.primary.id}/dependencies`,
-        ),
-        browserApi<number[]>(page, accessToken, '/api/v1/dependencies/blocked'),
-        browserApi<ThreadListResponse>(page, accessToken, '/api/threads/?page_size=200'),
-      ])
+        )).body
+        const remaining = [...dependencies.blocking, ...dependencies.blocked_by]
+          .some((dependency) => dependency.id === dependencyId)
+        expect(remaining).toBe(false)
+        fixture!.createdDependencyIds.delete(dependencyId)
+        dependencyId = null
+      } finally {
+        currentScope = 'workload'
+      }
     })
 
     await runAction('bug-report', async () => {
@@ -455,107 +622,111 @@ test('faithful real-user HAR workload profiles the existing production account',
     }
 
     await runAction('analytics-second', async () => {
-      await browserApi<AnalyticsMetrics>(page, accessToken, '/api/analytics/metrics')
+      await page.goto('/analytics', { waitUntil: 'domcontentloaded' })
+      await expect(page.locator('#root')).toBeVisible()
     })
 
     await runAction('reactivation', async () => {
-      await Promise.all([
-        browserApi<ThreadListResponse>(page, accessToken, '/api/threads/?page_size=200'),
-        browserApi<SessionCurrent>(page, accessToken, '/api/sessions/current/'),
-      ])
-      await browserApi(page, accessToken, '/api/threads/reactivate', {
-        method: 'POST',
-        body: { thread_id: fixture!.completed.id, issues_to_add: 1 },
-      })
-      await Promise.all([
-        browserApi<ThreadListResponse>(page, accessToken, '/api/threads/?page_size=200'),
-        browserApi<Thread>(page, accessToken, `/api/threads/${fixture!.completed.id}`),
-        browserApi<SessionCurrent>(page, accessToken, '/api/sessions/current/'),
-        browserApi<Thread[]>(page, accessToken, '/api/threads/stale?days=7'),
-      ])
+      await gotoQueue(page)
+      const completedCard = page.locator('.glass-card').filter({ hasText: fixture!.completed.title }).last()
+      await expect(completedCard).toBeVisible({ timeout: 15_000 })
+      await completedCard.getByRole('button', { name: 'Reactivate' }).click()
+      const dialog = page.getByRole('dialog').filter({ hasText: 'Reactivate Thread' })
+      await expect(dialog).toBeVisible()
+      const response = await waitForMutationResponse(
+        page,
+        'POST',
+        /^\/api\/threads\/reactivate$/,
+        async () => dialog.getByRole('button', { name: 'Reactivate' }).click(),
+      )
+      expect(response?.ok()).toBe(true)
     })
 
     await runAction('mark-unread', async () => {
-      const issues = await listIssues(page, accessToken, fixture!.primary.id)
-      const readIssue = issues.find((issue) => issue.status === 'read')
-      if (!readIssue) throw new Error('Primary fixture has no read issue to mark unread.')
-      await browserApi(page, accessToken, `/api/v1/issues/${readIssue.id}:markUnread`, { method: 'POST' })
-      await Promise.all([
-        browserApi<SessionCurrent>(page, accessToken, '/api/sessions/current/'),
-        browserApi<ThreadListResponse>(page, accessToken, '/api/threads/?page_size=200'),
-      ])
+      const dialog = await openPrimaryEditModal(page, fixture!.primary.title)
+      await ensureExpandedIssueList(dialog, 40)
+      const response = await waitForMutationResponse(
+        page,
+        'POST',
+        new RegExp(`^/api/v1/issues/${initiallyRead.id}:markUnread$`),
+        async () => dialog.getByTestId(`issue-toggle-${initiallyRead.id}`).click(),
+      )
+      expect(response?.ok()).toBe(true)
+      await page.getByRole('button', { name: 'Close' }).click()
     })
 
     await runAction('rating-second', async () => {
-      const unread = (await listIssues(page, accessToken, fixture!.primary.id))
-        .find((issue) => issue.status === 'unread')
-      if (!unread) throw new Error('Primary fixture has no unread issue for second rating.')
-      await browserApi(page, accessToken, `/api/threads/${fixture!.primary.id}/set-pending`, { method: 'POST' })
-      ratingOutcomes.push(await rateWithReconciliation(
-        page,
-        accessToken,
+      await page.goto('/', { waitUntil: 'domcontentloaded' })
+      ratingOutcomes.push(await rateThroughUi(
         'rating-second',
         fixture!.primary.id,
-        unread.issue_number,
+        fixture!.primary.title,
         4.5,
       ))
-      await Promise.all([
-        browserApi<SessionCurrent>(page, accessToken, '/api/sessions/current/'),
-        browserApi<ThreadListResponse>(page, accessToken, '/api/threads/?page_size=200'),
-        browserApi<Thread[]>(page, accessToken, '/api/threads/stale?days=7'),
-      ])
     })
 
     await runAction('dice-changes', async () => {
       for (const die of [50, 100, 4, 20]) {
-        await browserApi(page, accessToken, `/api/roll/set-die?die=${die}`, { method: 'POST' })
+        const response = await waitForMutationResponse(
+          page,
+          'POST',
+          new RegExp(`^/api/roll/set-die\\?die=${die}$`),
+          async () => page.getByRole('button', { name: `d${die}`, exact: true }).click(),
+        )
+        expect(response?.ok()).toBe(true)
       }
     })
 
     await runAction('roll-dismiss-second', async () => {
-      const roll = (await browserApi<RollResponse>(page, accessToken, '/api/roll/', { method: 'POST' })).body
-      await Promise.all([
-        browserApi(page, accessToken, `/api/v1/threads/${roll.thread_id}/reading-orders`),
-        browserApi(page, accessToken, `/api/v1/threads/${roll.thread_id}/connected`),
-      ])
-      await browserApi(page, accessToken, '/api/roll/dismiss-pending', { method: 'POST' })
-      await Promise.all([
-        browserApi<SessionCurrent>(page, accessToken, '/api/sessions/current/'),
-        browserApi<ThreadListResponse>(page, accessToken, '/api/threads/?page_size=200'),
-      ])
+      await rollAndCancel(page)
     })
 
     await runAction('final-roll-rate', async () => {
-      await browserApi(page, accessToken, '/api/roll/set-die?die=100', { method: 'POST' })
-      const roll = (await browserApi<RollResponse>(page, accessToken, '/api/roll/', { method: 'POST' })).body
-      await Promise.all([
-        browserApi(page, accessToken, `/api/v1/threads/${roll.thread_id}/reading-orders`),
-        browserApi(page, accessToken, `/api/v1/threads/${roll.thread_id}/connected`),
-      ])
-      await browserApi(page, accessToken, '/api/roll/dismiss-pending', { method: 'POST' })
-      const unread = (await listIssues(page, accessToken, fixture!.primary.id))
-        .find((issue) => issue.status === 'unread')
-      if (!unread) throw new Error('Primary fixture has no unread issue for final rating.')
-      await browserApi(page, accessToken, `/api/threads/${fixture!.primary.id}/set-pending`, { method: 'POST' })
-      ratingOutcomes.push(await rateWithReconciliation(
+      const dieResponse = await waitForMutationResponse(
         page,
-        accessToken,
+        'POST',
+        /^\/api\/roll\/set-die\?die=100$/,
+        async () => page.getByRole('button', { name: 'd100', exact: true }).click(),
+      )
+      expect(dieResponse?.ok()).toBe(true)
+      await rollAndCancel(page)
+      ratingOutcomes.push(await rateThroughUi(
         'final-roll-rate',
         fixture!.primary.id,
-        unread.issue_number,
+        fixture!.primary.title,
         5,
       ))
-      await Promise.all([
-        browserApi<SessionCurrent>(page, accessToken, '/api/sessions/current/'),
-        browserApi<ThreadListResponse>(page, accessToken, '/api/threads/?page_size=200'),
-        browserApi<Thread[]>(page, accessToken, '/api/threads/stale?days=7'),
-      ])
     })
   } finally {
     if (accessToken) {
+      await restoreSessionState()
       currentActionId = 'cleanup'
       currentScope = 'cleanup'
-      cleanupReport = await cleanupFixture(page, accessToken, fixture, beforeFingerprint)
+      const fixtureCleanup = await cleanupFixture(page, accessToken, fixture, beforeFingerprint)
+      cleanupReport = {
+        ...fixtureCleanup,
+        errors: [...cleanupReport.errors, ...fixtureCleanup.errors],
+      }
+      cleanupReport.verified = fixtureCleanup.verified && cleanupReport.errors.length === 0
+
+      if (initialSession) {
+        try {
+          const restored = (await browserApi<SessionCurrent>(page, accessToken, '/api/sessions/current/')).body
+          const expectedPending = initialSession.pending_thread_id ?? null
+          const actualPending = restored.pending_thread_id ?? null
+          if (actualPending !== expectedPending) {
+            cleanupReport.errors.push(`pending thread was not restored: expected ${expectedPending}, found ${actualPending}`)
+          }
+          const expectedManualDie = initialSession.manual_die ?? null
+          const actualManualDie = restored.manual_die ?? null
+          if (actualManualDie !== expectedManualDie) {
+            cleanupReport.errors.push(`manual die was not restored: expected ${expectedManualDie}, found ${actualManualDie}`)
+          }
+        } catch (error) {
+          cleanupReport.errors.push(`session cleanup verification: ${errorText(error)}`)
+        }
+        cleanupReport.verified = cleanupReport.verified && cleanupReport.errors.length === 0
+      }
     }
     await profile.finish()
   }
@@ -603,6 +774,7 @@ test('faithful real-user HAR workload profiles the existing production account',
       workloadRequests: workloadRecords.length,
       setupRequests: profile.records.filter((record) => record.scope === 'fixture-setup').length,
       cleanupRequests: profile.records.filter((record) => record.scope === 'cleanup').length,
+      reconciliationRequests: profile.records.filter((record) => record.scope === 'reconciliation').length,
       failedResponses: failedResponses.length,
       transportFailures: transportFailures.length,
       slowResponses: slowResponses.length,
@@ -629,6 +801,13 @@ test('faithful real-user HAR workload profiles the existing production account',
     cleanup: cleanupReport,
     actionDivergence,
     coverage: manifest.coverage,
+    workloadExecution: {
+      measuredActionsUseProductionUi: true,
+      directApiUse: ['fixture setup', 'state snapshot', 'cleanup', 'timeout reconciliation'],
+      knownSourceDivergence: [
+        'The current queue search filters the already-loaded thread list in the browser, so the source HAR search strings are reproduced through the UI without issuing the obsolete server-side search requests.',
+      ],
+    },
     deliberateExclusions: [bugReportConstruction],
     timeline,
     routeSummary: routeSummary(workloadRecords),
@@ -689,12 +868,13 @@ test('faithful real-user HAR workload profiles the existing production account',
       actionDivergence,
       requestCountWithinEquivalentRange:
         workloadRecords.length >= minimumRequests && workloadRecords.length <= maximumRequests,
+      knownRouteDivergence: report.workloadExecution.knownSourceDivergence,
     }),
     attachJson(testInfo, 'production-profile.bug-report-construction.json', bugReportConstruction),
   ])
 
   expect(actionDivergence, 'Every source-HAR action group must execute').toEqual([])
-  expect(cleanupReport, 'Fixture cleanup must be verified').toMatchObject({ verified: true })
+  expect(cleanupReport, 'Fixture and session cleanup must be verified').toMatchObject({ verified: true })
   expect(ambiguousMutations, 'Mutation outcomes must not remain unknown').toEqual([])
   expect(failedResponses, 'Unexpected HTTP responses with status >= 400').toEqual([])
   expect(transportFailures, 'Transport failures').toEqual([])
