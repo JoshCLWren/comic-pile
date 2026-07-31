@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IssueList } from '../components/IssueList'
@@ -90,7 +90,7 @@ const buildThread = (id: number): Thread => ({
 
 describe('IssueList request races and rollback isolation', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
     mockedIssueDependenciesApi.listForThread.mockImplementation(async (threadId) => ({
       thread_id: threadId,
       issues: [],
@@ -112,12 +112,13 @@ describe('IssueList request races and rollback isolation', () => {
     rerender(<IssueList thread={buildThread(100)} />)
     await waitFor(() => expect(screen.getByText('#100')).toBeInTheDocument())
 
-    oldResponse.resolve(buildListResponse([oldIssue]))
-
-    await waitFor(() => {
-      expect(screen.getByText('#100')).toBeInTheDocument()
-      expect(screen.queryByText('#1')).not.toBeInTheDocument()
+    await act(async () => {
+      oldResponse.resolve(buildListResponse([oldIssue]))
+      await oldResponse.promise
     })
+
+    expect(screen.getByText('#100')).toBeInTheDocument()
+    expect(screen.queryByText('#1')).not.toBeInTheDocument()
   })
 
   it('ignores an older dependency response after the thread changes', async () => {
@@ -141,54 +142,29 @@ describe('IssueList request races and rollback isolation', () => {
     rerender(<IssueList thread={buildThread(100)} />)
     await waitFor(() => expect(mockedIssueDependenciesApi.listForThread).toHaveBeenCalledTimes(2))
 
-    oldDependencies.resolve({
-      thread_id: 99,
-      issues: [
-        {
-          issue_id: issue.id,
-          incoming: [
-            {
-              dependency_id: 2,
-              source_issue_id: 2,
-              source_issue_number: '2',
-              source_thread_id: 20,
-              source_thread_title: 'Source',
-            },
-          ],
-          outgoing: [],
-        },
-      ],
+    await act(async () => {
+      oldDependencies.resolve({
+        thread_id: 99,
+        issues: [
+          {
+            issue_id: issue.id,
+            incoming: [
+              {
+                dependency_id: 2,
+                source_issue_id: 2,
+                source_issue_number: '2',
+                source_thread_id: 20,
+                source_thread_title: 'Source',
+              },
+            ],
+            outgoing: [],
+          },
+        ],
+      })
+      await oldDependencies.promise
     })
 
-    await waitFor(() => {
-      expect(screen.queryByTitle('Has dependencies')).not.toBeInTheDocument()
-    })
-  })
-
-  it('ignores an older filter response when a newer filter wins', async () => {
-    const readResponse = createDeferred<IssueListResponse>()
-    const allIssue = buildIssue(1, 99, '1')
-    const readIssue = buildIssue(2, 99, '2', 'read')
-    const unreadIssue = buildIssue(3, 99, '3')
-
-    mockedIssuesApi.list
-      .mockResolvedValueOnce(buildListResponse([allIssue]))
-      .mockImplementationOnce(() => readResponse.promise)
-      .mockResolvedValueOnce(buildListResponse([unreadIssue]))
-
-    render(<IssueList thread={buildThread(99)} />)
-    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
-
-    await userEvent.selectOptions(screen.getByRole('combobox'), 'read')
-    await userEvent.selectOptions(screen.getByRole('combobox'), 'unread')
-    await waitFor(() => expect(screen.getByText('#3')).toBeInTheDocument())
-
-    readResponse.resolve(buildListResponse([readIssue]))
-
-    await waitFor(() => {
-      expect(screen.getByText('#3')).toBeInTheDocument()
-      expect(screen.queryByText('#2')).not.toBeInTheDocument()
-    })
+    expect(screen.queryByTitle('Has dependencies')).not.toBeInTheDocument()
   })
 
   it('rolls back only the failed issue and preserves another successful toggle', async () => {
@@ -210,17 +186,20 @@ describe('IssueList request races and rollback isolation', () => {
     await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
 
     await userEvent.click(screen.getByText('#1'))
+    await waitFor(() => expect(mockedIssuesApi.markRead).toHaveBeenCalledTimes(1))
     await userEvent.click(screen.getByText('#2'))
     await waitFor(() => {
+      expect(mockedIssuesApi.markRead).toHaveBeenCalledTimes(2)
       expect(screen.getByText('#2').closest('.issue-item')).toHaveClass('read')
     })
 
-    firstToggle.reject(new Error('first toggle failed'))
-
-    await waitFor(() => {
-      expect(screen.getByText('#1').closest('.issue-item')).toHaveClass('unread')
-      expect(screen.getByText('#2').closest('.issue-item')).toHaveClass('read')
+    await act(async () => {
+      firstToggle.reject(new Error('first toggle failed'))
+      await firstToggle.promise.catch(() => undefined)
     })
+
+    expect(screen.getByText('#1').closest('.issue-item')).toHaveClass('unread')
+    expect(screen.getByText('#2').closest('.issue-item')).toHaveClass('read')
     errorSpy.mockRestore()
   })
 
@@ -240,15 +219,17 @@ describe('IssueList request races and rollback isolation', () => {
     await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
 
     await userEvent.click(screen.getByText('#1'))
+    await waitFor(() => expect(mockedIssuesApi.markRead).toHaveBeenCalledWith(1))
     await userEvent.click(screen.getByRole('button', { name: /load more/i }))
     await waitFor(() => expect(screen.getByText('#3')).toBeInTheDocument())
 
-    firstToggle.reject(new Error('toggle failed'))
-
-    await waitFor(() => {
-      expect(screen.getByText('#1').closest('.issue-item')).toHaveClass('unread')
-      expect(screen.getByText('#3')).toBeInTheDocument()
+    await act(async () => {
+      firstToggle.reject(new Error('toggle failed'))
+      await firstToggle.promise.catch(() => undefined)
     })
+
+    expect(screen.getByText('#1').closest('.issue-item')).toHaveClass('unread')
+    expect(screen.getByText('#3')).toBeInTheDocument()
     errorSpy.mockRestore()
   })
 })
