@@ -4,7 +4,13 @@ import {
   threadsApi,
 } from './api'
 
-const inFlightReads = new Map<string, Promise<unknown>>()
+type InFlightRead = {
+  request: Promise<unknown>
+  startedAt: number
+}
+
+const COALESCE_BURST_WINDOW_MS = 250
+const inFlightReads = new Map<string, InFlightRead>()
 let installed = false
 
 function stableSerialize(value: unknown): string {
@@ -19,14 +25,20 @@ function stableSerialize(value: unknown): string {
 }
 
 export function coalesceRead<T>(key: string, loader: () => Promise<T>): Promise<T> {
+  const startedAt = Date.now()
   const existing = inFlightReads.get(key)
-  if (existing) return existing as Promise<T>
+  if (
+    existing
+    && startedAt - existing.startedAt <= COALESCE_BURST_WINDOW_MS
+  ) {
+    return existing.request as Promise<T>
+  }
 
   const request = loader()
-  inFlightReads.set(key, request)
+  inFlightReads.set(key, { request, startedAt })
 
   const removeRequest = () => {
-    if (inFlightReads.get(key) === request) {
+    if (inFlightReads.get(key)?.request === request) {
       inFlightReads.delete(key)
     }
   }
