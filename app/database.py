@@ -2,14 +2,16 @@
 
 import logging
 import os
+import time
 from collections.abc import AsyncIterator
 
-from sqlalchemy import text
+from sqlalchemy import event, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 from app.config import get_database_settings
+from app.performance_diagnostics import record_database_query
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +48,37 @@ async_engine = create_async_engine(
     pool_timeout=30,
     pool_pre_ping=True,
 )
+
+
+@event.listens_for(async_engine.sync_engine, "before_cursor_execute")
+def _before_cursor_execute(
+    connection: object,
+    cursor: object,
+    statement: str,
+    parameters: object,
+    context: object,
+    executemany: bool,
+) -> None:
+    """Start timing a SQL statement after a connection has been acquired."""
+    del connection, cursor, statement, parameters, executemany
+    vars(context)["_comic_pile_query_started_at"] = time.perf_counter()
+
+
+@event.listens_for(async_engine.sync_engine, "after_cursor_execute")
+def _after_cursor_execute(
+    connection: object,
+    cursor: object,
+    statement: str,
+    parameters: object,
+    context: object,
+    executemany: bool,
+) -> None:
+    """Record SQL execution time in the active request diagnostics context."""
+    del connection, cursor, statement, parameters, executemany
+    started_at = vars(context).get("_comic_pile_query_started_at")
+    if isinstance(started_at, float):
+        record_database_query((time.perf_counter() - started_at) * 1000)
+
 
 AsyncSessionLocal = async_sessionmaker(
     async_engine,
