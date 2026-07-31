@@ -73,6 +73,33 @@ describe('API read coalescing', () => {
     expect(apiMocks.listThreads).toHaveBeenCalledTimes(2)
   })
 
+  it('starts a fresh request when an older read is outside the burst window', async () => {
+    let now = 1000
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const resolvers: Array<(value: ThreadListResponse) => void> = []
+    apiMocks.listThreads.mockImplementation(() =>
+      new Promise<ThreadListResponse>((resolve) => {
+        resolvers.push(resolve)
+      })
+    )
+
+    try {
+      const first = threadsApi.list({ page_size: 200 })
+      now += 251
+      const second = threadsApi.list({ page_size: 200 })
+
+      expect(first).not.toBe(second)
+      expect(apiMocks.listThreads).toHaveBeenCalledTimes(2)
+
+      for (const resolve of resolvers) {
+        resolve(emptyThreadResponse)
+      }
+      await Promise.all([first, second])
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
+
   it('keeps request keys isolated by access token', async () => {
     const resolvers: Array<(value: ThreadListResponse) => void> = []
     apiMocks.listThreads.mockImplementation(() =>
