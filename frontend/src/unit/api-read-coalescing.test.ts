@@ -70,12 +70,13 @@ describe('API read coalescing', () => {
     expect(apiMocks.listThreads).toHaveBeenCalledTimes(2)
   })
 
-  it('does not share reads across authenticated users', async () => {
-    let resolveRequest: ((value: ThreadListResponse) => void) | undefined
-    const request = new Promise<ThreadListResponse>((resolve) => {
-      resolveRequest = resolve
-    })
-    apiMocks.listThreads.mockReturnValue(request)
+  it('keeps request keys isolated by access token', async () => {
+    const resolvers: Array<(value: ThreadListResponse) => void> = []
+    apiMocks.listThreads.mockImplementation(() =>
+      new Promise<ThreadListResponse>((resolve) => {
+        resolvers.push(resolve)
+      })
+    )
 
     const first = threadsApi.list({ page_size: 200 })
     apiMocks.getAccessToken.mockReturnValue('token-b')
@@ -84,7 +85,9 @@ describe('API read coalescing', () => {
     expect(first).not.toBe(second)
     expect(apiMocks.listThreads).toHaveBeenCalledTimes(2)
 
-    resolveRequest?.(emptyThreadResponse)
+    for (const resolve of resolvers) {
+      resolve(emptyThreadResponse)
+    }
     await Promise.all([first, second])
   })
 
