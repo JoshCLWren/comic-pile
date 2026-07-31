@@ -1,0 +1,47 @@
+name: Production Profile
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  production-profile:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'test/har-production-profile'
+    name: Production Profile (Chromium)
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/joshclwren/comic-pile:6a877fa8339c3e688c8eef2281fe59ea4fe4f5dd
+      options: --shm-size=2gb
+    timeout-minutes: 15
+    env:
+      PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+      PLAYWRIGHT_BROWSERS_PATH: /root/.cache/ms-playwright
+      PROD_BASE_URL: https://comic-pile.vercel.app
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Restore frontend toolchain from CI image
+        run: |
+          mkdir -p static
+          rm -rf frontend/node_modules static/react
+          cp -a /opt/ci-assets/static/react static/react
+          pnpm install --frozen-lockfile
+
+      - name: Run production profile
+        run: pnpm --filter frontend run test:e2e:prod-profile
+
+      - name: Print production profile report
+        if: always()
+        shell: bash
+        run: |
+          reports=$(find frontend/test-results -type f -name '*.json' 2>/dev/null || true)
+          if [ -z "$reports" ]; then
+            echo "No JSON attachment found."
+            exit 0
+          fi
+          while IFS= read -r report; do
+            echo "===== $report ====="
+            cat "$report"
+            echo
+          done <<< "$reports"
