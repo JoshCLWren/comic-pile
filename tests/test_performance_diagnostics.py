@@ -6,8 +6,10 @@ from typing import cast
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 
 from app.cache import UpstashCache
+from app.database import AsyncSessionLocal
 from app.middleware.request_logging import add_request_logging_middleware
 from app.performance_diagnostics import (
     begin_request_diagnostics,
@@ -44,6 +46,21 @@ async def test_request_middleware_emits_performance_headers() -> None:
     assert "app;dur=" in server_timing
     assert 'db;dur=8.25;desc="1 queries"' in server_timing
     assert 'cache;dur=12.50;desc="hit"' in server_timing
+
+
+@pytest.mark.asyncio
+async def test_database_events_record_a_real_async_query() -> None:
+    """SQLAlchemy execution events should update the active request context."""
+    token = begin_request_diagnostics()
+    try:
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+        diagnostics = get_request_diagnostics()
+    finally:
+        end_request_diagnostics(token)
+
+    assert diagnostics.database_queries >= 1
+    assert diagnostics.database_time_ms >= 0
 
 
 def test_diagnostics_aggregate_mixed_cache_activity() -> None:
