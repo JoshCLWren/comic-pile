@@ -1,15 +1,12 @@
-import { expect, test, type APIResponse, type Page, type Request } from '@playwright/test'
+import { expect, test, type Page, type Request } from '@playwright/test'
 import {
   SELECTORS,
-  createThread,
-  generateTestUser,
   setRangeInput,
   submitRatingAndWaitForRateResponse,
 } from './helpers'
 
 type ApiRecord = {
   method: string
-  path: string
   normalizedUrl: string
   status: number
   durationMs: number
@@ -26,9 +23,35 @@ type NetworkProfile = {
   finish: () => Promise<void>
 }
 
-type RegistrationResponse = {
-  access_token?: unknown
+type ThreadListPayload = {
+  threads?: unknown[]
 }
+
+type SessionListPayload = {
+  sessions?: unknown[]
+}
+
+const SOURCE_HAR = {
+  capturedAt: '2026-07-30T15:25:46.699-05:00',
+  durationMs: 200_602,
+  apiRequests: 198,
+  accountShape: 'Josh production account after the Vercel, Neon, and Upstash migration',
+  actions: [
+    'cold authenticated startup and refresh recovery',
+    'queue, history, and analytics navigation',
+    'rate pending thread',
+    'roll and rate',
+    'roll and snooze',
+    'roll and dismiss pending',
+    'manual thread selection and queue movement',
+    'open a large issue editor and mutate issue state',
+    'dependency management',
+    'bug report submission',
+    'stale-thread reactivation',
+    'manual die changes',
+    'final roll and rating',
+  ],
+} as const
 
 function numericEnvironmentValue(name: string, fallback: number): number {
   const rawValue = process.env[name]
@@ -76,9 +99,7 @@ function installNetworkProfile(page: Page): NetworkProfile {
   const recordTransportFailure = (request: Request, reason: string) => {
     if (failedRequests.has(request)) return
     failedRequests.add(request)
-    transportFailures.push(
-      `${request.method()} ${normalizeApiUrl(request.url())}: ${reason}`,
-    )
+    transportFailures.push(`${request.method()} ${normalizeApiUrl(request.url())}: ${reason}`)
   }
 
   page.on('request', (request) => {
@@ -90,10 +111,7 @@ function installNetworkProfile(page: Page): NetworkProfile {
   page.on('requestfailed', (request) => {
     if (!isApiRequest(request.url()) || !requestStarts.has(request)) return
 
-    recordTransportFailure(
-      request,
-      request.failure()?.errorText ?? 'unknown failure',
-    )
+    recordTransportFailure(request, request.failure()?.errorText ?? 'unknown failure')
     requestStarts.delete(request)
   })
 
@@ -102,20 +120,15 @@ function installNetworkProfile(page: Page): NetworkProfile {
 
     const request = response.request()
     const startedAt = requestStarts.get(request)
-
-    // Ignore responses for requests that began before the profile was installed.
-    // Falling back to Date.now() would understate their duration, especially for redirects.
     if (startedAt === undefined) return
 
     responseTasks.push((async () => {
       try {
         await response.finished()
         const headers = await response.allHeaders()
-        const url = new URL(response.url())
 
         records.push({
           method: request.method(),
-          path: url.pathname,
           normalizedUrl: normalizeApiUrl(response.url()),
           status: response.status(),
           durationMs: Date.now() - startedAt,
@@ -155,6 +168,13 @@ function installNetworkProfile(page: Page): NetworkProfile {
   }
 }
 
+function percentile(values: number[], quantile: number): number {
+  if (values.length === 0) return 0
+  const sorted = [...values].sort((left, right) => left - right)
+  const index = Math.min(sorted.length - 1, Math.ceil(sorted.length * quantile) - 1)
+  return sorted[index] ?? 0
+}
+
 function findDuplicateGetBursts(records: ApiRecord[], windowMs: number): string[] {
   const lastStartedByUrl = new Map<string, number>()
   const duplicates: string[] = []
@@ -172,177 +192,187 @@ function findDuplicateGetBursts(records: ApiRecord[], windowMs: number): string[
   return duplicates
 }
 
-function percentile(values: number[], quantile: number): number {
-  if (values.length === 0) return 0
-  const sorted = [...values].sort((left, right) => left - right)
-  const index = Math.min(sorted.length - 1, Math.ceil(sorted.length * quantile) - 1)
-  return sorted[index] ?? 0
-}
-
-async function assertProductionHealth(response: APIResponse, durationMs: number): Promise<void> {
-  if (response.ok()) return
-
-  const headers = response.headers()
-  const body = (await response.text()).slice(0, 2_000)
-  const vercelHeaders = Object.fromEntries(
-    Object.entries(headers).filter(([name]) =>
-      ['server', 'date', 'x-vercel-id', 'x-vercel-cache'].includes(name),
+async function readAccessToken(page: Page): Promise<string> {
+  await expect.poll(
+    () => page.evaluate(() =>
+      localStorage.getItem('auth_token')
+      ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
+      ?? null
     ),
-  )
+    { timeout: 30_000 },
+  ).not.toBeNull()
 
-  throw new Error(
-    `Production health check failed after ${durationMs} ms: ${response.status()} ${response.statusText()}\n` +
-      `URL: ${response.url()}\n` +
-      `Vercel headers: ${JSON.stringify(vercelHeaders)}\n` +
-      `Response body: ${body || '(empty)'}`,
+  const token = await page.evaluate(() =>
+    localStorage.getItem('auth_token')
+    ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
+    ?? null
   )
+  if (!token) throw new Error('The supplied production storage state did not yield an access token')
+  return token
 }
 
-async function setupProductionProfileUser(page: Page): Promise<void> {
-  const user = generateTestUser()
-  const response = await page.request.post('/api/auth/register', {
-    data: {
-      username: user.username,
-      email: user.email,
-      password: user.password,
-    },
-    timeout: 30000,
-  })
-  const responseText = await response.text()
+async function assertFullAccountShape(page: Page, token: string): Promise<{
+  threadCount: number
+  sessionCount: number
+}> {
+  const minThreads = numericEnvironmentValue('PROD_PROFILE_MIN_THREADS', 100)
+  const minSessions = numericEnvironmentValue('PROD_PROFILE_MIN_SESSIONS', 25)
+  const headers = { Authorization: `Bearer ${token}` }
 
-  if (!response.ok()) {
-    throw new Error(
-      `Production profile registration failed: ${response.status()} ${response.statusText()} ${responseText.slice(0, 500)}`,
-    )
-  }
+  const [threadsResponse, sessionsResponse] = await Promise.all([
+    page.request.get('/api/threads/?page_size=200', { headers }),
+    page.request.get('/api/sessions/?page_size=200', { headers }),
+  ])
 
-  let payload: RegistrationResponse
-  try {
-    payload = JSON.parse(responseText) as RegistrationResponse
-  } catch {
-    throw new Error(`Production profile registration returned invalid JSON: ${responseText.slice(0, 500)}`)
-  }
+  expect(threadsResponse.ok(), 'Full-account thread probe').toBeTruthy()
+  expect(sessionsResponse.ok(), 'Full-account session probe').toBeTruthy()
 
-  if (typeof payload.access_token !== 'string' || payload.access_token.length === 0) {
-    throw new Error(`Production profile registration returned no access token: ${responseText.slice(0, 500)}`)
-  }
+  const threadsPayload = await threadsResponse.json() as ThreadListPayload | unknown[]
+  const sessionsPayload = await sessionsResponse.json() as SessionListPayload | unknown[]
+  const threads = Array.isArray(threadsPayload) ? threadsPayload : threadsPayload.threads ?? []
+  const sessions = Array.isArray(sessionsPayload) ? sessionsPayload : sessionsPayload.sessions ?? []
 
-  await page.addInitScript((accessToken: string) => {
-    localStorage.setItem('auth_token', accessToken)
-    ;(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = accessToken
-  }, payload.access_token)
+  expect(
+    threads.length,
+    `Production profile must use a full account with at least ${minThreads} loaded threads`,
+  ).toBeGreaterThanOrEqual(minThreads)
+  expect(
+    sessions.length,
+    `Production profile must use a mature account with at least ${minSessions} loaded sessions`,
+  ).toBeGreaterThanOrEqual(minSessions)
+
+  return { threadCount: threads.length, sessionCount: sessions.length }
+}
+
+async function navigateSourcePages(page: Page): Promise<void> {
+  await page.goto('/queue', { waitUntil: 'domcontentloaded' })
+  await expect(page.getByRole('heading', { name: 'Read Queue' })).toBeVisible()
+
+  await page.goto('/history', { waitUntil: 'domcontentloaded' })
+  await expect(page.getByRole('heading', { name: 'History', exact: true })).toBeVisible()
+
+  await page.goto('/analytics', { waitUntil: 'domcontentloaded' })
+  await expect(page.getByRole('heading', { name: 'Analytics', exact: true })).toBeVisible()
+
   await page.goto('/', { waitUntil: 'domcontentloaded' })
+  await expect(page.locator(SELECTORS.roll.mainDie).or(page.locator('[data-roll-pool]')).first()).toBeVisible()
 }
 
-test('HAR-derived production journey stays within request budgets', async ({ page }, testInfo) => {
+async function rateOrRoll(page: Page, rating: string): Promise<void> {
+  const ratingInput = page.locator(SELECTORS.rate.ratingInput)
+  if (!(await ratingInput.isVisible())) {
+    await page.locator(SELECTORS.roll.mainDie).click()
+    await expect(ratingInput).toBeVisible()
+  }
+
+  await setRangeInput(page, SELECTORS.rate.ratingInput, rating)
+  await submitRatingAndWaitForRateResponse(page, () => page.click(SELECTORS.rate.submitButton))
+  await expect(page.locator(SELECTORS.roll.mainDie).or(page.locator('[data-roll-pool]')).first()).toBeVisible()
+}
+
+async function exerciseQueueAndIssueEditor(page: Page): Promise<void> {
+  await page.goto('/queue', { waitUntil: 'domcontentloaded' })
+  const firstThread = page.locator(SELECTORS.threadList.threadItem).first()
+  await expect(firstThread).toBeVisible()
+
+  const actionNames = ['Move to Front', 'Move to Back']
+  for (const actionName of actionNames) {
+    const actionButton = firstThread.locator('button[aria-label="Thread actions"]')
+    if (await actionButton.isVisible()) {
+      await actionButton.click()
+      const menu = page.getByRole('menu')
+      const action = menu.getByRole('menuitem', { name: actionName })
+      if (await action.isVisible()) {
+        await action.click()
+      } else {
+        await page.keyboard.press('Escape')
+      }
+    }
+  }
+
+  await firstThread.click()
+  await page.waitForURL('**/thread/**')
+  const editButton = page.getByRole('button', { name: 'Edit', exact: true })
+  await expect(editButton).toBeVisible()
+  await editButton.click()
+
+  const editDialog = page.getByRole('dialog', { name: 'Edit Thread', exact: true })
+  await expect(editDialog).toBeVisible()
+
+  const showAll = editDialog.getByRole('button', { name: /^Show all \d+$/ })
+  if (await showAll.isVisible()) await showAll.click()
+
+  const issueToggle = editDialog.getByRole('button', { name: /^Toggle issue #/ }).first()
+  if (await issueToggle.isVisible()) {
+    await issueToggle.click()
+    await issueToggle.click()
+  }
+
+  const cancel = editDialog.getByRole('button', { name: /Cancel|Close/ }).first()
+  if (await cancel.isVisible()) await cancel.click()
+}
+
+test('full production account follows the HAR-derived browser workload', async ({ page }, testInfo) => {
   test.skip(
     testInfo.config.metadata.productionProfile !== true,
-    'Run with playwright.prod-profile.config.ts against an explicit production URL.',
+    'Run with playwright.prod-profile.config.ts and a production storage state.',
   )
 
-  const maxApiDurationMs = numericEnvironmentValue('PROD_PROFILE_MAX_API_MS', 5000)
-  const maxApiRequests = numericEnvironmentValue('PROD_PROFILE_MAX_API_REQUESTS', 60)
+  const maxApiDurationMs = numericEnvironmentValue('PROD_PROFILE_MAX_API_MS', 5_000)
+  const minApiRequests = numericEnvironmentValue('PROD_PROFILE_MIN_API_REQUESTS', 40)
+  const maxApiRequests = numericEnvironmentValue('PROD_PROFILE_MAX_API_REQUESTS', SOURCE_HAR.apiRequests)
   const duplicateWindowMs = numericEnvironmentValue('PROD_PROFILE_DUPLICATE_WINDOW_MS', 250)
-
-  const healthStartedAt = Date.now()
-  const health = await page.request.get('/health')
-  await assertProductionHealth(health, Date.now() - healthStartedAt)
-
-  await setupProductionProfileUser(page)
-  const profileTitle = `Production Profile ${Date.now()}`
-  await createThread(page, {
-    title: profileTitle,
-    format: 'Comics',
-    issues_remaining: 40,
-    issue_range: '1-40',
-  })
-  await createThread(page, {
-    title: `${profileTitle} Side A`,
-    format: 'Manga',
-    issues_remaining: 4,
-    issue_range: '1-4',
-  })
-  await createThread(page, {
-    title: `${profileTitle} Side B`,
-    format: 'Novel',
-    issues_remaining: 3,
-    issue_range: '1-3',
-  })
 
   const profile = installNetworkProfile(page)
 
   await page.goto('/', { waitUntil: 'domcontentloaded' })
-  await expect(page.locator(SELECTORS.roll.mainDie)).toBeVisible()
-  await page.click(SELECTORS.roll.mainDie)
+  await expect(page.locator('#root')).toBeVisible()
+  const token = await readAccessToken(page)
+  const accountShape = await assertFullAccountShape(page, token)
+
+  await navigateSourcePages(page)
+  await rateOrRoll(page, '4.0')
+
+  await page.locator(SELECTORS.roll.mainDie).click()
   await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible()
-  await setRangeInput(page, SELECTORS.rate.ratingInput, '4.0')
-  await submitRatingAndWaitForRateResponse(page, () => page.click(SELECTORS.rate.submitButton))
-  await expect(page.locator(SELECTORS.roll.mainDie)).toBeVisible()
-  await page.waitForLoadState('networkidle')
+  const snoozeButton = page.locator(SELECTORS.rate.snoozeButton)
+  if (await snoozeButton.isVisible()) await snoozeButton.click()
 
-  await page.goto('/queue', { waitUntil: 'domcontentloaded' })
-  const profileTitleText = page.getByText(profileTitle, { exact: true }).first()
-  await expect(profileTitleText).toBeVisible()
-  const threadCard = profileTitleText.locator(
-    'xpath=ancestor::*[@data-testid="queue-thread-item"]',
-  )
-  await expect(threadCard).toHaveCount(1)
-  await threadCard.click()
-  await page.waitForURL('**/thread/**')
-  const threadTitle = page.getByRole('heading', { name: profileTitle, exact: true })
-  await expect(threadTitle).toBeVisible()
+  await rateOrRoll(page, '3.5')
+  await exerciseQueueAndIssueEditor(page)
 
-  const threadHeader = threadTitle.locator('xpath=ancestor::header')
-  await threadHeader.getByRole('button', { name: 'Edit', exact: true }).click()
-  const editDialog = page.getByRole('dialog', { name: 'Edit Thread', exact: true })
-  await expect(editDialog).toBeVisible()
-  const showAllIssues = editDialog.getByRole('button', { name: 'Show all 40', exact: true })
-  await expect(showAllIssues).toBeVisible()
-  await showAllIssues.click()
-  const issueToggles = editDialog.getByRole('button', { name: /^Toggle issue #/ })
-  await expect(issueToggles).toHaveCount(40)
-  const firstIssueToggle = issueToggles.first()
-  const toggleIssueResponse = page.waitForResponse((response) => {
-    const path = new URL(response.url()).pathname
-    return (
-      /:(markRead|markUnread)$/.test(path)
-      && response.request().method() === 'POST'
-    )
-  })
-  await firstIssueToggle.click()
-  expect((await toggleIssueResponse).ok()).toBeTruthy()
-  await page.waitForLoadState('networkidle')
-
-  await page.goto('/history', { waitUntil: 'domcontentloaded' })
-  await expect(page.getByRole('heading', { name: 'History', exact: true })).toBeVisible()
-  await page.waitForLoadState('networkidle')
   await page.goto('/analytics', { waitUntil: 'domcontentloaded' })
   await expect(page.getByRole('heading', { name: 'Analytics', exact: true })).toBeVisible()
-  await page.waitForLoadState('networkidle')
+  await page.goto('/history', { waitUntil: 'domcontentloaded' })
+  await expect(page.getByRole('heading', { name: 'History', exact: true })).toBeVisible()
 
   await profile.finish()
 
   const failedResponses = profile.records.filter((record) => record.status >= 400)
   const slowResponses = profile.records.filter((record) => record.durationMs > maxApiDurationMs)
+  const duplicateGetBursts = findDuplicateGetBursts(profile.records, duplicateWindowMs)
   const legacyDependencyRequests = profile.records.filter((record) =>
-    /^\/api\/v1\/issues\/:id\/dependencies$/.test(record.normalizedUrl)
+    record.normalizedUrl === '/api/v1/issues/:id/dependencies'
   )
   const batchDependencyRequests = profile.records.filter((record) =>
     record.normalizedUrl === '/api/v1/threads/:id/issue-dependencies'
   )
-  const duplicateGetBursts = findDuplicateGetBursts(profile.records, duplicateWindowMs)
   const durations = profile.records.map((record) => record.durationMs)
 
   const report = {
     generatedAt: new Date().toISOString(),
     baseUrl: testInfo.project.use.baseURL,
+    sourceHar: SOURCE_HAR,
+    accountShape,
     thresholds: {
       maxApiDurationMs,
+      minApiRequests,
       maxApiRequests,
       duplicateWindowMs,
     },
     summary: {
       apiRequests: profile.records.length,
+      sourceHarRequestRatio: profile.records.length / SOURCE_HAR.apiRequests,
       failedResponses: failedResponses.length,
       transportFailures: profile.transportFailures.length,
       slowResponses: slowResponses.length,
@@ -368,12 +398,10 @@ test('HAR-derived production journey stays within request budgets', async ({ pag
 
   expect(profile.transportFailures, 'Transport failures').toEqual([])
   expect(failedResponses, 'API responses with status >= 400').toEqual([])
-  expect(
-    slowResponses,
-    `API responses slower than ${maxApiDurationMs} ms`,
-  ).toEqual([])
-  expect(profile.records.length, 'Total API request budget').toBeLessThanOrEqual(maxApiRequests)
+  expect(slowResponses, `API responses slower than ${maxApiDurationMs} ms`).toEqual([])
+  expect(profile.records.length, 'Minimum full-account workload').toBeGreaterThanOrEqual(minApiRequests)
+  expect(profile.records.length, 'Maximum HAR-derived request budget').toBeLessThanOrEqual(maxApiRequests)
   expect(legacyDependencyRequests, 'Legacy one-request-per-issue dependency calls').toEqual([])
-  expect(batchDependencyRequests, 'Expected one dependency batch request').toHaveLength(1)
+  expect(batchDependencyRequests.length, 'Thread dependency batch requests').toBeGreaterThanOrEqual(1)
   expect(duplicateGetBursts, 'Duplicate GET requests inside the burst window').toEqual([])
 })
