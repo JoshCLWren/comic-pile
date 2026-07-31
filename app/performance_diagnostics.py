@@ -9,14 +9,13 @@ import time
 from collections.abc import Awaitable
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
-from typing import Literal, TypeVar
+from typing import Literal
 
 from app.cache import UpstashCache
 
 logger = logging.getLogger(__name__)
 
 CacheOutcome = Literal["hit", "miss", "write", "bypass", "timeout", "error"]
-T = TypeVar("T")
 _DEFAULT_CACHE_OPERATION_TIMEOUT_SECONDS = 2.0
 
 
@@ -143,7 +142,7 @@ def _record_cache_timeout_failure(cache: UpstashCache) -> None:
         record_failure()
 
 
-async def _await_cache_operation(
+async def _await_cache_operation[T](
     operation: str,
     awaitable: Awaitable[T],
     fallback: T,
@@ -245,8 +244,12 @@ def install_cache_instrumentation(cache: UpstashCache) -> None:
         record_cache_operation("write" if initialized else "bypass", duration_ms)
         return result
 
-    setattr(cache, "get", instrumented_get)
-    setattr(cache, "set", instrumented_set)
-    setattr(cache, "delete", instrumented_delete)
-    setattr(cache, "clear_pattern", instrumented_clear_pattern)
-    setattr(cache, "_performance_instrumented", True)
+    vars(cache).update(
+        {
+            "get": instrumented_get,
+            "set": instrumented_set,
+            "delete": instrumented_delete,
+            "clear_pattern": instrumented_clear_pattern,
+            "_performance_instrumented": True,
+        }
+    )
