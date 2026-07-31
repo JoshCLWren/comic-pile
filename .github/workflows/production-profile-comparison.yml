@@ -1,0 +1,122 @@
+name: One-off Production Profile Comparison
+
+on:
+  push:
+    branches:
+      - ops/run-production-profile-20260731
+
+permissions:
+  contents: read
+
+jobs:
+  production-profile:
+    name: Production Profile (Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PROD_BASE_URL: https://comic-pile.vercel.app
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm --filter frontend exec playwright install --with-deps chromium
+
+      - name: Run and decode production profile
+        shell: bash
+        run: |
+          set +e
+          pnpm --filter frontend exec playwright test \
+            --config=playwright.prod-profile.config.ts \
+            --reporter=json > production-profile-playwright.json
+          test_status=$?
+          set -e
+
+          node <<'NODE'
+          const fs = require('fs')
+
+          const reportPath = 'production-profile-playwright.json'
+          const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'))
+          let attachment = null
+
+          function visit(value) {
+            if (attachment || value === null || value === undefined) return
+            if (Array.isArray(value)) {
+              for (const item of value) visit(item)
+              return
+            }
+            if (typeof value !== 'object') return
+
+            if (
+              value.name === 'production-profile.json' &&
+              value.contentType === 'application/json'
+            ) {
+              attachment = value
+              return
+            }
+
+            for (const child of Object.values(value)) visit(child)
+          }
+
+          visit(report)
+
+          if (!attachment) {
+            throw new Error('Playwright JSON report did not contain production-profile.json')
+          }
+
+          let candidates = []
+          if (typeof attachment.body === 'string') {
+            candidates.push(Buffer.from(attachment.body, 'base64').toString('utf8'))
+            candidates.push(attachment.body)
+          }
+          if (typeof attachment.path === 'string' && fs.existsSync(attachment.path)) {
+            candidates.push(fs.readFileSync(attachment.path, 'utf8'))
+          }
+
+          let decoded = null
+          for (const candidate of candidates) {
+            try {
+              const parsed = JSON.parse(candidate)
+              if (parsed && typeof parsed === 'object' && parsed.generatedAt) {
+                decoded = JSON.stringify(parsed, null, 2)
+                break
+              }
+            } catch {
+              // Try the next representation.
+            }
+          }
+
+          if (!decoded) {
+            throw new Error('Found production-profile.json but could not decode its JSON body')
+          }
+
+          fs.writeFileSync('production-profile.json', `${decoded}\n`)
+          console.log('===== production-profile.json =====')
+          console.log(decoded)
+          NODE
+
+          exit "$test_status"
+
+      - name: Upload production profile reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: production-profile-comparison
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            production-profile.json
+            production-profile-playwright.json
+            frontend/test-results
