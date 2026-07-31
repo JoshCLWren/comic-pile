@@ -20,9 +20,30 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
   const [totalCount, setTotalCount] = useState<number>(0)
   const [dependencies, setDependencies] = useState<Record<number, IssueDependenciesResponse>>({})
   const filterRef = useRef<'all' | 'unread' | 'read'>('all')
+  const threadIdRef = useRef(thread.id)
+  const mountedRef = useRef(true)
+  const issueLoadRequestRef = useRef(0)
+  const dependencyLoadRequestRef = useRef(0)
+  const issueMutationRequestRef = useRef<Record<number, number>>({})
+
   filterRef.current = filter
+  threadIdRef.current = thread.id
+
+  useEffect(() => {
+    mountedRef.current = true
+
+    return () => {
+      mountedRef.current = false
+      issueLoadRequestRef.current += 1
+      dependencyLoadRequestRef.current += 1
+    }
+  }, [])
 
   const loadIssues = useCallback(async (append = false, pageToken?: string | null) => {
+    const requestId = ++issueLoadRequestRef.current
+    const requestedThreadId = thread.id
+    const requestedFilter = filterRef.current
+
     if (append) {
       setIsLoadingMore(true)
     } else {
@@ -30,28 +51,62 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
     }
 
     try {
-      const response = await issuesApi.list(thread.id, {
-        status: filterRef.current === 'all' ? undefined : filterRef.current,
+      const response = await issuesApi.list(requestedThreadId, {
+        status: requestedFilter === 'all' ? undefined : requestedFilter,
         page_size: 50,
         page_token: pageToken ?? undefined,
       })
+
+      if (
+        !mountedRef.current
+        || requestId !== issueLoadRequestRef.current
+        || requestedThreadId !== threadIdRef.current
+        || requestedFilter !== filterRef.current
+      ) {
+        return
+      }
 
       setIssues((previous) => append ? [...previous, ...response.issues] : response.issues)
       setTotalCount(response.total_count)
       setNextPageToken(response.next_page_token)
     } catch (error) {
-      console.error('Failed to load issues:', error)
+      if (
+        mountedRef.current
+        && requestId === issueLoadRequestRef.current
+        && requestedThreadId === threadIdRef.current
+        && requestedFilter === filterRef.current
+      ) {
+        console.error('Failed to load issues:', error)
+      }
     } finally {
-      setIsLoading(false)
-      setIsLoadingMore(false)
+      if (
+        mountedRef.current
+        && requestId === issueLoadRequestRef.current
+        && requestedThreadId === threadIdRef.current
+        && requestedFilter === filterRef.current
+      ) {
+        setIsLoading(false)
+        setIsLoadingMore(false)
+      }
     }
   }, [thread.id])
 
   const loadDependencies = useCallback(async () => {
+    const requestId = ++dependencyLoadRequestRef.current
+    const requestedThreadId = thread.id
     setDependencies({})
 
     try {
-      const response = await issueDependenciesApi.listForThread(thread.id)
+      const response = await issueDependenciesApi.listForThread(requestedThreadId)
+
+      if (
+        !mountedRef.current
+        || requestId !== dependencyLoadRequestRef.current
+        || requestedThreadId !== threadIdRef.current
+      ) {
+        return
+      }
+
       const nextDependencies: Record<number, IssueDependenciesResponse> = {}
 
       for (const issueDependencies of response.issues) {
@@ -65,7 +120,13 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
 
       setDependencies(nextDependencies)
     } catch (error) {
-      console.error(`Failed to load dependencies for thread ${thread.id}:`, error)
+      if (
+        mountedRef.current
+        && requestId === dependencyLoadRequestRef.current
+        && requestedThreadId === threadIdRef.current
+      ) {
+        console.error(`Failed to load dependencies for thread ${requestedThreadId}:`, error)
+      }
     }
   }, [thread.id])
 
@@ -81,17 +142,22 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
   }
 
   const toggleIssueStatus = async (issue: Issue) => {
-    const previousIssues = issues
-    const previousTotalCount = totalCount
+    const mutationThreadId = thread.id
+    const mutationFilter = filterRef.current
+    const mutationRequestId = (issueMutationRequestRef.current[issue.id] ?? 0) + 1
+    const originalIndex = issues.findIndex((currentIssue) => currentIssue.id === issue.id)
     const nextStatus = issue.status === 'read' ? 'unread' : 'read'
+    const shouldRemoveFromFilter = mutationFilter !== 'all' && mutationFilter !== nextStatus
     const updatedIssue: Issue = {
       ...issue,
       status: nextStatus,
       read_at: nextStatus === 'read' ? new Date().toISOString() : null,
     }
 
+    issueMutationRequestRef.current[issue.id] = mutationRequestId
+
     setIssues((currentIssues) => {
-      if (filterRef.current !== 'all' && filterRef.current !== nextStatus) {
+      if (shouldRemoveFromFilter) {
         return currentIssues.filter((currentIssue) => currentIssue.id !== issue.id)
       }
 
@@ -100,7 +166,7 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
       )
     })
 
-    if (filterRef.current !== 'all' && filterRef.current !== nextStatus) {
+    if (shouldRemoveFromFilter) {
       setTotalCount((currentTotal) => Math.max(0, currentTotal - 1))
     }
 
@@ -111,12 +177,41 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
         await issuesApi.markRead(issue.id)
       }
 
-      onThreadUpdated?.(thread.id)
-      window.dispatchEvent(new CustomEvent('thread-updated', { detail: { threadId: thread.id } }))
+      onThreadUpdated?.(mutationThreadId)
+      window.dispatchEvent(new CustomEvent('thread-updated', { detail: { threadId: mutationThreadId } }))
     } catch (error) {
-      setIssues(previousIssues)
-      setTotalCount(previousTotalCount)
       console.error('Failed to toggle issue status:', error)
+
+      if (
+        issueMutationRequestRef.current[issue.id] !== mutationRequestId
+        || threadIdRef.current !== mutationThreadId
+        || filterRef.current !== mutationFilter
+      ) {
+        return
+      }
+
+      setIssues((currentIssues) => {
+        const existingIndex = currentIssues.findIndex(
+          (currentIssue) => currentIssue.id === issue.id,
+        )
+
+        if (existingIndex >= 0) {
+          return currentIssues.map((currentIssue) =>
+            currentIssue.id === issue.id ? issue : currentIssue
+          )
+        }
+
+        const insertionIndex = Math.max(0, Math.min(originalIndex, currentIssues.length))
+        return [
+          ...currentIssues.slice(0, insertionIndex),
+          issue,
+          ...currentIssues.slice(insertionIndex),
+        ]
+      })
+
+      if (shouldRemoveFromFilter) {
+        setTotalCount((currentTotal) => currentTotal + 1)
+      }
     }
   }
 
