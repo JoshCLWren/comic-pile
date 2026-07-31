@@ -27,6 +27,7 @@ async def test_request_middleware_emits_performance_headers() -> None:
 
     @app.get("/diagnostics")
     async def diagnostics_route() -> dict[str, str]:
+        """Return a response after recording synthetic request activity."""
         record_cache_operation("hit", 12.5)
         record_database_query(8.25)
         return {"status": "ok"}
