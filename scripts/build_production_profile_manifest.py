@@ -63,6 +63,7 @@ ACTION_GROUPS = [
     ("final-roll-rate", 190, 197, "rating", "Change die, roll, load context, and rate"),
 ]
 
+
 POST_FIX_REQUEST_COUNT_RANGES = {
     "open-large-thread": [2, 6],
     "add-issue": [3, 8],
@@ -335,33 +336,6 @@ def build_manifest(har_path: Path) -> dict[str, object]:
             action_id,
             [max(1, len(action_requests) - 2), len(action_requests) + 3],
         )
-        source_request_summaries: list[dict[str, object]] = []
-        for request in action_requests:
-            signature = {
-                "method": request["method"],
-                "route": request["route"],
-                "queryShape": request["queryShape"],
-                "requestBodyShape": request["requestBodyShape"],
-                "mutationCategory": request["mutationCategory"],
-            }
-            if source_request_summaries and all(
-                source_request_summaries[-1].get(key) == value
-                for key, value in signature.items()
-            ):
-                source_request_summaries[-1]["count"] = int(
-                    source_request_summaries[-1]["count"]
-                ) + 1
-                statuses = source_request_summaries[-1]["statuses"]
-                status = str(request["status"])
-                statuses[status] = int(statuses.get(status, 0)) + 1
-            else:
-                source_request_summaries.append(
-                    {
-                        **signature,
-                        "count": 1,
-                        "statuses": {str(request["status"]): 1},
-                    }
-                )
         action_groups.append(
             {
                 "id": action_id,
@@ -373,8 +347,8 @@ def build_manifest(har_path: Path) -> dict[str, object]:
                 "coldWarmClassification": "unclassified",
                 "pauseAfterPreviousActionMs": round(max(0, action_start - previous_request_start)),
                 "concurrencyGroups": concurrency_groups,
+                "initialRequest": f'{action_requests[0]["method"]} {action_requests[0]["route"]}',
                 "expectedFollowUps": follow_ups,
-                "sourceRequests": source_request_summaries,
             }
         )
         previous_request_start = _started_ms(str(entries[end]["startedDateTime"]))
@@ -434,6 +408,27 @@ def build_manifest(har_path: Path) -> dict[str, object]:
     method_counts = Counter(str(request["method"]) for request in sanitized_requests)
     status_counts = Counter(int(request["status"]) for request in sanitized_requests)
     durations = [float(request["durationMs"]) for request in sanitized_requests]
+    mutation_shapes = []
+    seen_mutations = set()
+    for request in sanitized_requests:
+        if request["method"] == "GET":
+            continue
+        signature = (
+            str(request["method"]),
+            str(request["route"]),
+            json.dumps(request["requestBodyShape"], sort_keys=True),
+        )
+        if signature in seen_mutations:
+            continue
+        seen_mutations.add(signature)
+        mutation_shapes.append(
+            {
+                "method": request["method"],
+                "route": request["route"],
+                "requestBodyShape": request["requestBodyShape"],
+                "mutationCategory": request["mutationCategory"],
+            }
+        )
 
     return {
         "schemaVersion": SCHEMA_VERSION,
@@ -474,6 +469,7 @@ def build_manifest(har_path: Path) -> dict[str, object]:
             "routeSummaries": route_summaries,
         },
         "actionGroups": action_groups,
+        "mutationBodyShapes": mutation_shapes,
         "coverage": [
             {"action": action, "classification": classification, "reason": reason}
             for action, classification, reason in COVERAGE
@@ -488,7 +484,42 @@ def main() -> None:
     args = parser.parse_args()
     manifest = build_manifest(args.har)
     args.output.parent.mkdir(parents=True, exist_ok=True)
+
+    routes_path = args.output.with_name(f"{args.output.stem}.routes.json")
+    actions_path = args.output.with_name(f"{args.output.stem}.actions.json")
+    routes = manifest["baseline"].pop("routeSummaries")
+    actions = manifest.pop("actionGroups")
+    mutations = manifest.pop("mutationBodyShapes")
+    manifest["sidecars"] = {
+        "actions": actions_path.name,
+        "routes": routes_path.name,
+    }
+    manifest["actionGroupIds"] = [action["id"] for action in actions]
+
     args.output.write_text(json.dumps(manifest, separators=(",", ":"), sort_keys=False) + "\n")
+    actions_path.write_text(
+        json.dumps(
+            {
+                "manifestVersion": manifest["manifestVersion"],
+                "actionGroups": actions,
+                "mutationBodyShapes": mutations,
+            },
+            separators=(",", ":"),
+            sort_keys=False,
+        )
+        + "\n"
+    )
+    routes_path.write_text(
+        json.dumps(
+            {
+                "manifestVersion": manifest["manifestVersion"],
+                "routeSummaries": routes,
+            },
+            separators=(",", ":"),
+            sort_keys=False,
+        )
+        + "\n"
+    )
 
 
 if __name__ == "__main__":

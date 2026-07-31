@@ -136,9 +136,8 @@ def test_build_manifest_redacts_credentials_and_resource_values(tmp_path: Path) 
         "eventCounts": {"rate": 87, "snooze": 16, "roll": 136},
     }
     large_thread = next(group for group in manifest["actionGroups"] if group["id"] == "open-large-thread")
-    assert large_thread["sourceRequests"][0]["route"] == "/api/v1/threads/:id/issues?page_size=100"
-    first_rating = next(group for group in manifest["actionGroups"] if group["id"] == "rating-first")
-    rating_request = next(item for item in first_rating["sourceRequests"] if item["route"] == "/api/rate/")
+    assert large_thread["initialRequest"] == "GET /api/v1/threads/:id/issues?page_size=100"
+    rating_request = next(item for item in manifest["mutationBodyShapes"] if item["route"] == "/api/rate/")
     assert rating_request["requestBodyShape"] == {
         "finish_session": "boolean",
         "issue_number": "string",
