@@ -1,0 +1,46 @@
+name: Materialize UI-driven production profile
+
+on:
+  push:
+    branches:
+      - test/faithful-real-user-production-profile
+    paths:
+      - tmp-production-profile-ui/**
+      - .github/workflows/materialize-production-profile-ui.yml
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test/faithful-real-user-production-profile
+          fetch-depth: 0
+
+      - name: Materialize checksum-verified UI profile
+        run: python tmp-production-profile-ui/materialize.py
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check browser tests
+        run: pnpm --filter frontend typecheck:test
+
+      - name: Commit readable source and remove bridge
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git rm -r tmp-production-profile-ui .github/workflows/materialize-production-profile-ui.yml
+          git add frontend/src/test/production-profile-real-user.spec.ts
+          git commit -m "Drive real-user production profile through the UI"
+          git push origin HEAD:test/faithful-real-user-production-profile
