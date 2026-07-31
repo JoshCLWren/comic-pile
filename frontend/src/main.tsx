@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { SessionProvider } from './contexts/SessionContext'
 import { ToastProvider } from './contexts/ToastProvider'
+import './services/api-read-coalescing'
 import './index.css'
 import App from './App'
 
