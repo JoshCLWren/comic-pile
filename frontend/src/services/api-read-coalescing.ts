@@ -69,5 +69,3 @@ export function installApiReadCoalescing(): void {
       () => originalCurrentSession(...args),
     )) as typeof sessionApi.getCurrent
 }
-
-installApiReadCoalescing()
