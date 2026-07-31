@@ -14,7 +14,7 @@ from app.schemas.dependency import IssueDependenciesResponse, IssueDependencyEdg
 from app.schemas.issue_dependency_batch import ThreadIssueDependenciesResponse
 from app.services.ownership import get_owned_thread_or_404
 
-router = APIRouter(prefix="/api/v1", tags=["dependencies"])
+router = APIRouter(tags=["dependencies"])
 
 
 def _dependency_edge(issue: Issue, thread: Thread, dependency_id: int) -> IssueDependencyEdge:
