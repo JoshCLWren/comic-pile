@@ -197,7 +197,6 @@ it('backdrop click on the topmost overlapping modal closes only it', async () =>
     </Modal>,
   )
 
-  // The topmost modal renders last, so its backdrop is the last overlay in the DOM.
   const backdrops = container.parentElement!.querySelectorAll('[aria-hidden="true"]')
   const topmostBackdrop = backdrops[backdrops.length - 1]
   await user.click(topmostBackdrop as HTMLElement)
@@ -205,77 +204,131 @@ it('backdrop click on the topmost overlapping modal closes only it', async () =>
   expect(firstOnClose).not.toHaveBeenCalled()
 })
 
-it('restores focus to the lower modal when the topmost modal closes', () => {
+it('restores focus to the still-mounted lower modal when the topmost modal closes', async () => {
+  const user = userEvent.setup()
+
   function NestedModals() {
+    const [topOpen, setTopOpen] = useState(true)
+
     return (
       <>
         <Modal isOpen title="One" onClose={() => {}}>
           <input aria-label="Lower field" />
         </Modal>
-        <Modal isOpen title="Two" onClose={() => {}}>
+        <Modal isOpen={topOpen} title="Two" onClose={() => setTopOpen(false)}>
           <input aria-label="Top field" />
         </Modal>
       </>
     )
   }
 
-  const { rerender } = render(<NestedModals />)
+  render(<NestedModals />)
 
-  // The topmost modal (Two) owns focus.
-  const topField = screen.getByLabelText('Top field')
-  expect(topField).toHaveFocus()
+  expect(screen.getByLabelText('Top field')).toHaveFocus()
+  await user.keyboard('{Escape}')
 
-  // Close the topmost modal; focus must return to the lower modal's field.
-  rerender(
-    <>
-      <Modal isOpen title="One" onClose={() => {}}>
-        <input aria-label="Lower field" />
-      </Modal>
-      <Modal isOpen={false} title="Two" onClose={() => {}}>
-        <input aria-label="Top field" />
-      </Modal>
-    </>,
-  )
-  const lowerField = screen.getByLabelText('Lower field')
-  expect(lowerField).toHaveFocus()
+  expect(screen.queryByLabelText('Top field')).not.toBeInTheDocument()
+  expect(screen.getByLabelText('Lower field')).toHaveFocus()
 })
 
-it('closing the topmost modal lets Escape dismiss the modal below it', async () => {
+it('closing the topmost modal lets Escape dismiss the still-mounted modal below it', async () => {
   const user = userEvent.setup()
   const firstOnClose = vi.fn()
   const secondOnClose = vi.fn()
 
   function NestedModals() {
+    const [topOpen, setTopOpen] = useState(true)
+
     return (
       <>
         <Modal isOpen title="One" onClose={firstOnClose}>
           <button type="button">One action</button>
         </Modal>
-        <Modal isOpen title="Two" onClose={secondOnClose}>
+        <Modal
+          isOpen={topOpen}
+          title="Two"
+          onClose={() => {
+            secondOnClose()
+            setTopOpen(false)
+          }}
+        >
           <button type="button">Two action</button>
         </Modal>
       </>
     )
   }
 
-  const { rerender } = render(<NestedModals />)
+  render(<NestedModals />)
 
-  // Escape closes only the topmost modal (Two).
   await user.keyboard('{Escape}')
   expect(secondOnClose).toHaveBeenCalledTimes(1)
   expect(firstOnClose).not.toHaveBeenCalled()
+  expect(screen.queryByRole('dialog', { name: 'Two' })).not.toBeInTheDocument()
 
-  // After the topmost modal closes, Escape must dismiss the modal below it.
-  rerender(
-    <>
-      <Modal isOpen title="One" onClose={firstOnClose}>
-        <button type="button">One action</button>
-      </Modal>
-      <Modal isOpen={false} title="Two" onClose={secondOnClose}>
-        <button type="button">Two action</button>
-      </Modal>
-    </>,
-  )
   await user.keyboard('{Escape}')
   expect(firstOnClose).toHaveBeenCalledTimes(1)
+})
+
+it('raises an earlier DOM modal above a later modal when it reopens', async () => {
+  const user = userEvent.setup()
+  const firstOnClose = vi.fn()
+  const secondOnClose = vi.fn()
+
+  function ReopenHarness() {
+    const [firstOpen, setFirstOpen] = useState(false)
+    const [secondOpen, setSecondOpen] = useState(true)
+
+    return (
+      <>
+        <Modal
+          isOpen={firstOpen}
+          title="One"
+          onClose={() => {
+            firstOnClose()
+            setFirstOpen(false)
+          }}
+        >
+          <button type="button">One action</button>
+        </Modal>
+        <Modal
+          isOpen={secondOpen}
+          title="Two"
+          onClose={() => {
+            secondOnClose()
+            setSecondOpen(false)
+          }}
+        >
+          <button type="button" onClick={() => setFirstOpen(true)}>
+            Reopen first
+          </button>
+        </Modal>
+      </>
+    )
+  }
+
+  render(<ReopenHarness />)
+  await user.click(screen.getByRole('button', { name: 'Reopen first' }))
+
+  const firstDialog = screen.getByText('One').closest('[role="dialog"]')
+  const secondDialog = screen.getByText('Two').closest('[role="dialog"]')
+  if (!firstDialog || !secondDialog) {
+    throw new Error('Expected both modal dialogs to be mounted')
+  }
+  const firstLayer = Number(firstDialog.parentElement?.style.zIndex)
+  const secondLayer = Number(secondDialog.parentElement?.style.zIndex)
+
+  expect(firstLayer).toBeGreaterThan(secondLayer)
+
+  await user.keyboard('{Escape}')
+  expect(firstOnClose).toHaveBeenCalledTimes(1)
+  expect(secondOnClose).not.toHaveBeenCalled()
+  expect(screen.queryByRole('dialog', { name: 'One' })).not.toBeInTheDocument()
+  expect(screen.getByText('Two').closest('[role="dialog"]')).toBeInTheDocument()
+
+  const secondBackdrop = secondDialog.parentElement?.querySelector('[aria-hidden="true"]')
+  if (!secondBackdrop) {
+    throw new Error('Second modal backdrop not found')
+  }
+  await user.click(secondBackdrop)
+  expect(secondOnClose).toHaveBeenCalledTimes(1)
 })
