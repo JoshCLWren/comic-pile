@@ -67,6 +67,28 @@ raise SystemExit(f"unexpected oras arguments: {args}")
         encoding="utf-8",
     )
     oras.chmod(0o755)
+
+    jq = bin_dir / "jq"
+    jq.write_text(
+        """#!/usr/bin/env python3
+import json
+import sys
+
+data = json.load(sys.stdin)
+query = sys.argv[-1]
+if query == ".tags[]?":
+    for tag in data.get("tags", []):
+        print(tag)
+elif query == ".created // empty":
+    created = data.get("created")
+    if created:
+        print(created)
+else:
+    raise SystemExit(f"unexpected jq query: {query}")
+""",
+        encoding="utf-8",
+    )
+    jq.chmod(0o755)
     return bin_dir, deletion_log
 
 
@@ -88,6 +110,7 @@ def _run_pruner(
         **os.environ,
         "PATH": f"{bin_dir}:{os.environ['PATH']}",
         "ORAS_BIN": str(bin_dir / "oras"),
+        "JQ_BIN": str(bin_dir / "jq"),
         "GIT_BIN": "git",
         "MOCK_METADATA": str(tmp_path / "metadata.json"),
         "DELETION_LOG": str(deletion_log),
