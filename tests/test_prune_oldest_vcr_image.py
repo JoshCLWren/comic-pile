@@ -10,7 +10,11 @@ from pathlib import Path
 SCRIPT = Path(__file__).parents[1] / ".github" / "scripts" / "prune-oldest-vcr-image.sh"
 
 
-def _write_mock_tools(tmp_path: Path, tags: list[str], digests: dict[str, str]) -> tuple[Path, Path]:
+def _write_mock_tools(
+    tmp_path: Path,
+    tags: list[str],
+    digests: dict[str, str],
+) -> tuple[Path, Path]:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     deletion_log = tmp_path / "deleted.txt"
