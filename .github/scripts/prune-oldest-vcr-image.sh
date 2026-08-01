@@ -100,13 +100,13 @@ for tag in "${tags[@]}"; do
   if [[ -n "${examined_digests[$digest]:-}" ]]; then
     continue
   fi
-  examined_digests["$digest"]=1
 
   epoch="$(created_epoch_for_tag "$tag")"
   if [[ -z "$epoch" || ! "$epoch" =~ ^[0-9]+$ ]]; then
     echo "Skipping $tag: creation time could not be established safely."
     continue
   fi
+  examined_digests["$digest"]=1
 
   if [[ -z "$oldest_epoch" || "$epoch" -lt "$oldest_epoch" ]]; then
     oldest_tag="$tag"
