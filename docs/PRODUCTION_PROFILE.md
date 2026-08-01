@@ -87,3 +87,27 @@ Each run attaches `production-profile.json` with:
 - duplicate GET bursts, transport failures, and slow responses.
 
 The report is evidence, not a synthetic pass badge. A large drop in request count is expected when fan-out is removed, but a tiny request count or small-account guard failure means the profile is no longer representative.
+
+## `Server-Timing` is absent from the current Vercel deployment
+
+Observed against the live production deployment (`https://comic-pile.vercel.app/health`) and the local container path:
+
+- Running the same middleware over real HTTP locally returns all four headers: `X-Request-ID`, `X-App-Cache`, `X-App-DB-Queries`, and `Server-Timing`.
+- Responses observed through the current Vercel container deployment include `X-Request-ID`, `X-App-Cache`, and `X-App-DB-Queries`, but not `Server-Timing`.
+- This proves a deployment-path discrepancy, but the precise layer removing or suppressing `Server-Timing` has not been isolated. Vercel's documented system response headers are not an allowlist for application-defined headers.
+
+Consequences for the production profile report:
+
+- `serverTiming` is currently expected to be `null` for records captured against this deployment. Treat that as an observed limitation of the current deployment path, not a permanent or documented Vercel platform guarantee.
+- Timing and diagnostics evidence remains available from the per-request `X-Request-ID`, `X-App-DB-Queries`, and `X-App-Cache` headers, from the structured `Slow HTTP request` warning logs, and from Vercel runtime logs such as request `x-vercel-id` and invocation timing information.
+- A preview-deployment comparison or origin-versus-proxy capture is still required before attributing the missing header to a specific Vercel proxy layer.
+
+## Production slow-request warnings are enabled
+
+The middleware emits `Slow HTTP request` and `Client Error` warnings at WARNING level. Production defaults to WARNING (not ERROR) so these structured records reach Vercel runtime logs. Operators may still set `LOG_LEVEL` to raise (e.g. `ERROR`) or lower (e.g. `INFO`/`DEBUG`) verbosity. Verify slow-request logging locally with:
+
+```bash
+SLOW_REQUEST_THRESHOLD_MS=1 .venv/bin/python -m uvicorn app.main:app --port 9000
+```
+
+then exercise a slow endpoint and look for `Slow HTTP request` in the server output.
