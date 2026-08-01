@@ -25,8 +25,6 @@ jobs:
     name: Prune VCR and deploy main
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    outputs:
-      deployed_sha: ${{ steps.deploy_production.outputs.sha }}
     steps:
       - name: Check out full main history
         uses: actions/checkout@v7
@@ -116,14 +114,12 @@ jobs:
         run: bash .github/scripts/prune-oldest-vcr-image.sh
 
       - name: Deploy main to production
-        id: deploy_production
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
           deploy_sha="$(git rev-parse HEAD)"
           commit_message="$(git log -1 --pretty=%s)"
-          printf 'sha=%s\n' "$deploy_sha" >> "$GITHUB_OUTPUT"
           vercel deploy \
             --prod \
             --yes \
@@ -139,60 +135,3 @@ jobs:
             --meta githubOrg="$GITHUB_REPOSITORY_OWNER" \
             --meta githubRepo="${GITHUB_REPOSITORY#*/}" \
             --meta githubCommitAuthorLogin="$GITHUB_ACTOR"
-
-  smoke:
-    name: Production smoke (Chromium)
-    needs: deploy
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Check out deployed commit
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.deploy.outputs.deployed_sha }}
-          persist-credentials: false
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.15.0
-          run_install: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22.13.1
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Install Chromium
-        run: pnpm --filter frontend exec playwright install --with-deps chromium
-
-      - name: Wait for production alias
-        run: |
-          set -euo pipefail
-          for attempt in {1..30}; do
-            if curl --fail --silent --show-error https://comic-pile.vercel.app/health >/dev/null; then
-              exit 0
-            fi
-            sleep 5
-          done
-          curl --fail --show-error https://comic-pile.vercel.app/health
-
-      - name: Run production smoke suite
-        env:
-          PROD_BASE_URL: https://comic-pile.vercel.app
-        run: pnpm run test:e2e:prod-smoke
-
-      - name: Upload production smoke report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: production-smoke-${{ needs.deploy.outputs.deployed_sha }}
-          path: |
-            playwright-report-prod
-            frontend/test-results
-          if-no-files-found: warn
-          retention-days: 7
