@@ -51,6 +51,60 @@ from app.middleware.request_logging import add_request_logging_middleware
 
 logger = logging.getLogger(__name__)
 
+
+def _default_log_level(environment: str) -> int:
+    """Resolve the default root log level for an environment.
+
+    Production defaults to WARNING so structured slow-request and client-error
+    warnings reach deployment logs. Set ``LOG_LEVEL`` to raise or lower it.
+
+    Args:
+        environment: Current application environment.
+
+    Returns:
+        The default root logging level for the environment.
+    """
+    env_level_map: dict[str, int] = {
+        "production": logging.WARNING,
+        "staging": logging.WARNING,
+        "development": logging.DEBUG,
+        "test": logging.WARNING,
+    }
+    return env_level_map.get(environment, logging.WARNING)
+
+
+def _resolve_log_level(environment: str) -> int:
+    """Resolve the effective root log level, honoring a ``LOG_LEVEL`` override.
+
+    Args:
+        environment: Current application environment.
+
+    Returns:
+        The root logging level to configure.
+    """
+    requested_level = os.getenv("LOG_LEVEL")
+    if requested_level:
+        return logging.getLevelNamesMapping().get(
+            requested_level.upper(),
+            _default_log_level(environment),
+        )
+    return _default_log_level(environment)
+
+
+def _configure_logging(environment: str) -> None:
+    """Configure root logging unless a handler is already installed.
+
+    Uvicorn leaves the root logger without handlers, so this path runs in
+    production. ``basicConfig`` is a no-op when handlers already exist.
+
+    Args:
+        environment: Current application environment.
+    """
+    if logging.getLogger().hasHandlers():
+        return
+    logging.basicConfig(level=_resolve_log_level(environment))
+
+
 # Log database URL at startup (with password redacted)
 _db_settings = get_database_settings()
 _redacted_url = make_url(_db_settings.database_url).render_as_string(hide_password=True)
@@ -67,22 +121,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     """
     app_settings = get_app_settings()
 
-    if not logging.getLogger().hasHandlers():
-        requested_level = os.getenv("LOG_LEVEL")
-        env_level_map: dict[str, int] = {
-            "production": logging.ERROR,
-            "staging": logging.WARNING,
-            "development": logging.DEBUG,
-            "test": logging.WARNING,
-        }
-        default_level = env_level_map.get(app_settings.environment, logging.WARNING)
-
-        if requested_level:
-            level = logging.getLevelNamesMapping().get(requested_level.upper(), default_level)
-        else:
-            level = default_level
-
-        logging.basicConfig(level=level)
+    _configure_logging(app_settings.environment)
 
     app = FastAPI(
         title="Dice-Driven Comic Tracker",

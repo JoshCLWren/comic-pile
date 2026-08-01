@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-08-01
+
+**Production request observability (#678)**
+
+- Production now defaults to WARNING root log level instead of ERROR, so structured `Slow HTTP request` and `Client Error` warnings reach deployment logs (previously suppressed).
+- Documented that Vercel strips the `Server-Timing` response header for container deployments while passing custom `X-*` headers through; timing evidence should be read from `X-Request-ID`, `X-App-DB-Queries`, `X-App-Cache`, runtime logs, and the structured slow-request warnings.
+- Added regression coverage for log-level resolution and slow-request warning emission.
+
 ## 2026-07-24
 
 **Incremental session history (#608)**
