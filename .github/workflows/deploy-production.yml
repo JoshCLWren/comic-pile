@@ -26,10 +26,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Check out full history
+      - name: Check out full main history
         uses: actions/checkout@v7
         with:
+          ref: main
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Require Vercel token
         env:
@@ -40,17 +42,28 @@ jobs:
             exit 1
           fi
 
-      - name: Install Vercel CLI and ORAS
+      - name: Install Vercel CLI and verified ORAS
         env:
           ORAS_VERSION: 1.3.2
         run: |
+          set -euo pipefail
           npm install --global vercel@58.1.0
+
+          archive="oras_${ORAS_VERSION}_linux_amd64.tar.gz"
+          checksums="oras_${ORAS_VERSION}_checksums.txt"
+          release_url="https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}"
+
           curl --fail --silent --show-error --location \
-            "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_amd64.tar.gz" \
-            --output oras.tar.gz
-          tar -xzf oras.tar.gz oras
+            "$release_url/$archive" \
+            --output "$archive"
+          curl --fail --silent --show-error --location \
+            "$release_url/$checksums" \
+            --output "$checksums"
+
+          grep "  $archive$" "$checksums" | sha256sum --check --strict -
+          tar -xzf "$archive" oras
           sudo install -m 0755 oras /usr/local/bin/oras
-          rm -f oras oras.tar.gz
+          rm -f oras "$archive" "$checksums"
           vercel --version
           oras version
 
@@ -70,12 +83,16 @@ jobs:
         run: |
           set -euo pipefail
 
-          live_sha="$(
+          live_sha=""
+          if live_response="$(
             curl --fail --silent --show-error \
               --header "Authorization: Bearer $VERCEL_TOKEN" \
-              "https://api.vercel.com/v13/deployments/comic-pile.vercel.app?teamId=$VERCEL_TEAM_ID" \
-              | jq -r '.meta.githubCommitSha // empty'
-          )"
+              "https://api.vercel.com/v13/deployments/comic-pile.vercel.app?teamId=$VERCEL_TEAM_ID"
+          )"; then
+            live_sha="$(jq -r '.meta.githubCommitSha // empty' <<<"$live_response")"
+          else
+            echo "Current production deployment lookup failed; recent main commits remain protected." >&2
+          fi
 
           keep_tags=()
           if [[ -n "$live_sha" ]]; then
@@ -99,9 +116,10 @@ jobs:
       - name: Deploy main to production
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          GITHUB_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
-          commit_message="$(printf '%s\n' "${GITHUB_COMMIT_MESSAGE:-Production deployment}" | head -n 1)"
+          set -euo pipefail
+          deploy_sha="$(git rev-parse HEAD)"
+          commit_message="$(git log -1 --pretty=%s)"
           vercel deploy \
             --prod \
             --yes \
@@ -110,7 +128,7 @@ jobs:
             --token "$VERCEL_TOKEN" \
             --meta githubDeployment=1 \
             --meta githubCommitRef=main \
-            --meta githubCommitSha="$GITHUB_SHA" \
+            --meta githubCommitSha="$deploy_sha" \
             --meta githubCommitMessage="$commit_message" \
             --meta githubCommitOrg="$GITHUB_REPOSITORY_OWNER" \
             --meta githubCommitRepo="${GITHUB_REPOSITORY#*/}" \
