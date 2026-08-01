@@ -1,8 +1,20 @@
 import { test, expect } from './fixtures';
-import { gotoRollPage, SELECTORS } from './helpers';
+import { SELECTORS } from './helpers';
 
 test.describe('Issue #688: Roll rating modal stacking and pointer interception', () => {
-  test('roll opening the rating panel closes a competing thread dialog', async ({ authenticatedWithThreadsPage }) => {
+  test('roll opening the rating panel closes a competing thread dialog', async ({
+    authenticatedWithThreadsPage,
+    allowExpectedBrowserFailures,
+  }, testInfo) => {
+    if (testInfo.project.name === 'webkit') {
+      // WebKit can report the generated entry asset as unused while the roll
+      // transition replaces the dialog. Keep the exception local to this test.
+      allowExpectedBrowserFailures.allow({
+        category: 'console',
+        message: '/assets/index-',
+      });
+    }
+
     await authenticatedWithThreadsPage.goto('/')
     await expect(authenticatedWithThreadsPage.locator('[data-roll-pool]')).toBeVisible({ timeout: 10000 })
 
@@ -15,7 +27,7 @@ test.describe('Issue #688: Roll rating modal stacking and pointer interception',
     await expect(authenticatedWithThreadsPage.getByRole('dialog')).toBeVisible()
 
     // The roll completes and the rating panel opens. The competing dialog must
-    // not remain mounted over it — otherwise its backdrop intercepts the button.
+    // not remain mounted over it, otherwise its backdrop intercepts the button.
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 })
     await expect(authenticatedWithThreadsPage.getByRole('dialog')).toHaveCount(0)
 
