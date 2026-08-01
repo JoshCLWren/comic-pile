@@ -16,6 +16,16 @@ let rootLockCount = 0
 let savedOverflow = ''
 let savedScrollTop = 0
 
+// Module-level stack so overlapping modals know which one is on top. Only the
+// topmost modal owns Escape, backdrop dismissal, and focus restoration, so
+// closing one layer never dismisses or steals focus from the layer below it.
+const openModalStack: number[] = []
+let nextModalId = 0
+
+function isTopmostModal(modalId: number): boolean {
+  return openModalStack[openModalStack.length - 1] === modalId
+}
+
 export default function Modal({
   isOpen,
   title,
@@ -30,6 +40,11 @@ export default function Modal({
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const onCloseRef = useRef(onClose)
 
+  const modalIdRef = useRef<number | null>(null)
+  if (modalIdRef.current === null) {
+    modalIdRef.current = nextModalId++
+  }
+
   // Keep onCloseRef up to date without causing effect re-runs
   useEffect(() => {
     onCloseRef.current = onClose
@@ -38,6 +53,7 @@ export default function Modal({
   useEffect(() => {
     if (!isOpen) return
 
+    const modalId = modalIdRef.current!
     previousFocusRef.current = document.activeElement as HTMLElement
 
     const modal = modalRef.current!
@@ -49,6 +65,8 @@ export default function Modal({
     const lastElement = focusableElements[focusableElements.length - 1]
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isTopmostModal(modalId)) return
+
       if (e.key === 'Escape') {
         onCloseRef.current()
         return
@@ -70,6 +88,7 @@ export default function Modal({
     }
 
     document.addEventListener('keydown', handleKeyDown)
+    openModalStack.push(modalId)
 
     // Focus the first input/textarea/select element, or fall back to the first focusable element
     const focusableArray = Array.from(focusableElements)
@@ -83,7 +102,15 @@ export default function Modal({
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
-      previousFocusRef.current?.focus()
+      const stackIndex = openModalStack.indexOf(modalId)
+      const wasTopmost = stackIndex === openModalStack.length - 1
+      if (stackIndex !== -1) openModalStack.splice(stackIndex, 1)
+      // Only restore focus when this modal was the topmost layer (or the last
+      // modal open). Closing a lower modal must not steal focus from the modal
+      // rendered above it.
+      if (wasTopmost) {
+        previousFocusRef.current?.focus()
+      }
     }
   }, [autoFocus, isOpen])
 
@@ -119,7 +146,13 @@ export default function Modal({
 
   return (
     <div className={`fixed inset-0 z-[60] flex items-end md:items-center justify-center md:px-4 ${overlayClassName || ''}`}>
-      <div className="absolute inset-0 bg-[#110e0a]/60 backdrop-blur-sm touch-none" onClick={onClose} aria-hidden="true"></div>
+      <div
+        className="absolute inset-0 bg-[#110e0a]/60 backdrop-blur-sm touch-none"
+        onClick={() => {
+          if (isTopmostModal(modalIdRef.current!)) onClose()
+        }}
+        aria-hidden="true"
+      ></div>
       <div
         ref={modalRef}
         data-testid={testId}

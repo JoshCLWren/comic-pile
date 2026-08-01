@@ -183,6 +183,13 @@ export default function RollPage() {
       return
     }
 
+    // The rating panel is the single active layer for the roll workflow.
+    // Close any competing modal layers (selected-thread action sheet, override,
+    // die selector) so no backdrop can intercept the primary action.
+    setIsActionSheetOpen(false)
+    setIsOverrideOpen(false)
+    setIsDieModalOpen(false)
+
     setSelectedThreadId(threadId)
     if (result !== null) setRolledResult(result)
     setActiveRatingThread(ratingThread)
@@ -214,7 +221,7 @@ export default function RollPage() {
       setReadingOrders([])
       setConnectedThreads([])
     }
-  }, [session, currentDie, suppressPendingAutoOpenRef, setSelectedThreadId, setRolledResult, setActiveRatingThread, setRating, setErrorMessage, setPredictedDie, setIsRatingView])
+  }, [session, currentDie, suppressPendingAutoOpenRef, setSelectedThreadId, setRolledResult, setActiveRatingThread, setRating, setErrorMessage, setPredictedDie, setIsRatingView, setIsActionSheetOpen, setIsOverrideOpen, setIsDieModalOpen])
 
 const handleMigrationComplete = useCallback((migratedThread: Thread) => {
   refetchThreads()
@@ -419,7 +426,12 @@ useEffect(() => {
       setPredictedDie(idx > 0 ? DICE_LADDER[idx - 1] : DICE_LADDER[0])
       setIsRatingView(true)
     }
-  }, [session?.pending_thread_id, session?.active_thread, session?.last_rolled_result, activeThreads, activeRatingThread, currentDie, isRatingView, selectedThreadId, suppressPendingAutoOpenRef, setSelectedThreadId, setRolledResult, setActiveRatingThread, setRating, setErrorMessage, setPredictedDie, setIsRatingView])
+    // The rating panel is the single active layer for the roll workflow. Close
+    // any competing modal layers so no backdrop can intercept the primary action.
+    setIsActionSheetOpen(false)
+    setIsOverrideOpen(false)
+    setIsDieModalOpen(false)
+  }, [session?.pending_thread_id, session?.active_thread, session?.last_rolled_result, activeThreads, activeRatingThread, currentDie, isRatingView, selectedThreadId, suppressPendingAutoOpenRef, setSelectedThreadId, setRolledResult, setActiveRatingThread, setRating, setErrorMessage, setPredictedDie, setIsRatingView, setIsActionSheetOpen, setIsOverrideOpen, setIsDieModalOpen])
 
 useEffect(() => {
   const actionable = staleThreads?.filter(t => !t.is_blocked) ?? []

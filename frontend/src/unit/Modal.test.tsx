@@ -159,3 +159,123 @@ it('does not wrap focus when tabbing from a middle focusable element', () => {
   fireEvent.keyDown(document, { key: 'Tab', shiftKey: false })
   expect(middle).toHaveFocus()
 })
+
+it('Escape dismisses only the topmost overlapping modal', async () => {
+  const user = userEvent.setup()
+  const firstOnClose = vi.fn()
+  const secondOnClose = vi.fn()
+
+  render(
+    <Modal isOpen title="One" onClose={firstOnClose}>
+      <button type="button">One action</button>
+    </Modal>,
+  )
+  render(
+    <Modal isOpen title="Two" onClose={secondOnClose}>
+      <button type="button">Two action</button>
+    </Modal>,
+  )
+
+  await user.keyboard('{Escape}')
+  expect(secondOnClose).toHaveBeenCalledTimes(1)
+  expect(firstOnClose).not.toHaveBeenCalled()
+})
+
+it('backdrop click on the topmost overlapping modal closes only it', async () => {
+  const user = userEvent.setup()
+  const firstOnClose = vi.fn()
+  const secondOnClose = vi.fn()
+
+  const { container } = render(
+    <Modal isOpen title="One" onClose={firstOnClose}>
+      <button type="button">One action</button>
+    </Modal>,
+  )
+  render(
+    <Modal isOpen title="Two" onClose={secondOnClose}>
+      <button type="button">Two action</button>
+    </Modal>,
+  )
+
+  // The topmost modal renders last, so its backdrop is the last overlay in the DOM.
+  const backdrops = container.parentElement!.querySelectorAll('[aria-hidden="true"]')
+  const topmostBackdrop = backdrops[backdrops.length - 1]
+  await user.click(topmostBackdrop as HTMLElement)
+  expect(secondOnClose).toHaveBeenCalledTimes(1)
+  expect(firstOnClose).not.toHaveBeenCalled()
+})
+
+it('restores focus to the lower modal when the topmost modal closes', () => {
+  function NestedModals() {
+    return (
+      <>
+        <Modal isOpen title="One" onClose={() => {}}>
+          <input aria-label="Lower field" />
+        </Modal>
+        <Modal isOpen title="Two" onClose={() => {}}>
+          <input aria-label="Top field" />
+        </Modal>
+      </>
+    )
+  }
+
+  const { rerender } = render(<NestedModals />)
+
+  // The topmost modal (Two) owns focus.
+  const topField = screen.getByLabelText('Top field')
+  expect(topField).toHaveFocus()
+
+  // Close the topmost modal; focus must return to the lower modal's field.
+  rerender(
+    <>
+      <Modal isOpen title="One" onClose={() => {}}>
+        <input aria-label="Lower field" />
+      </Modal>
+      <Modal isOpen={false} title="Two" onClose={() => {}}>
+        <input aria-label="Top field" />
+      </Modal>
+    </>,
+  )
+  const lowerField = screen.getByLabelText('Lower field')
+  expect(lowerField).toHaveFocus()
+})
+
+it('closing the topmost modal lets Escape dismiss the modal below it', async () => {
+  const user = userEvent.setup()
+  const firstOnClose = vi.fn()
+  const secondOnClose = vi.fn()
+
+  function NestedModals() {
+    return (
+      <>
+        <Modal isOpen title="One" onClose={firstOnClose}>
+          <button type="button">One action</button>
+        </Modal>
+        <Modal isOpen title="Two" onClose={secondOnClose}>
+          <button type="button">Two action</button>
+        </Modal>
+      </>
+    )
+  }
+
+  const { rerender } = render(<NestedModals />)
+
+  // Escape closes only the topmost modal (Two).
+  await user.keyboard('{Escape}')
+  expect(secondOnClose).toHaveBeenCalledTimes(1)
+  expect(firstOnClose).not.toHaveBeenCalled()
+
+  // After the topmost modal closes, Escape must dismiss the modal below it.
+  rerender(
+    <>
+      <Modal isOpen title="One" onClose={firstOnClose}>
+        <button type="button">One action</button>
+      </Modal>
+      <Modal isOpen={false} title="Two" onClose={secondOnClose}>
+        <button type="button">Two action</button>
+      </Modal>
+    </>,
+  )
+  await user.keyboard('{Escape}')
+  expect(firstOnClose).toHaveBeenCalledTimes(1)
+})

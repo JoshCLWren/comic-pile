@@ -242,6 +242,7 @@ function isExpectedBrowserNoise(message: string): boolean {
   return (
     (message.includes('GPU stall due to ReadPixels') && message.includes('GL Driver Message'))
     || message.includes("Couldn't load preload assets")
+    || message.includes('was preloaded using link preload but not used within a few seconds from the window')
     || (message.includes('Network Error') && message.includes('/assets/'))
     || message.includes('Failed to fetch collections: Error: Network error. Please check your connection and try again.')
     || message.includes('Failed to fetch collections: Error @')
