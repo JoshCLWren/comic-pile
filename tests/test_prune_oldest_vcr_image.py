@@ -143,6 +143,7 @@ def _create_git_commit(repo: Path, timestamp: str) -> str:
 
 
 def test_pruner_deletes_oldest_unprotected_manifest(tmp_path: Path) -> None:
+    """Delete the oldest unique manifest that is not protected."""
     tags = ["old", "middle", "live"]
     digests = {"old": "sha256:old", "middle": "sha256:middle", "live": "sha256:live"}
 
@@ -154,6 +155,7 @@ def test_pruner_deletes_oldest_unprotected_manifest(tmp_path: Path) -> None:
 
 
 def test_pruner_protects_all_aliases_of_kept_digest(tmp_path: Path) -> None:
+    """Protect every tag alias that resolves to a kept digest."""
     tags = ["live-alias", "live", "old"]
     digests = {
         "live-alias": "sha256:live",
@@ -168,6 +170,7 @@ def test_pruner_protects_all_aliases_of_kept_digest(tmp_path: Path) -> None:
 
 
 def test_pruner_retries_digest_alias_with_git_commit_timestamp(tmp_path: Path) -> None:
+    """Retry a digest through a Git SHA alias after metadata lookup fails."""
     repo = tmp_path / "repo"
     commit_sha = _create_git_commit(repo, "2025-01-01T00:00:00Z")
     tags = ["missing-created", commit_sha, "newer"]
@@ -194,6 +197,7 @@ def test_pruner_retries_digest_alias_with_git_commit_timestamp(tmp_path: Path) -
 
 
 def test_pruner_keeps_the_only_unique_manifest(tmp_path: Path) -> None:
+    """Keep the repository intact when only one unique manifest exists."""
     tags = ["alias-a", "alias-b"]
     digests = {"alias-a": "sha256:only", "alias-b": "sha256:only"}
 
