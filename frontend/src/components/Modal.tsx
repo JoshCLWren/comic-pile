@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 
 interface ModalProps {
   isOpen: boolean
@@ -16,6 +16,17 @@ let rootLockCount = 0
 let savedOverflow = ''
 let savedScrollTop = 0
 
+// Module-level stack so overlapping modals know which one is on top. Each open
+// also receives a higher visual layer, keeping Escape/backdrop ownership aligned
+// with the modal the browser actually paints above the others.
+const openModalStack: number[] = []
+let nextModalId = 0
+let nextModalLayer = 60
+
+function isTopmostModal(modalId: number): boolean {
+  return openModalStack[openModalStack.length - 1] === modalId
+}
+
 export default function Modal({
   isOpen,
   title,
@@ -25,18 +36,32 @@ export default function Modal({
   overlayClassName,
   autoFocus = true,
 }: ModalProps) {
+  const overlayRef = useRef<HTMLDivElement>(null)
   const modalRef = useRef<HTMLDivElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const onCloseRef = useRef(onClose)
+
+  const modalIdRef = useRef<number | null>(null)
+  if (modalIdRef.current === null) {
+    modalIdRef.current = nextModalId++
+  }
 
   // Keep onCloseRef up to date without causing effect re-runs
   useEffect(() => {
     onCloseRef.current = onClose
   })
 
-  useEffect(() => {
+  // Register and layer open modals before paint so logical dismissal order and
+  // visual stacking cannot diverge when an earlier DOM modal reopens.
+  useLayoutEffect(() => {
     if (!isOpen) return
+
+    const modalId = modalIdRef.current!
+    // This effect's cleanup always removes its entry before a rerun, so every
+    // active modal has exactly one stack entry.
+    openModalStack.push(modalId)
+    overlayRef.current!.style.zIndex = String(nextModalLayer++)
 
     previousFocusRef.current = document.activeElement as HTMLElement
 
@@ -49,6 +74,8 @@ export default function Modal({
     const lastElement = focusableElements[focusableElements.length - 1]
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isTopmostModal(modalId)) return
+
       if (e.key === 'Escape') {
         onCloseRef.current()
         return
@@ -83,19 +110,29 @@ export default function Modal({
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
-      previousFocusRef.current?.focus()
+      const cleanupIndex = openModalStack.indexOf(modalId)
+      const wasTopmost = cleanupIndex === openModalStack.length - 1
+      // An open modal always owns one stack entry until this cleanup executes.
+      openModalStack.splice(cleanupIndex, 1)
+      if (openModalStack.length === 0) nextModalLayer = 60
+
+      // Only restore focus when this modal was the topmost layer. Closing a
+      // lower modal must not steal focus from the modal rendered above it.
+      if (wasTopmost) {
+        previousFocusRef.current?.focus()
+      }
     }
   }, [autoFocus, isOpen])
 
   // Lock the #root scroller while a modal is open (fixes iOS scroll-bleed).
   // This app scrolls via #root, NOT <body> (see src/styles.css: html/body are
   // overflow:hidden, so locking <body> is a no-op). Use overflow:hidden ONLY on
-  // #root — do NOT set touch-action:none on #root: the modal content is a DOM
+  // #root, do NOT set touch-action:none on #root: the modal content is a DOM
   // descendant of #root (Modal renders inline, no portal), and an ancestor
   // touch-action:none would disable touch-panning for descendants, breaking
   // in-modal scrolling on mobile.
   // Uses a module-level ref count so nested/overlapping modals don't prematurely
-  // unlock #root — the lock is only released when the last modal closes.
+  // unlock #root, the lock is only released when the last modal closes.
   useEffect(() => {
     if (!isOpen) return
     const root = document.getElementById('root')
@@ -118,8 +155,18 @@ export default function Modal({
   if (!isOpen) return null
 
   return (
-    <div className={`fixed inset-0 z-[60] flex items-end md:items-center justify-center md:px-4 ${overlayClassName || ''}`}>
-      <div className="absolute inset-0 bg-[#110e0a]/60 backdrop-blur-sm touch-none" onClick={onClose} aria-hidden="true"></div>
+    <div
+      ref={overlayRef}
+      className={`fixed inset-0 flex items-end md:items-center justify-center md:px-4 ${overlayClassName || ''}`}
+      style={{ zIndex: 60 }}
+    >
+      <div
+        className="absolute inset-0 bg-[#110e0a]/60 backdrop-blur-sm touch-none"
+        onClick={() => {
+          if (isTopmostModal(modalIdRef.current!)) onClose()
+        }}
+        aria-hidden="true"
+      ></div>
       <div
         ref={modalRef}
         data-testid={testId}
