@@ -88,18 +88,19 @@ Each run attaches `production-profile.json` with:
 
 The report is evidence, not a synthetic pass badge. A large drop in request count is expected when fan-out is removed, but a tiny request count or small-account guard failure means the profile is no longer representative.
 
-## Vercel strips the `Server-Timing` response header
+## `Server-Timing` is absent from the current Vercel deployment
 
-Proven against the live production deployment (`https://comic-pile.vercel.app/health`) and the local container path:
+Observed against the live production deployment (`https://comic-pile.vercel.app/health`) and the local container path:
 
 - Running the same middleware over real HTTP locally returns all four headers: `X-Request-ID`, `X-App-Cache`, `X-App-DB-Queries`, and `Server-Timing`.
-- Through Vercel's container-deployment proxy, `X-Request-ID`, `X-App-Cache`, and `X-App-DB-Queries` are present but `Server-Timing` is absent.
-- Vercel's documented deployment response headers cover only system headers (`x-vercel-cache`, `x-vercel-id`, `cache-control`, etc.); `Server-Timing` is stripped by the platform proxy for container deployments.
+- Responses observed through the current Vercel container deployment include `X-Request-ID`, `X-App-Cache`, and `X-App-DB-Queries`, but not `Server-Timing`.
+- This proves a deployment-path discrepancy, but the precise layer removing or suppressing `Server-Timing` has not been isolated. Vercel's documented system response headers are not an allowlist for application-defined headers.
 
 Consequences for the production profile report:
 
-- `serverTiming` is `null` for every record captured against a Vercel deployment. This is expected platform behavior, not a missing report field.
-- Timing and diagnostics evidence is still available from the per-request `X-Request-ID`, `X-App-DB-Queries`, and `X-App-Cache` headers, from the structured `Slow HTTP request` warning logs, and from Vercel runtime logs (request `x-vercel-id`, invocation timings).
+- `serverTiming` is currently expected to be `null` for records captured against this deployment. Treat that as an observed limitation of the current deployment path, not a permanent or documented Vercel platform guarantee.
+- Timing and diagnostics evidence remains available from the per-request `X-Request-ID`, `X-App-DB-Queries`, and `X-App-Cache` headers, from the structured `Slow HTTP request` warning logs, and from Vercel runtime logs such as request `x-vercel-id` and invocation timing information.
+- A preview-deployment comparison or origin-versus-proxy capture is still required before attributing the missing header to a specific Vercel proxy layer.
 
 ## Production slow-request warnings are enabled
 
