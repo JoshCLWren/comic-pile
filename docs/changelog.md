@@ -78,7 +78,7 @@
 - Interactive indicators have clear visual affordances (cursor-help, dashed borders)
 - Tooltips explain what each value means and whether/how it can be changed
 - Screen readers can read each indicator's label and value via aria-label attributes
-- Users can view contextual explanations on hover, focus, or tap
+- No layout changes to the roll page — tooltips fit within existing header space
 
 **Dependency Notes Feature (#364)**
 - Added optional `note` field to Dependency model (VARCHAR 255)
@@ -86,7 +86,7 @@
 - Notes validate max 255 characters; returns 422 if exceeded
 - Updated DependencyResponse schema to include `note: str | None`
 - Added inline note editing in DependencyBuilder modal component
-- Shows "Add note" link when empty, displays note with "Edit note" button
+- Shows "Add note" link when empty, displays note with "Edit note" button when present
 - Notes are deleted with their dependency (not preserved on re-add)
 
 **Dependency Reading Order (Issue #371)**
@@ -104,7 +104,7 @@
 - Distinguishes between no threads and threads blocked/snoozed; includes actionable CTAs.
 - Adds quick navigation to thread creation flow via the Roll empty state (Add Thread) and a path to the queue (Go to Queue).
 - Mobile-friendly touch targets for new CTAs and improved accessibility.
-- No regression for users with eligible threads; empty state disappears once they become available.
+- No regression for users with eligible threads; empty state disappears once threads are available.
 
 **Accessibility Improvements (#220)**
 - Added `aria-label="Roll pool collection"` to ThreadPool container for screen reader support
@@ -112,7 +112,7 @@
 - Implemented focus trap in Modal component to keep focus within dialog
 - Added focus return to trigger element on Modal close
 - Fixed ESLint warnings for React hook dependencies in RollPage
-- Fixed touch targets in IssueToggleList to be at least 44px on mobile accessibility (#358)
+- Fixed touch targets in IssueToggleList to be at least 44px for mobile accessibility (#358)
 
 **Documentation Updates (#220)**
 - README.md: Added prominent async-only PostgreSQL warning and guidance
@@ -155,7 +155,7 @@
 **Collections**
 - Success toast notification now appears after creating a collection
 - Toast includes collection name and auto-dismisses after 5 seconds
-- No success message shown on validation or error
+- No success message shown on validation or network errors
 
 **Developer Tools**
 - Added `GET /api/v1/threads/{thread_id}/dependency-order-check` endpoint to detect conflicts between dependency-implied reading order and issue position order
@@ -173,7 +173,7 @@
 
 **Issue Number Correction**
 - Added edit icon next to issue number in rating view
-- Quick correction dialog allows adjusting current issue without leaving rating page
+- Quick correction dialog allows adjusting current issue without leaving the rating page
 - +/- buttons for easy issue number adjustment
 - Validates issue number is within valid range (1 to total issues)
 - Updates thread's issue tracking state automatically
@@ -202,6 +202,7 @@
 **Validation & Error Handling**
 - Snooze at d20 max pool size now shows feedback message
 - Manual die selection persists when rolling into snoozed threads
+- Improved feedback when rolled die exceeds pool size
 - Collection filter now available on roll API and get_roll_pool endpoint
 - Validation prevents rating threads with 0 issues remaining
 - Config validation errors now raise ValueError instead of silent fallback
@@ -236,7 +237,7 @@
 **Mobile UX Redesign (Complete)**
 - Complete mobile UI overhaul with responsive design improvements
 - Touch-optimized interface across all major screens
-- Mobile-specific navigation patterns
+- Mobile-specific navigation and interaction patterns
 
 **Dependency Blocking**
 - Fixed dependency blocking to only block when next unread issue has unread prerequisite
@@ -255,6 +256,7 @@
 
 **CI & Infrastructure**
 - Updated CI setup actions for improved reliability
+- Added utility scripts for development workflow
 
 ## 2026-03-14
 
