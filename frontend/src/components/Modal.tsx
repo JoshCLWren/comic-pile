@@ -58,8 +58,8 @@ export default function Modal({
     if (!isOpen) return
 
     const modalId = modalIdRef.current!
-    const stackIndex = openModalStack.indexOf(modalId)
-    if (stackIndex !== -1) openModalStack.splice(stackIndex, 1)
+    // This effect's cleanup always removes its entry before a rerun, so every
+    // active modal has exactly one stack entry.
     openModalStack.push(modalId)
     overlayRef.current!.style.zIndex = String(nextModalLayer++)
 
@@ -112,7 +112,8 @@ export default function Modal({
       document.removeEventListener('keydown', handleKeyDown)
       const cleanupIndex = openModalStack.indexOf(modalId)
       const wasTopmost = cleanupIndex === openModalStack.length - 1
-      if (cleanupIndex !== -1) openModalStack.splice(cleanupIndex, 1)
+      // An open modal always owns one stack entry until this cleanup executes.
+      openModalStack.splice(cleanupIndex, 1)
       if (openModalStack.length === 0) nextModalLayer = 60
 
       // Only restore focus when this modal was the topmost layer. Closing a
