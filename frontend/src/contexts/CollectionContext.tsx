@@ -84,7 +84,7 @@ export const CollectionProvider = ({ children }: CollectionProviderProps) => {
 
   const createCollection = useCallback(async (data: CollectionCreate) => {
     await createMutation.mutateAsync(data)
-  }, [createMutation])
+  }, [createMutation.mutateAsync])
 
   const updateCollection = useCallback(async (id: number, data: CollectionUpdate) => {
     await collectionsApi.update(id, data)
