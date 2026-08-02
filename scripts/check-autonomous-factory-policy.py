@@ -22,12 +22,8 @@ def forbid(text: str, needle: str, source: Path) -> None:
         raise SystemExit(f"{source}: forbidden policy drift found: {needle!r}")
 
 
-def main() -> None:
-    """Validate the canonical policy, issue protocol, and local entrypoint."""
-    policy = POLICY.read_text()
-    protocol = PROTOCOL.read_text()
-    entrypoint = ENTRYPOINT.read_text()
-
+def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
+    """Validate policy source text against the canonical delivery invariants."""
     require(policy, "Never push directly to `main`.", POLICY)
     require(
         policy,
@@ -137,6 +133,14 @@ def main() -> None:
     forbid(entrypoint, "comic-pile-factory-fix-v2:", ENTRYPOINT)
     forbid(entrypoint, "comic-pile-factory-ready:", ENTRYPOINT)
 
+
+def main() -> None:
+    """Read repository policy sources and validate their alignment."""
+    validate_texts(
+        POLICY.read_text(encoding="utf-8"),
+        PROTOCOL.read_text(encoding="utf-8"),
+        ENTRYPOINT.read_text(encoding="utf-8"),
+    )
     print("Autonomous factory policy invariants are aligned.")
 
 
