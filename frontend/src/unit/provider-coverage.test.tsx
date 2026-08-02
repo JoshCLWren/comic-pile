@@ -33,7 +33,7 @@ function RestoreConsumer() {
 
 function CacheConsumer() {
   const { cache, updateCache, invalidateQueries } = useCache()
-  return <><span data-testid="cache">{[...cache.keys()].join(',')}</span><button onClick={() => updateCache('sessions:1', 1)}>add</button><button onClick={() => invalidateQueries(['sessions'])}>invalidate</button></>
+  return <><span data-testid="cache">{[...cache.keys()].join(',')}</span><button onClick={() => updateCache('sessions:1', 1)}>add session</button><button onClick={() => updateCache('threads:1', 1)}>add thread</button><button onClick={() => invalidateQueries(['sessions'])}>invalidate sessions</button></>
 }
 
 describe('context providers', () => {
@@ -92,13 +92,15 @@ describe('context providers', () => {
     expect(restoreSpy).toHaveBeenCalledOnce()
   })
 
-  it('updates and invalidates cache entries', async () => {
+  it('invalidates matching cache entries without removing retained resources', async () => {
     const user = userEvent.setup()
     render(<CacheProvider><CacheConsumer /></CacheProvider>)
-    await user.click(screen.getByRole('button', { name: 'add' }))
-    expect(screen.getByTestId('cache')).toHaveTextContent('sessions:1')
-    await user.click(screen.getByRole('button', { name: 'invalidate' }))
-    expect(screen.getByTestId('cache')).toHaveTextContent('')
+    await user.click(screen.getByRole('button', { name: 'add session' }))
+    await user.click(screen.getByRole('button', { name: 'add thread' }))
+    expect(screen.getByTestId('cache')).toHaveTextContent('sessions:1,threads:1')
+    await user.click(screen.getByRole('button', { name: 'invalidate sessions' }))
+    expect(screen.getByTestId('cache')).toHaveTextContent('threads:1')
+    expect(screen.getByTestId('cache')).not.toHaveTextContent('sessions:1')
   })
 
   it('throws clear errors when context hooks lack providers', () => {
