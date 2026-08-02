@@ -72,7 +72,26 @@ Before editing, print to the user:
 - Why it does not conflict with current open PRs
 - The primary files expected to change
 
-If no issue is executable, report the exact blockers and stop without changing code.
+If no campaign (#687) issue is executable, fall back to non-campaign issues using the
+same filter rules minus #687-specific constraints:
+
+1. Must have: `ralph-task`, `ralph-status:pending`.
+2. Must NOT have: `epic`, `ralph-status:blocked`, `ralph-status:in-progress`,
+   `ralph-status:in-review`, `ralph-status:done`.
+3. Every required dependency named in the issue must be closed or explicitly non-blocking.
+4. Do not select work that conflicts with an open PR or active issue touching the
+   same architectural lane or primary files.
+5. Prefer: `ralph-priority:critical` > `high` > `medium` > `low`.
+6. If more than one is equally eligible, choose the lowest-numbered one.
+7. **Verify the issue is genuinely pending** — inspect the referenced files and
+   code paths before selecting. An issue may claim an N+1 pattern exists when the
+   code was already fixed in a later PR (e.g. #669 was already resolved by the
+   bulk endpoint in #677). If the described problem no longer exists, skip the
+   issue and move to the next candidate. Do not close the issue — that is a
+   separate decision.
+
+If no campaign issue AND no non-campaign issue is executable, report the exact blockers
+and stop without changing code.
 
 ## Step 3 — Start the issue
 
