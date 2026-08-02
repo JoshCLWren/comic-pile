@@ -22,6 +22,8 @@ vi.mock('../hooks/useUndo', () => ({
 
 const restoreSpy = vi.fn()
 const undoSpy = vi.fn()
+const refetchDetailsSpy = vi.fn()
+const refetchSnapshotsSpy = vi.fn()
 const mockedUseSessionDetails = vi.mocked(useSessionDetails) as any
 const mockedUseSessionSnapshots = vi.mocked(useSessionSnapshots) as any
 const mockedUseRestoreSessionStart = vi.mocked(useRestoreSessionStart) as any
@@ -42,17 +44,26 @@ beforeEach(() => {
       ],
     },
     isLoading: false,
+    refetch: refetchDetailsSpy,
   })
   mockedUseSessionSnapshots.mockReturnValue({
-    data: { snapshots: [{ id: 4, description: 'Before twist', created_at: '2024-05-01T10:20:00Z' }] },
+    data: {
+      snapshots: [
+        { id: 4, description: 'Before twist', created_at: '2024-05-01T10:20:00Z' },
+        { id: 3, description: 'Earlier rating', created_at: '2024-05-01T10:10:00Z' },
+      ],
+    },
+    refetch: refetchSnapshotsSpy,
   })
   mockedUseRestoreSessionStart.mockReturnValue({ mutate: restoreSpy, isPending: false })
   mockedUseUndo.mockReturnValue({ mutate: undoSpy, isPending: false })
   restoreSpy.mockReset()
   undoSpy.mockReset()
+  refetchDetailsSpy.mockReset()
+  refetchSnapshotsSpy.mockReset()
 })
 
-it('renders session details and triggers restore actions', async () => {
+it('renders session details and only allows undoing the latest rating', async () => {
   const user = userEvent.setup()
   render(
     <MemoryRouter initialEntries={["/sessions/12"]}>
@@ -64,12 +75,17 @@ it('renders session details and triggers restore actions', async () => {
 
   expect(screen.getByText('Session Details')).toBeInTheDocument()
   expect(screen.getByText('Before twist')).toBeInTheDocument()
+  expect(screen.getByText('Earlier rating')).toBeInTheDocument()
+  expect(screen.getAllByText('History')).toHaveLength(1)
+  expect(screen.getAllByRole('button', { name: /undo latest/i })).toHaveLength(1)
 
   await user.click(screen.getByRole('button', { name: /restore start/i }))
   expect(restoreSpy).toHaveBeenCalledWith(12)
 
-  await user.click(screen.getByRole('button', { name: /undo/i }))
+  await user.click(screen.getByRole('button', { name: /undo latest/i }))
   expect(undoSpy).toHaveBeenCalledWith({ sessionId: 12, snapshotId: 4 })
+  expect(refetchDetailsSpy).toHaveBeenCalledOnce()
+  expect(refetchSnapshotsSpy).toHaveBeenCalledOnce()
 })
 
 it('renders loading, missing, empty, and active session branches', () => {
@@ -96,12 +112,29 @@ it('renders fallback labels for sparse summaries and events', () => {
     session_id: 14, started_at: '2024-01-01', ended_at: null, start_die: 4, current_die: 4,
     ladder_path: 'd4', narrative_summary: { highlights: [], misses: ['Missed'] },
     events: [{ id: 2, timestamp: '2024-01-01', type: 'shuffle', thread_title: '', rating: 0, result: 0, die: 0, queue_move: '' }],
-  }, isPending: false })
-  mockedUseSessionSnapshots.mockReturnValue({ data: { snapshots: [{ id: 5, description: '', created_at: '2024-01-01' }] } })
+  }, isPending: false, refetch: refetchDetailsSpy })
+  mockedUseSessionSnapshots.mockReturnValue({
+    data: { snapshots: [{ id: 5, description: '', created_at: '2024-01-01' }] },
+    refetch: refetchSnapshotsSpy,
+  })
   render(<MemoryRouter><SessionPage /></MemoryRouter>)
   expect(screen.getAllByText('None').length).toBeGreaterThan(0)
   expect(screen.getByText('Thread')).toBeInTheDocument()
   expect(screen.getByText('Snapshot')).toBeInTheDocument()
+})
+
+it('shows session-start snapshots as history instead of rating undo targets', () => {
+  mockedUseSessionSnapshots.mockReturnValue({
+    data: {
+      snapshots: [{ id: 1, description: 'Session start', created_at: '2024-05-01T10:00:00Z' }],
+    },
+    refetch: refetchSnapshotsSpy,
+  })
+
+  render(<MemoryRouter><SessionPage /></MemoryRouter>)
+
+  expect(screen.queryByRole('button', { name: /undo latest/i })).not.toBeInTheDocument()
+  expect(screen.getByText('History')).toBeInTheDocument()
 })
 
 it('renders pending restore state and optional event metadata', () => {
@@ -109,8 +142,11 @@ it('renders pending restore state and optional event metadata', () => {
     session_id: 15, started_at: '2024-01-01', ended_at: '2024-01-02', start_die: 4, current_die: 6,
     ladder_path: 'd4 → d6', narrative_summary: undefined,
     events: [{ id: 3, timestamp: '2024-01-01', type: 'move', thread_title: 'Saga', rating: 4, result: 5, die: 6, queue_move: 'front' }],
-  }, isPending: false })
-  mockedUseSessionSnapshots.mockReturnValue({ data: { snapshots: [{ id: 6, description: 'Snapshot', created_at: '2024-01-01' }] } })
+  }, isPending: false, refetch: refetchDetailsSpy })
+  mockedUseSessionSnapshots.mockReturnValue({
+    data: { snapshots: [{ id: 6, description: 'Snapshot', created_at: '2024-01-01' }] },
+    refetch: refetchSnapshotsSpy,
+  })
   mockedUseRestoreSessionStart.mockReturnValue({ mutate: restoreSpy, isPending: true })
   render(<MemoryRouter><SessionPage /></MemoryRouter>)
   expect(screen.getByRole('button', { name: 'Restoring...' })).toBeDisabled()
