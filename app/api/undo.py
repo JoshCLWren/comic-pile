@@ -5,7 +5,8 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import and_, delete, func, or_, select, update
+from sqlalchemy import and_, case, delete, func, or_, select, update
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.session import _invalidate_session_caches
@@ -16,12 +17,86 @@ from app.models import Event, Issue, Snapshot, Thread
 from app.models import Session as SessionModel
 from app.models.user import User
 from app.schemas import ActiveThreadInfo, SessionResponse
+from app.services.snapshot_contract import (
+    BLOCKED_CHANGES_KEY,
+    QUEUE_CHANGES_KEY,
+    SNAPSHOT_VERSION,
+    SNAPSHOT_VERSION_KEY,
+    USES_ISSUE_TRACKING_KEY,
+)
 from comic_pile.session import get_current_die
 
 router = APIRouter(tags=["undo"])
 
-QUEUE_CHANGES_KEY = "_queue_changes"
-BLOCKED_CHANGES_KEY = "_blocked_changes"
+
+def _deserialize_datetime(value: str | None) -> datetime | None:
+    """Deserialize an optional ISO datetime value."""
+    return datetime.fromisoformat(value) if value else None
+
+
+async def _restore_issue_states(
+    db: AsyncSession,
+    thread: Thread,
+    state: dict,
+) -> None:
+    """Restore issue state in place so surviving associations remain intact."""
+    has_tracking_marker = USES_ISSUE_TRACKING_KEY in state
+    has_issue_payload = "issue_states" in state
+    if not has_tracking_marker and not has_issue_payload:
+        return
+
+    uses_issue_tracking = state.get(
+        USES_ISSUE_TRACKING_KEY,
+        state.get("issue_states") is not None,
+    )
+    result = await db.execute(
+        select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
+    )
+    existing_issues = list(result.scalars().all())
+
+    thread.next_unread_issue_id = None
+    await db.flush()
+
+    if not uses_issue_tracking:
+        if existing_issues:
+            await db.execute(
+                delete(Issue).where(Issue.id.in_([issue.id for issue in existing_issues]))
+            )
+        thread.total_issues = None
+        thread.next_unread_issue_id = None
+        thread.reading_progress = None
+        thread.issues_remaining = state.get(
+            "issues_remaining",
+            thread.issues_remaining,
+        )
+        return
+
+    snapshot_issues = state.get("issue_states") or []
+    snapshot_ids = {int(issue_state["id"]) for issue_state in snapshot_issues}
+    existing_by_id = {issue.id: issue for issue in existing_issues}
+    extra_ids = [issue.id for issue in existing_issues if issue.id not in snapshot_ids]
+    if extra_ids:
+        await db.execute(delete(Issue).where(Issue.id.in_(extra_ids)))
+
+    for issue_state in snapshot_issues:
+        issue_id = int(issue_state["id"])
+        issue = existing_by_id.get(issue_id)
+        if issue is None:
+            issue = Issue(id=issue_id, thread_id=thread.id)
+            db.add(issue)
+        issue.issue_number = issue_state["number"]
+        issue.status = issue_state["status"]
+        issue.read_at = _deserialize_datetime(issue_state.get("read_at"))
+        issue.position = issue_state["position"]
+
+    await db.flush()
+    thread.total_issues = state.get("total_issues")
+    thread.next_unread_issue_id = state.get("next_unread_issue_id")
+    thread.reading_progress = state.get("reading_progress")
+    thread.issues_remaining = state.get(
+        "issues_remaining",
+        thread.issues_remaining,
+    )
 
 
 async def _restore_thread_from_state(
@@ -30,63 +105,10 @@ async def _restore_thread_from_state(
     state: dict,
     session_user_id: int,
 ) -> None:
-    """Restore a single thread and its issues from stored state."""
+    """Restore one thread and its issue state from a snapshot payload."""
     thread = await db.get(Thread, thread_id)
-    if thread:
-        if "title" in state:
-            thread.title = state["title"]
-        if "format" in state:
-            thread.format = state["format"]
-        thread.issues_remaining = state.get("issues_remaining", thread.issues_remaining)
-        thread.last_rating = state.get("last_rating", thread.last_rating)
-        thread.queue_position = state.get("queue_position", thread.queue_position)
-        thread.status = state.get("status", thread.status)
-        if "review_url" in state:
-            thread.review_url = state["review_url"]
-        if "notes" in state:
-            thread.notes = state["notes"]
-        if "is_test" in state:
-            thread.is_test = state["is_test"]
-        if state.get("last_activity_at"):
-            thread.last_activity_at = datetime.fromisoformat(state["last_activity_at"])
-        if state.get("last_review_at"):
-            thread.last_review_at = datetime.fromisoformat(state["last_review_at"])
-
-        if "issue_states" in state and state["issue_states"] is not None:
-            await db.execute(delete(Issue).where(Issue.thread_id == thread_id))
-
-            existing_positions_result = await db.execute(
-                select(Issue.position).where(Issue.thread_id == thread_id)
-            )
-            existing_positions = existing_positions_result.scalars().all()
-            max_position = max(existing_positions) if existing_positions else 0
-
-            for issue_state in state["issue_states"]:
-                position = issue_state.get("position", max_position + 1)
-                if position > max_position:
-                    max_position = position
-                issue = Issue(
-                    id=issue_state["id"],
-                    thread_id=thread_id,
-                    issue_number=issue_state["number"],
-                    status=issue_state["status"],
-                    read_at=datetime.fromisoformat(issue_state["read_at"])
-                    if issue_state["read_at"]
-                    else None,
-                    created_at=datetime.now(UTC),
-                    position=position,
-                )
-                db.add(issue)
-            if thread:
-                thread.total_issues = state.get("total_issues")
-                thread.next_unread_issue_id = state.get("next_unread_issue_id")
-                thread.reading_progress = state.get("reading_progress")
-                thread.issues_remaining = await thread.get_issues_remaining(db)
-        else:
-            if thread:
-                thread.issues_remaining = state.get("issues_remaining", thread.issues_remaining)
-    else:
-        new_thread = Thread(
+    if thread is None:
+        thread = Thread(
             id=thread_id,
             title=state.get("title", "Unknown Thread"),
             format=state.get("format", "comic"),
@@ -97,46 +119,42 @@ async def _restore_thread_from_state(
             review_url=state.get("review_url"),
             notes=state.get("notes"),
             is_test=state.get("is_test", False),
+            is_blocked=state.get("is_blocked", False),
             user_id=state.get("user_id", session_user_id),
-            created_at=datetime.fromisoformat(state["created_at"])
-            if state.get("created_at")
-            else datetime.now(UTC),
+            created_at=_deserialize_datetime(state.get("created_at"))
+            or datetime.now(UTC),
         )
-        if state.get("last_activity_at"):
-            new_thread.last_activity_at = datetime.fromisoformat(state["last_activity_at"])
-        if state.get("last_review_at"):
-            new_thread.last_review_at = datetime.fromisoformat(state["last_review_at"])
-        db.add(new_thread)
+        thread.last_activity_at = _deserialize_datetime(state.get("last_activity_at"))
+        thread.last_review_at = _deserialize_datetime(state.get("last_review_at"))
+        db.add(thread)
+        await db.flush()
+    else:
+        if "title" in state:
+            thread.title = state["title"]
+        if "format" in state:
+            thread.format = state["format"]
+        if "issues_remaining" in state:
+            thread.issues_remaining = state["issues_remaining"]
+        if "last_rating" in state:
+            thread.last_rating = state["last_rating"]
+        if "queue_position" in state:
+            thread.queue_position = state["queue_position"]
+        if "status" in state:
+            thread.status = state["status"]
+        if "review_url" in state:
+            thread.review_url = state["review_url"]
+        if "notes" in state:
+            thread.notes = state["notes"]
+        if "is_test" in state:
+            thread.is_test = state["is_test"]
+        if "is_blocked" in state:
+            thread.is_blocked = state["is_blocked"]
+        if "last_activity_at" in state:
+            thread.last_activity_at = _deserialize_datetime(state["last_activity_at"])
+        if "last_review_at" in state:
+            thread.last_review_at = _deserialize_datetime(state["last_review_at"])
 
-        if "issue_states" in state and state["issue_states"] is not None:
-            existing_positions_result = await db.execute(
-                select(Issue.position).where(Issue.thread_id == thread_id)
-            )
-            existing_positions = existing_positions_result.scalars().all()
-            max_position = max(existing_positions) if existing_positions else 0
-
-            for issue_state in state["issue_states"]:
-                position = issue_state.get("position", max_position + 1)
-                if position > max_position:
-                    max_position = position
-                issue = Issue(
-                    id=issue_state["id"],
-                    thread_id=thread_id,
-                    issue_number=issue_state["number"],
-                    status=issue_state["status"],
-                    read_at=datetime.fromisoformat(issue_state["read_at"])
-                    if issue_state["read_at"]
-                    else None,
-                    created_at=datetime.now(UTC),
-                    position=position,
-                )
-                db.add(issue)
-            new_thread.total_issues = state.get("total_issues")
-            new_thread.next_unread_issue_id = state.get("next_unread_issue_id")
-            new_thread.reading_progress = state.get("reading_progress")
-            new_thread.issues_remaining = await new_thread.get_issues_remaining(db)
-        else:
-            new_thread.issues_remaining = state.get("issues_remaining", 0)
+    await _restore_issue_states(db, thread, state)
 
 
 async def _restore_from_full_snapshot(
@@ -145,14 +163,14 @@ async def _restore_from_full_snapshot(
     snapshot: Snapshot,
     session_id: int,
 ) -> None:
-    """Full-library restore (v1 or unversioned snapshots)."""
-    snapshot_thread_ids = {int(tid) for tid in snapshot.thread_states.keys()}
+    """Restore a legacy or session-start full-library snapshot."""
+    snapshot_thread_ids = {int(thread_id) for thread_id in snapshot.thread_states}
 
     result = await db.execute(select(Thread).where(Thread.user_id == session.user_id))
     current_threads = result.scalars().all()
     current_thread_ids = {thread.id for thread in current_threads}
-
     threads_to_delete = current_thread_ids - snapshot_thread_ids
+
     if threads_to_delete:
         await db.execute(
             update(SessionModel)
@@ -168,7 +186,16 @@ async def _restore_from_full_snapshot(
                     Event.selected_thread_id.in_(threads_to_delete),
                 )
             )
-            .values(thread_id=None, selected_thread_id=None)
+            .values(
+                thread_id=case(
+                    (Event.thread_id.in_(threads_to_delete), None),
+                    else_=Event.thread_id,
+                ),
+                selected_thread_id=case(
+                    (Event.selected_thread_id.in_(threads_to_delete), None),
+                    else_=Event.selected_thread_id,
+                ),
+            )
         )
         await db.execute(
             delete(Thread)
@@ -178,8 +205,12 @@ async def _restore_from_full_snapshot(
         db.expire_all()
 
     for thread_id, state in snapshot.thread_states.items():
-        thread_id_int = int(thread_id)
-        await _restore_thread_from_state(db, thread_id_int, state, session.user_id)
+        await _restore_thread_from_state(
+            db,
+            int(thread_id),
+            state,
+            session.user_id,
+        )
 
     if snapshot.session_state:
         session.start_die = snapshot.session_state.get("start_die", session.start_die)
@@ -190,34 +221,53 @@ async def _restore_from_delta_snapshot(
     db: AsyncSession,
     session: SessionModel,
     snapshot: Snapshot,
-    _user_id: int,
-    session_id: int,
 ) -> None:
-    """Delta restore (v2): restore only the affected thread(s) and positions."""
+    """Restore only state changed by one version-two rating snapshot."""
     thread_states = snapshot.thread_states or {}
-
-    for thread_id_str, state in thread_states.items():
-        if thread_id_str.startswith("_"):
+    for thread_id, state in thread_states.items():
+        if thread_id.startswith("_"):
             continue
-        thread_id_int = int(thread_id_str)
-        await _restore_thread_from_state(db, thread_id_int, state, session.user_id)
-
-    queue_changes = thread_states.get(QUEUE_CHANGES_KEY, {})
-    for tid_str, old_pos in queue_changes.items():
-        await db.execute(
-            update(Thread)
-            .where(Thread.id == int(tid_str))
-            .where(Thread.user_id == session.user_id)
-            .values(queue_position=old_pos)
+        await _restore_thread_from_state(
+            db,
+            int(thread_id),
+            state,
+            session.user_id,
         )
 
-    blocked_changes = thread_states.get(BLOCKED_CHANGES_KEY, {})
-    for tid_str, old_val in blocked_changes.items():
+    queue_changes = {
+        int(thread_id): old_position
+        for thread_id, old_position in thread_states.get(QUEUE_CHANGES_KEY, {}).items()
+    }
+    if queue_changes:
         await db.execute(
             update(Thread)
-            .where(Thread.id == int(tid_str))
             .where(Thread.user_id == session.user_id)
-            .values(is_blocked=old_val)
+            .where(Thread.id.in_(queue_changes))
+            .values(
+                queue_position=case(
+                    queue_changes,
+                    value=Thread.id,
+                    else_=Thread.queue_position,
+                )
+            )
+        )
+
+    blocked_changes = {
+        int(thread_id): old_value
+        for thread_id, old_value in thread_states.get(BLOCKED_CHANGES_KEY, {}).items()
+    }
+    if blocked_changes:
+        await db.execute(
+            update(Thread)
+            .where(Thread.user_id == session.user_id)
+            .where(Thread.id.in_(blocked_changes))
+            .values(
+                is_blocked=case(
+                    blocked_changes,
+                    value=Thread.id,
+                    else_=Thread.is_blocked,
+                )
+            )
         )
 
     session_state = snapshot.session_state
@@ -227,15 +277,41 @@ async def _restore_from_delta_snapshot(
         if "pending_thread_id" in session_state:
             session.pending_thread_id = session_state["pending_thread_id"]
         if "pending_thread_updated_at" in session_state:
-            val = session_state["pending_thread_updated_at"]
-            session.pending_thread_updated_at = (
-                datetime.fromisoformat(val) if val else None
+            session.pending_thread_updated_at = _deserialize_datetime(
+                session_state["pending_thread_updated_at"]
             )
         if "ended_at" in session_state:
-            val = session_state["ended_at"]
-            session.ended_at = datetime.fromisoformat(val) if val else None
+            session.ended_at = _deserialize_datetime(session_state["ended_at"])
         if "snoozed_thread_ids" in session_state:
             session.snoozed_thread_ids = session_state["snoozed_thread_ids"]
+
+
+async def _record_undo_event(
+    db: AsyncSession,
+    snapshot: Snapshot,
+    session_id: int,
+) -> None:
+    """Append a compensating history event with the restored die value."""
+    target_event = (
+        await db.get(Event, snapshot.event_id)
+        if snapshot.event_id is not None
+        else None
+    )
+    restored_die = None
+    if snapshot.session_state:
+        restored_die = snapshot.session_state.get("current_die")
+    if restored_die is None and target_event is not None:
+        restored_die = target_event.die
+
+    db.add(
+        Event(
+            type="undo",
+            session_id=session_id,
+            thread_id=target_event.thread_id if target_event else None,
+            die=target_event.die_after if target_event else None,
+            die_after=restored_die,
+        )
+    )
 
 
 @router.post("/{session_id}/undo/{snapshot_id}")
@@ -245,23 +321,20 @@ async def undo_to_snapshot(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> SessionResponse:
-    """Undo session state to a specific snapshot with deadlock retry handling.
+    """Undo session state to a snapshot with deadlock retry handling.
 
     Args:
-        session_id: The session ID to undo.
-        snapshot_id: The snapshot ID to restore to.
-        current_user: The authenticated user making the request.
-        db: SQLAlchemy session for database operations.
+        session_id: Session to restore.
+        snapshot_id: Snapshot to restore.
+        current_user: Authenticated user.
+        db: Database session.
 
     Returns:
-        SessionResponse with restored session details.
+        Restored session response.
 
     Raises:
-        RuntimeError: If failed after max retries.
+        RuntimeError: If all deadlock retries fail.
     """
-    from sqlalchemy.exc import OperationalError
-
-
     max_retries = 3
     initial_delay = 0.1
     retries = 0
@@ -270,7 +343,12 @@ async def undo_to_snapshot(
         try:
             result = await db.execute(
                 select(SessionModel)
-                .where(and_(SessionModel.id == session_id, SessionModel.user_id == current_user.id))
+                .where(
+                    and_(
+                        SessionModel.id == session_id,
+                        SessionModel.user_id == current_user.id,
+                    )
+                )
                 .with_for_update()
             )
             session = result.scalar_one_or_none()
@@ -286,7 +364,6 @@ async def undo_to_snapshot(
                 .where(Snapshot.id == snapshot_id)
             )
             snapshot = result.scalars().first()
-
             if not snapshot:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -294,17 +371,13 @@ async def undo_to_snapshot(
                 )
 
             thread_states = snapshot.thread_states or {}
-            is_delta = thread_states.get("_version") == 2
-
+            is_delta = thread_states.get(SNAPSHOT_VERSION_KEY) == SNAPSHOT_VERSION
             if is_delta:
-                await _restore_from_delta_snapshot(
-                    db, session, snapshot, current_user.id, session_id
-                )
+                await _restore_from_delta_snapshot(db, session, snapshot)
             else:
-                await _restore_from_full_snapshot(
-                    db, session, snapshot, session_id
-                )
+                await _restore_from_full_snapshot(db, session, snapshot, session_id)
 
+            await _record_undo_event(db, snapshot, session_id)
             await db.commit()
             await db.refresh(session)
 
@@ -322,7 +395,7 @@ async def undo_to_snapshot(
                 .where(Event.session_id == session_id)
                 .where(Event.type == "roll")
                 .where(Event.selected_thread_id.is_not(None))
-                .order_by(Event.timestamp.desc())
+                .order_by(Event.timestamp.desc(), Event.id.desc())
             )
             active_thread = result.scalars().first()
 
@@ -331,7 +404,9 @@ async def undo_to_snapshot(
                 thread = await db.get(Thread, active_thread.selected_thread_id)
 
             result = await db.execute(
-                select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session_id)
+                select(func.count())
+                .select_from(Snapshot)
+                .where(Snapshot.session_id == session_id)
             )
             snapshot_count = result.scalar() or 0
 
@@ -344,11 +419,11 @@ async def undo_to_snapshot(
                 user_id=session.user_id,
                 ladder_path=str(session.start_die),
                 active_thread=ActiveThreadInfo(
-                    id=thread.id if thread else None,
-                    title=thread.title if thread else "",
-                    format=thread.format if thread else "",
-                    issues_remaining=thread.issues_remaining if thread else 0,
-                    queue_position=thread.queue_position if thread else 0,
+                    id=thread.id,
+                    title=thread.title,
+                    format=thread.format,
+                    issues_remaining=thread.issues_remaining,
+                    queue_position=thread.queue_position,
                     last_rolled_result=active_thread.result if active_thread else None,
                 )
                 if thread
@@ -358,16 +433,14 @@ async def undo_to_snapshot(
                 has_restore_point=snapshot_count > 0,
                 snapshot_count=snapshot_count,
             )
-        except OperationalError as e:
-            if "deadlock" in str(e).lower():
-                await db.rollback()
-                retries += 1
-                if retries >= max_retries:
-                    raise
-                delay = initial_delay * (2 ** (retries - 1))
-                await asyncio.sleep(delay)
-            else:
+        except OperationalError as error:
+            if "deadlock" not in str(error).lower():
                 raise
+            await db.rollback()
+            retries += 1
+            if retries >= max_retries:
+                raise
+            await asyncio.sleep(initial_delay * (2 ** (retries - 1)))
 
     raise RuntimeError(f"Failed to undo to snapshot after {max_retries} retries")
 
@@ -381,24 +454,18 @@ async def list_session_snapshots(
     """List all snapshots for a session.
 
     Args:
-        session_id: The session ID to list snapshots for.
-        current_user: The authenticated user making the request.
-        db: SQLAlchemy session for database operations.
+        session_id: Session whose snapshots should be listed.
+        current_user: Authenticated user.
+        db: Database session.
 
     Returns:
-        List of snapshot dictionaries with id, created_at, description, and event_id.
+        Snapshot metadata in reverse chronological order.
 
     Raises:
-        HTTPException: If session not found.
+        HTTPException: If the session is not owned by the current user.
     """
     session = await db.get(SessionModel, session_id)
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found",
-        )
-
-    if session.user_id != current_user.id:
+    if not session or session.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Session {session_id} not found",
@@ -410,13 +477,12 @@ async def list_session_snapshots(
         .order_by(Snapshot.created_at.desc())
     )
     snapshots = result.scalars().all()
-
     return [
         {
-            "id": s.id,
-            "created_at": s.created_at,
-            "description": s.description,
-            "event_id": s.event_id,
+            "id": snapshot.id,
+            "created_at": snapshot.created_at,
+            "description": snapshot.description,
+            "event_id": snapshot.event_id,
         }
-        for s in snapshots
+        for snapshot in snapshots
     ]
