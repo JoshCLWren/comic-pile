@@ -300,7 +300,7 @@ describe('Action Sheet Snooze/Unsnooze', () => {
     expect(mockSnoozeMutation.mutate).not.toHaveBeenCalled()
   })
 
-  it('refetches session and threads after snooze action', async () => {
+  it('refetches session but not the full thread list after snooze action', async () => {
     const mockRefetchSession = vi.fn()
     const mockRefetch = vi.fn()
     mockedUseSession.mockReturnValue({
@@ -329,8 +329,43 @@ describe('Action Sheet Snooze/Unsnooze', () => {
 
     await waitFor(() => {
       expect(mockRefetchSession).toHaveBeenCalled()
-      expect(mockRefetch).toHaveBeenCalled()
     })
+    expect(mockRefetch).not.toHaveBeenCalled()
+  })
+
+  it('refetches session but not the full thread list after unsnooze action', async () => {
+    const mockRefetchSession = vi.fn()
+    const mockRefetch = vi.fn()
+    mockedUseSession.mockReturnValue({
+      data: {
+        snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }],
+      },
+      refetch: mockRefetchSession,
+    })
+    mockedUseThreads.mockReturnValue({
+      data: [
+        { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5 },
+      ],
+      isLoading: false,
+      refetch: mockRefetch,
+    })
+
+    const user = userEvent.setup()
+    render(
+      <BrowserRouter>
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
+      </BrowserRouter>
+    )
+
+    const unsnoozeButtons = screen.getAllByLabelText('Unsnooze')
+    await user.click(unsnoozeButtons[0])
+
+    await waitFor(() => {
+      expect(mockRefetchSession).toHaveBeenCalled()
+    })
+    expect(mockRefetch).not.toHaveBeenCalled()
   })
 })
 

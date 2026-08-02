@@ -488,7 +488,6 @@ export default function QueuePage() {
               await snoozeMutation.mutate()
             }
             await refetchSession()
-            await refetch()
           } catch (error: unknown) {
             console.error('Swipe snooze failed:', error)
             alert(`Failed to ${isSnoozed ? 'unsnooze' : 'snooze'} thread: ${getApiErrorDetail(error)}`)
