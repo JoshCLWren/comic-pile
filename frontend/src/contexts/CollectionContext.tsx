@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { Collection, CollectionCreate, CollectionUpdate } from '../types'
 
 interface CollectionError {
@@ -29,6 +30,14 @@ const removedCollectionsState: RemovedCollectionsState = {
   isLoading: false,
   error: null,
   retry: () => undefined,
+}
+
+/**
+ * Inert compatibility wrapper for test harnesses that still render the removed
+ * provider boundary. It creates no context, state, persistence, or requests.
+ */
+export function CollectionProvider({ children }: { children: ReactNode }) {
+  return children
 }
 
 /**
