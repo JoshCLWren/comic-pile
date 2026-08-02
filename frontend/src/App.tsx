@@ -12,7 +12,6 @@ import type { DiagnosticData } from './hooks/useDiagnostics'
 import { ToastProvider } from './contexts/ToastProvider'
 import { CacheProvider } from './contexts/CacheContext'
 import { BugReportRestoreProvider } from './contexts/BugReportRestoreContext'
-import { CollectionProvider } from './contexts/CollectionContext'
 import './index.css'
 
 declare global {
@@ -343,9 +342,7 @@ function App() {
           <ToastProvider>
             <CacheProvider>
               <AuthProvider>
-                <AuthenticatedCollectionProvider>
-                  <AppRoutes />
-                </AuthenticatedCollectionProvider>
+                <AppRoutes />
               </AuthProvider>
             </CacheProvider>
           </ToastProvider>
@@ -353,16 +350,6 @@ function App() {
       </QueryClientProvider>
     </BrowserRouter>
   )
-}
-
-function AuthenticatedCollectionProvider({ children }: { children: ReactNode }) {
-  const { isAuthenticated } = useAuth()
-
-  if (!isAuthenticated) {
-    return children
-  }
-
-  return <CollectionProvider>{children}</CollectionProvider>
 }
 
 export { AppRoutes }
