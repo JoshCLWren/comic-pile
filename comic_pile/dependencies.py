@@ -2,7 +2,7 @@
 
 from collections import defaultdict, deque
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache import TTL, cached
@@ -231,16 +231,53 @@ async def update_thread_blocked_status(thread_id: int, user_id: int, db: AsyncSe
     )
 
 
-async def refresh_user_blocked_status(user_id: int, db: AsyncSession) -> None:
-    """Recalculate blocked flags without caching uncommitted transaction state."""
+async def refresh_user_blocked_status(
+    user_id: int,
+    db: AsyncSession,
+) -> dict[int, bool]:
+    """Recalculate blocked flags and return prior values that changed.
+
+    Args:
+        user_id: Thread owner.
+        db: Database session.
+
+    Returns:
+        Mapping of changed thread IDs to their previous blocked flag.
+    """
     blocked_ids = await _get_blocked_thread_ids_uncached(user_id, db)
 
-    await db.execute(update(Thread).where(Thread.user_id == user_id).values(is_blocked=False))
-
+    candidate_filter = Thread.is_blocked.is_(True)
     if blocked_ids:
+        candidate_filter = or_(candidate_filter, Thread.id.in_(blocked_ids))
+
+    result = await db.execute(
+        select(Thread.id, Thread.is_blocked)
+        .where(Thread.user_id == user_id)
+        .where(candidate_filter)
+    )
+    prior_values = {row.id: row.is_blocked for row in result.all()}
+    changes = {
+        thread_id: old_value
+        for thread_id, old_value in prior_values.items()
+        if old_value != (thread_id in blocked_ids)
+    }
+
+    to_unblock = [thread_id for thread_id in changes if thread_id not in blocked_ids]
+    if to_unblock:
         await db.execute(
             update(Thread)
             .where(Thread.user_id == user_id)
-            .where(Thread.id.in_(blocked_ids))
+            .where(Thread.id.in_(to_unblock))
+            .values(is_blocked=False)
+        )
+
+    to_block = [thread_id for thread_id in changes if thread_id in blocked_ids]
+    if to_block:
+        await db.execute(
+            update(Thread)
+            .where(Thread.user_id == user_id)
+            .where(Thread.id.in_(to_block))
             .values(is_blocked=True)
         )
+
+    return changes

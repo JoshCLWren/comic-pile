@@ -6,8 +6,8 @@ import LoadingSpinner from '../components/LoadingSpinner'
 
 export default function SessionPage() {
   const { id } = useParams()
-  const { data: details, isPending } = useSessionDetails(id)
-  const { data: snapshotsData } = useSessionSnapshots(id)
+  const { data: details, isPending, refetch: refetchDetails } = useSessionDetails(id)
+  const { data: snapshotsData, refetch: refetchSnapshots } = useSessionSnapshots(id)
   const restoreMutation = useRestoreSessionStart()
   const undoMutation = useUndo()
 
@@ -87,24 +87,38 @@ export default function SessionPage() {
           <p className="text-xs text-stone-500">No snapshots available.</p>
         ) : (
           <div className="space-y-3">
-            {snapshots.map((snapshot) => (
-              <div key={snapshot.id} className="flex items-center justify-between gap-2 md:gap-4 bg-white/5 border border-white/10 rounded-xl px-3 md:px-4 py-2.5 md:py-3">
-                <div className="min-w-0">
-                  <p className="text-xs md:text-sm font-bold text-stone-300">{snapshot.description || 'Snapshot'}</p>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">{formatDateTime(snapshot.created_at)}</p>
+            {snapshots.map((snapshot, index) => {
+              const canUndo = index === 0 && snapshot.description !== 'Session start'
+
+              return (
+                <div key={snapshot.id} className="flex items-center justify-between gap-2 md:gap-4 bg-white/5 border border-white/10 rounded-xl px-3 md:px-4 py-2.5 md:py-3">
+                  <div className="min-w-0">
+                    <p className="text-xs md:text-sm font-bold text-stone-300">{snapshot.description || 'Snapshot'}</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">{formatDateTime(snapshot.created_at)}</p>
+                  </div>
+                  {canUndo ? (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await undoMutation.mutate({
+                          sessionId: details.session_id,
+                          snapshotId: snapshot.id,
+                        })
+                        await Promise.all([refetchDetails(), refetchSnapshots()])
+                      }}
+                      disabled={undoMutation.isPending}
+                      className="h-8 md:h-10 px-3 md:px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 disabled:opacity-60 shrink-0"
+                    >
+                      Undo Latest
+                    </button>
+                  ) : (
+                    <span className="text-[10px] font-black uppercase tracking-widest text-stone-600 shrink-0">
+                      History
+                    </span>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() =>
-                    undoMutation.mutate({ sessionId: details.session_id, snapshotId: snapshot.id })
-                  }
-                  disabled={undoMutation.isPending}
-                  className="h-8 md:h-10 px-3 md:px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 disabled:opacity-60 shrink-0"
-                >
-                  Undo
-                </button>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
