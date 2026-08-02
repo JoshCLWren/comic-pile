@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class DependencyCreate(BaseModel):
@@ -94,6 +94,24 @@ class ThreadDependencyOrderCheckResponse(BaseModel):
 
     thread_id: int
     conflicts: list[DependencyOrderConflict]
+
+
+class BatchBlockingExplanationRequest(BaseModel):
+    """Schema for batch blocking-info request."""
+
+    thread_ids: list[int] = Field(..., min_length=1, max_length=500)
+
+    @field_validator("thread_ids")
+    @classmethod
+    def deduplicate_thread_ids(cls, thread_ids: list[int]) -> list[int]:
+        """Deduplicate thread IDs while preserving the caller's order."""
+        return list(dict.fromkeys(thread_ids))
+
+
+class BatchBlockingExplanationResponse(BaseModel):
+    """Schema for batch blocking-info response — keyed by thread ID."""
+
+    threads: dict[int, BlockingExplanation]
 
 
 class ConnectedThreadInfo(BaseModel):
