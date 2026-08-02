@@ -78,8 +78,8 @@ async def test_drag_and_drop_updates_position(
 async def test_move_to_front_via_api(
     auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
 ) -> None:
-    """Move to front endpoint works correctly."""
-    thread_id = sample_data["threads"][2].id
+    """Move an active thread to the normalized front."""
+    thread_id = sample_data["threads"][3].id
 
     response = await auth_client.put(f"/api/queue/threads/{thread_id}/front/")
     assert response.status_code == 200
@@ -93,14 +93,14 @@ async def test_move_to_front_via_api(
 async def test_move_to_back_via_api(
     auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
 ) -> None:
-    """Move to back endpoint works correctly."""
+    """Move an active thread to the normalized back."""
     thread_id = sample_data["threads"][0].id
 
     response = await auth_client.get("/api/threads/")
     data = response.json()
     threads = data["threads"]
     active_threads = [t for t in threads if t["status"] == "active"]
-    last_position = max(t["queue_position"] for t in active_threads)
+    last_position = len(active_threads)
 
     response = await auth_client.put(f"/api/queue/threads/{thread_id}/back/")
     assert response.status_code == 200

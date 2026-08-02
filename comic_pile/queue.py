@@ -5,18 +5,116 @@ import logging
 import random
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.models import Thread
 
 logger = logging.getLogger(__name__)
 
+ADVISORY_LOCK_NAMESPACE = 699001
+
+
+async def _acquire_queue_lock(user_id: int, db: AsyncSession) -> None:
+    """Acquire a transaction-scoped advisory lock keyed on user_id.
+
+    The lock uses the two-integer form of pg_advisory_xact_lock so it is
+    re-entrant within the same transaction and releases automatically on
+    commit or rollback.
+
+    Args:
+        user_id: Thread owner whose queue is being modified.
+        db: Async database session.
+    """
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(:ns, :uid)"),
+        {"ns": ADVISORY_LOCK_NAMESPACE, "uid": user_id},
+    )
+
+
+def _sync_cached_queue_positions(db: AsyncSession, positions: dict[int, int]) -> None:
+    """Synchronize cached Thread objects without issuing per-object SELECTs."""
+    if not positions:
+        return
+
+    for obj in list(db.identity_map.values()):
+        if isinstance(obj, Thread) and obj.id in positions:
+            set_committed_value(obj, "queue_position", positions[obj.id])
+
+
+_MOVE_POSITION_SQL = text("""
+    WITH ranked AS (
+        SELECT id, row_number() OVER (ORDER BY queue_position, id) AS seq
+        FROM threads
+        WHERE user_id = :uid AND status = 'active' AND queue_position >= 1
+    ),
+    target AS (
+        SELECT seq FROM ranked WHERE id = :tid
+    )
+    UPDATE threads AS t
+    SET queue_position = CASE
+        WHEN t.id = :tid THEN :new_pos
+        WHEN target.seq < :new_pos THEN
+            CASE WHEN ranked.seq > target.seq AND ranked.seq <= :new_pos
+                 THEN ranked.seq - 1 ELSE ranked.seq END
+        ELSE
+            CASE WHEN ranked.seq >= :new_pos AND ranked.seq < target.seq
+                 THEN ranked.seq + 1 ELSE ranked.seq END
+    END
+    FROM ranked, target
+    WHERE t.id = ranked.id
+    RETURNING t.id, t.queue_position
+""")
+
+_MOVE_TO_BACK_SQL = text("""
+    WITH ranked AS (
+        SELECT id, row_number() OVER (ORDER BY queue_position, id) AS seq
+        FROM threads
+        WHERE user_id = :uid
+          AND queue_position >= 1
+          AND (status = 'active' OR id = :tid)
+    ),
+    target AS (
+        SELECT seq FROM ranked WHERE id = :tid
+    ),
+    bounds AS (
+        SELECT count(*) AS total FROM ranked
+    )
+    UPDATE threads AS t
+    SET queue_position = CASE
+        WHEN t.id = :tid THEN bounds.total
+        WHEN ranked.seq > target.seq THEN ranked.seq - 1
+        ELSE ranked.seq
+    END
+    FROM ranked, target, bounds
+    WHERE t.id = ranked.id
+    RETURNING t.id, t.queue_position
+""")
+
+_SHUFFLE_SQL = text("""
+    WITH shuffled AS (
+        SELECT thread_id, new_position
+        FROM unnest(
+            CAST(:thread_ids AS INTEGER[]),
+            CAST(:positions AS INTEGER[])
+        ) AS shuffled(thread_id, new_position)
+    )
+    UPDATE threads AS t
+    SET queue_position = shuffled.new_position
+    FROM shuffled
+    WHERE t.id = shuffled.thread_id
+      AND t.user_id = :uid
+      AND t.status = 'active'
+      AND t.queue_position >= 1
+    RETURNING t.id, t.queue_position
+""")
+
 
 async def move_to_front(
     thread_id: int, user_id: int, db: AsyncSession, commit: bool = True
 ) -> None:
-    """Move thread to front of queue.
+    """Move an active thread to the normalized front of its queue.
 
     Args:
         thread_id: Thread to move.
@@ -24,32 +122,15 @@ async def move_to_front(
         db: Async database session.
         commit: Whether to commit inside this helper.
     """
-    result = await db.execute(
-        select(Thread).where(Thread.id == thread_id).where(Thread.user_id == user_id)
-    )
-    target_thread = result.scalar_one_or_none()
-    if not target_thread:
-        return
-
-    original_position = target_thread.queue_position
-    if original_position == 1:
-        return
-
-    await db.execute(
-        update(Thread)
-        .where(Thread.user_id == user_id)
-        .where(Thread.status == "active")
-        .where(Thread.queue_position >= 1)
-        .where(Thread.queue_position < original_position)
-        .values(queue_position=Thread.queue_position + 1)
-    )
-    target_thread.queue_position = 1
-    if commit:
-        await db.commit()
+    await move_to_position(thread_id, user_id, 1, db, do_commit=commit)
 
 
 async def move_to_back(thread_id: int, user_id: int, db: AsyncSession, commit: bool = True) -> None:
-    """Move thread to back of queue.
+    """Move a thread behind the active queue while normalizing active positions.
+
+    The target is included even when it has just been marked completed, which
+    preserves the rating flow's behavior of compacting the remaining active
+    queue and placing the completed thread immediately after it.
 
     Args:
         thread_id: Thread to move.
@@ -57,48 +138,32 @@ async def move_to_back(thread_id: int, user_id: int, db: AsyncSession, commit: b
         db: Async database session.
         commit: Whether to commit inside this helper.
     """
-    result = await db.execute(
-        select(Thread).where(Thread.id == thread_id).where(Thread.user_id == user_id)
-    )
-    target_thread = result.scalar_one_or_none()
-    if not target_thread:
-        return
-
-    original_position = target_thread.queue_position
+    await _acquire_queue_lock(user_id, db)
 
     result = await db.execute(
-        select(Thread.queue_position)
-        .where(Thread.user_id == user_id)
-        .where(Thread.status == "active")
-        .where(Thread.queue_position >= 1)
-        .order_by(Thread.queue_position.desc())
-        .limit(1)
+        _MOVE_TO_BACK_SQL,
+        {"uid": user_id, "tid": thread_id},
     )
-    max_position = result.scalar()
+    positions = {row.id: row.queue_position for row in result.fetchall()}
+    _sync_cached_queue_positions(db, positions)
 
-    if max_position is None:
-        return
-
-    if original_position == max_position:
-        return
-
-    await db.execute(
-        update(Thread)
-        .where(Thread.user_id == user_id)
-        .where(Thread.status == "active")
-        .where(Thread.queue_position > original_position)
-        .values(queue_position=Thread.queue_position - 1)
-    )
-    target_thread.queue_position = max_position
     if commit:
         await db.commit()
 
 
 async def move_to_position(
-    thread_id: int, user_id: int, new_position: int, db: AsyncSession,
+    thread_id: int,
+    user_id: int,
+    new_position: int,
+    db: AsyncSession,
     do_commit: bool = True,
 ) -> None:
-    """Move thread to specific position.
+    """Move an active thread to a normalized sequential position.
+
+    Uses a single CASE-based UPDATE driven by a window-function ranking.
+    Gap and duplicate normalization happens in the same statement as the move,
+    and returned positions synchronize cached ORM objects without N additional
+    database round trips.
 
     Args:
         thread_id: Thread to move.
@@ -107,52 +172,67 @@ async def move_to_position(
         db: Async database session.
         do_commit: Whether to commit inside this helper.
     """
-    logger.info(
-        f"move_to_position ENTRY: thread_id={thread_id}, user_id={user_id}, new_position={new_position}"
+    logger.debug(
+        "move_to_position ENTRY: thread_id=%d, user_id=%d, new_position=%d",
+        thread_id,
+        user_id,
+        new_position,
     )
 
-    logger.debug(f"Retrieving thread {thread_id} for user {user_id}")
+    await _acquire_queue_lock(user_id, db)
+
     result = await db.execute(
-        select(Thread).where(Thread.id == thread_id).where(Thread.user_id == user_id)
-    )
-    target_thread = result.scalar_one_or_none()
-
-    if not target_thread:
-        logger.error(f"Thread {thread_id} not found for user {user_id}")
-        return
-
-    logger.info(
-        f"Thread found: id={target_thread.id}, title='{target_thread.title}', "
-        f"user_id={target_thread.user_id}, current_position={target_thread.queue_position}, "
-        f"status='{target_thread.status}'"
-    )
-
-    old_position = target_thread.queue_position
-    logger.info(f"Current thread position: {old_position}")
-
-    # Get all active threads sorted by current position
-    result = await db.execute(
-        select(Thread)
+        select(Thread.id, Thread.queue_position, Thread.status)
+        .where(Thread.id == thread_id)
         .where(Thread.user_id == user_id)
-        .where(Thread.status == "active")
-        .where(Thread.queue_position >= 1)
-        .order_by(Thread.queue_position)
     )
-    all_threads = result.scalars().all()
+    row = result.one_or_none()
 
-    thread_count = len(all_threads)
-    logger.info(f"Active thread count: {thread_count}")
-
-    # Find the current sequential position of our target thread
-    current_sequential_pos = next(
-        (i + 1 for i, thread in enumerate(all_threads) if thread.id == thread_id), 0
-    )
-
-    if current_sequential_pos == 0:
-        logger.error(f"Target thread {thread_id} not found in active threads list")
+    if not row:
+        logger.error("Thread %d not found for user %d", thread_id, user_id)
+        if do_commit:
+            await db.commit()
         return
 
-    # Validate position range only if thread is in active list
+    thread_id_val, queue_position, status = row
+    logger.debug(
+        "Thread found: id=%d, user_id=%d, current_position=%d, status='%s'",
+        thread_id_val,
+        user_id,
+        queue_position,
+        status,
+    )
+
+    if status != "active" or queue_position < 1:
+        logger.error("Target thread %d not found in active threads list", thread_id)
+        if do_commit:
+            await db.commit()
+        return
+
+    result = await db.execute(
+        text(
+            """
+            SELECT
+                count(*)::integer AS total,
+                count(*) FILTER (
+                    WHERE queue_position < :queue_position
+                       OR (queue_position = :queue_position AND id <= :tid)
+                )::integer AS seq
+            FROM threads
+            WHERE user_id = :uid
+              AND status = 'active'
+              AND queue_position >= 1
+            """
+        ),
+        {
+            "uid": user_id,
+            "tid": thread_id,
+            "queue_position": queue_position,
+        },
+    )
+    thread_count, old_seq = result.one()
+    logger.debug("Active thread count: %d", thread_count)
+
     if new_position < 1:
         raise ValueError(f"Position must be at least 1, got {new_position}")
 
@@ -161,75 +241,47 @@ async def move_to_position(
             f"Position {new_position} is out of range. Maximum position is {thread_count}."
         )
 
-    logger.info(f"Final target position: {new_position} (original: {old_position})")
+    logger.debug(
+        "Moving thread %d from sequential position %d to %d",
+        thread_id,
+        old_seq,
+        new_position,
+    )
 
-    if current_sequential_pos == new_position:
-        logger.info(
-            f"Thread {thread_id} already at sequential position {new_position}, no movement needed"
+    result = await db.execute(
+        _MOVE_POSITION_SQL,
+        {"uid": user_id, "tid": thread_id, "new_pos": new_position},
+    )
+    positions = {row.id: row.queue_position for row in result.fetchall()}
+    _sync_cached_queue_positions(db, positions)
+
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("Final queue state after operation:")
+        result = await db.execute(
+            select(Thread)
+            .where(Thread.user_id == user_id)
+            .where(Thread.status == "active")
+            .where(Thread.queue_position >= 1)
+            .order_by(Thread.queue_position, Thread.id)
         )
-        return
+        final_queue = result.scalars().all()
 
-    # Normalize all positions to be sequential first
-    for i, thread in enumerate(all_threads):
-        normalized_position = i + 1
-        if thread.queue_position != normalized_position:
-            thread.queue_position = normalized_position
+        for thread in final_queue:
+            logger.debug(
+                "  Position %d: Thread %d ('%s...')",
+                thread.queue_position,
+                thread.id,
+                thread.title[:50],
+            )
 
-    logger.info("Normalized all thread positions to sequential values")
-
-    # Now apply the move using the normalized positions
-    if current_sequential_pos < new_position:
-        logger.info(
-            f"Moving thread BACKWARD: sequential {current_sequential_pos} -> {new_position}"
-        )
-
-        # Shift threads at current position + 1 to new_position back by 1
-        for thread in all_threads:
-            if thread.id != thread_id:
-                current_thread_seq_pos = next(
-                    (i + 1 for i, t in enumerate(all_threads) if t.id == thread.id), 0
-                )
-                if current_sequential_pos < current_thread_seq_pos <= new_position:
-                    thread.queue_position -= 1
-
-        target_thread.queue_position = new_position
-        logger.info(f"Set target thread {thread_id} position to {new_position}")
-
-    else:  # current_sequential_pos > new_position
-        logger.info(f"Moving thread FORWARD: sequential {current_sequential_pos} -> {new_position}")
-
-        # Shift threads at new_position to current_position - 1 forward by 1
-        for thread in all_threads:
-            if thread.id != thread_id:
-                current_thread_seq_pos = next(
-                    (i + 1 for i, t in enumerate(all_threads) if t.id == thread.id), 0
-                )
-                if new_position <= current_thread_seq_pos < current_sequential_pos:
-                    thread.queue_position += 1
-
-        target_thread.queue_position = new_position
-        logger.info(f"Set target thread {thread_id} position to {new_position}")
-
-    logger.debug("Committing database transaction")
     if do_commit:
         await db.commit()
 
-    logger.info(f"move_to_position SUCCESS: thread {thread_id} moved to position {new_position}")
-
-    # Show final queue state for debugging
-    logger.debug("Final queue state after operation:")
-    result = await db.execute(
-        select(Thread)
-        .where(Thread.user_id == user_id)
-        .where(Thread.queue_position >= 1)
-        .order_by(Thread.queue_position)
+    logger.debug(
+        "move_to_position SUCCESS: thread %d moved to position %d",
+        thread_id,
+        new_position,
     )
-    final_queue = result.scalars().all()
-
-    for thread in final_queue:
-        logger.debug(
-            f"  Position {thread.queue_position}: Thread {thread.id} ('{thread.title[:50]}...')"
-        )
 
 
 async def move_to_safe_position(
@@ -247,18 +299,9 @@ async def move_to_safe_position(
     pool while keeping it realistically reachable.
 
     The roll pool (``get_roll_pool``) excludes blocked threads, so the target
-    position must be computed by counting non-blocked threads — not raw queue
-    positions.  This fixes a bug (#597) where blocked threads inflated the
-    ``queue_position`` values but were excluded from the roll pool, causing
-    the rated thread to remain selectable.
-
-    Example (die=d6, no blocked threads):
-        Position 1-6: rollable pool
-        Rated thread -> position 7
-
-    Example (die=d6, 10 blocked threads interspersed in positions 3-12):
-        Rollable pool: positions 1, 2, 13, 14, ... (blocked skipped)
-        Rated thread -> placed after the 6th non-blocked thread
+    position must be computed by counting non-blocked threads, not raw queue
+    positions. The queue lock covers both this calculation and the subsequent
+    move so a concurrent reorder cannot invalidate the target rank.
 
     Args:
         thread_id: Thread to reposition.
@@ -268,6 +311,8 @@ async def move_to_safe_position(
         excluded_thread_ids: Thread IDs excluded from the current roll pool,
             such as threads snoozed in the active session.
     """
+    await _acquire_queue_lock(user_id, db)
+
     excluded_ids = set(excluded_thread_ids or ())
 
     result = await db.execute(
@@ -275,11 +320,10 @@ async def move_to_safe_position(
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
         .where(Thread.queue_position >= 1)
-        .order_by(Thread.queue_position)
+        .order_by(Thread.queue_position, Thread.id)
     )
     all_active = list(result.scalars().all())
 
-    # Build the rollable pool (same filter as get_roll_pool: non-blocked only)
     rollable = [t for t in all_active if not t.is_blocked and t.id not in excluded_ids]
 
     target_rollable_index = next(
@@ -291,25 +335,18 @@ async def move_to_safe_position(
     if len(rollable) <= 1:
         return
 
-    # If the target is already at or beyond the die range in the rollable
-    # pool, no move is needed — it's already outside the next roll pool.
     if target_rollable_index >= die_size:
         return
 
-    # Walk the full active list (including blocked) and count non-blocked
-    # threads (excluding the target) until we've seen die_size of them.
-    # The target goes right after that point in the all-active list,
-    # guaranteeing it has die_size rollable threads before it and is
-    # therefore outside the roll pool.
     non_blocked_seen = 0
-    target_seq = len(all_active)  # default: back of queue (small-pool fallback)
+    target_seq = len(all_active)
     for i, t in enumerate(all_active):
         if t.id == thread_id:
             continue
         if not t.is_blocked and t.id not in excluded_ids:
             non_blocked_seen += 1
         if non_blocked_seen >= die_size:
-            target_seq = i + 1  # 1-indexed position in all_active
+            target_seq = i + 1
             break
 
     target_seq = min(target_seq, len(all_active))
@@ -324,7 +361,7 @@ async def move_to_safe_position(
 
 
 async def shuffle_queue(user_id: int, db: AsyncSession) -> int:
-    """Randomize the order of active queue threads for a user.
+    """Randomize active queue positions for a user in one array-backed update.
 
     Args:
         user_id: The user whose active queue should be shuffled.
@@ -333,24 +370,37 @@ async def shuffle_queue(user_id: int, db: AsyncSession) -> int:
     Returns:
         Number of active threads that were shuffled.
     """
+    await _acquire_queue_lock(user_id, db)
+
     result = await db.execute(
-        select(Thread)
+        select(Thread.id)
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
         .where(Thread.queue_position >= 1)
         .order_by(Thread.queue_position, Thread.id)
     )
-    threads = list(result.scalars().all())
+    active_ids = [row[0] for row in result.fetchall()]
 
-    if len(threads) < 2:
-        return len(threads)
+    if len(active_ids) < 2:
+        await db.commit()
+        return len(active_ids)
 
-    random.shuffle(threads)
-    for position, thread in enumerate(threads, start=1):
-        thread.queue_position = position
+    shuffled_ids = list(active_ids)
+    random.shuffle(shuffled_ids)
+
+    result = await db.execute(
+        _SHUFFLE_SQL,
+        {
+            "uid": user_id,
+            "thread_ids": shuffled_ids,
+            "positions": list(range(1, len(shuffled_ids) + 1)),
+        },
+    )
+    positions = {row.id: row.queue_position for row in result.fetchall()}
+    _sync_cached_queue_positions(db, positions)
 
     await db.commit()
-    return len(threads)
+    return len(active_ids)
 
 
 async def get_roll_pool(
