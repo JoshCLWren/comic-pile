@@ -1,8 +1,11 @@
 """Focused tests for the session-read benchmark harness."""
+import pytest
+
 from scripts.benchmark_session_reads import (
     Sample,
     _build_endpoints,
     _parse_db_queries,
+    _select_endpoints,
     summarize,
 )
 
@@ -26,6 +29,24 @@ def test_build_endpoints_includes_optional_later_history_page() -> None:
         "/api/sessions/?page_size=25",
         "/api/sessions/?page_size=25&page_token=2026-08-01T12%3A00%3A00%2B00%3A00%2C42",
     ]
+
+
+def test_select_endpoints_supports_isolated_first_request_runs() -> None:
+    """Verify each endpoint can be measured without earlier endpoints preconditioning it."""
+    token = "2026-08-01T12:00:00+00:00,42"
+
+    assert _select_endpoints("current", 25, token) == ["/api/sessions/current/"]
+    assert _select_endpoints("history-first", 25, token) == ["/api/sessions/?page_size=25"]
+    assert _select_endpoints("history-later", 25, token) == [
+        "/api/sessions/?page_size=25&page_token=2026-08-01T12%3A00%3A00%2B00%3A00%2C42"
+    ]
+    assert _select_endpoints("all", 25, token) == _build_endpoints(25, token)
+
+
+def test_select_endpoints_requires_token_for_later_history_page() -> None:
+    """Verify an isolated later-page run cannot silently fall back to another endpoint."""
+    with pytest.raises(ValueError, match="history-later requires --later-page-token"):
+        _select_endpoints("history-later", 25, None)
 
 
 def test_summarize_separates_first_observed_from_steady_state() -> None:
