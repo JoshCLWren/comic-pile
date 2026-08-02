@@ -1,9 +1,9 @@
 name: PR 712 Chromium E2E
 
 on:
-  push:
+  pull_request:
     branches:
-      - perf/694-delta-undo-snapshots
+      - main
 
 permissions:
   contents: read
