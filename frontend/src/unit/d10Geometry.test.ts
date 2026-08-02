@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { buildD10Faces, D10_FACE_NUMBERS } from '../components/d10Geometry'
 
 type Vector3Tuple = [number, number, number]
@@ -18,6 +18,10 @@ function cross(a: Vector3Tuple, b: Vector3Tuple): Vector3Tuple {
 function dot(a: Vector3Tuple, b: Vector3Tuple): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('d10Geometry', () => {
   it('builds 10 coplanar quad faces', () => {
@@ -43,6 +47,16 @@ describe('d10Geometry', () => {
     lowerRing.forEach((vertex) => {
       expect(vertex[1]).toBeLessThan(0)
     })
+  })
+
+  it('uses a stable apex fallback when the ring geometry is degenerate', () => {
+    vi.spyOn(Math, 'sin').mockReturnValue(0)
+
+    const { topApex, bottomApex, faces } = buildD10Faces()
+
+    expect(topApex).toEqual([0, 0.95, 0])
+    expect(bottomApex).toEqual([0, -0.95, 0])
+    expect(faces).toHaveLength(10)
   })
 
   it('keeps numbering alternating high/low around the belt', () => {

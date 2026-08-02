@@ -270,12 +270,9 @@ describe('QueuePage callback coverage', () => {
     await user.click(screen.getByRole('button', { name: /close modal/i }))
   })
 
-  it('opens and closes the collection dialog when collections are enabled', async () => {
-    const user = userEvent.setup()
+  it('does not render collection creation or editing controls', () => {
     renderPage()
-    await user.click(screen.getByRole('button', { name: /create new collection/i }))
-    expect(screen.getByRole('heading', { name: /create collection/i })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /close dialog/i }))
+    expect(screen.queryByRole('button', { name: /create new collection/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: /create collection/i })).not.toBeInTheDocument()
   })
 
@@ -341,5 +338,4 @@ describe('QueuePage callback coverage', () => {
     await user.click(screen.getAllByRole('button', { name: /^reactivate$/i })[0]!)
     expect(screen.getByRole('button', { name: 'Reactivating...' })).toBeDisabled()
   })
-
 })

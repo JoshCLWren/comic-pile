@@ -1,8 +1,5 @@
-import { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { collectionsApi } from '../services/api'
-import { queryKeys } from '../query/queryKeys'
-import { useCollectionsQuery } from '../hooks/useCollectionsQuery'
+import { createContext, useContext } from 'react'
+import type { ReactNode } from 'react'
 import type { Collection, CollectionCreate, CollectionUpdate } from '../types'
 
 interface CollectionError {
@@ -23,115 +20,36 @@ interface CollectionContextType {
   retry: () => void
 }
 
-const CollectionContext = createContext<CollectionContextType | null>(null)
-
-const STORAGE_KEY = 'comic_pile_active_collection_id'
-
-interface CollectionProviderProps {
-  children: ReactNode
+const removedCollectionsContext: CollectionContextType = {
+  collections: [],
+  activeCollectionId: null,
+  setActiveCollectionId: () => undefined,
+  createCollection: async (_data: CollectionCreate) => undefined,
+  updateCollection: async (_id: number, _data: CollectionUpdate) => undefined,
+  deleteCollection: async (_id: number) => undefined,
+  moveCollection: async (_id: number, _newPosition: number) => undefined,
+  isLoading: false,
+  error: null,
+  retry: () => undefined,
 }
 
-export const CollectionProvider = ({ children }: CollectionProviderProps) => {
-  const [activeCollectionId, setActiveCollectionIdState] = useState<number | null>(null)
-  const queryClient = useQueryClient()
+const CollectionContext = createContext<CollectionContextType>(removedCollectionsContext)
 
-  const {
-    data: collections = [],
-    isPending,
-    error: queryError,
-    refetch,
-  } = useCollectionsQuery()
-
-  const sortedCollections = useMemo(() =>
-    [...collections].sort((a, b) => a.position - b.position),
-    [collections]
-  )
-
-  const createMutation = useMutation({
-    mutationFn: (data: CollectionCreate) => collectionsApi.create(data),
-    onSuccess: () => {
-      return queryClient.invalidateQueries({ queryKey: queryKeys.collections })
-    },
-  })
-
-  const contextError: CollectionError | null = useMemo(() => {
-    if (!queryError) return null
-    const e = queryError as { response?: { status?: number; data?: { detail?: string } }; message?: string }
-    const status = e.response?.status
-    const message = e.response?.data?.detail || e.message || 'Failed to load collections'
-    return { message, status }
-  }, [queryError])
-
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) {
-      const id = parseInt(stored, 10)
-      if (!isNaN(id)) {
-        setActiveCollectionIdState(id)
-      }
-    }
-  }, [])
-
-  const setActiveCollectionId = useCallback((id: number | null) => {
-    console.log('[CollectionContext] setActiveCollectionId called:', id)
-    setActiveCollectionIdState(id)
-    if (id !== null) {
-      localStorage.setItem(STORAGE_KEY, id.toString())
-    } else {
-      localStorage.removeItem(STORAGE_KEY)
-    }
-  }, [])
-
-  const createCollection = useCallback(async (data: CollectionCreate) => {
-    await createMutation.mutateAsync(data)
-  }, [createMutation.mutateAsync])
-
-  const updateCollection = useCallback(async (id: number, data: CollectionUpdate) => {
-    await collectionsApi.update(id, data)
-    await queryClient.invalidateQueries({ queryKey: queryKeys.collections })
-  }, [queryClient])
-
-  const deleteCollection = useCallback(async (id: number) => {
-    await collectionsApi.delete(id)
-    if (activeCollectionId === id) {
-      setActiveCollectionId(null)
-    }
-    await queryClient.invalidateQueries({ queryKey: queryKeys.collections })
-  }, [queryClient, activeCollectionId, setActiveCollectionId])
-
-  const moveCollection = useCallback(async (id: number, newPosition: number) => {
-    await collectionsApi.update(id, { position: newPosition })
-    await queryClient.invalidateQueries({ queryKey: queryKeys.collections })
-  }, [queryClient])
-
-  const retry = useCallback(() => {
-    refetch()
-  }, [refetch])
-
+/**
+ * Transitional compatibility provider for #636.
+ *
+ * Collections are no longer loaded, persisted, selected, or mutated. This
+ * provider remains only while the remaining Roll and Queue callers are removed
+ * in follow-up slices, after which this file can be deleted entirely.
+ */
+export function CollectionProvider({ children }: { children: ReactNode }) {
   return (
-    <CollectionContext.Provider
-      value={{
-        collections: sortedCollections,
-        activeCollectionId,
-        setActiveCollectionId,
-        createCollection,
-        updateCollection,
-        deleteCollection,
-        moveCollection,
-        isLoading: isPending,
-        error: contextError,
-        retry,
-      }}
-    >
+    <CollectionContext.Provider value={removedCollectionsContext}>
       {children}
     </CollectionContext.Provider>
   )
 }
 
-export const useCollections = () => {
-  const context = useContext(CollectionContext)
-  if (!context) {
-    throw new Error('useCollections must be used within a CollectionProvider')
-  }
-  return context
+export function useCollections() {
+  return useContext(CollectionContext)
 }

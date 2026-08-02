@@ -1,7 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Mock the API service
 const bugReportsApiMock = vi.hoisted(() => ({
   create: vi.fn(),
 }))
@@ -11,9 +10,8 @@ vi.mock('../services/api', () => ({
   default: {},
 }))
 
-// Mock the getApiErrorDetail utility
 vi.mock('../utils/apiError', () => ({
-  getApiErrorDetail: vi.fn((error) => error?.message || 'Unknown error'),
+  getApiErrorDetail: vi.fn((error: { message?: string } | null | undefined) => error?.message ?? null),
 }))
 
 import { useBugReport } from '../hooks/useBugReport'
@@ -37,7 +35,7 @@ describe('useBugReport', () => {
     const { result } = renderHook(() => useBugReport())
 
     act(() => {
-      result.current.submit('Test title', 'Test description', null)
+      void result.current.submit('Test title', 'Test description', null)
     })
 
     expect(result.current.isSubmitting).toBe(true)
@@ -81,6 +79,20 @@ describe('useBugReport', () => {
       expect(result.current.issueUrl).toBeNull()
       expect(thrownError).toBe(error)
     })
+  })
+
+  it('uses a stable fallback when an API failure has no detail', async () => {
+    const error = { code: 'missing-detail' }
+    bugReportsApiMock.create.mockRejectedValue(error)
+
+    const { result } = renderHook(() => useBugReport())
+
+    await act(async () => {
+      await expect(result.current.submit('Test title', 'Test description', null)).rejects.toBe(error)
+    })
+
+    expect(result.current.error).toBe('Failed to submit bug report')
+    expect(result.current.isSubmitting).toBe(false)
   })
 
   it('should include diagnostics in payload when provided', async () => {
