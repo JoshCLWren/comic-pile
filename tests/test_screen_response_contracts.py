@@ -1,6 +1,6 @@
 """Regression tests for screen-specific API response contracts."""
 
-from typing import Any
+from typing import cast
 
 from app.main import app
 from app.schemas.session import SessionListItem, SessionResponse
@@ -52,11 +52,12 @@ SESSION_HISTORY_DROPPED_FIELDS = {
 }
 
 
-def _response_schema(path: str) -> dict[str, Any]:
+def _response_schema(path: str) -> dict[str, object]:
     """Return the successful GET response schema for an OpenAPI path."""
-    return app.openapi()["paths"][path]["get"]["responses"]["200"]["content"][
+    schema = app.openapi()["paths"][path]["get"]["responses"]["200"]["content"][
         "application/json"
     ]["schema"]
+    return cast(dict[str, object], schema)
 
 
 def test_queue_item_contract_is_exact_and_measurably_narrower() -> None:
