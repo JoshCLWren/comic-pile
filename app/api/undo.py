@@ -9,7 +9,7 @@ from sqlalchemy import and_, case, delete, func, or_, select, update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.session import _invalidate_session_caches
+from app.api.session import _invalidate_session_caches, build_ladder_path
 from app.auth import get_current_user
 from app.cache import invalidate_cache
 from app.database import get_db
@@ -32,6 +32,28 @@ router = APIRouter(tags=["undo"])
 def _deserialize_datetime(value: str | None) -> datetime | None:
     """Deserialize an optional ISO datetime value."""
     return datetime.fromisoformat(value) if value else None
+
+
+def _is_delta_snapshot(snapshot: Snapshot) -> bool:
+    """Return whether a snapshot uses the version-two delta contract."""
+    thread_states = snapshot.thread_states or {}
+    return thread_states.get(SNAPSHOT_VERSION_KEY) == SNAPSHOT_VERSION
+
+
+async def _latest_delta_snapshot(
+    db: AsyncSession,
+    session_id: int,
+) -> Snapshot | None:
+    """Return the newest unconsumed delta snapshot for a session."""
+    result = await db.execute(
+        select(Snapshot)
+        .where(Snapshot.session_id == session_id)
+        .order_by(Snapshot.created_at.desc(), Snapshot.id.desc())
+    )
+    return next(
+        (snapshot for snapshot in result.scalars().all() if _is_delta_snapshot(snapshot)),
+        None,
+    )
 
 
 async def _restore_issue_states(
@@ -370,14 +392,21 @@ async def undo_to_snapshot(
                     detail=f"Snapshot {snapshot_id} not found for session {session_id}",
                 )
 
-            thread_states = snapshot.thread_states or {}
-            is_delta = thread_states.get(SNAPSHOT_VERSION_KEY) == SNAPSHOT_VERSION
+            is_delta = _is_delta_snapshot(snapshot)
             if is_delta:
+                latest_delta = await _latest_delta_snapshot(db, session_id)
+                if latest_delta is None or latest_delta.id != snapshot.id:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="Only the latest rating can be undone",
+                    )
                 await _restore_from_delta_snapshot(db, session, snapshot)
             else:
                 await _restore_from_full_snapshot(db, session, snapshot, session_id)
 
             await _record_undo_event(db, snapshot, session_id)
+            if is_delta:
+                await db.delete(snapshot)
             await db.commit()
             await db.refresh(session)
 
@@ -419,7 +448,7 @@ async def undo_to_snapshot(
                 start_die=session.start_die,
                 manual_die=session.manual_die,
                 user_id=session.user_id,
-                ladder_path=str(session.start_die),
+                ladder_path=await build_ladder_path(session_id, db),
                 active_thread=ActiveThreadInfo(
                     id=thread.id,
                     title=thread.title,
@@ -476,7 +505,7 @@ async def list_session_snapshots(
     result = await db.execute(
         select(Snapshot)
         .where(Snapshot.session_id == session_id)
-        .order_by(Snapshot.created_at.desc())
+        .order_by(Snapshot.created_at.desc(), Snapshot.id.desc())
     )
     snapshots = result.scalars().all()
     return [
