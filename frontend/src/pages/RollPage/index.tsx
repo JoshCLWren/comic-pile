@@ -79,7 +79,7 @@ export default function RollPage() {
   const { activeCollectionId = null } = useCollections()
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
   const { data: threads, refetch: refetchThreads } = useThreads('', activeCollectionId)
-  const { data: staleThreads, refetch: refetchStaleThreads } = useStaleThreads(7)
+  const { data: staleThreads } = useStaleThreads(7)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -226,11 +226,10 @@ export default function RollPage() {
 const handleMigrationComplete = useCallback((migratedThread: Thread) => {
   refetchThreads()
   refetchSession()
-  refetchStaleThreads()
   setShowMigrationDialog(false)
   setThreadToMigrate(null)
   enterRatingView(migratedThread.id, null, migratedThread)
-}, [refetchThreads, refetchSession, refetchStaleThreads, enterRatingView, setShowMigrationDialog, setThreadToMigrate])
+}, [refetchThreads, refetchSession, enterRatingView, setShowMigrationDialog, setThreadToMigrate])
 
 const handleMigrationSkip = useCallback(() => {
   setShowMigrationDialog(false)
@@ -249,7 +248,16 @@ const handleMigrationClose = useCallback(() => {
       rating,
       finish_session: false,
       issue_number: issueNumber,
-    }).then(() => {
+    }).then((rateResponse) => {
+      if (rateResponse && activeRatingThread) {
+        setActiveRatingThread({
+          ...activeRatingThread,
+          issues_remaining: rateResponse.issues_remaining,
+          total_issues: rateResponse.total_issues ?? null,
+          reading_progress: rateResponse.reading_progress ?? null,
+          last_rolled_result: null,
+        })
+      }
       suppressPendingAutoOpenRef.current = true
       setIsRolling(false)
       setIsRatingView(false)
@@ -257,11 +265,11 @@ const handleMigrationClose = useCallback(() => {
       setSelectedThreadId(null)
       setActiveRatingThread(null)
       setErrorMessage('')
-      Promise.allSettled([refetchSession(), refetchThreads(), refetchStaleThreads()])
+      refetchSession()
     }).catch((error: unknown) => {
       setErrorMessage(getApiErrorDetail(error))
     })
-  }, [activeRatingThread, rating, rateMutation, refetchSession, refetchThreads, refetchStaleThreads, setShowSimpleMigration, suppressPendingAutoOpenRef, setIsRolling, setIsRatingView, setRolledResult, setSelectedThreadId, setActiveRatingThread, setErrorMessage])
+  }, [activeRatingThread, rating, rateMutation, refetchSession, setShowSimpleMigration, suppressPendingAutoOpenRef, setIsRolling, setIsRatingView, setRolledResult, setSelectedThreadId, setActiveRatingThread, setErrorMessage])
 
   async function handleAction(action: string) {
     setIsActionSheetOpen(false)
@@ -305,7 +313,6 @@ case 'read': {
             await snoozeMutation.mutate()
           }
           await refetchSession()
-          await refetchThreads()
           break
         case 'edit':
           navigate('/queue', { state: { editThreadId: selectedThread!.id } })
@@ -489,15 +496,29 @@ useEffect(() => {
     if (!activeRatingThread) return
 
     try {
-      await rateMutation.mutate({
+      const rateResponse = await rateMutation.mutate({
         thread_id: activeRatingThread!.id,
         rating,
         finish_session: finishSession,
         issue_number: activeRatingThread!.issue_number || undefined
       })
 
-      const refreshResults = await Promise.allSettled([refetchSession(), refetchThreads(), refetchStaleThreads()])
-      if (refreshResults[0].status === 'rejected' || refreshResults[1].status === 'rejected') {
+      if (rateResponse && activeRatingThread) {
+        setActiveRatingThread({
+          ...activeRatingThread,
+          issues_remaining: rateResponse.issues_remaining,
+          queue_position: rateResponse.queue_position,
+          total_issues: rateResponse.total_issues ?? null,
+          reading_progress: rateResponse.reading_progress ?? null,
+          issue_id: rateResponse.next_unread_issue_id ?? null,
+          issue_number: rateResponse.next_unread_issue_number ?? null,
+          last_rolled_result: null,
+        })
+      }
+
+      try {
+        await refetchSession()
+      } catch {
         setErrorMessage('Rating saved but failed to refresh. Please refresh the page.')
         return
       }
@@ -519,7 +540,6 @@ useEffect(() => {
     try {
       await snoozeMutation.mutate()
       await refetchSession()
-      await refetchThreads()
       setIsRolling(false)
       setIsRatingView(false)
       setRolledResult(null)
@@ -532,7 +552,7 @@ useEffect(() => {
 
   async function handleRefreshThread() {
     try {
-      const [latestSession] = await Promise.all([refetchSession(), refetchThreads()])
+      const latestSession = await refetchSession()
       const refreshedThread = latestSession?.active_thread
 
       if (activeRatingThread && refreshedThread?.id === activeRatingThread.id) {
@@ -786,7 +806,6 @@ useEffect(() => {
                   try {
                     await dismissPendingMutation.mutate()
                     await refetchSession()
-                    await refetchThreads()
                   } catch (error) {
                     setErrorMessage(getApiErrorDetail(error))
                     return

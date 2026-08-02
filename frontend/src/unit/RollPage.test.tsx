@@ -548,115 +548,115 @@ describe('Rating View', () => {
     expect(within(poolList).getByText('X-Men')).toBeInTheDocument()
   })
 
-  it('[P4] refetches threads after successful rating', async () => {
+  it('[P4] refetches session but not threads after successful rating', async () => {
     const { threadsApi } = await import('../services/api')
     vi.spyOn(threadsApi, 'setPending').mockResolvedValue(baseRollResponse)
 
-    const mockRate = vi.fn().mockResolvedValue({})
+    const mockRate = vi.fn().mockResolvedValue(baseRollResponse)
     mockedUseRate.mockReturnValue({ mutate: mockRate, isPending: false })
 
     const mockRefetchThreads = vi.fn()
+    const mockRefetchSession = vi.fn().mockResolvedValue({})
     mockedUseThreads.mockReturnValue({
       data: [{ id: 1, title: 'Saga', format: 'Comics', status: 'active' }],
       refetch: mockRefetchThreads
+    })
+    mockedUseSession.mockReturnValue({
+      data: {
+        id: 1,
+        current_die: 6,
+        last_rolled_result: null,
+        manual_die: null,
+        pending_thread_id: 1,
+        snoozed_threads: [],
+        active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1, total_issues: 50 },
+      },
+      refetch: mockRefetchSession,
     })
 
     const user = userEvent.setup()
     render(<RollPage />)
 
-    // 1. Enter rating view
-    const sagaItem = getPoolItem('Saga')
-    await user.click(sagaItem)
-    await user.click(screen.getByText('Read Now'))
+    await waitFor(() => {
+      expect(screen.getByText('How was it?')).toBeInTheDocument()
+    })
 
-    // 2. Submit rating
     await user.click(screen.getByText('Save & Continue'))
 
-    // 3. Verify refetchThreads was called
     await waitFor(() => {
-      expect(mockRefetchThreads).toHaveBeenCalled()
+      expect(mockRefetchSession).toHaveBeenCalled()
     })
+    expect(mockRefetchThreads).not.toHaveBeenCalled()
   })
 
   it('[P5] closes rating view even if post-save refresh fails', async () => {
     const { threadsApi } = await import('../services/api')
     vi.spyOn(threadsApi, 'setPending').mockResolvedValue(baseRollResponse)
 
-    const mockRate = vi.fn().mockResolvedValue({})
+    const mockRate = vi.fn().mockResolvedValue(baseRollResponse)
     mockedUseRate.mockReturnValue({ mutate: mockRate, isPending: false })
 
     const refetchSessionError = new Error('session refresh failed')
     const mockRefetchSession = vi.fn().mockRejectedValue(refetchSessionError)
     mockedUseSession.mockReturnValue({
       data: {
+        id: 1,
         current_die: 6,
         last_rolled_result: null,
         manual_die: null,
+        pending_thread_id: 1,
         has_restore_point: false,
         snoozed_threads: [],
+        active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1, total_issues: 50 },
       },
       refetch: mockRefetchSession,
-    })
-
-    const mockRefetchThreads = vi.fn().mockRejectedValue(new Error('threads refresh failed'))
-    mockedUseThreads.mockReturnValue({
-      data: [
-        { id: 1, title: 'Saga', format: 'Comics', status: 'active' },
-        { id: 2, title: 'X-Men', format: 'Comics', status: 'active' },
-      ],
-      refetch: mockRefetchThreads,
     })
 
     const user = userEvent.setup()
     render(<RollPage />)
 
-    const sagaItem = getPoolItem('Saga')
-    await user.click(sagaItem)
-    await user.click(screen.getByText('Read Now'))
+    await waitFor(() => {
+      expect(screen.getByText('How was it?')).toBeInTheDocument()
+    })
     await user.click(screen.getByText('Save & Continue'))
 
     await waitFor(() => expect(screen.getByText(/failed to refresh/i)).toBeInTheDocument())
   })
 
-  it('[P5b] closes rating view when threads refresh fails after session refresh succeeds', async () => {
+  it('[P5b] closes rating view when session refresh succeeds after successful rating', async () => {
     const { threadsApi } = await import('../services/api')
     vi.spyOn(threadsApi, 'setPending').mockResolvedValue(baseRollResponse)
 
-    const mockRate = vi.fn().mockResolvedValue({})
+    const mockRate = vi.fn().mockResolvedValue(baseRollResponse)
     mockedUseRate.mockReturnValue({ mutate: mockRate, isPending: false })
 
     const mockRefetchSession = vi.fn().mockResolvedValue({})
     mockedUseSession.mockReturnValue({
       data: {
+        id: 1,
         current_die: 6,
         last_rolled_result: null,
         manual_die: null,
+        pending_thread_id: 1,
         has_restore_point: false,
         snoozed_threads: [],
+        active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1, total_issues: 50 },
       },
       refetch: mockRefetchSession,
-    })
-
-    const mockRefetchThreads = vi.fn().mockRejectedValue(new Error('threads refresh failed'))
-    mockedUseThreads.mockReturnValue({
-      data: [
-        { id: 1, title: 'Saga', format: 'Comics', status: 'active' },
-        { id: 2, title: 'X-Men', format: 'Comics', status: 'active' },
-      ],
-      refetch: mockRefetchThreads,
     })
 
     const user = userEvent.setup()
     render(<RollPage />)
 
-    const sagaItem = getPoolItem('Saga')
-    await user.click(sagaItem)
-    await user.click(screen.getByText('Read Now'))
+    await waitFor(() => {
+      expect(screen.getByText('How was it?')).toBeInTheDocument()
+    })
     await user.click(screen.getByText('Save & Continue'))
 
-    await waitFor(() => expect(screen.getByText(/failed to refresh/i)).toBeInTheDocument())
-    expect(mockRefetchSession).toHaveBeenCalled()
-    expect(mockRefetchThreads).toHaveBeenCalled()
+    await waitFor(() => {
+      expect(mockRefetchSession).toHaveBeenCalled()
+    })
+    expect(screen.queryByText(/failed to refresh/i)).not.toBeInTheDocument()
   })
 
   it('[P6] does not auto-finish session when rating the last issue', async () => {
@@ -957,7 +957,6 @@ describe('Rating View', () => {
   it('cancels pending roll through dismiss mutation', async () => {
     const dismissSpy = vi.fn().mockResolvedValue({})
     const refetchSessionSpy = vi.fn().mockResolvedValue({})
-    const refetchThreadsSpy = vi.fn().mockResolvedValue({})
 
     mockedUseDismissPending.mockReturnValue({ mutate: dismissSpy, isPending: false })
     mockedUseSession.mockReturnValue({
@@ -981,7 +980,7 @@ describe('Rating View', () => {
         { id: 1, title: 'Saga', format: 'Comics', status: 'active', queue_position: 1 },
         { id: 2, title: 'X-Men', format: 'Comics', status: 'active', queue_position: 2 },
       ],
-      refetch: refetchThreadsSpy,
+      refetch: vi.fn(),
     })
 
     const user = userEvent.setup()
@@ -996,7 +995,6 @@ describe('Rating View', () => {
     await waitFor(() => {
       expect(dismissSpy).toHaveBeenCalled()
       expect(refetchSessionSpy).toHaveBeenCalled()
-      expect(refetchThreadsSpy).toHaveBeenCalled()
     })
   })
 
@@ -1143,6 +1141,142 @@ describe('Rating View', () => {
       await user.click(screen.getByRole('button', { name: 'Go to Queue' }))
 
       expect(navigateSpy).toHaveBeenCalledWith('/queue')
+    })
+  })
+
+  describe('Post-action refresh contract', () => {
+    it('rate: does not refetch threads or stale threads', async () => {
+      const { threadsApi } = await import('../services/api')
+      vi.spyOn(threadsApi, 'setPending').mockResolvedValue(baseRollResponse)
+
+      const mockRate = vi.fn().mockResolvedValue(baseRollResponse)
+      mockedUseRate.mockReturnValue({ mutate: mockRate, isPending: false })
+
+      const mockRefetchThreads = vi.fn()
+      const mockRefetchStale = vi.fn()
+      const mockRefetchSession = vi.fn().mockResolvedValue({})
+
+      mockedUseThreads.mockReturnValue({
+        data: [{ id: 1, title: 'Saga', format: 'Comics', status: 'active' }],
+        refetch: mockRefetchThreads,
+      })
+      mockedUseStaleThreads.mockReturnValue({ data: [], refetch: mockRefetchStale })
+      mockedUseSession.mockReturnValue({
+        data: {
+          id: 1,
+          current_die: 6,
+          last_rolled_result: null,
+          manual_die: null,
+          pending_thread_id: 1,
+          has_restore_point: false,
+          snoozed_threads: [],
+          active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1, total_issues: 50 },
+        },
+        refetch: mockRefetchSession,
+      })
+
+      const user = userEvent.setup()
+      render(<RollPage />)
+
+      await waitFor(() => {
+        expect(screen.getByText('How was it?')).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByText('Save & Continue'))
+
+      await waitFor(() => {
+        expect(mockRefetchSession).toHaveBeenCalled()
+      })
+      expect(mockRefetchThreads).not.toHaveBeenCalled()
+      expect(mockRefetchStale).not.toHaveBeenCalled()
+    })
+
+    it('snooze: only refetches session', async () => {
+      const snoozeSpy = vi.fn().mockResolvedValue({})
+      mockedUseSnooze.mockReturnValue({ mutate: snoozeSpy, isPending: false })
+
+      const mockRefetchThreads = vi.fn()
+      const mockRefetchStale = vi.fn()
+      const mockRefetchSession = vi.fn().mockResolvedValue({})
+
+      mockedUseThreads.mockReturnValue({
+        data: [{ id: 1, title: 'Saga', format: 'Comics', status: 'active' }],
+        refetch: mockRefetchThreads,
+      })
+      mockedUseStaleThreads.mockReturnValue({ data: [], refetch: mockRefetchStale })
+      mockedUseSession.mockReturnValue({
+        data: {
+          id: 1,
+          current_die: 6,
+          last_rolled_result: 3,
+          manual_die: null,
+          pending_thread_id: 1,
+          has_restore_point: false,
+          snoozed_threads: [],
+          active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1, total_issues: 50 },
+        },
+        refetch: mockRefetchSession,
+      })
+
+      const user = userEvent.setup()
+      render(<RollPage />)
+
+      await waitFor(() => {
+        expect(screen.getByText('How was it?')).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByText('Snooze'))
+
+      await waitFor(() => {
+        expect(snoozeSpy).toHaveBeenCalled()
+        expect(mockRefetchSession).toHaveBeenCalled()
+      })
+      expect(mockRefetchThreads).not.toHaveBeenCalled()
+      expect(mockRefetchStale).not.toHaveBeenCalled()
+    })
+
+    it('dismiss: only refetches session', async () => {
+      const dismissSpy = vi.fn().mockResolvedValue({})
+      mockedUseDismissPending.mockReturnValue({ mutate: dismissSpy, isPending: false })
+
+      const mockRefetchThreads = vi.fn()
+      const mockRefetchStale = vi.fn()
+      const mockRefetchSession = vi.fn().mockResolvedValue({})
+
+      mockedUseThreads.mockReturnValue({
+        data: [
+          { id: 1, title: 'Saga', format: 'Comics', status: 'active', queue_position: 1 },
+          { id: 2, title: 'X-Men', format: 'Comics', status: 'active', queue_position: 2 },
+        ],
+        refetch: mockRefetchThreads,
+      })
+      mockedUseStaleThreads.mockReturnValue({ data: [], refetch: mockRefetchStale })
+      mockedUseSession.mockReturnValue({
+        data: {
+          current_die: 6,
+          last_rolled_result: 2,
+          pending_thread_id: 1,
+          manual_die: null,
+          active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1, total_issues: 50 },
+        },
+        refetch: mockRefetchSession,
+      })
+
+      const user = userEvent.setup()
+      render(<RollPage />)
+
+      await waitFor(() => {
+        expect(screen.getByText('How was it?')).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByText('Cancel'))
+
+      await waitFor(() => {
+        expect(dismissSpy).toHaveBeenCalled()
+        expect(mockRefetchSession).toHaveBeenCalled()
+      })
+      expect(mockRefetchThreads).not.toHaveBeenCalled()
+      expect(mockRefetchStale).not.toHaveBeenCalled()
     })
   })
 })
