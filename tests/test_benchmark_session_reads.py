@@ -25,7 +25,7 @@ def test_build_endpoints_includes_optional_later_history_page() -> None:
     ]
 
 
-def test_summarize_reports_latency_payload_query_and_header_evidence() -> None:
+def test_summarize_separates_first_observed_from_steady_state() -> None:
     samples = [
         Sample(
             endpoint="/api/sessions/current/",
@@ -49,14 +49,64 @@ def test_summarize_reports_latency_payload_query_and_header_evidence() -> None:
             db_queries=0,
             server_timing="app;dur=19.5",
         ),
+        Sample(
+            endpoint="/api/sessions/current/",
+            iteration=3,
+            elapsed_ms=30.0,
+            status=200,
+            response_bytes=950,
+            request_id="req-3",
+            app_cache="HIT",
+            db_queries=0,
+            server_timing="app;dur=29.5",
+        ),
     ]
 
     assert summarize(samples) == {
         "endpoint": "/api/sessions/current/",
-        "samples": 2,
-        "elapsed_ms": {"min": 20.0, "median": 30.0, "max": 40.0, "mean": 30.0},
-        "response_bytes": {"min": 900, "max": 1000},
-        "db_queries": {"reported_samples": 2, "min": 0, "max": 8},
-        "cache_states": {"MISS": 1, "HIT": 1},
-        "missing_server_timing": 1,
+        "first_observed": {
+            "elapsed_ms": 40.0,
+            "status": 200,
+            "response_bytes": 1000,
+            "request_id": "req-1",
+            "app_cache": "MISS",
+            "db_queries": 8,
+            "server_timing": None,
+        },
+        "steady_state": {
+            "samples": 2,
+            "elapsed_ms": {"min": 20.0, "median": 25.0, "max": 30.0, "mean": 25.0},
+            "response_bytes": {"min": 900, "max": 950},
+            "db_queries": {"reported_samples": 2, "min": 0, "max": 0},
+            "cache_states": {"HIT": 2},
+            "missing_server_timing": 0,
+        },
+        "all_recorded": {
+            "samples": 3,
+            "elapsed_ms": {"min": 20.0, "median": 30.0, "max": 40.0, "mean": 30.0},
+            "response_bytes": {"min": 900, "max": 1000},
+            "db_queries": {"reported_samples": 3, "min": 0, "max": 8},
+            "cache_states": {"MISS": 1, "HIT": 2},
+            "missing_server_timing": 1,
+        },
     }
+
+
+def test_summarize_handles_a_single_recorded_sample() -> None:
+    sample = Sample(
+        endpoint="/api/sessions/?page_size=50",
+        iteration=1,
+        elapsed_ms=15.0,
+        status=200,
+        response_bytes=500,
+        request_id=None,
+        app_cache=None,
+        db_queries=None,
+        server_timing=None,
+    )
+
+    summary = summarize([sample])
+
+    assert summary["first_observed"]["elapsed_ms"] == 15.0
+    assert summary["steady_state"] is None
+    assert summary["all_recorded"]["samples"] == 1
