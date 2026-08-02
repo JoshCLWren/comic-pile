@@ -47,8 +47,10 @@ test.describe('Bug Report Button', () => {
     const titleInput = modal.getByLabel('Title')
     const descriptionInput = modal.getByLabel('Description')
 
-    await titleInput.fill('Test bug on narrow screen')
-    await descriptionInput.fill('This is a test description for the bug report form on a 320px wide viewport.')
+    await titleInput.fill('Test bug on narrow screen with an intentionally long title')
+    await descriptionInput.fill(
+      'This is an intentionally long description that verifies the form content remains contained inside the dialog on a 320px-wide viewport without widening the page.',
+    )
 
     const submitButton = modal.getByRole('button', { name: 'Submit Report' })
     const cancelButton = modal.getByRole('button', { name: 'Cancel' })
@@ -56,7 +58,28 @@ test.describe('Bug Report Button', () => {
     await expect(submitButton).toBeVisible()
     await expect(cancelButton).toBeVisible()
 
-    await expect(titleInput).toHaveValue('Test bug on narrow screen')
-    await expect(descriptionInput).toHaveValue('This is a test description for the bug report form on a 320px wide viewport.')
+    const viewport = authenticatedPage.viewportSize()
+    const modalBox = await modal.boundingBox()
+    const submitBox = await submitButton.boundingBox()
+    const cancelBox = await cancelButton.boundingBox()
+
+    expect(viewport).not.toBeNull()
+    expect(modalBox).not.toBeNull()
+    expect(submitBox).not.toBeNull()
+    expect(cancelBox).not.toBeNull()
+
+    expect(modalBox!.x).toBeGreaterThanOrEqual(0)
+    expect(modalBox!.x + modalBox!.width).toBeLessThanOrEqual(viewport!.width)
+
+    for (const buttonBox of [submitBox!, cancelBox!]) {
+      expect(buttonBox.x).toBeGreaterThanOrEqual(modalBox!.x)
+      expect(buttonBox.x + buttonBox.width).toBeLessThanOrEqual(modalBox!.x + modalBox!.width)
+    }
+
+    const documentWidths = await authenticatedPage.evaluate(() => ({
+      clientWidth: document.documentElement.clientWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+    }))
+    expect(documentWidths.scrollWidth).toBeLessThanOrEqual(documentWidths.clientWidth)
   })
 })
