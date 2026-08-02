@@ -1,6 +1,8 @@
 import { lazy, Suspense, createContext, useContext, useState, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { queryClient } from './query/queryClient'
 import Navigation from './components/Navigation'
 import BugReportButton from './components/BugReportButton'
 import api, { clearAccessToken, setAccessToken } from './services/api'
@@ -330,17 +332,19 @@ function AppRoutes() {
 function App() {
   return (
     <BrowserRouter>
-      <BugReportRestoreProvider>
-        <ToastProvider>
-          <CacheProvider>
-            <AuthProvider>
-              <AuthenticatedCollectionProvider>
-                <AppRoutes />
-              </AuthenticatedCollectionProvider>
-            </AuthProvider>
-          </CacheProvider>
-        </ToastProvider>
-      </BugReportRestoreProvider>
+      <QueryClientProvider client={queryClient}>
+        <BugReportRestoreProvider>
+          <ToastProvider>
+            <CacheProvider>
+              <AuthProvider>
+                <AuthenticatedCollectionProvider>
+                  <AppRoutes />
+                </AuthenticatedCollectionProvider>
+              </AuthProvider>
+            </CacheProvider>
+          </ToastProvider>
+        </BugReportRestoreProvider>
+      </QueryClientProvider>
     </BrowserRouter>
   )
 }
