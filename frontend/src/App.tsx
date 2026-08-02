@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import Navigation from './components/Navigation'
 import BugReportButton from './components/BugReportButton'
-import api, { clearAccessToken, setAccessToken } from './services/api'
+import api, { clearAccessToken, setAccessToken, getAccessToken } from './services/api'
 import type { AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
 import type { DiagnosticData } from './hooks/useDiagnostics'
@@ -64,6 +64,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const authChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('comic-pile-auth') : null
 
     const validateSession = async () => {
+      if (!getAccessToken() && !window.__COMIC_PILE_ACCESS_TOKEN) {
+        setIsLoading(false)
+        return
+      }
       if (window.__COMIC_PILE_ACCESS_TOKEN) {
         setAccessToken(window.__COMIC_PILE_ACCESS_TOKEN)
         delete window.__COMIC_PILE_ACCESS_TOKEN

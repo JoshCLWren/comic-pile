@@ -9,6 +9,7 @@ const mockApiGet = vi.fn()
 const mockCollectionsList = vi.fn()
 const mockSetAccessToken = vi.fn()
 const mockClearAccessToken = vi.fn()
+const mockGetAccessToken = vi.fn<() => string | null>(() => 'test-token')
 
 // Mock the API module with a factory that doesn't reference outer scope
 vi.mock('../services/api', () => {
@@ -25,6 +26,7 @@ vi.mock('../services/api', () => {
     },
     setAccessToken: (...args: Parameters<typeof mockSetAccessToken>) => mockSetAccessToken(...args),
     clearAccessToken: (...args: Parameters<typeof mockClearAccessToken>) => mockClearAccessToken(...args),
+    getAccessToken: () => mockGetAccessToken(),
     collectionsApi: { list: (...args: unknown[]) => mockCollectionsList(...args) },
   }
 })
@@ -315,5 +317,50 @@ describe('auth state race condition regression', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('register-page')).not.toBeInTheDocument()
     })
+  })
+})
+
+describe('anonymous no-token probe suppression', () => {
+  beforeEach(() => {
+    mockApiGet.mockReset()
+    mockGetAccessToken.mockReset()
+    mockGetAccessToken.mockReturnValue(null)
+    mockSetAccessToken.mockReset()
+    mockClearAccessToken.mockReset()
+    delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
+  })
+
+  afterEach(() => {
+    mockGetAccessToken.mockReset()
+  })
+
+  test('anonymous user does not call /auth/me when no token exists', async () => {
+    renderWithAuth('/login')
+
+    await waitFor(() => {
+      expect(screen.getByTestId('login-page')).toBeInTheDocument()
+    })
+    expect(mockApiGet).not.toHaveBeenCalledWith('/auth/me')
+  })
+
+  test('anonymous user falls through correctly to login page from protected route', async () => {
+    renderWithAuth('/')
+
+    await waitFor(() => {
+      expect(screen.getByTestId('login-page')).toBeInTheDocument()
+    })
+  })
+
+  test('SSR token injection still triggers /auth/me when in-memory token is null', async () => {
+    mockApiGet.mockResolvedValue({ username: 'ssruser', email: 'ssr@test.com' })
+    ;(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN =
+      'ssr-token'
+    renderWithAuth('/')
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('login-page')).not.toBeInTheDocument()
+    })
+    expect(mockApiGet).toHaveBeenCalledWith('/auth/me')
+    expect(mockSetAccessToken).toHaveBeenCalledWith('ssr-token')
   })
 })

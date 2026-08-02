@@ -10,6 +10,7 @@ const mockApiGet = vi.fn()
 const mockApiPost = vi.fn()
 const mockSetAccessToken = vi.fn()
 const mockClearAccessToken = vi.fn()
+const mockGetAccessToken = vi.fn(() => 'test-token')
 
 vi.mock('../services/api', () => {
   return {
@@ -19,6 +20,7 @@ vi.mock('../services/api', () => {
     },
     setAccessToken: (...args: Parameters<typeof mockSetAccessToken>) => mockSetAccessToken(...args),
     clearAccessToken: (...args: Parameters<typeof mockClearAccessToken>) => mockClearAccessToken(...args),
+    getAccessToken: () => mockGetAccessToken(),
   }
 })
 
