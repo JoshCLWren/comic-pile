@@ -1,0 +1,200 @@
+#!/usr/bin/env python3
+"""Benchmark authenticated current-session and History API reads.
+
+This harness is intentionally dependency-free so it can run against local,
+preview, or production deployments without installing the application.
+It records the response evidence needed by issue #700: elapsed time, payload
+size, application cache state, request ID, and database query-count headers.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import statistics
+import time
+from dataclasses import asdict, dataclass
+from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode, urljoin
+from urllib.request import Request, urlopen
+
+
+@dataclass(frozen=True)
+class Sample:
+    endpoint: str
+    iteration: int
+    elapsed_ms: float
+    status: int
+    response_bytes: int
+    request_id: str | None
+    app_cache: str | None
+    db_queries: int | None
+    server_timing: str | None
+
+
+def _parse_db_queries(value: str | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+def _request(
+    *,
+    base_url: str,
+    endpoint: str,
+    iteration: int,
+    bearer_token: str | None,
+    cookie: str | None,
+    timeout: float,
+) -> Sample:
+    url = urljoin(base_url.rstrip("/") + "/", endpoint.lstrip("/"))
+    headers = {"Accept": "application/json", "User-Agent": "comic-pile-session-benchmark/1"}
+    if bearer_token:
+        headers["Authorization"] = f"Bearer {bearer_token}"
+    if cookie:
+        headers["Cookie"] = cookie
+
+    request = Request(url, headers=headers, method="GET")
+    started = time.perf_counter()
+    try:
+        with urlopen(request, timeout=timeout) as response:  # noqa: S310 - explicit operator URL
+            body = response.read()
+            elapsed_ms = (time.perf_counter() - started) * 1000
+            return Sample(
+                endpoint=endpoint,
+                iteration=iteration,
+                elapsed_ms=round(elapsed_ms, 3),
+                status=response.status,
+                response_bytes=len(body),
+                request_id=response.headers.get("X-Request-ID"),
+                app_cache=response.headers.get("X-App-Cache"),
+                db_queries=_parse_db_queries(response.headers.get("X-App-DB-Queries")),
+                server_timing=response.headers.get("Server-Timing"),
+            )
+    except HTTPError as exc:
+        body = exc.read()
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        raise RuntimeError(
+            f"{endpoint} returned HTTP {exc.code} after {elapsed_ms:.1f} ms: "
+            f"{body[:500].decode('utf-8', errors='replace')}"
+        ) from exc
+    except URLError as exc:
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        raise RuntimeError(
+            f"{endpoint} failed after {elapsed_ms:.1f} ms: {exc.reason}"
+        ) from exc
+
+
+def summarize(samples: list[Sample]) -> dict[str, Any]:
+    """Return stable summary statistics for one endpoint's samples."""
+    if not samples:
+        raise ValueError("at least one sample is required")
+
+    elapsed = [sample.elapsed_ms for sample in samples]
+    db_queries = [sample.db_queries for sample in samples if sample.db_queries is not None]
+    cache_states: dict[str, int] = {}
+    for sample in samples:
+        key = sample.app_cache or "missing"
+        cache_states[key] = cache_states.get(key, 0) + 1
+
+    return {
+        "endpoint": samples[0].endpoint,
+        "samples": len(samples),
+        "elapsed_ms": {
+            "min": min(elapsed),
+            "median": round(statistics.median(elapsed), 3),
+            "max": max(elapsed),
+            "mean": round(statistics.fmean(elapsed), 3),
+        },
+        "response_bytes": {
+            "min": min(sample.response_bytes for sample in samples),
+            "max": max(sample.response_bytes for sample in samples),
+        },
+        "db_queries": {
+            "reported_samples": len(db_queries),
+            "min": min(db_queries) if db_queries else None,
+            "max": max(db_queries) if db_queries else None,
+        },
+        "cache_states": cache_states,
+        "missing_server_timing": sum(sample.server_timing is None for sample in samples),
+    }
+
+
+def _build_endpoints(page_size: int, later_page_token: str | None) -> list[str]:
+    endpoints = [
+        "/api/sessions/current/",
+        f"/api/sessions/?{urlencode({'page_size': page_size})}",
+    ]
+    if later_page_token:
+        endpoints.append(
+            f"/api/sessions/?{urlencode({'page_size': page_size, 'page_token': later_page_token})}"
+        )
+    return endpoints
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--base-url", required=True, help="Deployment URL, for example http://localhost:8000")
+    parser.add_argument("--bearer-token", help="Access token for Authorization: Bearer")
+    parser.add_argument("--cookie", help="Raw Cookie header, useful for refresh-cookie authentication")
+    parser.add_argument("--warmups", type=int, default=1, help="Unrecorded requests per endpoint")
+    parser.add_argument("--iterations", type=int, default=5, help="Recorded requests per endpoint")
+    parser.add_argument("--page-size", type=int, default=50)
+    parser.add_argument("--later-page-token", help="Optional History cursor to benchmark a later page")
+    parser.add_argument("--timeout", type=float, default=15.0)
+    parser.add_argument("--output", help="Optional path for the JSON report")
+    args = parser.parse_args()
+
+    if args.warmups < 0 or args.iterations < 1:
+        parser.error("--warmups must be >= 0 and --iterations must be >= 1")
+    if not 1 <= args.page_size <= 200:
+        parser.error("--page-size must be between 1 and 200")
+
+    report: dict[str, Any] = {
+        "base_url": args.base_url,
+        "warmups": args.warmups,
+        "iterations": args.iterations,
+        "page_size": args.page_size,
+        "runs": [],
+        "summaries": [],
+    }
+
+    for endpoint in _build_endpoints(args.page_size, args.later_page_token):
+        for warmup in range(args.warmups):
+            _request(
+                base_url=args.base_url,
+                endpoint=endpoint,
+                iteration=-(warmup + 1),
+                bearer_token=args.bearer_token,
+                cookie=args.cookie,
+                timeout=args.timeout,
+            )
+
+        endpoint_samples = [
+            _request(
+                base_url=args.base_url,
+                endpoint=endpoint,
+                iteration=iteration,
+                bearer_token=args.bearer_token,
+                cookie=args.cookie,
+                timeout=args.timeout,
+            )
+            for iteration in range(1, args.iterations + 1)
+        ]
+        report["runs"].extend(asdict(sample) for sample in endpoint_samples)
+        report["summaries"].append(summarize(endpoint_samples))
+
+    rendered = json.dumps(report, indent=2, sort_keys=True)
+    print(rendered)
+    if args.output:
+        with open(args.output, "w", encoding="utf-8") as output_file:
+            output_file.write(rendered + "\n")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
