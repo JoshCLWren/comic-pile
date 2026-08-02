@@ -226,11 +226,13 @@ export default function RollPage() {
 const handleMigrationComplete = useCallback((migratedThread: Thread) => {
   refetchThreads()
   refetchSession()
-  refetchStaleThreads()
+  if (staleThreads?.some(t => t.id === migratedThread.id)) {
+    refetchStaleThreads()
+  }
   setShowMigrationDialog(false)
   setThreadToMigrate(null)
   enterRatingView(migratedThread.id, null, migratedThread)
-}, [refetchThreads, refetchSession, refetchStaleThreads, enterRatingView, setShowMigrationDialog, setThreadToMigrate])
+}, [refetchThreads, refetchSession, refetchStaleThreads, staleThreads, enterRatingView, setShowMigrationDialog, setThreadToMigrate])
 
 const handleMigrationSkip = useCallback(() => {
   setShowMigrationDialog(false)
@@ -243,6 +245,7 @@ const handleMigrationClose = useCallback(() => {
 }, [setShowMigrationDialog, setThreadToMigrate])
 
   const handleSimpleMigrationComplete = useCallback((issueNumber: string) => {
+    const threadWasStale = staleThreads?.some(t => t.id === activeRatingThread!.id) ?? false
     setShowSimpleMigration(false)
     rateMutation.mutate({
       thread_id: activeRatingThread!.id,
@@ -257,11 +260,12 @@ const handleMigrationClose = useCallback(() => {
       setSelectedThreadId(null)
       setActiveRatingThread(null)
       setErrorMessage('')
-      Promise.allSettled([refetchSession(), refetchThreads(), refetchStaleThreads()])
+      const staleRefresh = threadWasStale ? refetchStaleThreads() : Promise.resolve()
+      Promise.allSettled([refetchSession(), refetchThreads(), staleRefresh])
     }).catch((error: unknown) => {
       setErrorMessage(getApiErrorDetail(error))
     })
-  }, [activeRatingThread, rating, rateMutation, refetchSession, refetchThreads, refetchStaleThreads, setShowSimpleMigration, suppressPendingAutoOpenRef, setIsRolling, setIsRatingView, setRolledResult, setSelectedThreadId, setActiveRatingThread, setErrorMessage])
+  }, [activeRatingThread, rating, rateMutation, refetchSession, refetchThreads, refetchStaleThreads, staleThreads, setShowSimpleMigration, suppressPendingAutoOpenRef, setIsRolling, setIsRatingView, setRolledResult, setSelectedThreadId, setActiveRatingThread, setErrorMessage])
 
   async function handleAction(action: string) {
     setIsActionSheetOpen(false)
@@ -488,6 +492,8 @@ useEffect(() => {
 
     if (!activeRatingThread) return
 
+    const threadWasStale = staleThreads?.some(t => t.id === activeRatingThread!.id) ?? false
+
     try {
       await rateMutation.mutate({
         thread_id: activeRatingThread!.id,
@@ -496,7 +502,8 @@ useEffect(() => {
         issue_number: activeRatingThread!.issue_number || undefined
       })
 
-      const refreshResults = await Promise.allSettled([refetchSession(), refetchThreads(), refetchStaleThreads()])
+      const staleRefresh = threadWasStale ? refetchStaleThreads() : Promise.resolve()
+      const refreshResults = await Promise.allSettled([refetchSession(), refetchThreads(), staleRefresh])
       if (refreshResults[0].status === 'rejected' || refreshResults[1].status === 'rejected') {
         setErrorMessage('Rating saved but failed to refresh. Please refresh the page.')
         return

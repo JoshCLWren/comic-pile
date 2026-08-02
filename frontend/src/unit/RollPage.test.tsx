@@ -75,6 +75,9 @@ vi.mock('../services/api', async (importOriginal) => {
       getBlockingInfo: vi.fn().mockResolvedValue({ is_blocked: false, blocking_reasons: [] }),
       getConnectedThreads: vi.fn().mockResolvedValue({ thread_id: 0, connected_threads: [] }),
     },
+    migrationApi: {
+      migrateThread: vi.fn().mockResolvedValue({ id: 1, title: 'Saga' }),
+    },
   }
 })
 
@@ -575,6 +578,206 @@ describe('Rating View', () => {
     // 3. Verify refetchThreads was called
     await waitFor(() => {
       expect(mockRefetchThreads).toHaveBeenCalled()
+    })
+  })
+
+  it('[P4b] skips stale-thread refetch when rated thread is not stale', async () => {
+    const { threadsApi } = await import('../services/api')
+    vi.spyOn(threadsApi, 'setPending').mockResolvedValue(baseRollResponse)
+
+    const mockRate = vi.fn().mockResolvedValue({})
+    mockedUseRate.mockReturnValue({ mutate: mockRate, isPending: false })
+
+    const mockRefetchThreads = vi.fn()
+    mockedUseThreads.mockReturnValue({
+      data: [{ id: 1, title: 'Saga', format: 'Comics', status: 'active' }],
+      refetch: mockRefetchThreads
+    })
+
+    const mockRefetchStale = vi.fn().mockResolvedValue(undefined)
+    mockedUseStaleThreads.mockReturnValue({
+      data: [{ id: 4, title: 'Old Book', format: 'Comics', status: 'active' }],
+      refetch: mockRefetchStale
+    })
+
+    const user = userEvent.setup()
+    render(<RollPage />)
+
+    const sagaItem = getPoolItem('Saga')
+    await user.click(sagaItem)
+    await user.click(screen.getByText('Read Now'))
+
+    // Rate Saga (id=1), which is NOT in stale list (only id=4 is)
+    await user.click(screen.getByText('Save & Continue'))
+
+    await waitFor(() => {
+      expect(mockRefetchThreads).toHaveBeenCalled()
+    })
+    // Stale refetch must NOT be called — Saga was not stale
+    expect(mockRefetchStale).not.toHaveBeenCalled()
+  })
+
+  it('[P4c] refetches stale threads when rated thread was in stale list', async () => {
+    const { threadsApi } = await import('../services/api')
+    vi.spyOn(threadsApi, 'setPending').mockResolvedValue(baseRollResponse)
+
+    const mockRate = vi.fn().mockResolvedValue({})
+    mockedUseRate.mockReturnValue({ mutate: mockRate, isPending: false })
+
+    const mockRefetchThreads = vi.fn()
+    mockedUseThreads.mockReturnValue({
+      data: [{ id: 1, title: 'Saga', format: 'Comics', status: 'active' }],
+      refetch: mockRefetchThreads
+    })
+
+    const mockRefetchStale = vi.fn().mockResolvedValue(undefined)
+    mockedUseStaleThreads.mockReturnValue({
+      data: [
+        { id: 1, title: 'Saga', format: 'Comics', status: 'active' },
+        { id: 4, title: 'Old Book', format: 'Comics', status: 'active' },
+      ],
+      refetch: mockRefetchStale
+    })
+
+    const user = userEvent.setup()
+    render(<RollPage />)
+
+    const sagaItem = getPoolItem('Saga')
+    await user.click(sagaItem)
+    await user.click(screen.getByText('Read Now'))
+
+    // Rate Saga (id=1), which IS in stale list
+    await user.click(screen.getByText('Save & Continue'))
+
+    await waitFor(() => {
+      expect(mockRefetchStale).toHaveBeenCalled()
+    })
+  })
+
+  it('[P4d] skips stale refetch after SimpleMigration when thread not stale', async () => {
+    const mockRoll = vi.fn().mockResolvedValue({ ...baseRollResponse, total_issues: null, result: 4 })
+    mockedUseRoll.mockReturnValue({ mutate: mockRoll, isPending: false })
+
+    const mockRate = vi.fn().mockResolvedValue({})
+    mockedUseRate.mockReturnValue({ mutate: mockRate, isPending: false })
+
+    const mockRefetchThreads = vi.fn()
+    mockedUseThreads.mockReturnValue({
+      data: [{ id: 1, title: 'Saga', format: 'Comics', status: 'active' }],
+      refetch: mockRefetchThreads
+    })
+
+    const mockRefetchStale = vi.fn().mockResolvedValue(undefined)
+    mockedUseStaleThreads.mockReturnValue({
+      data: [{ id: 4, title: 'Old Book', format: 'Comics', status: 'active' }],
+      refetch: mockRefetchStale
+    })
+
+    const user = userEvent.setup()
+    render(<RollPage />)
+
+    // Roll dice to enter rating view with total_issues: null
+    await user.click(screen.getByLabelText('Roll the dice'))
+    await waitFor(() => {
+      expect(screen.getByText('How was it?')).toBeInTheDocument()
+    }, { timeout: 2000 })
+
+    // Clicking Save & Continue triggers SimpleMigration since total_issues is null
+    await user.click(screen.getByText('Save & Continue'))
+
+    const input = screen.getByLabelText(/what issue number/i)
+    await user.type(input, '42')
+    await user.click(screen.getByRole('button', { name: 'Start Tracking' }))
+
+    await waitFor(() => {
+      expect(mockRefetchThreads).toHaveBeenCalled()
+    })
+    expect(mockRefetchStale).not.toHaveBeenCalled()
+  })
+
+  it('[P4e] refetches stale after SimpleMigration when thread was stale', async () => {
+    const mockRoll = vi.fn().mockResolvedValue({ ...baseRollResponse, total_issues: null, result: 4 })
+    mockedUseRoll.mockReturnValue({ mutate: mockRoll, isPending: false })
+
+    const mockRate = vi.fn().mockResolvedValue({})
+    mockedUseRate.mockReturnValue({ mutate: mockRate, isPending: false })
+
+    const mockRefetchThreads = vi.fn()
+    mockedUseThreads.mockReturnValue({
+      data: [{ id: 1, title: 'Saga', format: 'Comics', status: 'active' }],
+      refetch: mockRefetchThreads
+    })
+
+    const mockRefetchStale = vi.fn().mockResolvedValue(undefined)
+    mockedUseStaleThreads.mockReturnValue({
+      data: [
+        { id: 1, title: 'Saga', format: 'Comics', status: 'active' },
+        { id: 4, title: 'Old Book', format: 'Comics', status: 'active' },
+      ],
+      refetch: mockRefetchStale
+    })
+
+    const user = userEvent.setup()
+    render(<RollPage />)
+
+    // Roll dice to enter rating view with total_issues: null
+    await user.click(screen.getByLabelText('Roll the dice'))
+    await waitFor(() => {
+      expect(screen.getByText('How was it?')).toBeInTheDocument()
+    }, { timeout: 2000 })
+
+    // Clicking Save & Continue triggers SimpleMigration since total_issues is null
+    await user.click(screen.getByText('Save & Continue'))
+
+    const input = screen.getByLabelText(/what issue number/i)
+    await user.type(input, '42')
+    await user.click(screen.getByRole('button', { name: 'Start Tracking' }))
+
+    await waitFor(() => {
+      expect(mockRefetchStale).toHaveBeenCalled()
+    })
+  })
+
+  it('[P4f] refetches stale after MigrationDialog when migrated thread was stale', async () => {
+    const { threadsApi } = await import('../services/api')
+    vi.spyOn(threadsApi, 'setPending').mockResolvedValue({ ...baseRollResponse, total_issues: null })
+
+    const mockRefetchThreads = vi.fn()
+    mockedUseThreads.mockReturnValue({
+      data: [{ id: 1, title: 'Saga', format: 'Comics', status: 'active' }],
+      refetch: mockRefetchThreads
+    })
+
+    const mockRefetchStale = vi.fn().mockResolvedValue(undefined)
+    mockedUseStaleThreads.mockReturnValue({
+      data: [
+        { id: 1, title: 'Saga', format: 'Comics', status: 'active' },
+      ],
+      refetch: mockRefetchStale
+    })
+
+    const user = userEvent.setup()
+    render(<RollPage />)
+
+    // Open action sheet for Saga
+    const sagaItem = getPoolItem('Saga')
+    await user.click(sagaItem)
+
+    // Click "Read Now" — total_issues: null triggers MigrationDialog
+    await user.click(screen.getByText('Read Now'))
+
+    // MigrationDialog appears — fill in form
+    const lastRead = screen.getByLabelText(/Last Issue Read/)
+    const totalIssues = screen.getByLabelText(/Total Issues/)
+    await user.type(lastRead, '5')
+    await user.type(totalIssues, '12')
+
+    // Submit migration
+    await user.click(screen.getByRole('button', { name: 'Start Tracking' }))
+
+    // handleMigrationComplete fires. Saga (id=1) IS in stale list
+    await waitFor(() => {
+      expect(mockRefetchStale).toHaveBeenCalled()
     })
   })
 
