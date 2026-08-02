@@ -5,6 +5,11 @@ This harness is intentionally dependency-free so it can run against local,
 preview, or production deployments without installing the application.
 It records the response evidence needed by issue #700: elapsed time, payload
 size, application cache state, request ID, and database query-count headers.
+
+The first recorded request is reported separately from later steady-state
+samples. It is only a first-observed measurement, not proof that the deployment
+was cold; callers must control deployment idleness when collecting cold-path
+evidence.
 """
 
 from __future__ import annotations
@@ -89,10 +94,21 @@ def _request(
         ) from exc
 
 
-def summarize(samples: list[Sample]) -> dict[str, Any]:
-    """Return stable summary statistics for one endpoint's samples."""
+def _sample_evidence(sample: Sample) -> dict[str, Any]:
+    return {
+        "elapsed_ms": sample.elapsed_ms,
+        "status": sample.status,
+        "response_bytes": sample.response_bytes,
+        "request_id": sample.request_id,
+        "app_cache": sample.app_cache,
+        "db_queries": sample.db_queries,
+        "server_timing": sample.server_timing,
+    }
+
+
+def _aggregate(samples: list[Sample]) -> dict[str, Any] | None:
     if not samples:
-        raise ValueError("at least one sample is required")
+        return None
 
     elapsed = [sample.elapsed_ms for sample in samples]
     db_queries = [sample.db_queries for sample in samples if sample.db_queries is not None]
@@ -102,7 +118,6 @@ def summarize(samples: list[Sample]) -> dict[str, Any]:
         cache_states[key] = cache_states.get(key, 0) + 1
 
     return {
-        "endpoint": samples[0].endpoint,
         "samples": len(samples),
         "elapsed_ms": {
             "min": min(elapsed),
@@ -124,6 +139,19 @@ def summarize(samples: list[Sample]) -> dict[str, Any]:
     }
 
 
+def summarize(samples: list[Sample]) -> dict[str, Any]:
+    """Return first-observed and steady-state evidence for one endpoint."""
+    if not samples:
+        raise ValueError("at least one sample is required")
+
+    return {
+        "endpoint": samples[0].endpoint,
+        "first_observed": _sample_evidence(samples[0]),
+        "steady_state": _aggregate(samples[1:]),
+        "all_recorded": _aggregate(samples),
+    }
+
+
 def _build_endpoints(page_size: int, later_page_token: str | None) -> list[str]:
     endpoints = [
         "/api/sessions/current/",
@@ -141,7 +169,12 @@ def main() -> int:
     parser.add_argument("--base-url", required=True, help="Deployment URL, for example http://localhost:8000")
     parser.add_argument("--bearer-token", help="Access token for Authorization: Bearer")
     parser.add_argument("--cookie", help="Raw Cookie header, useful for refresh-cookie authentication")
-    parser.add_argument("--warmups", type=int, default=1, help="Unrecorded requests per endpoint")
+    parser.add_argument(
+        "--warmups",
+        type=int,
+        default=0,
+        help="Unrecorded preconditioning requests per endpoint; default 0 retains first-observed evidence",
+    )
     parser.add_argument("--iterations", type=int, default=5, help="Recorded requests per endpoint")
     parser.add_argument("--page-size", type=int, default=50)
     parser.add_argument("--later-page-token", help="Optional History cursor to benchmark a later page")
@@ -159,6 +192,10 @@ def main() -> int:
         "warmups": args.warmups,
         "iterations": args.iterations,
         "page_size": args.page_size,
+        "first_observed_note": (
+            "The first recorded request is not guaranteed cold. Control deployment idleness "
+            "outside this harness when collecting cold-path evidence."
+        ),
         "runs": [],
         "summaries": [],
     }
