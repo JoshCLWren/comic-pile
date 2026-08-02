@@ -27,6 +27,8 @@ from urllib.request import Request, urlopen
 
 @dataclass(frozen=True)
 class Sample:
+    """One recorded benchmark observation for a single endpoint request."""
+
     endpoint: str
     iteration: int
     elapsed_ms: float
@@ -165,6 +167,7 @@ def _build_endpoints(page_size: int, later_page_token: str | None) -> list[str]:
 
 
 def main() -> int:
+    """Run the session-read benchmark and print a JSON report to stdout."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", required=True, help="Deployment URL, for example http://localhost:8000")
     parser.add_argument("--bearer-token", help="Access token for Authorization: Bearer")

@@ -1,3 +1,4 @@
+"""Focused tests for the session-read benchmark harness."""
 from scripts.benchmark_session_reads import (
     Sample,
     _build_endpoints,
@@ -7,6 +8,7 @@ from scripts.benchmark_session_reads import (
 
 
 def test_parse_db_queries_handles_missing_and_invalid_headers() -> None:
+    """Verify the header parser correctly handles missing, empty, invalid, and valid values."""
     assert _parse_db_queries(None) is None
     assert _parse_db_queries("") is None
     assert _parse_db_queries("unknown") is None
@@ -14,6 +16,7 @@ def test_parse_db_queries_handles_missing_and_invalid_headers() -> None:
 
 
 def test_build_endpoints_includes_optional_later_history_page() -> None:
+    """Verify endpoint construction includes the optional later-History-page entry."""
     assert _build_endpoints(25, None) == [
         "/api/sessions/current/",
         "/api/sessions/?page_size=25",
@@ -26,6 +29,7 @@ def test_build_endpoints_includes_optional_later_history_page() -> None:
 
 
 def test_summarize_separates_first_observed_from_steady_state() -> None:
+    """Verify summarize splits first-observed evidence from steady-state aggregate."""
     samples = [
         Sample(
             endpoint="/api/sessions/current/",
@@ -93,6 +97,7 @@ def test_summarize_separates_first_observed_from_steady_state() -> None:
 
 
 def test_summarize_handles_a_single_recorded_sample() -> None:
+    """Verify summarize correctly reports a single-sample run with no steady state."""
     sample = Sample(
         endpoint="/api/sessions/?page_size=50",
         iteration=1,
