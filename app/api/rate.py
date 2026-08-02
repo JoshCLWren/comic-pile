@@ -26,20 +26,138 @@ from comic_pile.session import get_current_die
 
 router = APIRouter()
 
+VERSION_KEY = "_version"
+QUEUE_CHANGES_KEY = "_queue_changes"
+BLOCKED_CHANGES_KEY = "_blocked_changes"
+
+
+async def _capture_thread_pre_state(thread: Thread, db: AsyncSession) -> dict:
+    """Extract a thread's full pre-rating state as a plain dict.
+
+    All attributes are read BEFORE db.commit() per the MissingGreenlet rule.
+    """
+    state: dict = {
+        "title": thread.title,
+        "format": thread.format,
+        "issues_remaining": thread.issues_remaining,
+        "last_rating": thread.last_rating,
+        "last_activity_at": thread.last_activity_at.isoformat()
+        if thread.last_activity_at
+        else None,
+        "queue_position": thread.queue_position,
+        "status": thread.status,
+        "review_url": thread.review_url,
+        "last_review_at": thread.last_review_at.isoformat() if thread.last_review_at else None,
+        "notes": thread.notes,
+        "is_test": thread.is_test,
+        "created_at": thread.created_at.isoformat(),
+        "user_id": thread.user_id,
+        "is_blocked": thread.is_blocked,
+    }
+
+    if thread.uses_issue_tracking():
+        issues_result = await db.execute(
+            select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
+        )
+        issues = issues_result.scalars().all()
+        state["issue_states"] = [
+            {
+                "id": issue.id,
+                "number": issue.issue_number,
+                "status": issue.status,
+                "read_at": issue.read_at.isoformat() if issue.read_at else None,
+                "position": issue.position,
+            }
+            for issue in issues
+        ]
+        state["total_issues"] = thread.total_issues
+        state["next_unread_issue_id"] = thread.next_unread_issue_id
+        state["reading_progress"] = thread.reading_progress
+    else:
+        state["issue_states"] = None
+        state["total_issues"] = None
+        state["next_unread_issue_id"] = None
+        state["reading_progress"] = None
+
+    return state
+
+
+async def _capture_queue_positions(db: AsyncSession, user_id: int) -> dict[int, int]:
+    """Load (thread_id, queue_position) for all active user threads."""
+    result = await db.execute(
+        select(Thread.id, Thread.queue_position)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .where(Thread.queue_position >= 1)
+    )
+    return {row[0]: row[1] for row in result.all()}
+
+
+async def _capture_blocked_map(db: AsyncSession, user_id: int) -> dict[int, bool]:
+    """Load (thread_id, is_blocked) for all user threads."""
+    result = await db.execute(
+        select(Thread.id, Thread.is_blocked).where(Thread.user_id == user_id)
+    )
+    return {row[0]: row[1] for row in result.all()}
+
 
 async def snapshot_thread_states(
-    db: AsyncSession, session_id: int, event_id: int, user_id: int, commit: bool = True
+    db: AsyncSession,
+    session_id: int,
+    event_id: int,
+    user_id: int,
+    commit: bool = True,
+    *,
+    rated_thread_id: int | None = None,
+    rated_thread_pre_state: dict | None = None,
+    queue_position_changes: dict[int, int] | None = None,
+    blocked_changes: dict[int, bool] | None = None,
+    pre_session_state: dict | None = None,
 ) -> None:
-    """Create a snapshot of all thread states for undo functionality.
+    """Create a snapshot for undo functionality.
+
+    When called with rated_thread_pre_state (delta mode), stores only the
+    changed records.  Otherwise falls back to a full-library snapshot for
+    backward compatibility with direct callers (tests).
 
     Args:
-        db: SQLAlchemy session for database operations.
-        session_id: The session ID to create snapshot for.
-        event_id: The event ID that triggered the snapshot.
-        user_id: The user ID to snapshot threads for.
+        db: SQLAlchemy session.
+        session_id: Session to snapshot.
+        event_id: The event that triggered the snapshot.
+        user_id: Thread owner.
         commit: Whether to commit inside this helper.
+        rated_thread_id: ID of the rated thread (delta mode).
+        rated_thread_pre_state: Pre-rating state of the rated thread (delta).
+        queue_position_changes: {thread_id: old_position} diff (delta).
+        blocked_changes: {thread_id: old_is_blocked} diff (delta).
+        pre_session_state: Pre-rating session fields (delta).
     """
-    from app.models import Issue
+    if rated_thread_pre_state is not None:
+        thread_states: dict = {VERSION_KEY: 2}
+        thread_states[str(rated_thread_id)] = rated_thread_pre_state
+
+        if queue_position_changes:
+            thread_states[QUEUE_CHANGES_KEY] = {
+                str(tid): old_pos for tid, old_pos in queue_position_changes.items()
+            }
+        if blocked_changes:
+            thread_states[BLOCKED_CHANGES_KEY] = {
+                str(tid): old_val for tid, old_val in blocked_changes.items()
+            }
+
+        session_state = pre_session_state
+
+        snapshot = Snapshot(
+            session_id=session_id,
+            event_id=event_id,
+            thread_states=thread_states,
+            session_state=session_state,
+            description="After rating",
+        )
+        db.add(snapshot)
+        if commit:
+            await db.commit()
+        return
 
     result = await db.execute(select(Thread).where(Thread.user_id == user_id))
     threads = result.scalars().all()
@@ -203,6 +321,26 @@ async def rate_thread(
                 detail=f"Thread {latest_action_event.selected_thread_id} not found",
             )
     thread_id = thread.id
+
+    pre_thread_state = await _capture_thread_pre_state(thread, db)
+    pre_queue_positions = await _capture_queue_positions(db, user_id)
+    pre_blocked_map = await _capture_blocked_map(db, user_id)
+    pre_session_state = {
+        "start_die": current_session.start_die,
+        "manual_die": current_session.manual_die,
+        "pending_thread_id": current_session.pending_thread_id,
+        "pending_thread_updated_at": current_session.pending_thread_updated_at.isoformat()
+        if current_session.pending_thread_updated_at
+        else None,
+        "ended_at": current_session.ended_at.isoformat()
+        if current_session.ended_at
+        else None,
+        "snoozed_thread_ids": (
+            list(current_session.snoozed_thread_ids)
+            if current_session.snoozed_thread_ids
+            else None
+        ),
+    }
 
     issues_remaining = await thread.get_issues_remaining(db)
     if issues_remaining <= 0:
@@ -386,9 +524,39 @@ async def rate_thread(
     current_session.pending_thread_id = None
     current_session.pending_thread_updated_at = None
 
+    await db.flush()
+    post_queue_positions = await _capture_queue_positions(db, user_id)
+    queue_position_changes = {
+        tid: pre_queue_positions[tid]
+        for tid in pre_queue_positions
+        if pre_queue_positions.get(tid) != post_queue_positions.get(tid)
+    }
+
+    blocked_changes: dict[int, bool] | None = None
+    if should_complete_thread:
+        post_blocked_map = await _capture_blocked_map(db, user_id)
+        blocked_changes = {
+            tid: pre_blocked_map.get(tid, False)
+            for tid in set(pre_blocked_map) | set(post_blocked_map)
+            if pre_blocked_map.get(tid) != post_blocked_map.get(tid)
+        }
+        if not blocked_changes:
+            blocked_changes = None
+
     await db.refresh(event)
     event_id = event.id
-    await snapshot_thread_states(db, current_session_id, event_id, user_id, commit=False)
+    await snapshot_thread_states(
+        db,
+        current_session_id,
+        event_id,
+        user_id,
+        commit=False,
+        rated_thread_id=thread_id,
+        rated_thread_pre_state=pre_thread_state,
+        queue_position_changes=queue_position_changes,
+        blocked_changes=blocked_changes,
+        pre_session_state=pre_session_state,
+    )
     await db.commit()
 
     await asyncio.gather(

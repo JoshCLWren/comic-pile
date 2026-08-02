@@ -56,6 +56,18 @@ async def create_session_start_snapshot(db: AsyncSession, session: Session) -> N
     result = await db.execute(select(Thread).where(Thread.user_id == session.user_id))
     threads = result.scalars().all()
 
+    thread_ids = [t.id for t in threads]
+
+    issues_by_thread: dict[int, list[Issue]] = {}
+    if thread_ids:
+        issues_result = await db.execute(
+            select(Issue)
+            .where(Issue.thread_id.in_(thread_ids))
+            .order_by(Issue.position)
+        )
+        for issue in issues_result.scalars().all():
+            issues_by_thread.setdefault(issue.thread_id, []).append(issue)
+
     thread_states = {}
     for thread in threads:
         thread_states[thread.id] = {
@@ -77,11 +89,7 @@ async def create_session_start_snapshot(db: AsyncSession, session: Session) -> N
         }
 
         if thread.uses_issue_tracking():
-            issues_result = await db.execute(
-                select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
-            )
-            issues = issues_result.scalars().all()
-
+            issues = issues_by_thread.get(thread.id, [])
             thread_states[thread.id]["issue_states"] = [
                 {
                     "id": issue.id,

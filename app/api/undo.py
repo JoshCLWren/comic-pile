@@ -20,6 +20,223 @@ from comic_pile.session import get_current_die
 
 router = APIRouter(tags=["undo"])
 
+QUEUE_CHANGES_KEY = "_queue_changes"
+BLOCKED_CHANGES_KEY = "_blocked_changes"
+
+
+async def _restore_thread_from_state(
+    db: AsyncSession,
+    thread_id: int,
+    state: dict,
+    session_user_id: int,
+) -> None:
+    """Restore a single thread and its issues from stored state."""
+    thread = await db.get(Thread, thread_id)
+    if thread:
+        if "title" in state:
+            thread.title = state["title"]
+        if "format" in state:
+            thread.format = state["format"]
+        thread.issues_remaining = state.get("issues_remaining", thread.issues_remaining)
+        thread.last_rating = state.get("last_rating", thread.last_rating)
+        thread.queue_position = state.get("queue_position", thread.queue_position)
+        thread.status = state.get("status", thread.status)
+        if "review_url" in state:
+            thread.review_url = state["review_url"]
+        if "notes" in state:
+            thread.notes = state["notes"]
+        if "is_test" in state:
+            thread.is_test = state["is_test"]
+        if state.get("last_activity_at"):
+            thread.last_activity_at = datetime.fromisoformat(state["last_activity_at"])
+        if state.get("last_review_at"):
+            thread.last_review_at = datetime.fromisoformat(state["last_review_at"])
+
+        if "issue_states" in state and state["issue_states"] is not None:
+            await db.execute(delete(Issue).where(Issue.thread_id == thread_id))
+
+            existing_positions_result = await db.execute(
+                select(Issue.position).where(Issue.thread_id == thread_id)
+            )
+            existing_positions = existing_positions_result.scalars().all()
+            max_position = max(existing_positions) if existing_positions else 0
+
+            for issue_state in state["issue_states"]:
+                position = issue_state.get("position", max_position + 1)
+                if position > max_position:
+                    max_position = position
+                issue = Issue(
+                    id=issue_state["id"],
+                    thread_id=thread_id,
+                    issue_number=issue_state["number"],
+                    status=issue_state["status"],
+                    read_at=datetime.fromisoformat(issue_state["read_at"])
+                    if issue_state["read_at"]
+                    else None,
+                    created_at=datetime.now(UTC),
+                    position=position,
+                )
+                db.add(issue)
+            if thread:
+                thread.total_issues = state.get("total_issues")
+                thread.next_unread_issue_id = state.get("next_unread_issue_id")
+                thread.reading_progress = state.get("reading_progress")
+                thread.issues_remaining = await thread.get_issues_remaining(db)
+        else:
+            if thread:
+                thread.issues_remaining = state.get("issues_remaining", thread.issues_remaining)
+    else:
+        new_thread = Thread(
+            id=thread_id,
+            title=state.get("title", "Unknown Thread"),
+            format=state.get("format", "comic"),
+            issues_remaining=state.get("issues_remaining", 0),
+            last_rating=state.get("last_rating"),
+            queue_position=state.get("queue_position", 1),
+            status=state.get("status", "active"),
+            review_url=state.get("review_url"),
+            notes=state.get("notes"),
+            is_test=state.get("is_test", False),
+            user_id=state.get("user_id", session_user_id),
+            created_at=datetime.fromisoformat(state["created_at"])
+            if state.get("created_at")
+            else datetime.now(UTC),
+        )
+        if state.get("last_activity_at"):
+            new_thread.last_activity_at = datetime.fromisoformat(state["last_activity_at"])
+        if state.get("last_review_at"):
+            new_thread.last_review_at = datetime.fromisoformat(state["last_review_at"])
+        db.add(new_thread)
+
+        if "issue_states" in state and state["issue_states"] is not None:
+            existing_positions_result = await db.execute(
+                select(Issue.position).where(Issue.thread_id == thread_id)
+            )
+            existing_positions = existing_positions_result.scalars().all()
+            max_position = max(existing_positions) if existing_positions else 0
+
+            for issue_state in state["issue_states"]:
+                position = issue_state.get("position", max_position + 1)
+                if position > max_position:
+                    max_position = position
+                issue = Issue(
+                    id=issue_state["id"],
+                    thread_id=thread_id,
+                    issue_number=issue_state["number"],
+                    status=issue_state["status"],
+                    read_at=datetime.fromisoformat(issue_state["read_at"])
+                    if issue_state["read_at"]
+                    else None,
+                    created_at=datetime.now(UTC),
+                    position=position,
+                )
+                db.add(issue)
+            new_thread.total_issues = state.get("total_issues")
+            new_thread.next_unread_issue_id = state.get("next_unread_issue_id")
+            new_thread.reading_progress = state.get("reading_progress")
+            new_thread.issues_remaining = await new_thread.get_issues_remaining(db)
+        else:
+            new_thread.issues_remaining = state.get("issues_remaining", 0)
+
+
+async def _restore_from_full_snapshot(
+    db: AsyncSession,
+    session: SessionModel,
+    snapshot: Snapshot,
+    session_id: int,
+) -> None:
+    """Full-library restore (v1 or unversioned snapshots)."""
+    snapshot_thread_ids = {int(tid) for tid in snapshot.thread_states.keys()}
+
+    result = await db.execute(select(Thread).where(Thread.user_id == session.user_id))
+    current_threads = result.scalars().all()
+    current_thread_ids = {thread.id for thread in current_threads}
+
+    threads_to_delete = current_thread_ids - snapshot_thread_ids
+    if threads_to_delete:
+        await db.execute(
+            update(SessionModel)
+            .where(SessionModel.id == session_id)
+            .where(SessionModel.pending_thread_id.in_(threads_to_delete))
+            .values(pending_thread_id=None)
+        )
+        await db.execute(
+            update(Event)
+            .where(
+                or_(
+                    Event.thread_id.in_(threads_to_delete),
+                    Event.selected_thread_id.in_(threads_to_delete),
+                )
+            )
+            .values(thread_id=None, selected_thread_id=None)
+        )
+        await db.execute(
+            delete(Thread)
+            .where(Thread.id.in_(threads_to_delete))
+            .where(Thread.user_id == session.user_id)
+        )
+        db.expire_all()
+
+    for thread_id, state in snapshot.thread_states.items():
+        thread_id_int = int(thread_id)
+        await _restore_thread_from_state(db, thread_id_int, state, session.user_id)
+
+    if snapshot.session_state:
+        session.start_die = snapshot.session_state.get("start_die", session.start_die)
+        session.manual_die = snapshot.session_state.get("manual_die", session.manual_die)
+
+
+async def _restore_from_delta_snapshot(
+    db: AsyncSession,
+    session: SessionModel,
+    snapshot: Snapshot,
+    _user_id: int,
+    session_id: int,
+) -> None:
+    """Delta restore (v2): restore only the affected thread(s) and positions."""
+    thread_states = snapshot.thread_states or {}
+
+    for thread_id_str, state in thread_states.items():
+        if thread_id_str.startswith("_"):
+            continue
+        thread_id_int = int(thread_id_str)
+        await _restore_thread_from_state(db, thread_id_int, state, session.user_id)
+
+    queue_changes = thread_states.get(QUEUE_CHANGES_KEY, {})
+    for tid_str, old_pos in queue_changes.items():
+        await db.execute(
+            update(Thread)
+            .where(Thread.id == int(tid_str))
+            .where(Thread.user_id == session.user_id)
+            .values(queue_position=old_pos)
+        )
+
+    blocked_changes = thread_states.get(BLOCKED_CHANGES_KEY, {})
+    for tid_str, old_val in blocked_changes.items():
+        await db.execute(
+            update(Thread)
+            .where(Thread.id == int(tid_str))
+            .where(Thread.user_id == session.user_id)
+            .values(is_blocked=old_val)
+        )
+
+    session_state = snapshot.session_state
+    if session_state:
+        session.start_die = session_state.get("start_die", session.start_die)
+        session.manual_die = session_state.get("manual_die", session.manual_die)
+        if "pending_thread_id" in session_state:
+            session.pending_thread_id = session_state["pending_thread_id"]
+        if "pending_thread_updated_at" in session_state:
+            val = session_state["pending_thread_updated_at"]
+            session.pending_thread_updated_at = (
+                datetime.fromisoformat(val) if val else None
+            )
+        if "ended_at" in session_state:
+            val = session_state["ended_at"]
+            session.ended_at = datetime.fromisoformat(val) if val else None
+        if "snoozed_thread_ids" in session_state:
+            session.snoozed_thread_ids = session_state["snoozed_thread_ids"]
+
 
 @router.post("/{session_id}/undo/{snapshot_id}")
 async def undo_to_snapshot(
@@ -76,151 +293,17 @@ async def undo_to_snapshot(
                     detail=f"Snapshot {snapshot_id} not found for session {session_id}",
                 )
 
-            snapshot_thread_ids = {int(tid) for tid in snapshot.thread_states.keys()}
+            thread_states = snapshot.thread_states or {}
+            is_delta = thread_states.get("_version") == 2
 
-            result = await db.execute(select(Thread).where(Thread.user_id == current_user.id))
-            current_threads = result.scalars().all()
-            current_thread_ids = {thread.id for thread in current_threads}
-
-            threads_to_delete = current_thread_ids - snapshot_thread_ids
-            if threads_to_delete:
-                await db.execute(
-                    update(SessionModel)
-                    .where(SessionModel.id == session_id)
-                    .where(SessionModel.pending_thread_id.in_(threads_to_delete))
-                    .values(pending_thread_id=None)
+            if is_delta:
+                await _restore_from_delta_snapshot(
+                    db, session, snapshot, current_user.id, session_id
                 )
-                await db.execute(
-                    update(Event)
-                    .where(
-                        or_(
-                            Event.thread_id.in_(threads_to_delete),
-                            Event.selected_thread_id.in_(threads_to_delete),
-                        )
-                    )
-                    .values(thread_id=None, selected_thread_id=None)
+            else:
+                await _restore_from_full_snapshot(
+                    db, session, snapshot, session_id
                 )
-                await db.execute(
-                    delete(Thread)
-                    .where(Thread.id.in_(threads_to_delete))
-                    .where(Thread.user_id == current_user.id)
-                )
-                db.expire_all()
-
-            for thread_id, state in snapshot.thread_states.items():
-                thread_id_int = int(thread_id)
-                thread = await db.get(Thread, thread_id_int)
-                if thread:
-                    if "title" in state:
-                        thread.title = state["title"]
-                    if "format" in state:
-                        thread.format = state["format"]
-                    thread.issues_remaining = state.get("issues_remaining", thread.issues_remaining)
-                    thread.last_rating = state.get("last_rating", thread.last_rating)
-                    thread.queue_position = state.get("queue_position", thread.queue_position)
-                    thread.status = state.get("status", thread.status)
-                    if "review_url" in state:
-                        thread.review_url = state["review_url"]
-                    if "notes" in state:
-                        thread.notes = state["notes"]
-                    if "is_test" in state:
-                        thread.is_test = state["is_test"]
-                    if state.get("last_activity_at"):
-                        thread.last_activity_at = datetime.fromisoformat(state["last_activity_at"])
-                    if state.get("last_review_at"):
-                        thread.last_review_at = datetime.fromisoformat(state["last_review_at"])
-
-                    if "issue_states" in state and state["issue_states"] is not None:
-                        await db.execute(delete(Issue).where(Issue.thread_id == thread_id_int))
-
-                        existing_positions_result = await db.execute(
-                            select(Issue.position).where(Issue.thread_id == thread_id_int)
-                        )
-                        existing_positions = existing_positions_result.scalars().all()
-                        max_position = max(existing_positions) if existing_positions else 0
-
-                        for issue_state in state["issue_states"]:
-                            position = issue_state.get("position", max_position + 1)
-                            if position > max_position:
-                                max_position = position
-                            issue = Issue(
-                                id=issue_state["id"],
-                                thread_id=thread_id_int,
-                                issue_number=issue_state["number"],
-                                status=issue_state["status"],
-                                read_at=datetime.fromisoformat(issue_state["read_at"])
-                                if issue_state["read_at"]
-                                else None,
-                                created_at=datetime.now(UTC),
-                                position=position,
-                            )
-                            db.add(issue)
-                        thread.total_issues = state.get("total_issues")
-                        thread.next_unread_issue_id = state.get("next_unread_issue_id")
-                        thread.reading_progress = state.get("reading_progress")
-                        thread.issues_remaining = await thread.get_issues_remaining(db)
-                    else:
-                        thread.issues_remaining = state.get(
-                            "issues_remaining", thread.issues_remaining
-                        )
-                else:
-                    new_thread = Thread(
-                        id=thread_id,
-                        title=state.get("title", "Unknown Thread"),
-                        format=state.get("format", "comic"),
-                        issues_remaining=state.get("issues_remaining", 0),
-                        last_rating=state.get("last_rating"),
-                        queue_position=state.get("queue_position", 1),
-                        status=state.get("status", "active"),
-                        review_url=state.get("review_url"),
-                        notes=state.get("notes"),
-                        is_test=state.get("is_test", False),
-                        user_id=state.get("user_id", session.user_id),
-                        created_at=datetime.fromisoformat(state["created_at"])
-                        if state.get("created_at")
-                        else datetime.now(UTC),
-                    )
-                    if state.get("last_activity_at"):
-                        new_thread.last_activity_at = datetime.fromisoformat(
-                            state["last_activity_at"]
-                        )
-                    if state.get("last_review_at"):
-                        new_thread.last_review_at = datetime.fromisoformat(state["last_review_at"])
-                    db.add(new_thread)
-
-                    if "issue_states" in state and state["issue_states"] is not None:
-                        existing_positions_result = await db.execute(
-                            select(Issue.position).where(Issue.thread_id == thread_id_int)
-                        )
-                        existing_positions = existing_positions_result.scalars().all()
-                        max_position = max(existing_positions) if existing_positions else 0
-
-                        for issue_state in state["issue_states"]:
-                            position = issue_state.get("position", max_position + 1)
-                            if position > max_position:
-                                max_position = position
-                            issue = Issue(
-                                id=issue_state["id"],
-                                thread_id=thread_id_int,
-                                issue_number=issue_state["number"],
-                                status=issue_state["status"],
-                                read_at=datetime.fromisoformat(issue_state["read_at"])
-                                if issue_state["read_at"]
-                                else None,
-                                created_at=datetime.now(UTC),
-                                position=position,
-                            )
-                            db.add(issue)
-                        new_thread.total_issues = state.get("total_issues")
-                        new_thread.next_unread_issue_id = state.get("next_unread_issue_id")
-                        new_thread.reading_progress = state.get("reading_progress")
-                        new_thread.issues_remaining = await new_thread.get_issues_remaining(db)
-                    else:
-                        new_thread.issues_remaining = state.get("issues_remaining", 0)
-
-            if snapshot.session_state:
-                session.start_die = snapshot.session_state.get("start_die", session.start_die)
-                session.manual_die = snapshot.session_state.get("manual_die", session.manual_die)
 
             await db.commit()
             await db.refresh(session)

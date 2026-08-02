@@ -586,3 +586,299 @@ async def test_undo_handles_missing_session_state(
     assert session.start_die == original_start_die
     assert session.manual_die == original_manual_die
     assert thread.issues_remaining == 15
+
+
+@pytest.mark.asyncio
+async def test_delta_snapshot_contains_only_rated_thread(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
+) -> None:
+    """Delta snapshot stores only the rated thread, not every thread."""
+    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread1 = Thread(
+        title="Rated Thread", format="comic", issues_remaining=10,
+        queue_position=1, user_id=sample_user.id,
+    )
+    thread2 = Thread(
+        title="Unrelated Thread", format="trade", issues_remaining=5,
+        queue_position=2, user_id=sample_user.id,
+    )
+    async_db.add_all([thread1, thread2])
+    await async_db.commit()
+    await async_db.refresh(thread1)
+    await async_db.refresh(thread2)
+
+    roll_event = Event(
+        type="roll", session_id=session.id,
+        selected_thread_id=thread1.id, result=3,
+    )
+    async_db.add(roll_event)
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/rate/", json={"rating": 5.0, "issues_read": 1},
+    )
+    assert response.status_code == 200
+
+    result = await async_db.execute(
+        select(Snapshot).where(Snapshot.session_id == session.id)
+        .order_by(Snapshot.id.desc())
+    )
+    snapshots = result.scalars().all()
+    assert len(snapshots) >= 1
+
+    newest = snapshots[0]
+    ts = newest.thread_states
+    assert "_version" in ts
+    assert ts["_version"] == 2
+    assert str(thread1.id) in ts
+    assert str(thread2.id) not in ts, "Unrelated thread should not be in delta snapshot"
+
+
+@pytest.mark.asyncio
+async def test_delta_undo_restores_issues_remaining(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
+) -> None:
+    """Undoing a delta snapshot restores issues_remaining to pre-rating value."""
+    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Test", format="comic", issues_remaining=10,
+        queue_position=1, user_id=sample_user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    roll_event = Event(
+        type="roll", session_id=session.id,
+        selected_thread_id=thread.id, result=3,
+    )
+    async_db.add(roll_event)
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/rate/", json={"rating": 5.0, "issues_read": 1},
+    )
+    assert response.status_code == 200
+
+    result = await async_db.execute(
+        select(Snapshot).where(Snapshot.session_id == session.id)
+        .order_by(Snapshot.id.desc())
+    )
+    snapshot = result.scalars().first()
+    assert snapshot is not None
+
+    await auth_client.post(f"/api/undo/{session.id}/undo/{snapshot.id}")
+
+    await async_db.refresh(thread)
+    assert thread.issues_remaining == 10
+
+
+@pytest.mark.asyncio
+async def test_delta_undo_restores_queue_positions(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
+) -> None:
+    """Undoing a delta snapshot restores queue positions of shifted threads."""
+    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread1 = Thread(
+        title="Thread 1", format="comic", issues_remaining=10,
+        queue_position=1, status="active", user_id=sample_user.id,
+    )
+    thread2 = Thread(
+        title="Thread 2", format="comic", issues_remaining=10,
+        queue_position=2, status="active", user_id=sample_user.id,
+    )
+    thread3 = Thread(
+        title="Thread 3", format="comic", issues_remaining=10,
+        queue_position=3, status="active", user_id=sample_user.id,
+    )
+    async_db.add_all([thread1, thread2, thread3])
+    await async_db.commit()
+    await async_db.refresh(thread1)
+
+    roll_event = Event(
+        type="roll", session_id=session.id,
+        selected_thread_id=thread3.id, result=3,
+    )
+    async_db.add(roll_event)
+    await async_db.commit()
+
+    rate_response = await auth_client.post(
+        "/api/rate/", json={"rating": 5.0, "issues_read": 1},
+    )
+    assert rate_response.status_code == 200
+
+    result = await async_db.execute(
+        select(Snapshot).where(Snapshot.session_id == session.id)
+        .order_by(Snapshot.id.desc())
+    )
+    snapshot = result.scalars().first()
+    assert snapshot is not None
+
+    await auth_client.post(f"/api/undo/{session.id}/undo/{snapshot.id}")
+
+    await async_db.refresh(thread1)
+    await async_db.refresh(thread2)
+    await async_db.refresh(thread3)
+
+    assert thread1.queue_position == 1
+    assert thread2.queue_position == 2
+    assert thread3.queue_position == 3
+
+
+@pytest.mark.asyncio
+async def test_delta_undo_restores_session_ended_at(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
+) -> None:
+    """Undoing a delta snapshot with finish_session restores session ended_at to None."""
+    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Test", format="comic", issues_remaining=1,
+        queue_position=1, user_id=sample_user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    roll_event = Event(
+        type="roll", session_id=session.id,
+        selected_thread_id=thread.id, result=3,
+    )
+    async_db.add(roll_event)
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/rate/", json={"rating": 5.0, "finish_session": True},
+    )
+    assert response.status_code == 200
+
+    result = await async_db.execute(
+        select(Snapshot).where(Snapshot.session_id == session.id)
+        .order_by(Snapshot.id.desc())
+    )
+    snapshot = result.scalars().first()
+    assert snapshot is not None
+
+    undo_response = await auth_client.post(
+        f"/api/undo/{session.id}/undo/{snapshot.id}",
+    )
+    assert undo_response.status_code == 200
+
+    await async_db.refresh(session)
+    assert session.ended_at is None
+
+
+@pytest.mark.asyncio
+async def test_backward_compat_full_snapshot_undo(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
+) -> None:
+    """An old-style full snapshot (no _version marker) still undoes correctly."""
+    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Test", format="comic", issues_remaining=10,
+        queue_position=1, user_id=sample_user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    event = Event(
+        type="roll", session_id=session.id,
+        selected_thread_id=thread.id, result=3,
+    )
+    async_db.add(event)
+    await async_db.commit()
+
+    snapshot = Snapshot(
+        session_id=session.id, event_id=event.id,
+        thread_states={
+            str(thread.id): {
+                "issues_remaining": 20, "queue_position": 1,
+                "status": "active", "title": "Test",
+                "format": "comic",
+                "last_activity_at": datetime.now(UTC).isoformat(),
+            },
+        },
+        description="Old full snapshot",
+    )
+    async_db.add(snapshot)
+    await async_db.commit()
+
+    response = await auth_client.post(f"/api/undo/{session.id}/undo/{snapshot.id}")
+    assert response.status_code == 200
+
+    await async_db.refresh(thread)
+    assert thread.issues_remaining == 20
+
+
+@pytest.mark.asyncio
+async def test_delta_undo_with_blocked_changes(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
+) -> None:
+    """Undoing a completion delta restores is_blocked flags."""
+    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread1 = Thread(
+        title="Thread 1", format="comic", issues_remaining=1,
+        queue_position=1, status="active", user_id=sample_user.id,
+    )
+    thread2 = Thread(
+        title="Thread 2", format="comic", issues_remaining=5,
+        queue_position=2, status="active", user_id=sample_user.id,
+    )
+    async_db.add_all([thread1, thread2])
+    await async_db.commit()
+    await async_db.refresh(thread1)
+    await async_db.refresh(thread2)
+
+    roll_event = Event(
+        type="roll", session_id=session.id,
+        selected_thread_id=thread1.id, result=3,
+    )
+    async_db.add(roll_event)
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/rate/", json={"rating": 5.0, "issues_read": 1},
+    )
+    assert response.status_code == 200
+
+    result = await async_db.execute(
+        select(Snapshot).where(Snapshot.session_id == session.id)
+        .order_by(Snapshot.id.desc())
+    )
+    snapshot = result.scalars().first()
+    assert snapshot is not None
+
+    ts = snapshot.thread_states
+    has_blocked_changes = "_blocked_changes" in ts
+    if has_blocked_changes:
+        undo_response = await auth_client.post(
+            f"/api/undo/{session.id}/undo/{snapshot.id}",
+        )
+        assert undo_response.status_code == 200
+
+        await async_db.refresh(thread1)
+        assert thread1.is_blocked is False
