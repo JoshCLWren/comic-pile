@@ -185,3 +185,41 @@ it('does not refresh session or threads when unsnooze fails', async () => {
   expect(refetchSession).not.toHaveBeenCalled()
   expect(refetchThreads).not.toHaveBeenCalled()
 })
+
+it('keeps snooze actionable before session data has loaded', async () => {
+  const refetchThreads = vi.fn()
+  const refetchSession = vi.fn().mockResolvedValue(undefined)
+  const snooze = vi.fn().mockResolvedValue(undefined)
+
+  mockedUseThreads.mockReturnValue({
+    data: [
+      {
+        id: 1,
+        title: 'Saga',
+        format: 'Comic',
+        status: 'active',
+        queue_position: 1,
+        issues_remaining: 5,
+      },
+    ],
+    isLoading: false,
+    refetch: refetchThreads,
+  })
+  mockedUseSession.mockReturnValue({
+    data: undefined,
+    refetch: refetchSession,
+  })
+  mockedUseSnooze.mockReturnValue({ mutate: snooze, isPending: false })
+
+  const user = userEvent.setup()
+  renderQueue()
+
+  await user.click(screen.getAllByLabelText('Snooze')[0])
+
+  await waitFor(() => {
+    expect(refetchSession).toHaveBeenCalledOnce()
+  })
+  expect(snooze).toHaveBeenCalledOnce()
+  expect(refetchThreads).not.toHaveBeenCalled()
+  expect(alert).not.toHaveBeenCalled()
+})
