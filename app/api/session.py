@@ -242,8 +242,9 @@ async def build_ladder_path(session_id: int, db: AsyncSession) -> str:
     events_result = await db.execute(
         select(Event)
         .where(Event.session_id == session_id)
-        .where(Event.type == "rate")
-        .order_by(Event.timestamp)
+        .where(Event.type.in_(("rate", "snooze", "undo")))
+        .where(Event.die_after.is_not(None))
+        .order_by(Event.timestamp, Event.id)
     )
     events = events_result.scalars().all()
 
@@ -484,16 +485,18 @@ async def list_sessions(
     ladder_events_result = await db.execute(
         select(Event)
         .where(Event.session_id.in_(session_ids))
-        .where(Event.type == "rate")
-        .order_by(Event.session_id, Event.timestamp)
+        .where(Event.type.in_(("rate", "snooze", "undo")))
+        .where(Event.die_after.is_not(None))
+        .order_by(Event.session_id, Event.timestamp, Event.id)
     )
     ladder_events = ladder_events_result.scalars().all()
 
     die_events_result = await db.execute(
         select(Event)
         .where(Event.session_id.in_(session_ids))
-        .where(Event.type == "rate")
-        .order_by(Event.session_id, Event.timestamp.desc())
+        .where(Event.type.in_(("rate", "snooze", "undo")))
+        .where(Event.die_after.is_not(None))
+        .order_by(Event.session_id, Event.timestamp.desc(), Event.id.desc())
     )
     die_events = die_events_result.scalars().all()
 
@@ -750,7 +753,7 @@ async def get_session_snapshots(
     snapshots_result = await db.execute(
         select(Snapshot)
         .where(Snapshot.session_id == session_id)
-        .order_by(Snapshot.created_at.desc())
+        .order_by(Snapshot.created_at.desc(), Snapshot.id.desc())
     )
     snapshots = snapshots_result.scalars().all()
 
