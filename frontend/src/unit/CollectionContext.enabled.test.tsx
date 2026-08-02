@@ -177,7 +177,9 @@ describe('enabled collection provider', () => {
   })
 
   it('createCollection resolves only after collections refetch completes', async () => {
-    let resolveListCall: ((value: unknown) => void) | null = null
+    let resolveListCall: (value: unknown) => void = () => {
+      throw new Error('Expected the collections refetch to start')
+    }
     let listCallCount = 0
 
     collectionsApi.list.mockImplementation(() => {
@@ -223,7 +225,7 @@ describe('enabled collection provider', () => {
     expect(createResolved).toBe(false)
     expect(listCallCount).toBe(2)
 
-    resolveListCall?.({ collections: [
+    resolveListCall({ collections: [
       { id: 1, name: 'Initial', position: 1 },
       { id: 2, name: 'New', position: 2 },
     ] })
