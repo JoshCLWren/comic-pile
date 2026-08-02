@@ -9,7 +9,8 @@ size, application cache state, request ID, and database query-count headers.
 The first recorded request is reported separately from later steady-state
 samples. It is only a first-observed measurement, not proof that the deployment
 was cold; callers must control deployment idleness when collecting cold-path
-evidence.
+evidence. Use ``--endpoint`` to isolate one endpoint in a fresh invocation when
+collecting endpoint-specific first-request evidence.
 """
 
 from __future__ import annotations
@@ -166,12 +167,41 @@ def _build_endpoints(page_size: int, later_page_token: str | None) -> list[str]:
     return endpoints
 
 
+def _select_endpoints(
+    endpoint_selection: str,
+    page_size: int,
+    later_page_token: str | None,
+) -> list[str]:
+    """Select endpoints without preconditioning a later target in the same run."""
+    endpoints = _build_endpoints(page_size, later_page_token)
+    if endpoint_selection == "all":
+        return endpoints
+    if endpoint_selection == "current":
+        return [endpoints[0]]
+    if endpoint_selection == "history-first":
+        return [endpoints[1]]
+    if endpoint_selection == "history-later":
+        if len(endpoints) < 3:
+            raise ValueError("history-later requires --later-page-token")
+        return [endpoints[2]]
+    raise ValueError(f"unknown endpoint selection: {endpoint_selection}")
+
+
 def main() -> int:
     """Run the session-read benchmark and print a JSON report to stdout."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", required=True, help="Deployment URL, for example http://localhost:8000")
     parser.add_argument("--bearer-token", help="Access token for Authorization: Bearer")
     parser.add_argument("--cookie", help="Raw Cookie header, useful for refresh-cookie authentication")
+    parser.add_argument(
+        "--endpoint",
+        choices=("all", "current", "history-first", "history-later"),
+        default="all",
+        help=(
+            "Endpoint group to benchmark. Select one endpoint in a fresh invocation for "
+            "endpoint-specific first-request evidence."
+        ),
+    )
     parser.add_argument(
         "--warmups",
         type=int,
@@ -190,20 +220,35 @@ def main() -> int:
     if not 1 <= args.page_size <= 200:
         parser.error("--page-size must be between 1 and 200")
 
+    try:
+        endpoints = _select_endpoints(args.endpoint, args.page_size, args.later_page_token)
+    except ValueError as exc:
+        parser.error(str(exc))
+
+    if len(endpoints) == 1:
+        first_observed_note = (
+            "The first recorded request is not guaranteed cold. Control deployment idleness "
+            "outside this harness when collecting cold-path evidence."
+        )
+    else:
+        first_observed_note = (
+            "Only the first endpoint in this multi-endpoint run can be the deployment's first "
+            "request. Use --endpoint in separate fresh invocations for endpoint-specific "
+            "first-request evidence; deployment coldness must still be controlled externally."
+        )
+
     report: dict[str, Any] = {
         "base_url": args.base_url,
+        "endpoint_selection": args.endpoint,
         "warmups": args.warmups,
         "iterations": args.iterations,
         "page_size": args.page_size,
-        "first_observed_note": (
-            "The first recorded request is not guaranteed cold. Control deployment idleness "
-            "outside this harness when collecting cold-path evidence."
-        ),
+        "first_observed_note": first_observed_note,
         "runs": [],
         "summaries": [],
     }
 
-    for endpoint in _build_endpoints(args.page_size, args.later_page_token):
+    for endpoint in endpoints:
         for warmup in range(args.warmups):
             _request(
                 base_url=args.base_url,
