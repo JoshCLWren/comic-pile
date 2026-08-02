@@ -29,18 +29,45 @@ def main() -> None:
     entrypoint = ENTRYPOINT.read_text()
 
     require(policy, "Never push directly to `main`.", POLICY)
-    require(policy, "Never create a draft pull request unless Josh explicitly requests a draft.", POLICY)
-    require(policy, "Never merge unless Josh explicitly orders that specific merge.", POLICY)
-    require(policy, "All review, repair, and readiness decisions are tied to the exact pull-request head SHA.", POLICY)
+    require(
+        policy,
+        "Never create a draft pull request unless Josh explicitly requests a draft.",
+        POLICY,
+    )
+    require(
+        policy,
+        "Never merge unless Josh explicitly orders that specific merge.",
+        POLICY,
+    )
+    require(
+        policy,
+        (
+            "All review, repair, and readiness decisions are tied to the exact "
+            "pull-request head SHA."
+        ),
+        POLICY,
+    )
     require(policy, "CI-assisted debugging is permitted", POLICY)
 
     require(protocol, "docs/AUTONOMOUS_FACTORY_POLICY.md", PROTOCOL)
-    require(protocol, "Never create a draft pull request unless Josh explicitly requests a draft.", PROTOCOL)
-    require(protocol, "Never merge without Josh's explicit authorization", PROTOCOL)
+    require(
+        protocol,
+        "Never create a draft pull request unless Josh explicitly requests a draft.",
+        PROTOCOL,
+    )
+    require(
+        protocol,
+        "Never merge without Josh's explicit authorization",
+        PROTOCOL,
+    )
 
     require(entrypoint, "docs/AUTONOMOUS_FACTORY_POLICY.md", ENTRYPOINT)
     require(entrypoint, "open a truthful non-draft PR", ENTRYPOINT)
-    require(entrypoint, "Never create or convert a draft PR unless Josh explicitly", ENTRYPOINT)
+    require(
+        entrypoint,
+        "Never create or convert a draft PR unless Josh explicitly",
+        ENTRYPOINT,
+    )
     require(entrypoint, "Never merge.", ENTRYPOINT)
 
     forbid(entrypoint, "open a truthful draft PR", ENTRYPOINT)
