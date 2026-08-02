@@ -21,6 +21,31 @@ export interface Collection {
 }
 
 /**
+ * Represents a thread in list view (QueuePage).
+ *
+ * A deliberate subset of Thread — the list endpoint does not return
+ * detail-only fields like reading_progress, next_unread_issue_id,
+ * last_rating, review_url, last_review_at, or is_test to reduce payload
+ * size for large lists.
+ */
+export interface ThreadListItem {
+  id: number;
+  title: string;
+  format: string;
+  issues_remaining: number;
+  total_issues: number | null;
+  next_unread_issue_number?: string | null;
+  queue_position: number;
+  status: string;
+  is_blocked: boolean;
+  blocking_reasons: string[];
+  collection_id: number | null;
+  notes?: string | null;
+  last_activity_at?: string | null;
+  created_at: string;
+}
+
+/**
  * Represents a comic thread/series
  */
 export interface Thread {
@@ -34,12 +59,12 @@ export interface Thread {
   issues_remaining: number;
   /** Total number of issues in the thread (nullable for future use) */
   total_issues: number | null;
-  /** ID of the next unread issue (nullable if all read) */
-  next_unread_issue_id: number | null;
+  /** ID of the next unread issue (nullable if all read, omitted in list views) */
+  next_unread_issue_id?: number | null;
   /** Issue number of the next unread issue */
   next_unread_issue_number?: string | null;
-  /** Reading progress percentage (0-100, nullable) */
-  reading_progress: string | null;
+  /** Reading progress percentage (0-100, nullable, omitted in list views) */
+  reading_progress?: string | null;
   /** Position in the reading queue */
   queue_position: number;
   /** Current status (e.g., 'active', 'completed', 'pending') */

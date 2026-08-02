@@ -141,7 +141,7 @@ export function buildReadingOrderTimelineEntries({ thread, dependencies }: Build
   )
 
   const nextIssueNumberValue = issueStringToNumber(thread.next_unread_issue_number ?? null)
-  const nextOrderValue = determineOrderValue(nextIssueNumberValue, thread.next_unread_issue_id)
+  const nextOrderValue = determineOrderValue(nextIssueNumberValue, thread.next_unread_issue_id ?? null)
   const isThreadComplete = thread.issues_remaining === 0
 
   const entries: TimelineEntry[] = []
@@ -177,7 +177,7 @@ export function buildReadingOrderTimelineEntries({ thread, dependencies }: Build
      const status = resolveGateStatus({
        isThreadComplete,
        gateIssueId: gate.targetIssueId,
-       nextIssueId: thread.next_unread_issue_id,
+        nextIssueId: thread.next_unread_issue_id ?? null,
        gateValue: gate.orderValue,
        nextValue: nextOrderValue,
      })

@@ -30,13 +30,18 @@ from app.schemas.session import (
     ActiveThreadInfo,
     EventDetail,
     SessionDetailsResponse,
+    SessionHistoryListResponse,
+    SessionListItem,
     SessionListResponse,
     SessionResponse,
 )
 from app.schemas.snapshot import SnapshotResponse, SnapshotsListResponse
 from app.schemas.thread import (
+    QueueThreadListItem,
+    QueueThreadListResponse,
     ReactivateRequest,
     ThreadCreate,
+    ThreadDetail,
     ThreadListResponse,
     ThreadResponse,
     ThreadUpdate,
@@ -53,7 +58,10 @@ __all__ = [
     "ThreadCreate",
     "ThreadUpdate",
     "ThreadResponse",
+    "ThreadDetail",
     "ThreadListResponse",
+    "QueueThreadListItem",
+    "QueueThreadListResponse",
     "ReactivateRequest",
     # Dependency
     "DependencyCreate",
@@ -80,6 +88,8 @@ __all__ = [
     # Session
     "SessionResponse",
     "SessionListResponse",
+    "SessionListItem",
+    "SessionHistoryListResponse",
     "SessionDetailsResponse",
     "ActiveThreadInfo",
     "EventDetail",

@@ -53,6 +53,34 @@ class ThreadResponse(BaseModel):
     next_unread_issue_number: str | None = None
 
 
+class ThreadDetail(ThreadResponse):
+    """Schema for thread detail view (single thread with full detail fields)."""
+
+
+class QueueThreadListItem(BaseModel):
+    """Schema for a single thread in the list/queue view.
+
+    A deliberate subset of ThreadResponse. The list view does not need
+    detail-only fields like review_url, last_review_at, last_rating,
+    is_test, or reading_progress, which reduces payload size for large lists.
+    """
+
+    id: int
+    title: str
+    format: str
+    issues_remaining: int
+    queue_position: int
+    status: str
+    last_activity_at: datetime | None
+    is_blocked: bool = False
+    blocking_reasons: list[str] = []
+    collection_id: int | None = None
+    total_issues: int | None = None
+    next_unread_issue_number: str | None = None
+    notes: str | None = None
+    created_at: datetime
+
+
 class ReactivateRequest(BaseModel):
     """Schema for reactivating a completed thread."""
 
@@ -64,4 +92,11 @@ class ThreadListResponse(BaseModel):
     """Schema for paginated thread list response."""
 
     threads: list[ThreadResponse]
+    next_page_token: str | None = None
+
+
+class QueueThreadListResponse(BaseModel):
+    """Schema for paginated thread list response using the queue-optimized item."""
+
+    threads: list[QueueThreadListItem]
     next_page_token: str | None = None
