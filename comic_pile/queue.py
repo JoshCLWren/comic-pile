@@ -204,7 +204,7 @@ async def move_to_position(
     )
 
     if status != "active" or queue_position < 1:
-        logger.debug("Thread %d is not in the active queue", thread_id)
+        logger.error("Target thread %d not found in active threads list", thread_id)
         if do_commit:
             await db.commit()
         return
