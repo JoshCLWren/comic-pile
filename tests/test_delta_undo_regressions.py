@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Dependency, Event, Issue, Review, Snapshot, Thread, User
 from app.models import Session as SessionModel
 from app.services.snapshot_contract import (
+    BLOCKED_CHANGES_KEY,
     QUEUE_CHANGES_KEY,
     SNAPSHOT_VERSION,
     SNAPSHOT_VERSION_KEY,
@@ -293,6 +294,7 @@ async def test_delta_snapshot_uses_queue_helper_change_set(
     assert rate_response.status_code == 200
 
     snapshot = await _latest_snapshot(async_db, session.id)
+    assert snapshot.thread_states[SNAPSHOT_VERSION_KEY] == SNAPSHOT_VERSION
     queue_changes = snapshot.thread_states[QUEUE_CHANGES_KEY]
     assert queue_changes == {
         str(threads[0].id): 1,
@@ -312,6 +314,176 @@ async def test_delta_snapshot_uses_queue_helper_change_set(
     for thread in threads:
         await async_db.refresh(thread)
     assert [thread.queue_position for thread in threads] == [1, 2, 3]
+
+
+@pytest.mark.asyncio
+async def test_delta_undo_restores_finished_session_state(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Prove a v2 undo reverses the session completion mutation.
+
+    Args:
+        auth_client: Authenticated HTTP test client.
+        async_db: Test database session.
+        default_user: Authenticated test user.
+
+    Returns:
+        None.
+    """
+    session = SessionModel(
+        start_die=6,
+        user_id=default_user.id,
+        started_at=datetime.now(UTC),
+    )
+    thread = Thread(
+        title="Session Finisher",
+        format="comic",
+        issues_remaining=2,
+        queue_position=1,
+        status="active",
+        user_id=default_user.id,
+    )
+    async_db.add_all([session, thread])
+    await async_db.commit()
+    await async_db.refresh(session)
+    await async_db.refresh(thread)
+
+    async_db.add(
+        Event(
+            type="roll",
+            session_id=session.id,
+            selected_thread_id=thread.id,
+            die=6,
+            result=1,
+        )
+    )
+    await async_db.commit()
+
+    rate_response = await auth_client.post(
+        "/api/rate/",
+        json={"rating": 5.0, "issues_read": 1, "finish_session": True},
+    )
+    assert rate_response.status_code == 200
+
+    snapshot = await _latest_snapshot(async_db, session.id)
+    assert snapshot.thread_states[SNAPSHOT_VERSION_KEY] == SNAPSHOT_VERSION
+    await async_db.refresh(session)
+    assert session.ended_at is not None
+
+    undo_response = await auth_client.post(
+        f"/api/undo/{session.id}/undo/{snapshot.id}",
+    )
+    assert undo_response.status_code == 200
+    await async_db.refresh(session)
+    assert session.ended_at is None
+
+
+@pytest.mark.asyncio
+async def test_delta_undo_restores_deterministic_blocked_transition(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Restore a dependency-blocked flag changed by completing its source.
+
+    Args:
+        auth_client: Authenticated HTTP test client.
+        async_db: Test database session.
+        default_user: Authenticated test user.
+
+    Returns:
+        None.
+    """
+    session = SessionModel(
+        start_die=6,
+        user_id=default_user.id,
+        started_at=datetime.now(UTC),
+    )
+    source_thread = Thread(
+        title="Dependency Source",
+        format="comic",
+        issues_remaining=1,
+        total_issues=1,
+        reading_progress="in_progress",
+        queue_position=1,
+        status="active",
+        user_id=default_user.id,
+    )
+    target_thread = Thread(
+        title="Blocked Target",
+        format="comic",
+        issues_remaining=1,
+        total_issues=1,
+        reading_progress="in_progress",
+        queue_position=2,
+        status="active",
+        is_blocked=True,
+        user_id=default_user.id,
+    )
+    async_db.add_all([session, source_thread, target_thread])
+    await async_db.commit()
+    await async_db.refresh(session)
+    await async_db.refresh(source_thread)
+    await async_db.refresh(target_thread)
+
+    source_issue = Issue(
+        thread_id=source_thread.id,
+        issue_number="1",
+        position=1,
+        status="unread",
+    )
+    target_issue = Issue(
+        thread_id=target_thread.id,
+        issue_number="1",
+        position=1,
+        status="unread",
+    )
+    async_db.add_all([source_issue, target_issue])
+    await async_db.commit()
+    await async_db.refresh(source_issue)
+    await async_db.refresh(target_issue)
+
+    source_thread.next_unread_issue_id = source_issue.id
+    target_thread.next_unread_issue_id = target_issue.id
+    async_db.add(
+        Dependency(
+            source_issue_id=source_issue.id,
+            target_issue_id=target_issue.id,
+        )
+    )
+    async_db.add(
+        Event(
+            type="roll",
+            session_id=session.id,
+            selected_thread_id=source_thread.id,
+            die=6,
+            result=1,
+        )
+    )
+    await async_db.commit()
+
+    rate_response = await auth_client.post(
+        "/api/rate/",
+        json={"rating": 5.0, "issues_read": 1},
+    )
+    assert rate_response.status_code == 200
+
+    snapshot = await _latest_snapshot(async_db, session.id)
+    assert snapshot.thread_states[SNAPSHOT_VERSION_KEY] == SNAPSHOT_VERSION
+    blocked_changes = snapshot.thread_states[BLOCKED_CHANGES_KEY]
+    assert blocked_changes[str(target_thread.id)] is True
+
+    await async_db.refresh(target_thread)
+    assert target_thread.is_blocked is False
+
+    undo_response = await auth_client.post(
+        f"/api/undo/{session.id}/undo/{snapshot.id}",
+    )
+    assert undo_response.status_code == 200
+    await async_db.refresh(target_thread)
+    assert target_thread.is_blocked is True
 
 
 @pytest.mark.asyncio
