@@ -176,15 +176,33 @@ Run command: bash -c 'set -a; source .env.test; set +a; .venv/bin/python -m pyte
 When you are done, write a brief completion summary to .opencode_handoff/<handoff-file>_done.md
 ```
 
-For backend issues the focused test run is a must; for frontend issues lead with the
-`cd frontend && pnpm run lint/typecheck/build/test` block. For browser-visible behavior
-the worker must run Playwright per `AGENTS.md` (backend on port 9000).
+### Test suite scoping — E2E / Playwright is conditional
+
+**Backend-only or schema-only issues (no browser-visible behavior changed):**
+Remove step 3's Playwright mention entirely. The worker prompt for these issues must NOT
+include Playwright. Backend tests + frontend lint/typecheck/build/unit tests are
+sufficient.
+
+**Frontend or browser-visible issues (user-visible UI changes):**
+The worker must run Playwright E2E tests per `AGENTS.md`. The planner MUST set the
+bash timeout on `opencode run` high enough: `--timeout 3600000` (60 minutes). E2E tests
+against multiple browsers routinely take 20–40 minutes. Do not let the bash tool kill
+the worker mid-test.
+
+**Planner (Step 4):** Never run Playwright/E2E tests during planning. The planner's
+baseline run is focused pytest only (the `-q` variant). E2E is the worker's job and
+takes too long for planning.
 
 ## Step 8 — Launch the worker
 
 ```bash
 opencode run -m "<resolved-model-id>" --dir "<repo-root>" "<worker-prompt>"
 ```
+
+**Timeout**: The bash tool wrapping `opencode run` must use a generous timeout.
+Backend-only issues: `--timeout 600000` (10 minutes). Frontend/browser-visible
+issues: `--timeout 3600000` (60 minutes). Never let the bash tool timeout kill
+the worker before it finishes its test suite.
 
 Stream the output. When it finishes:
 
@@ -210,6 +228,9 @@ Stream the output. When it finishes:
 - The planner may reuse existing skills: `github-issue-kanban` for selection/status
   labels and `handoff` for the launch mechanics; this skill supersedes them for the
   full plan-then-handoff loop.
+- E2E/Playwright tests are ONLY for frontend/browser-visible issues. Backend-only
+  issues skip Playwright entirely. When Playwright IS required, set the bash timeout
+  to 60 minutes — these tests are slow and must not be killed mid-run.
 
 ## Notes
 
@@ -217,3 +238,6 @@ Stream the output. When it finishes:
 - Ports: dev 5435, test 5437, CI 5432. Coverage gate is 94%.
 - `.opencode_handoff/` and `.opencode_logs/` hold prior handoffs and model test results —
   useful when deciding the worker model.
+- E2E test runtime: Chromium only ≈ 5–10 min, all 3 browsers ≈ 20–40 min. The
+  planner should not run E2E during Step 4 (planning). Only the worker runs them,
+  and only when the issue changes browser-visible behavior.
