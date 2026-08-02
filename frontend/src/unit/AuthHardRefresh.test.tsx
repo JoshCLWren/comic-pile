@@ -80,4 +80,20 @@ describe('hard refresh session bootstrap', () => {
     expect(authState?.isAuthenticated).toBe(false)
     expect(mockApiGet).not.toHaveBeenCalled()
   })
+
+  test('still skips the anonymous probe on the register page', async () => {
+    window.history.replaceState({}, '', '/register')
+
+    render(
+      <AuthProvider>
+        <AuthStateProbe />
+      </AuthProvider>,
+    )
+
+    await waitFor(() => {
+      expect(authState?.isLoading).toBe(false)
+    })
+    expect(authState?.isAuthenticated).toBe(false)
+    expect(mockApiGet).not.toHaveBeenCalled()
+  })
 })
