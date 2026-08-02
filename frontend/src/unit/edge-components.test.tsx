@@ -33,6 +33,31 @@ describe('edge component behavior', () => {
     vi.unstubAllGlobals()
   })
 
+  it('keeps fitting titles truncated and disconnects resize observation', () => {
+    let callback: (() => void) | undefined
+    const observe = vi.fn()
+    const disconnect = vi.fn()
+    class Observer {
+      observe = observe
+      disconnect = disconnect
+      constructor(cb: () => void) { callback = cb }
+    }
+    vi.stubGlobal('ResizeObserver', Observer)
+    const { container, unmount } = render(<MarqueeTitle title="Fits" />)
+    const wrapper = container.firstElementChild as HTMLDivElement
+    const heading = wrapper.querySelector('h3') as HTMLElement
+    Object.defineProperty(wrapper, 'clientWidth', { configurable: true, value: 100 })
+    Object.defineProperty(heading, 'scrollWidth', { configurable: true, value: 20 })
+    act(() => callback?.())
+    expect(heading).toHaveClass('truncate')
+    expect(heading).not.toHaveClass('marquee-runner')
+    expect(heading.querySelector('[aria-hidden="true"]')).not.toBeInTheDocument()
+    expect(observe).toHaveBeenCalledTimes(2)
+    unmount()
+    expect(disconnect).toHaveBeenCalledOnce()
+    vi.unstubAllGlobals()
+  })
+
   it('keeps marquee usable when ResizeObserver is unavailable', () => {
     vi.stubGlobal('ResizeObserver', undefined)
     const { container } = render(<MarqueeTitle title="No observer" />)
