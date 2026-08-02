@@ -9,10 +9,6 @@ import MigrationDialog from '../components/MigrationDialog'
 
 const issuesApi = vi.hoisted(() => ({ list: vi.fn(), create: vi.fn(), move: vi.fn(), markRead: vi.fn(), markUnread: vi.fn() }))
 vi.mock('../services/api-issues', () => ({ issuesApi }))
-const collection = vi.hoisted(() => ({ createCollection: vi.fn().mockResolvedValue(undefined), updateCollection: vi.fn().mockResolvedValue(undefined) }))
-vi.mock('../contexts/CollectionContext', () => ({ useCollections: () => collection }))
-const showToast = vi.hoisted(() => vi.fn())
-vi.mock('../contexts/useToast', () => ({ useToast: () => ({ showToast }) }))
 const migration = vi.hoisted(() => ({ migrateThread: vi.fn() }))
 vi.mock('../services/api', () => ({ migrationApi: migration }))
 
@@ -78,30 +74,10 @@ describe('edge component behavior', () => {
     expect(onClose).toHaveBeenCalled()
   })
 
-  it('validates collection forms and submits create/edit operations', async () => {
-    const user = userEvent.setup(); const close = vi.fn()
-    const { rerender } = render(<CollectionDialog onClose={close} />)
-    await user.click(screen.getByRole('button', { name: 'Create' }))
-    expect(screen.getByRole('alert')).toHaveTextContent('required')
-    await user.type(screen.getByLabelText(/Collection Name/), 'New collection')
-    await user.click(screen.getByRole('checkbox'))
-    await user.click(screen.getByRole('button', { name: 'Create' }))
-    await waitFor(() => expect(collection.createCollection).toHaveBeenCalled())
-    rerender(<CollectionDialog collection={{ id: 1, user_id: 1, name: 'Old', position: 1, is_default: false, created_at: 'now' }} onClose={close} />)
-    await user.click(screen.getByRole('button', { name: 'Update' }))
-    await waitFor(() => expect(collection.updateCollection).toHaveBeenCalled())
-  })
-
-  it('reports collection save failures and closes through keyboard or backdrop', async () => {
-    const user = userEvent.setup(); const close = vi.fn()
-    collection.createCollection.mockRejectedValueOnce(new Error('collection failed'))
-    render(<CollectionDialog onClose={close} />)
-    await user.type(screen.getByLabelText(/Collection Name/), 'Archive')
-    await user.click(screen.getByRole('button', { name: 'Create' }))
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('collection failed'))
-    fireEvent.keyDown(document, { key: 'Escape' })
-    fireEvent.click(screen.getByRole('dialog'))
-    expect(close).toHaveBeenCalled()
+  it('does not render removed collection controls', () => {
+    const { container } = render(<CollectionDialog onClose={vi.fn()} />)
+    expect(container).toBeEmptyDOMElement()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('shows migration warnings for near-complete and completed series', async () => {
