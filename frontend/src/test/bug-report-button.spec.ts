@@ -33,8 +33,8 @@ test.describe('Bug Report Button', () => {
     await expect(modal).toBeVisible({ timeout: 10000 })
   })
 
-  test('fits within a 320px-wide viewport without horizontal overflow', async ({ authenticatedPage }) => {
-    await authenticatedPage.setViewportSize({ width: 320, height: 568 })
+  test('fits and scrolls on a 320px-wide viewport without horizontal overflow', async ({ authenticatedPage }) => {
+    await authenticatedPage.setViewportSize({ width: 320, height: 400 })
     await authenticatedPage.reload({ waitUntil: 'domcontentloaded' })
 
     const reportButton = authenticatedPage.getByRole('button', { name: /report a bug/i }).last()
@@ -43,6 +43,14 @@ test.describe('Bug Report Button', () => {
 
     const modal = authenticatedPage.getByRole('dialog', { name: 'Report a Bug' })
     await expect(modal).toBeVisible({ timeout: 10000 })
+
+    // Exercise the validation-error state directly. The visible submit button is
+    // correctly disabled while required fields are blank, but the form handler
+    // still needs to keep its error message contained on a narrow viewport.
+    await modal.locator('form').evaluate(form => {
+      form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
+    })
+    await expect(modal.getByText('Title and description are required')).toBeVisible()
 
     const titleInput = modal.getByLabel('Title')
     const descriptionInput = modal.getByLabel('Description')
@@ -75,6 +83,18 @@ test.describe('Bug Report Button', () => {
       expect(buttonBox.x).toBeGreaterThanOrEqual(modalBox!.x)
       expect(buttonBox.x + buttonBox.width).toBeLessThanOrEqual(modalBox!.x + modalBox!.width)
     }
+
+    const scrollRegion = modal.locator('.overflow-y-auto')
+    const scrollMetrics = await scrollRegion.evaluate(element => ({
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+    }))
+    expect(scrollMetrics.scrollHeight).toBeGreaterThan(scrollMetrics.clientHeight)
+
+    await scrollRegion.evaluate(element => {
+      element.scrollTop = element.scrollHeight
+    })
+    await expect.poll(() => scrollRegion.evaluate(element => element.scrollTop)).toBeGreaterThan(0)
 
     const documentWidths = await authenticatedPage.evaluate(() => ({
       clientWidth: document.documentElement.clientWidth,
