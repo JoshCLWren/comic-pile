@@ -78,7 +78,7 @@ async def _restore_issue_states(
     if extra_ids:
         await db.execute(delete(Issue).where(Issue.id.in_(extra_ids)))
 
-    for issue_state in snapshot_issues:
+    for fallback_position, issue_state in enumerate(snapshot_issues, start=1):
         issue_id = int(issue_state["id"])
         issue = existing_by_id.get(issue_id)
         if issue is None:
@@ -87,7 +87,7 @@ async def _restore_issue_states(
         issue.issue_number = issue_state["number"]
         issue.status = issue_state["status"]
         issue.read_at = _deserialize_datetime(issue_state.get("read_at"))
-        issue.position = issue_state["position"]
+        issue.position = issue_state.get("position", fallback_position)
 
     await db.flush()
     thread.total_issues = state.get("total_issues")
@@ -402,6 +402,8 @@ async def undo_to_snapshot(
             thread = None
             if active_thread and active_thread.selected_thread_id:
                 thread = await db.get(Thread, active_thread.selected_thread_id)
+                if thread is not None:
+                    await db.refresh(thread)
 
             result = await db.execute(
                 select(func.count())
