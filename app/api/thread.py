@@ -9,7 +9,7 @@ import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -60,19 +60,27 @@ async def thread_to_response(
     thread: Thread,
     db: AsyncSession,
     issue_number_map: dict[int, str] | None = None,
+    issues_remaining_map: dict[int, int] | None = None,
 ) -> ThreadResponse:
     """Convert Thread model to ThreadResponse.
 
     Args:
         thread: Thread model instance
-        db: Database session for computing issues_remaining
+        db: Database session for computing issues_remaining (fallback only)
         issue_number_map: Pre-fetched mapping of issue ID → issue_number.
             When provided, avoids per-thread DB lookups for next_unread_issue_number.
+        issues_remaining_map: Pre-fetched mapping of thread ID → unread count.
+            When provided and the thread uses issue tracking, avoids a per-thread
+            COUNT query. Single-thread callers may omit this to use the per-row
+            fallback.
 
     Returns:
         ThreadResponse schema
     """
-    issues_remaining = await thread.get_issues_remaining(db)
+    if issues_remaining_map is not None and thread.uses_issue_tracking():
+        issues_remaining = issues_remaining_map.get(thread.id, 0)
+    else:
+        issues_remaining = await thread.get_issues_remaining(db)
     reading_progress = thread.reading_progress
 
     next_unread_issue_id = thread.next_unread_issue_id
@@ -118,10 +126,36 @@ async def _bulk_issue_number_map(threads: list[Thread], db: AsyncSession) -> dic
     return {row.id: row.issue_number for row in result}
 
 
+async def _bulk_issues_remaining(threads: list[Thread], db: AsyncSession) -> dict[int, int]:
+    """Bulk-fetch unread issue counts for all migrated threads in one query."""
+    migrated_ids = [t.id for t in threads if t.uses_issue_tracking()]
+    if not migrated_ids:
+        return {}
+    result = await db.execute(
+        select(Issue.thread_id, func.count())
+        .where(Issue.status == "unread")
+        .where(Issue.thread_id.in_(migrated_ids))
+        .group_by(Issue.thread_id),
+    )
+    counts: dict[int, int] = {}
+    for row in result:
+        counts[row[0]] = row[1]
+    return counts
+
+
 async def _threads_to_responses(threads: list[Thread], db: AsyncSession) -> list[ThreadResponse]:
     """Convert a list of Thread models to ThreadResponses with batched lookups."""
     issue_map = await _bulk_issue_number_map(threads, db)
-    return [await thread_to_response(thread, db, issue_number_map=issue_map) for thread in threads]
+    remaining_map = await _bulk_issues_remaining(threads, db)
+    return [
+        await thread_to_response(
+            thread,
+            db,
+            issue_number_map=issue_map,
+            issues_remaining_map=remaining_map,
+        )
+        for thread in threads
+    ]
 
 
 @router.get("/stale", response_model=list[ThreadResponse])
