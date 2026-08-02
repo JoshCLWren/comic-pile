@@ -11,7 +11,7 @@ export function useRate() {
     setIsPending(true)
     setIsError(false)
     try {
-      await rateApi.rate(data)
+      return await rateApi.rate(data)
     } catch (error: unknown) {
       setIsError(true)
       console.error('Failed to rate thread:', getApiErrorDetail(error))
