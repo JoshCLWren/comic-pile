@@ -137,7 +137,12 @@ describe('useCollectionsQuery', () => {
             })
         })
 
-        const sharedClient = createClientNoRetry()
+        const sharedClient = new QueryClient({
+            defaultOptions: {
+                queries: { retry: false, staleTime: 5000, gcTime: 0 },
+                mutations: { retry: false },
+            },
+        })
         const sharedWrapper = makeWrapper(sharedClient)
 
         const { result: r1 } = renderHook(() => useCollectionsQuery(), {

@@ -87,7 +87,7 @@ App (BrowserRouter)
 
 ### API Service Layer
 
-The `services/api.js` module provides a configured Axios instance:
+The `services/api.ts` module provides a configured Axios instance:
 
 ```javascript
 const api = axios.create({
@@ -526,7 +526,7 @@ const createMutation = useMutation({
 })
 ```
 
-Invalidate only the exact key affected — never a broader key.
+Invalidate only the exact key affected. Note that `invalidateQueries` matches query keys by prefix by default, so `{ queryKey: ['collections'] }` invalidates both `['collections']` and `['collections', 1]`. To match exactly, add `exact: true`. Choose query-key scopes carefully to avoid unintentionally invalidating sibling queries.
 
 ### Auth / retry interplay
 

@@ -176,6 +176,62 @@ describe('enabled collection provider', () => {
     expect(screen.getByTestId('error')).toHaveTextContent('Failed to load collections')
   })
 
+  it('createCollection resolves only after collections refetch completes', async () => {
+    let resolveListCall: ((value: unknown) => void) | null = null
+    let listCallCount = 0
+
+    collectionsApi.list.mockImplementation(() => {
+      listCallCount++
+      if (listCallCount === 1) {
+        return Promise.resolve({ collections: [{ id: 1, name: 'Initial', position: 1 }] })
+      }
+      return new Promise((resolve) => {
+        resolveListCall = resolve
+      })
+    })
+
+    collectionsApi.create.mockResolvedValue({ id: 2, name: 'New', position: 2 })
+
+    let createResolved = false
+
+    function CreateTester() {
+      const { createCollection, collections } = useCollections()
+      return (
+        <>
+          <span data-testid="collections">{collections.map((c) => c.name).join(',')}</span>
+          <button
+            onClick={() => {
+              void createCollection({ name: 'New', position: 2 }).then(() => {
+                createResolved = true
+              })
+            }}
+          >
+            create-and-track
+          </button>
+        </>
+      )
+    }
+
+    render(<TestWrapper><CreateTester /></TestWrapper>)
+
+    await waitFor(() => expect(screen.getByTestId('collections')).toHaveTextContent('Initial'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'create-and-track' }))
+
+    await waitFor(() => expect(collectionsApi.create).toHaveBeenCalled())
+
+    expect(createResolved).toBe(false)
+    expect(listCallCount).toBe(2)
+
+    resolveListCall?.({ collections: [
+      { id: 1, name: 'Initial', position: 1 },
+      { id: 2, name: 'New', position: 2 },
+    ] })
+
+    await waitFor(() => expect(createResolved).toBe(true))
+    await waitFor(() => expect(screen.getByTestId('collections')).toHaveTextContent('Initial,New'))
+  })
+
 })
 
 it('rejects consumers outside the provider', () => {

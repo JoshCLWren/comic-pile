@@ -50,7 +50,7 @@ export const CollectionProvider = ({ children }: CollectionProviderProps) => {
   const createMutation = useMutation({
     mutationFn: (data: CollectionCreate) => collectionsApi.create(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections })
+      return queryClient.invalidateQueries({ queryKey: queryKeys.collections })
     },
   })
 
