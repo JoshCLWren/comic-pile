@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { queryClient } from '../query/queryClient'
 
+function responseError(status: number, detail?: string) {
+  return Object.assign(new Error(`HTTP ${status}`), {
+    response: {
+      status,
+      data: detail === undefined ? undefined : { detail },
+    },
+  })
+}
+
 describe('queryClient defaults', () => {
   it('configures cache and mutation behavior', () => {
     const defaults = queryClient.getDefaultOptions()
@@ -18,13 +27,9 @@ describe('queryClient defaults', () => {
       throw new Error('Expected query retry policy to be a function')
     }
 
-    expect(retry(0, { response: { status: 401 } })).toBe(false)
-    expect(retry(0, {
-      response: { status: 403, data: { detail: 'Not authenticated' } },
-    })).toBe(false)
-    expect(retry(0, {
-      response: { status: 403, data: { detail: 'Forbidden' } },
-    })).toBe(true)
+    expect(retry(0, responseError(401))).toBe(false)
+    expect(retry(0, responseError(403, 'Not authenticated'))).toBe(false)
+    expect(retry(0, responseError(403, 'Forbidden'))).toBe(true)
     expect(retry(2, new Error('temporary'))).toBe(true)
     expect(retry(3, new Error('temporary'))).toBe(false)
   })
