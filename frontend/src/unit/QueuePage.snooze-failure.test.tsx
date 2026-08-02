@@ -1,8 +1,8 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
-import { beforeEach, expect, it, vi } from 'vitest'
 import { BrowserRouter } from 'react-router-dom'
+import { beforeEach, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
@@ -75,6 +75,7 @@ vi.mock('../contexts/useToast', () => ({
 const mockedUseThreads = vi.mocked(useThreads) as any
 const mockedUseSession = vi.mocked(useSession) as any
 const mockedUseSnooze = vi.mocked(useSnooze) as any
+const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
 
 beforeEach(() => {
   vi.stubGlobal('alert', vi.fn())
@@ -86,13 +87,24 @@ beforeEach(() => {
   vi.mocked(useMoveToBack).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
   vi.mocked(useMoveToPosition).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
   vi.mocked(useShuffleQueue).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
-  vi.mocked(useUnsnooze).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
+  mockedUseSnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
   vi.mocked(useBugReportRestore).mockReturnValue({
     setRestoreAction: vi.fn(),
     clearRestoreAction: vi.fn(),
     restoreLastView: vi.fn(),
   } as any)
 })
+
+function renderQueue(): void {
+  render(
+    <BrowserRouter>
+      <ToastProvider>
+        <QueuePage />
+      </ToastProvider>
+    </BrowserRouter>,
+  )
+}
 
 it('does not refresh session or threads when snooze fails', async () => {
   const refetchThreads = vi.fn()
@@ -122,13 +134,7 @@ it('does not refresh session or threads when snooze fails', async () => {
   mockedUseSnooze.mockReturnValue({ mutate: snooze, isPending: false })
 
   const user = userEvent.setup()
-  render(
-    <BrowserRouter>
-      <ToastProvider>
-        <QueuePage />
-      </ToastProvider>
-    </BrowserRouter>,
-  )
+  renderQueue()
 
   await user.click(screen.getAllByLabelText('Snooze')[0])
 
@@ -136,6 +142,46 @@ it('does not refresh session or threads when snooze fails', async () => {
     expect(alert).toHaveBeenCalledWith('Failed to snooze thread: Snooze unavailable')
   })
   expect(snooze).toHaveBeenCalledOnce()
+  expect(refetchSession).not.toHaveBeenCalled()
+  expect(refetchThreads).not.toHaveBeenCalled()
+})
+
+it('does not refresh session or threads when unsnooze fails', async () => {
+  const refetchThreads = vi.fn()
+  const refetchSession = vi.fn()
+  const unsnooze = vi.fn().mockRejectedValue({
+    response: { data: { detail: 'Unsnooze unavailable' } },
+  })
+
+  mockedUseThreads.mockReturnValue({
+    data: [
+      {
+        id: 1,
+        title: 'Saga',
+        format: 'Comic',
+        status: 'active',
+        queue_position: 1,
+        issues_remaining: 5,
+      },
+    ],
+    isLoading: false,
+    refetch: refetchThreads,
+  })
+  mockedUseSession.mockReturnValue({
+    data: { snoozed_threads: [{ id: 1 }] },
+    refetch: refetchSession,
+  })
+  mockedUseUnsnooze.mockReturnValue({ mutate: unsnooze, isPending: false })
+
+  const user = userEvent.setup()
+  renderQueue()
+
+  await user.click(screen.getAllByLabelText('Unsnooze')[0])
+
+  await waitFor(() => {
+    expect(alert).toHaveBeenCalledWith('Failed to unsnooze thread: Unsnooze unavailable')
+  })
+  expect(unsnooze).toHaveBeenCalledWith(1)
   expect(refetchSession).not.toHaveBeenCalled()
   expect(refetchThreads).not.toHaveBeenCalled()
 })
