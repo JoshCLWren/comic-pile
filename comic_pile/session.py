@@ -1,8 +1,8 @@
 """Session management functions."""
 
 import asyncio
-import logging
 from datetime import UTC, datetime, timedelta
+import logging
 
 from sqlalchemy import select, text
 from sqlalchemy.exc import OperationalError
@@ -10,16 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_session_settings
 from app.models import Event, Issue, Session, Snapshot, Thread
-
+from app.services.snapshot_contract import USES_ISSUE_TRACKING_KEY
 
 logger = logging.getLogger(__name__)
 _session_creation_lock = asyncio.Lock()
 
 
 def _session_gap_hours() -> int:
-    # TODO: Make session_gap_hours configurable in future
-    # Currently hardcoded to 6 hours based on user's reading pattern
-    # (early morning vs late night sessions, rarely < 6 hours apart)
+    # TODO: Make session_gap_hours configurable in future.
     return get_session_settings().session_gap_hours
 
 
@@ -28,8 +26,12 @@ def _start_die() -> int:
     return get_session_settings().start_die
 
 
-async def is_active(started_at: datetime, ended_at: datetime | None, _db: AsyncSession) -> bool:
-    """Check if session was within configured gap hours."""
+async def is_active(
+    started_at: datetime,
+    ended_at: datetime | None,
+    _db: AsyncSession,
+) -> bool:
+    """Check whether a session is within the configured gap."""
     cutoff_time = datetime.now(UTC) - timedelta(hours=_session_gap_hours())
     session_time = started_at
     if session_time.tzinfo is None:
@@ -38,7 +40,7 @@ async def is_active(started_at: datetime, ended_at: datetime | None, _db: AsyncS
 
 
 async def should_start_new(db: AsyncSession, user_id: int) -> bool:
-    """Check if no active session in configured gap hours."""
+    """Check whether no active session exists in the configured gap."""
     cutoff_time = datetime.now(UTC) - timedelta(hours=_session_gap_hours())
     result = await db.execute(
         select(Session)
@@ -46,31 +48,33 @@ async def should_start_new(db: AsyncSession, user_id: int) -> bool:
         .where(Session.started_at >= cutoff_time)
         .where(Session.ended_at.is_(None))
     )
-    recent_sessions = result.scalars().all()
-
-    return len(recent_sessions) == 0
+    return len(result.scalars().all()) == 0
 
 
 async def create_session_start_snapshot(db: AsyncSession, session: Session) -> None:
-    """Create a snapshot of all states at session start."""
-    result = await db.execute(select(Thread).where(Thread.user_id == session.user_id))
+    """Create a consistent full-library checkpoint at session start."""
+    result = await db.execute(
+        select(Thread)
+        .where(Thread.user_id == session.user_id)
+        .with_for_update()
+    )
     threads = result.scalars().all()
-
-    thread_ids = [t.id for t in threads]
+    thread_ids = [thread.id for thread in threads]
 
     issues_by_thread: dict[int, list[Issue]] = {}
     if thread_ids:
         issues_result = await db.execute(
             select(Issue)
             .where(Issue.thread_id.in_(thread_ids))
-            .order_by(Issue.position)
+            .order_by(Issue.position),
         )
         for issue in issues_result.scalars().all():
             issues_by_thread.setdefault(issue.thread_id, []).append(issue)
 
-    thread_states = {}
+    thread_states: dict[int, dict] = {}
     for thread in threads:
-        thread_states[thread.id] = {
+        uses_issue_tracking = thread.uses_issue_tracking()
+        state = {
             "title": thread.title,
             "format": thread.format,
             "issues_remaining": thread.issues_remaining,
@@ -81,16 +85,20 @@ async def create_session_start_snapshot(db: AsyncSession, session: Session) -> N
             "queue_position": thread.queue_position,
             "status": thread.status,
             "review_url": thread.review_url,
-            "last_review_at": thread.last_review_at.isoformat() if thread.last_review_at else None,
+            "last_review_at": thread.last_review_at.isoformat()
+            if thread.last_review_at
+            else None,
             "notes": thread.notes,
             "is_test": thread.is_test,
+            "is_blocked": thread.is_blocked,
             "created_at": thread.created_at.isoformat(),
             "user_id": thread.user_id,
+            USES_ISSUE_TRACKING_KEY: uses_issue_tracking,
         }
 
-        if thread.uses_issue_tracking():
+        if uses_issue_tracking:
             issues = issues_by_thread.get(thread.id, [])
-            thread_states[thread.id]["issue_states"] = [
+            state["issue_states"] = [
                 {
                     "id": issue.id,
                     "number": issue.issue_number,
@@ -100,34 +108,35 @@ async def create_session_start_snapshot(db: AsyncSession, session: Session) -> N
                 }
                 for issue in issues
             ]
-            thread_states[thread.id]["total_issues"] = thread.total_issues
-            thread_states[thread.id]["next_unread_issue_id"] = thread.next_unread_issue_id
-            thread_states[thread.id]["reading_progress"] = thread.reading_progress
+            state["total_issues"] = thread.total_issues
+            state["next_unread_issue_id"] = thread.next_unread_issue_id
+            state["reading_progress"] = thread.reading_progress
         else:
-            thread_states[thread.id]["issue_states"] = None
-            thread_states[thread.id]["total_issues"] = None
-            thread_states[thread.id]["next_unread_issue_id"] = None
-            thread_states[thread.id]["reading_progress"] = None
+            state["issue_states"] = None
+            state["total_issues"] = None
+            state["next_unread_issue_id"] = None
+            state["reading_progress"] = None
 
-    session_state = {
-        "start_die": session.start_die,
-        "manual_die": session.manual_die,
-    }
+        thread_states[thread.id] = state
 
     snapshot = Snapshot(
         session_id=session.id,
         event_id=None,
         thread_states=thread_states,
+        session_state={
+            "start_die": session.start_die,
+            "manual_die": session.manual_die,
+            "current_die": session.start_die,
+        },
         description="Session start",
     )
-    snapshot.session_state = session_state
     db.add(snapshot)
     await db.commit()
     await db.refresh(session)
 
 
 async def get_or_create(db: AsyncSession, user_id: int) -> Session:
-    """Get active session or create new one."""
+    """Get an active session or create one."""
     from app.models import User
 
     max_retries = 3
@@ -155,18 +164,17 @@ async def get_or_create(db: AsyncSession, user_id: int) -> Session:
                 .order_by(Session.started_at.desc(), Session.id.desc())
             )
             active_session = result.scalars().first()
-
             if active_session:
                 return active_session
 
             async with _session_creation_lock:
                 try:
                     await db.execute(text("SELECT pg_advisory_xact_lock(12345)"))
-                except Exception as e:
+                except Exception as error:
                     logger.warning(
-                        f"Advisory lock failed: {e}. "
-                        "Continuing with asyncio.Lock protection only. "
-                        "This may increase risk of race conditions in multi-instance deployments."
+                        "Advisory lock failed: %s. Continuing with asyncio.Lock "
+                        "protection only; multi-instance races are more likely.",
+                        error,
                     )
 
                 result = await db.execute(
@@ -177,37 +185,31 @@ async def get_or_create(db: AsyncSession, user_id: int) -> Session:
                     .order_by(Session.started_at.desc(), Session.id.desc())
                 )
                 active_session = result.scalars().first()
-
                 if active_session:
                     return active_session
 
                 new_session = Session(start_die=start_die, user_id=user_id)
                 db.add(new_session)
-
                 await create_session_start_snapshot(db, new_session)
-
                 await db.commit()
                 await db.refresh(new_session)
-
                 return new_session
-        except OperationalError as e:
-            if "deadlock" in str(e).lower():
-                await db.rollback()
-                retries += 1
-                if retries >= max_retries:
-                    raise RuntimeError(
-                        f"Failed to get_or_create session after {max_retries} retries"
-                    ) from e
-                delay = initial_delay * (2 ** (retries - 1))
-                await asyncio.sleep(delay)
-            else:
+        except OperationalError as error:
+            if "deadlock" not in str(error).lower():
                 raise
+            await db.rollback()
+            retries += 1
+            if retries >= max_retries:
+                raise RuntimeError(
+                    f"Failed to get_or_create session after {max_retries} retries"
+                ) from error
+            await asyncio.sleep(initial_delay * (2 ** (retries - 1)))
 
     raise RuntimeError(f"Failed to get_or_create session after {max_retries} retries")
 
 
 async def end_session(session_id: int, db: AsyncSession) -> None:
-    """Mark session as ended."""
+    """Mark a session as ended."""
     session_result = await db.execute(select(Session).where(Session.id == session_id))
     session = session_result.scalar_one_or_none()
     if session:
@@ -216,7 +218,7 @@ async def end_session(session_id: int, db: AsyncSession) -> None:
 
 
 async def get_current_die(session_id: int, db: AsyncSession) -> int:
-    """Get current die size based on manual selection or last rating/snooze event."""
+    """Get the die from manual selection or the latest die-changing event."""
     start_die = _start_die()
     session_result = await db.execute(select(Session).where(Session.id == session_id))
     session = session_result.scalar_one_or_none()
@@ -227,14 +229,12 @@ async def get_current_die(session_id: int, db: AsyncSession) -> int:
     result = await db.execute(
         select(Event)
         .where(Event.session_id == session_id)
-        .where(Event.type.in_(("rate", "snooze")))
+        .where(Event.type.in_(("rate", "snooze", "undo")))
         .where(Event.die_after.is_not(None))
-        .order_by(Event.timestamp.desc())
+        .order_by(Event.timestamp.desc(), Event.id.desc())
     )
     last_die_event = result.scalars().first()
-
-    if last_die_event:
-        die_after = last_die_event.die_after
-        return die_after if die_after is not None else start_die
+    if last_die_event and last_die_event.die_after is not None:
+        return last_die_event.die_after
 
     return session.start_die if session else start_die
