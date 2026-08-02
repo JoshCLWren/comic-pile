@@ -131,4 +131,20 @@ describe('Queue shuffle availability', () => {
 
     expect(screen.getByRole('button', { name: 'Shuffle' })).toBeDisabled()
   })
+
+  it('enables shuffle when at least two active threads are available and no shuffle is pending', () => {
+    mockedUseThreads.mockReturnValue({
+      data: [
+        { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5 },
+        { id: 2, title: 'Spawn', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 5 },
+      ],
+      isLoading: false,
+      refetch: vi.fn(),
+    })
+    mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false })
+
+    renderQueue()
+
+    expect(screen.getByRole('button', { name: 'Shuffle' })).toBeEnabled()
+  })
 })
