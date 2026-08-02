@@ -1,5 +1,8 @@
-import { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode, useRef } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { collectionsApi } from '../services/api'
+import { queryKeys } from '../query/queryKeys'
+import { useCollectionsQuery } from '../hooks/useCollectionsQuery'
 import type { Collection, CollectionCreate, CollectionUpdate } from '../types'
 
 interface CollectionError {
@@ -23,60 +26,41 @@ interface CollectionContextType {
 const CollectionContext = createContext<CollectionContextType | null>(null)
 
 const STORAGE_KEY = 'comic_pile_active_collection_id'
-const MAX_RETRIES = 3
-const RETRY_DELAY = 1000
 
 interface CollectionProviderProps {
   children: ReactNode
 }
 
 export const CollectionProvider = ({ children }: CollectionProviderProps) => {
-  const [collections, setCollections] = useState<Collection[]>([])
   const [activeCollectionId, setActiveCollectionIdState] = useState<number | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<CollectionError | null>(null)
-  const retryCountRef = useRef(0)
+  const queryClient = useQueryClient()
+
+  const {
+    data: collections = [],
+    isPending,
+    error: queryError,
+    refetch,
+  } = useCollectionsQuery()
 
   const sortedCollections = useMemo(() =>
     [...collections].sort((a, b) => a.position - b.position),
     [collections]
   )
 
-  const fetchCollections = useCallback(async () => {
-    setIsLoading(true)
-    setError(null)
-    try {
-      const response = await collectionsApi.list()
-      const fetchedCollections: Collection[] = response.collections || []
-      setCollections(fetchedCollections)
-      retryCountRef.current = 0
-    } catch (err) {
-      const axiosError = err as { response?: { status: number; data?: { detail?: string } }; message?: string }
-      const status = axiosError.response?.status
-      const message = axiosError.response?.data?.detail || axiosError.message || 'Failed to load collections'
-      setError({ message, status })
-      if (status !== 401) {
-        console.error('Failed to fetch collections:', err)
-      }
-      if (status !== 401 && retryCountRef.current < MAX_RETRIES) {
-        retryCountRef.current += 1
-        setTimeout(() => {
-          fetchCollections()
-        }, RETRY_DELAY * retryCountRef.current)
-      }
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
+  const createMutation = useMutation({
+    mutationFn: (data: CollectionCreate) => collectionsApi.create(data),
+    onSuccess: () => {
+      return queryClient.invalidateQueries({ queryKey: queryKeys.collections })
+    },
+  })
 
-  const retry = useCallback(() => {
-    retryCountRef.current = 0
-    fetchCollections()
-  }, [fetchCollections])
-
-  useEffect(() => {
-    fetchCollections()
-  }, [fetchCollections])
+  const contextError: CollectionError | null = useMemo(() => {
+    if (!queryError) return null
+    const e = queryError as { response?: { status?: number; data?: { detail?: string } }; message?: string }
+    const status = e.response?.status
+    const message = e.response?.data?.detail || e.message || 'Failed to load collections'
+    return { message, status }
+  }, [queryError])
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY)
@@ -99,47 +83,30 @@ export const CollectionProvider = ({ children }: CollectionProviderProps) => {
   }, [])
 
   const createCollection = useCallback(async (data: CollectionCreate) => {
-    setIsLoading(true)
-    try {
-      await collectionsApi.create(data)
-      await fetchCollections()
-    } finally {
-      setIsLoading(false)
-    }
-  }, [fetchCollections])
+    await createMutation.mutateAsync(data)
+  }, [createMutation.mutateAsync])
 
   const updateCollection = useCallback(async (id: number, data: CollectionUpdate) => {
-    setIsLoading(true)
-    try {
-      await collectionsApi.update(id, data)
-      await fetchCollections()
-    } finally {
-      setIsLoading(false)
-    }
-  }, [fetchCollections])
+    await collectionsApi.update(id, data)
+    await queryClient.invalidateQueries({ queryKey: queryKeys.collections })
+  }, [queryClient])
 
   const deleteCollection = useCallback(async (id: number) => {
-    setIsLoading(true)
-    try {
-      await collectionsApi.delete(id)
-      if (activeCollectionId === id) {
-        setActiveCollectionId(null)
-      }
-      await fetchCollections()
-    } finally {
-      setIsLoading(false)
+    await collectionsApi.delete(id)
+    if (activeCollectionId === id) {
+      setActiveCollectionId(null)
     }
-  }, [fetchCollections, activeCollectionId, setActiveCollectionId])
+    await queryClient.invalidateQueries({ queryKey: queryKeys.collections })
+  }, [queryClient, activeCollectionId, setActiveCollectionId])
 
   const moveCollection = useCallback(async (id: number, newPosition: number) => {
-    setIsLoading(true)
-    try {
-      await collectionsApi.update(id, { position: newPosition })
-      await fetchCollections()
-    } finally {
-      setIsLoading(false)
-    }
-  }, [fetchCollections])
+    await collectionsApi.update(id, { position: newPosition })
+    await queryClient.invalidateQueries({ queryKey: queryKeys.collections })
+  }, [queryClient])
+
+  const retry = useCallback(() => {
+    refetch()
+  }, [refetch])
 
   return (
     <CollectionContext.Provider
@@ -151,8 +118,8 @@ export const CollectionProvider = ({ children }: CollectionProviderProps) => {
         updateCollection,
         deleteCollection,
         moveCollection,
-        isLoading,
-        error,
+        isLoading: isPending,
+        error: contextError,
         retry,
       }}
     >

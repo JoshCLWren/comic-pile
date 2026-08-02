@@ -2,6 +2,14 @@
 
 ## 2026-08-01
 
+**TanStack Query collections pilot (#701)**
+
+- Introduced `@tanstack/react-query` as the standard server-state layer via a small pilot migration of the collections read + create mutation.
+- Collections now load through a single deduplicated TanStack query (`useCollectionsQuery`) shared across consumers, instead of per-provider manual `useState`/`useEffect` fetches.
+- Create mutation invalidates only the `['collections']` query key; all 401 responses and 403 responses whose detail is "Not authenticated" are never retried (the axios interceptor already handles token refresh); other 403 errors and transient failures retry up to 3 times.
+- Added the migration recipe to `docs/REACT_ARCHITECTURE.md` so future features can follow the same pattern.
+- Queue, Roll, and other pages keep their existing custom-hook data fetching.
+
 **Production request observability (#678)**
 
 - Production now defaults to WARNING root log level instead of ERROR, so structured `Slow HTTP request` and `Client Error` warnings reach deployment logs (previously suppressed).

@@ -87,7 +87,7 @@ App (BrowserRouter)
 
 ### API Service Layer
 
-The `services/api.js` module provides a configured Axios instance:
+The `services/api.ts` module provides a configured Axios instance:
 
 ```javascript
 const api = axios.create({
@@ -488,6 +488,49 @@ No React-specific env vars needed (uses `/api` for backend).
 - New PostCSS plugin (`@tailwindcss/postcss`)
 - Faster build times
 - Simpler configuration
+
+## TanStack Query Pilot (#701)
+
+TanStack Query (`@tanstack/react-query`) is the standard server-state layer, introduced via a small pilot in `CollectionContext`. The custom `useState`/`useEffect` hooks remain for existing features; migrate incrementally.
+
+### Provider placement
+
+`QueryClientProvider` is the outermost provider, inside `BrowserRouter`, in `frontend/src/App.tsx`. The client is a single stable module-level instance (`frontend/src/query/queryClient.ts`) — never build a new `QueryClient` per render (it resets cache and breaks request dedup).
+
+### Adding a query
+
+```ts
+// frontend/src/query/queryKeys.ts
+export const queryKeys = { collections: ['collections'] as const }
+```
+
+```ts
+// frontend/src/hooks/useCollectionsQuery.ts
+export function useCollectionsQuery() {
+  return useQuery<Collection[]>({
+    queryKey: queryKeys.collections,
+    queryFn: async () => (await collectionsApi.list()).collections ?? [],
+  })
+}
+```
+
+Two consumers of the same query key under one provider share a single in-flight request (dedup). Use `isPending` for the initial-load state (v5 semantics).
+
+### Mutation + targeted invalidation
+
+```ts
+const queryClient = useQueryClient()
+const createMutation = useMutation({
+  mutationFn: (data) => collectionsApi.create(data),
+  onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.collections }),
+})
+```
+
+Invalidate only the exact key affected. Note that `invalidateQueries` matches query keys by prefix by default, so `{ queryKey: ['collections'] }` invalidates both `['collections']` and `['collections', 1]`. To match exactly, add `exact: true`. Choose query-key scopes carefully to avoid unintentionally invalidating sibling queries.
+
+### Auth / retry interplay
+
+The axios interceptor in `services/api.ts` already handles 401 → token refresh → single retry and login redirect. The QueryClient `retry` callback suppresses TanStack retries for 401 and 403 `Not authenticated`, and retries other errors up to 3 times. Mutations never auto-retry. `refetchOnWindowFocus` is `false` so pages keep their own refetch choreography.
 
 ## Future Enhancements
 

@@ -1,13 +1,49 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { CollectionProvider, useCollections } from '../contexts/CollectionContext'
+import { CollectionBadge } from '../pages/QueuePage/CollectionBadge'
 
 const collectionsApi = vi.hoisted(() => ({
   list: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(),
 }))
 vi.mock('../services/api', () => ({ collectionsApi }))
 
-import { CollectionProvider, useCollections } from '../contexts/CollectionContext'
-import { CollectionBadge } from '../pages/QueuePage/CollectionBadge'
+function createTestQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: (failureCount, error) => {
+          const e = error as {
+            response?: { status?: number; data?: { detail?: string } }
+            data?: { detail?: string }
+          }
+          if (e?.response?.status === 401) return false
+          if (
+            e?.response?.status === 403
+            && e?.response?.data?.detail === 'Not authenticated'
+          ) {
+            return false
+          }
+          return failureCount < 3
+        },
+        staleTime: 0,
+        gcTime: 0,
+      },
+      mutations: { retry: false },
+    },
+  })
+}
+
+function TestWrapper({ children }: { children: React.ReactNode }) {
+  const [client] = useState(() => createTestQueryClient())
+  return (
+    <QueryClientProvider client={client}>
+      <CollectionProvider>{children}</CollectionProvider>
+    </QueryClientProvider>
+  )
+}
 
 function Consumer() {
   const value = useCollections()
@@ -51,7 +87,7 @@ describe('enabled collection provider', () => {
   })
 
   it('loads, sorts, selects, persists, mutates, and renders badges', async () => {
-    render(<CollectionProvider><Consumer /></CollectionProvider>)
+    render(<TestWrapper><Consumer /></TestWrapper>)
     await waitFor(() => expect(screen.getByTestId('collections')).toHaveTextContent('First,Second'))
     expect(screen.getByTestId('collection-badge')).toHaveTextContent('First')
     fireEvent.click(screen.getByRole('button', { name: 'select' }))
@@ -72,7 +108,7 @@ describe('enabled collection provider', () => {
     try {
       window.localStorage.setItem('comic_pile_active_collection_id', '2')
       collectionsApi.list.mockRejectedValue({ response: { status: 401, data: { detail: 'Nope' } } })
-      render(<CollectionProvider><Consumer /></CollectionProvider>)
+      render(<TestWrapper><Consumer /></TestWrapper>)
       await waitFor(() => expect(screen.getByTestId('error')).toHaveTextContent('Nope'))
       expect(screen.getByTestId('active')).toHaveTextContent('2')
       fireEvent.click(screen.getByRole('button', { name: 'retry' }))
@@ -84,7 +120,7 @@ describe('enabled collection provider', () => {
   })
 
   it('clears the active selection when the selected collection is deleted', async () => {
-    render(<CollectionProvider><Consumer /></CollectionProvider>)
+    render(<TestWrapper><Consumer /></TestWrapper>)
     await waitFor(() => expect(screen.getByTestId('collections')).toHaveTextContent('First,Second'))
     fireEvent.click(screen.getByRole('button', { name: 'select-first' }))
     fireEvent.click(screen.getByRole('button', { name: 'delete-active' }))
@@ -97,10 +133,10 @@ describe('enabled collection provider', () => {
     vi.useFakeTimers()
     collectionsApi.list.mockRejectedValue(new Error('temporary'))
     collectionsApi.create.mockResolvedValue({})
-    render(<CollectionProvider><Consumer /></CollectionProvider>)
+    render(<TestWrapper><Consumer /></TestWrapper>)
     await vi.advanceTimersByTimeAsync(1000)
     await vi.advanceTimersByTimeAsync(2000)
-    await vi.advanceTimersByTimeAsync(3000)
+    await vi.advanceTimersByTimeAsync(4000)
     expect(collectionsApi.list).toHaveBeenCalled()
     vi.useRealTimers()
 
@@ -115,7 +151,7 @@ describe('enabled collection provider', () => {
     const user = (await import('@testing-library/user-event')).default.setup()
     window.localStorage.setItem('comic_pile_active_collection_id', 'not-a-number')
     collectionsApi.list.mockResolvedValueOnce({})
-    render(<CollectionProvider><Consumer /></CollectionProvider>)
+    render(<TestWrapper><Consumer /></TestWrapper>)
     await waitFor(() => expect(screen.getByTestId('loading')).toHaveTextContent('false'))
     expect(screen.getByTestId('collections')).toHaveTextContent('')
 
@@ -130,9 +166,72 @@ describe('enabled collection provider', () => {
   })
 
   it('uses the generic load error when an API error has no message', async () => {
-    collectionsApi.list.mockRejectedValueOnce({ response: { status: 500 } })
-    render(<CollectionProvider><Consumer /></CollectionProvider>)
-    await waitFor(() => expect(screen.getByTestId('error')).toHaveTextContent('Failed to load collections'))
+    vi.useFakeTimers()
+    collectionsApi.list.mockRejectedValue({ response: { status: 500 } })
+    render(<TestWrapper><Consumer /></TestWrapper>)
+    await vi.advanceTimersByTimeAsync(1000)
+    await vi.advanceTimersByTimeAsync(2000)
+    await vi.advanceTimersByTimeAsync(4000)
+    await vi.runAllTimersAsync()
+    expect(screen.getByTestId('error')).toHaveTextContent('Failed to load collections')
+  })
+
+  it('createCollection resolves only after collections refetch completes', async () => {
+    let resolveListCall: (value: unknown) => void = () => {
+      throw new Error('Expected the collections refetch to start')
+    }
+    let listCallCount = 0
+
+    collectionsApi.list.mockImplementation(() => {
+      listCallCount++
+      if (listCallCount === 1) {
+        return Promise.resolve({ collections: [{ id: 1, name: 'Initial', position: 1 }] })
+      }
+      return new Promise((resolve) => {
+        resolveListCall = resolve
+      })
+    })
+
+    collectionsApi.create.mockResolvedValue({ id: 2, name: 'New', position: 2 })
+
+    let createResolved = false
+
+    function CreateTester() {
+      const { createCollection, collections } = useCollections()
+      return (
+        <>
+          <span data-testid="collections">{collections.map((c) => c.name).join(',')}</span>
+          <button
+            onClick={() => {
+              void createCollection({ name: 'New', position: 2 }).then(() => {
+                createResolved = true
+              })
+            }}
+          >
+            create-and-track
+          </button>
+        </>
+      )
+    }
+
+    render(<TestWrapper><CreateTester /></TestWrapper>)
+
+    await waitFor(() => expect(screen.getByTestId('collections')).toHaveTextContent('Initial'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'create-and-track' }))
+
+    await waitFor(() => expect(collectionsApi.create).toHaveBeenCalled())
+
+    expect(createResolved).toBe(false)
+    expect(listCallCount).toBe(2)
+
+    resolveListCall({ collections: [
+      { id: 1, name: 'Initial', position: 1 },
+      { id: 2, name: 'New', position: 2 },
+    ] })
+
+    await waitFor(() => expect(createResolved).toBe(true))
+    await waitFor(() => expect(screen.getByTestId('collections')).toHaveTextContent('Initial,New'))
   })
 
 })
