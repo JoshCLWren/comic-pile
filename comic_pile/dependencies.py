@@ -77,6 +77,50 @@ async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSessi
     ]
 
 
+async def get_blocking_explanations_batch(
+    thread_ids: list[int],
+    user_id: int,
+    db: AsyncSession,
+) -> dict[int, list[str]]:
+    """Human-readable blocking reasons for multiple threads in one query."""
+    if not thread_ids:
+        return {}
+
+    source_issue = Issue.__table__.alias("source_issue")
+    next_unread_issue = Issue.__table__.alias("next_unread_issue")
+    source_thread = Thread.__table__.alias("source_thread")
+    target_thread = Thread.__table__.alias("target_thread")
+
+    result = await db.execute(
+        select(
+            target_thread.c.id,
+            source_thread.c.id,
+            source_thread.c.title,
+            source_issue.c.id,
+            source_issue.c.issue_number,
+        )
+        .join(
+            next_unread_issue,
+            next_unread_issue.c.id == target_thread.c.next_unread_issue_id,
+        )
+        .join(Dependency, Dependency.target_issue_id == next_unread_issue.c.id)
+        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
+        .join(source_thread, source_issue.c.thread_id == source_thread.c.id)
+        .where(target_thread.c.id.in_(thread_ids))
+        .where(target_thread.c.user_id == user_id)
+        .where(source_thread.c.user_id == user_id)
+        .where(source_issue.c.status != "read")
+        .where(target_thread.c.next_unread_issue_id.isnot(None))
+    )
+
+    reasons_map: dict[int, list[str]] = {}
+    for target_tid, src_tid, src_title, _src_iid, src_issue_num in result.all():
+        reasons_map.setdefault(target_tid, []).append(
+            f"Blocked by issue #{src_issue_num} in {src_title} (thread #{src_tid})"
+        )
+    return reasons_map
+
+
 async def validate_position_dependency_consistency(
     thread_id: int,
     user_id: int,

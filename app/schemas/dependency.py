@@ -96,6 +96,18 @@ class ThreadDependencyOrderCheckResponse(BaseModel):
     conflicts: list[DependencyOrderConflict]
 
 
+class BatchBlockingExplanationRequest(BaseModel):
+    """Schema for batch blocking-info request."""
+
+    thread_ids: list[int] = Field(..., min_length=1, max_length=500)
+
+
+class BatchBlockingExplanationResponse(BaseModel):
+    """Schema for batch blocking-info response — keyed by thread ID."""
+
+    threads: dict[int, BlockingExplanation]
+
+
 class ConnectedThreadInfo(BaseModel):
     """Lightweight info about a thread connected via dependencies."""
 

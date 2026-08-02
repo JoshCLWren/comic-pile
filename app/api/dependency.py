@@ -4,7 +4,7 @@ import asyncio
 from typing import Annotated, TypedDict
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +14,8 @@ from app.database import get_db
 from app.models import Dependency, Issue, Thread
 from app.models.user import User
 from app.schemas.dependency import (
+    BatchBlockingExplanationRequest,
+    BatchBlockingExplanationResponse,
     BlockingExplanation,
     ConnectedThreadInfo,
     DependencyCreate,
@@ -31,6 +33,7 @@ from comic_pile.dependencies import (
     detect_circular_dependency,
     get_blocked_thread_ids,
     get_blocking_explanations,
+    get_blocking_explanations_batch,
     get_dependency_order_conflicts,
     refresh_user_blocked_status,
 )
@@ -55,6 +58,7 @@ async def _invalidate_dependency_caches(user_id: int, dependency_id: int | None 
         invalidate_cache(f"cache:list_thread_dependencies:*:User:{user_id}:"),
         invalidate_cache(f"cache:list_issue_dependencies:*:User:{user_id}:"),
         invalidate_cache(f"cache:get_thread_blocking_info:*:User:{user_id}:"),
+        invalidate_cache(f"cache:get_threads_blocking_info:*:User:{user_id}:"),
         invalidate_cache(f"cache:check_thread_dependency_order:*:User:{user_id}:"),
         invalidate_cache(f"cache:get_thread_connected_threads:*:User:{user_id}:"),
     ]
@@ -304,6 +308,47 @@ async def get_thread_blocking_info(
 
     reasons = await get_blocking_explanations(thread_id, current_user.id, db)
     return BlockingExplanation(is_blocked=True, blocking_reasons=reasons)
+
+
+@router.post("/threads:getBlockingInfo", response_model=BatchBlockingExplanationResponse)
+@cached(ttl=TTL.SHORT)
+async def get_threads_blocking_info(
+    request: BatchBlockingExplanationRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> BatchBlockingExplanationResponse:
+    """Return blocked status and human-readable blocking reasons for multiple threads."""
+    thread_count = await db.scalar(
+        select(func.count()).select_from(Thread).where(
+            Thread.id.in_(request.thread_ids),
+            Thread.user_id == current_user.id,
+        )
+    )
+    if thread_count != len(request.thread_ids):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="One or more threads not found",
+        )
+
+    blocked_ids = await get_blocked_thread_ids(current_user.id, db)
+    reasons_map = await get_blocking_explanations_batch(
+        request.thread_ids, current_user.id, db
+    )
+
+    result: dict[int, BlockingExplanation] = {}
+    for tid in request.thread_ids:
+        if tid in blocked_ids:
+            result[tid] = BlockingExplanation(
+                is_blocked=True,
+                blocking_reasons=reasons_map.get(tid, []),
+            )
+        else:
+            result[tid] = BlockingExplanation(
+                is_blocked=False,
+                blocking_reasons=[],
+            )
+
+    return BatchBlockingExplanationResponse(threads=result)
 
 
 @router.post(
