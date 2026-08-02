@@ -66,7 +66,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const authChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('comic-pile-auth') : null
 
     const validateSession = async () => {
-      if (!getAccessToken() && !window.__COMIC_PILE_ACCESS_TOKEN) {
+      const isPublicAuthPage =
+        window.location.pathname === '/login' || window.location.pathname === '/register'
+      if (!getAccessToken() && !window.__COMIC_PILE_ACCESS_TOKEN && isPublicAuthPage) {
         setIsLoading(false)
         return
       }
