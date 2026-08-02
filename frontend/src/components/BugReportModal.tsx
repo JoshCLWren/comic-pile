@@ -117,19 +117,19 @@ export default function BugReportModal({
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3 pt-2">
+        <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-3 pt-2">
           <button
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all disabled:opacity-50"
+            className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] min-[360px]:tracking-[0.2em] transition-all disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={isSubmitting || !title.trim() || !description.trim()}
-            className="w-full py-3 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-600/50 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all disabled:opacity-50"
+            className="w-full py-3 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-600/50 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] min-[360px]:tracking-[0.2em] transition-all disabled:opacity-50"
           >
             {isSubmitting ? 'Submitting...' : 'Submit Report'}
           </button>

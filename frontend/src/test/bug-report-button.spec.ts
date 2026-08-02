@@ -32,4 +32,31 @@ test.describe('Bug Report Button', () => {
     const modal = authenticatedPage.getByRole('dialog', { name: 'Report a Bug' })
     await expect(modal).toBeVisible({ timeout: 10000 })
   })
+
+  test('fits within a 320px-wide viewport without horizontal overflow', async ({ authenticatedPage }) => {
+    await authenticatedPage.setViewportSize({ width: 320, height: 568 })
+    await authenticatedPage.reload({ waitUntil: 'domcontentloaded' })
+
+    const reportButton = authenticatedPage.getByRole('button', { name: /report a bug/i }).last()
+    await expect(reportButton).toBeVisible()
+    await reportButton.click()
+
+    const modal = authenticatedPage.getByRole('dialog', { name: 'Report a Bug' })
+    await expect(modal).toBeVisible({ timeout: 10000 })
+
+    const titleInput = modal.getByLabel('Title')
+    const descriptionInput = modal.getByLabel('Description')
+
+    await titleInput.fill('Test bug on narrow screen')
+    await descriptionInput.fill('This is a test description for the bug report form on a 320px wide viewport.')
+
+    const submitButton = modal.getByRole('button', { name: 'Submit Report' })
+    const cancelButton = modal.getByRole('button', { name: 'Cancel' })
+
+    await expect(submitButton).toBeVisible()
+    await expect(cancelButton).toBeVisible()
+
+    await expect(titleInput).toHaveValue('Test bug on narrow screen')
+    await expect(descriptionInput).toHaveValue('This is a test description for the bug report form on a 320px wide viewport.')
+  })
 })
