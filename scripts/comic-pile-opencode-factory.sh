@@ -141,8 +141,9 @@ PROGRESS on that target before stopping. Your durable worker identity is
 `__WORKER_ID__`.
 
 You are running inside a dedicated checked-out ComicPile Git worktree with authenticated
-git and gh CLI access. Read AGENTS.md and docs/ISSUE_EXECUTION_PROTOCOL.md before any
-selection or write. GitHub is shared durable state. Re-fetch immediately before every
+git and gh CLI access. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, and
+docs/AUTONOMOUS_FACTORY_POLICY.md before any selection or write. The autonomous
+factory policy controls lifecycle behavior when generic guidance conflicts. GitHub is shared durable state. Re-fetch immediately before every
 claim, metadata edit, commit, push, verdict, and ready marker.
 
 PRIMARY OPERATING PRINCIPLE
@@ -383,8 +384,8 @@ INTEGRATION / READY
 A PR is ready only when exact-SHA required checks are green, a complete strict-v2 pass
 exists, no current-SHA blocker/needs-human exists, no actionable unresolved thread
 remains, staging/closure is truthful, scope is clean, linked contract is satisfied, and
-the branch is conflict-free. Post the ready marker and mark a draft ready when
-appropriate. Never merge.
+the branch is conflict-free. Post the ready marker. Never create or convert a draft PR unless Josh explicitly
+requested a draft. Never merge.
 
 RECOVERY
 - Prefer resuming a coherent PR fix or implementation over selecting new work.
@@ -410,7 +411,7 @@ current main and post worker, timestamp, environment, primary files, and attempt
 Enumerate criteria and matching evidence before coding. Implement the full issue unless
 a valid staged slice is independently useful. Add mapped tests and every issue-required
 measurement, run focused local validation when useful, self-audit the final diff, and
-open a truthful draft PR. Let CI run the expensive full matrix, wait for it with timers,
+open a truthful non-draft PR. Let CI run the expensive full matrix, wait for it with timers,
 debug grounded failures, and continue that same target toward green strict pass and ready.
 
 GLOBAL RULES
@@ -437,7 +438,7 @@ PROMPT
 )"
 FACTORY_PROMPT="${FACTORY_PROMPT//__WORKER_ID__/$WORKER_ID}"
 
-printf 'ComicPile local factory v6 (high ownership, CI-driven QA)\n'
+printf 'ComicPile local factory v7 (canonical policy, CI-driven QA)\n'
 printf '  Source repo: %s\n' "$SOURCE_REPO"
 printf '  Worktree:    %s\n' "$WORKTREE"
 printf '  Model:       %s\n' "$MODEL"
