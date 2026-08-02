@@ -17,7 +17,8 @@ from app.schemas import (
     ActiveThreadInfo,
     EventDetail,
     SessionDetailsResponse,
-    SessionListResponse,
+    SessionHistoryListResponse,
+    SessionListItem,
     SessionResponse,
     SnapshotResponse,
     SnapshotsListResponse,
@@ -28,6 +29,28 @@ from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.session import get_current_die, get_or_create, is_active
 
 router = APIRouter(tags=["sessions"])
+
+
+def _to_session_list_item(sr: SessionResponse) -> SessionListItem:
+    """Convert a full SessionResponse to a narrow SessionListItem.
+
+    Deliberately drops snoozed_thread_ids, snoozed_threads, and pending_thread_id
+    to reduce payload size for session history list views.
+    """
+    return SessionListItem(
+        id=sr.id,
+        started_at=sr.started_at,
+        ended_at=sr.ended_at,
+        start_die=sr.start_die,
+        manual_die=sr.manual_die,
+        user_id=sr.user_id,
+        ladder_path=sr.ladder_path,
+        active_thread=sr.active_thread,
+        current_die=sr.current_die,
+        last_rolled_result=sr.last_rolled_result,
+        has_restore_point=sr.has_restore_point,
+        snapshot_count=sr.snapshot_count,
+    )
 
 
 async def _invalidate_session_caches(user_id: int) -> None:
@@ -402,7 +425,7 @@ async def get_current_session(
     raise RuntimeError(f"Failed to get current session after {max_retries} retries")
 
 
-@router.get("/", response_model=SessionListResponse)
+@router.get("/", response_model=SessionHistoryListResponse)
 @cached(ttl=TTL.SHORT)
 async def list_sessions(
     current_user: Annotated[User, Depends(get_current_user)],
@@ -416,7 +439,7 @@ async def list_sessions(
         default=None, description="Token for pagination continuation (started_at,session_id)"
     ),
     db: AsyncSession = Depends(get_db),
-) -> SessionListResponse:
+) -> SessionHistoryListResponse:
     """List sessions with cursor-based pagination.
 
     Args:
@@ -426,7 +449,7 @@ async def list_sessions(
         db: SQLAlchemy session for database operations.
 
     Returns:
-        SessionListResponse with paginated sessions and next_page_token if more exist.
+        SessionHistoryListResponse with paginated sessions and next_page_token if more exist.
     """
     from fastapi import HTTPException, status
     from sqlalchemy import func, or_
@@ -461,7 +484,7 @@ async def list_sessions(
     sessions_to_return = sessions[:page_size]
 
     if not sessions_to_return:
-        return SessionListResponse(sessions=[], next_page_token=None)
+        return SessionHistoryListResponse(sessions=[], next_page_token=None)
 
     session_ids = [s.id for s in sessions_to_return]
 
@@ -564,35 +587,34 @@ async def list_sessions(
             else:
                 active_threads_dict[sid] = None
 
-    responses = []
+    responses: list[SessionListItem] = []
     for session in sessions_to_return:
         active_thread = active_threads_dict.get(session.id)
-        snapshot_count = snapshot_counts.get(session.id, 0)
+        snapshot_count_num = snapshot_counts.get(session.id, 0)
 
-        responses.append(
-            SessionResponse(
-                id=session.id,
-                started_at=session.started_at,
-                ended_at=session.ended_at,
-                start_die=session.start_die,
-                manual_die=session.manual_die,
-                user_id=session.user_id,
-                ladder_path=ladder_paths[session.id],
-                active_thread=active_thread,
-                current_die=current_die[session.id],
-                last_rolled_result=active_thread.last_rolled_result if active_thread else None,
-                has_restore_point=snapshot_count > 0,
-                snapshot_count=snapshot_count,
-                pending_thread_id=session.pending_thread_id,
-            )
+        sr = SessionResponse(
+            id=session.id,
+            started_at=session.started_at,
+            ended_at=session.ended_at,
+            start_die=session.start_die,
+            manual_die=session.manual_die,
+            user_id=session.user_id,
+            ladder_path=ladder_paths[session.id],
+            active_thread=active_thread,
+            current_die=current_die[session.id],
+            last_rolled_result=active_thread.last_rolled_result if active_thread else None,
+            has_restore_point=snapshot_count_num > 0,
+            snapshot_count=snapshot_count_num,
+            pending_thread_id=session.pending_thread_id,
         )
+        responses.append(_to_session_list_item(sr))
 
     next_page_token = None
     if has_more and sessions_to_return:
         last = sessions_to_return[-1]
         next_page_token = f"{last.started_at.isoformat()},{last.id}"
 
-    return SessionListResponse(sessions=responses, next_page_token=next_page_token)
+    return SessionHistoryListResponse(sessions=responses, next_page_token=next_page_token)
 
 
 @router.get("/{session_id}")

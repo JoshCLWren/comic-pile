@@ -159,3 +159,48 @@ class SessionListResponse(BaseModel):
 
     sessions: list[SessionResponse]
     next_page_token: str | None = None
+
+
+class SessionListItem(BaseModel):
+    """Schema for a single session in the history list view.
+
+    A deliberate subset of SessionResponse. The list view does not need
+    snoozed_thread_ids, snoozed_threads, or pending_thread_id, which
+    reduces payload size for session history lists.
+    """
+
+    id: int
+    started_at: datetime
+    ended_at: datetime | None
+    start_die: int
+    manual_die: int | None
+    user_id: int
+    ladder_path: str
+    active_thread: ActiveThreadInfo | None
+    current_die: int
+    last_rolled_result: int | None
+    has_restore_point: bool
+    snapshot_count: int
+
+    @field_serializer("started_at", "ended_at")
+    def serialize_datetime(self, value: datetime | None) -> str | None:
+        """Serialize datetime to ISO 8601 format with timezone.
+
+        Ensures naive datetimes are treated as UTC for consistent serialization.
+
+        Args:
+            value: The datetime value to serialize.
+
+        Returns:
+            ISO 8601 formatted string with timezone, or None if value is None.
+        """
+        if value is None:
+            return None
+        return _to_utc_iso(value)
+
+
+class SessionHistoryListResponse(BaseModel):
+    """Schema for paginated session history list response."""
+
+    sessions: list[SessionListItem]
+    next_page_token: str | None = None

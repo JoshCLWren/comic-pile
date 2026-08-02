@@ -24,10 +24,12 @@ from app.models import Event, Issue, Review, Thread
 from app.models.user import User
 from app.schemas import (
     MigrateToIssuesRequest,
+    QueueThreadListItem,
+    QueueThreadListResponse,
     ReactivateRequest,
     RollResponse,
     ThreadCreate,
-    ThreadListResponse,
+    ThreadDetail,
     ThreadResponse,
     ThreadUpdate,
 )
@@ -158,6 +160,31 @@ async def _threads_to_responses(threads: list[Thread], db: AsyncSession) -> list
     ]
 
 
+def _to_queue_list_item(tr: ThreadResponse) -> QueueThreadListItem:
+    """Convert a full ThreadResponse to a narrow QueueThreadListItem.
+
+    Deliberately drops detail-only fields (last_rating, review_url, last_review_at,
+    is_test, reading_progress, next_unread_issue_id) to reduce
+    payload size for list views.
+    """
+    return QueueThreadListItem(
+        id=tr.id,
+        title=tr.title,
+        format=tr.format,
+        issues_remaining=tr.issues_remaining,
+        queue_position=tr.queue_position,
+        status=tr.status,
+        is_blocked=tr.is_blocked,
+        blocking_reasons=tr.blocking_reasons,
+        collection_id=tr.collection_id,
+        last_activity_at=tr.last_activity_at,
+        total_issues=tr.total_issues,
+        next_unread_issue_number=tr.next_unread_issue_number,
+        notes=tr.notes,
+        created_at=tr.created_at,
+    )
+
+
 @router.get("/stale", response_model=list[ThreadResponse])
 async def list_stale_threads(
     current_user: Annotated[User, Depends(get_current_user)],
@@ -189,7 +216,7 @@ async def list_stale_threads(
     return await _threads_to_responses(threads, db)
 
 
-@router.get("/", response_model=ThreadListResponse)
+@router.get("/", response_model=QueueThreadListResponse)
 @limiter.limit("100/minute")
 @cached(ttl=TTL.SHORT)
 async def list_threads(
@@ -207,7 +234,7 @@ async def list_threads(
     page_token: str | None = Query(
         default=None, description="Token for pagination continuation (queue_position,thread_id)"
     ),
-) -> ThreadListResponse:
+) -> QueueThreadListResponse:
     """List threads ordered by position with cursor-based pagination.
 
     Args:
@@ -220,7 +247,7 @@ async def list_threads(
         db: SQLAlchemy session for database operations.
 
     Returns:
-        ThreadListResponse with paginated threads and next_page_token if more exist.
+        QueueThreadListResponse with paginated threads and next_page_token if more exist.
     """
     normalized_search = search.strip() if search is not None else None
     query = select(Thread).where(Thread.user_id == current_user.id)
@@ -268,14 +295,17 @@ async def list_threads(
 
     thread_responses = await _threads_to_responses(threads_to_return, db)
 
+    # Convert full ThreadResponse to narrow QueueThreadListItem for list views
+    queue_items = [_to_queue_list_item(tr) for tr in thread_responses]
+
     # Set next_page_token to composite cursor of last item if there are more pages
     next_token = None
     if has_more and threads_to_return:
         last = threads_to_return[-1]
         next_token = f"{last.queue_position},{last.id}"
 
-    return ThreadListResponse(
-        threads=thread_responses,
+    return QueueThreadListResponse(
+        threads=queue_items,
         next_page_token=next_token,
     )
 
@@ -414,13 +444,13 @@ async def create_thread(
     raise RuntimeError(f"Failed to create thread after {max_retries} retries")
 
 
-@router.get("/{thread_id}", response_model=ThreadResponse)
+@router.get("/{thread_id}", response_model=ThreadDetail)
 @cached(ttl=TTL.MEDIUM)
 async def get_thread(
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> ThreadResponse:
+) -> ThreadDetail:
     """Get a single thread by ID.
 
     Args:
@@ -429,13 +459,14 @@ async def get_thread(
         db: SQLAlchemy session for database operations.
 
     Returns:
-        ThreadResponse with thread details.
+        ThreadDetail with thread details.
 
     Raises:
         HTTPException: If thread not found.
     """
     thread = await get_owned_thread_or_404(db, current_user.id, thread_id)
-    return await thread_to_response(thread, db)
+    tr = await thread_to_response(thread, db)
+    return ThreadDetail(**tr.model_dump())
 
 
 @router.put("/{thread_id}", response_model=ThreadResponse)
