@@ -28,5 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check local factory shell syntax
+        run: bash -n scripts/comic-pile-opencode-factory.sh
+      - name: Compile factory policy checker
+        run: python -m py_compile scripts/check-autonomous-factory-policy.py
       - name: Check canonical factory invariants
         run: python scripts/check-autonomous-factory-policy.py
