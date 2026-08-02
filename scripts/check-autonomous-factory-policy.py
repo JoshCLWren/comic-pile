@@ -48,6 +48,27 @@ def main() -> None:
         POLICY,
     )
     require(policy, "CI-assisted debugging is permitted", POLICY)
+    require(
+        policy,
+        (
+            "Labels, claims, comments, verdicts, PR-body edits, and ready markers "
+            "do not satisfy this floor by themselves."
+        ),
+        POLICY,
+    )
+    require(
+        policy,
+        (
+            "CI failures, rebases, merge conflicts, test updates, review defects, "
+            "browser inconvenience, and broad issues are ordinary engineering"
+        ),
+        POLICY,
+    )
+    require(
+        policy,
+        "When strict review finds a bounded, understood defect on a writable branch",
+        POLICY,
+    )
 
     require(protocol, "docs/AUTONOMOUS_FACTORY_POLICY.md", PROTOCOL)
     require(
@@ -60,6 +81,11 @@ def main() -> None:
         "Never merge without Josh's explicit authorization",
         PROTOCOL,
     )
+    require(
+        protocol,
+        "run focused local validation that directly exercises the change",
+        PROTOCOL,
+    )
 
     require(entrypoint, "docs/AUTONOMOUS_FACTORY_POLICY.md", ENTRYPOINT)
     require(entrypoint, "open a truthful non-draft PR", ENTRYPOINT)
@@ -69,9 +95,12 @@ def main() -> None:
         ENTRYPOINT,
     )
     require(entrypoint, "Never merge.", ENTRYPOINT)
+    require(entrypoint, "ONE TARGET, MAXIMUM SAFE PROGRESS", ENTRYPOINT)
+    require(entrypoint, "escalate REVIEW -> FIX", ENTRYPOINT)
 
     forbid(entrypoint, "open a truthful draft PR", ENTRYPOINT)
     forbid(entrypoint, "mark a draft ready when", ENTRYPOINT)
+    forbid(entrypoint, "merge the pull request", ENTRYPOINT)
 
     print("Autonomous factory policy invariants are aligned.")
 
