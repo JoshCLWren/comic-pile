@@ -24,7 +24,18 @@ beforeEach(() => {
 })
 
 it('applies the authoritative rating response to targeted caches', async () => {
-  const thread = { id: 1, rating: 4 } as Thread
+  const thread: Thread = {
+    id: 1,
+    title: 'Saga',
+    format: 'issue',
+    issues_remaining: 3,
+    total_issues: 10,
+    queue_position: 2,
+    status: 'active',
+    is_blocked: false,
+    blocking_reasons: [],
+    created_at: '2026-08-03T00:00:00Z',
+  }
   mockedRateApi.rate.mockResolvedValue(thread)
   mockedApplyRatedThreadCache.mockResolvedValue()
   const { result } = renderHook(() => useRate())
