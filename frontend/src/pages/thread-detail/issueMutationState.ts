@@ -26,18 +26,15 @@ export function applyIssueReadStatus(
   const issues = snapshot.issues.map((issue) =>
     issue.id === issueId ? { ...issue, status: nextStatus } : issue,
   )
-
-  const unreadIssues = issues
-    .filter((issue) => issue.status === 'unread')
-    .sort((left, right) => left.position - right.position)
+  const nextUnreadIssue = issues.find((issue) => issue.status === 'unread')
 
   return {
     issues,
     thread: {
       ...snapshot.thread,
       issues_remaining: issuesRemaining,
-      next_unread_issue_number:
-        unreadIssues[0]?.issue_number ?? snapshot.thread.next_unread_issue_number,
+      next_unread_issue_id: nextUnreadIssue?.id ?? null,
+      next_unread_issue_number: nextUnreadIssue?.issue_number ?? null,
     },
   }
 }
