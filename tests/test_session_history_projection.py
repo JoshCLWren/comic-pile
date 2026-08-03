@@ -26,6 +26,7 @@ def _event(
 
 
 def test_projection_keeps_latest_roll_and_chronological_die_path() -> None:
+    """Keep the newest roll and preserve chronological die transitions."""
     events = [
         _event(event_id=1, session_id=10, event_type="roll", selected_thread_id=101),
         _event(event_id=2, session_id=10, event_type="rate", die_after=6),
@@ -41,6 +42,7 @@ def test_projection_keeps_latest_roll_and_chronological_die_path() -> None:
 
 
 def test_projection_uses_event_order_to_break_duplicate_timestamps() -> None:
+    """Use deterministic input order when event timestamps are identical."""
     events = [
         _event(event_id=20, session_id=10, event_type="undo", die_after=6),
         _event(event_id=21, session_id=10, event_type="rate", die_after=12),
@@ -53,6 +55,7 @@ def test_projection_uses_event_order_to_break_duplicate_timestamps() -> None:
 
 
 def test_projection_ignores_events_outside_the_bounded_page() -> None:
+    """Ignore events that do not belong to the requested History page."""
     events = [
         _event(event_id=1, session_id=10, event_type="rate", die_after=6),
         _event(event_id=2, session_id=11, event_type="rate", die_after=20),
@@ -67,6 +70,7 @@ def test_projection_ignores_events_outside_the_bounded_page() -> None:
 
 
 def test_projection_preserves_empty_sessions_for_constant_time_fallbacks() -> None:
+    """Create empty path entries for sessions without matching events."""
     projection = project_session_history_events([10, 11], [])
 
     assert projection.die_path_by_session == {10: (), 11: ()}
