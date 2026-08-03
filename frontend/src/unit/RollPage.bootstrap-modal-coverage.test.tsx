@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
@@ -134,8 +134,9 @@ describe('RollPage bootstrap modal coverage', () => {
 
     const d6Buttons = screen.getAllByRole('button', { name: 'd6' })
     await user.click(d6Buttons[d6Buttons.length - 1]!)
-    const dieModal = screen.getByRole('heading', { name: 'Select Die' }).closest('section')!
-    await user.click(within(dieModal).getByRole('button', { name: 'd8' }))
+    expect(screen.getByRole('heading', { name: 'Select Die' })).toBeInTheDocument()
+    const d8Buttons = screen.getAllByRole('button', { name: 'd8' })
+    await user.click(d8Buttons[d8Buttons.length - 1]!)
     await waitFor(() => expect(spies.setDie).toHaveBeenCalledWith(8))
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Select Die' })).not.toBeInTheDocument())
   })
