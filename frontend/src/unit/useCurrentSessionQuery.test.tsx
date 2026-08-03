@@ -84,7 +84,7 @@ describe('useCurrentSessionQuery', () => {
       )
     })
 
-    expect(result.current.data?.id).toBe(21)
+    await waitFor(() => expect(result.current.data?.id).toBe(21))
     expect(client.getQueryData(queryKeys.session.current())).toMatchObject({ id: 21 })
   })
 })
