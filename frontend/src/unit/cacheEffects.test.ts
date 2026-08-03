@@ -2,6 +2,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
 import {
   applyRatedThreadCache,
+  applyUpdatedThreadCache,
   invalidateAfterQueueMovement,
   invalidateCurrentSessionAfterSnooze,
 } from '../query/cacheEffects'
@@ -35,6 +36,38 @@ describe('retained mutation cache effects', () => {
     )
     expect(invalidateQueries).not.toHaveBeenCalledWith(
       expect.objectContaining({ queryKey: queryKeys.thread.all }),
+    )
+  })
+
+  it('uses a thread edit response directly and recalculates only affected screens', async () => {
+    const client = new QueryClient()
+    const invalidateQueries = vi.spyOn(client, 'invalidateQueries')
+    const thread = buildThread(9)
+
+    await applyUpdatedThreadCache(client, thread)
+
+    expect(client.getQueryData(queryKeys.thread.detail(9))).toEqual(thread)
+    expect(client.getQueryData(queryKeys.thread.summary(9))).toEqual(thread)
+    expect(invalidateQueries).toHaveBeenCalledTimes(3)
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.queue.pages(),
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.session.current(),
+      exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    })
+    expect(invalidateQueries).not.toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: queryKeys.session.pages() }),
+    )
+    expect(invalidateQueries).not.toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: queryKeys.dependencies.all }),
+    )
+    expect(invalidateQueries).not.toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: queryKeys.analytics.all }),
     )
   })
 
