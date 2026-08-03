@@ -1,5 +1,6 @@
 """Regression tests for screen-specific API response contracts."""
 
+from datetime import UTC, datetime
 from typing import cast
 
 from app.main import app
@@ -118,6 +119,40 @@ def test_queue_item_contract_is_exact_and_measurably_narrower() -> None:
     assert (len(full_fields) - len(queue_fields)) / len(full_fields) == 6 / 19
 
 
+def test_queue_item_records_serialized_byte_reduction() -> None:
+    """A representative queue item serializes at least 20% smaller than thread detail."""
+    timestamp = datetime(2026, 8, 3, 12, 0, tzinfo=UTC)
+    detail = ThreadResponse(
+        id=42,
+        title="The New Gods",
+        format="Comic",
+        issues_remaining=11,
+        queue_position=3,
+        status="active",
+        last_rating=4.5,
+        last_activity_at=timestamp,
+        review_url="https://example.test/reviews/42",
+        last_review_at=timestamp,
+        notes="Continue with issue 2",
+        is_test=False,
+        is_blocked=True,
+        blocking_reasons=["Read Mister Miracle #1 first"],
+        created_at=timestamp,
+        total_issues=12,
+        reading_progress="1 of 12",
+        next_unread_issue_id=4202,
+        next_unread_issue_number="2",
+    )
+    queue_item = QueueThreadListItem.model_validate(detail.model_dump())
+
+    detail_bytes = len(detail.model_dump_json().encode())
+    queue_bytes = len(queue_item.model_dump_json().encode())
+
+    assert queue_bytes < detail_bytes
+    assert (detail_bytes - queue_bytes) / detail_bytes >= 0.20
+    assert not QUEUE_DROPPED_FIELDS.intersection(queue_item.model_dump())
+
+
 def test_session_history_item_contract_is_exact_and_measurably_narrower() -> None:
     """History items expose only the documented 12-field screen contract."""
     full_fields = set(SessionResponse.model_fields)
@@ -128,6 +163,40 @@ def test_session_history_item_contract_is_exact_and_measurably_narrower() -> Non
     assert len(full_fields) == 15
     assert len(history_fields) == 12
     assert (len(full_fields) - len(history_fields)) / len(full_fields) == 0.20
+
+
+def test_session_history_records_serialized_byte_reduction() -> None:
+    """A representative history item omits session-only data and shrinks serialized bytes."""
+    timestamp = datetime(2026, 8, 3, 12, 0, tzinfo=UTC)
+    current_session = SessionResponse(
+        id=7,
+        started_at=timestamp,
+        ended_at=timestamp,
+        start_die=6,
+        manual_die=None,
+        user_id=1,
+        ladder_path="6,8,10",
+        active_thread=None,
+        current_die=10,
+        last_rolled_result=4,
+        has_restore_point=True,
+        snapshot_count=3,
+        snoozed_thread_ids=[11, 12, 13],
+        snoozed_threads=[
+            {"id": 11, "title": "Thread Eleven"},
+            {"id": 12, "title": "Thread Twelve"},
+            {"id": 13, "title": "Thread Thirteen"},
+        ],
+        pending_thread_id=14,
+    )
+    history_item = SessionListItem.model_validate(current_session.model_dump())
+
+    current_bytes = len(current_session.model_dump_json().encode())
+    history_bytes = len(history_item.model_dump_json().encode())
+
+    assert history_bytes < current_bytes
+    assert (current_bytes - history_bytes) / current_bytes >= 0.20
+    assert not SESSION_HISTORY_DROPPED_FIELDS.intersection(history_item.model_dump())
 
 
 def test_thread_detail_preserves_the_complete_thread_contract() -> None:
