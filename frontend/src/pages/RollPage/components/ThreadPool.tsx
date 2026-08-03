@@ -73,7 +73,7 @@ export function ThreadPool({
         </button>
       </div>
 
-      <div className="space-y-2" data-roll-pool aria-label="Roll pool collection">
+      <div className="space-y-2" data-roll-pool aria-label="Roll pool">
         {pool.length === 0 && blockedThreads.length === 0 && snoozedThreads.length === 0 ? (
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🎲</div>
