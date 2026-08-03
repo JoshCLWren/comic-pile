@@ -1104,6 +1104,33 @@ describe('Rating View', () => {
     })
   })
 
+  it('shows error message when cancel dismiss fails', async () => {
+    const dismissError = Object.assign(new Error('dismiss failed'), { response: { status: 500, data: { detail: 'dismiss failure' } } })
+    const dismissSpy = vi.fn().mockRejectedValue(dismissError)
+    const refetchBootstrapSpy = vi.fn()
+
+    mockedUseDismissPending.mockReturnValue({ mutate: dismissSpy, isPending: false })
+    mockedUseRollBootstrap.mockReturnValue(makeBootstrapData({
+      pending_thread_id: 1,
+      last_rolled_result: 2,
+      active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1, total_issues: 50, last_rolled_result: null },
+      roll_pool: [{ id: 1, title: 'Saga', format: 'Comics' }],
+      refetch: refetchBootstrapSpy,
+    }))
+
+    const user = userEvent.setup()
+    render(<RollPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('How was it?')).toBeInTheDocument()
+    })
+    await user.click(screen.getByText('Cancel'))
+
+    await waitFor(() => {
+      expect(screen.getByText('dismiss failure')).toBeInTheDocument()
+    })
+  })
+
   describe('Empty state', () => {
     it('shows empty state with "Nothing to roll yet" when no threads exist', async () => {
       mockedUseRollBootstrap.mockReturnValue(makeBootstrapData({
