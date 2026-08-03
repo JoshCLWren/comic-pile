@@ -52,6 +52,7 @@ SESSION_HISTORY_DROPPED_FIELDS = {
     "snoozed_threads",
     "pending_thread_id",
 }
+CURRENT_SESSION_FIELDS = SESSION_HISTORY_FIELDS | SESSION_HISTORY_DROPPED_FIELDS
 ISSUE_FIELDS = {
     "id",
     "thread_id",
@@ -150,20 +151,10 @@ def test_roll_screen_contract_is_named_and_bounded() -> None:
     assert len(roll_fields) == 15
 
 
-def test_current_session_contract_is_named() -> None:
-    """The current-session screen uses the named SessionResponse contract."""
-    assert set(SessionResponse.model_fields) >= {
-        "id",
-        "active_thread",
-        "current_die",
-        "start_die",
-        "ladder_path",
-        "snoozed_thread_ids",
-        "snoozed_threads",
-        "pending_thread_id",
-        "snapshot_count",
-        "has_restore_point",
-    }
+def test_current_session_contract_is_exact_and_named() -> None:
+    """The current-session screen exposes exactly the named 15-field contract."""
+    assert set(SessionResponse.model_fields) == CURRENT_SESSION_FIELDS
+    assert len(SessionResponse.model_fields) == 15
 
 
 def test_routes_publish_the_screen_specific_openapi_contracts() -> None:
