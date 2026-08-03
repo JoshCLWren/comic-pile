@@ -1,69 +1,65 @@
 """Query-count evidence for the bounded Queue response contract."""
 
-from collections import namedtuple
 from datetime import UTC, datetime
 from inspect import unwrap
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy import event
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from starlette.requests import Request
 
 from app.api.thread import list_threads
-from app.models import Thread
-
-IssueNumberRow = namedtuple("IssueNumberRow", ["id", "issue_number"])
-
-
-def _thread(thread_id: int) -> Thread:
-    """Build a representative migrated thread without persisting it."""
-    return Thread(
-        id=thread_id,
-        user_id=1,
-        title=f"Thread {thread_id}",
-        format="Comic",
-        issues_remaining=1,
-        total_issues=2,
-        next_unread_issue_id=10_000 + thread_id,
-        reading_progress="in_progress",
-        queue_position=thread_id,
-        status="active",
-        last_rating=None,
-        last_activity_at=None,
-        notes=None,
-        is_test=False,
-        is_blocked=False,
-        created_at=datetime(2026, 8, 3, tzinfo=UTC),
-    )
-
-
-def _result(*, scalars: list[Thread] | None = None, rows: list[object] | None = None) -> MagicMock:
-    """Return a minimal SQLAlchemy result double for route-level query evidence."""
-    result = MagicMock()
-    if scalars is not None:
-        result.scalars.return_value.all.return_value = scalars
-    if rows is not None:
-        result.__iter__.return_value = iter(rows)
-    return result
+from app.models import Issue, Thread
+from tests.conftest import get_or_create_user_async
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("thread_count", [1, 50])
-async def test_queue_query_count_is_constant_for_page_size(thread_count: int) -> None:
-    """Queue construction hydrates every row with three SQL executions at any page size."""
-    threads = [_thread(thread_id) for thread_id in range(1, thread_count + 1)]
-    issue_rows = [
-        IssueNumberRow(thread.next_unread_issue_id, str(thread.id + 1))
-        for thread in threads
-    ]
-    remaining_rows = [(thread.id, thread.id + 10) for thread in threads]
+async def test_queue_query_count_is_constant_for_page_size(
+    thread_count: int,
+    async_db: AsyncSession,
+    db_engine: AsyncEngine,
+) -> None:
+    """Queue construction hydrates every row with three PostgreSQL executions."""
+    user = await get_or_create_user_async(async_db)
+    expected: dict[int, tuple[str, int]] = {}
 
-    db = AsyncMock()
-    db.execute.side_effect = [
-        _result(scalars=threads),
-        _result(rows=issue_rows),
-        _result(rows=remaining_rows),
-    ]
+    for queue_position in range(1, thread_count + 1):
+        thread = Thread(
+            user_id=user.id,
+            title=f"Thread {queue_position}",
+            format="Comic",
+            issues_remaining=99,
+            total_issues=2,
+            reading_progress="in_progress",
+            queue_position=queue_position,
+            status="active",
+            created_at=datetime.now(UTC),
+        )
+        async_db.add(thread)
+        await async_db.flush()
+
+        first_unread = Issue(
+            thread_id=thread.id,
+            issue_number=str(queue_position + 1),
+            position=1,
+            status="unread",
+        )
+        second_unread = Issue(
+            thread_id=thread.id,
+            issue_number=f"{queue_position + 1}.1",
+            position=2,
+            status="unread",
+        )
+        async_db.add_all([first_unread, second_unread])
+        await async_db.flush()
+
+        thread.next_unread_issue_id = first_unread.id
+        expected[thread.id] = (first_unread.issue_number, 2)
+
+    await async_db.commit()
+
     request = Request(
         {
             "type": "http",
@@ -73,21 +69,36 @@ async def test_queue_query_count_is_constant_for_page_size(thread_count: int) ->
             "query_string": b"",
         }
     )
+    statements: list[str] = []
+
+    def _capture_statement(
+        conn: object,
+        cursor: object,
+        statement: str,
+        parameters: object,
+        context: object,
+        executemany: bool,
+    ) -> None:
+        statements.append(statement)
 
     route = unwrap(list_threads)
-    response = await route(
-        request=request,
-        current_user=SimpleNamespace(id=1),
-        db=db,
-        search=None,
-        page_size=thread_count,
-        page_token=None,
-    )
+    event.listen(db_engine.sync_engine, "before_cursor_execute", _capture_statement)
+    try:
+        response = await route(
+            request=request,
+            current_user=SimpleNamespace(id=user.id),
+            db=async_db,
+            search=None,
+            page_size=thread_count,
+            page_token=None,
+        )
+    finally:
+        event.remove(db_engine.sync_engine, "before_cursor_execute", _capture_statement)
 
     assert len(response.threads) == thread_count
-    assert db.execute.await_count == 3
+    assert len(statements) == 3, statements
 
-    for thread_id, queue_thread in enumerate(response.threads, start=1):
-        assert queue_thread.id == thread_id
-        assert queue_thread.next_unread_issue_number == str(thread_id + 1)
-        assert queue_thread.issues_remaining == thread_id + 10
+    for queue_thread in response.threads:
+        expected_issue_number, expected_remaining = expected[queue_thread.id]
+        assert queue_thread.next_unread_issue_number == expected_issue_number
+        assert queue_thread.issues_remaining == expected_remaining
