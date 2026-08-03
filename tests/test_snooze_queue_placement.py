@@ -58,14 +58,14 @@ async def _create_pending_snooze_session(
     return user.id, threads
 
 
-async def _load_queue(async_db: AsyncSession, user_id: int):
+async def _load_queue(async_db: AsyncSession, user_id: int) -> list[tuple[int, int]]:
     """Return the user's queue in deterministic position order."""
     result = await async_db.execute(
         select(Thread.id, Thread.queue_position)
         .where(Thread.user_id == user_id)
         .order_by(Thread.queue_position, Thread.id)
     )
-    return result.all()
+    return [(row.id, row.queue_position) for row in result.all()]
 
 
 @pytest.mark.asyncio
@@ -84,9 +84,8 @@ async def test_snooze_moves_thread_beyond_widened_roll_range(
 
     queue = await _load_queue(async_db, user_id)
 
-    assert queue[8].id == target.id
-    assert queue[8].queue_position == 9
-    assert [row.queue_position for row in queue] == list(range(1, 11))
+    assert queue[8] == (target.id, 9)
+    assert [position for _, position in queue] == list(range(1, 11))
 
 
 @pytest.mark.asyncio
@@ -111,6 +110,5 @@ async def test_snooze_placement_does_not_count_existing_snoozed_threads(
 
     queue = await _load_queue(async_db, user_id)
 
-    assert queue[9].id == target.id
-    assert queue[9].queue_position == 10
-    assert [row.queue_position for row in queue] == list(range(1, 12))
+    assert queue[9] == (target.id, 10)
+    assert [position for _, position in queue] == list(range(1, 12))
