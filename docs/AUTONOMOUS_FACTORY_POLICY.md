@@ -1,316 +1,212 @@
 # ComicPile Autonomous Factory Policy
 
-Version: 9
+Version: 10
 
-This is the canonical policy for every autonomous ComicPile software-delivery worker, including scheduled ChatGPT workers, the local OpenCode factory, and interactive repair sessions acting as factory workers.
+This is the canonical policy for every autonomous ComicPile software-delivery worker, including scheduled ChatGPT workers, the local OpenCode factory, and interactive factory repair sessions.
 
-Worker-specific identity, schedule, tool availability, and environment instructions may differ. Delivery philosophy, state transitions, marker syntax, lease rules, evidence requirements, and repository safety must not drift.
+## Prime directive
 
-## Policy precedence
+**Finish what you start. Success is measured by issues closed, not pull requests opened.**
 
-For an autonomous factory run, this document governs factory lifecycle behavior and overrides contradictory generic agent guidance about:
-
-- draft pull requests;
-- requiring the entire local test matrix before every push;
-- prohibiting evidence-grounded CI-assisted debugging;
-- stopping after review or CI observation;
-- escalating ordinary engineering work to Josh.
-
-Repository-specific engineering rules still apply, including async PostgreSQL, no test skipping, no linter suppressions, no hook bypasses, ownership and authorization safety, and preservation of unrelated work.
+A worker owns an issue, not a PR. Once an issue is claimed, stay with it through implementation, review feedback, CI failures, rebases, follow-up repairs, and integration readiness until the issue is closed or a genuine human-only decision blocks it.
 
 ## Mission
 
-Turn repository intent into coherent, reviewed, tested, integration-ready pull requests without requiring Josh to supervise each transition.
+Turn one selected issue into complete, reviewed, tested, integration-ready software with the fewest coherent PRs reasonably possible.
 
-The product is durable code and verified outcomes. Labels, comments, reviews, CI observations, and readiness markers are coordination evidence, not substitutes for delivery.
+Planning, architecture notes, reviews, comments, labels, CI observations, PR bodies, and readiness markers are supporting evidence. They are not the product. The product is working code, tests, migrations, and an issue that can truthfully close.
 
-## Non-negotiable repository safety
+## Repository safety
 
 - Never push directly to `main`.
-- Use branches and pull requests for every code, test, migration, workflow, or policy change.
+- Use a branch and non-draft PR for code, tests, migrations, workflow, or policy changes.
 - Never create a draft pull request unless Josh explicitly requests a draft.
 - Never merge unless Josh explicitly orders that specific merge.
 - Never enable auto-merge as a substitute for explicit authorization.
-- Never hide failures, weaken gates, skip tests, delete meaningful coverage, use `--no-verify`, or add suppression comments merely to make CI green.
+- Never weaken checks, skip tests, delete meaningful coverage, bypass hooks, or add suppressions merely to make CI green.
 
-## Durable coordination plane
+## Issue ownership
 
-GitHub is the shared source of truth. Workers must reconstruct current state from:
+Before selecting new work, reconstruct current GitHub state and prefer finishing already-started issues.
 
-- issues and acceptance criteria;
-- labels and dependencies;
-- branches and commits;
-- pull-request bodies;
-- top-level comments;
-- submitted reviews;
-- inline review threads and replies;
-- current-SHA factory markers;
-- CI runs, jobs, steps, and logs;
-- recently merged overlapping changes.
+When a worker claims an issue:
 
-Chat memory, private reasoning, and assumptions about another worker are never coordination state.
+- the issue is the durable unit of ownership;
+- an open PR is only one state inside that ownership lifecycle;
+- the worker must continue executable remaining work instead of declaring a stage complete and selecting another issue;
+- review feedback, failed CI, merge conflicts, and follow-up defects stay with the same issue;
+- ownership ends only when the issue is closed, Josh explicitly redirects the work, or a genuine human-only blocker is documented.
 
-## Exact-commit truth
+Multiple workers may cooperate on one large issue when their file ownership is non-overlapping and coordination is explicit. Five workers do not imply five unrelated active issues.
 
-All review, repair, and readiness decisions are tied to the exact pull-request head SHA.
+## Closure-first selection
 
-After any new commit:
+Select work in this order:
 
-- earlier pass and ready markers become historical;
-- active review or repair leases for the old SHA are released;
-- current CI must be evaluated for the new SHA;
-- the new SHA requires a fresh strict review before readiness.
+1. A branch-caused failure or repair on an issue already in progress.
+2. Remaining executable work required to close an issue with an open or recently merged partial PR.
+3. A green PR for an owned issue that needs strict review or repair.
+4. A ready PR awaiting Josh's explicit merge authorization.
+5. The highest-value unclaimed executable issue.
+6. Factory maintenance only when factory behavior itself blocks delivery.
 
-Never reuse approval or evidence from an earlier SHA as current approval.
+Do not start a new issue while an owned issue has executable remaining work. Already-ready PRs are not new implementation targets, but their parent issues remain targets when work still remains after merge.
 
-## Complete conversation requirement
+## One coherent PR by default
 
-Before reviewing, repairing, rebasing, or marking ready, read and reconcile:
+Implement the full issue in one coherent PR whenever reasonably reviewable.
 
-- the complete PR body;
-- every linked issue and plan;
-- all top-level comments;
-- submitted reviews;
-- inline threads, replies, and resolution state;
-- all factory claims, progress markers, verdicts, and readiness markers;
-- all commits since earlier reviews;
-- current CI and relevant logs;
-- recent merges touching the same subsystem.
+Large coherent PRs are allowed and preferred over chains of tiny foundation PRs. Do not split merely to reduce line count, create a tidy stage boundary, or avoid difficult implementation work.
 
-Classify earlier findings as fixed, still applicable, superseded by a new SHA, intentionally deferred by a truthful stage, non-actionable, or requiring work. Do not silently drop caveats.
+Split only when at least one is true:
+
+- Josh explicitly requests it;
+- a feature flag or independent deployment boundary is required;
+- unavoidable branch collisions would make one PR unsafe;
+- the combined change would be genuinely unreasonable to review;
+- a destructive or irreversible decision must be authorized separately.
+
+When a split is unavoidable, keep ownership of the parent issue and immediately continue the next required slice. A partial PR is not completion.
+
+## No planning PRs
+
+Do not open planning-only, architecture-only, inventory-only, or implementation-plan PRs unless the issue itself explicitly requests documentation as the deliverable.
+
+Planning belongs in private scratch work, an issue comment, or directly alongside implementation. Documentation must support shipped behavior, not replace it. Writing extensive docs instead of implementing executable work is a policy failure.
+
+Do not create a PR whose primary result is `Stage scope`, `Remaining work`, a migration plan, an architecture proposal, or a future implementation checklist.
+
+## Closure score
+
+Use this outcome hierarchy when choosing between actions:
+
+- issue truthfully closed: highest value;
+- actionable review feedback repaired: high value;
+- branch restored to green and complete: high value;
+- coherent implementation materially advanced toward closure: positive value;
+- PR opened: minor coordination value;
+- review, marker, label, or comment without implementation: no delivery value;
+- planning-only PR or avoidable staged split: negative value;
+- abandoning an executable owned issue for a new issue: severe failure.
 
 ## Lifecycle
 
 The normal state machine is:
 
-`DISCOVER -> SELECT -> CLAIM -> IMPLEMENT OR REPAIR -> FOCUSED LOCAL VALIDATION -> PUSH -> OBSERVE CI AND REVIEWS -> REPAIR -> REVALIDATE -> EXACT-SHA REVIEW -> READY -> WAIT FOR EXPLICIT MERGE AUTHORIZATION`
+`DISCOVER -> SELECT ISSUE -> CLAIM ISSUE -> IMPLEMENT FULL CONTRACT -> FOCUSED VALIDATION -> PUSH -> REVIEW -> REPAIR -> CI DEBUG LOOP -> FRESH-SHA REVIEW -> READY -> WAIT FOR EXPLICIT MERGE -> VERIFY ISSUE CLOSURE OR CONTINUE REMAINING WORK`
 
-A heartbeat is not one isolated verb. Own one target at a time and move it through as many safe states as the current run permits.
+A heartbeat is not one isolated verb. Move the owned issue through as many states as possible.
 
-Review, PR creation, pending CI, a metadata correction, or a ready marker alone are not automatic stop conditions.
+PR creation, review completion, pending CI, green CI, a ready marker, or one merged slice are not automatic stop conditions while the issue remains open and executable work remains.
 
-## Selection priority
+## Durable progress floor
 
-Build a ledger of every open PR targeting `main` before selecting work. Record current SHA, CI state, exact-SHA verdict, review and repair leases, mergeability, conversation state, linked contract, overlapping work, and next executable action.
+A normal heartbeat must produce substantive progress toward closing the owned issue unless every eligible issue is genuinely human-blocked or every safe write path is unavailable.
 
-Prefer:
+Substantive progress includes:
 
-1. Branch-caused failed required CI on substantive work.
-2. An active repair already in progress.
-3. A valid current-SHA blocking finding with a writable repair path.
-4. A useful branch requiring semantic rebase or conflict reconciliation.
-5. A green PR needing strict exact-SHA review.
-6. A passed PR needing the ready transition.
-7. A previously started high-priority architectural effort.
-8. The highest-value unclaimed executable issue.
-9. Factory architecture maintenance when coordination itself is unhealthy.
-
-Already-ready current-SHA PRs are skipped. Stale metadata is not a target tier by itself.
-
-Do not select solely by lowest issue number or easiest diff. Account for priority, dependency order, user impact, architectural leverage, branch freshness, collision risk, and unfinished high-value work.
-
-## Builder-first and repair-first behavior
-
-When substantive implementation or repair is available, produce code, tests, migrations, workflow changes, or policy changes rather than another review-only heartbeat.
-
-When strict review finds a bounded, understood defect on a writable branch, transition into repair in the same target lifecycle. Do not merely post `changes-required` and summon another worker.
-
-A normal heartbeat should create at least one substantive durable artifact unless every eligible target is blocked by a genuine human-only boundary or every safe write path is unavailable.
-
-Substantive artifacts include:
-
-- code, tests, or migrations committed and pushed;
-- a meaningful semantic rebase or conflict resolution;
-- a materially repaired existing branch;
-- a non-draft PR containing coherent work;
-- a durable factory workflow or policy repair.
+- code, tests, or migration committed and pushed;
+- a materially repaired branch;
+- a semantic rebase or conflict resolution;
+- a coherent non-draft PR that implements the issue contract;
+- durable factory code or policy repair when the factory itself is the target.
 
 Labels, claims, comments, verdicts, PR-body edits, and ready markers do not satisfy this floor by themselves.
 
+## Exact-commit truth
+
+All review, repair, and readiness decisions are tied to the exact pull-request head SHA.
+
+After every push, re-fetch the new SHA, full diff, conversation, mergeability, and CI. Earlier approval and ready markers become historical. Freshly review every new SHA before readiness.
+
+## Repair-first behavior
+
+When strict review finds a bounded, understood defect on a writable branch, repair it in the same issue lifecycle. Do not merely post `changes-required` and summon another worker.
+
+CI failures, rebases, merge conflicts, test updates, review defects, browser inconvenience, and broad issues are ordinary engineering, not human-only boundaries.
+
+## Validation and evidence
+
+Run focused local validation that directly exercises the change when tools permit. CI-assisted debugging is permitted when each repair is grounded in exact logs, code, tests, or the issue contract.
+
+Green CI is necessary but not sufficient. Match evidence to the claim:
+
+| Claim | Evidence |
+| --- | --- |
+| Contract shape | schema, route, OpenAPI, or exact-key tests |
+| Query reduction | query-count instrumentation before and after |
+| Payload reduction | representative serialized byte measurements |
+| Latency improvement | controlled benchmark with context and variance |
+| UI behavior | focused unit and browser evidence where required |
+| Ownership/security | unauthorized and cross-user tests |
+| Cache behavior | dedupe, invalidation, rollback, cancellation, and stale-response tests |
+
+Do not invent PASS claims. Do not use missing optional evidence as an excuse to replace implementation with documentation.
+
 ## Claims and marker schema
 
-All workers use the same marker family.
-
-### Issue implementation lease
+Issue implementation claim:
 
 `<!-- comic-pile-factory-implement-claim-v3:issue-<number>:<worker-id>:<unix-epoch>:attempt-<n> -->`
 
-Progress:
+Issue progress:
 
 `<!-- comic-pile-factory-implement-progress-v3:issue-<number>:<worker-id>:<unix-epoch> -->`
 
-### Review lease
+Review claim:
 
 `<!-- comic-pile-factory-review-claim-v2:<full-sha>:<worker-id>:<unix-epoch> -->`
 
-### Review verdict
+Review verdict:
 
 `<!-- comic-pile-factory-review-v2:<full-sha>:pass -->`
 
 `<!-- comic-pile-factory-review-v2:<full-sha>:changes-required -->`
 
-### Repair lease
+Repair claim:
 
 `<!-- comic-pile-factory-fix-claim-v3:<full-sha>:<worker-id>:<unix-epoch>:attempt-<n> -->`
 
-Progress:
+Repair progress:
 
 `<!-- comic-pile-factory-fix-progress-v3:<full-sha>:<worker-id>:<unix-epoch> -->`
 
-### Ready
+Ready:
 
 `<!-- comic-pile-factory-ready-v2:<full-sha> -->`
 
-### Needs human
+Needs human:
 
 `<!-- comic-pile-factory-needs-human-v2:<full-sha-or-issue-number> -->`
 
-### Superseded or released
+Released:
 
 `<!-- comic-pile-factory-claim-released-v3:<target>:<worker-id>:<unix-epoch>:<reason> -->`
-
-Old unversioned markers and old fix-v2 markers are historical only.
 
 ## Lease rules
 
 - Re-fetch current SHA, comments, threads, and time immediately before claiming.
-- A review lease is active only for the current exact SHA, with no current verdict, for 45 minutes after its latest claim.
-- A repair lease is active only for the current exact SHA and writable branch for 60 minutes after its latest claim or progress marker.
-- An issue implementation lease is active for 60 minutes after its latest claim, progress marker, branch movement, issue activity, or open PR creation.
+- A review lease is active for 45 minutes after its latest claim.
+- A repair lease is active for 60 minutes after its latest claim or progress marker.
+- An issue implementation lease is active for 60 minutes after its latest claim, progress marker, branch movement, issue activity, or PR creation.
 - Simultaneous claims are resolved by lowest GitHub comment ID.
-- Claims are leases, not eternal locks.
 - A pushed new SHA releases old-SHA review and repair leases.
-- Merged, closed, deleted, superseded, or completed targets release their claims.
-- Stale claims must be explicitly released or superseded when discovered.
-- Do not post duplicate exact-SHA verdicts or ready markers for the same conclusion.
-
-## Implementation and conflict resolution
-
-Before editing:
-
-- understand the current architecture and behavioral contract;
-- inspect recently merged overlapping work;
-- identify public API, persistence, cache, UI, authorization, and migration consequences;
-- avoid restoring behavior deliberately removed by a newer merge;
-- choose the smallest coherent architectural slice, not the smallest possible diff.
-
-A merge conflict is a semantic integration task. Reconcile both sides intentionally. Do not mechanically choose ours or theirs.
-
-## Validation and CI
-
-Use focused local validation for fast feedback. Run the narrowest directly relevant tests, lint, type checks, migration checks, or browser spec that exercise the changed behavior.
-
-The autonomous factory may push a grounded repair after focused validation and use CI for the configured full matrix. CI-assisted debugging is permitted when each iteration is based on exact logs, code, tests, or contract evidence.
-
-Do not:
-
-- launch the entire expensive local suite as ceremony when CI is designed to run it;
-- make speculative edits while CI is merely pending;
-- call a branch-caused failure infrastructure without reading logs;
-- represent CI-only evidence as local evidence;
-- add unrelated tests solely to manipulate a coverage percentage.
-
-When CI fails:
-
-1. Identify the exact run, job, step, command, and failure.
-2. Determine whether it is branch-caused, inherited from `main`, or infrastructure-caused.
-3. Repair branch-caused failures.
-4. Re-run only what is appropriate.
-5. Push the repair and continue the loop.
-6. Freshly review the new SHA after green CI.
-
-Pending CI is queue state, not a defect and not a reason to abandon an owned target.
-
-## Evidence must match the claim
-
-Green CI proves configured checks passed. It does not automatically prove the product requirement.
-
-Examples:
-
-| Claim | Required evidence |
-| --- | --- |
-| Contract shape | schema tests, authenticated route-response tests, exact key assertions, or OpenAPI checks |
-| Payload reduction | representative serialized byte measurements before and after |
-| Query reduction | query-count instrumentation before and after at named data sizes |
-| Latency improvement | controlled benchmark with cold/warm context and variance |
-| UI behavior | focused unit coverage plus browser or explicit manual validation when required |
-| Ownership or security | unauthorized and cross-user route tests |
-| Cache behavior | hit/miss, dedupe, invalidation, cancellation, rollback, and stale-response tests |
-| Pagination or scale | boundaries, duplicate/gap behavior, stale cursors, and growth-size tests |
-
-When direct browser or production-like evidence is required but unavailable, either build an executable evidence path or truthfully narrow the PR to a stage that does not claim the missing evidence. Never manufacture a pass.
-
-## Staged work
-
-A coherent staged PR is valid when it creates a useful, safe architectural boundary.
-
-It must:
-
-- use `Part of #N` or a plain issue reference, never a closure keyword;
-- describe `Stage scope` precisely;
-- list meaningful `Remaining work`;
-- leave the parent issue open;
-- avoid claiming acceptance criteria or measurements the stage did not satisfy.
-
-Do not block an honest stage on parent work clearly listed as remaining unless the current diff makes that work unsafe, incompatible, misleading, or harder.
-
-## Strict exact-SHA review
-
-A strict reviewer independently verifies:
-
-- implementation correctness;
-- every acceptance criterion or declared stage claim;
-- regression coverage;
-- changed-file scope;
-- migration and persistence safety where relevant;
-- authorization and ownership;
-- concurrency, cancellation, cache, and race behavior;
-- failure handling;
-- interaction with recent merges;
-- all unresolved comments and threads;
-- current CI for the exact SHA;
-- truthful PR and issue metadata.
-
-Verdicts are `pass`, `changes-required`, or exceptional `needs-human`.
-
-`needs-human` must identify an exact unavailable capability, credential, destructive authorization, contradictory product requirement, or irreversible product decision. CI failures, rebases, merge conflicts, test updates, review defects, browser inconvenience, and broad issues are ordinary engineering, not human-only boundaries.
+- A PR merge does not release issue ownership when the parent issue still has executable remaining work.
 
 ## Ready definition
 
-A current-SHA ready marker requires:
+A PR is ready only when the exact SHA has passed strict review, required CI is green or a documented non-branch exception is understood, actionable threads are resolved, scope is coherent, the branch is conflict-free, and the PR truthfully satisfies its declared contract.
 
-- exact-SHA strict pass;
-- required CI green, or a documented non-branch infrastructure exception that does not invalidate the evidence;
-- no blocking review finding or actionable unresolved thread;
-- truthful stage and closure language;
-- clean, explainable scope;
-- no merge conflict;
-- no newer commit;
-- linked contract satisfied for the declared scope.
+Ready never means the parent issue is finished when remaining work still exists.
 
-Ready never means merged.
+## Human escalation
 
-## Architecture health
+Use `needs-human` only for missing credentials or permissions, destructive authorization, contradictory product requirements, unavailable external access, or irreversible product decisions.
 
-Workers must periodically detect and repair:
-
-- stale claims;
-- duplicate exact-SHA reviews;
-- ready markers on obsolete SHAs;
-- current-SHA ready markers while CI is red;
-- obsolete branches after newer merges;
-- high-priority work starved by stale leases;
-- repeated review-only heartbeats;
-- marker dialect drift;
-- scheduled prompt drift;
-- local factory prompt drift;
-- partial stages that close parent issues;
-- branches left open after supersession.
-
-Factory-policy changes are real engineering work. Put them on a branch, validate them, open a non-draft PR, and preserve the explicit no-merge boundary.
+Do not escalate ordinary implementation difficulty, large diffs, CI failures, review defects, merge conflicts, or the need to write more code.
 
 ## Communication
 
-Be direct and evidence-based. Distinguish proven, inferred, running, stale, blocked, and merely unfinished state. Identify exact SHAs, runs, jobs, tests, and unresolved criteria.
+Report issue-level progress. State whether the issue will close, what remains before closure, and why any split was unavoidable.
 
-Do not congratulate activity. Evaluate whether the factory produced durable, correct progress.
+Do not congratulate activity. Evaluate whether the factory finished what it started.
