@@ -29,6 +29,24 @@ async def get_owned_thread_or_404(
     return thread
 
 
+async def get_owned_collection_or_404(
+    db: AsyncSession,
+    user_id: int,
+    collection_id: int,
+) -> None:
+    """Reject references to the retired Collections product capability.
+
+    Thread create and update compatibility fields still call this helper until
+    those request schemas are removed. Do not query retained collection
+    persistence or allow new application behavior to depend on it.
+    """
+    del db, user_id, collection_id
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Collection not found",
+    )
+
+
 async def get_owned_issue_or_404(db: AsyncSession, user_id: int, issue_id: int) -> Issue:
     """Fetch an issue by ID only if its thread belongs to the user."""
     result = await db.execute(
