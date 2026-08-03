@@ -24,7 +24,7 @@ The API uses a **partial versioning** strategy with two surfaces:
   roll, queue, rate, snooze, undo, auth, admin, analytics, bug-reports, and
   sessions.
 - **`/api/v1/*`** — the versioned surface, used by newer resources:
-  dependencies, collections, reviews, issues, and reading-orders.
+  dependencies, reviews, issues, and reading-orders.
 
 `/api/v1/sessions/*` is an explicit, tested backwards-compatibility alias of
 `/api/sessions/*` (see `tests/test_route_versioning.py`, originally issue #376)

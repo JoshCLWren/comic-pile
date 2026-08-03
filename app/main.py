@@ -194,7 +194,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     # - Legacy resources are served under /api/* (threads, roll, queue,
     #   rate, snooze, undo, auth, admin, analytics, bug-reports, sessions).
     # - Newer resources are served under the versioned /api/v1/* surface
-    #   (dependencies, collections, reviews, issues, reading-orders).
+    #   (dependencies, reviews, issues, reading-orders).
     # - /api/v1/sessions/* is an explicit, tested backwards-compat alias of
     #   /api/sessions/* (see tests/test_route_versioning.py, issue #376).
     # - Non-production tooling routes (debug, test) are also mounted under

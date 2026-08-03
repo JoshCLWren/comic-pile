@@ -114,7 +114,6 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/threads/{thread_id}/test-backdate",
             "/api/threads/{thread_id}:migrateToIssues",
             "/api/threads/{thread_id}:migrateToIssuesSimple",
-            "/api/threads/{thread_id}:moveToCollection",
             "/api/tasks/",
             "/api/tasks/ready",
             "/api/tasks/metrics",

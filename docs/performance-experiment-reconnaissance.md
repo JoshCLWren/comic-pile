@@ -123,7 +123,7 @@ Important database-heavy paths include `app/api/session.py:get_current_session`,
 `app/api/rate.py:snapshot_thread_states`; broad admin exports; and dependency enrichment in
 `app/api/dependency.py`. Several paths use `.scalars().all()` over historical or export data.
 The repository has useful indexes on thread ownership/status/position, issue thread/position,
-event session/time, session user/time, reviews, dependencies, collections, and snapshots.
+event session/time, session user/time, reviews, dependencies, and snapshots.
 
 Two Uvicorn workers create two independent SQLAlchemy engines and pools, allowing up to six
 database connections under the configured pool settings. Worker-count experiments therefore
@@ -152,10 +152,9 @@ Other recommended workloads:
 | CPU candidate | `GET /api/v1/threads/{id}/connected` + bearer token | `get_thread_connected_threads` | Profile first; isolated data recommended |
 | DB-heavy | `GET /api/sessions/{id}/details` + bearer token | `get_session_details` | Multiple queries; isolated data recommended |
 | Validation error | Malformed `POST /api/threads/` JSON | `create_thread` | Safe if validation fails before mutation |
-| Write | `POST /api/v1/collections/` + bearer token | `create_collection` | Only isolated benchmark DB |
 
 All registered route modules are under `app/api/`: auth, threads, queue, roll, rate,
-snooze, undo, sessions, analytics, admin exports/imports, bug reports, collections, issues,
+snooze, undo, sessions, analytics, admin exports/imports, bug reports, issues,
 dependencies, reading orders, reviews, debug, and test helpers. `app/main.py` also registers
 `/api/v1/sessions/*` as an alias for `/api/sessions/*`.
 
@@ -298,8 +297,7 @@ migration state, traffic volume, and availability of an isolated benchmark envir
     {"workload": "large paginated list", "method": "GET", "path": "/api/v1/threads/{thread_id}/issues?page_size=100", "handler": "app.api.issue.list_issues", "auth_required": true, "read_only": true, "safe_for_production_load_test": false, "notes": "Requires a large fixture thread."},
     {"workload": "CPU-heavy read candidate", "method": "GET", "path": "/api/v1/threads/{thread_id}/connected", "handler": "app.api.dependency.get_thread_connected_threads", "auth_required": true, "read_only": true, "safe_for_production_load_test": false, "notes": "Profile before treating as CPU-heavy."},
     {"workload": "database-heavy read", "method": "GET", "path": "/api/sessions/{session_id}/details", "handler": "app.api.session.get_session_details", "auth_required": true, "read_only": true, "safe_for_production_load_test": false, "notes": "Multiple queries."},
-    {"workload": "validation-error path", "method": "POST", "path": "/api/threads/", "handler": "app.api.thread.create_thread", "auth_required": true, "read_only": false, "safe_for_production_load_test": false, "notes": "Malformed payload must fail before mutation."},
-    {"workload": "safe write", "method": "POST", "path": "/api/v1/collections/", "handler": "app.api.collection.create_collection", "auth_required": true, "read_only": false, "safe_for_production_load_test": false, "notes": "Only isolated benchmark DB."}
+    {"workload": "validation-error path", "method": "POST", "path": "/api/threads/", "handler": "app.api.thread.create_thread", "auth_required": true, "read_only": false, "safe_for_production_load_test": false, "notes": "Malformed payload must fail before mutation."}
   ],
   "runtime_candidates": [
     {"name": "CPython 3.14 control", "feasibility": "high", "blockers": [], "required_changes": [], "relevance": "Required baseline", "confidence": "high"},

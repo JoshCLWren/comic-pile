@@ -17,7 +17,6 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.models import (
-    Collection,
     Dependency,
     Event,
     Issue,
@@ -82,7 +81,6 @@ async def clean_clone_users(db_engine) -> AsyncIterator[None]:
         "DELETE FROM issues WHERE thread_id IN "
         f"(SELECT id FROM threads WHERE user_id IN (SELECT id FROM users WHERE username IN ({placeholders})))",
         f"DELETE FROM threads WHERE user_id IN (SELECT id FROM users WHERE username IN ({placeholders}))",
-        f"DELETE FROM collections WHERE user_id IN (SELECT id FROM users WHERE username IN ({placeholders}))",
         f"DELETE FROM users WHERE username IN ({placeholders})",
     )
 
@@ -173,19 +171,7 @@ async def export_data(db_engine, export_user: User) -> dict[str, object]:
             text("DELETE FROM threads WHERE user_id = :uid"),
             {"uid": export_user.id},
         )
-        await session.execute(
-            text("DELETE FROM collections WHERE user_id = :uid"),
-            {"uid": export_user.id},
-        )
         await session.commit()
-        collection = Collection(
-            name="Test Collection",
-            user_id=export_user.id,
-            is_default=True,
-            position=0,
-        )
-        session.add(collection)
-        await session.flush()
 
         thread = Thread(
             title="Export Test Thread",
@@ -196,7 +182,6 @@ async def export_data(db_engine, export_user: User) -> dict[str, object]:
             queue_position=1,
             status="active",
             user_id=export_user.id,
-            collection_id=collection.id,
         )
         session.add(thread)
         await session.flush()
@@ -290,7 +275,6 @@ async def export_data(db_engine, export_user: User) -> dict[str, object]:
 
     return {
         "user_id": export_user.id,
-        "collection_id": collection.id,
         "thread_id": thread.id,
         "issue1_id": issue1.id,
         "issue2_id": issue2.id,
@@ -373,8 +357,7 @@ async def test_export_via_db_returns_document(test_db_url, export_user, export_d
     assert export["schema_version"] == "1.0"
     assert export["source_username"] == "clone_export_test_user"
     assert export["user"]["username"] == "clone_export_test_user"
-    assert len(export["collections"]) == 1
-    assert export["collections"][0]["name"] == "Test Collection"
+    assert "collections" not in export
     assert len(export["threads"]) == 1
     assert export["threads"][0]["title"] == "Export Test Thread"
     assert len(export["issues"]) == 2
@@ -504,17 +487,15 @@ async def test_import_remaps_relationships_and_writes_backup(
     )
     async with async_session() as session:
         result = await session.execute(
-            text("SELECT id, collection_id FROM threads WHERE title = 'Export Test Thread'")
+            text("SELECT id FROM threads WHERE title = 'Export Test Thread'")
         )
-        thread_id, collection_id = result.one()
+        thread_id = result.scalar_one()
         result = await session.execute(
             text("SELECT thread_id FROM issues WHERE thread_id = :thread_id ORDER BY id"),
             {"thread_id": thread_id},
         )
         assert result.fetchall()
-        assert collection_id is not None
         assert thread_id != export_data["thread_id"]
-    assert collection_id != export_data["collection_id"]
 
 
 @pytest.mark.asyncio
@@ -530,7 +511,6 @@ async def test_clone_round_trip_preserves_counts_and_relationships(
     counts = await _import_document(test_db_url, export, tmp_path / "backup.json", dry_run=False)
 
     assert counts == {
-        "collections": 1,
         "threads": 1,
         "issues": 2,
         "dependencies": 1,
@@ -553,12 +533,12 @@ async def test_clone_round_trip_preserves_counts_and_relationships(
         ).scalar_one()
         thread = (
             await session.execute(
-                text("SELECT id, user_id, collection_id, next_unread_issue_id "
+                text("SELECT id, user_id, next_unread_issue_id "
                      "FROM threads WHERE title = 'Export Test Thread' AND user_id = :user_id"),
                 {"user_id": imported_user_id},
             )
         ).one()
-        thread_id, user_id, collection_id, next_issue_id = thread
+        thread_id, user_id, next_issue_id = thread
         issue_rows = (
             await session.execute(
                 text("SELECT id, issue_number, thread_id FROM issues "
@@ -612,7 +592,6 @@ async def test_clone_round_trip_preserves_counts_and_relationships(
         ).one()
 
     assert user_id != export_data["user_id"]
-    assert collection_id != export_data["collection_id"]
     assert next_issue_id in issue_ids
     assert {row.thread_id for row in issue_rows} == {thread_id}
     assert dependency.source_issue_id in issue_ids
@@ -664,11 +643,6 @@ async def test_import_preserves_ownership_isolation(
                 text("SELECT DISTINCT user_id FROM threads WHERE title = 'Export Test Thread'")
             )
         ).scalars().all()
-        target_collection_users = (
-            await session.execute(
-                text("SELECT DISTINCT user_id FROM collections WHERE name = 'Test Collection'")
-            )
-        ).scalars().all()
         source_thread_count = (
             await session.execute(
                 text("SELECT count(*) FROM threads WHERE user_id = :user_id"),
@@ -679,8 +653,6 @@ async def test_import_preserves_ownership_isolation(
     assert target_id != source_id
     assert source_id in target_thread_users
     assert target_id in target_thread_users
-    assert source_id in target_collection_users
-    assert target_id in target_collection_users
     assert source_thread_count == 1
 
 
@@ -774,8 +746,7 @@ def test_validate_export_rejects_broken_foreign_key():
     document = {
         "schema_version": "1.0",
         "user": {"id": 10, "username": "import-user"},
-        "collections": [],
-        "threads": [{"id": 20, "user_id": 10, "title": "Thread", "collection_id": None}],
+        "threads": [{"id": 20, "user_id": 10, "title": "Thread"}],
         "issues": [],
         "dependencies": [],
         "reading_orders": [],

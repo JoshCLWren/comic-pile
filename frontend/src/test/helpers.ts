@@ -17,10 +17,6 @@ type TestUser = {
   accessToken?: string;
 };
 
-export async function getCollectionsEnabled(_page: Page): Promise<boolean> {
-  return false
-}
-
 export async function waitForQueueReady(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Read Queue' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Add Thread' })).toBeVisible()

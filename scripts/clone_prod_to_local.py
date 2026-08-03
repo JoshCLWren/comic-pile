@@ -40,7 +40,6 @@ from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.models import (
-    Collection,
     Dependency,
     Event,
     Issue,
@@ -58,7 +57,6 @@ SCHEMA_VERSION = "1.0"
 
 EXPORT_TABLES = [
     "user",
-    "collections",
     "threads",
     "issues",
     "dependencies",
@@ -92,17 +90,6 @@ class ExportUserRecord(TypedDict, total=False):
     created_at: str | None
 
 
-class ExportCollectionRecord(TypedDict, total=False):
-    """Serialized collection record for export."""
-
-    id: int
-    name: str
-    user_id: int
-    is_default: bool
-    position: int
-    created_at: str | None
-
-
 class ExportThreadRecord(TypedDict, total=False):
     """Serialized thread record for export."""
 
@@ -124,7 +111,6 @@ class ExportThreadRecord(TypedDict, total=False):
     is_blocked: bool
     created_at: str | None
     user_id: int
-    collection_id: int | None
 
 
 class ExportIssueRecord(TypedDict, total=False):
@@ -236,7 +222,6 @@ class ExportDocument(TypedDict):
     source_url: str
     source_username: str
     user: ExportUserRecord
-    collections: list[ExportCollectionRecord]
     threads: list[ExportThreadRecord]
     issues: list[ExportIssueRecord]
     dependencies: list[ExportDependencyRecord]
@@ -249,8 +234,7 @@ class ExportDocument(TypedDict):
 
 
 type ExportRecord = (
-    ExportCollectionRecord
-    | ExportThreadRecord
+    ExportThreadRecord
     | ExportIssueRecord
     | ExportDependencyRecord
     | ExportReadingOrderRecord
@@ -341,17 +325,6 @@ def _export_user(user: User) -> ExportUserRecord:
     })
 
 
-def _export_collection(collection: Collection) -> ExportCollectionRecord:
-    return ExportCollectionRecord(**{
-        "id": collection.id,
-        "name": collection.name,
-        "user_id": collection.user_id,
-        "is_default": collection.is_default,
-        "position": collection.position,
-        "created_at": _datetime_to_iso(collection.created_at),
-    })
-
-
 def _export_thread(thread: Thread) -> ExportThreadRecord:
     return ExportThreadRecord(**{
         "id": thread.id,
@@ -372,7 +345,6 @@ def _export_thread(thread: Thread) -> ExportThreadRecord:
         "is_blocked": thread.is_blocked,
         "created_at": _datetime_to_iso(thread.created_at),
         "user_id": thread.user_id,
-        "collection_id": thread.collection_id,
     })
 
 
@@ -481,8 +453,6 @@ def _records_for_table(export: ExportDocument, table: str) -> list[ExportRecord]
     """Return typed records for a non-user export table."""
     records: object
     match table:
-        case "collections":
-            records = export["collections"]
         case "threads":
             records = export["threads"]
         case "issues":
@@ -541,7 +511,6 @@ async def _export_via_db(db_url: str, username: str) -> ExportDocument:
             "source_url": _redact_db_url(db_url),
             "source_username": source_user.username,
             "user": _export_user(source_user),
-            "collections": [],
             "threads": [],
             "issues": [],
             "dependencies": [],
@@ -552,11 +521,6 @@ async def _export_via_db(db_url: str, username: str) -> ExportDocument:
             "snapshots": [],
             "reviews": [],
         }
-
-        result = await db.execute(
-            select(Collection).where(Collection.user_id == user_id).order_by(Collection.id)
-        )
-        export["collections"] = [_export_collection(c) for c in result.scalars().all()]
 
         result = await db.execute(
             select(Thread).where(Thread.user_id == user_id).order_by(Thread.id)
@@ -668,8 +632,7 @@ def _validate_export(export: ExportDocument) -> None:
 
     user_id = user["id"]
     checks = {
-        "collections": [("user_id", "user")],
-        "threads": [("user_id", "user"), ("collection_id", "collections")],
+        "threads": [("user_id", "user")],
         "issues": [("thread_id", "threads")],
         "dependencies": [
             ("source_issue_id", "issues"),
@@ -740,14 +703,12 @@ async def _delete_local_user_data(db: AsyncSession, user_id: int) -> None:
     await db.execute(delete(Session).where(Session.user_id == user_id))
     await db.execute(delete(Issue).where(Issue.thread_id.in_(thread_ids)))
     await db.execute(delete(Thread).where(Thread.user_id == user_id))
-    await db.execute(delete(Collection).where(Collection.user_id == user_id))
 
 
 async def _sync_id_sequences(db: AsyncSession) -> None:
     """Advance PostgreSQL identity sequences after importing explicit record IDs."""
     tables = (
         "users",
-        "collections",
         "threads",
         "issues",
         "dependencies",
@@ -831,16 +792,6 @@ async def _import_document(
                         _parse_datetime(export["user"].get("created_at")) or local_user.created_at
                     )
 
-                collection_map: dict[int, int] = {}
-                for record in export["collections"]:
-                    item = Collection(
-                        name=record["name"], user_id=local_user.id, is_default=record.get("is_default", False),
-                        position=record.get("position", 0), created_at=_parse_datetime(record.get("created_at")) or datetime.now(UTC),
-                    )
-                    db.add(item)
-                    await db.flush()
-                    collection_map[record["id"]] = item.id
-
                 thread_map: dict[int, int] = {}
                 thread_models: dict[int, Thread] = {}
                 for record in export["threads"]:
@@ -853,7 +804,7 @@ async def _import_document(
                         last_review_at=_parse_datetime(record.get("last_review_at")), notes=record.get("notes"),
                         is_test=record.get("is_test", False), is_blocked=record.get("is_blocked", False),
                         created_at=_parse_datetime(record.get("created_at")) or datetime.now(UTC),
-                        user_id=local_user.id, collection_id=_remap(record.get("collection_id"), collection_map),
+                        user_id=local_user.id,
                     )
                     db.add(item)
                     await db.flush()
