@@ -1,16 +1,16 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures'
 
 const MOBILE_WIDTHS = [320, 375, 414] as const
 
 for (const width of MOBILE_WIDTHS) {
-  test(`mobile form controls remain contained at ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 812 })
-    await page.goto('/queue')
-    await expect(page.getByRole('heading', { name: 'Read Queue' })).toBeVisible()
+  test(`mobile form controls remain contained at ${width}px`, async ({ authenticatedPage }) => {
+    await authenticatedPage.setViewportSize({ width, height: 812 })
+    await authenticatedPage.goto('/queue')
+    await expect(authenticatedPage.getByRole('heading', { name: 'Read Queue' })).toBeVisible()
 
-    await page.getByRole('button', { name: 'Add Thread' }).click()
+    await authenticatedPage.getByRole('button', { name: 'Add Thread' }).click()
 
-    const controls = page.locator('input:visible, textarea:visible, select:visible')
+    const controls = authenticatedPage.locator('input:visible, textarea:visible, select:visible')
     const count = await controls.count()
     expect(count).toBeGreaterThan(0)
 
@@ -18,7 +18,7 @@ for (const width of MOBILE_WIDTHS) {
       const control = controls.nth(index)
       await control.focus()
 
-      const metrics = await page.evaluate(() => {
+      const metrics = await authenticatedPage.evaluate(() => {
         const root = document.getElementById('root')
         const active = document.activeElement
         const fontSize = active instanceof HTMLElement

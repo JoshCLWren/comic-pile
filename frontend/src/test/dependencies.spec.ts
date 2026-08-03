@@ -95,24 +95,35 @@ test.describe('Dependencies', () => {
 	const response = await threadsResponse.json()
 	const threads = response.threads ?? response
 
-	const source = threads.find((thread: { title: string; id: number; next_unread_issue_id: number | null }) => thread.title === 'A Prequel')
-	const target = threads.find((thread: { title: string; id: number; next_unread_issue_id: number | null }) => thread.title === 'B Main Story')
+	const source = threads.find((thread: { title: string; id: number }) => thread.title === 'A Prequel')
+	const target = threads.find((thread: { title: string; id: number }) => thread.title === 'B Main Story')
 
     if (!source || !target) {
       throw new Error(`Failed to find expected threads: source=${source?.id}, target=${target?.id}`)
     }
 
-    if (!source.next_unread_issue_id || !target.next_unread_issue_id) {
-      throw new Error(`Threads missing next_unread_issue_id: source=${source.next_unread_issue_id}, target=${target.next_unread_issue_id}`)
+    // The list view deliberately omits detail-only fields (see #715), so fetch
+    // the thread detail for the next_unread_issue_id dependency contract.
+    const sourceDetailResponse = await authenticatedPage.request.get(`/api/threads/${source.id}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    const targetDetailResponse = await authenticatedPage.request.get(`/api/threads/${target.id}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    const sourceDetail = await sourceDetailResponse.json()
+    const targetDetail = await targetDetailResponse.json()
+
+    if (!sourceDetail.next_unread_issue_id || !targetDetail.next_unread_issue_id) {
+      throw new Error(`Threads missing next_unread_issue_id: source=${sourceDetail.next_unread_issue_id}, target=${targetDetail.next_unread_issue_id}`)
     }
 
     await authenticatedPage.request.post('/api/v1/dependencies/', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       data: {
         source_type: 'issue',
-        source_id: source.next_unread_issue_id,
+        source_id: sourceDetail.next_unread_issue_id,
         target_type: 'issue',
-        target_id: target.next_unread_issue_id,
+        target_id: targetDetail.next_unread_issue_id,
       },
     })
 
