@@ -27,7 +27,6 @@ from app.schemas import (
     RollRequest,
     RollResponse,
 )
-from app.schemas.session import SnoozedThreadInfo
 from comic_pile.queue import get_roll_pool
 from comic_pile.session import get_current_die, get_or_create
 
@@ -404,13 +403,15 @@ async def roll_bootstrap(
         for row in pool_result.all()
     ]
 
-    snoozed_threads: list[SnoozedThreadInfo] = []
+    snoozed_threads: list[RollBootstrapThread] = []
     if snoozed_ids:
         snoozed_result = await db.execute(
-            select(Thread.id, Thread.title).where(Thread.id.in_(snoozed_ids))
+            select(Thread.id, Thread.title, Thread.format)
+            .where(Thread.user_id == user_id)
+            .where(Thread.id.in_(snoozed_ids))
         )
         snoozed_threads = [
-            SnoozedThreadInfo(id=row.id, title=row.title)
+            RollBootstrapThread(id=row.id, title=row.title, format=row.format)
             for row in snoozed_result.all()
         ]
 
@@ -477,7 +478,7 @@ async def roll_bootstrap(
         active_thread=active_thread,
         roll_pool=roll_pool,
         snoozed_threads=snoozed_threads,
-        snoozed_count=len(snoozed_ids),
+        snoozed_count=len(snoozed_threads),
         blocked_count=blocked_count,
         blocked_threads=blocked_threads,
         stale_thread_count=stale_thread_count,

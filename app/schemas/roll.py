@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, Field
 
-from app.schemas.session import ActiveThreadInfo, SnoozedThreadInfo
+from app.schemas.session import ActiveThreadInfo
 
 
 class RollRequest(BaseModel):
@@ -62,7 +62,7 @@ class RollBootstrapResponse(BaseModel):
     last_rolled_result: int | None
     active_thread: ActiveThreadInfo | None
     roll_pool: list[RollBootstrapThread]
-    snoozed_threads: list[SnoozedThreadInfo]
+    snoozed_threads: list[RollBootstrapThread]
     snoozed_count: int
     blocked_count: int
     blocked_threads: list[RollBootstrapThread]
