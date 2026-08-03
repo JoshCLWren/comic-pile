@@ -18,6 +18,7 @@ import type {
   DependencyCreatePayload,
   IssueDependenciesResponse,
   ReactivateThreadPayload,
+  RollBootstrapResponse,
   RollResponse,
   SessionCurrent,
   SessionDetails,
@@ -297,6 +298,7 @@ export const rollApi = {
   reroll: () => api.post<RollResponse>('/roll/'),
   setDie: (die: number) => api.post<void>('/roll/set-die', null, { params: { die } }),
   clearManualDie: () => api.post<void>('/roll/clear-manual-die'),
+  bootstrap: () => api.get<RollBootstrapResponse>('/roll/bootstrap'),
 }
 
 export const rateApi = {

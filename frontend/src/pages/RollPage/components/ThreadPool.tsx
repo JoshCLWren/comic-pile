@@ -1,21 +1,20 @@
 import { useNavigate } from 'react-router-dom'
-import type { Thread } from '../../../types'
-import type { RatingThread } from '../types'
+import type { RollBootstrapThread } from '../../../types'
 
 interface ThreadPoolProps {
-  pool: Thread[]
-  blockedThreads: Thread[]
+  pool: RollBootstrapThread[]
+  blockedThreads: RollBootstrapThread[]
   blockingReasonMap: Record<number, string[]>
   isRatingView: boolean
   isRolling: boolean
   rolledResult: number | null
   selectedThreadId: number | null
-  staleThread: (Thread & { days: number }) | null
+  staleThread: (RollBootstrapThread & { days: number }) | null
   staleThreadCount: number
   snoozedThreads: Array<{ id: number; title: string; format: string }>
   snoozedExpanded: boolean
   blockedExpanded: boolean
-  onThreadClick: (thread: Thread) => void
+  onThreadClick: (thread: RollBootstrapThread) => void
   onUnsnooze: (threadId: number) => void
   onReadStale: () => void
   onToggleSnoozed: () => void

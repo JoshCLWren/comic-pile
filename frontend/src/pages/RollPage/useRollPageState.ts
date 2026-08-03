@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import type { Thread, RollResponse, SessionThread } from '../../types'
+import type { RollBootstrapThread, Thread, RollResponse } from '../../types'
 import type { RatingThread } from './types'
 
 export interface RollPageState {
@@ -8,7 +8,7 @@ export interface RollPageState {
   selectedThreadId: number | null
   currentDie: number
   diceState: string
-  staleThread: (Thread & { days: number }) | null
+  staleThread: (RollBootstrapThread & { days: number }) | null
   staleThreadCount: number
   isOverrideOpen: boolean
   overrideThreadId: string
@@ -16,7 +16,7 @@ export interface RollPageState {
   snoozedExpanded: boolean
   blockedExpanded: boolean
   isDieModalOpen: boolean
-  selectedThread: Thread | null
+  selectedThread: RollBootstrapThread | null
   isActionSheetOpen: boolean
   activeRatingThread: RatingThread | null
   isCollectionDialogOpen: boolean
@@ -39,7 +39,7 @@ export interface RollPageStateSetters {
   setSelectedThreadId: (value: number | null) => void
   setCurrentDie: (value: number) => void
   setDiceState: (value: string) => void
-  setStaleThread: (value: (Thread & { days: number }) | null) => void
+  setStaleThread: (value: (RollBootstrapThread & { days: number }) | null) => void
   setStaleThreadCount: (value: number) => void
   setIsOverrideOpen: (value: boolean) => void
   setOverrideThreadId: (value: string) => void
@@ -47,7 +47,7 @@ export interface RollPageStateSetters {
   setSnoozedExpanded: (value: boolean) => void
   setBlockedExpanded: (value: boolean) => void
   setIsDieModalOpen: (value: boolean) => void
-  setSelectedThread: (value: Thread | null) => void
+  setSelectedThread: (value: RollBootstrapThread | null) => void
   setIsActionSheetOpen: (value: boolean) => void
   setActiveRatingThread: (value: RatingThread | null) => void
   setIsCollectionDialogOpen: (value: boolean) => void
@@ -67,7 +67,7 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const [selectedThreadId, setSelectedThreadId] = useState<number | null>(null)
   const [currentDie, setCurrentDie] = useState(6)
   const [diceState, setDiceState] = useState('idle')
-  const [staleThread, setStaleThread] = useState<(Thread & { days: number }) | null>(null)
+  const [staleThread, setStaleThread] = useState<(RollBootstrapThread & { days: number }) | null>(null)
   const [staleThreadCount, setStaleThreadCount] = useState(0)
   const [isOverrideOpen, setIsOverrideOpen] = useState(false)
   const [overrideThreadId, setOverrideThreadId] = useState('')
@@ -75,7 +75,7 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const [snoozedExpanded, setSnoozedExpanded] = useState(false)
   const [blockedExpanded, setBlockedExpanded] = useState(false)
   const [isDieModalOpen, setIsDieModalOpen] = useState(false)
-  const [selectedThread, setSelectedThread] = useState<Thread | null>(null)
+  const [selectedThread, setSelectedThread] = useState<RollBootstrapThread | null>(null)
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
   const [activeRatingThread, setActiveRatingThread] = useState<RatingThread | null>(null)
   const [isCollectionDialogOpen, setIsCollectionDialogOpen] = useState(false)

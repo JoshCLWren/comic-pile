@@ -15,6 +15,7 @@ import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks'
 import { useCollections } from '../contexts/CollectionContext'
+import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 import { ToastProvider } from '../contexts/ToastProvider'
 import type { RollResponse } from '../types'
@@ -37,6 +38,7 @@ vi.mock('../components/LazyDice3D', () => ({
 
 vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
 vi.mock('../hooks/useThread', () => ({ useThreads: vi.fn(), useStaleThreads: vi.fn() }))
+vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
 vi.mock('../hooks/useRoll', () => ({
   useSetDie: vi.fn(),
   useClearManualDie: vi.fn(),
@@ -81,6 +83,7 @@ vi.mock('../services/api', async (importOriginal) => {
 const mockedUseSession = vi.mocked(useSession) as any
 const mockedUseThreads = vi.mocked(useThreads) as any
 const mockedUseStaleThreads = vi.mocked(useStaleThreads) as any
+const mockedUseRollBootstrap = vi.mocked(useRollBootstrap) as any
 const mockedUseSetDie = vi.mocked(useSetDie) as any
 const mockedUseClearManualDie = vi.mocked(useClearManualDie) as any
 const mockedUseRoll = vi.mocked(useRoll) as any
@@ -136,6 +139,30 @@ function getPoolItem(title: string): HTMLElement {
 }
 
 beforeEach(() => {
+  const mockBootstrapData = {
+    current_die: 6,
+    last_rolled_result: null,
+    manual_die: null,
+    pending_thread_id: null,
+    active_thread: null,
+    snoozed_threads: [],
+    snoozed_count: 0,
+    roll_pool: [
+      { id: 1, title: 'Saga', format: 'Comics' },
+      { id: 2, title: 'X-Men', format: 'Comics' },
+    ],
+    blocked_count: 0,
+    blocked_threads: [],
+    stale_thread_count: 0,
+    stale_thread: null,
+  }
+  mockedUseRollBootstrap.mockReturnValue({
+    data: mockBootstrapData,
+    refetch: vi.fn(),
+    isPending: false,
+    isError: false,
+    error: null,
+  })
   const mockSessionData = {
     current_die: 6,
     last_rolled_result: null,
@@ -283,6 +310,29 @@ describe('Action Sheet', () => {
         snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }],
       },
       refetch: mockRefetchSession,
+    })
+    mockedUseRollBootstrap.mockReturnValue({
+      data: {
+        current_die: 6,
+        last_rolled_result: null,
+        manual_die: null,
+        pending_thread_id: null,
+        active_thread: null,
+        snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }],
+        snoozed_count: 1,
+        roll_pool: [
+          { id: 1, title: 'Saga', format: 'Comic' },
+          { id: 2, title: 'X-Men', format: 'Comic' },
+        ],
+        blocked_count: 0,
+        blocked_threads: [],
+        stale_thread_count: 0,
+        stale_thread: null,
+      },
+      refetch: vi.fn(),
+      isPending: false,
+      isError: false,
+      error: null,
     })
     mockUnsnoozeMutation.mutate.mockReset()
 

@@ -25,7 +25,13 @@ from app.schemas.issue import (
 )
 from app.schemas.migration import MigrateToIssuesRequest
 from app.schemas.rate import RateRequest
-from app.schemas.roll import OverrideRequest, RollRequest, RollResponse
+from app.schemas.roll import (
+    OverrideRequest,
+    RollBootstrapResponse,
+    RollBootstrapThread,
+    RollRequest,
+    RollResponse,
+)
 from app.schemas.session import (
     ActiveThreadInfo,
     EventDetail,
@@ -83,6 +89,8 @@ __all__ = [
     "RollRequest",
     "RollResponse",
     "OverrideRequest",
+    "RollBootstrapThread",
+    "RollBootstrapResponse",
     # Rate
     "RateRequest",
     # Session
