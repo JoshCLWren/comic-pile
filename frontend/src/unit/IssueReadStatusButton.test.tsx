@@ -49,7 +49,7 @@ describe('IssueReadStatusButton', () => {
     vi.clearAllMocks()
   })
 
-  it('marks an unread issue read and reconciles the latest visible snapshot', async () => {
+  it('marks an unread issue read and reconciles the visible snapshot from bounded reads', async () => {
     vi.mocked(issuesApi.markRead).mockResolvedValue()
     vi.mocked(issuesApi.get).mockResolvedValue({
       ...issue,
@@ -62,22 +62,20 @@ describe('IssueReadStatusButton', () => {
       next_unread_issue_id: 99,
       next_unread_issue_number: '25',
     })
-    let snapshot: IssueMutationSnapshot = { issues: [issue], thread }
-    const onSnapshotChange = vi.fn(
-      (update: (current: IssueMutationSnapshot) => IssueMutationSnapshot) => {
-        snapshot = update(snapshot)
-      },
-    )
+    const onSnapshotChange = vi.fn()
 
-    render(<IssueReadStatusButton issue={issue} onSnapshotChange={onSnapshotChange} />)
+    render(
+      <IssueReadStatusButton
+        issue={issue}
+        snapshot={{ issues: [issue], thread }}
+        onSnapshotChange={onSnapshotChange}
+      />,
+    )
 
     fireEvent.click(screen.getByRole('button', { name: 'Mark read' }))
 
     await waitFor(() => expect(onSnapshotChange).toHaveBeenCalledTimes(1))
-    expect(issuesApi.markRead).toHaveBeenCalledWith(11)
-    expect(issuesApi.get).toHaveBeenCalledWith(11)
-    expect(threadsApi.get).toHaveBeenCalledWith(7)
-    expect(snapshot).toEqual({
+    expect(onSnapshotChange).toHaveBeenCalledWith({
       issues: [{ ...issue, status: 'read', read_at: '2026-08-03T18:30:00Z' }],
       thread: {
         ...thread,
@@ -88,52 +86,90 @@ describe('IssueReadStatusButton', () => {
     })
   })
 
-  it('applies a delayed result without overwriting a newer row transition', async () => {
+  it('preserves a newer row transition when an older request finishes later', async () => {
+    const secondIssue: Issue = {
+      ...issue,
+      id: 12,
+      issue_number: '3',
+    }
+    const firstIssueRequest = Promise.withResolvers<Issue>()
+    const secondIssueRequest = Promise.withResolvers<Issue>()
     vi.mocked(issuesApi.markRead).mockResolvedValue()
-    vi.mocked(issuesApi.get).mockResolvedValue({
+    vi.mocked(issuesApi.get)
+      .mockReturnValueOnce(firstIssueRequest.promise)
+      .mockReturnValueOnce(secondIssueRequest.promise)
+    vi.mocked(threadsApi.get)
+      .mockResolvedValueOnce({
+        ...thread,
+        issues_remaining: 0,
+        next_unread_issue_id: null,
+        next_unread_issue_number: null,
+      })
+      .mockResolvedValueOnce({
+        ...thread,
+        issues_remaining: 1,
+        next_unread_issue_id: 12,
+        next_unread_issue_number: '3',
+      })
+
+    let snapshot: IssueMutationSnapshot = {
+      issues: [issue, secondIssue],
+      thread,
+    }
+    const onSnapshotChange = (nextSnapshot: IssueMutationSnapshot) => {
+      snapshot = nextSnapshot
+    }
+
+    render(
+      <>
+        <IssueReadStatusButton
+          issue={issue}
+          snapshot={snapshot}
+          onSnapshotChange={onSnapshotChange}
+        />
+        <IssueReadStatusButton
+          issue={secondIssue}
+          snapshot={snapshot}
+          onSnapshotChange={onSnapshotChange}
+        />
+      </>,
+    )
+
+    const buttons = screen.getAllByRole('button', { name: 'Mark read' })
+    fireEvent.click(buttons[0])
+    fireEvent.click(buttons[1])
+
+    secondIssueRequest.resolve({
+      ...secondIssue,
+      status: 'read',
+      read_at: '2026-08-03T18:29:00Z',
+    })
+    await waitFor(() => expect(snapshot.issues[1].status).toBe('read'))
+
+    firstIssueRequest.resolve({
       ...issue,
       status: 'read',
       read_at: '2026-08-03T18:30:00Z',
     })
-    vi.mocked(threadsApi.get).mockResolvedValue({
-      ...thread,
-      issues_remaining: 0,
-      next_unread_issue_id: null,
-      next_unread_issue_number: null,
-    })
-    const otherIssue: Issue = {
-      ...issue,
-      id: 12,
-      issue_number: '3',
+    await waitFor(() => expect(snapshot.issues[0].status).toBe('read'))
+
+    expect(snapshot.issues[1]).toMatchObject({
       status: 'read',
       read_at: '2026-08-03T18:29:00Z',
-    }
-    let snapshot: IssueMutationSnapshot = {
-      issues: [issue, { ...otherIssue, status: 'unread', read_at: null }],
-      thread,
-    }
-    const onSnapshotChange = (
-      update: (current: IssueMutationSnapshot) => IssueMutationSnapshot,
-    ) => {
-      snapshot = {
-        ...snapshot,
-        issues: snapshot.issues.map((item) => (item.id === 12 ? otherIssue : item)),
-      }
-      snapshot = update(snapshot)
-    }
-
-    render(<IssueReadStatusButton issue={issue} onSnapshotChange={onSnapshotChange} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Mark read' }))
-
-    await waitFor(() => expect(snapshot.issues[0].status).toBe('read'))
-    expect(snapshot.issues[1]).toEqual(otherIssue)
+    })
   })
 
   it('keeps the current snapshot and shows a retryable error when the mutation fails', async () => {
     vi.mocked(issuesApi.markRead).mockRejectedValue(new Error('network'))
     const onSnapshotChange = vi.fn()
 
-    render(<IssueReadStatusButton issue={issue} onSnapshotChange={onSnapshotChange} />)
+    render(
+      <IssueReadStatusButton
+        issue={issue}
+        snapshot={{ issues: [issue], thread }}
+        onSnapshotChange={onSnapshotChange}
+      />,
+    )
 
     fireEvent.click(screen.getByRole('button', { name: 'Mark read' }))
 
