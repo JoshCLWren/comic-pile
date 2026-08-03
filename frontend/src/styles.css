@@ -36,6 +36,17 @@ body {
   --desktop-nav-height: 5rem;
 }
 
+/* Keep mobile form controls inside their containers and at the iOS no-zoom font threshold. */
+@media (max-width: 767px) {
+  input,
+  textarea,
+  select {
+    min-width: 0;
+    max-width: 100%;
+    font-size: 1rem;
+  }
+}
+
 /* Keep the rating action bar's scroll target above the fixed navigation and iOS home indicator. */
 .rating-actions {
   scroll-margin-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
