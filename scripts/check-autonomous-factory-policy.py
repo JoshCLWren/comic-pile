@@ -10,17 +10,19 @@ ENTRYPOINT = ROOT / "scripts" / "comic-pile-opencode-factory.sh"
 
 
 def require(text: str, needle: str, source: Path) -> None:
+    """Require one invariant string in a policy source."""
     if needle not in text:
         raise SystemExit(f"{source}: missing required policy text: {needle!r}")
 
 
 def forbid(text: str, needle: str, source: Path) -> None:
+    """Reject one known contradictory policy string."""
     if needle in text:
         raise SystemExit(f"{source}: forbidden policy drift found: {needle!r}")
 
 
 def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
-    """Validate policy source text against the canonical delivery invariants."""
+    """Validate policy source text against canonical delivery invariants."""
     for needle in (
         "Finish what you start. Success is measured by issues closed, not pull requests opened.",
         "A worker owns an issue, not a PR.",
@@ -108,6 +110,7 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
 
 
 def main() -> None:
+    """Read repository policy sources and validate their alignment."""
     validate_texts(
         POLICY.read_text(encoding="utf-8"),
         PROTOCOL.read_text(encoding="utf-8"),
