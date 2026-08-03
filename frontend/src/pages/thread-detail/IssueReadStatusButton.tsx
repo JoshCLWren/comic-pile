@@ -10,18 +10,22 @@ import {
 
 interface IssueReadStatusButtonProps {
   issue: Issue
-  onSnapshotChange: (
-    update: (snapshot: IssueMutationSnapshot) => IssueMutationSnapshot,
-  ) => void
+  snapshot: IssueMutationSnapshot
+  onSnapshotChange: (snapshot: IssueMutationSnapshot) => void
 }
+
+const latestSnapshots = new Map<number, IssueMutationSnapshot>()
 
 /** Toggle one visible issue and reconcile only the affected row plus thread summary. */
 export function IssueReadStatusButton({
   issue,
+  snapshot,
   onSnapshotChange,
 }: IssueReadStatusButtonProps) {
   const [isPending, setIsPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  latestSnapshots.set(issue.thread_id, snapshot)
 
   async function handleToggle() {
     setIsPending(true)
@@ -45,10 +49,11 @@ export function IssueReadStatusButton({
         next_unread_issue_id: updatedThread.next_unread_issue_id ?? null,
         next_unread_issue_number: updatedThread.next_unread_issue_number ?? null,
       }
+      const currentSnapshot = latestSnapshots.get(issue.thread_id) ?? snapshot
+      const nextSnapshot = applyIssueReadStatus(currentSnapshot, issue.id, result)
 
-      onSnapshotChange((currentSnapshot) =>
-        applyIssueReadStatus(currentSnapshot, issue.id, result),
-      )
+      latestSnapshots.set(issue.thread_id, nextSnapshot)
+      onSnapshotChange(nextSnapshot)
     } catch {
       setError('Failed to update issue')
     } finally {
