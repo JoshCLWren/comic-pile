@@ -59,7 +59,7 @@ const renderWithoutAuth = () => {
   )
 }
 
-test('renders navigation links when authenticated', async () => {
+test('renders retained navigation links when authenticated', async () => {
   renderWithAuth()
 
   await waitFor(() => {
@@ -67,7 +67,7 @@ test('renders navigation links when authenticated', async () => {
   })
   expect(screen.getByRole('link', { name: /queue page/i })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /history page/i })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /analytics page/i })).toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: /analytics page/i })).not.toBeInTheDocument()
 })
 
 test('does not render when not authenticated', async () => {
@@ -122,7 +122,6 @@ test('clears authentication when the user lookup returns unauthorized', async ()
 })
 
 test('falls back to an empty username when the user profile omits it', async () => {
-  // L43 `setUsername(user.username || '')` — username falsy
   mockApiGet.mockResolvedValue({ username: '', email: 'empty@test.com' })
   render(
     <MemoryRouter initialEntries={['/']}>
@@ -134,6 +133,5 @@ test('falls back to an empty username when the user profile omits it', async () 
     </MemoryRouter>,
   )
   await waitFor(() => expect(screen.getByRole('button', { name: /log out/i })).toBeInTheDocument())
-  // empty username is falsy, so no username span is rendered for it
   expect(screen.queryByText('testuser')).not.toBeInTheDocument()
 })
