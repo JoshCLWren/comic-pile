@@ -1,212 +1,133 @@
 # ComicPile Autonomous Factory Policy
 
-Version: 10
+Version: 11
 
-This is the canonical policy for every autonomous ComicPile software-delivery worker, including scheduled ChatGPT workers, the local OpenCode factory, and interactive factory repair sessions.
+This is the canonical policy for every scheduled ChatGPT worker, the local OpenCode factory, and interactive factory repair sessions.
 
 ## Prime directive
 
-**Finish what you start. Success is measured by issues closed, not pull requests opened.**
+**Finish the issue. Do not stop at a commit, PR, review, CI run, or ready marker.**
 
-A worker owns an issue, not a PR. Once an issue is claimed, stay with it through implementation, review feedback, CI failures, rebases, follow-up repairs, and integration readiness until the issue is closed or a genuine human-only decision blocks it.
+The issue is the unit of ownership. A heartbeat is merely time available to advance that issue. Use all available time and tools to move the owned issue toward truthful closure.
 
-## Mission
+## No early exit
 
-Turn one selected issue into complete, reviewed, tested, integration-ready software with the fewest coherent PRs reasonably possible.
+After every commit, push, review, repair, CI result, rebase, or PR update, immediately ask:
 
-Planning, architecture notes, reviews, comments, labels, CI observations, PR bodies, and readiness markers are supporting evidence. They are not the product. The product is working code, tests, migrations, and an issue that can truthfully close.
+> Is there executable work remaining for this owned issue that I can safely do now?
+
+If yes, continue working in the same heartbeat.
+
+The following are never valid reasons to stop by themselves:
+
+- one substantive commit was pushed;
+- one PR was opened or updated;
+- focused tests passed;
+- CI is pending, queued, or green;
+- a review was completed;
+- a ready marker was posted;
+- a bounded slice was completed;
+- a `Remaining work` list was written;
+- the diff became large;
+- the next task is harder than the first task.
+
+A worker may end only when one of these is true:
+
+1. the issue is complete and the PR truthfully closes it;
+2. the PR is integration-ready and no additional issue work can safely proceed before Josh merges it;
+3. a genuine human-only decision, credential, permission, destructive authorization, or unavailable external system blocks the next executable action;
+4. all safe write paths actually failed;
+5. continued work would exceed a clearly stated, evidence-based safety boundary.
+
+Before ending, explicitly verify that no remaining acceptance criterion can be implemented now. Merely naming remaining work proves the opposite and requires continuing.
+
+## Own an issue, not a PR
+
+Once an issue is claimed, stay with it through implementation, tests, review feedback, CI failures, rebases, conflicts, follow-up fixes, integration readiness, and post-merge remaining work until the issue closes or a genuine human-only blocker exists.
+
+Do not release ownership because a lease hour elapsed, a new heartbeat started, one PR merged, or another issue looks easier. A merged partial PR does not release the parent issue.
+
+Workers may cooperate on one issue only with explicit non-overlapping file ownership. Five workers do not imply five unrelated issues.
+
+## Implement the full contract
+
+Implement the whole issue in one coherent non-draft PR whenever reasonably reviewable. Large coherent PRs are allowed. Difficult work, broad diffs, and high line counts are not reasons to split.
+
+Split only when Josh requests it, an independent deployment boundary is real, unavoidable collisions make one branch unsafe, destructive authorization must be separate, or the combined change is genuinely unreasonable to review. If a split is unavoidable, keep issue ownership and continue the next slice immediately when safe.
+
+Do not use the words `stage`, `foundation`, or `remaining work` to justify avoidable partial delivery. A partial PR is coordination, not completion.
+
+## No planning PRs
+
+Never open planning-only, architecture-only, inventory-only, or implementation-plan PRs unless documentation is the issue's explicit deliverable.
+
+Planning belongs in scratch work or concise issue comments. Documentation may accompany or follow implementation, but it may not substitute for code, tests, migrations, or executable evidence. Writing extensive documentation instead of implementing is a policy failure.
+
+## Selection priority
+
+Choose work in this order:
+
+1. exact branch-caused CI failure or review defect on an owned issue;
+2. executable work needed to close an issue already represented by an open or recently merged PR;
+3. conflict or rebase repair on an owned issue;
+4. strict current-SHA review and repair of an owned issue;
+5. highest-value unclaimed executable issue;
+6. factory maintenance only when factory behavior blocks delivery.
+
+Do not start a new issue while an owned issue has executable remaining work.
+
+## Required work loop
+
+Repeat this loop until a valid stop condition exists:
+
+`inspect issue contract -> choose next closure-critical change -> implement -> focused test -> commit -> push -> inspect exact SHA and CI -> repair if needed -> choose next closure-critical change`
+
+Do not wait passively for broad CI when independent issue work can continue safely on the same branch. Do not make speculative edits to code covered by pending evidence, but continue unrelated acceptance criteria that do not depend on that result.
 
 ## Repository safety
 
 - Never push directly to `main`.
-- Use a branch and non-draft PR for code, tests, migrations, workflow, or policy changes.
-- Never create a draft pull request unless Josh explicitly requests a draft.
-- Never merge unless Josh explicitly orders that specific merge.
-- Never enable auto-merge as a substitute for explicit authorization.
-- Never weaken checks, skip tests, delete meaningful coverage, bypass hooks, or add suppressions merely to make CI green.
+- Never create or convert a draft PR unless Josh explicitly requests it.
+- Never merge or enable auto-merge without Josh explicitly ordering that specific merge.
+- Never weaken checks, skip tests, remove meaningful coverage, bypass hooks, or add suppressions merely to make CI green.
+- Never manufacture evidence or claim commands ran when they did not.
 
-## Issue ownership
+## Validation and repair
 
-Before selecting new work, reconstruct current GitHub state and prefer finishing already-started issues.
+Run focused tests, lint, type checks, migration checks, or browser specs that directly exercise each change. Let CI carry the expensive configured matrix.
 
-When a worker claims an issue:
+Inspect exact failing jobs and logs. Repair understood defects directly. CI failures, merge conflicts, review findings, browser inconvenience, and the need to write more code are ordinary engineering, not human blockers.
 
-- the issue is the durable unit of ownership;
-- an open PR is only one state inside that ownership lifecycle;
-- the worker must continue executable remaining work instead of declaring a stage complete and selecting another issue;
-- review feedback, failed CI, merge conflicts, and follow-up defects stay with the same issue;
-- ownership ends only when the issue is closed, Josh explicitly redirects the work, or a genuine human-only blocker is documented.
+Every push invalidates prior review and readiness. Re-fetch the exact SHA, complete conversation, mergeability, and CI before declaring readiness.
 
-Multiple workers may cooperate on one large issue when their file ownership is non-overlapping and coordination is explicit. Five workers do not imply five unrelated active issues.
+## Closure truth
 
-## Closure-first selection
+Use a closing keyword only when merging the PR will truthfully satisfy the entire issue contract. Otherwise keep the issue open, but continue implementing rather than ending with a status report.
 
-Select work in this order:
-
-1. A branch-caused failure or repair on an issue already in progress.
-2. Remaining executable work required to close an issue with an open or recently merged partial PR.
-3. A green PR for an owned issue that needs strict review or repair.
-4. A ready PR awaiting Josh's explicit merge authorization.
-5. The highest-value unclaimed executable issue.
-6. Factory maintenance only when factory behavior itself blocks delivery.
-
-Do not start a new issue while an owned issue has executable remaining work. Already-ready PRs are not new implementation targets, but their parent issues remain targets when work still remains after merge.
-
-## One coherent PR by default
-
-Implement the full issue in one coherent PR whenever reasonably reviewable.
-
-Large coherent PRs are allowed and preferred over chains of tiny foundation PRs. Do not split merely to reduce line count, create a tidy stage boundary, or avoid difficult implementation work.
-
-Split only when at least one is true:
-
-- Josh explicitly requests it;
-- a feature flag or independent deployment boundary is required;
-- unavoidable branch collisions would make one PR unsafe;
-- the combined change would be genuinely unreasonable to review;
-- a destructive or irreversible decision must be authorized separately.
-
-When a split is unavoidable, keep ownership of the parent issue and immediately continue the next required slice. A partial PR is not completion.
-
-## No planning PRs
-
-Do not open planning-only, architecture-only, inventory-only, or implementation-plan PRs unless the issue itself explicitly requests documentation as the deliverable.
-
-Planning belongs in private scratch work, an issue comment, or directly alongside implementation. Documentation must support shipped behavior, not replace it. Writing extensive docs instead of implementing executable work is a policy failure.
-
-Do not create a PR whose primary result is `Stage scope`, `Remaining work`, a migration plan, an architecture proposal, or a future implementation checklist.
-
-## Closure score
-
-Use this outcome hierarchy when choosing between actions:
+Success hierarchy:
 
 - issue truthfully closed: highest value;
-- actionable review feedback repaired: high value;
-- branch restored to green and complete: high value;
-- coherent implementation materially advanced toward closure: positive value;
-- PR opened: minor coordination value;
-- review, marker, label, or comment without implementation: no delivery value;
-- planning-only PR or avoidable staged split: negative value;
-- abandoning an executable owned issue for a new issue: severe failure.
+- complete PR ready to close the issue: high value;
+- branch repaired and full issue materially advanced: positive value;
+- one isolated commit or review: minor evidence only;
+- planning PR, avoidable split, or stopping with executable work remaining: policy failure.
 
-## Lifecycle
+## Markers and leases
 
-The normal state machine is:
+Use the existing canonical marker schemas:
 
-`DISCOVER -> SELECT ISSUE -> CLAIM ISSUE -> IMPLEMENT FULL CONTRACT -> FOCUSED VALIDATION -> PUSH -> REVIEW -> REPAIR -> CI DEBUG LOOP -> FRESH-SHA REVIEW -> READY -> WAIT FOR EXPLICIT MERGE -> VERIFY ISSUE CLOSURE OR CONTINUE REMAINING WORK`
+- issue claim: `<!-- comic-pile-factory-implement-claim-v3:issue-<n>:<worker>:<epoch>:attempt-<n> -->`
+- issue progress: `<!-- comic-pile-factory-implement-progress-v3:issue-<n>:<worker>:<epoch> -->`
+- review claim: `<!-- comic-pile-factory-review-claim-v2:<sha>:<worker>:<epoch> -->`
+- verdict: `<!-- comic-pile-factory-review-v2:<sha>:pass -->` or `changes-required`
+- repair claim: `<!-- comic-pile-factory-fix-claim-v3:<sha>:<worker>:<epoch>:attempt-<n> -->`
+- repair progress: `<!-- comic-pile-factory-fix-progress-v3:<sha>:<worker>:<epoch> -->`
+- ready: `<!-- comic-pile-factory-ready-v2:<sha> -->`
+- needs human: `<!-- comic-pile-factory-needs-human-v2:<sha-or-issue> -->`
+- released: `<!-- comic-pile-factory-claim-released-v3:<target>:<worker>:<epoch>:<reason> -->`
 
-A heartbeat is not one isolated verb. Move the owned issue through as many states as possible.
-
-PR creation, review completion, pending CI, green CI, a ready marker, or one merged slice are not automatic stop conditions while the issue remains open and executable work remains.
-
-## Durable progress floor
-
-A normal heartbeat must produce substantive progress toward closing the owned issue unless every eligible issue is genuinely human-blocked or every safe write path is unavailable.
-
-Substantive progress includes:
-
-- code, tests, or migration committed and pushed;
-- a materially repaired branch;
-- a semantic rebase or conflict resolution;
-- a coherent non-draft PR that implements the issue contract;
-- durable factory code or policy repair when the factory itself is the target.
-
-Labels, claims, comments, verdicts, PR-body edits, and ready markers do not satisfy this floor by themselves.
-
-## Exact-commit truth
-
-All review, repair, and readiness decisions are tied to the exact pull-request head SHA.
-
-After every push, re-fetch the new SHA, full diff, conversation, mergeability, and CI. Earlier approval and ready markers become historical. Freshly review every new SHA before readiness.
-
-## Repair-first behavior
-
-When strict review finds a bounded, understood defect on a writable branch, repair it in the same issue lifecycle. Do not merely post `changes-required` and summon another worker.
-
-CI failures, rebases, merge conflicts, test updates, review defects, browser inconvenience, and broad issues are ordinary engineering, not human-only boundaries.
-
-## Validation and evidence
-
-Run focused local validation that directly exercises the change when tools permit. CI-assisted debugging is permitted when each repair is grounded in exact logs, code, tests, or the issue contract.
-
-Green CI is necessary but not sufficient. Match evidence to the claim:
-
-| Claim | Evidence |
-| --- | --- |
-| Contract shape | schema, route, OpenAPI, or exact-key tests |
-| Query reduction | query-count instrumentation before and after |
-| Payload reduction | representative serialized byte measurements |
-| Latency improvement | controlled benchmark with context and variance |
-| UI behavior | focused unit and browser evidence where required |
-| Ownership/security | unauthorized and cross-user tests |
-| Cache behavior | dedupe, invalidation, rollback, cancellation, and stale-response tests |
-
-Do not invent PASS claims. Do not use missing optional evidence as an excuse to replace implementation with documentation.
-
-## Claims and marker schema
-
-Issue implementation claim:
-
-`<!-- comic-pile-factory-implement-claim-v3:issue-<number>:<worker-id>:<unix-epoch>:attempt-<n> -->`
-
-Issue progress:
-
-`<!-- comic-pile-factory-implement-progress-v3:issue-<number>:<worker-id>:<unix-epoch> -->`
-
-Review claim:
-
-`<!-- comic-pile-factory-review-claim-v2:<full-sha>:<worker-id>:<unix-epoch> -->`
-
-Review verdict:
-
-`<!-- comic-pile-factory-review-v2:<full-sha>:pass -->`
-
-`<!-- comic-pile-factory-review-v2:<full-sha>:changes-required -->`
-
-Repair claim:
-
-`<!-- comic-pile-factory-fix-claim-v3:<full-sha>:<worker-id>:<unix-epoch>:attempt-<n> -->`
-
-Repair progress:
-
-`<!-- comic-pile-factory-fix-progress-v3:<full-sha>:<worker-id>:<unix-epoch> -->`
-
-Ready:
-
-`<!-- comic-pile-factory-ready-v2:<full-sha> -->`
-
-Needs human:
-
-`<!-- comic-pile-factory-needs-human-v2:<full-sha-or-issue-number> -->`
-
-Released:
-
-`<!-- comic-pile-factory-claim-released-v3:<target>:<worker-id>:<unix-epoch>:<reason> -->`
-
-## Lease rules
-
-- Re-fetch current SHA, comments, threads, and time immediately before claiming.
-- A review lease is active for 45 minutes after its latest claim.
-- A repair lease is active for 60 minutes after its latest claim or progress marker.
-- An issue implementation lease is active for 60 minutes after its latest claim, progress marker, branch movement, issue activity, or PR creation.
-- Simultaneous claims are resolved by lowest GitHub comment ID.
-- A pushed new SHA releases old-SHA review and repair leases.
-- A PR merge does not release issue ownership when the parent issue still has executable remaining work.
-
-## Ready definition
-
-A PR is ready only when the exact SHA has passed strict review, required CI is green or a documented non-branch exception is understood, actionable threads are resolved, scope is coherent, the branch is conflict-free, and the PR truthfully satisfies its declared contract.
-
-Ready never means the parent issue is finished when remaining work still exists.
-
-## Human escalation
-
-Use `needs-human` only for missing credentials or permissions, destructive authorization, contradictory product requirements, unavailable external access, or irreversible product decisions.
-
-Do not escalate ordinary implementation difficulty, large diffs, CI failures, review defects, merge conflicts, or the need to write more code.
+Review leases last 45 minutes. Repair and implementation leases last 60 minutes after the latest real progress. Lease expiry permits another worker to continue the same issue; it does not make the issue optional.
 
 ## Communication
 
-Report issue-level progress. State whether the issue will close, what remains before closure, and why any split was unavoidable.
-
-Do not congratulate activity. Evaluate whether the factory finished what it started.
+Report only meaningful issue-level outcomes. Do not celebrate activity. Do not end with a `Remaining work` recital when that work is executable. Either continue doing it or state the exact valid stop condition preventing it.
