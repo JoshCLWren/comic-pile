@@ -1,6 +1,8 @@
 """Roll-related Pydantic schemas for request/response validation."""
 
-from pydantic import BaseModel, Field
+from typing import Any, ClassVar
+
+from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.session import ActiveThreadInfo
 
@@ -56,6 +58,8 @@ class RollBootstrapResponse(BaseModel):
     Does not include the full queue, collection data, or secondary detail panels.
     """
 
+    summary_limit: ClassVar[int] = 20
+
     current_die: int
     manual_die: int | None
     pending_thread_id: int | None
@@ -68,3 +72,17 @@ class RollBootstrapResponse(BaseModel):
     blocked_threads: list[RollBootstrapThread]
     stale_thread_count: int
     stale_thread: RollBootstrapThread | None
+
+    @model_validator(mode="before")
+    @classmethod
+    def bound_summary_lists(cls, data: Any) -> Any:
+        """Keep summary collections bounded even when stored session IDs grow."""
+        if not isinstance(data, dict):
+            return data
+
+        bounded = dict(data)
+        for field_name in ("snoozed_threads", "blocked_threads"):
+            values = bounded.get(field_name)
+            if isinstance(values, list):
+                bounded[field_name] = values[: cls.summary_limit]
+        return bounded
