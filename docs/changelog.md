@@ -2,6 +2,7 @@
 
 ## 2026-08-03
 
+<<<<<<< HEAD
 **OpenCode model discovery, rotation, and attribution (factory tooling)**
 
 - Added `scripts/opencode-model-manifest.sh`: a shared, flock-protected model manifest helper (`init`, `set`, `record`, `confirmed`, `next`, `pending`, `summary`) that tracks probe status, tool-call support, last probe time, and per-model usage.
@@ -11,6 +12,12 @@
 - The overnight supervisor (`comic-pile-opencode-factory-overnight.sh`) now launches the model scout in `--watch` mode alongside the factory, tracks it with its own pid file, and reports confirmed models in `status`.
 - Added `.githooks/prepare-commit-msg`: every commit is attributed with a `Model: <id>` trailer from `OPENCODE_MODEL` (skipped for merges, amends, and squash commits). Factory PR bodies are attributed with the producing model.
 - `scripts/install-git-hooks.sh` installs the new hook, preserving any original user hooks in `.sample` backups on first run; `factory-policy.yml` syntax-checks the new shell scripts.
+
+**Session read phase instrumentation (#700)**
+
+- Current-session and History reads now record structured per-phase wall-clock durations and SQL statement counts through the existing request diagnostics context, exposed in the `Server-Timing` response header and in the `phase_timings_ms`/`phase_query_counts` structured log fields.
+- `get_current_session()` phases: `candidate_selection`, `session_refresh`, `active_thread`, `snapshot_count`, `snoozed_threads`, `ladder_path`, `current_die`. History phases: `history_page`, `history_events`, `history_snapshot_counts`, `history_active_threads`.
+- Added exact per-phase statement-count regression coverage proving the current-session path issues bounded, attributed SQL and that History reads stay bounded.
 
 **Production migrations on Vercel/Neon**
 

@@ -13,6 +13,7 @@ from app.cache import TTL, cached, invalidate_cache
 from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Issue, Session as SessionModel, Snapshot, Thread, User
+from app.performance_diagnostics import record_phase
 from app.schemas import (
     ActiveThreadInfo,
     EventDetail,
@@ -404,41 +405,55 @@ async def get_current_session(
 
     while retries < max_retries:
         try:
-            active_session_result = await db.execute(
-                select(SessionModel)
-                .where(SessionModel.user_id == current_user.id)
-                .where(SessionModel.ended_at.is_(None))
-                .order_by(SessionModel.started_at.desc(), SessionModel.id.desc())
-                .limit(1)
-            )
-            active_session = active_session_result.scalars().first()
+            async with record_phase("candidate_selection"):
+                active_session_result = await db.execute(
+                    select(SessionModel)
+                    .where(SessionModel.user_id == current_user.id)
+                    .where(SessionModel.ended_at.is_(None))
+                    .order_by(SessionModel.started_at.desc(), SessionModel.id.desc())
+                    .limit(1)
+                )
+                active_session = active_session_result.scalars().first()
 
-            if active_session is None or not await is_active(
-                active_session.started_at, active_session.ended_at, db
-            ):
-                active_session = await get_or_create(db, user_id=current_user.id)
+                if active_session is None or not await is_active(
+                    active_session.started_at, active_session.ended_at, db
+                ):
+                    active_session = await get_or_create(db, user_id=current_user.id)
 
-            await db.refresh(active_session)
-            active_session_id = active_session.id
-            _, active_thread = await get_session_with_thread_safe(active_session_id, db)
+            async with record_phase("session_refresh"):
+                await db.refresh(active_session)
+                active_session_id = active_session.id
+
+            async with record_phase("active_thread"):
+                _, active_thread = await get_session_with_thread_safe(active_session_id, db)
 
             from sqlalchemy import func
 
-            snapshot_count_result = await db.execute(
-                select(func.count())
-                .select_from(Snapshot)
-                .where(Snapshot.session_id == active_session_id)
-            )
-            snapshot_count = snapshot_count_result.scalar() or 0
+            async with record_phase("snapshot_count"):
+                snapshot_count_result = await db.execute(
+                    select(func.count())
+                    .select_from(Snapshot)
+                    .where(Snapshot.session_id == active_session_id)
+                )
+                snapshot_count = snapshot_count_result.scalar() or 0
 
             snoozed_threads = []
             snoozed_ids = active_session.snoozed_thread_ids or []
-            if snoozed_ids:
-                snoozed_result = await db.execute(select(Thread).where(Thread.id.in_(snoozed_ids)))
-                snoozed_threads = [
-                    SnoozedThreadInfo(id=thread.id, title=thread.title)
-                    for thread in snoozed_result.scalars().all()
-                ]
+            async with record_phase("snoozed_threads"):
+                if snoozed_ids:
+                    snoozed_result = await db.execute(
+                        select(Thread).where(Thread.id.in_(snoozed_ids))
+                    )
+                    snoozed_threads = [
+                        SnoozedThreadInfo(id=thread.id, title=thread.title)
+                        for thread in snoozed_result.scalars().all()
+                    ]
+
+            async with record_phase("ladder_path"):
+                ladder_path = await build_ladder_path(active_session_id, db)
+
+            async with record_phase("current_die"):
+                current_die = await get_current_die(active_session_id, db)
 
             return SessionResponse(
                 id=active_session_id,
@@ -447,9 +462,9 @@ async def get_current_session(
                 start_die=active_session.start_die,
                 manual_die=active_session.manual_die,
                 user_id=active_session.user_id,
-                ladder_path=await build_ladder_path(active_session_id, db),
+                ladder_path=ladder_path,
                 active_thread=active_thread,
-                current_die=await get_current_die(active_session_id, db),
+                current_die=current_die,
                 last_rolled_result=active_thread.last_rolled_result if active_thread else None,
                 has_restore_point=snapshot_count > 0,
                 snapshot_count=snapshot_count,
@@ -523,8 +538,9 @@ async def list_sessions(
             ) from None
 
     query = query.limit(page_size + 1)
-    sessions_result = await db.execute(query)
-    sessions = sessions_result.scalars().all()
+    async with record_phase("history_page"):
+        sessions_result = await db.execute(query)
+        sessions = sessions_result.scalars().all()
 
     has_more = len(sessions) > page_size
     sessions_to_return = sessions[:page_size]
@@ -534,27 +550,29 @@ async def list_sessions(
 
     session_ids = [s.id for s in sessions_to_return]
 
-    history_events_result = await db.execute(
-        select(Event)
-        .where(Event.session_id.in_(session_ids))
-        .where(
-            or_(
-                (Event.type == "roll") & (Event.selected_thread_id.is_not(None)),
-                (Event.type.in_(("rate", "snooze", "undo"))) & (Event.die_after.is_not(None)),
+    async with record_phase("history_events"):
+        history_events_result = await db.execute(
+            select(Event)
+            .where(Event.session_id.in_(session_ids))
+            .where(
+                or_(
+                    (Event.type == "roll") & (Event.selected_thread_id.is_not(None)),
+                    (Event.type.in_(("rate", "snooze", "undo"))) & (Event.die_after.is_not(None)),
+                )
             )
+            .order_by(Event.session_id, Event.timestamp, Event.id)
         )
-        .order_by(Event.session_id, Event.timestamp, Event.id)
-    )
-    history_events = history_events_result.scalars().all()
+        history_events = history_events_result.scalars().all()
 
-    projection = project_session_history_events(session_ids, history_events)
+        projection = project_session_history_events(session_ids, history_events)
 
-    snapshot_count_result = await db.execute(
-        select(Snapshot.session_id, func.count())
-        .where(Snapshot.session_id.in_(session_ids))
-        .group_by(Snapshot.session_id)
-    )
-    snapshot_counts = {row[0]: row[1] for row in snapshot_count_result.all()}
+    async with record_phase("history_snapshot_counts"):
+        snapshot_count_result = await db.execute(
+            select(Snapshot.session_id, func.count())
+            .where(Snapshot.session_id.in_(session_ids))
+            .group_by(Snapshot.session_id)
+        )
+        snapshot_counts = {row[0]: row[1] for row in snapshot_count_result.all()}
 
     sessions_by_id = {s.id: s for s in sessions_to_return}
 
@@ -580,12 +598,13 @@ async def list_sessions(
     }
 
     active_threads_dict: dict[int, ActiveThreadInfo | None] = {}
-    if thread_ids:
-        threads_result = await db.execute(select(Thread).where(Thread.id.in_(thread_ids)))
-        threads_by_id = {t.id: t for t in threads_result.scalars().all()}
-        threads = list(threads_by_id.values())
-        unread_counts = await _bulk_unread_counts(threads, db)
-        issue_numbers = await _bulk_next_issue_numbers(threads, db)
+    async with record_phase("history_active_threads"):
+        if thread_ids:
+            threads_result = await db.execute(select(Thread).where(Thread.id.in_(thread_ids)))
+            threads_by_id = {t.id: t for t in threads_result.scalars().all()}
+            threads = list(threads_by_id.values())
+            unread_counts = await _bulk_unread_counts(threads, db)
+            issue_numbers = await _bulk_next_issue_numbers(threads, db)
 
         for sid in session_ids:
             roll_event = projection.latest_roll_by_session.get(sid)

@@ -7,7 +7,12 @@ from collections.abc import AsyncIterator
 
 from sqlalchemy import event, text
 from sqlalchemy.engine import make_url
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.orm import DeclarativeBase
 
 from app.config import get_database_settings
@@ -50,34 +55,53 @@ async_engine = create_async_engine(
 )
 
 
-@event.listens_for(async_engine.sync_engine, "before_cursor_execute")
-def _before_cursor_execute(
-    connection: object,
-    cursor: object,
-    statement: str,
-    parameters: object,
-    context: object,
-    executemany: bool,
-) -> None:
-    """Start timing a SQL statement after a connection has been acquired."""
-    del connection, cursor, statement, parameters, executemany
-    vars(context)["_comic_pile_query_started_at"] = time.perf_counter()
+def install_database_instrumentation(engine: AsyncEngine) -> None:
+    """Attach SQL timing and query-count listeners to an async engine.
+
+    The listeners feed the active request diagnostics context so that total
+    database time/query counts and per-phase query attribution are observable
+    for any engine, including test engines that use their own connection.
+
+    Installing on the same engine more than once is a no-op.
+
+    Args:
+        engine: The async engine to instrument.
+    """
+    if getattr(engine.sync_engine, "_comic_pile_instrumented", False):
+        return
+
+    @event.listens_for(engine.sync_engine, "before_cursor_execute")
+    def _before_cursor_execute(
+        connection: object,
+        cursor: object,
+        statement: str,
+        parameters: object,
+        context: object,
+        executemany: bool,
+    ) -> None:
+        """Start timing a SQL statement after a connection has been acquired."""
+        del connection, cursor, statement, parameters, executemany
+        vars(context)["_comic_pile_query_started_at"] = time.perf_counter()
+
+    @event.listens_for(engine.sync_engine, "after_cursor_execute")
+    def _after_cursor_execute(
+        connection: object,
+        cursor: object,
+        statement: str,
+        parameters: object,
+        context: object,
+        executemany: bool,
+    ) -> None:
+        """Record SQL execution time in the active request diagnostics context."""
+        del connection, cursor, statement, parameters, executemany
+        started_at = vars(context).get("_comic_pile_query_started_at")
+        if isinstance(started_at, float):
+            record_database_query((time.perf_counter() - started_at) * 1000)
+
+    vars(engine.sync_engine)["_comic_pile_instrumented"] = True
 
 
-@event.listens_for(async_engine.sync_engine, "after_cursor_execute")
-def _after_cursor_execute(
-    connection: object,
-    cursor: object,
-    statement: str,
-    parameters: object,
-    context: object,
-    executemany: bool,
-) -> None:
-    """Record SQL execution time in the active request diagnostics context."""
-    del connection, cursor, statement, parameters, executemany
-    started_at = vars(context).get("_comic_pile_query_started_at")
-    if isinstance(started_at, float):
-        record_database_query((time.perf_counter() - started_at) * 1000)
+install_database_instrumentation(async_engine)
 
 
 AsyncSessionLocal = async_sessionmaker(
