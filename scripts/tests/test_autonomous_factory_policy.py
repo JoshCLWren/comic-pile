@@ -49,6 +49,17 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "missing required policy text"):
             CHECKER.validate_texts(mutated, self.protocol, self.entrypoint)
 
+    def test_missing_exact_sha_truth_is_rejected(self) -> None:
+        """Reject policy drift that allows approval evidence to float across commits."""
+        mutated = self.policy.replace(
+            "All review, repair, and readiness decisions are tied to the exact "
+            "pull-request head SHA.",
+            "Reviews may apply to later pull-request commits when the scope is similar.",
+        )
+
+        with self.assertRaisesRegex(SystemExit, "missing required policy text"):
+            CHECKER.validate_texts(mutated, self.protocol, self.entrypoint)
+
     def test_obsolete_marker_dialect_is_rejected(self) -> None:
         """Reject reintroduction of an obsolete repair marker dialect."""
         mutated = f"{self.policy}\n<!-- comic-pile-factory-fix-v2:legacy -->\n"
