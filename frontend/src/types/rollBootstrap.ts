@@ -25,3 +25,12 @@ export interface RollBootstrapResponse {
   stale_thread_count: number
   stale_thread: RollBootstrapThread | null
 }
+
+declare module './index' {
+  interface RollBootstrapThread {
+    id: number
+    title: string
+    format: string
+    last_activity_at?: string | null
+  }
+}
