@@ -1,10 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IssueReadStatusButton } from '../pages/thread-detail/IssueReadStatusButton'
-import { issuesApi } from '../services/api-issues'
-import { threadsApi } from '../services/api'
-import type { Issue, Thread } from '../types'
 import type { IssueMutationSnapshot } from '../pages/thread-detail/issueMutationState'
+import { threadsApi } from '../services/api'
+import { issuesApi } from '../services/api-issues'
+import type { Issue, Thread } from '../types'
 
 vi.mock('../services/api-issues', () => ({
   issuesApi: {
@@ -19,6 +20,49 @@ vi.mock('../services/api', () => ({
     get: vi.fn(),
   },
 }))
+
+interface Deferred<T> {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (reason?: unknown) => void
+}
+
+function createDeferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+
+  return { promise, resolve, reject }
+}
+
+interface ControlledIssueButtonsProps {
+  initialSnapshot: IssueMutationSnapshot
+  onSnapshotChange: (snapshot: IssueMutationSnapshot) => void
+}
+
+function ControlledIssueButtons({
+  initialSnapshot,
+  onSnapshotChange,
+}: ControlledIssueButtonsProps) {
+  const [snapshot, setSnapshot] = useState(initialSnapshot)
+
+  function handleSnapshotChange(nextSnapshot: IssueMutationSnapshot) {
+    setSnapshot(nextSnapshot)
+    onSnapshotChange(nextSnapshot)
+  }
+
+  return snapshot.issues.map((currentIssue) => (
+    <IssueReadStatusButton
+      key={currentIssue.id}
+      issue={currentIssue}
+      snapshot={snapshot}
+      onSnapshotChange={handleSnapshotChange}
+    />
+  ))
+}
 
 const issue: Issue = {
   id: 11,
@@ -92,8 +136,8 @@ describe('IssueReadStatusButton', () => {
       id: 12,
       issue_number: '3',
     }
-    const firstIssueRequest = Promise.withResolvers<Issue>()
-    const secondIssueRequest = Promise.withResolvers<Issue>()
+    const firstIssueRequest = createDeferred<Issue>()
+    const secondIssueRequest = createDeferred<Issue>()
     vi.mocked(issuesApi.markRead).mockResolvedValue()
     vi.mocked(issuesApi.get)
       .mockReturnValueOnce(firstIssueRequest.promise)
@@ -121,18 +165,10 @@ describe('IssueReadStatusButton', () => {
     }
 
     render(
-      <>
-        <IssueReadStatusButton
-          issue={issue}
-          snapshot={snapshot}
-          onSnapshotChange={onSnapshotChange}
-        />
-        <IssueReadStatusButton
-          issue={secondIssue}
-          snapshot={snapshot}
-          onSnapshotChange={onSnapshotChange}
-        />
-      </>,
+      <ControlledIssueButtons
+        initialSnapshot={snapshot}
+        onSnapshotChange={onSnapshotChange}
+      />,
     )
 
     const buttons = screen.getAllByRole('button', { name: 'Mark read' })
