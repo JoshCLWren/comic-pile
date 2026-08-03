@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import type { RollBootstrapThread } from '../../../types'
+import type { RollBootstrapThread } from '../../../types/rollBootstrap'
 
 interface ThreadPoolProps {
   pool: RollBootstrapThread[]
