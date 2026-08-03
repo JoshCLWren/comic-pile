@@ -80,9 +80,8 @@ class RollBootstrapResponse(BaseModel):
         if not isinstance(data, dict):
             return data
 
-        bounded: dict[object, object] = dict(data)
         for field_name in ("snoozed_threads", "blocked_threads"):
-            values = bounded.get(field_name)
+            values = data.get(field_name)
             if isinstance(values, list):
-                bounded[field_name] = values[: cls.summary_limit]
-        return bounded
+                data[field_name] = values[: cls.summary_limit]
+        return data
