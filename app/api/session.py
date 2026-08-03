@@ -404,21 +404,18 @@ async def get_current_session(
 
     while retries < max_retries:
         try:
-            active_sessions_result = await db.execute(
+            active_session_result = await db.execute(
                 select(SessionModel)
                 .where(SessionModel.user_id == current_user.id)
                 .where(SessionModel.ended_at.is_(None))
                 .order_by(SessionModel.started_at.desc(), SessionModel.id.desc())
+                .limit(1)
             )
-            active_sessions = active_sessions_result.scalars().all()
+            active_session = active_session_result.scalars().first()
 
-            active_session = None
-            for session in active_sessions:
-                if await is_active(session.started_at, session.ended_at, db):
-                    active_session = session
-                    break
-
-            if not active_session:
+            if active_session is None or not await is_active(
+                active_session.started_at, active_session.ended_at, db
+            ):
                 active_session = await get_or_create(db, user_id=current_user.id)
 
             await db.refresh(active_session)
