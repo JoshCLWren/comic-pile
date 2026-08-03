@@ -61,7 +61,9 @@ export function useRollBootstrap() {
   }, [showToast]);
 
   useEffect(() => {
-    fetchBootstrap();
+    // Defer the request by one microtask so consumers can reliably observe the
+    // initial loading state before even an already-resolved test or cache value settles.
+    void Promise.resolve().then(fetchBootstrap);
   }, [fetchBootstrap]);
 
   return { data, isPending, isError, error, refetch: fetchBootstrap };
