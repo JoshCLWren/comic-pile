@@ -4,13 +4,13 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_REPO="${COMIC_PILE_REPO:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 RUNNER="$SCRIPT_DIR/comic-pile-opencode-factory.sh"
-STATE_DIR="${COMIC_PILE_FACTORY_STATE_DIR:-$SOURCE_REPO/.opencode_factory}"
+STATE_DIR="${COMIC_PILE_FACTORY_STATE_DIR:-${SOURCE_REPO%/}-factory-state}"
 PID_FILE="$STATE_DIR/overnight.pid"
 SUPERVISOR_LOG="$STATE_DIR/overnight.log"
 
 usage() {
   cat <<'USAGE'
-Usage: comic-pile-opencode-factory-overnight.sh <start|stop|status|run> [factory options]
+Usage: bash scripts/comic-pile-opencode-factory-overnight.sh <start|stop|status|run> [factory options]
 
 Commands:
   start    Launch the continuous OpenCode factory in the background.
@@ -25,10 +25,10 @@ Environment defaults:
 
 Additional arguments are passed to comic-pile-opencode-factory.sh after --watch.
 Examples:
-  ./scripts/comic-pile-opencode-factory-overnight.sh start
-  ./scripts/comic-pile-opencode-factory-overnight.sh status
-  ./scripts/comic-pile-opencode-factory-overnight.sh stop
-  ./scripts/comic-pile-opencode-factory-overnight.sh run --idle-seconds 30
+  bash scripts/comic-pile-opencode-factory-overnight.sh start
+  bash scripts/comic-pile-opencode-factory-overnight.sh status
+  bash scripts/comic-pile-opencode-factory-overnight.sh stop
+  bash scripts/comic-pile-opencode-factory-overnight.sh run --idle-seconds 30
 USAGE
 }
 
