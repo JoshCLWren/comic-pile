@@ -87,4 +87,64 @@ describe('useCurrentSessionQuery', () => {
     await waitFor(() => expect(result.current.data?.id).toBe(21))
     expect(client.getQueryData(queryKeys.session.current())).toMatchObject({ id: 21 })
   })
+
+  it('keeps API data usable when browser storage reads and writes fail', async () => {
+    vi.mocked(sessionApi.getCurrent).mockResolvedValue({
+      id: 30,
+      current_die: 20,
+      user_id: 12,
+    })
+    const getItem = vi
+      .spyOn(Storage.prototype, 'getItem')
+      .mockImplementation(() => {
+        throw new Error('storage read blocked')
+      })
+    const setItem = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(() => {
+        throw new Error('storage write blocked')
+      })
+
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+      },
+    })
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    )
+
+    const { result } = renderHook(() => useCurrentSessionQuery(), { wrapper })
+
+    await waitFor(() => expect(result.current.data?.id).toBe(30))
+    expect(showToast).not.toHaveBeenCalled()
+    expect(getItem).toHaveBeenCalledWith('comic_pile_last_session_id_12')
+    expect(setItem).toHaveBeenCalledWith('comic_pile_last_session_id_12', '30')
+
+    getItem.mockRestore()
+    setItem.mockRestore()
+  })
+
+  it('accepts a direct cache value when no current session is cached', async () => {
+    vi.mocked(sessionApi.getCurrent).mockResolvedValue(null)
+
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+      },
+    })
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    )
+
+    const { result } = renderHook(() => useCurrentSessionQuery(), { wrapper })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    act(() => {
+      result.current.setData({ id: 31, current_die: 4, user_id: 12 })
+    })
+
+    await waitFor(() => expect(result.current.data?.id).toBe(31))
+    expect(client.getQueryData(queryKeys.session.current())).toMatchObject({ id: 31 })
+  })
 })
