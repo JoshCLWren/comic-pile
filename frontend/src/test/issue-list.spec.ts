@@ -579,8 +579,13 @@ test.describe('Progress Tracking', () => {
     const threads = extractThreadsFromResponse(await threadsResponse.json());
     const thread = findByTitle(threads, uniqueTitle);
 
+    // The list view deliberately omits detail-only fields (see #715), so fetch
+    // the thread detail for the reading_progress contract.
+    const detailResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/threads/${thread.id}`);
+    const threadDetail = await detailResponse.json();
+
     // Initial progress: not_started
-    expect(thread.reading_progress).toBe('not_started');
+    expect(threadDetail.reading_progress).toBe('not_started');
 
     // Get issues
     const issuesResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/v1/threads/${thread.id}/issues`);

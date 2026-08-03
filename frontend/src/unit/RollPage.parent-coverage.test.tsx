@@ -527,6 +527,10 @@ describe('RollPage parent handlers', () => {
 
   it('handles finish-session rating refresh failure and stale migration', async () => {
     const user = userEvent.setup()
+    // The rated pool thread is rendered as stale, so the rating flow refreshes
+    // bootstrap stale data; a refresh failure must surface the error.
+    bootstrapData.stale_thread = { id: 1, title: 'Saga', format: 'Comic', last_activity_at: '2000-01-01T00:00:00Z' }
+    bootstrapData.stale_thread_count = 1
     render(<RollPage />)
     await user.click(screen.getByRole('button', { name: 'thread' }))
     await user.click(screen.getByRole('button', { name: /Read Now/ }))
@@ -536,7 +540,6 @@ describe('RollPage parent handlers', () => {
     await waitFor(() => expect(screen.getByText(/failed to refresh/i)).toBeInTheDocument())
 
     cleanup()
-    staleData = [{ id: 3, title: 'Unmigrated stale', format: 'Comic', status: 'active', is_blocked: false, created_at: '2000-01-01' }] as never[]
     bootstrapData.stale_thread = { id: 3, title: 'Unmigrated stale', format: 'Comic', last_activity_at: '2000-01-01T00:00:00Z' }
     bootstrapData.stale_thread_count = 1
     spies.setPending.mockResolvedValueOnce({ thread_id: 3, title: 'Unmigrated stale', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, result: 2 })
@@ -544,6 +547,50 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('button', { name: 'read stale' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'skip migration' })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'close migration' }))
+  })
+
+  it('refreshes stale data after simple migration completion of a stale thread', async () => {
+    const user = userEvent.setup()
+    bootstrapData.stale_thread = { id: 1, title: 'Saga', format: 'Comic', last_activity_at: '2000-01-01T00:00:00Z' }
+    bootstrapData.stale_thread_count = 1
+    spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, result: 3 })
+    render(<RollPage />)
+    await user.click(screen.getByRole('button', { name: 'read stale' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'skip migration' })).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'skip migration' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'save rating' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'complete simple' })).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'complete simple' }))
+    await waitFor(() => expect(spies.refetch).toHaveBeenCalled())
+  })
+
+  it('refreshes bootstrap only when the rated thread was rendered stale', async () => {
+    const user = userEvent.setup()
+    spies.refetch.mockClear()
+    bootstrapData.stale_thread = { id: 1, title: 'Saga', format: 'Comic', last_activity_at: '2000-01-01T00:00:00Z' }
+    bootstrapData.stale_thread_count = 1
+    render(<RollPage />)
+    await user.click(screen.getByRole('button', { name: 'thread' }))
+    await user.click(screen.getByRole('button', { name: /Read Now/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
+    spies.refetch.mockClear()
+    await user.click(screen.getByRole('button', { name: 'save rating' }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'save rating' })).not.toBeInTheDocument())
+    expect(spies.refetch).toHaveBeenCalled()
+
+    cleanup()
+    bootstrapData.stale_thread = null
+    bootstrapData.stale_thread_count = 0
+    spies.refetch.mockClear()
+    render(<RollPage />)
+    await user.click(screen.getByRole('button', { name: 'thread' }))
+    await user.click(screen.getByRole('button', { name: /Read Now/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
+    spies.refetch.mockClear()
+    await user.click(screen.getByRole('button', { name: 'save rating' }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'save rating' })).not.toBeInTheDocument())
+    expect(spies.refetch).not.toHaveBeenCalled()
   })
 
   it('renders loading and session error recovery states', async () => {

@@ -229,31 +229,13 @@ test('5. History page - Verify reading history', async ({ authenticatedPage }) =
     }
   });
 
-test('6. Analytics page - Verify charts and stats', async ({ authenticatedPage }) => {
+test('6. Analytics page - retired route redirects to root', async ({ authenticatedPage }) => {
+    const baseUrl = process.env.BASE_URL || 'http://localhost:9000';
     await authenticatedPage.goto('/analytics', { waitUntil: 'domcontentloaded' });
 
-    // Verify analytics page loads
-    await expect(authenticatedPage.locator('h1:has-text("Analytics"), h2:has-text("Analytics")').first()).toBeVisible({ timeout: 10000 });
-
-    // Check for glass cards (stat cards)
-    const glassCards = authenticatedPage.locator('.glass-card, .stat-card, [data-stat]');
-    const cardCount = await glassCards.count();
-
-    if (cardCount > 0) {
-      await expect(glassCards.first()).toBeVisible();
-
-      // Check that numbers look reasonable (not NaN)
-      const firstCardText = await glassCards.first().textContent();
-      expect(firstCardText).not.toContain('NaN');
-    }
-
-    // Check for charts
-    const charts = authenticatedPage.locator('canvas, .chart, .graph, [data-chart]');
-    const chartCount = await charts.count();
-
-    if (chartCount > 0) {
-      await expect(charts.first()).toBeVisible();
-    }
+    // The analytics feature was retired (#611); the route must redirect to root.
+    await expect(authenticatedPage).toHaveURL(`${baseUrl}/`);
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
   });
 
   test('7. Dependencies - Check dependency indicators and tooltips', async ({ authenticatedPage, request }) => {

@@ -221,13 +221,18 @@ export default function RollPage() {
   }, [setShowMigrationDialog, setThreadToMigrate])
 
   const handleSimpleMigrationComplete = useCallback((issueNumber: string) => {
+    // Rating a stale thread moves it out of the stale set, so refresh the stale
+    // data (via bootstrap) only when the rated thread was already rendered as
+    // stale. This preserves stale indicators without a bootstrap refetch on
+    // every rating.
+    const wasStale = bootstrap?.stale_thread?.id === activeRatingThread!.id
     setShowSimpleMigration(false)
     rateMutation.mutate({
       thread_id: activeRatingThread!.id,
       rating,
       finish_session: false,
       issue_number: issueNumber,
-    }).then((rateResponse) => {
+    }).then(async (rateResponse) => {
       if (rateResponse && activeRatingThread) {
         setActiveRatingThread({
           ...activeRatingThread,
@@ -244,11 +249,13 @@ export default function RollPage() {
       setSelectedThreadId(null)
       setActiveRatingThread(null)
       setErrorMessage('')
-      refetchBootstrap()
+      if (wasStale) {
+        await refetchBootstrap()
+      }
     }).catch((error: unknown) => {
       setErrorMessage(getApiErrorDetail(error))
     })
-  }, [activeRatingThread, rating, rateMutation, refetchBootstrap, setShowSimpleMigration, suppressPendingAutoOpenRef, setIsRolling, setIsRatingView, setRolledResult, setSelectedThreadId, setActiveRatingThread, setErrorMessage])
+  }, [activeRatingThread, rating, rateMutation, refetchBootstrap, bootstrap, setShowSimpleMigration, suppressPendingAutoOpenRef, setIsRolling, setIsRatingView, setRolledResult, setSelectedThreadId, setActiveRatingThread, setErrorMessage])
 
   async function handleAction(action: string) {
     setIsActionSheetOpen(false)
@@ -493,6 +500,11 @@ export default function RollPage() {
 
     if (!activeRatingThread) return
 
+    // Capture stale-set membership before the mutation: a rated thread leaves the
+    // stale set, so refresh stale data (via bootstrap) only when it was rendered
+    // as stale. This avoids a bootstrap round trip on every rating.
+    const wasStale = bootstrap?.stale_thread?.id === activeRatingThread.id
+
     try {
       const rateResponse = await rateMutation.mutate({
         thread_id: activeRatingThread.id,
@@ -514,11 +526,13 @@ export default function RollPage() {
         })
       }
 
-      try {
-        await refetchBootstrap()
-      } catch {
-        setErrorMessage('Rating saved but failed to refresh. Please refresh the page.')
-        return
+      if (wasStale) {
+        try {
+          await refetchBootstrap()
+        } catch {
+          setErrorMessage('Rating saved but failed to refresh. Please refresh the page.')
+          return
+        }
       }
 
       setIsRolling(false)
