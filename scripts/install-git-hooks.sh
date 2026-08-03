@@ -1,26 +1,38 @@
 #!/usr/bin/env bash
-# Install git hooks for this repository
+# Install git hooks for this repository.
 
-set -e
+set -euo pipefail
 
 echo "🔧 Installing git hooks..."
 
-# Backup any existing hooks
-cp .git/hooks/pre-commit .git/hooks/pre-commit.sample 2>/dev/null || true
-cp .git/hooks/pre-push .git/hooks/pre-push.sample 2>/dev/null || true
-cp .git/hooks/prepare-commit-msg .git/hooks/prepare-commit-msg.sample 2>/dev/null || true
+mkdir -p .git/hooks .git/hooks/comic-pile-originals
 
-# Install from versioned hooks
-mkdir -p .git/hooks
+backup_original_hook() {
+    local hook_name="$1"
+    local active_hook=".git/hooks/$hook_name"
+    local backup_hook=".git/hooks/comic-pile-originals/$hook_name"
+
+    if [[ -f "$active_hook" && ! -e "$backup_hook" ]]; then
+        cp "$active_hook" "$backup_hook"
+    fi
+}
+
+# Preserve each pre-existing user hook exactly once. Re-running this installer
+# must never replace the original backup with ComicPile's installed hook.
+backup_original_hook pre-commit
+backup_original_hook pre-push
+backup_original_hook prepare-commit-msg
+
+# Install from versioned hooks.
 cp .githooks/pre-commit .git/hooks/pre-commit
 chmod +x .git/hooks/pre-commit
 
-if [ -f .githooks/pre-push ]; then
+if [[ -f .githooks/pre-push ]]; then
     cp .githooks/pre-push .git/hooks/pre-push
     chmod +x .git/hooks/pre-push
 fi
 
-if [ -f .githooks/prepare-commit-msg ]; then
+if [[ -f .githooks/prepare-commit-msg ]]; then
     cp .githooks/prepare-commit-msg .git/hooks/prepare-commit-msg
     chmod +x .git/hooks/prepare-commit-msg
 fi
@@ -30,8 +42,7 @@ echo ""
 echo "Hooks installed:"
 echo "  - pre-commit: Runs linting before each commit"
 echo "  - pre-push: Runs tests before each push"
-echo "  - prepare-commit-msg: Signs commits with the producing model (\$OPENCODE_MODEL)"
+echo "  - prepare-commit-msg: Adds the producing model trailer (\$OPENCODE_MODEL)"
 echo ""
-echo "To bypass hooks (not recommended), use:"
-echo "  git commit --no-verify"
-echo "  git push --no-verify"
+echo "Original user hooks, when present, are preserved in:"
+echo "  .git/hooks/comic-pile-originals/"
