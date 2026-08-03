@@ -39,6 +39,16 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "missing required policy text"):
             CHECKER.validate_texts(mutated, self.protocol, self.entrypoint)
 
+    def test_missing_no_auto_merge_boundary_is_rejected(self) -> None:
+        """Reject removal of the explicit no-auto-merge safety boundary."""
+        mutated = self.policy.replace(
+            "Never enable auto-merge as a substitute for explicit authorization.",
+            "Auto-merge may be enabled after CI passes.",
+        )
+
+        with self.assertRaisesRegex(SystemExit, "missing required policy text"):
+            CHECKER.validate_texts(mutated, self.protocol, self.entrypoint)
+
     def test_obsolete_marker_dialect_is_rejected(self) -> None:
         """Reject reintroduction of an obsolete repair marker dialect."""
         mutated = f"{self.policy}\n<!-- comic-pile-factory-fix-v2:legacy -->\n"
