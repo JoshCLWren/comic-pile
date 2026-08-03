@@ -9,6 +9,27 @@ from pathlib import Path
 
 SCRIPT = Path(__file__).parents[1] / ".github" / "scripts" / "prune-oldest-vcr-image.sh"
 
+# Git exports these into hook environments (e.g. the pre-push hook). When a test
+# subprocess inherits them, git targets the outer repository instead of the
+# fixture's throwaway repo, so strip every git override before spawning git.
+_GIT_OVERRIDE_VARS = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_NAMESPACE",
+    "GIT_CEILING_DIRECTORIES",
+    "GIT_DISCOVERY_ACROSS_FILESYSTEM",
+    "GIT_CONFIG_GLOBAL",
+    "GIT_CONFIG_SYSTEM",
+    "GIT_COMMON_DIR",
+)
+
+
+def _git_safe_env() -> dict[str, str]:
+    return {k: v for k, v in os.environ.items() if k not in _GIT_OVERRIDE_VARS}
+
 
 def _write_mock_tools(
     tmp_path: Path,
@@ -107,7 +128,7 @@ def _run_pruner(
         created_by_tag,
     )
     env = {
-        **os.environ,
+        **_git_safe_env(),
         "PATH": f"{bin_dir}:{os.environ['PATH']}",
         "ORAS_BIN": str(bin_dir / "oras"),
         "JQ_BIN": str(bin_dir / "jq"),
@@ -132,21 +153,24 @@ def _run_pruner(
 
 def _create_git_commit(repo: Path, timestamp: str) -> str:
     repo.mkdir()
-    subprocess.run(["git", "init", "--quiet"], cwd=repo, check=True)
+    git_env = _git_safe_env()
+    subprocess.run(["git", "init", "--quiet"], cwd=repo, env=git_env, check=True)
     subprocess.run(
         ["git", "config", "user.email", "profile-test@example.com"],
         cwd=repo,
+        env=git_env,
         check=True,
     )
     subprocess.run(
         ["git", "config", "user.name", "Production Profile Test"],
         cwd=repo,
+        env=git_env,
         check=True,
     )
     (repo / "fixture.txt").write_text("fixture\n", encoding="utf-8")
-    subprocess.run(["git", "add", "fixture.txt"], cwd=repo, check=True)
+    subprocess.run(["git", "add", "fixture.txt"], cwd=repo, env=git_env, check=True)
     commit_env = {
-        **os.environ,
+        **git_env,
         "GIT_AUTHOR_DATE": timestamp,
         "GIT_COMMITTER_DATE": timestamp,
     }
@@ -159,6 +183,7 @@ def _create_git_commit(repo: Path, timestamp: str) -> str:
     return subprocess.run(
         ["git", "rev-parse", "HEAD"],
         cwd=repo,
+        env=git_env,
         check=True,
         capture_output=True,
         text=True,
