@@ -7,6 +7,7 @@ on:
       - docs/AUTONOMOUS_FACTORY_POLICY.md
       - docs/ISSUE_EXECUTION_PROTOCOL.md
       - scripts/comic-pile-opencode-factory.sh
+      - scripts/comic-pile-opencode-factory-overnight.sh
       - scripts/check-autonomous-factory-policy.py
       - scripts/tests/test_autonomous_factory_policy.py
       - .github/workflows/factory-policy.yml
@@ -18,6 +19,7 @@ on:
       - docs/AUTONOMOUS_FACTORY_POLICY.md
       - docs/ISSUE_EXECUTION_PROTOCOL.md
       - scripts/comic-pile-opencode-factory.sh
+      - scripts/comic-pile-opencode-factory-overnight.sh
       - scripts/check-autonomous-factory-policy.py
       - scripts/tests/test_autonomous_factory_policy.py
       - .github/workflows/factory-policy.yml
@@ -31,7 +33,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check local factory shell syntax
-        run: bash -n scripts/comic-pile-opencode-factory.sh
+        run: |
+          bash -n scripts/comic-pile-opencode-factory.sh
+          bash -n scripts/comic-pile-opencode-factory-overnight.sh
       - name: Compile factory policy checker and tests
         run: python -m py_compile scripts/check-autonomous-factory-policy.py scripts/tests/test_autonomous_factory_policy.py
       - name: Check canonical factory invariants
