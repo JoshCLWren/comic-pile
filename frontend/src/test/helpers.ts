@@ -19,7 +19,7 @@ type TestUser = {
 
 export async function getCollectionsEnabled(page: Page): Promise<boolean> {
   void page
-  return true
+  return false
 }
 
 export async function waitForQueueReady(page: Page): Promise<void> {

@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
@@ -919,5 +919,75 @@ describe('RollPage parent handlers', () => {
     expect(errorSpy).toHaveBeenCalledWith('Failed to fetch reading orders:', expect.any(Error))
     expect(errorSpy).toHaveBeenCalledWith('Failed to fetch connected threads:', expect.any(Error))
     errorSpy.mockRestore()
+  })
+
+  it('retries a non-401 bootstrap error and reopens the roll view', async () => {
+    bootstrapHook.value = {
+      data: undefined,
+      isPending: false,
+      isError: true,
+      error: Object.assign(new Error('boom'), { response: { status: 500, data: { detail: 'server down' } } }),
+      refetch: spies.refetch,
+    }
+    render(<RollPage />)
+    expect(screen.getByText('Session Error')).toBeInTheDocument()
+    await userEvent.setup().click(screen.getByRole('button', { name: /retry/i }))
+    expect(spies.refetch).toHaveBeenCalled()
+  })
+
+  it('falls back to empty blocked reasons when blocking info fails', async () => {
+    threadData.push({ id: 2, title: 'Blocked', format: 'Comic', status: 'active', is_blocked: true })
+    bootstrapData.blocked_threads = [{ id: 2, title: 'Blocked', format: 'Comic' }]
+    bootstrapData.blocked_count = 1
+    relatedApi.blockingInfo.mockReset().mockRejectedValue(new Error('blocking down'))
+    render(<RollPage />)
+    await userEvent.setup().click(screen.getByRole('button', { name: 'toggle blocked' }))
+    await waitFor(() => expect(relatedApi.blockingInfo).toHaveBeenCalledWith(2))
+    threadData.splice(1)
+  })
+
+  it('selects a die and clears manual die from the mobile die modal', async () => {
+    render(<RollPage />)
+    await userEvent.setup().click(screen.getAllByRole('button', { name: 'd6' })[1]!)
+    const autoModal = screen.getByRole('heading', { name: 'Select Die' }).closest('section')!
+    await userEvent.setup().click(within(autoModal).getByRole('button', { name: 'Auto' }))
+    expect(spies.clearDie).toHaveBeenCalled()
+
+    await userEvent.setup().click(screen.getAllByRole('button', { name: 'd6' })[1]!)
+    const dieModal = screen.getByRole('heading', { name: 'Select Die' }).closest('section')!
+    await userEvent.setup().click(within(dieModal).getByRole('button', { name: 'd4' }))
+    expect(spies.setDie).toHaveBeenCalledWith(4)
+  })
+
+  it('recovers a roll conflict from roll-pool metadata when active thread does not match', async () => {
+    bootstrapHook.value = null
+    render(<RollPage />)
+    spies.refetch.mockResolvedValueOnce({
+      pending_thread_id: 3,
+      last_rolled_result: 5,
+      active_thread: { id: 9, title: 'Other', format: 'Comic', issues_remaining: 1, queue_position: 1, total_issues: 4 },
+      roll_pool: [{ id: 3, title: 'Pool Thread', format: 'Comic' }],
+    })
+    spies.roll.mockRejectedValueOnce(Object.assign(new Error('pending'), { response: { status: 409, data: { detail: 'pending' } } }))
+    vi.useFakeTimers()
+    fireEvent.click(screen.getByRole('button', { name: 'Roll the dice' }))
+    await act(async () => { await vi.advanceTimersByTimeAsync(1300) })
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+    expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument()
+    vi.useRealTimers()
+  })
+
+  it('renders manual-die mode and a failed die change in the modal', async () => {
+    bootstrapData.manual_die = 4
+    render(<RollPage />)
+    expect(screen.getByRole('button', { name: 'Auto' })).toHaveAttribute('title', 'Exit manual mode (currently d4)')
+
+    await userEvent.setup().click(screen.getAllByRole('button', { name: 'd6' })[1]!)
+    const modal = screen.getByRole('heading', { name: 'Select Die' }).closest('section')!
+    spies.setDie.mockRejectedValueOnce(new Error('die failed'))
+    await userEvent.setup().click(within(modal).getByRole('button', { name: 'd4' }))
+    expect(spies.setDie).toHaveBeenCalledWith(4)
+    expect(screen.getByRole('heading', { name: 'Select Die' })).toBeInTheDocument()
+    bootstrapData.manual_die = null
   })
 })

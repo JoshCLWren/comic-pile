@@ -437,16 +437,14 @@ async def roll_bootstrap(
     ]
 
     stale_cutoff = datetime.now(UTC) - timedelta(days=7)
+    effective_activity = func.coalesce(Thread.last_activity_at, Thread.created_at)
     stale_count_result = await db.execute(
         select(func.count())
         .select_from(Thread)
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
         .where(Thread.is_blocked.is_(False))
-        .where(
-            (Thread.last_activity_at < stale_cutoff)
-            | (Thread.last_activity_at.is_(None))
-        )
+        .where(effective_activity < stale_cutoff)
     )
     stale_thread_count = stale_count_result.scalar() or 0
 
@@ -457,11 +455,8 @@ async def roll_bootstrap(
             .where(Thread.user_id == user_id)
             .where(Thread.status == "active")
             .where(Thread.is_blocked.is_(False))
-            .where(
-                (Thread.last_activity_at < stale_cutoff)
-                | (Thread.last_activity_at.is_(None))
-            )
-            .order_by(Thread.last_activity_at.asc().nullsfirst())
+            .where(effective_activity < stale_cutoff)
+            .order_by(effective_activity.asc())
             .limit(1)
         )
         stale_row = stale_result.first()
