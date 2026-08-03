@@ -51,6 +51,7 @@ export default function CompletedThreadsSection({
             <button
               type="button"
               onClick={() => onReactivate(null)}
+              aria-label="Choose completed thread to reactivate"
               className="h-8 md:h-10 px-3 md:px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10"
             >
               Reactivate
@@ -69,6 +70,7 @@ export default function CompletedThreadsSection({
                   <button
                     type="button"
                     onClick={() => onReactivate(thread)}
+                    aria-label={`Reactivate ${thread.title}`}
                     className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[9px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10"
                   >
                     Reactivate
