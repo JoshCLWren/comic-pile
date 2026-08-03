@@ -50,6 +50,37 @@ export async function applyUpdatedThreadCache(
 }
 
 /**
+ * Reconcile an issue edit through the thread-owned read models it can change.
+ *
+ * Issue title, number, read state, and ordering changes affect the edited thread's
+ * paginated issue rows. They can also alter thread summary/detail counters and the
+ * current session when the edited issue is pending. Unrelated threads, Queue pages,
+ * History, dependencies, Roll bootstrap, and analytics remain valid.
+ */
+export async function invalidateAfterIssueEdit(
+  client: QueryClient,
+  threadId: number,
+): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({
+      queryKey: queryKeys.thread.issuePages(threadId),
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.thread.detail(threadId),
+      exact: true,
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.thread.summary(threadId),
+      exact: true,
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.session.current(),
+      exact: true,
+    }),
+  ])
+}
+
+/**
  * Reconcile snooze and unsnooze mutations through their authoritative owner.
  *
  * Snooze membership lives on the current session, so these mutations must not
