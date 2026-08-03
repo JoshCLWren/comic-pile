@@ -100,4 +100,34 @@ describe('useRollBootstrap', () => {
       new Error('Failed to fetch roll bootstrap'),
     )
   })
+
+  it('still loads when persisting the session id fails', async () => {
+    const originalStorage = window.localStorage
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: vi.fn(() => null),
+        setItem: vi.fn(() => {
+          throw new Error('storage unavailable')
+        }),
+        clear: vi.fn(),
+      },
+    })
+    mockedBootstrap.mockResolvedValue(bootstrapResponse)
+
+    try {
+      const { result } = renderBootstrap()
+
+      await waitFor(() => expect(result.current.isPending).toBe(false))
+
+      expect(result.current.data).toBe(bootstrapResponse)
+      expect(result.current.isError).toBe(false)
+      expect(result.current.error).toBeNull()
+    } finally {
+      Object.defineProperty(window, 'localStorage', {
+        configurable: true,
+        value: originalStorage,
+      })
+    }
+  })
 })
