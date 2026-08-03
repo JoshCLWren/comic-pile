@@ -24,7 +24,6 @@ from app.database import Base
 from app.models.issue import Issue
 
 if TYPE_CHECKING:
-    from app.models.collection import Collection
     from app.models.event import Event
     from app.models.user import User
     from app.models.review import Review
@@ -60,9 +59,6 @@ class Thread(Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    collection_id: Mapped[int | None] = mapped_column(
-        ForeignKey("collections.id", ondelete="SET NULL"), nullable=True
-    )
 
     __table_args__ = (
         Index("ix_thread_position", "queue_position"),
@@ -76,13 +72,9 @@ class Thread(Base):
             "is_blocked",
             "queue_position",
         ),
-        Index("ix_thread_collection_id", "collection_id"),
     )
 
     user: Mapped[User] = relationship("User", back_populates="threads", lazy="raise")
-    collection: Mapped[Collection | None] = relationship(
-        "Collection", back_populates="threads", lazy="raise", passive_deletes=True
-    )
     events: Mapped[list[Event]] = relationship(
         "Event", back_populates="thread", cascade="all, delete-orphan", lazy="raise"
     )

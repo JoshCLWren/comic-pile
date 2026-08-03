@@ -2,7 +2,6 @@ import Tooltip from '../../components/Tooltip'
 import { MarqueeTitle } from '../../components/MarqueeTitle'
 import PositionMenu from '../../components/PositionMenu'
 import Swipeable from '../../components/Swipeable'
-import { CollectionBadge } from './CollectionBadge'
 import type { Thread } from '../../types'
 
 interface QueueThreadCardProps {
@@ -137,11 +136,6 @@ export default function QueueThreadCard({
         </div>
         <div className="pl-8 md:pl-[2.75rem]">
           <p className="text-xs text-stone-500 uppercase tracking-widest font-bold">{thread.format}</p>
-          {thread.collection_id && (
-            <div className="mt-1.5 flex">
-              <CollectionBadge collectionId={thread.collection_id} />
-            </div>
-          )}
           {thread.notes && <p className="text-xs text-stone-400 mt-2">{thread.notes}</p>}
           {thread.issues_remaining !== null && (
             <p className="text-sm text-stone-300 mt-2 font-medium">

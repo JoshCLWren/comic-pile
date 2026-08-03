@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import Collection, Issue, Review, Session as SessionModel, Thread
+from app.models import Issue, Review, Session as SessionModel, Thread
 
 
 async def get_owned_thread_or_404(
@@ -27,27 +27,6 @@ async def get_owned_thread_or_404(
             detail=f"Thread {thread_id} not found",
         )
     return thread
-
-
-async def get_owned_collection_or_404(
-    db: AsyncSession,
-    user_id: int,
-    collection_id: int,
-) -> Collection:
-    """Fetch a collection by ID only if it belongs to the user."""
-    result = await db.execute(
-        select(Collection).where(
-            Collection.id == collection_id,
-            Collection.user_id == user_id,
-        )
-    )
-    collection = result.scalar_one_or_none()
-    if collection is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Collection {collection_id} not found",
-        )
-    return collection
 
 
 async def get_owned_issue_or_404(db: AsyncSession, user_id: int, issue_id: int) -> Issue:

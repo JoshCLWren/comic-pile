@@ -46,7 +46,7 @@ it('loads threads data', async () => {
 })
 
 it('supports the string search signature without a cache provider', async () => {
-  const { result } = renderHook(() => useThreads(' saga ', null))
+  const { result } = renderHook(() => useThreads(' saga '))
   await waitFor(() => expect(result.current.data).toEqual([{ id: 1 }]))
   expect(mockedThreadsApi.list).toHaveBeenCalledWith({ search: 'saga', page_size: 200 }, undefined)
 })
@@ -92,13 +92,13 @@ it('creates, updates, deletes, and reactivates threads', async () => {
   expect(mockedThreadsApi.reactivate).toHaveBeenCalledWith({ thread_id: 7, issues_to_add: 3 })
 })
 
-it('supports search/collection pagination, explicit refetch, empty ids, and failures', async () => {
+it('supports search pagination, explicit refetch, empty ids, and failures', async () => {
   mockedThreadsApi.list
     .mockResolvedValueOnce({ threads: [{ id: 1 }], next_page_token: 'next' } as never)
     .mockResolvedValueOnce({ threads: [{ id: 2 }], next_page_token: null } as never)
-  const { result } = renderHook(() => useThreads({ searchTerm: '  saga ', collectionId: 4 }), { wrapper: CacheProvider })
+  const { result } = renderHook(() => useThreads({ searchTerm: '  saga ' }), { wrapper: CacheProvider })
   await waitFor(() => expect(result.current.data).toHaveLength(2))
-  expect(mockedThreadsApi.list).toHaveBeenCalledWith({ search: 'saga', collection_id: 4, page_size: 200 }, 'next')
+  expect(mockedThreadsApi.list).toHaveBeenCalledWith({ search: 'saga', page_size: 200 }, 'next')
   mockedThreadsApi.list.mockResolvedValueOnce({ threads: [{ id: 9 }], next_page_token: 'later' } as never)
   await act(async () => result.current.refetch('page'))
   expect(result.current.nextPageToken).toBe('later')
@@ -249,7 +249,7 @@ it('ignores late stale-thread results after unmount', async () => {
 it('ignores late paginated thread results after unmount and supports blank options', async () => {
   let resolveThreads!: (value: never) => void
   mockedThreadsApi.list.mockImplementationOnce(() => new Promise((resolve) => { resolveThreads = resolve }))
-  const pending = renderHook(() => useThreads({ searchTerm: '   ', collectionId: null }))
+  const pending = renderHook(() => useThreads({ searchTerm: '   ' }))
   pending.unmount()
   await act(async () => resolveThreads({ threads: [], next_page_token: null } as never))
 

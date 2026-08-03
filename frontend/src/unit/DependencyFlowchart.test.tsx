@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import DependencyFlowchart from '../components/DependencyFlowchart'
 
-const makeThread = (id: number) => ({ id, title: `Thread ${id} with a long title`, format: 'Comic', issues_remaining: 1, total_issues: 2, next_unread_issue_id: null, reading_progress: null, queue_position: id, status: 'active', is_blocked: id === 2, blocking_reasons: [], collection_id: null, created_at: 'now' })
+const makeThread = (id: number) => ({ id, title: `Thread ${id} with a long title`, format: 'Comic', issues_remaining: 1, total_issues: 2, next_unread_issue_id: null, reading_progress: null, queue_position: id, status: 'active', is_blocked: id === 2, blocking_reasons: [], created_at: 'now' })
 
 describe('DependencyFlowchart', () => {
   it('renders empty state and interactive graph controls', () => {

@@ -4,32 +4,18 @@ This guide covers the major user-facing features added after commit `0cd5a462ef4
 
 ## What Was Added
 
-1. Collections (create, select roll pool, assign threads).
+1. Collections (create, select roll pool, assign threads) — **removed in #636**.
 2. Dependency management (block threads until prerequisites are read).
 3. Dependency flowchart visualization.
 4. Issue tracking and migration from old threads.
 5. Issue-range thread creation (`1-25`, `1, 3, 5-7`).
 
-## 1) Collections
+## 1) Collections (removed in #636)
 
-### Create and switch collections
-
-1. Open the Roll page (`/`).
-2. In the roll pool controls, use the `Roll pool collection` dropdown.
-3. Click `+ New` to open the collection dialog.
-4. Enter a name, optionally set `Make this my default collection`, then save.
-5. Select the collection in the dropdown to filter the roll pool.
-
-Notes:
-- `Roll Pool: All Collections` shows everything.
-- Collection selection is persisted for the session in browser storage.
-
-### How collections affect Queue
-
-1. Select a collection on the Roll page.
-2. Go to Queue (`/queue`).
-3. Queue results are filtered to that active collection.
-4. Threads with a collection show a collection badge on the thread card.
+Collections were retired entirely: the Roll pool collection dropdown, the
+collection dialog, collection badges on queue cards, the collection query key,
+and all collection API routes are gone. Roll and Queue operate on the full
+user thread library without collection filtering.
 
 ## 2) Dependencies (Blocking Rules)
 
@@ -134,8 +120,7 @@ Behavior:
 
 The Roll page now includes:
 
-1. Collection control in the main roll view (`Roll pool collection` + `+ New`).
-2. Issue-aware rating context when available:
+1. Issue-aware rating context when available:
    - Current issue number (`#N`)
    - Total issues context (`#N of M`)
    - Reading progress bar for tracked threads
@@ -144,10 +129,6 @@ The Roll page now includes:
 
 New/expanded endpoints relevant to these features:
 
-- Collections:
-  - `POST /api/v1/collections/`
-  - `GET /api/v1/collections/`
-  - `PUT/PATCH/DELETE /api/v1/collections/{collection_id}`
 - Dependencies:
   - `GET /api/v1/dependencies/blocked`
   - `POST /api/v1/dependencies/`

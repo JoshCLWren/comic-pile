@@ -21,7 +21,6 @@ let staleData: never[] = []
 let threadsValue: unknown = threadData
 
 vi.mock('react-router-dom', () => ({ useNavigate: () => spies.navigate }))
-vi.mock('../contexts/CollectionContext', () => ({ useCollections: () => ({ activeCollectionId: null, collections: [] }) }))
 vi.mock('../contexts/useBugReportRestore', () => ({
   useBugReportRestore: () => ({
     setRestoreAction: vi.fn((restore: () => void) => restore()),
@@ -47,7 +46,6 @@ vi.mock('../components/LazyDice3D', () => ({
 }))
 vi.mock('../components/Tooltip', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
 vi.mock('../components/Modal', () => ({ default: ({ isOpen, title, children, onClose }: { isOpen: boolean; title: string; children: React.ReactNode; onClose: () => void }) => isOpen ? <section><h2>{title}</h2><button onClick={onClose}>close modal</button>{children}</section> : null }))
-vi.mock('../components/CollectionDialog', () => ({ default: ({ collection }: { collection: { name?: string } | null }) => <div data-testid="collection-dialog">collection dialog {collection?.name ?? 'new'}</div> }))
 vi.mock('../components/MigrationDialog', () => ({ default: ({ onComplete, onSkip, onClose }: { onComplete: (thread: unknown) => void; onSkip: () => void; onClose: () => void }) => <div><button onClick={onSkip}>skip migration</button><button onClick={onClose}>close migration</button><button onClick={() => onComplete({ id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10 })}>complete migration</button></div> }))
 vi.mock('../components/SimpleMigrationDialog', () => ({ default: ({ onComplete, onClose }: { onComplete: (issue: string) => void; onClose: () => void }) => <div><button onClick={() => onComplete('1')}>complete simple</button><button onClick={onClose}>close simple</button></div> }))
 vi.mock('../pages/RollPage/components/ThreadPool', () => ({ ThreadPool: (props: Record<string, unknown>) => <div><button onClick={() => (props.onThreadClick as (thread: unknown) => void)({ id: 1, title: 'Saga', format: 'Comic' })}>thread</button><button onClick={props.onShuffle as () => void}>shuffle pool</button><button onClick={props.onReadStale as () => void}>read stale</button><button onClick={props.onUnsnooze as () => void}>unsnooze</button><button onClick={props.onToggleSnoozed as () => void}>toggle snoozed</button><button onClick={props.onToggleBlocked as () => void}>toggle blocked</button><span>{JSON.stringify(props.blockingReasonMap)}</span></div> }))
@@ -645,12 +643,6 @@ describe('RollPage parent handlers', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'complete simple' })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'complete simple' }))
     await waitFor(() => expect(screen.getByText('simple migration save failed')).toBeInTheDocument())
-  })
-
-  it('accepts collection edit events from the integration test hook', () => {
-    render(<RollPage />)
-    act(() => window.dispatchEvent(new CustomEvent('test-edit-collection', { detail: { id: 4, name: 'Archive' } })))
-    expect(screen.getByTestId('collection-dialog')).toHaveTextContent('Archive')
   })
 
   it('completes migration and simple migration flows', async () => {

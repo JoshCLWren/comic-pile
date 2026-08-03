@@ -422,7 +422,6 @@ async def get_roll_pool(
     user_id: int,
     db: AsyncSession,
     snoozed_ids: list[int] | None = None,
-    collection_id: int | None = None,
 ) -> list[Thread]:
     """Get all active threads ordered by position.
 
@@ -430,7 +429,6 @@ async def get_roll_pool(
         user_id: The user ID to filter threads by.
         db: The database session.
         snoozed_ids: Optional list of thread IDs to exclude from the pool.
-        collection_id: Optional collection ID to filter threads by.
 
     Returns:
         List of active threads ordered by queue position.
@@ -444,9 +442,6 @@ async def get_roll_pool(
 
     if snoozed_ids:
         query = query.where(Thread.id.not_in(snoozed_ids))
-
-    if collection_id is not None:
-        query = query.where(Thread.collection_id == collection_id)
 
     query = query.where(Thread.is_blocked.is_(False))
     query = query.order_by(Thread.queue_position)

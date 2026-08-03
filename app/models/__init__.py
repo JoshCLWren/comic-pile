@@ -1,6 +1,5 @@
 """SQLAlchemy database models."""
 
-from app.models.collection import Collection
 from app.models.dependency import Dependency
 from app.models.event import Event
 from app.models.failed_login_attempt import FailedLoginAttempt
@@ -14,7 +13,6 @@ from app.models.thread import Thread
 from app.models.user import User
 
 __all__ = [
-    "Collection",
     "Dependency",
     "Event",
     "FailedLoginAttempt",

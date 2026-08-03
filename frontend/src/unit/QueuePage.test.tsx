@@ -1,10 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserRouter } from 'react-router-dom'
 import QueuePage from '../pages/QueuePage'
-import { CollectionProvider } from '../contexts/CollectionContext'
 import { ToastProvider } from '../contexts/ToastProvider'
 import {
  useCreateThread,
@@ -52,9 +50,6 @@ vi.mock('../services/api', () => ({
     listBlockedThreadIds: vi.fn().mockResolvedValue([]),
     getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),
   },
-  collectionsApi: {
-    list: vi.fn().mockResolvedValue([]),
-  },
 }))
 
 vi.mock('../services/api-issues', () => ({
@@ -67,21 +62,6 @@ vi.mock('../services/api-issues', () => ({
 
 vi.mock('../contexts/useBugReportRestore', () => ({
   useBugReportRestore: vi.fn(),
-}))
-
-vi.mock('../contexts/CollectionContext', () => ({
-  CollectionProvider: ({ children }: { children: ReactNode }) => children,
-  useCollections: vi.fn().mockReturnValue({
-    collections: [],
-    activeCollectionId: null,
-    activeCollection: null,
-    setActiveCollectionId: vi.fn(),
-    createCollection: vi.fn(),
-    updateCollection: vi.fn(),
-    deleteCollection: vi.fn(),
-    moveCollection: vi.fn(),
-    isLoading: false,
-  }),
 }))
 
 vi.mock('../contexts/useToast', () => ({

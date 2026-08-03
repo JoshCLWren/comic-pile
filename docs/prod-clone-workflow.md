@@ -40,7 +40,7 @@ python -m scripts.clone_prod_to_local export \
 ```
 
 The output is a private (`0600`) JSON file. It contains user-scoped
-collections, threads, issues, dependencies, reading orders, sessions, events,
+threads, issues, dependencies, reading orders, sessions, events,
 snapshots, and reviews. It does not contain `password_hash`, revoked tokens,
 failed-login records, or database credentials.
 

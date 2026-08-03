@@ -77,7 +77,6 @@ const mockThread: Thread = {
   status: 'active',
   is_blocked: false,
   blocking_reasons: [],
-  collection_id: null,
   created_at: '2026-03-08T00:00:00Z',
   next_unread_issue_id: null,
   next_unread_issue_number: null,

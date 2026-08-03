@@ -1,15 +1,12 @@
 """Roll-related Pydantic schemas for request/response validation."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict
 
 
 class RollRequest(BaseModel):
     """Schema for roll request."""
 
-    collection_id: int | None = Field(
-        default=None,
-        description="Optional collection ID to filter the roll pool by",
-    )
+    model_config = ConfigDict(extra="forbid")
 
 
 class RollResponse(BaseModel):

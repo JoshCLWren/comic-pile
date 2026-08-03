@@ -6,10 +6,9 @@ import { CacheContext } from '../contexts/CacheContextValue';
 
 type UseThreadsOptions = {
   searchTerm?: string;
-  collectionId?: number | null;
 };
 
-export function useThreads(searchTermOrOptions?: string | UseThreadsOptions, collectionId?: number | null) {
+export function useThreads(searchTermOrOptions?: string | UseThreadsOptions) {
   const [data, setData] = useState<Thread[] | null>(null);
   const [isPending, setIsPending] = useState(true);
   const [isError, setIsError] = useState(false);
@@ -18,12 +17,12 @@ export function useThreads(searchTermOrOptions?: string | UseThreadsOptions, col
   const invalidateQueries = useMemo(() => cache?.invalidateQueries ?? (() => {}), [cache]);
 
   // Support both calling conventions:
-  // useThreads('', collectionId) or useThreads({ searchTerm: '', collectionId })
+  // useThreads('') or useThreads({ searchTerm: '' })
   const options: UseThreadsOptions = typeof searchTermOrOptions === 'string'
-    ? { searchTerm: searchTermOrOptions, collectionId }
+    ? { searchTerm: searchTermOrOptions }
     : { ...searchTermOrOptions };
 
-  const { searchTerm = '', collectionId: cid = null } = options;
+  const { searchTerm = '' } = options;
 
   const fetchData = useCallback(async (pageToken?: string) => {
     setIsPending(true);
@@ -34,9 +33,6 @@ export function useThreads(searchTermOrOptions?: string | UseThreadsOptions, col
       const baseParams: ThreadQueryParams = {};
       if (searchTerm?.trim()) {
         baseParams.search = searchTerm.trim();
-      }
-      if (cid !== null) {
-        baseParams.collection_id = cid;
       }
       // For initial load (no pageToken), fetch all pages with large page_size
       if (!pageToken) {
@@ -78,12 +74,12 @@ export function useThreads(searchTermOrOptions?: string | UseThreadsOptions, col
         setIsPending(false);
       }
     }
-  }, [searchTerm, cid, invalidateQueries]);
+  }, [searchTerm, invalidateQueries]);
 
   useEffect(() => {
     void fetchData().catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, cid]);
+  }, [searchTerm]);
 
   const refetch = useCallback((pageToken?: string): Promise<void> => {
     return fetchData(pageToken);

@@ -15,7 +15,7 @@ vi.mock('../components/DependencyFlowchart', () => ({ default: () => <div data-t
 vi.mock('../components/ReadingOrderTimeline', () => ({ default: () => <div data-testid="mock-timeline" /> }))
 import DependencyBuilder from '../components/DependencyBuilder'
 
-const thread = { id: 1, title: 'Target', format: 'Comic', issues_remaining: 1, total_issues: 3, next_unread_issue_id: null, reading_progress: null, queue_position: 1, status: 'active', is_blocked: false, blocking_reasons: [], collection_id: null, created_at: 'now' }
+const thread = { id: 1, title: 'Target', format: 'Comic', issues_remaining: 1, total_issues: 3, next_unread_issue_id: null, reading_progress: null, queue_position: 1, status: 'active', is_blocked: false, blocking_reasons: [], created_at: 'now' }
 const dependency = { id: 4, source_thread_id: 2, target_thread_id: 1, source_issue_id: null, target_issue_id: null, source_label: 'Source', target_label: 'Target', created_at: 'now' }
 
 describe('DependencyBuilder', () => {

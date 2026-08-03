@@ -14,7 +14,6 @@ import {
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks'
-import { useCollections } from '../contexts/CollectionContext'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 import { ToastProvider } from '../contexts/ToastProvider'
 import type { RollResponse } from '../types'
@@ -61,7 +60,6 @@ vi.mock('../hooks', async (importOriginal) => {
     useRate: vi.fn(),
   }
 })
-vi.mock('../contexts/CollectionContext', () => ({ useCollections: vi.fn() }))
 vi.mock('../services/api-reading-orders', () => ({
   readingOrdersApi: {
     getForThread: vi.fn().mockResolvedValue({ reading_orders: [] }),
@@ -92,7 +90,6 @@ const mockedUseMoveToFront = vi.mocked(useMoveToFront) as any
 const mockedUseMoveToBack = vi.mocked(useMoveToBack) as any
 const mockedUseShuffleQueue = vi.mocked(useShuffleQueue) as any
 const mockedUseRate = vi.mocked(useRate) as any
-const mockedUseCollections = vi.mocked(useCollections) as any
 const mockedUseBugReportRestore = vi.mocked(useBugReportRestore) as any
 
 type MockThread = {
@@ -166,12 +163,6 @@ beforeEach(() => {
   mockedUseMoveToBack.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseRate.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseCollections.mockReturnValue({
-    collections: [],
-    activeCollectionId: null,
-    setActiveCollectionId: vi.fn(),
-    isLoading: false,
-  })
   mockedUseBugReportRestore.mockReturnValue({
     setRestoreAction: vi.fn(),
     clearRestoreAction: vi.fn(),
@@ -542,7 +533,7 @@ describe('Rating View', () => {
     await user.click(screen.getByText('Read Now'))
 
     // In rating view, Saga should be HIDDEN from the pool at the bottom
-    const poolList = screen.getByLabelText('Roll pool collection')
+    const poolList = screen.getByLabelText('Roll pool')
     expect(within(poolList).queryByText('Saga')).not.toBeInTheDocument()
     // Other threads (X-Men) should still be there
     expect(within(poolList).getByText('X-Men')).toBeInTheDocument()

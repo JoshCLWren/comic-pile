@@ -489,9 +489,9 @@ No React-specific env vars needed (uses `/api` for backend).
 - Faster build times
 - Simpler configuration
 
-## TanStack Query Pilot (#701)
+## TanStack Query Pilot
 
-TanStack Query (`@tanstack/react-query`) is the standard server-state layer, introduced via a small pilot in `CollectionContext`. The custom `useState`/`useEffect` hooks remain for existing features; migrate incrementally.
+TanStack Query (`@tanstack/react-query`) is the standard server-state layer, introduced via a small pilot. The custom `useState`/`useEffect` hooks remain for existing features; migrate incrementally.
 
 ### Provider placement
 
@@ -501,15 +501,15 @@ TanStack Query (`@tanstack/react-query`) is the standard server-state layer, int
 
 ```ts
 // frontend/src/query/queryKeys.ts
-export const queryKeys = { collections: ['collections'] as const }
+export const queryKeys = { issues: ['issues'] as const }
 ```
 
 ```ts
-// frontend/src/hooks/useCollectionsQuery.ts
-export function useCollectionsQuery() {
-  return useQuery<Collection[]>({
-    queryKey: queryKeys.collections,
-    queryFn: async () => (await collectionsApi.list()).collections ?? [],
+// frontend/src/hooks/useIssuesQuery.ts
+export function useIssuesQuery() {
+  return useQuery<Issue[]>({
+    queryKey: queryKeys.issues,
+    queryFn: async () => (await issuesApi.list()).issues ?? [],
   })
 }
 ```
@@ -521,12 +521,12 @@ Two consumers of the same query key under one provider share a single in-flight 
 ```ts
 const queryClient = useQueryClient()
 const createMutation = useMutation({
-  mutationFn: (data) => collectionsApi.create(data),
-  onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.collections }),
+  mutationFn: (data) => issuesApi.create(data),
+  onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.issues }),
 })
 ```
 
-Invalidate only the exact key affected. Note that `invalidateQueries` matches query keys by prefix by default, so `{ queryKey: ['collections'] }` invalidates both `['collections']` and `['collections', 1]`. To match exactly, add `exact: true`. Choose query-key scopes carefully to avoid unintentionally invalidating sibling queries.
+Invalidate only the exact key affected. Note that `invalidateQueries` matches query keys by prefix by default, so `{ queryKey: ['issues'] }` invalidates both `['issues']` and `['issues', 1]`. To match exactly, add `exact: true`. Choose query-key scopes carefully to avoid unintentionally invalidating sibling queries.
 
 ### Auth / retry interplay
 

@@ -11,7 +11,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 if TYPE_CHECKING:
-    from app.models.collection import Collection
     from app.models.revoked_token import RevokedToken
     from app.models.session import Session
     from app.models.thread import Thread
@@ -41,9 +40,6 @@ class User(Base):
     )
     revoked_tokens: Mapped[list[RevokedToken]] = relationship(
         "RevokedToken", back_populates="user", cascade="all, delete-orphan", lazy="raise"
-    )
-    collections: Mapped[list[Collection]] = relationship(
-        "Collection", back_populates="user", cascade="all, delete-orphan", lazy="raise"
     )
     reviews: Mapped[list[Review]] = relationship(
         "Review", back_populates="user", cascade="all, delete-orphan", lazy="raise"

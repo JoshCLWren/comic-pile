@@ -1,26 +1,4 @@
 /**
- * Type definitions for Collections feature
- */
-
-/**
- * Represents a collection for organizing threads
- */
-export interface Collection {
-  /** Unique identifier for the collection */
-  id: number;
-  /** Display name of the collection */
-  name: string;
-  /** ID of the user who owns this collection */
-  user_id: number;
-  /** Whether this is the user's default collection */
-  is_default: boolean;
-  /** Position for ordering collections */
-  position: number;
-  /** ISO 8601 timestamp when the collection was created */
-  created_at: string;
-}
-
-/**
  * Represents a thread in list view (QueuePage).
  *
  * A deliberate subset of Thread — the list endpoint does not return
@@ -39,7 +17,6 @@ export interface ThreadListItem {
   status: string;
   is_blocked: boolean;
   blocking_reasons: string[];
-  collection_id: number | null;
   notes?: string | null;
   last_activity_at?: string | null;
   created_at: string;
@@ -73,8 +50,6 @@ export interface Thread {
   is_blocked: boolean;
   /** List of reasons why the thread is blocked */
   blocking_reasons: string[];
-  /** ID of the collection this thread belongs to (null if uncategorized) */
-  collection_id: number | null;
   /** Optional free-form notes */
   notes?: string | null;
   /** Timestamp of last activity when available */
@@ -96,7 +71,6 @@ export interface AuthTokens {
 
 export interface ThreadQueryParams {
   search?: string;
-  collection_id?: number;
   page_size?: number;
   page_token?: string;
 }
@@ -238,10 +212,6 @@ export interface AnalyticsMetrics {
   top_rated_threads: TopRatedThread[];
 }
 
-export interface CollectionListResponse {
-  collections: Collection[];
-}
-
 export interface ThreadListResponse {
   threads: Thread[];
   next_page_token: string | null;
@@ -261,30 +231,6 @@ export interface DependencyCreatePayload {
   sourceId: number;
   targetType?: 'thread' | 'issue';
   targetId: number;
-}
-
-/**
- * Data required to create a new collection
- */
-export interface CollectionCreate {
-  /** Display name of the collection */
-  name: string;
-  /** Whether this should be the default collection */
-  is_default?: boolean;
-  /** Position for ordering (optional, defaults to end) */
-  position?: number;
-}
-
-/**
- * Data for updating an existing collection
- */
-export interface CollectionUpdate {
-  /** New display name */
-  name?: string;
-  /** Whether this should be the default collection */
-  is_default?: boolean;
-  /** New position for ordering */
-  position?: number;
 }
 
 /**

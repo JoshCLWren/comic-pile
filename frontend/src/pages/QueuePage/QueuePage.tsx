@@ -6,8 +6,6 @@ import PositionSlider from '../../components/PositionSlider'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import DependencyBuilder from '../../components/DependencyBuilder'
 import MigrationDialog from '../../components/MigrationDialog'
-import CollectionDialog from '../../components/CollectionDialog'
-import CollectionToolbar from '../../components/CollectionToolbar'
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../../hooks/useQueue'
 import { useCreateThread, useDeleteThread, useReactivateThread, useThreads, useUpdateThread } from '../../hooks/useThread'
 import { useSession } from '../../hooks/useSession'
@@ -15,7 +13,6 @@ import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
 import { threadsApi } from '../../services/api'
 import { issuesApi } from '../../services/api-issues'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
-import { useCollections } from '../../contexts/CollectionContext'
 import { PositionMenuProvider } from '../../contexts/PositionMenuContext'
 import type { Thread } from '../../types'
 import { getApiErrorDetail } from '../../utils/apiError'
@@ -28,9 +25,8 @@ import { DEFAULT_CREATE_STATE, type QueueFormState } from './types'
 export default function QueuePage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { activeCollectionId } = useCollections()
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
-  const { data: threads, isPending, refetch } = useThreads('', activeCollectionId)
+  const { data: threads, isPending, refetch } = useThreads('')
   const { data: session, refetch: refetchSession } = useSession()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
@@ -46,7 +42,6 @@ export default function QueuePage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [isReactivateOpen, setIsReactivateOpen] = useState(false)
-  const [isCollectionDialogOpen, setIsCollectionDialogOpen] = useState(false)
   const [createForm, setCreateForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
   const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
   const [editingThread, setEditingThread] = useState<Thread | null>(null)
@@ -65,7 +60,7 @@ export default function QueuePage() {
   const [issuePreview, setIssuePreview] = useState<number | null>(null)
   const [issueParseError, setIssueParseError] = useState<string | null>(null)
 
-  const isAnyModalOpen = isCreateOpen || isEditOpen || isReactivateOpen || isCollectionDialogOpen || isDependencyBuilderOpen || showMigrationDialog
+  const isAnyModalOpen = isCreateOpen || isEditOpen || isReactivateOpen || isDependencyBuilderOpen || showMigrationDialog
 
   useEffect(() => {
     let cancelled = false
@@ -538,7 +533,6 @@ export default function QueuePage() {
             </button>
           </div>
         </div>
-        <CollectionToolbar onNewCollection={() => setIsCollectionDialogOpen(true)} />
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1">
             {(['position', 'alphabetical', 'created'] as const).map((sort) => (
@@ -890,8 +884,6 @@ export default function QueuePage() {
           await refetch()
         }}
       />
-
-      {isCollectionDialogOpen && <CollectionDialog onClose={() => setIsCollectionDialogOpen(false)} />}
 
       {showMigrationDialog && threadToMigrate && (
         <MigrationDialog

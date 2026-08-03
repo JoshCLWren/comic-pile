@@ -19,7 +19,6 @@ export interface RollPageState {
   selectedThread: Thread | null
   isActionSheetOpen: boolean
   activeRatingThread: RatingThread | null
-  isCollectionDialogOpen: boolean
   blockingReasonMap: Record<number, string[]>
   showMigrationDialog: boolean
   threadToMigrate: RatingThread | null
@@ -50,7 +49,6 @@ export interface RollPageStateSetters {
   setSelectedThread: (value: Thread | null) => void
   setIsActionSheetOpen: (value: boolean) => void
   setActiveRatingThread: (value: RatingThread | null) => void
-  setIsCollectionDialogOpen: (value: boolean) => void
   setBlockingReasonMap: (value: Record<number, string[]>) => void
   setShowMigrationDialog: (value: boolean) => void
   setThreadToMigrate: (value: RatingThread | null) => void
@@ -78,7 +76,6 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const [selectedThread, setSelectedThread] = useState<Thread | null>(null)
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
   const [activeRatingThread, setActiveRatingThread] = useState<RatingThread | null>(null)
-  const [isCollectionDialogOpen, setIsCollectionDialogOpen] = useState(false)
   const [blockingReasonMap, setBlockingReasonMap] = useState<Record<number, string[]>>({})
   const [showMigrationDialog, setShowMigrationDialog] = useState(false)
   const [threadToMigrate, setThreadToMigrate] = useState<RatingThread | null>(null)
@@ -125,8 +122,6 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
     setIsActionSheetOpen,
     activeRatingThread,
     setActiveRatingThread,
-    isCollectionDialogOpen,
-    setIsCollectionDialogOpen,
     blockingReasonMap,
     setBlockingReasonMap,
     showMigrationDialog,

@@ -5,7 +5,6 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import { threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 import type { Thread, Issue } from '../types'
-import { CollectionBadge } from '../pages/QueuePage/CollectionBadge'
 import { FormatSelect } from '../pages/QueuePage/FormatSelect'
 import { useUpdateThread } from '../hooks/useThread'
 import { getApiErrorDetail } from '../utils/apiError'
@@ -179,12 +178,6 @@ export default function ThreadDetailView() {
       </header>
 
       <div className="space-y-4 md:space-y-6">
-        {thread.collection_id && (
-          <div className="flex">
-            <CollectionBadge collectionId={thread.collection_id} />
-          </div>
-        )}
-
         {progressPercentage && (
           <div className="glass-card p-3 md:p-4 space-y-3">
             <div className="flex justify-between items-center">

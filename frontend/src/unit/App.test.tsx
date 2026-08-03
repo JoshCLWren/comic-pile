@@ -6,7 +6,6 @@ import type { AuthContextValue } from '../App'
 
 // Create mock function for API get
 const mockApiGet = vi.fn()
-const mockCollectionsList = vi.fn()
 const mockSetAccessToken = vi.fn()
 const mockClearAccessToken = vi.fn()
 const mockGetAccessToken = vi.fn<() => string | null>(() => 'test-token')
@@ -27,7 +26,6 @@ vi.mock('../services/api', () => {
     setAccessToken: (...args: Parameters<typeof mockSetAccessToken>) => mockSetAccessToken(...args),
     clearAccessToken: (...args: Parameters<typeof mockClearAccessToken>) => mockClearAccessToken(...args),
     getAccessToken: () => mockGetAccessToken(),
-    collectionsApi: { list: (...args: unknown[]) => mockCollectionsList(...args) },
   }
 })
 
@@ -116,14 +114,6 @@ test('mounts the application shell', async () => {
   mockApiGet.mockRejectedValue(new Error('unauthenticated'))
   render(<App />)
   await waitFor(() => expect(screen.getByTestId('login-page')).toBeInTheDocument())
-})
-
-test('does not request collections before authentication succeeds', async () => {
-  mockApiGet.mockRejectedValue(new Error('unauthenticated'))
-  render(<App />)
-
-  await waitFor(() => expect(screen.getByTestId('login-page')).toBeInTheDocument())
-  expect(mockCollectionsList).not.toHaveBeenCalled()
 })
 
 test('ignores an auth response that arrives after the provider unmounts', async () => {

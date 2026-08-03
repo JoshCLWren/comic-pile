@@ -13,7 +13,6 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => navigateSpy, useParams: () => routeParams }
 })
 vi.mock('../hooks/useThread', () => ({ useUpdateThread: vi.fn() }))
-vi.mock('../contexts/CollectionContext', () => ({ useCollections: () => ({ collections: [], activeCollectionId: null }) }))
 vi.mock('../services/api', () => ({
   threadsApi: { get: vi.fn() },
   dependenciesApi: { getIssueDependencies: vi.fn().mockResolvedValue({ incoming: [], outgoing: [] }) },
@@ -30,7 +29,7 @@ beforeEach(() => {
   mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
   mockedThreadsApiGet.mockResolvedValue({
     id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1,
-    status: 'active', total_issues: null, notes: null, collection_id: null,
+    status: 'active', total_issues: null, notes: null,
   } as never)
   mockedIssuesApiList.mockResolvedValue({ issues: [], next_page_token: null, total_count: 0, page_size: 100 })
 })
@@ -48,7 +47,7 @@ it('renders a thread without legacy rating content', async () => {
 it('renders migrated progress, paginated issues, and saves edits', async () => {
   mockedThreadsApiGet.mockResolvedValue({
     id: 1, title: 'Saga', format: 'Comics', issues_remaining: 2, queue_position: 1,
-    status: 'active', total_issues: 10, next_unread_issue_number: '3', notes: 'Keep reading', collection_id: null,
+    status: 'active', total_issues: 10, next_unread_issue_number: '3', notes: 'Keep reading',
   } as never)
   mockedIssuesApiList
     .mockResolvedValueOnce({ issues: [{ id: 1, thread_id: 1, issue_number: '1', status: 'read', read_at: 'now', created_at: 'now' }], next_page_token: 'next', total_count: 2, page_size: 100 })
@@ -110,7 +109,7 @@ it('edits migrated threads and displays the all-read boundary', async () => {
   mockedThreadsApiGet.mockResolvedValue({
     id: 1, title: 'Saga', format: 'Comics', issues_remaining: 0, queue_position: 1,
     status: 'complete', total_issues: 4, next_unread_issue_number: null,
-    notes: '', collection_id: 7,
+    notes: '',
   } as never)
   mockedIssuesApiList.mockReset()
   mockedIssuesApiList.mockResolvedValue({
@@ -120,7 +119,7 @@ it('edits migrated threads and displays the all-read boundary', async () => {
   const updatedThread = {
     id: 1, title: 'Updated Saga', format: 'Comics', issues_remaining: 0, queue_position: 1,
     status: 'complete', total_issues: 4, next_unread_issue_number: null,
-    notes: 'Finished', collection_id: 7,
+    notes: 'Finished',
   }
   const mutate = vi.fn().mockResolvedValue(updatedThread)
   mockedUseUpdateThread.mockReturnValue({ mutate, isPending: false } as never)
