@@ -27,8 +27,8 @@ describe('useCurrentSessionQuery', () => {
 
   it('shares the canonical current-session key and refetches after exact invalidation', async () => {
     vi.mocked(sessionApi.getCurrent)
-      .mockResolvedValueOnce({ id: 10, user_id: 7 })
-      .mockResolvedValueOnce({ id: 11, user_id: 7 })
+      .mockResolvedValueOnce({ id: 10, current_die: 6, user_id: 7 })
+      .mockResolvedValueOnce({ id: 11, current_die: 8, user_id: 7 })
 
     const client = new QueryClient({
       defaultOptions: {
@@ -60,7 +60,11 @@ describe('useCurrentSessionQuery', () => {
   })
 
   it('writes compatible local updates into the same canonical cache entry', async () => {
-    vi.mocked(sessionApi.getCurrent).mockResolvedValue({ id: 20, user_id: 9 })
+    vi.mocked(sessionApi.getCurrent).mockResolvedValue({
+      id: 20,
+      current_die: 12,
+      user_id: 9,
+    })
 
     const client = new QueryClient({
       defaultOptions: {
