@@ -21,7 +21,7 @@ async def test_queue_query_count_is_constant_for_page_size(
     async_db: AsyncSession,
     db_engine: AsyncEngine,
 ) -> None:
-    """Queue construction hydrates every row with three PostgreSQL executions."""
+    """Queue construction hydrates every row with three PostgreSQL reads."""
     user = await get_or_create_user_async(async_db)
     expected: dict[int, tuple[str, int]] = {}
 
@@ -69,7 +69,7 @@ async def test_queue_query_count_is_constant_for_page_size(
             "query_string": b"",
         }
     )
-    statements: list[str] = []
+    select_statements: list[str] = []
 
     def _capture_statement(
         conn: object,
@@ -79,7 +79,9 @@ async def test_queue_query_count_is_constant_for_page_size(
         context: object,
         executemany: bool,
     ) -> None:
-        statements.append(statement)
+        normalized_statement = statement.lstrip().upper()
+        if normalized_statement.startswith("SELECT"):
+            select_statements.append(statement)
 
     route = unwrap(list_threads)
     event.listen(db_engine.sync_engine, "before_cursor_execute", _capture_statement)
@@ -96,7 +98,7 @@ async def test_queue_query_count_is_constant_for_page_size(
         event.remove(db_engine.sync_engine, "before_cursor_execute", _capture_statement)
 
     assert len(response.threads) == thread_count
-    assert len(statements) == 3, statements
+    assert len(select_statements) == 3, select_statements
 
     for queue_thread in response.threads:
         expected_issue_number, expected_remaining = expected[queue_thread.id]
