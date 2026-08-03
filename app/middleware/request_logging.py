@@ -171,6 +171,8 @@ def _server_timing_header(total_ms: float) -> str:
         metrics.append(
             f'cache;dur={diagnostics.cache_time_ms:.2f};desc="{diagnostics.cache_status}"'
         )
+    for name, phase in diagnostics.phases.items():
+        metrics.append(f'{name};dur={phase.duration_ms:.2f};desc="{phase.query_count} queries"')
     return ", ".join(metrics)
 
 
@@ -224,6 +226,14 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                 "user_agent": request.headers.get("user-agent"),
                 "headers": redact_headers(dict(request.headers)),
             }
+
+            if diagnostics.phases:
+                log_data["phase_timings_ms"] = {
+                    name: round(phase.duration_ms, 2) for name, phase in diagnostics.phases.items()
+                }
+                log_data["phase_query_counts"] = {
+                    name: phase.query_count for name, phase in diagnostics.phases.items()
+                }
 
             if hasattr(request.state, "request_body"):
                 log_data["request_body"] = request.state.request_body

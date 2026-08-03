@@ -2,6 +2,12 @@
 
 ## 2026-08-03
 
+**Session read phase instrumentation (#700)**
+
+- Current-session and History reads now record structured per-phase wall-clock durations and SQL statement counts through the existing request diagnostics context, exposed in the `Server-Timing` response header and in the `phase_timings_ms`/`phase_query_counts` structured log fields.
+- `get_current_session()` phases: `candidate_selection`, `session_refresh`, `active_thread`, `snapshot_count`, `snoozed_threads`, `ladder_path`, `current_die`. History phases: `history_page`, `history_events`, `history_snapshot_counts`, `history_active_threads`.
+- Added exact per-phase statement-count regression coverage proving the current-session path issues bounded, attributed SQL and that History reads stay bounded.
+
 **Production migrations on Vercel/Neon**
 
 - Production schema migrations now run automatically in the GitHub Actions `deploy-production.yml` workflow, before `vercel deploy`, against the Neon main-branch database.

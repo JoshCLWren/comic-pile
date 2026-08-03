@@ -6,9 +6,10 @@ import asyncio
 import logging
 import os
 import time
-from collections.abc import Awaitable
+from collections.abc import AsyncIterator, Awaitable
+from contextlib import asynccontextmanager
 from contextvars import ContextVar, Token
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 from app.cache import UpstashCache
@@ -17,6 +18,14 @@ logger = logging.getLogger(__name__)
 
 CacheOutcome = Literal["hit", "miss", "write", "bypass", "timeout", "error"]
 _DEFAULT_CACHE_OPERATION_TIMEOUT_SECONDS = 2.0
+
+
+@dataclass
+class PhaseTiming:
+    """Wall-clock duration and SQL statement count for one named phase."""
+
+    duration_ms: float = 0.0
+    query_count: int = 0
 
 
 @dataclass
@@ -33,6 +42,7 @@ class RequestDiagnostics:
     cache_time_ms: float = 0.0
     database_queries: int = 0
     database_time_ms: float = 0.0
+    phases: dict[str, PhaseTiming] = field(default_factory=dict)
 
     @property
     def cache_status(self) -> str:
@@ -61,6 +71,8 @@ _request_diagnostics: ContextVar[RequestDiagnostics | None] = ContextVar(
     default=None,
 )
 
+_current_phase: ContextVar[str | None] = ContextVar("current_phase", default=None)
+
 
 def begin_request_diagnostics() -> Token[RequestDiagnostics | None]:
     """Start a fresh diagnostics context for the current request."""
@@ -84,6 +96,34 @@ def record_database_query(duration_ms: float) -> None:
         return
     diagnostics.database_queries += 1
     diagnostics.database_time_ms += duration_ms
+
+    phase_name = _current_phase.get()
+    if phase_name is not None:
+        phase = diagnostics.phases.setdefault(phase_name, PhaseTiming())
+        phase.query_count += 1
+
+
+@asynccontextmanager
+async def record_phase(name: str) -> AsyncIterator[None]:
+    """Time one named logical phase, attributing SQL statements to it.
+
+    Nested phases are supported; each SQL statement is counted against the
+    innermost active phase while its wall-clock duration is accumulated on the
+    phase that opened it.
+
+    Args:
+        name: The phase name to record (e.g. ``"active_thread"``).
+    """
+    diagnostics = _request_diagnostics.get()
+    started_at = time.perf_counter()
+    token = _current_phase.set(name)
+    try:
+        yield
+    finally:
+        _current_phase.reset(token)
+        if diagnostics is not None:
+            phase = diagnostics.phases.setdefault(name, PhaseTiming())
+            phase.duration_ms += (time.perf_counter() - started_at) * 1000
 
 
 def record_cache_operation(outcome: CacheOutcome, duration_ms: float) -> None:
