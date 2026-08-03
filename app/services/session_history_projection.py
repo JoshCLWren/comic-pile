@@ -44,7 +44,7 @@ def project_session_history_events(
 
     for event in events:
         session_id = event.session_id
-        if session_id not in included_session_ids:
+        if session_id is None or session_id not in included_session_ids:
             continue
 
         if event.type == "roll" and event.selected_thread_id is not None:
