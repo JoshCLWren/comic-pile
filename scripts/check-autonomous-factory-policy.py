@@ -27,7 +27,7 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "Version: 11",
         "Finish the issue. Do not stop at a commit, PR, review, CI run, or ready marker.",
         "Is there executable work remaining for this owned issue that I can safely do now?",
-        "Naming executable remaining work and then stopping is a policy failure.",
+        "Merely naming remaining work proves the opposite and requires continuing.",
         "One pushed commit, pending CI, green CI, review completion, a large diff, or harder next work are never stop conditions.",
         "Implement the whole issue in one coherent non-draft PR whenever reasonably reviewable.",
         "Never open planning-only, architecture-only, inventory-only, or implementation-plan PRs",
