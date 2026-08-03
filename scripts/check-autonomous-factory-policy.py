@@ -37,6 +37,11 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
     )
     require(
         policy,
+        "Never enable auto-merge as a substitute for explicit authorization.",
+        POLICY,
+    )
+    require(
+        policy,
         (
             "All review, repair, and readiness decisions are tied to the exact "
             "pull-request head SHA."
