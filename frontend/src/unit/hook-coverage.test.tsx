@@ -5,9 +5,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const api = vi.hoisted(() => ({
   queueApi: { moveToPosition: vi.fn(), moveToFront: vi.fn(), moveToBack: vi.fn(), shuffle: vi.fn() },
   rateApi: { rate: vi.fn() },
-  rollApi: { roll: vi.fn(), override: vi.fn(), dismissPending: vi.fn(), setDie: vi.fn(), clearManualDie: vi.fn(), reroll: vi.fn() },
+  rollApi: { roll: vi.fn(), override: vi.fn(), dismissPending: vi.fn(), setDie: vi.fn(), clearManualDie: vi.fn(), reroll: vi.fn(), bootstrap: vi.fn() },
   undoApi: { listSnapshots: vi.fn(), undo: vi.fn() },
   tasksApi: { getMetrics: vi.fn() },
+  threadsApi: { listStale: vi.fn() },
   sessionApi: { getCurrent: vi.fn(), list: vi.fn(), getDetails: vi.fn(), getSnapshots: vi.fn(), restoreSessionStart: vi.fn() },
 }))
 vi.mock('../services/api', () => api)
@@ -22,6 +23,8 @@ import { useClearManualDie, useDismissPending, useOverrideRoll, useReroll, useRo
 import { useSession, useSessions, useSessionDetails, useSessionSnapshots, useRestoreSessionStart } from '../hooks/useSession'
 import { useSnapshots, useUndo } from '../hooks/useUndo'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { useRollBootstrap } from '../hooks/useRollBootstrap'
+import { useStaleThreads } from '../hooks/useThread'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -135,6 +138,24 @@ describe('data hooks', () => {
     expect(noDetails.result.current.isPending).toBe(false)
   })
 
+  it('handles loadMore failure with Error and non-Error types', async () => {
+    api.sessionApi.list.mockResolvedValueOnce({ sessions: [{ id: 1 }], next_page_token: 'next' })
+    const sessions = renderHook(() => useSessions())
+    await waitFor(() => expect(sessions.result.current.data).toHaveLength(1))
+    api.sessionApi.list.mockRejectedValueOnce(new Error('loadMore failed'))
+    await act(async () => { sessions.result.current.loadMore() })
+    await waitFor(() => expect(sessions.result.current.isError).toBe(true))
+    expect(sessions.result.current.error?.message).toBe('loadMore failed')
+
+    api.sessionApi.list.mockResolvedValueOnce({ sessions: [{ id: 2 }], next_page_token: 'next' })
+    const sessions2 = renderHook(() => useSessions())
+    await waitFor(() => expect(sessions2.result.current.data).toHaveLength(1))
+    api.sessionApi.list.mockRejectedValueOnce('plain string error')
+    await act(async () => { sessions2.result.current.loadMore() })
+    await waitFor(() => expect(sessions2.result.current.isError).toBe(true))
+    expect(sessions2.result.current.error?.message).toBe('Failed to load more sessions')
+  })
+
   it('loads current session, handles notifications, and restores snapshots', async () => {
     const storage = new Map<string, string>([['comic_pile_last_session_id_7', '1']])
     Object.defineProperty(window, 'localStorage', { configurable: true, value: { getItem: (k: string) => storage.get(k) ?? null, setItem: (k: string, v: string) => storage.set(k, v) } })
@@ -167,6 +188,10 @@ describe('data hooks', () => {
     api.sessionApi.list.mockRejectedValueOnce(new Error('list failed'))
     const sessions = renderHook(() => useSessions(null as never))
     await waitFor(() => expect(sessions.result.current.isError).toBe(true))
+    api.sessionApi.list.mockRejectedValueOnce('string list failed')
+    const sessionsStr = renderHook(() => useSessions())
+    await waitFor(() => expect(sessionsStr.result.current.isError).toBe(true))
+    expect(sessionsStr.result.current.error?.message).toBe('Failed to fetch sessions')
     api.sessionApi.getDetails.mockRejectedValueOnce('details failed')
     const details = renderHook(() => useSessionDetails(9))
     await waitFor(() => expect(details.result.current.isError).toBe(true))
@@ -211,5 +236,43 @@ describe('data hooks', () => {
     const snapshots = renderHook(() => useSnapshots(44))
     snapshots.unmount()
     await act(async () => resolveSnapshots({ snapshots: [{ id: 44 }] }))
+  })
+
+  it('covers roll bootstrap success, error, and refetch paths', async () => {
+    api.rollApi.bootstrap.mockResolvedValue({ current_die: 6, roll_pool: [] })
+    const hook = renderHook(() => useRollBootstrap())
+    expect(hook.result.current.isPending).toBe(true)
+    await waitFor(() => {
+      expect(hook.result.current.isPending).toBe(false)
+      expect(hook.result.current.data).toEqual({ current_die: 6, roll_pool: [] })
+    })
+
+    const refetchData = { current_die: 8, roll_pool: [{ id: 1, title: 'Test', format: 'Comic' }] }
+    api.rollApi.bootstrap.mockResolvedValueOnce(refetchData)
+    let refetchResult: unknown
+    await act(async () => { refetchResult = await hook.result.current.refetch() })
+    expect(refetchResult).toEqual(refetchData)
+    expect(hook.result.current.data).toEqual(refetchData)
+
+    api.rollApi.bootstrap.mockRejectedValueOnce(new Error('bootstrap failed'))
+    const failedHook = renderHook(() => useRollBootstrap())
+    await waitFor(() => {
+      expect(failedHook.result.current.isError).toBe(true)
+      expect(failedHook.result.current.error).toBeInstanceOf(Error)
+      expect(failedHook.result.current.error?.message).toBe('bootstrap failed')
+    })
+
+    api.rollApi.bootstrap.mockRejectedValueOnce('string error')
+    const stringHook = renderHook(() => useRollBootstrap())
+    await waitFor(() => {
+      expect(stringHook.result.current.isError).toBe(true)
+      expect(stringHook.result.current.error?.message).toBe('Failed to fetch roll bootstrap')
+    })
+  })
+
+  it('covers stale thread error path', async () => {
+    api.threadsApi.listStale.mockRejectedValueOnce(new Error('stale fetch failed'))
+    const stale = renderHook(() => useStaleThreads())
+    await waitFor(() => expect(stale.result.current.isError).toBe(true))
   })
 })

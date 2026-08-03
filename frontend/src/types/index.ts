@@ -1,4 +1,26 @@
 /**
+ * Type definitions for Collections feature
+ */
+
+/**
+ * Represents a collection for organizing threads
+ */
+export interface Collection {
+  /** Unique identifier for the collection */
+  id: number;
+  /** Display name of the collection */
+  name: string;
+  /** ID of the user who owns this collection */
+  user_id: number;
+  /** Whether this is the user's default collection */
+  is_default: boolean;
+  /** Position for ordering collections */
+  position: number;
+  /** ISO 8601 timestamp when the collection was created */
+  created_at: string;
+}
+
+/**
  * Represents a thread in list view (QueuePage).
  *
  * A deliberate subset of Thread — the list endpoint does not return
@@ -17,6 +39,7 @@ export interface ThreadListItem {
   status: string;
   is_blocked: boolean;
   blocking_reasons: string[];
+  collection_id: number | null;
   notes?: string | null;
   last_activity_at?: string | null;
   created_at: string;
@@ -50,6 +73,8 @@ export interface Thread {
   is_blocked: boolean;
   /** List of reasons why the thread is blocked */
   blocking_reasons: string[];
+  /** ID of the collection this thread belongs to (null if uncategorized) */
+  collection_id: number | null;
   /** Optional free-form notes */
   notes?: string | null;
   /** Timestamp of last activity when available */
@@ -71,6 +96,7 @@ export interface AuthTokens {
 
 export interface ThreadQueryParams {
   search?: string;
+  collection_id?: number;
   page_size?: number;
   page_token?: string;
 }
@@ -212,6 +238,10 @@ export interface AnalyticsMetrics {
   top_rated_threads: TopRatedThread[];
 }
 
+export interface CollectionListResponse {
+  collections: Collection[];
+}
+
 export interface ThreadListResponse {
   threads: Thread[];
   next_page_token: string | null;
@@ -231,6 +261,30 @@ export interface DependencyCreatePayload {
   sourceId: number;
   targetType?: 'thread' | 'issue';
   targetId: number;
+}
+
+/**
+ * Data required to create a new collection
+ */
+export interface CollectionCreate {
+  /** Display name of the collection */
+  name: string;
+  /** Whether this should be the default collection */
+  is_default?: boolean;
+  /** Position for ordering (optional, defaults to end) */
+  position?: number;
+}
+
+/**
+ * Data for updating an existing collection
+ */
+export interface CollectionUpdate {
+  /** New display name */
+  name?: string;
+  /** Whether this should be the default collection */
+  is_default?: boolean;
+  /** New position for ordering */
+  position?: number;
 }
 
 /**
@@ -466,6 +520,32 @@ export interface RollResponse {
   reading_progress: string | null;
   /** Last rolled result for active thread context (when present) */
   last_rolled_result?: number | null;
+}
+
+/** Lightweight thread summary returned by the roll bootstrap endpoint. */
+export interface RollBootstrapThread {
+  id: number;
+  title: string;
+  format: string;
+  last_activity_at?: string | null;
+}
+
+/** Bounded bootstrap payload for the Roll initial render. */
+export interface RollBootstrapResponse {
+  session_id: number;
+  user_id: number;
+  current_die: number;
+  manual_die: number | null;
+  pending_thread_id: number | null;
+  last_rolled_result: number | null;
+  active_thread: SessionThread | null;
+  roll_pool: RollBootstrapThread[];
+  snoozed_threads: SessionThread[];
+  snoozed_count: number;
+  blocked_count: number;
+  blocked_threads: RollBootstrapThread[];
+  stale_thread_count: number;
+  stale_thread: RollBootstrapThread | null;
 }
 
 export interface BugReportResponse {

@@ -9,11 +9,16 @@ import type {
   AuthTokens,
   BlockingInfoResponse,
   BugReportResponse,
+  Collection,
+  CollectionCreate,
+  CollectionListResponse,
+  CollectionUpdate,
   ConnectedDependenciesResponse,
   Dependency,
   DependencyCreatePayload,
   IssueDependenciesResponse,
   ReactivateThreadPayload,
+  RollBootstrapResponse,
   RollResponse,
   SessionCurrent,
   SessionDetails,
@@ -293,6 +298,7 @@ export const rollApi = {
   reroll: () => api.post<RollResponse>('/roll/'),
   setDie: (die: number) => api.post<void>('/roll/set-die', null, { params: { die } }),
   clearManualDie: () => api.post<void>('/roll/clear-manual-die'),
+  bootstrap: () => api.get<RollBootstrapResponse>('/roll/bootstrap'),
 }
 
 export const rateApi = {
@@ -361,6 +367,16 @@ export const tasksApi = {
 export const snoozeApi = {
   snooze: () => api.post<void>('/snooze/'),
   unsnooze: (threadId: number) => api.post<void>(`/snooze/${threadId}/unsnooze`),
+}
+
+export const collectionsApi = {
+  list: () => api.get<CollectionListResponse>('/v1/collections/'),
+  get: (id: number) => api.get<Collection>(`/v1/collections/${id}`),
+  create: (data: CollectionCreate) => api.post<Collection, CollectionCreate>('/v1/collections/', data),
+  update: (id: number, data: CollectionUpdate) => api.put<Collection, CollectionUpdate>(`/v1/collections/${id}`, data),
+  delete: (id: number) => api.delete<void>(`/v1/collections/${id}`),
+  moveThreadToCollection: (threadId: number, collectionId: number | null) =>
+    api.post<void>(`/threads/${threadId}:moveToCollection`, null, { params: { collection_id: collectionId } }),
 }
 
 export const migrationApi = {

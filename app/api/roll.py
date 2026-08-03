@@ -2,22 +2,31 @@
 
 import logging
 import random
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
 
-from app.api.session import _invalidate_session_caches
+from app.api.session import (
+    _invalidate_session_caches,
+    get_session_with_thread_safe,
+)
 from app.auth import get_current_user
 
 from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Thread
 from app.models.user import User
-from app.schemas import OverrideRequest, RollRequest, RollResponse
+from app.schemas import (
+    OverrideRequest,
+    RollBootstrapResponse,
+    RollBootstrapThread,
+    RollRequest,
+    RollResponse,
+)
 from comic_pile.queue import get_roll_pool
 from comic_pile.session import get_current_die, get_or_create
 
@@ -37,7 +46,7 @@ async def roll_dice(
     """Roll dice to select a thread.
 
     Args:
-        roll_request: The roll request.
+        roll_request: The roll request with optional collection_id filter.
         request: FastAPI request object for rate limiting.
         current_user: The authenticated user making the request.
         db: SQLAlchemy session for database operations.
@@ -75,7 +84,7 @@ async def roll_dice(
     snoozed_count = len(snoozed_ids)
     offset = snoozed_count
 
-    threads = await get_roll_pool(user_id, db, snoozed_ids)
+    threads = await get_roll_pool(user_id, db, snoozed_ids, roll_request.collection_id)
     if not threads:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -342,3 +351,138 @@ async def clear_manual_die(
     await db.refresh(current_session)
     current_die = await get_current_die(current_session.id, db)
     return f"d{current_die}"
+
+
+@router.get("/bootstrap", response_model=RollBootstrapResponse)
+async def roll_bootstrap(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> RollBootstrapResponse:
+    """Return bounded bootstrap data for the Roll initial render.
+
+    Replaces the need for separate session, full-thread-library, and stale-thread requests
+    by returning only the retained data required for the first interactive screen.
+
+    Args:
+        current_user: The authenticated user.
+        db: Async database session.
+
+    Returns:
+        RollBootstrapResponse with session state, bounded pool, snoozed/blocked/stale summaries.
+    """
+    user_id = current_user.id
+    current_session = await get_or_create(db, user_id=user_id)
+    await db.refresh(current_session)
+
+    current_session_id = current_session.id
+
+    _, active_thread = await get_session_with_thread_safe(current_session_id, db)
+
+    die_size = await get_current_die(current_session_id, db)
+    manual_die = current_session.manual_die
+    pending_thread_id = current_session.pending_thread_id
+    last_rolled_result = active_thread.last_rolled_result if active_thread else None
+
+    pool_query = (
+        select(Thread.id, Thread.title, Thread.format)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .where(Thread.queue_position >= 1)
+        .where(Thread.is_blocked.is_(False))
+        .order_by(Thread.queue_position)
+        .limit(die_size)
+    )
+
+    snoozed_ids = list(current_session.snoozed_thread_ids or [])
+    if snoozed_ids:
+        pool_query = pool_query.where(Thread.id.not_in(snoozed_ids))
+
+    pool_result = await db.execute(pool_query)
+    roll_pool = [
+        RollBootstrapThread(id=row.id, title=row.title, format=row.format)
+        for row in pool_result.all()
+    ]
+
+    snoozed_threads: list[RollBootstrapThread] = []
+    if snoozed_ids:
+        snoozed_result = await db.execute(
+            select(Thread.id, Thread.title, Thread.format)
+            .where(Thread.user_id == user_id)
+            .where(Thread.id.in_(snoozed_ids))
+        )
+        snoozed_threads = [
+            RollBootstrapThread(id=row.id, title=row.title, format=row.format)
+            for row in snoozed_result.all()
+        ]
+
+    blocked_count_result = await db.execute(
+        select(func.count())
+        .select_from(Thread)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .where(Thread.is_blocked.is_(True))
+    )
+    blocked_count = blocked_count_result.scalar() or 0
+
+    blocked_result = await db.execute(
+        select(Thread.id, Thread.title, Thread.format)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .where(Thread.is_blocked.is_(True))
+        .order_by(Thread.queue_position)
+        .limit(20)
+    )
+    blocked_threads = [
+        RollBootstrapThread(id=row.id, title=row.title, format=row.format)
+        for row in blocked_result.all()
+    ]
+
+    stale_cutoff = datetime.now(UTC) - timedelta(days=7)
+    effective_activity = func.coalesce(Thread.last_activity_at, Thread.created_at)
+    stale_count_result = await db.execute(
+        select(func.count())
+        .select_from(Thread)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .where(Thread.is_blocked.is_(False))
+        .where(effective_activity < stale_cutoff)
+    )
+    stale_thread_count = stale_count_result.scalar() or 0
+
+    stale_thread = None
+    if stale_thread_count > 0:
+        stale_result = await db.execute(
+            select(Thread.id, Thread.title, Thread.format, Thread.last_activity_at)
+            .where(Thread.user_id == user_id)
+            .where(Thread.status == "active")
+            .where(Thread.is_blocked.is_(False))
+            .where(effective_activity < stale_cutoff)
+            .order_by(effective_activity.asc())
+            .limit(1)
+        )
+        stale_row = stale_result.first()
+        if stale_row:
+            stale_last_activity = stale_row.last_activity_at.isoformat() if stale_row.last_activity_at else None
+            stale_thread = RollBootstrapThread(
+                id=stale_row.id,
+                title=stale_row.title,
+                format=stale_row.format,
+                last_activity_at=stale_last_activity,
+            )
+
+    return RollBootstrapResponse(
+        current_die=die_size,
+        manual_die=manual_die,
+        pending_thread_id=pending_thread_id,
+        last_rolled_result=last_rolled_result,
+        active_thread=active_thread,
+        roll_pool=roll_pool,
+        snoozed_threads=snoozed_threads,
+        snoozed_count=len(snoozed_threads),
+        blocked_count=blocked_count,
+        blocked_threads=blocked_threads,
+        stale_thread_count=stale_thread_count,
+        stale_thread=stale_thread,
+        session_id=current_session_id,
+        user_id=user_id,
+    )

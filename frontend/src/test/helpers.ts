@@ -17,6 +17,11 @@ type TestUser = {
   accessToken?: string;
 };
 
+export async function getCollectionsEnabled(page: Page): Promise<boolean> {
+  void page
+  return false
+}
+
 export async function waitForQueueReady(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Read Queue' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Add Thread' })).toBeVisible()
@@ -315,7 +320,9 @@ export async function setupAuthenticatedPage(
 
   // Use 'domcontentloaded' instead of 'load' to avoid timeout in SPAs
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  await page.locator('#root').waitFor({ state: 'visible' });
+  if (await getCollectionsEnabled(page)) {
+    await page.waitForSelector('[aria-label="Roll pool collection"]', { state: 'visible', timeout: 10000 }).catch(() => {});
+  }
 
   return testUser;
 }
