@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# prepare-commit-msg — sign every commit with the opencode model that produced it.
+#
+# When OPENCODE_MODEL is set (by the comic-pile factory runner, or exported
+# manually), append "Model: <model-id>" to the commit message body. The factory
+# tracks per-model usage in its manifest so the best-performing models can be
+# rotated into rotation.
+#
+# Skipped for merges and amends (source=merge|commit) and when already present.
+
+set -euo pipefail
+
+MSG_FILE="${1:-}"
+SOURCE="${2:-}"
+
+if [[ -z "${OPENCODE_MODEL:-}" ]]; then
+  exit 0
+fi
+if [[ "$SOURCE" == "merge" || "$SOURCE" == "commit" || "$SOURCE" == "squash" ]]; then
+  exit 0
+fi
+[[ -n "$MSG_FILE" && -f "$MSG_FILE" ]] || exit 0
+
+if grep -qE '^Model: ' "$MSG_FILE"; then
+  exit 0
+fi
+
+printf '\nModel: %s\n' "$OPENCODE_MODEL" >>"$MSG_FILE"

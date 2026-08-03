@@ -2,10 +2,15 @@
 set -Eeuo pipefail
 
 SOURCE_REPO="${COMIC_PILE_REPO:-/mnt/extra/josh/code/comic-pile}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 WORKTREE="${COMIC_PILE_FACTORY_WORKTREE:-}"
-MODEL="${OPENCODE_MODEL:-deepseek/deepseek-v4-pro}"
+STATE_DIR="${COMIC_PILE_FACTORY_STATE_DIR:-${SOURCE_REPO%/}-factory-state}"
+MANIFEST_HELPER="$SCRIPT_DIR/opencode-model-manifest.sh"
+DEFAULT_MODEL="${COMIC_PILE_DEFAULT_MODEL:-deepseek/deepseek-v4-pro}"
+MODEL=""
 AGENT="${OPENCODE_AGENT:-}"
 USE_AUTO="${OPENCODE_AUTO:-1}"
+HEARTBEAT_TIMEOUT="${FACTORY_HEARTBEAT_TIMEOUT:-900}"
 IDLE_SECONDS="${FACTORY_IDLE_SECONDS:-60}"
 FAILURE_BACKOFF_SECONDS="${FACTORY_FAILURE_BACKOFF_SECONDS:-20}"
 MAX_FAILURES="${FACTORY_MAX_FAILURES:-2}"
@@ -23,7 +28,8 @@ Options:
   --once              Run exactly one factory heartbeat.
   --repo PATH         Source comic-pile repository.
   --worktree PATH     Dedicated factory worktree.
-  --model ID          OpenCode model id.
+  --state-dir PATH    Factory state directory (manifest, heartbeats, scout).
+  --model ID          OpenCode model id (default: rotate confirmed models).
   --agent NAME        Optional OpenCode agent name.
   --idle-seconds N    Watch-mode idle poll interval.
   --worker-id ID      Durable GitHub lease identity.
@@ -46,6 +52,7 @@ while (($#)); do
     --once) RUN_ONCE=1; shift ;;
     --repo) (($# >= 2)) || die "--repo requires a path"; SOURCE_REPO="$2"; shift 2 ;;
     --worktree) (($# >= 2)) || die "--worktree requires a path"; WORKTREE="$2"; shift 2 ;;
+    --state-dir) (($# >= 2)) || die "--state-dir requires a path"; STATE_DIR="$2"; shift 2 ;;
     --model) (($# >= 2)) || die "--model requires an id"; MODEL="$2"; shift 2 ;;
     --agent) (($# >= 2)) || die "--agent requires a name"; AGENT="$2"; shift 2 ;;
     --idle-seconds) (($# >= 2)) || die "--idle-seconds requires a number"; IDLE_SECONDS="$2"; shift 2 ;;
@@ -66,12 +73,28 @@ is_nonnegative_integer "$FAILURE_BACKOFF_SECONDS" || die "FACTORY_FAILURE_BACKOF
 is_nonnegative_integer "$MAX_FAILURES" || die "FACTORY_MAX_FAILURES must be an integer"
 ((MAX_FAILURES >= 1)) || die "FACTORY_MAX_FAILURES must be at least 1"
 
-for command in git gh opencode flock tee grep date sleep; do
+for command in git gh opencode flock tee grep date sleep stat tail touch setsid; do
   command -v "$command" >/dev/null 2>&1 || die "required command not found: $command"
 done
 
 git -C "$SOURCE_REPO" rev-parse --show-toplevel >/dev/null 2>&1 || die "not a Git repository: $SOURCE_REPO"
 gh auth status >/dev/null 2>&1 || die "GitHub CLI is not authenticated; run: gh auth login"
+
+[[ -x "$MANIFEST_HELPER" ]] || die "manifest helper is not executable: $MANIFEST_HELPER"
+mkdir -p "$STATE_DIR"
+"$MANIFEST_HELPER" init "$STATE_DIR"
+
+# Select the model: explicit --model wins, then OPENCODE_MODEL, then rotation
+# across confirmed models (round-robin), falling back to the default model.
+if [[ -z "$MODEL" ]]; then
+  if [[ -n "${OPENCODE_MODEL:-}" ]]; then
+    MODEL="$OPENCODE_MODEL"
+  else
+    MODEL="$("$MANIFEST_HELPER" next "$DEFAULT_MODEL" "$STATE_DIR")"
+    printf 'Rotating to model from manifest: %s\n' "$MODEL" >&2
+  fi
+fi
+export OPENCODE_MODEL="$MODEL"
 
 if ! opencode models 2>/dev/null | grep -Fq "$MODEL"; then
   die "configured model was not found in opencode models: $MODEL"
@@ -217,6 +240,14 @@ Open a truthful non-draft PR that implements the full issue contract whenever re
 reviewable. Use a closure keyword only when merge will actually close the issue. Do not use
 `Stage scope` and `Remaining work` as an excuse for avoidable splitting.
 
+MODEL SIGNING
+The agent id running this heartbeat is `__MODEL_ID__` (env OPENCODE_MODEL). Sign every PR
+body you open or update with a trailing block:
+`Model: __MODEL_ID__`
+Your commits are already signed by the prepare-commit-msg hook; keep the PR body in sync so
+model attribution is visible at a glance and usage stats stay truthful. Never claim a model
+other than the one in OPENCODE_MODEL.
+
 STOP CONDITIONS
 Stop only when the owned issue is closed; Josh explicitly redirects it; a genuine human-only
 product, credential, permission, destructive, external-access, or irreversible decision is
@@ -229,7 +260,10 @@ FACTORY_RESULT: idle
 FACTORY_RESULT: needs-human
 PROMPT
 )"
+
+# Model attribution: substitute the resolved model id so PR bodies are signed.
 FACTORY_PROMPT="${FACTORY_PROMPT//__WORKER_ID__/$WORKER_ID}"
+FACTORY_PROMPT="${FACTORY_PROMPT//__MODEL_ID__/$MODEL}"
 
 printf 'ComicPile local factory v8 (closure-first issue ownership)\n'
 printf '  Source repo: %s\n' "$SOURCE_REPO"
@@ -256,16 +290,49 @@ while true; do
   heartbeat=$((heartbeat + 1))
   timestamp="$(date +%Y%m%d_%H%M%S)"
   log_file="$WORKTREE/.opencode_logs/factory_${timestamp}_heartbeat_${heartbeat}.log"
-  printf '\n[%s] Starting heartbeat %d\n' "$(date --iso-8601=seconds)" "$heartbeat"
+  printf '\n[%s] Starting heartbeat %d (model %s)\n' "$(date --iso-8601=seconds)" "$heartbeat" "$MODEL"
 
   opencode_args=(run -m "$MODEL" --dir "$WORKTREE" --title "ComicPile factory heartbeat ${timestamp}")
   [[ -n "$AGENT" ]] && opencode_args+=(--agent "$AGENT")
   [[ "$USE_AUTO" == "1" ]] && opencode_args+=(--auto)
 
+  # Heartbeat file: touched on every line of opencode output so the watchdog can
+  # kill a hung run that has not produced output for HEARTBEAT_TIMEOUT seconds.
+  hb_file="$STATE_DIR/heartbeats/factory_heartbeat_${heartbeat}.hb"
+  mkdir -p "$STATE_DIR/heartbeats"
+  touch "$hb_file"
+
   set +e
-  opencode "${opencode_args[@]}" "$FACTORY_PROMPT" 2>&1 | tee "$log_file"
-  opencode_status=${PIPESTATUS[0]}
+  setsid bash -c '
+    LOG="$1"; HB="$2"; shift 2
+    opencode "$@" 2>&1 | while IFS= read -r line; do
+      touch "$HB"
+      printf "%s\n" "$line"
+    done | tee "$LOG"
+    exit "${PIPESTATUS[0]}"
+  ' _ "$log_file" "$hb_file" "${opencode_args[@]}" "$FACTORY_PROMPT" &
+  run_pid=$!
+  ( # Watchdog: kill the run's process group when the heartbeat goes stale.
+    while kill -0 "$run_pid" 2>/dev/null; do
+      age=$(( $(date +%s) - $(stat -c %Y "$hb_file" 2>/dev/null || printf '%s' "$(date +%s)") ))
+      if ((age > HEARTBEAT_TIMEOUT)); then
+        printf 'WATCHDOG: killing heartbeat %d run %s — no output for %ss\n' "$heartbeat" "$run_pid" "$age" >&2
+        kill -9 -- "-$run_pid" 2>/dev/null || kill -9 "$run_pid" 2>/dev/null || true
+        break
+      fi
+      sleep 10
+    done
+  ) &
+  watchdog_pid=$!
+  wait "$run_pid"
+  opencode_status=$?
+  kill "$watchdog_pid" 2>/dev/null || true
   set -e
+
+  # Mark the model as used (confirmed) when the run completed successfully.
+  if ((opencode_status == 0)); then
+    "$MANIFEST_HELPER" record "$MODEL" "$STATE_DIR" >/dev/null 2>&1 || true
+  fi
 
   if ((opencode_status != 0)); then
     consecutive_failures=$((consecutive_failures + 1))

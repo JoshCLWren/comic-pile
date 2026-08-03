@@ -8,6 +8,10 @@ on:
       - docs/ISSUE_EXECUTION_PROTOCOL.md
       - scripts/comic-pile-opencode-factory.sh
       - scripts/comic-pile-opencode-factory-overnight.sh
+      - scripts/opencode-model-manifest.sh
+      - scripts/opencode-model-scout.sh
+      - scripts/install-git-hooks.sh
+      - .githooks/prepare-commit-msg
       - scripts/check-autonomous-factory-policy.py
       - scripts/tests/test_autonomous_factory_policy.py
       - .github/workflows/factory-policy.yml
@@ -20,6 +24,10 @@ on:
       - docs/ISSUE_EXECUTION_PROTOCOL.md
       - scripts/comic-pile-opencode-factory.sh
       - scripts/comic-pile-opencode-factory-overnight.sh
+      - scripts/opencode-model-manifest.sh
+      - scripts/opencode-model-scout.sh
+      - scripts/install-git-hooks.sh
+      - .githooks/prepare-commit-msg
       - scripts/check-autonomous-factory-policy.py
       - scripts/tests/test_autonomous_factory_policy.py
       - .github/workflows/factory-policy.yml
@@ -36,6 +44,8 @@ jobs:
         run: |
           bash -n scripts/comic-pile-opencode-factory.sh
           bash -n scripts/comic-pile-opencode-factory-overnight.sh
+          bash -n scripts/opencode-model-manifest.sh
+          bash -n scripts/opencode-model-scout.sh
       - name: Compile factory policy checker and tests
         run: python -m py_compile scripts/check-autonomous-factory-policy.py scripts/tests/test_autonomous_factory_policy.py
       - name: Check canonical factory invariants
