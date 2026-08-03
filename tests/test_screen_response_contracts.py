@@ -70,6 +70,23 @@ THREAD_DEPENDENCIES_FIELDS = {
     "blocking",
     "blocked_by",
 }
+ROLL_FIELDS = {
+    "thread_id",
+    "title",
+    "format",
+    "issues_remaining",
+    "queue_position",
+    "die_size",
+    "result",
+    "offset",
+    "snoozed_count",
+    "issue_id",
+    "issue_number",
+    "next_issue_id",
+    "next_issue_number",
+    "total_issues",
+    "reading_progress",
+}
 
 
 def _response_schema(
@@ -137,18 +154,10 @@ def test_blocked_summary_contract_is_exact_and_named() -> None:
     assert set(ThreadDependenciesResponse.model_fields) == THREAD_DEPENDENCIES_FIELDS
 
 
-def test_roll_screen_contract_is_named_and_bounded() -> None:
-    """The Roll screen response is a named, bounded contract without thread detail fields."""
-    roll_fields = set(RollResponse.model_fields)
-    assert "title" in roll_fields
-    assert "format" in roll_fields
-    assert "result" in roll_fields
-    assert "die_size" in roll_fields
-    assert "issues_remaining" in roll_fields
-    assert "queue_position" in roll_fields
-    assert "offset" in roll_fields
-    assert "snoozed_count" in roll_fields
-    assert len(roll_fields) == 15
+def test_roll_screen_contract_is_exact_and_named() -> None:
+    """The Roll screen response exposes exactly the documented 15-field contract."""
+    assert set(RollResponse.model_fields) == ROLL_FIELDS
+    assert len(RollResponse.model_fields) == 15
 
 
 def test_current_session_contract_is_exact_and_named() -> None:
@@ -202,10 +211,11 @@ def test_no_collection_specific_contracts_remain_in_openapi() -> None:
 
 
 def test_component_schemas_expose_exact_screen_contracts() -> None:
-    """Named component schemas advertise the bounded list models, not detail models."""
+    """Named component schemas advertise the bounded screen models, not detail models."""
     assert set(_component_schema("QueueThreadListItem")["properties"]) == QUEUE_FIELDS
     assert set(_component_schema("IssueResponse")["properties"]) == ISSUE_FIELDS
     assert (
         set(_component_schema("BlockingExplanation")["properties"])
         == BLOCKING_EXPLANATION_FIELDS
     )
+    assert set(_component_schema("RollResponse")["properties"]) == ROLL_FIELDS
