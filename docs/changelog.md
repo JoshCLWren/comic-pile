@@ -2,6 +2,14 @@
 
 ## 2026-08-03
 
+**Production migrations on Vercel/Neon**
+
+- Production schema migrations now run automatically in the GitHub Actions `deploy-production.yml` workflow, before `vercel deploy`, against the Neon main-branch database.
+- The workflow fetches the main branch's direct (unpooled) connection URL at runtime via the Neon API using the `NEON_API_KEY` secret and `NEON_PROJECT_ID` variable created by the Neon GitHub integration, then runs `alembic upgrade head`. The old `NEON_DIRECT_DATABASE_URL` secret is no longer required.
+- The workflow fails closed if the Neon credentials are missing or if multiple Alembic heads exist, and verifies the applied revision with `alembic current`.
+- The dead Railway migration path is gone: `make deploy-prod` now dispatches the `deploy-production.yml` workflow, and `make prod-migrate` runs `alembic upgrade head` against Neon via the Neon API (or an explicit `NEON_DIRECT_DATABASE_URL` override).
+- `PROD_BASE_URL` now defaults to `https://comic-pile.vercel.app`.
+
 **Collections feature removed (#636)**
 
 - The Collections feature is retired: the roll-pool collection dropdown, collection dialog, collection badges, collection query keys and context, and all collection API routes are gone.

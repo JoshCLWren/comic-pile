@@ -13,11 +13,13 @@ BINDIR ?= $(PREFIX)/bin
 LIBDIR ?= $(PREFIX)/lib
 PYTHON ?= .venv/bin/python
 PYTEST ?= $(PYTHON) -m pytest
-PROD_BASE_URL ?= https://app-production-72b9.up.railway.app
-RAILWAY_PROJECT_ID ?= 8222a6ae-6873-443e-a367-a240536dc213
-RAILWAY_PROD_ENV ?= production
-RAILWAY_APP_SERVICE ?= app
-PROD_MIGRATE_CMD ?= /app/.venv/bin/alembic upgrade head
+PROD_BASE_URL ?= https://comic-pile.vercel.app
+# Neon credentials used by make prod-migrate to fetch the production connection URL via the Neon API.
+# Both are created automatically by the Neon GitHub integration.
+NEON_API_KEY ?=
+NEON_PROJECT_ID ?=
+# Optional direct (unpooled) Neon connection URL override for make prod-migrate.
+NEON_DIRECT_DATABASE_URL ?=
 RAILWAY_CONTROL_RESULTS ?= $(filter-out benchmarks/results/control-results-comparison.json,$(wildcard benchmarks/results/control-results-*.json))
 RAILWAY_CONTROL_C32_RESULTS ?= $(filter-out benchmarks/results/control-c32-diagnostic-comparison.json,$(wildcard benchmarks/results/control-c32-diagnostic-*.json))
 
@@ -239,7 +241,7 @@ test-e2e-api:  ## Run e2e API tests (no browser/server needed)
 
 test-e2e-prod-smoke:  ## Run Playwright prod smoke test (set PROD_BASE_URL=https://...)
 	@if [ -z "$(PROD_BASE_URL)" ]; then \
-		echo "Usage: make test-e2e-prod-smoke PROD_BASE_URL=https://app-production-72b9.up.railway.app"; \
+		echo "Usage: make test-e2e-prod-smoke PROD_BASE_URL=https://comic-pile.vercel.app"; \
 		exit 1; \
 	fi
 	@PROD_BASE_URL="$(PROD_BASE_URL)" pnpm --filter frontend run test:e2e:prod-smoke
@@ -322,7 +324,7 @@ list-postgres-backups:  ## List all PostgreSQL backups
 	@echo "Available PostgreSQL backups:"
 	@ls -lh backups/postgres/postgres_backup_*.sql.gz 2>/dev/null || echo "No PostgreSQL backups found"
 
-deploy-prod:  ## Deploy to Railway production
+deploy-prod:  ## Deploy to production via the GitHub Actions workflow (migrations run before deploy)
 	@echo "Verifying clean git worktree..."
 	@if ! git diff --quiet || ! git diff --cached --quiet; then \
 		echo "ERROR: Working tree is not clean. Commit or stash changes before deploy."; \
@@ -335,46 +337,50 @@ deploy-prod:  ## Deploy to Railway production
 		echo "Rebase/merge and push before deploy to ensure deterministic release."; \
 		exit 1; \
 	fi
-	@echo "Installing locked frontend dependencies..."
-	@pnpm install --frozen-lockfile
-	@echo "Running frontend TypeScript typecheck..."
-	@pnpm --filter frontend run typecheck
-	@echo "Deploying to Railway project $(RAILWAY_PROJECT_ID) service $(RAILWAY_APP_SERVICE) in $(RAILWAY_PROD_ENV)..."
-	@railway up \
-		--project $(RAILWAY_PROJECT_ID) \
-		--environment $(RAILWAY_PROD_ENV) \
-		--service $(RAILWAY_APP_SERVICE) \
-		--detach
-	@sleep 60
-	@echo "Checking deployment status for $(RAILWAY_APP_SERVICE) in $(RAILWAY_PROD_ENV)..."
-	@railway service status --service $(RAILWAY_APP_SERVICE) --environment $(RAILWAY_PROD_ENV)
-	@echo "Testing health endpoint..."
-	@curl -fsS $(PROD_BASE_URL)/health >/dev/null
-	@echo "Validating deployed frontend asset references..."
-	@bash scripts/check_frontend_assets.sh $(PROD_BASE_URL)
-
-prod-migrate:  ## Run Alembic migrations in Railway production app service
-	@echo "Pre-flight: checking for multiple Alembic heads..."
+	@echo "Checking for multiple Alembic heads..."
 	@HEADS=$$(uv run alembic heads 2>/dev/null | grep -c "(head)"); \
 	if [ "$$HEADS" -ne 1 ]; then \
 		echo "ERROR: $$HEADS Alembic heads detected. Resolve merge before deploying."; \
 		uv run alembic heads 2>/dev/null; \
 		exit 1; \
 	fi
-	@echo "Running production migrations on Railway ($(RAILWAY_PROJECT_ID)/$(RAILWAY_APP_SERVICE)/$(RAILWAY_PROD_ENV))..."
-	@railway ssh --project $(RAILWAY_PROJECT_ID) --service $(RAILWAY_APP_SERVICE) --environment $(RAILWAY_PROD_ENV) $(PROD_MIGRATE_CMD)
-	@echo "Verifying production migration revision..."
-	@railway ssh --project $(RAILWAY_PROJECT_ID) --service $(RAILWAY_APP_SERVICE) --environment $(RAILWAY_PROD_ENV) /app/.venv/bin/alembic current
+	@echo "Running frontend TypeScript typecheck..."
+	@pnpm --filter frontend run typecheck
+	@echo "Triggering production deploy workflow (migrate-then-deploy)..."
+	@gh workflow run deploy-production.yml --ref main
+	@echo "Deploy workflow dispatched. Monitor with: gh run watch --workflow=deploy-production.yml"
 
-deploy-prod-migrate: deploy-prod prod-migrate  ## Deploy to Railway production, then run Alembic migrations
-	@echo "Verifying health endpoint after production migration..."
-	@curl -fsS $(PROD_BASE_URL)/health >/dev/null
-	@echo "Validating deployed frontend asset references after migration..."
-	@bash scripts/check_frontend_assets.sh $(PROD_BASE_URL)
+prod-migrate:  ## Run Alembic migrations on the Neon production database (fetches the direct connection URL via the Neon API)
+	@if [ -z "$(NEON_DIRECT_DATABASE_URL)" ]; then \
+		if [ -z "$(NEON_API_KEY)" ] || [ -z "$(NEON_PROJECT_ID)" ]; then \
+			echo "ERROR: provide NEON_DIRECT_DATABASE_URL or both NEON_API_KEY and NEON_PROJECT_ID."; \
+			echo "The GitHub deploy workflow fetches the URL automatically via the Neon API."; \
+			exit 1; \
+		fi; \
+	fi
+	@echo "Pre-flight: checking for multiple Alembic heads..."
+	@HEADS=$$(uv run alembic heads 2>/dev/null | grep -c "(head)"); \
+	if [ "$$HEADS" -ne 1 ]; then \
+		echo "ERROR: $$HEADS Alembic heads detected. Resolve merge before migrating."; \
+		uv run alembic heads 2>/dev/null; \
+		exit 1; \
+	fi
+	@echo "Resolving Neon production connection URL..."
+	@NEON_URL=$${NEON_DIRECT_DATABASE_URL:-$$(curl --fail --silent --show-error \
+		--url "https://console.neon.tech/api/v2/projects/$${NEON_PROJECT_ID}/connection_uri?database_name=neondb&role_name=neondb_owner" \
+		--header 'Accept: application/json' \
+		--header "Authorization: Bearer $${NEON_API_KEY}" \
+		| jq -r '.uri')}; \
+	echo "Running production migrations on Neon..."; \
+	DATABASE_URL="$$NEON_URL" uv run alembic upgrade head; \
+	echo "Verifying production migration revision..."; \
+	DATABASE_URL="$$NEON_URL" uv run alembic current
+
+deploy-prod-migrate: deploy-prod  ## Deploy to production; migrations run automatically before deploy in the workflow
 
 check-prod-assets:  ## Validate deployed frontend assets (make check-prod-assets PROD_BASE_URL=https://...)
 	@if [ -z "$(PROD_BASE_URL)" ]; then \
-		echo "Usage: make check-prod-assets PROD_BASE_URL=https://app-production-72b9.up.railway.app"; \
+		echo "Usage: make check-prod-assets PROD_BASE_URL=https://comic-pile.vercel.app"; \
 		exit 1; \
 	fi
 	@bash scripts/check_frontend_assets.sh "$(PROD_BASE_URL)"
