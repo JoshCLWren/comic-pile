@@ -22,6 +22,34 @@ export async function applyRatedThreadCache(
 }
 
 /**
+ * Apply the authoritative thread returned by a successful thread edit.
+ *
+ * Thread edits can change Queue ordering/filter presentation and Roll eligibility,
+ * so those screen read models are recalculated narrowly. The returned entity remains
+ * authoritative for exact thread detail and summary caches. History, dependencies,
+ * analytics, and unrelated thread entries remain valid.
+ */
+export async function applyUpdatedThreadCache(
+  client: QueryClient,
+  thread: Thread,
+): Promise<void> {
+  client.setQueryData(queryKeys.thread.detail(thread.id), thread)
+  client.setQueryData(queryKeys.thread.summary(thread.id), thread)
+
+  await Promise.all([
+    client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
+    client.invalidateQueries({
+      queryKey: queryKeys.session.current(),
+      exact: true,
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    }),
+  ])
+}
+
+/**
  * Reconcile snooze and unsnooze mutations through their authoritative owner.
  *
  * Snooze membership lives on the current session, so these mutations must not
