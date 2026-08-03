@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   applyRatedThreadCache,
   applyUpdatedThreadCache,
+  invalidateAfterIssueEdit,
   invalidateAfterQueueMovement,
   invalidateCurrentSessionAfterSnooze,
 } from '../query/cacheEffects'
@@ -62,6 +63,45 @@ describe('retained mutation cache effects', () => {
     })
     expect(invalidateQueries).not.toHaveBeenCalledWith(
       expect.objectContaining({ queryKey: queryKeys.session.pages() }),
+    )
+    expect(invalidateQueries).not.toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: queryKeys.dependencies.all }),
+    )
+    expect(invalidateQueries).not.toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: queryKeys.analytics.all }),
+    )
+  })
+
+  it('invalidates only the edited thread issue pages, summaries, detail, and current session', async () => {
+    const client = new QueryClient()
+    const invalidateQueries = vi.spyOn(client, 'invalidateQueries')
+
+    await invalidateAfterIssueEdit(client, 12)
+
+    expect(invalidateQueries).toHaveBeenCalledTimes(4)
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.thread.issuePages(12),
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.thread.detail(12),
+      exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.thread.summary(12),
+      exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.session.current(),
+      exact: true,
+    })
+    expect(invalidateQueries).not.toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: queryKeys.thread.issuePages(13) }),
+    )
+    expect(invalidateQueries).not.toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: queryKeys.queue.pages() }),
+    )
+    expect(invalidateQueries).not.toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: queryKeys.roll.bootstrap() }),
     )
     expect(invalidateQueries).not.toHaveBeenCalledWith(
       expect.objectContaining({ queryKey: queryKeys.dependencies.all }),
