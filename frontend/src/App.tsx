@@ -31,7 +31,6 @@ const QueuePage = lazy(() => import('./pages/QueuePage'))
 const ThreadDetailView = lazy(() => import('./pages/ThreadDetailView'))
 const HistoryPage = lazy(() => import('./pages/HistoryPage'))
 const SessionPage = lazy(() => import('./pages/SessionPage'))
-const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
 const HelpPage = lazy(() => import('./pages/HelpPage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage'))
@@ -245,6 +244,7 @@ function AppRoutes() {
           }
         />
         <Route path="/rate" element={<Navigate to="/" replace />} />
+        <Route path="/analytics" element={<Navigate to="/" replace />} />
         <Route
           path="/"
           element={
@@ -291,16 +291,6 @@ function AppRoutes() {
             <ProtectedRoute>
               <AuthenticatedLayout onBugReportSubmit={submit}>
                 <SessionPage />
-              </AuthenticatedLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/analytics"
-          element={
-            <ProtectedRoute>
-              <AuthenticatedLayout onBugReportSubmit={submit}>
-                <AnalyticsPage />
               </AuthenticatedLayout>
             </ProtectedRoute>
           }
