@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import event as sa_event
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import Event, Thread, User
 from app.models import Session as SessionModel
@@ -217,7 +217,7 @@ async def test_history_deleted_thread_yields_null_active_thread(
 async def test_history_event_reads_do_not_grow_per_session(
     auth_client: AsyncClient,
     async_db: AsyncSession,
-    db_engine,
+    db_engine: AsyncEngine,
     default_user: User,
 ) -> None:
     """The History page performs one events read regardless of page size."""
@@ -266,3 +266,88 @@ async def test_history_event_reads_do_not_grow_per_session(
     assert len(event_reads) == 1, (
         f"Expected a single events read, got {len(event_reads)}: {event_reads}"
     )
+
+
+@pytest.mark.asyncio
+async def test_history_pagination_preserves_ordering_and_tokens(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """Cursor pages keep reverse-chronological ordering and stable tokens."""
+    for i in range(5):
+        session = SessionModel(
+            start_die=6,
+            user_id=default_user.id,
+            started_at=datetime(2026, 8, 2, 12, 0, 50 - i, tzinfo=UTC),
+        )
+        async_db.add(session)
+        await async_db.flush()
+    await _commit_all(async_db)
+
+    first_page = await auth_client.get("/api/sessions/?page_size=2")
+    assert first_page.status_code == 200
+    first_data = first_page.json()
+    first_sessions = first_data["sessions"]
+    assert len(first_sessions) == 2
+    assert [s["started_at"] for s in first_sessions] == sorted(
+        (s["started_at"] for s in first_sessions), reverse=True
+    ), "Sessions must be newest-first by started_at"
+
+    next_token = first_data.get("next_page_token")
+    assert next_token is not None
+
+    second_page = await auth_client.get(
+        "/api/sessions/", params={"page_size": 2, "page_token": next_token}
+    )
+    assert second_page.status_code == 200
+    second_data = second_page.json()
+    second_sessions = second_data["sessions"]
+    assert len(second_sessions) == 2
+    assert [s["started_at"] for s in second_sessions] == sorted(
+        (s["started_at"] for s in second_sessions), reverse=True
+    ), "Second page continues newest-first ordering"
+
+    assert {s["id"] for s in first_sessions}.isdisjoint({s["id"] for s in second_sessions})
+    assert all(first_sessions[-1]["started_at"] > s["started_at"] for s in second_sessions), (
+        "First page must be strictly newer than the second page"
+    )
+
+    third_page = await auth_client.get(
+        "/api/sessions/", params={"page_size": 2, "page_token": second_data["next_page_token"]}
+    )
+    assert third_page.status_code == 200
+    third_data = third_page.json()
+    assert len(third_data["sessions"]) == 1
+    assert third_data["next_page_token"] is None
+
+
+@pytest.mark.asyncio
+async def test_history_duplicate_timestamps_break_ties_by_event_id(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """Latest die selection uses event ID to break equal timestamp ties."""
+    thread = Thread(
+        title="Tie Comic",
+        format="Comic",
+        issues_remaining=10,
+        queue_position=1,
+        user_id=default_user.id,
+    )
+    async_db.add(thread)
+    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    async_db.add(session)
+    await async_db.flush()
+
+    first = _die_event(session, thread, timestamp=1, die_after=8)
+    second = _die_event(session, thread, timestamp=1, die_after=12)
+    async_db.add_all([first, second])
+    await async_db.flush()
+
+    first.id, second.id = 100, 101
+    await _commit_all(async_db)
+
+    response = await auth_client.get("/api/sessions/")
+    assert response.status_code == 200
+    item = next(s for s in response.json()["sessions"] if s["id"] == session.id)
+
+    assert item["current_die"] == 12
+    assert item["ladder_path"] == "6 → 8 → 12"
