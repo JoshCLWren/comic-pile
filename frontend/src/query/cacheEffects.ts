@@ -35,3 +35,26 @@ export async function invalidateCurrentSessionAfterSnooze(
     exact: true,
   })
 }
+
+/**
+ * Reconcile queue ordering mutations without evicting unrelated server state.
+ *
+ * A move can reshape every filtered or paginated Queue page and can change the
+ * current session and Roll selection. Thread details, History, dependencies, and
+ * analytics remain valid and must not be globally invalidated.
+ */
+export async function invalidateAfterQueueMovement(
+  client: QueryClient,
+): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
+    client.invalidateQueries({
+      queryKey: queryKeys.session.current(),
+      exact: true,
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    }),
+  ])
+}
