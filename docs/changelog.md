@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-08-03
+
+**Collections feature removed (#636)**
+
+- The Collections feature is retired: the roll-pool collection dropdown, collection dialog, collection badges, collection query keys and context, and all collection API routes are gone.
+- Roll and Queue operate on the full user thread library without collection filtering or collection-dependent branches.
+- The `collections` table and `threads.collection_id` column are dropped by migration; the prod-clone export/import and user-merge scripts no longer handle collections.
+
 ## 2026-08-01
 
 **TanStack Query collections pilot (#701)**
