@@ -157,6 +157,28 @@ jobs:
           fi
           echo "Single head confirmed"
 
+      - name: Inspect production schema state
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+        run: |
+          set -euo pipefail
+          .venv/bin/python - <<'PY'
+          import os
+          import psycopg
+
+          url = os.environ["DATABASE_URL"]
+          if url.startswith("postgres://"):
+              url = "postgresql://" + url[len("postgres://"):]
+          with psycopg.connect(url) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("SELECT version_num FROM alembic_version")
+                  print("alembic_version:", cur.fetchall())
+                  cur.execute("SELECT to_regclass('public.collections')")
+                  print("collections table:", cur.fetchall())
+                  cur.execute("SELECT indexname FROM pg_indexes WHERE tablename='collections'")
+                  print("collections indexes:", cur.fetchall())
+          PY
+
       - name: Migrate production database before deploy
         env:
           DATABASE_URL: ${{ steps.neon.outputs.db_url }}
