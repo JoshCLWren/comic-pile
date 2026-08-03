@@ -76,7 +76,7 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
 
     for needle in (
         "docs/AUTONOMOUS_FACTORY_POLICY.md",
-        "open a truthful non-draft PR",
+        "Open a truthful non-draft PR",
         "Never create or convert a draft PR unless Josh explicitly",
         "Never merge.",
         "FINISH WHAT YOU START",
