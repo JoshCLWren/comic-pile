@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { invalidateCurrentSessionAfterSnooze } from '../query/cacheEffects'
+import { queryClient } from '../query/queryClient'
 import { snoozeApi } from '../services/api'
 import { getApiErrorDetail } from '../utils/apiError'
 
@@ -11,6 +13,7 @@ export function useSnooze() {
     setIsError(false)
     try {
       await snoozeApi.snooze()
+      await invalidateCurrentSessionAfterSnooze(queryClient)
     } catch (error: unknown) {
       setIsError(true)
       console.error('Failed to snooze thread:', getApiErrorDetail(error))
@@ -32,6 +35,7 @@ export function useUnsnooze() {
     setIsError(false)
     try {
       await snoozeApi.unsnooze(threadId)
+      await invalidateCurrentSessionAfterSnooze(queryClient)
     } catch (error: unknown) {
       setIsError(true)
       console.error('Failed to unsnooze thread:', getApiErrorDetail(error))
