@@ -65,8 +65,17 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
     def test_one_commit_is_not_a_stop_condition(self) -> None:
         """Reject restoring one-commit heartbeat completion."""
         mutated = self.policy.replace(
-            "One pushed commit, pending CI, green CI, review completion, a large diff, or harder next work are never stop conditions.",
+            "one substantive commit was pushed;",
             "A heartbeat may stop after one substantive commit",
+        )
+        with self.assertRaisesRegex(SystemExit, "missing required policy text"):
+            self.validate(policy=mutated)
+
+    def test_pending_ci_is_not_a_stop_condition(self) -> None:
+        """Reject allowing a worker to stop merely because CI is pending."""
+        mutated = self.policy.replace(
+            "CI is pending, queued, or green;",
+            "CI is pending, so stop the heartbeat;",
         )
         with self.assertRaisesRegex(SystemExit, "missing required policy text"):
             self.validate(policy=mutated)
