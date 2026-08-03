@@ -3,8 +3,9 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
 
+const state = vi.hoisted(() => ({ overridePending: false, setDiePending: false, manualDie: null as number | null }))
 const spies = vi.hoisted(() => ({
-  list: vi.fn(), override: vi.fn(), refetch: vi.fn(), navigate: vi.fn(),
+  list: vi.fn(), override: vi.fn(), refetch: vi.fn(), navigate: vi.fn(), setDie: vi.fn(), clearDie: vi.fn(),
 }))
 
 vi.mock('react-router-dom', () => ({ useNavigate: () => spies.navigate }))
@@ -15,7 +16,7 @@ vi.mock('../hooks/useRollBootstrap', () => ({
   useRollBootstrap: () => ({
     data: {
       current_die: 6,
-      manual_die: null,
+      manual_die: state.manualDie,
       last_rolled_result: null,
       pending_thread_id: null,
       active_thread: null,
@@ -34,11 +35,11 @@ vi.mock('../hooks/useRollBootstrap', () => ({
   }),
 }))
 vi.mock('../hooks/useRoll', () => ({
-  useSetDie: () => ({ mutate: vi.fn(), isPending: false }),
-  useClearManualDie: () => ({ mutate: vi.fn(), isPending: false }),
+  useSetDie: () => ({ mutate: spies.setDie, isPending: state.setDiePending }),
+  useClearManualDie: () => ({ mutate: spies.clearDie, isPending: false }),
   useRoll: () => ({ mutate: vi.fn(), isPending: false }),
   useDismissPending: () => ({ mutate: vi.fn(), isPending: false }),
-  useOverrideRoll: () => ({ mutate: spies.override, isPending: false }),
+  useOverrideRoll: () => ({ mutate: spies.override, isPending: state.overridePending }),
 }))
 vi.mock('../hooks/useSnooze', () => ({
   useSnooze: () => ({ mutate: vi.fn(), isPending: false }),
@@ -81,6 +82,9 @@ vi.mock('../pages/RollPage/components/RatingView', () => ({ RatingView: () => <d
 describe('RollPage bootstrap modal coverage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    state.overridePending = false
+    state.setDiePending = false
+    state.manualDie = null
     spies.list.mockResolvedValue({
       threads: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active' }],
       next_page_token: null,
@@ -94,6 +98,8 @@ describe('RollPage bootstrap modal coverage', () => {
       queue_position: 1,
       total_issues: 10,
     })
+    spies.setDie.mockResolvedValue(undefined)
+    spies.clearDie.mockResolvedValue(undefined)
     spies.refetch.mockResolvedValue({})
   })
 
@@ -113,5 +119,24 @@ describe('RollPage bootstrap modal coverage', () => {
     await user.click(screen.getByRole('button', { name: 'Override Roll' }))
     await waitFor(() => expect(spies.override).toHaveBeenCalledWith({ thread_id: 1 }))
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Override Roll' })).not.toBeInTheDocument())
+  })
+
+  it('renders pending override and manual-die states and closes the die modal after a successful choice', async () => {
+    state.overridePending = true
+    state.manualDie = 6
+    const user = userEvent.setup()
+    render(<RollPage />)
+
+    await user.click(screen.getByRole('button', { name: 'Override' }))
+    expect(screen.getByRole('button', { name: 'Overriding...' })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: 'close modal' }))
+    expect(screen.queryByRole('heading', { name: 'Override Roll' })).not.toBeInTheDocument()
+
+    const d6Buttons = screen.getAllByRole('button', { name: 'd6' })
+    await user.click(d6Buttons[d6Buttons.length - 1]!)
+    expect(screen.getByRole('heading', { name: 'Select Die' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'd8' }))
+    await waitFor(() => expect(spies.setDie).toHaveBeenCalledWith(8))
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Select Die' })).not.toBeInTheDocument())
   })
 })
