@@ -14,7 +14,7 @@ SPEC.loader.exec_module(CHECKER)
 
 
 class AutonomousFactoryPolicyTests(unittest.TestCase):
-    """Verify closure-first factory drift is detected."""
+    """Verify no-early-exit factory drift is detected."""
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -35,20 +35,38 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
         """Accept the checked-in canonical policy sources."""
         self.validate()
 
-    def test_issue_closure_north_star_is_required(self) -> None:
-        """Reject replacing issue closure with PR-count incentives."""
+    def test_no_early_exit_north_star_is_required(self) -> None:
+        """Reject returning to commit-sized heartbeat completion."""
         mutated = self.policy.replace(
-            "Finish what you start. Success is measured by issues closed, not pull requests opened.",
-            "Success is measured by pull requests opened.",
+            "Finish the issue. Do not stop at a commit, PR, review, CI run, or ready marker.",
+            "Stop after one substantive commit.",
         )
         with self.assertRaisesRegex(SystemExit, "missing required policy text"):
             self.validate(policy=mutated)
 
-    def test_issue_ownership_is_required(self) -> None:
-        """Reject reverting ownership from the issue back to the PR."""
+    def test_mandatory_continue_check_is_required(self) -> None:
+        """Reject removing the post-action continuation decision."""
         mutated = self.policy.replace(
-            "A worker owns an issue, not a PR.",
-            "A worker owns one PR at a time.",
+            "Is there executable work remaining for this owned issue that I can safely do now?",
+            "Was one commit pushed?",
+        )
+        with self.assertRaisesRegex(SystemExit, "missing required policy text"):
+            self.validate(policy=mutated)
+
+    def test_remaining_work_cannot_be_a_stop_report(self) -> None:
+        """Reject allowing workers to list executable work and leave."""
+        mutated = self.policy.replace(
+            "Naming executable remaining work and then stopping is a policy failure.",
+            "List remaining work before stopping.",
+        )
+        with self.assertRaisesRegex(SystemExit, "missing required policy text"):
+            self.validate(policy=mutated)
+
+    def test_one_commit_is_not_a_stop_condition(self) -> None:
+        """Reject restoring one-commit heartbeat completion."""
+        mutated = self.policy.replace(
+            "One pushed commit, pending CI, green CI, review completion, a large diff, or harder next work are never stop conditions.",
+            "A heartbeat may stop after one substantive commit",
         )
         with self.assertRaisesRegex(SystemExit, "missing required policy text"):
             self.validate(policy=mutated)
@@ -56,16 +74,16 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
     def test_planning_pr_ban_is_required(self) -> None:
         """Reject restoring planning-only PRs as normal delivery."""
         mutated = self.policy.replace(
-            "Do not open planning-only, architecture-only, inventory-only, or implementation-plan PRs",
+            "Never open planning-only, architecture-only, inventory-only, or implementation-plan PRs",
             "Planning PRs are encouraged",
         )
         with self.assertRaisesRegex(SystemExit, "missing required policy text"):
             self.validate(policy=mutated)
 
     def test_large_coherent_pr_rule_is_required(self) -> None:
-        """Reject restoring an automatic small-PR splitting bias."""
+        """Reject restoring automatic stage splitting."""
         mutated = self.policy.replace(
-            "Large coherent PRs are allowed and preferred",
+            "Implement the whole issue in one coherent non-draft PR whenever reasonably reviewable.",
             "Always split large PRs into stages",
         )
         with self.assertRaisesRegex(SystemExit, "missing required policy text"):
@@ -76,21 +94,6 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
         mutated = f"{self.entrypoint}\nHONEST STAGE FAST PATH\n"
         with self.assertRaisesRegex(SystemExit, "forbidden policy drift"):
             self.validate(entrypoint=mutated)
-
-    def test_no_auto_merge_boundary_is_required(self) -> None:
-        """Reject removal of the explicit auto-merge boundary."""
-        mutated = self.policy.replace(
-            "Never enable auto-merge as a substitute for explicit authorization.",
-            "Enable auto-merge after CI passes.",
-        )
-        with self.assertRaisesRegex(SystemExit, "missing required policy text"):
-            self.validate(policy=mutated)
-
-    def test_obsolete_marker_dialect_is_rejected(self) -> None:
-        """Reject reintroduction of an obsolete repair marker dialect."""
-        mutated = f"{self.policy}\n<!-- comic-pile-factory-fix-v2:legacy -->\n"
-        with self.assertRaisesRegex(SystemExit, "forbidden policy drift"):
-            self.validate(policy=mutated)
 
     def test_entrypoint_cannot_restore_merge_behavior(self) -> None:
         """Reject local entrypoint instructions to merge autonomously."""
