@@ -220,7 +220,7 @@ export default function ThreadDetailView() {
           <div className="glass-card p-3 md:p-4 space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-xs font-black uppercase tracking-widest text-stone-500">
-                Issues ({issuesTotal > 0 ? issuesTotal : issues.length})
+                Issues ({issuesTotal > 0 ? issuesTotal : (thread.total_issues ?? issues.length)})
               </span>
               <button
                 type="button"

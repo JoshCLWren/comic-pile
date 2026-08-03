@@ -52,6 +52,7 @@ it('does not fetch issues before the Issues section expands', async () => {
   renderPage()
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   expect(mockedIssuesApiList).not.toHaveBeenCalled()
+  expect(screen.getByText('Issues (10)')).toBeInTheDocument()
   expect(screen.getByText(/Next up: #3/)).toBeInTheDocument()
 })
 
