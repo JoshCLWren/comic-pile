@@ -1,0 +1,40 @@
+name: Factory Policy
+
+on:
+  pull_request:
+    paths:
+      - AGENTS.md
+      - docs/AUTONOMOUS_FACTORY_POLICY.md
+      - docs/ISSUE_EXECUTION_PROTOCOL.md
+      - scripts/comic-pile-opencode-factory.sh
+      - scripts/check-autonomous-factory-policy.py
+      - scripts/tests/test_autonomous_factory_policy.py
+      - .github/workflows/factory-policy.yml
+  push:
+    branches:
+      - main
+    paths:
+      - AGENTS.md
+      - docs/AUTONOMOUS_FACTORY_POLICY.md
+      - docs/ISSUE_EXECUTION_PROTOCOL.md
+      - scripts/comic-pile-opencode-factory.sh
+      - scripts/check-autonomous-factory-policy.py
+      - scripts/tests/test_autonomous_factory_policy.py
+      - .github/workflows/factory-policy.yml
+
+permissions:
+  contents: read
+
+jobs:
+  policy-alignment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check local factory shell syntax
+        run: bash -n scripts/comic-pile-opencode-factory.sh
+      - name: Compile factory policy checker and tests
+        run: python -m py_compile scripts/check-autonomous-factory-policy.py scripts/tests/test_autonomous_factory_policy.py
+      - name: Check canonical factory invariants
+        run: python scripts/check-autonomous-factory-policy.py
+      - name: Test policy drift detection
+        run: python -m unittest scripts/tests/test_autonomous_factory_policy.py
