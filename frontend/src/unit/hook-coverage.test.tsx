@@ -5,13 +5,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const api = vi.hoisted(() => ({
   queueApi: { moveToPosition: vi.fn(), moveToFront: vi.fn(), moveToBack: vi.fn(), shuffle: vi.fn() },
   rateApi: { rate: vi.fn() },
-  rollApi: { roll: vi.fn(), override: vi.fn(), dismissPending: vi.fn(), setDie: vi.fn(), clearManualDie: vi.fn(), reroll: vi.fn(), bootstrap: vi.fn() },
+  rollApi: { roll: vi.fn(), override: vi.fn(), dismissPending: vi.fn(), setDie: vi.fn(), clearManualDie: vi.fn(), reroll: vi.fn() },
   undoApi: { listSnapshots: vi.fn(), undo: vi.fn() },
   tasksApi: { getMetrics: vi.fn() },
   threadsApi: { listStale: vi.fn() },
   sessionApi: { getCurrent: vi.fn(), list: vi.fn(), getDetails: vi.fn(), getSnapshots: vi.fn(), restoreSessionStart: vi.fn() },
 }))
+const bootstrapApi = vi.hoisted(() => ({ get: vi.fn() }))
 vi.mock('../services/api', () => api)
+vi.mock('../services/rollBootstrapApi', () => ({ rollBootstrapApi: bootstrapApi }))
 const toast = vi.hoisted(() => ({ showToast: vi.fn() }))
 const cache = vi.hoisted(() => ({ invalidateQueries: vi.fn() }))
 vi.mock('../contexts/useToast', () => ({ useToast: () => toast }))
@@ -29,6 +31,7 @@ import { useStaleThreads } from '../hooks/useThread'
 beforeEach(() => {
   vi.clearAllMocks()
   Object.values(api).forEach((group) => Object.values(group).forEach((fn) => fn.mockResolvedValue({})))
+  bootstrapApi.get.mockResolvedValue({})
   api.rollApi.roll.mockResolvedValue({ result: 4 })
 })
 
@@ -158,7 +161,7 @@ describe('data hooks', () => {
 
   it('loads current session, handles notifications, and restores snapshots', async () => {
     const storage = new Map<string, string>([['comic_pile_last_session_id_7', '1']])
-    Object.defineProperty(window, 'localStorage', { configurable: true, value: { getItem: (k: string) => storage.get(k) ?? null, setItem: (k: string, v: string) => storage.set(k, v) } })
+    Object.defineProperty(window, 'localStorage', { configurable: true, value: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value) } })
     api.sessionApi.getCurrent.mockResolvedValue({ id: 2, user_id: 7 })
     const current = renderHook(() => useSession())
     await waitFor(() => expect(current.result.current.data?.id).toBe(2))
@@ -239,22 +242,38 @@ describe('data hooks', () => {
   })
 
   it('covers roll bootstrap success, error, and refetch paths', async () => {
-    api.rollApi.bootstrap.mockResolvedValue({ current_die: 6, roll_pool: [] })
+    const initialData = {
+      session_id: 1,
+      user_id: 1,
+      current_die: 6,
+      manual_die: null,
+      pending_thread_id: null,
+      last_rolled_result: null,
+      active_thread: null,
+      roll_pool: [],
+      snoozed_threads: [],
+      snoozed_count: 0,
+      blocked_count: 0,
+      blocked_threads: [],
+      stale_thread_count: 0,
+      stale_thread: null,
+    }
+    bootstrapApi.get.mockResolvedValue(initialData)
     const hook = renderHook(() => useRollBootstrap())
     expect(hook.result.current.isPending).toBe(true)
     await waitFor(() => {
       expect(hook.result.current.isPending).toBe(false)
-      expect(hook.result.current.data).toEqual({ current_die: 6, roll_pool: [] })
+      expect(hook.result.current.data).toEqual(initialData)
     })
 
-    const refetchData = { current_die: 8, roll_pool: [{ id: 1, title: 'Test', format: 'Comic' }] }
-    api.rollApi.bootstrap.mockResolvedValueOnce(refetchData)
+    const refetchData = { ...initialData, current_die: 8, roll_pool: [{ id: 1, title: 'Test', format: 'Comic' }] }
+    bootstrapApi.get.mockResolvedValueOnce(refetchData)
     let refetchResult: unknown
     await act(async () => { refetchResult = await hook.result.current.refetch() })
     expect(refetchResult).toEqual(refetchData)
     expect(hook.result.current.data).toEqual(refetchData)
 
-    api.rollApi.bootstrap.mockRejectedValueOnce(new Error('bootstrap failed'))
+    bootstrapApi.get.mockRejectedValueOnce(new Error('bootstrap failed'))
     const failedHook = renderHook(() => useRollBootstrap())
     await waitFor(() => {
       expect(failedHook.result.current.isError).toBe(true)
@@ -262,7 +281,7 @@ describe('data hooks', () => {
       expect(failedHook.result.current.error?.message).toBe('bootstrap failed')
     })
 
-    api.rollApi.bootstrap.mockRejectedValueOnce('string error')
+    bootstrapApi.get.mockRejectedValueOnce('string error')
     const stringHook = renderHook(() => useRollBootstrap())
     await waitFor(() => {
       expect(stringHook.result.current.isError).toBe(true)
