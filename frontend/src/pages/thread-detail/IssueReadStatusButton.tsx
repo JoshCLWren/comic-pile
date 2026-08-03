@@ -42,8 +42,8 @@ export function IssueReadStatusButton({
         status: updatedIssue.status,
         read_at: updatedIssue.read_at,
         issues_remaining: updatedThread.issues_remaining,
-        next_unread_issue_id: updatedThread.next_unread_issue_id,
-        next_unread_issue_number: updatedThread.next_unread_issue_number,
+        next_unread_issue_id: updatedThread.next_unread_issue_id ?? null,
+        next_unread_issue_number: updatedThread.next_unread_issue_number ?? null,
       }
 
       onSnapshotChange(applyIssueReadStatus(snapshot, issue.id, result))
