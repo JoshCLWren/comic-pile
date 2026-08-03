@@ -1,6 +1,6 @@
 """Roll-related Pydantic schemas for request/response validation."""
 
-from typing import Any, ClassVar
+from typing import ClassVar
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -75,12 +75,12 @@ class RollBootstrapResponse(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def bound_summary_lists(cls, data: Any) -> Any:
+    def bound_summary_lists(cls, data: object) -> object:
         """Keep summary collections bounded even when stored session IDs grow."""
         if not isinstance(data, dict):
             return data
 
-        bounded = dict(data)
+        bounded: dict[object, object] = dict(data)
         for field_name in ("snoozed_threads", "blocked_threads"):
             values = bounded.get(field_name)
             if isinstance(values, list):
