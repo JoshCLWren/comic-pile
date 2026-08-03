@@ -85,7 +85,15 @@ describe('RollPage bootstrap modal coverage', () => {
       threads: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active' }],
       next_page_token: null,
     })
-    spies.override.mockResolvedValue({})
+    spies.override.mockResolvedValue({
+      thread_id: 1,
+      title: 'Saga',
+      format: 'Comic',
+      result: 3,
+      issues_remaining: 2,
+      queue_position: 1,
+      total_issues: 10,
+    })
     spies.refetch.mockResolvedValue({})
   })
 
@@ -103,7 +111,7 @@ describe('RollPage bootstrap modal coverage', () => {
 
     await user.selectOptions(select, '1')
     await user.click(screen.getByRole('button', { name: 'Override Roll' }))
-    await waitFor(() => expect(spies.override).toHaveBeenCalledWith(1))
-    expect(spies.refetch).toHaveBeenCalled()
+    await waitFor(() => expect(spies.override).toHaveBeenCalledWith({ thread_id: 1 }))
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Override Roll' })).not.toBeInTheDocument())
   })
 })
