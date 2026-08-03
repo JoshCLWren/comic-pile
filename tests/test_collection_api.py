@@ -1,171 +1,39 @@
-"""Tests for Collection API endpoints."""
+"""Regression coverage for the retired Collections API."""
 
 import pytest
-import pytest_asyncio
 from httpx import AsyncClient
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.auth import create_access_token
-from app.models import Collection, Thread, User
-
-
-@pytest_asyncio.fixture
-async def sample_collection(auth_client: AsyncClient, async_db: AsyncSession) -> Collection:
-    """Create a sample collection for testing."""
-    from tests.conftest import get_or_create_user_async
-
-    user = await get_or_create_user_async(async_db)
-
-    collection = Collection(
-        name="DC Comics",
-        user_id=user.id,
-        is_default=False,
-        position=0,
-    )
-    async_db.add(collection)
-    await async_db.commit()
-    await async_db.refresh(collection)
-
-    return collection
-
-
-@pytest_asyncio.fixture
-async def sample_thread(auth_client: AsyncClient, async_db: AsyncSession) -> Thread:
-    """Create a sample thread for testing."""
-    from datetime import UTC, datetime
-    from tests.conftest import get_or_create_user_async
-
-    user = await get_or_create_user_async(async_db)
-
-    thread = Thread(
-        title="Test Thread",
-        format="Comic",
-        issues_remaining=10,
-        queue_position=1,
-        status="active",
-        user_id=user.id,
-        created_at=datetime.now(UTC),
-    )
-    async_db.add(thread)
-    await async_db.commit()
-    await async_db.refresh(thread)
-
-    return thread
 
 
 @pytest.mark.asyncio
-async def test_create_collection(auth_client: AsyncClient, async_db: AsyncSession) -> None:
-    """Test creating a collection."""
-    from tests.conftest import get_or_create_user_async
-
-    user = await get_or_create_user_async(async_db)
-
-    response = await auth_client.post(
-        "/api/v1/collections/", json={"name": "DC Comics", "is_default": False, "position": 0}
-    )
-    assert response.status_code == 201
-    data = response.json()
-    assert data["name"] == "DC Comics"
-    assert data["user_id"] == user.id
-
-
-@pytest.mark.asyncio
-async def test_list_collections(auth_client: AsyncClient) -> None:
-    """Test listing collections."""
-    response = await auth_client.get("/api/v1/collections/")
-    assert response.status_code == 200
-    data = response.json()
-    assert "collections" in data
-    assert isinstance(data["collections"], list)
-
-
-@pytest.mark.asyncio
-async def test_move_thread_to_collection(
+@pytest.mark.parametrize(
+    ("method", "path", "kwargs"),
+    [
+        ("get", "/api/v1/collections/", {}),
+        ("post", "/api/v1/collections/", {"json": {"name": "Removed"}}),
+        ("get", "/api/v1/collections/1", {}),
+        ("put", "/api/v1/collections/1", {"json": {"name": "Removed"}}),
+        ("patch", "/api/v1/collections/1", {"json": {"position": 1}}),
+        ("delete", "/api/v1/collections/1", {}),
+    ],
+)
+async def test_collection_routes_are_retired(
     auth_client: AsyncClient,
-    sample_thread: Thread,
-    sample_collection: Collection,
-    async_db: AsyncSession,
+    method: str,
+    path: str,
+    kwargs: dict[str, object],
 ) -> None:
-    """Test moving a thread to a collection."""
-    response = await auth_client.post(
-        f"/api/threads/{sample_thread.id}:moveToCollection",
-        params={"collection_id": sample_collection.id},
-    )
-    assert response.status_code == 200
+    """Former collection endpoints fall through to the standard JSON 404."""
+    response = await auth_client.request(method, path, **kwargs)
 
-    await async_db.refresh(sample_thread)
-    assert sample_thread.collection_id == sample_collection.id
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Not Found"}
 
 
 @pytest.mark.asyncio
-async def test_filter_threads_by_collection(
-    auth_client: AsyncClient,
-    sample_thread: Thread,
-    sample_collection: Collection,
-    async_db: AsyncSession,
-) -> None:
-    """Test filtering threads by collection."""
-    # Move thread to collection
-    sample_thread.collection_id = sample_collection.id
-    await async_db.commit()
+async def test_collection_routes_are_absent_from_openapi(auth_client: AsyncClient) -> None:
+    """Collections are no longer advertised as an active API capability."""
+    response = await auth_client.get("/openapi.json")
 
-    # Filter by collection
-    response = await auth_client.get(
-        "/api/threads/", params={"collection_id": sample_collection.id}
-    )
     assert response.status_code == 200
-    data = response.json()
-    assert "threads" in data
-    threads = data["threads"]
-    assert len(threads) == 1
-    assert threads[0]["id"] == sample_thread.id
-
-
-@pytest.mark.asyncio
-async def test_collection_endpoints_return_404_for_non_owner(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-    sample_collection: Collection,
-) -> None:
-    """Collection read/update/delete endpoints return 404 for non-owners."""
-    intruder = User(username="collection_intruder", created_at=None)
-    async_db.add(intruder)
-    await async_db.commit()
-    await async_db.refresh(intruder)
-
-    intruder_token = create_access_token(
-        data={"sub": intruder.username, "jti": "collection-intruder"}
-    )
-    intruder_headers = {"Authorization": f"Bearer {intruder_token}"}
-
-    get_response = await auth_client.get(
-        f"/api/v1/collections/{sample_collection.id}",
-        headers=intruder_headers,
-    )
-    assert get_response.status_code == 404
-
-    put_response = await auth_client.put(
-        f"/api/v1/collections/{sample_collection.id}",
-        json={"name": "Hijacked"},
-        headers=intruder_headers,
-    )
-    assert put_response.status_code == 404
-
-    patch_response = await auth_client.patch(
-        f"/api/v1/collections/{sample_collection.id}",
-        json={"position": 99},
-        headers=intruder_headers,
-    )
-    assert patch_response.status_code == 404
-
-    delete_response = await auth_client.delete(
-        f"/api/v1/collections/{sample_collection.id}",
-        headers=intruder_headers,
-    )
-    assert delete_response.status_code == 404
-
-    collection_result = await async_db.execute(
-        select(Collection).where(Collection.id == sample_collection.id)
-    )
-    assert collection_result.scalar_one_or_none() is not None
+    paths = response.json()["paths"]
+    assert not any(path.startswith("/api/v1/collections") for path in paths)
