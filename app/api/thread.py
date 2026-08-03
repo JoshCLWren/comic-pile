@@ -244,7 +244,15 @@ async def list_threads(
 
     Returns:
         QueueThreadListResponse with paginated threads and next_page_token if more exist.
+
+    Raises:
+        HTTPException: If a retired ``collection_id`` query parameter is present.
     """
+    if "collection_id" in request.query_params:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="collection_id is retired",
+        )
     normalized_search = search.strip() if search is not None else None
     query = select(Thread).where(Thread.user_id == current_user.id)
 

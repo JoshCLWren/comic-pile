@@ -37,3 +37,24 @@ async def test_collection_routes_are_absent_from_openapi(auth_client: AsyncClien
     assert response.status_code == 200
     paths = response.json()["paths"]
     assert not any(path.startswith("/api/v1/collections") for path in paths)
+
+
+@pytest.mark.asyncio
+async def test_thread_list_rejects_retired_collection_id_query(
+    auth_client: AsyncClient,
+) -> None:
+    """A retired collection_id query parameter fails closed with 422."""
+    response = await auth_client.get("/api/threads/", params={"collection_id": 4})
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "collection_id is retired"}
+
+
+@pytest.mark.asyncio
+async def test_roll_request_rejects_retired_collection_id_body(
+    auth_client: AsyncClient,
+) -> None:
+    """A roll body carrying a retired collection_id fails closed with 422."""
+    response = await auth_client.post("/api/roll/", json={"collection_id": 4})
+
+    assert response.status_code == 422

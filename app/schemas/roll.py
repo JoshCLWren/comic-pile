@@ -1,10 +1,12 @@
 """Roll-related Pydantic schemas for request/response validation."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class RollRequest(BaseModel):
     """Schema for roll request."""
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class RollResponse(BaseModel):

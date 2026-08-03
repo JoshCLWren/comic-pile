@@ -319,6 +319,7 @@ export async function setupAuthenticatedPage(
 
   // Use 'domcontentloaded' instead of 'load' to avoid timeout in SPAs
   await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await page.locator('#root').waitFor({ state: 'visible' });
 
   return testUser;
 }
