@@ -18,11 +18,13 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
+        """Load the checked-in policy sources once for mutation tests."""
         cls.policy = CHECKER.POLICY.read_text(encoding="utf-8")
         cls.protocol = CHECKER.PROTOCOL.read_text(encoding="utf-8")
         cls.entrypoint = CHECKER.ENTRYPOINT.read_text(encoding="utf-8")
 
     def validate(self, *, policy: str | None = None, entrypoint: str | None = None) -> None:
+        """Validate optional mutated text against unchanged companion sources."""
         CHECKER.validate_texts(
             policy if policy is not None else self.policy,
             self.protocol,
@@ -30,9 +32,11 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
         )
 
     def test_current_policy_sources_are_aligned(self) -> None:
+        """Accept the checked-in canonical policy sources."""
         self.validate()
 
     def test_issue_closure_north_star_is_required(self) -> None:
+        """Reject replacing issue closure with PR-count incentives."""
         mutated = self.policy.replace(
             "Finish what you start. Success is measured by issues closed, not pull requests opened.",
             "Success is measured by pull requests opened.",
@@ -41,6 +45,7 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
             self.validate(policy=mutated)
 
     def test_issue_ownership_is_required(self) -> None:
+        """Reject reverting ownership from the issue back to the PR."""
         mutated = self.policy.replace(
             "A worker owns an issue, not a PR.",
             "A worker owns one PR at a time.",
@@ -49,6 +54,7 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
             self.validate(policy=mutated)
 
     def test_planning_pr_ban_is_required(self) -> None:
+        """Reject restoring planning-only PRs as normal delivery."""
         mutated = self.policy.replace(
             "Do not open planning-only, architecture-only, inventory-only, or implementation-plan PRs",
             "Planning PRs are encouraged",
@@ -57,6 +63,7 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
             self.validate(policy=mutated)
 
     def test_large_coherent_pr_rule_is_required(self) -> None:
+        """Reject restoring an automatic small-PR splitting bias."""
         mutated = self.policy.replace(
             "Large coherent PRs are allowed and preferred",
             "Always split large PRs into stages",
@@ -65,11 +72,13 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
             self.validate(policy=mutated)
 
     def test_stage_fast_path_cannot_return(self) -> None:
+        """Reject reintroducing the obsolete stage fast path."""
         mutated = f"{self.entrypoint}\nHONEST STAGE FAST PATH\n"
         with self.assertRaisesRegex(SystemExit, "forbidden policy drift"):
             self.validate(entrypoint=mutated)
 
     def test_no_auto_merge_boundary_is_required(self) -> None:
+        """Reject removal of the explicit auto-merge boundary."""
         mutated = self.policy.replace(
             "Never enable auto-merge as a substitute for explicit authorization.",
             "Enable auto-merge after CI passes.",
@@ -78,11 +87,13 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
             self.validate(policy=mutated)
 
     def test_obsolete_marker_dialect_is_rejected(self) -> None:
+        """Reject reintroduction of an obsolete repair marker dialect."""
         mutated = f"{self.policy}\n<!-- comic-pile-factory-fix-v2:legacy -->\n"
         with self.assertRaisesRegex(SystemExit, "forbidden policy drift"):
             self.validate(policy=mutated)
 
     def test_entrypoint_cannot_restore_merge_behavior(self) -> None:
+        """Reject local entrypoint instructions to merge autonomously."""
         mutated = f"{self.entrypoint}\n# merge the pull request after CI\n"
         with self.assertRaisesRegex(SystemExit, "forbidden policy drift"):
             self.validate(entrypoint=mutated)
