@@ -7,34 +7,52 @@ export interface IssueMutationSnapshot {
   thread: Thread
 }
 
+export interface IssueReadStatusResult {
+  status: IssueReadStatus
+  read_at: string | null
+  issues_remaining: number
+  next_unread_issue_id: number | null
+  next_unread_issue_number: string | null
+}
+
 /**
- * Apply a mark-read or mark-unread result to the currently visible issue page and
- * thread summary without refetching every loaded issue page.
+ * Apply an authoritative mark-read or mark-unread result to the currently visible
+ * issue page and thread summary without refetching every loaded issue page.
  */
 export function applyIssueReadStatus(
   snapshot: IssueMutationSnapshot,
   issueId: number,
-  nextStatus: IssueReadStatus,
+  result: IssueReadStatusResult,
 ): IssueMutationSnapshot {
   const currentIssue = snapshot.issues.find((issue) => issue.id === issueId)
-  if (!currentIssue || currentIssue.status === nextStatus) {
+  if (!currentIssue) {
     return snapshot
   }
 
-  const delta = nextStatus === 'read' ? -1 : 1
-  const issuesRemaining = Math.max(0, snapshot.thread.issues_remaining + delta)
+  const issueIsUnchanged =
+    currentIssue.status === result.status && currentIssue.read_at === result.read_at
+  const threadIsUnchanged =
+    snapshot.thread.issues_remaining === result.issues_remaining &&
+    snapshot.thread.next_unread_issue_id === result.next_unread_issue_id &&
+    snapshot.thread.next_unread_issue_number === result.next_unread_issue_number
+
+  if (issueIsUnchanged && threadIsUnchanged) {
+    return snapshot
+  }
+
   const issues = snapshot.issues.map((issue) =>
-    issue.id === issueId ? { ...issue, status: nextStatus } : issue,
+    issue.id === issueId
+      ? { ...issue, status: result.status, read_at: result.read_at }
+      : issue,
   )
-  const nextUnreadIssue = issues.find((issue) => issue.status === 'unread')
 
   return {
     issues,
     thread: {
       ...snapshot.thread,
-      issues_remaining: issuesRemaining,
-      next_unread_issue_id: nextUnreadIssue?.id ?? null,
-      next_unread_issue_number: nextUnreadIssue?.issue_number ?? null,
+      issues_remaining: result.issues_remaining,
+      next_unread_issue_id: result.next_unread_issue_id,
+      next_unread_issue_number: result.next_unread_issue_number,
     },
   }
 }
