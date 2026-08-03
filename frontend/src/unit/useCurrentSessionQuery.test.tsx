@@ -126,7 +126,9 @@ describe('useCurrentSessionQuery', () => {
   })
 
   it('accepts a direct cache value when no current session is cached', async () => {
-    vi.mocked(sessionApi.getCurrent).mockResolvedValue(null)
+    vi.mocked(sessionApi.getCurrent).mockImplementation(
+      () => new Promise(() => undefined),
+    )
 
     const client = new QueryClient({
       defaultOptions: {
@@ -138,7 +140,6 @@ describe('useCurrentSessionQuery', () => {
     )
 
     const { result } = renderHook(() => useCurrentSessionQuery(), { wrapper })
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
     act(() => {
       result.current.setData({ id: 31, current_die: 4, user_id: 12 })
