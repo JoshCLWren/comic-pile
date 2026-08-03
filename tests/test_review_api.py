@@ -14,6 +14,7 @@ from httpx import AsyncClient
         ("PUT", "/api/v1/reviews/1"),
         ("PATCH", "/api/v1/reviews/1"),
         ("DELETE", "/api/v1/reviews/1"),
+        ("GET", "/api/threads/1/reviews"),
     ],
 )
 async def test_former_review_routes_return_standard_json_404(
@@ -35,4 +36,4 @@ async def test_reviews_are_absent_from_openapi(auth_client: AsyncClient) -> None
 
     assert response.status_code == 200
     paths = response.json()["paths"]
-    assert not any(path.startswith("/api/v1/reviews") for path in paths)
+    assert not any("review" in path.lower() for path in paths)

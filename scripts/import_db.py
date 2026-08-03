@@ -53,10 +53,6 @@ async def import_database():
                     last_activity_at=datetime.fromisoformat(t["last_activity_at"])
                     if t.get("last_activity_at")
                     else None,
-                    review_url=t.get("review_url"),
-                    last_review_at=datetime.fromisoformat(t["last_review_at"])
-                    if t.get("last_review_at")
-                    else None,
                     created_at=datetime.fromisoformat(t["created_at"]),
                     user_id=t["user_id"],
                 )

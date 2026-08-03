@@ -38,7 +38,6 @@ from app.api import (
     thread,
     undo,
 )
-from app.api.review import router
 from app.cache import cache
 from app.config import get_app_settings, get_database_settings, get_redis_settings
 from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, is_csrf_protected_request
@@ -194,7 +193,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     # - Legacy resources are served under /api/* (threads, roll, queue,
     #   rate, snooze, undo, auth, admin, analytics, bug-reports, sessions).
     # - Newer resources are served under the versioned /api/v1/* surface
-    #   (dependencies, reviews, issues, reading-orders).
+    #   (dependencies, issues, reading-orders).
     # - /api/v1/sessions/* is an explicit, tested backwards-compat alias of
     #   /api/sessions/* (see tests/test_route_versioning.py, issue #376).
     # - Non-production tooling routes (debug, test) are also mounted under
@@ -203,7 +202,6 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     # Add new client resources under /api/v1/*; do not introduce new bare
     # /api/* routes.
     app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
-    app.include_router(router, prefix="/api/v1/reviews", tags=["reviews"])
     app.include_router(admin.router, prefix="/api", tags=["admin"])
     app.include_router(analytics.router, prefix="/api", tags=["analytics"])
     app.include_router(bug_report.router, prefix="/api/bug-reports", tags=["bug-reports"])

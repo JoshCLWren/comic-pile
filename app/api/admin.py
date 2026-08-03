@@ -187,10 +187,6 @@ async def export_json(db: Annotated[AsyncSession, Depends(get_db)]) -> Streaming
                 "last_activity_at": thread.last_activity_at.isoformat()
                 if thread.last_activity_at
                 else None,
-                "review_url": thread.review_url,
-                "last_review_at": thread.last_review_at.isoformat()
-                if thread.last_review_at
-                else None,
                 "created_at": thread.created_at.isoformat() if thread.created_at else None,
                 "user_id": thread.user_id,
             }
@@ -313,86 +309,6 @@ async def delete_test_data(db: Annotated[AsyncSession, Depends(get_db)]) -> dict
         "deleted_sessions": deleted_sessions,
         "deleted_events": deleted_events,
     }
-
-
-@router.post("/import/reviews/")
-async def import_reviews(
-    file: Annotated[UploadFile, File(...)], db: Annotated[AsyncSession, Depends(get_db)]
-) -> dict[str, int | list[str]]:
-    """Import review timestamps from CSV file.
-
-    CSV format: thread_id, review_url, review_timestamp
-    - thread_id: Thread ID (required, must exist)
-    - review_url: Review URL (required)
-    - review_timestamp: ISO format datetime (required)
-
-    Updates thread's last_review_at and review_url fields.
-
-    Args:
-        file: CSV file to import.
-        db: SQLAlchemy session for database operations.
-
-    Returns:
-        Dictionary with "imported" count and "errors" list.
-
-    Raises:
-        HTTPException: If file is not a CSV.
-    """
-    if not file.filename or not file.filename.endswith(".csv"):
-        raise HTTPException(status_code=400, detail="File must be a CSV")
-
-    content = await file.read()
-    csv_reader = csv.DictReader(content.decode("utf-8").splitlines())
-
-    imported = 0
-    errors = []
-
-    for row_num, row in enumerate(csv_reader, start=2):
-        try:
-            thread_id_str = row.get("thread_id", "").strip()
-            review_url = row.get("review_url", "").strip()
-            review_timestamp_str = row.get("review_timestamp", "").strip()
-
-            if not thread_id_str:
-                errors.append(f"Row {row_num}: Missing thread_id")
-                continue
-
-            if not review_url:
-                errors.append(f"Row {row_num}: Missing review_url")
-                continue
-
-            if not review_timestamp_str:
-                errors.append(f"Row {row_num}: Missing review_timestamp")
-                continue
-
-            try:
-                thread_id = int(thread_id_str)
-            except ValueError:
-                errors.append(f"Row {row_num}: thread_id must be an integer")
-                continue
-
-            thread_result = await db.execute(select(Thread).where(Thread.id == thread_id))
-            thread = thread_result.scalar_one_or_none()
-
-            if not thread:
-                errors.append(f"Row {row_num}: Thread {thread_id} not found")
-                continue
-
-            try:
-                review_timestamp = datetime.fromisoformat(review_timestamp_str)
-            except ValueError:
-                errors.append(f"Row {row_num}: review_timestamp must be ISO format datetime")
-                continue
-
-            thread.review_url = review_url
-            thread.last_review_at = review_timestamp
-            imported += 1
-
-        except Exception as e:
-            errors.append(f"Row {row_num}: {str(e)}")
-
-    await db.commit()
-    return {"imported": imported, "errors": errors}
 
 
 @router.get("/export/summary/")

@@ -37,8 +37,6 @@ class ThreadResponse(BaseModel):
     status: str
     last_rating: float | None
     last_activity_at: datetime | None
-    review_url: str | None
-    last_review_at: datetime | None
     notes: str | None
     is_test: bool
     is_blocked: bool = False
@@ -58,8 +56,8 @@ class QueueThreadListItem(BaseModel):
     """Schema for a single thread in the list/queue view.
 
     A deliberate subset of ThreadResponse. The list view does not need
-    detail-only fields like review_url, last_review_at, last_rating,
-    is_test, or reading_progress, which reduces payload size for large lists.
+    detail-only fields like last_rating, is_test, or reading_progress,
+    which reduces payload size for large lists.
     """
 
     id: int

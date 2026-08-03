@@ -5,7 +5,6 @@ from app.models.event import Event
 from app.models.failed_login_attempt import FailedLoginAttempt
 from app.models.issue import Issue
 from app.models.revoked_token import RevokedToken
-from app.models.review import Review
 from app.models.session import Session
 from app.models.snapshot import Snapshot
 from app.models.reading_order import ReadingOrder, ReadingOrderItem
@@ -20,7 +19,6 @@ __all__ = [
     "ReadingOrder",
     "ReadingOrderItem",
     "RevokedToken",
-    "Review",
     "Session",
     "Snapshot",
     "Thread",

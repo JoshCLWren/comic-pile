@@ -69,8 +69,6 @@ def migrate_threads_to_postgres():
                     thread.get("status", "active"),
                     thread.get("last_rating"),
                     thread.get("last_activity_at"),
-                    thread.get("review_url"),
-                    thread.get("last_review_at"),
                     thread.get("created_at"),
                     1,
                 )
@@ -80,9 +78,9 @@ def migrate_threads_to_postgres():
             """
             INSERT INTO threads (
                 title, format, issues_remaining, queue_position, status,
-                last_rating, last_activity_at, review_url, last_review_at,
+                last_rating, last_activity_at,
                 created_at, user_id
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             thread_values,

@@ -14,7 +14,6 @@ if TYPE_CHECKING:
     from app.models.revoked_token import RevokedToken
     from app.models.session import Session
     from app.models.thread import Thread
-    from app.models.review import Review
 
 
 class User(Base):
@@ -41,6 +40,4 @@ class User(Base):
     revoked_tokens: Mapped[list[RevokedToken]] = relationship(
         "RevokedToken", back_populates="user", cascade="all, delete-orphan", lazy="raise"
     )
-    reviews: Mapped[list[Review]] = relationship(
-        "Review", back_populates="user", cascade="all, delete-orphan", lazy="raise"
-    )
+

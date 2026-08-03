@@ -9,18 +9,16 @@ import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from app.api.review import _create_or_update_review_response
 from app.api.session import _invalidate_session_caches
 from app.auth import get_current_user
 from app.cache import TTL, cached, invalidate_cache
 from app.database import get_db
 from app.middleware import limiter
-from app.models import Event, Issue, Review, Thread
+from app.models import Event, Issue, Thread
 from app.models.user import User
 from app.schemas import (
     MigrateToIssuesRequest,
@@ -33,7 +31,6 @@ from app.schemas import (
     ThreadResponse,
     ThreadUpdate,
 )
-from app.schemas.review import ReviewResponse
 from app.schemas.migration import MigrateToIssuesSimpleRequest
 from app.services.ownership import get_owned_thread_or_404
 from comic_pile.session import get_current_die, get_or_create
@@ -104,8 +101,6 @@ async def thread_to_response(
         status=thread.status,
         last_rating=thread.last_rating,
         last_activity_at=thread.last_activity_at,
-        review_url=thread.review_url,
-        last_review_at=thread.last_review_at,
         notes=thread.notes,
         is_test=thread.is_test,
         is_blocked=thread.is_blocked,
@@ -162,9 +157,8 @@ async def _threads_to_responses(threads: list[Thread], db: AsyncSession) -> list
 def _to_queue_list_item(tr: ThreadResponse) -> QueueThreadListItem:
     """Convert a full ThreadResponse to a narrow QueueThreadListItem.
 
-    Deliberately drops detail-only fields (last_rating, review_url, last_review_at,
-    is_test, reading_progress, next_unread_issue_id) to reduce
-    payload size for list views.
+    Deliberately drops detail-only fields (last_rating, is_test, reading_progress,
+    next_unread_issue_id) to reduce payload size for list views.
     """
     return QueueThreadListItem(
         id=tr.id,
@@ -763,38 +757,6 @@ async def set_pending_thread(
         total_issues=thread_total_issues,
         reading_progress=thread_reading_progress,
     )
-
-
-@router.get("/{thread_id}/reviews", response_model=list[ReviewResponse])
-async def get_thread_reviews(
-    thread_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> list[ReviewResponse]:
-    """Get all reviews for a specific thread.
-
-    Args:
-        thread_id: ID of the thread
-        current_user: The authenticated user
-        db: Database session
-
-    Returns:
-        List of reviews for the thread
-
-    Raises:
-        HTTPException: If thread not found or not owned by user
-    """
-    await get_owned_thread_or_404(db, current_user.id, thread_id)
-
-    result = await db.execute(
-        select(Review)
-        .where(and_(Review.thread_id == thread_id, Review.user_id == current_user.id))
-        .options(selectinload(Review.thread), selectinload(Review.issue))
-        .order_by(Review.created_at.desc())
-    )
-    reviews = result.scalars().all()
-
-    return [await _create_or_update_review_response(review, db) for review in reviews]
 
 
 @router.put("/{thread_id}/test-backdate", response_model=ThreadResponse)

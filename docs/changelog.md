@@ -10,6 +10,14 @@
 - The dead Railway migration path is gone: `make deploy-prod` now dispatches the `deploy-production.yml` workflow, and `make prod-migrate` runs `alembic upgrade head` against Neon via the Neon API (or an explicit `NEON_DIRECT_DATABASE_URL` override).
 - `PROD_BASE_URL` now defaults to `https://comic-pile.vercel.app`.
 
+**Remove reviews from the backend (#627)**
+
+- Removed the retired Reviews API: the empty reviews router is unwired from `app/main.py`, the thread-scoped `GET /threads/{id}/reviews` endpoint is gone, and `app/api/review.py`, `app/schemas/review.py`, and `app/models/review.py` are deleted.
+- Removed the `Review` model exports and the user/thread/issue `reviews` relationships, the `get_owned_review_or_404` ownership helper, and the admin `POST /admin/import/reviews/` endpoint.
+- Removed the review-only `review_url` and `last_review_at` thread columns from the model, schemas, serializers, and snapshot restore paths.
+- Clone/export scripts no longer export or import reviews or the retired thread columns.
+- The `reviews` table and the orphaned thread columns remain in the database for one release pending production verification (follow-up issue #741); no destructive migration ships yet.
+
 **Collections feature removed (#636)**
 
 - The Collections feature is retired: the roll-pool collection dropdown, collection dialog, collection badges, collection query keys and context, and all collection API routes are gone.

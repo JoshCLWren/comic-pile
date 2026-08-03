@@ -22,7 +22,6 @@ from app.models import (
     Issue,
     ReadingOrder,
     ReadingOrderItem,
-    Review,
     Session,
     Snapshot,
     Thread,
@@ -76,8 +75,6 @@ async def clean_clone_users(db_engine) -> AsyncIterator[None]:
         f"DELETE FROM reading_orders WHERE user_id IN (SELECT id FROM users WHERE username IN ({placeholders}))",
         "DELETE FROM dependencies WHERE source_issue_id IN "
         f"(SELECT id FROM issues WHERE thread_id IN (SELECT id FROM threads WHERE user_id IN (SELECT id FROM users WHERE username IN ({placeholders}))))",
-        "DELETE FROM reviews WHERE user_id IN "
-        f"(SELECT id FROM users WHERE username IN ({placeholders}))",
         "DELETE FROM issues WHERE thread_id IN "
         f"(SELECT id FROM threads WHERE user_id IN (SELECT id FROM users WHERE username IN ({placeholders})))",
         f"DELETE FROM threads WHERE user_id IN (SELECT id FROM users WHERE username IN ({placeholders}))",
@@ -262,15 +259,6 @@ async def export_data(db_engine, export_user: User) -> dict[str, object]:
             description="Before rating",
         )
         session.add(snapshot)
-        session.add(
-            Review(
-                user_id=export_user.id,
-                thread_id=thread.id,
-                issue_id=issue1.id,
-                rating=4.5,
-                review_text="Strong opening issue.",
-            )
-        )
         await session.commit()
 
     return {
@@ -519,7 +507,6 @@ async def test_clone_round_trip_preserves_counts_and_relationships(
         "sessions": 1,
         "events": 1,
         "snapshots": 1,
-        "reviews": 1,
     }
 
     async_session = async_sessionmaker(
@@ -583,13 +570,6 @@ async def test_clone_round_trip_preserves_counts_and_relationships(
                 {"session_id": imported_session.id},
             )
         ).one()
-        review = (
-            await session.execute(
-                text("SELECT user_id, thread_id, issue_id, review_text FROM reviews "
-                     "WHERE user_id = :user_id"),
-                {"user_id": user_id},
-            )
-        ).one()
 
     assert user_id != export_data["user_id"]
     assert next_issue_id in issue_ids
@@ -608,10 +588,6 @@ async def test_clone_round_trip_preserves_counts_and_relationships(
     assert imported_event.selected_thread_id == thread_id
     assert snapshot.event_id == imported_event.id
     assert snapshot.description == "Before rating"
-    assert review.user_id == user_id
-    assert review.thread_id == thread_id
-    assert review.issue_id in issue_ids
-    assert review.review_text == "Strong opening issue."
 
 
 @pytest.mark.asyncio
@@ -754,7 +730,6 @@ def test_validate_export_rejects_broken_foreign_key():
         "sessions": [],
         "events": [],
         "snapshots": [],
-        "reviews": [],
     }
 
     with pytest.raises(ValueError, match="missing user id 999"):

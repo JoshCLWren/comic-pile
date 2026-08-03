@@ -13,7 +13,6 @@ from app.database import Base
 if TYPE_CHECKING:
     from app.models.dependency import Dependency
     from app.models.thread import Thread
-    from app.models.review import Review
 
 
 class Issue(Base):
@@ -64,7 +63,4 @@ class Issue(Base):
         back_populates="target_issue",
         lazy="raise",
         passive_deletes=True,
-    )
-    reviews: Mapped[list[Review]] = relationship(
-        "Review", back_populates="issue", lazy="raise", passive_deletes=True
     )

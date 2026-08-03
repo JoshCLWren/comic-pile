@@ -24,8 +24,6 @@ QUEUE_FIELDS = {
 }
 QUEUE_DROPPED_FIELDS = {
     "last_rating",
-    "review_url",
-    "last_review_at",
     "is_test",
     "reading_progress",
     "next_unread_issue_id",
@@ -66,9 +64,9 @@ def test_queue_item_contract_is_exact_and_measurably_narrower() -> None:
 
     assert queue_fields == QUEUE_FIELDS
     assert full_fields - queue_fields == QUEUE_DROPPED_FIELDS
-    assert len(full_fields) == 19
+    assert len(full_fields) == 17
     assert len(queue_fields) == 13
-    assert (len(full_fields) - len(queue_fields)) / len(full_fields) == 6 / 19
+    assert (len(full_fields) - len(queue_fields)) / len(full_fields) == 4 / 17
 
 
 def test_session_history_item_contract_is_exact_and_measurably_narrower() -> None:
@@ -86,7 +84,7 @@ def test_session_history_item_contract_is_exact_and_measurably_narrower() -> Non
 def test_thread_detail_preserves_the_complete_thread_contract() -> None:
     """Thread detail remains a named compatibility contract with every full field."""
     assert set(ThreadDetail.model_fields) == set(ThreadResponse.model_fields)
-    assert len(ThreadDetail.model_fields) == 19
+    assert len(ThreadDetail.model_fields) == 17
 
 
 def test_routes_publish_the_screen_specific_openapi_contracts() -> None:

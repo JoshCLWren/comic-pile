@@ -912,16 +912,12 @@ async def restore_session_start(
                     thread.last_rating = state.get("last_rating", thread.last_rating)
                     thread.queue_position = state.get("queue_position", thread.queue_position)
                     thread.status = state.get("status", thread.status)
-                    if "review_url" in state:
-                        thread.review_url = state["review_url"]
                     if "notes" in state:
                         thread.notes = state["notes"]
                     if "is_test" in state:
                         thread.is_test = state["is_test"]
                     if state.get("last_activity_at"):
                         thread.last_activity_at = datetime.fromisoformat(state["last_activity_at"])
-                    if state.get("last_review_at"):
-                        thread.last_review_at = datetime.fromisoformat(state["last_review_at"])
 
                     if "issue_states" in state and state["issue_states"] is not None:
                         await db.execute(delete(Issue).where(Issue.thread_id == thread_id_int))
@@ -970,7 +966,6 @@ async def restore_session_start(
                         last_rating=state.get("last_rating"),
                         queue_position=state.get("queue_position", 1),
                         status=state.get("status", "active"),
-                        review_url=state.get("review_url"),
                         notes=state.get("notes"),
                         is_test=state.get("is_test", False),
                         user_id=state.get("user_id", session.user_id),
@@ -982,8 +977,6 @@ async def restore_session_start(
                         new_thread.last_activity_at = datetime.fromisoformat(
                             state["last_activity_at"]
                         )
-                    if state.get("last_review_at"):
-                        new_thread.last_review_at = datetime.fromisoformat(state["last_review_at"])
                     db.add(new_thread)
 
                     if "issue_states" in state and state["issue_states"] is not None:
