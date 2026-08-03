@@ -7,6 +7,7 @@ RUNNER="$SCRIPT_DIR/comic-pile-opencode-factory.sh"
 STATE_DIR="${COMIC_PILE_FACTORY_STATE_DIR:-${SOURCE_REPO%/}-factory-state}"
 PID_FILE="$STATE_DIR/overnight.pid"
 SUPERVISOR_LOG="$STATE_DIR/overnight.log"
+DEFAULT_MODEL="deepseek/deepseek-v4-flash"
 
 usage() {
   cat <<'USAGE'
@@ -19,6 +20,7 @@ Commands:
   run      Run continuously in the foreground.
 
 Environment defaults:
+  OPENCODE_MODEL=deepseek/deepseek-v4-flash
   FACTORY_IDLE_SECONDS=60
   FACTORY_FAILURE_BACKOFF_SECONDS=30
   FACTORY_MAX_FAILURES=5
@@ -58,6 +60,7 @@ cleanup_stale_pid() {
 }
 
 run_factory() {
+  export OPENCODE_MODEL="${OPENCODE_MODEL:-$DEFAULT_MODEL}"
   export FACTORY_IDLE_SECONDS="${FACTORY_IDLE_SECONDS:-60}"
   export FACTORY_FAILURE_BACKOFF_SECONDS="${FACTORY_FAILURE_BACKOFF_SECONDS:-30}"
   export FACTORY_MAX_FAILURES="${FACTORY_MAX_FAILURES:-5}"
@@ -79,8 +82,9 @@ case "$command" in
       exit 0
     fi
 
-    printf 'Starting ComicPile overnight factory. Supervisor log: %s\n' "$SUPERVISOR_LOG"
+    printf 'Starting ComicPile overnight factory with model %s. Supervisor log: %s\n' "${OPENCODE_MODEL:-$DEFAULT_MODEL}" "$SUPERVISOR_LOG"
     nohup env \
+      OPENCODE_MODEL="${OPENCODE_MODEL:-$DEFAULT_MODEL}" \
       FACTORY_IDLE_SECONDS="${FACTORY_IDLE_SECONDS:-60}" \
       FACTORY_FAILURE_BACKOFF_SECONDS="${FACTORY_FAILURE_BACKOFF_SECONDS:-30}" \
       FACTORY_MAX_FAILURES="${FACTORY_MAX_FAILURES:-5}" \
