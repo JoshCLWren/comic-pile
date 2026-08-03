@@ -15,7 +15,7 @@ Usage: bash scripts/comic-pile-opencode-factory-overnight.sh <start|stop|status|
 
 Commands:
   start    Launch the continuous OpenCode factory in the background.
-  stop     Stop the background factory started by this supervisor.
+  stop     Stop the background factory and all of its child processes.
   status   Report whether the supervised factory is running.
   run      Run continuously in the foreground.
 
@@ -50,7 +50,7 @@ read_pid() {
 is_running() {
   local pid
   pid="$(read_pid)" || return 1
-  kill -0 "$pid" 2>/dev/null
+  kill -0 -- "-$pid" 2>/dev/null
 }
 
 cleanup_stale_pid() {
@@ -72,18 +72,19 @@ command="${1:-}"
 shift
 
 [[ -x "$RUNNER" ]] || die "factory runner is not executable: $RUNNER"
+command -v setsid >/dev/null 2>&1 || die "required command not found: setsid"
 mkdir -p "$STATE_DIR"
 cleanup_stale_pid
 
 case "$command" in
   start)
     if is_running; then
-      printf 'ComicPile overnight factory is already running (PID %s).\n' "$(read_pid)"
+      printf 'ComicPile overnight factory is already running (process group %s).\n' "$(read_pid)"
       exit 0
     fi
 
     printf 'Starting ComicPile overnight factory with model %s. Supervisor log: %s\n' "${OPENCODE_MODEL:-$DEFAULT_MODEL}" "$SUPERVISOR_LOG"
-    nohup env \
+    nohup setsid env \
       OPENCODE_MODEL="${OPENCODE_MODEL:-$DEFAULT_MODEL}" \
       FACTORY_IDLE_SECONDS="${FACTORY_IDLE_SECONDS:-60}" \
       FACTORY_FAILURE_BACKOFF_SECONDS="${FACTORY_FAILURE_BACKOFF_SECONDS:-30}" \
@@ -93,12 +94,12 @@ case "$command" in
     printf '%s\n' "$pid" >"$PID_FILE"
     sleep 1
 
-    if ! kill -0 "$pid" 2>/dev/null; then
+    if ! kill -0 -- "-$pid" 2>/dev/null; then
       rm -f "$PID_FILE"
       die "factory exited during startup; inspect $SUPERVISOR_LOG"
     fi
 
-    printf 'ComicPile overnight factory started (PID %s).\n' "$pid"
+    printf 'ComicPile overnight factory started (process group %s).\n' "$pid"
     ;;
 
   stop)
@@ -109,11 +110,11 @@ case "$command" in
     fi
 
     pid="$(read_pid)"
-    printf 'Stopping ComicPile overnight factory (PID %s)...\n' "$pid"
-    kill "$pid"
+    printf 'Stopping ComicPile overnight factory process group %s...\n' "$pid"
+    kill -TERM -- "-$pid"
 
     for _ in {1..20}; do
-      if ! kill -0 "$pid" 2>/dev/null; then
+      if ! kill -0 -- "-$pid" 2>/dev/null; then
         rm -f "$PID_FILE"
         printf 'ComicPile overnight factory stopped.\n'
         exit 0
@@ -121,14 +122,14 @@ case "$command" in
       sleep 1
     done
 
-    printf 'Factory did not stop after 20 seconds; sending SIGKILL.\n' >&2
-    kill -KILL "$pid" 2>/dev/null || true
+    printf 'Factory did not stop after 20 seconds; sending SIGKILL to the process group.\n' >&2
+    kill -KILL -- "-$pid" 2>/dev/null || true
     rm -f "$PID_FILE"
     ;;
 
   status)
     if is_running; then
-      printf 'ComicPile overnight factory is running (PID %s).\n' "$(read_pid)"
+      printf 'ComicPile overnight factory is running (process group %s).\n' "$(read_pid)"
       printf 'Supervisor log: %s\n' "$SUPERVISOR_LOG"
       exit 0
     fi
