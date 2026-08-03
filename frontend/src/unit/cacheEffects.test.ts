@@ -2,6 +2,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
 import {
   applyRatedThreadCache,
+  invalidateAfterQueueMovement,
   invalidateCurrentSessionAfterSnooze,
 } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
@@ -50,6 +51,35 @@ describe('retained mutation cache effects', () => {
     })
     expect(invalidateQueries).not.toHaveBeenCalledWith(
       expect.objectContaining({ queryKey: queryKeys.thread.all }),
+    )
+    expect(invalidateQueries).not.toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: queryKeys.analytics.all }),
+    )
+  })
+
+  it('invalidates queue pages and their selection owners without evicting unrelated resources', async () => {
+    const client = new QueryClient()
+    const invalidateQueries = vi.spyOn(client, 'invalidateQueries')
+
+    await invalidateAfterQueueMovement(client)
+
+    expect(invalidateQueries).toHaveBeenCalledTimes(3)
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.queue.pages(),
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.session.current(),
+      exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    })
+    expect(invalidateQueries).not.toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: queryKeys.thread.all }),
+    )
+    expect(invalidateQueries).not.toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: queryKeys.session.pages() }),
     )
     expect(invalidateQueries).not.toHaveBeenCalledWith(
       expect.objectContaining({ queryKey: queryKeys.analytics.all }),
