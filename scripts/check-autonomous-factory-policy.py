@@ -92,7 +92,7 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "age <=2700 seconds",
         "age <=3600 seconds",
         "Lowest GitHub comment ID wins simultaneous races.",
-        "A pushed new SHA releases the old-SHA lease automatically.",
+        "SHA releases the old-SHA lease automatically.",
     ):
         require(entrypoint, needle, ENTRYPOINT)
 
