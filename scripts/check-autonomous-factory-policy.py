@@ -3,7 +3,6 @@
 
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 POLICY = ROOT / "docs" / "AUTONOMOUS_FACTORY_POLICY.md"
 PROTOCOL = ROOT / "docs" / "ISSUE_EXECUTION_PROTOCOL.md"
@@ -11,67 +10,38 @@ ENTRYPOINT = ROOT / "scripts" / "comic-pile-opencode-factory.sh"
 
 
 def require(text: str, needle: str, source: Path) -> None:
-    """Require an invariant string in a policy source."""
     if needle not in text:
         raise SystemExit(f"{source}: missing required policy text: {needle!r}")
 
 
 def forbid(text: str, needle: str, source: Path) -> None:
-    """Reject a known contradictory policy string."""
     if needle in text:
         raise SystemExit(f"{source}: forbidden policy drift found: {needle!r}")
 
 
 def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
     """Validate policy source text against the canonical delivery invariants."""
-    require(policy, "Never push directly to `main`.", POLICY)
-    require(
-        policy,
+    for needle in (
+        "Finish what you start. Success is measured by issues closed, not pull requests opened.",
+        "A worker owns an issue, not a PR.",
+        "Implement the full issue in one coherent PR whenever reasonably reviewable.",
+        "Large coherent PRs are allowed and preferred",
+        "Do not open planning-only, architecture-only, inventory-only, or implementation-plan PRs",
+        "Writing extensive docs instead of implementing executable work is a policy failure.",
+        "Do not start a new issue while an owned issue has executable remaining work.",
+        "A PR merge does not release issue ownership when the parent issue still has executable remaining work.",
+        "Labels, claims, comments, verdicts, PR-body edits, and ready markers do not satisfy this floor by themselves.",
+        "All review, repair, and readiness decisions are tied to the exact pull-request head SHA.",
+        "CI-assisted debugging is permitted",
+        "CI failures, rebases, merge conflicts, test updates, review defects, browser inconvenience, and broad issues are ordinary engineering",
+        "Never push directly to `main`.",
         "Never create a draft pull request unless Josh explicitly requests a draft.",
-        POLICY,
-    )
-    require(
-        policy,
         "Never merge unless Josh explicitly orders that specific merge.",
-        POLICY,
-    )
-    require(
-        policy,
         "Never enable auto-merge as a substitute for explicit authorization.",
-        POLICY,
-    )
-    require(
-        policy,
-        (
-            "All review, repair, and readiness decisions are tied to the exact "
-            "pull-request head SHA."
-        ),
-        POLICY,
-    )
-    require(policy, "CI-assisted debugging is permitted", POLICY)
-    require(
-        policy,
-        (
-            "Labels, claims, comments, verdicts, PR-body edits, and ready markers "
-            "do not satisfy this floor by themselves."
-        ),
-        POLICY,
-    )
-    require(
-        policy,
-        (
-            "CI failures, rebases, merge conflicts, test updates, review defects, "
-            "browser inconvenience, and broad issues are ordinary engineering"
-        ),
-        POLICY,
-    )
-    require(
-        policy,
-        "When strict review finds a bounded, understood defect on a writable branch",
-        POLICY,
-    )
+    ):
+        require(policy, needle, POLICY)
 
-    canonical_markers = (
+    for marker in (
         "comic-pile-factory-implement-claim-v3",
         "comic-pile-factory-implement-progress-v3",
         "comic-pile-factory-review-claim-v2",
@@ -82,8 +52,7 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "comic-pile-factory-ready-v2",
         "comic-pile-factory-needs-human-v2",
         "comic-pile-factory-claim-released-v3",
-    )
-    for marker in canonical_markers:
+    ):
         require(policy, marker, POLICY)
 
     require(policy, "for 45 minutes after its latest claim", POLICY)
@@ -92,55 +61,53 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
     require(policy, "Simultaneous claims are resolved by lowest GitHub comment ID.", POLICY)
     require(policy, "A pushed new SHA releases old-SHA review and repair leases.", POLICY)
 
-    forbid(policy, "comic-pile-factory-fix-v2:", POLICY)
-    forbid(policy, "comic-pile-factory-ready:", POLICY)
-    forbid(policy, "comic-pile-factory-review-claim:", POLICY)
+    for obsolete in (
+        "comic-pile-factory-fix-v2:",
+        "comic-pile-factory-ready:",
+        "comic-pile-factory-review-claim:",
+        "HONEST STAGE FAST PATH",
+    ):
+        forbid(policy, obsolete, POLICY)
 
     require(protocol, "docs/AUTONOMOUS_FACTORY_POLICY.md", PROTOCOL)
-    require(
-        protocol,
-        "Never create a draft pull request unless Josh explicitly requests a draft.",
-        PROTOCOL,
-    )
-    require(
-        protocol,
-        "Never merge without Josh's explicit authorization",
-        PROTOCOL,
-    )
-    require(
-        protocol,
-        "run focused local validation that directly exercises the change",
-        PROTOCOL,
-    )
+    require(protocol, "Never create a draft pull request unless Josh explicitly requests a draft.", PROTOCOL)
+    require(protocol, "Never merge without Josh's explicit authorization", PROTOCOL)
+    require(protocol, "run focused local validation that directly exercises the change", PROTOCOL)
 
-    require(entrypoint, "docs/AUTONOMOUS_FACTORY_POLICY.md", ENTRYPOINT)
-    require(entrypoint, "open a truthful non-draft PR", ENTRYPOINT)
-    require(
-        entrypoint,
+    for needle in (
+        "docs/AUTONOMOUS_FACTORY_POLICY.md",
+        "open a truthful non-draft PR",
         "Never create or convert a draft PR unless Josh explicitly",
-        ENTRYPOINT,
-    )
-    require(entrypoint, "Never merge.", ENTRYPOINT)
-    require(entrypoint, "ONE TARGET, MAXIMUM SAFE PROGRESS", ENTRYPOINT)
-    require(entrypoint, "escalate REVIEW -> FIX", ENTRYPOINT)
-    require(entrypoint, "comic-pile-factory-review-claim-v2", ENTRYPOINT)
-    require(entrypoint, "comic-pile-factory-fix-claim-v3", ENTRYPOINT)
-    require(entrypoint, "comic-pile-factory-fix-progress-v3", ENTRYPOINT)
-    require(entrypoint, "comic-pile-factory-ready-v2", ENTRYPOINT)
-    require(entrypoint, "age <=2700 seconds", ENTRYPOINT)
-    require(entrypoint, "age <=3600 seconds", ENTRYPOINT)
-    require(entrypoint, "Lowest GitHub comment ID wins simultaneous races.", ENTRYPOINT)
-    require(entrypoint, "A pushed new SHA releases the old-SHA lease automatically.", ENTRYPOINT)
+        "Never merge.",
+        "FINISH WHAT YOU START",
+        "OWN AN ISSUE, NOT A PR",
+        "NO PLANNING PRS",
+        "ONE COHERENT PR BY DEFAULT",
+        "Success is measured by issues closed, not pull requests opened.",
+        "escalate REVIEW -> FIX",
+        "comic-pile-factory-review-claim-v2",
+        "comic-pile-factory-fix-claim-v3",
+        "comic-pile-factory-fix-progress-v3",
+        "comic-pile-factory-ready-v2",
+        "age <=2700 seconds",
+        "age <=3600 seconds",
+        "Lowest GitHub comment ID wins simultaneous races.",
+        "A pushed new SHA releases the old-SHA lease automatically.",
+    ):
+        require(entrypoint, needle, ENTRYPOINT)
 
-    forbid(entrypoint, "open a truthful draft PR", ENTRYPOINT)
-    forbid(entrypoint, "mark a draft ready when", ENTRYPOINT)
-    forbid(entrypoint, "merge the pull request", ENTRYPOINT)
-    forbid(entrypoint, "comic-pile-factory-fix-v2:", ENTRYPOINT)
-    forbid(entrypoint, "comic-pile-factory-ready:", ENTRYPOINT)
+    for obsolete in (
+        "open a truthful draft PR",
+        "mark a draft ready when",
+        "merge the pull request",
+        "comic-pile-factory-fix-v2:",
+        "comic-pile-factory-ready:",
+        "HONEST STAGE FAST PATH",
+    ):
+        forbid(entrypoint, obsolete, ENTRYPOINT)
 
 
 def main() -> None:
-    """Read repository policy sources and validate their alignment."""
     validate_texts(
         POLICY.read_text(encoding="utf-8"),
         PROTOCOL.read_text(encoding="utf-8"),
