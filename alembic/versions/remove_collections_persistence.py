@@ -24,13 +24,14 @@ def upgrade() -> None:
         batch_op.drop_index("ix_thread_collection_id")
         batch_op.drop_constraint("fk_threads_collection_id_collections", type_="foreignkey")
         batch_op.drop_column("collection_id")
-    op.drop_index("ix_collections_user_id", table_name="collections")
+    op.drop_index("ix_collections_user_id", table_name="collections", if_exists=True)
     op.drop_index(
         "uq_collections_user_default",
         table_name="collections",
         postgresql_where=sa.text("is_default = TRUE"),
+        if_exists=True,
     )
-    op.drop_table("collections")
+    op.drop_table("collections", if_exists=True)
 
 
 def downgrade() -> None:

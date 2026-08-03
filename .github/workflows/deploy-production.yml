@@ -114,7 +114,7 @@ jobs:
         run: bash .github/scripts/prune-oldest-vcr-image.sh
 
       - name: Set up Python and runtime dependencies
-        uses: astral-sh/setup-uv@v9
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
           python-version: "3.14"
           enable-cache: true
