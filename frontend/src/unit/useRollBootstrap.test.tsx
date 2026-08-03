@@ -101,6 +101,40 @@ describe('useRollBootstrap', () => {
     )
   })
 
+  it('still loads when reading the persisted session id fails', async () => {
+    const originalStorage = window.localStorage
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: vi.fn(() => {
+          throw new Error('storage unavailable')
+        }),
+        setItem: vi.fn(),
+        clear: vi.fn(),
+      },
+    })
+    mockedBootstrap.mockResolvedValue(bootstrapResponse)
+
+    try {
+      const { result } = renderBootstrap()
+
+      await waitFor(() => expect(result.current.isPending).toBe(false))
+
+      expect(result.current.data).toBe(bootstrapResponse)
+      expect(result.current.isError).toBe(false)
+      expect(result.current.error).toBeNull()
+      expect(window.localStorage.setItem).toHaveBeenCalledWith(
+        'comic_pile_last_session_id_1',
+        '1',
+      )
+    } finally {
+      Object.defineProperty(window, 'localStorage', {
+        configurable: true,
+        value: originalStorage,
+      })
+    }
+  })
+
   it('still loads when persisting the session id fails', async () => {
     const originalStorage = window.localStorage
     Object.defineProperty(window, 'localStorage', {
