@@ -1,17 +1,17 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
-import { rollApi } from '../services/api'
-import type { RollBootstrapResponse } from '../types'
+import { rollBootstrapApi } from '../services/rollBootstrapApi'
+import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import { ToastProvider } from '../contexts/ToastProvider'
 
-vi.mock('../services/api', () => ({
-  rollApi: {
-    bootstrap: vi.fn(),
+vi.mock('../services/rollBootstrapApi', () => ({
+  rollBootstrapApi: {
+    get: vi.fn(),
   },
 }))
 
-const mockedBootstrap = vi.mocked(rollApi.bootstrap)
+const mockedBootstrap = vi.mocked(rollBootstrapApi.get)
 
 const bootstrapResponse = {
   session_id: 1,
