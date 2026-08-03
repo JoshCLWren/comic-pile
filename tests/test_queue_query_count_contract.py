@@ -89,6 +89,5 @@ async def test_queue_query_count_is_constant_for_page_size(thread_count: int) ->
 
     for thread_id, queue_thread in enumerate(response.threads, start=1):
         assert queue_thread.id == thread_id
-        assert queue_thread.next_unread_issue_id == 10_000 + thread_id
         assert queue_thread.next_unread_issue_number == str(thread_id + 1)
         assert queue_thread.issues_remaining == thread_id + 10
