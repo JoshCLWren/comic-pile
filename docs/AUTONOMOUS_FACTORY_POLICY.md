@@ -119,7 +119,8 @@ Use the existing canonical marker schemas:
 - issue claim: `<!-- comic-pile-factory-implement-claim-v3:issue-<n>:<worker>:<epoch>:attempt-<n> -->`
 - issue progress: `<!-- comic-pile-factory-implement-progress-v3:issue-<n>:<worker>:<epoch> -->`
 - review claim: `<!-- comic-pile-factory-review-claim-v2:<sha>:<worker>:<epoch> -->`
-- verdict: `<!-- comic-pile-factory-review-v2:<sha>:pass -->` or `changes-required`
+- review pass verdict: `<!-- comic-pile-factory-review-v2:<sha>:pass -->`
+- review changes-required verdict: `<!-- comic-pile-factory-review-v2:<sha>:changes-required -->`
 - repair claim: `<!-- comic-pile-factory-fix-claim-v3:<sha>:<worker>:<epoch>:attempt-<n> -->`
 - repair progress: `<!-- comic-pile-factory-fix-progress-v3:<sha>:<worker>:<epoch> -->`
 - ready: `<!-- comic-pile-factory-ready-v2:<sha> -->`
