@@ -53,8 +53,10 @@ export function useRollBootstrap() {
       setData(result);
       return result;
     } catch (err: unknown) {
+      const normalized = err instanceof Error ? err : new Error('Failed to fetch roll bootstrap');
       setIsError(true);
-      setError(err instanceof Error ? err : new Error('Failed to fetch roll bootstrap'));
+      setError(normalized);
+      throw normalized;
     } finally {
       setIsPending(false);
     }
@@ -63,7 +65,7 @@ export function useRollBootstrap() {
   useEffect(() => {
     // Defer the request by one microtask so consumers can reliably observe the
     // initial loading state before even an already-resolved test or cache value settles.
-    void Promise.resolve().then(fetchBootstrap);
+    void Promise.resolve().then(fetchBootstrap).catch(() => undefined);
   }, [fetchBootstrap]);
 
   return { data, isPending, isError, error, refetch: fetchBootstrap };
