@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
 
@@ -46,7 +46,7 @@ async def roll_dice(
     """Roll dice to select a thread.
 
     Args:
-        roll_request: The roll request with optional collection_id filter.
+        roll_request: The roll request.
         request: FastAPI request object for rate limiting.
         current_user: The authenticated user making the request.
         db: SQLAlchemy session for database operations.
@@ -84,7 +84,7 @@ async def roll_dice(
     snoozed_count = len(snoozed_ids)
     offset = snoozed_count
 
-    threads = await get_roll_pool(user_id, db, snoozed_ids, roll_request.collection_id)
+    threads = await get_roll_pool(user_id, db, snoozed_ids)
     if not threads:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
