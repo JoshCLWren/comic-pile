@@ -4,6 +4,7 @@ import { IssueReadStatusButton } from '../pages/thread-detail/IssueReadStatusBut
 import { issuesApi } from '../services/api-issues'
 import { threadsApi } from '../services/api'
 import type { Issue, Thread } from '../types'
+import type { IssueMutationSnapshot } from '../pages/thread-detail/issueMutationState'
 
 vi.mock('../services/api-issues', () => ({
   issuesApi: {
@@ -48,7 +49,7 @@ describe('IssueReadStatusButton', () => {
     vi.clearAllMocks()
   })
 
-  it('marks an unread issue read and reconciles the visible snapshot from bounded reads', async () => {
+  it('marks an unread issue read and reconciles the latest visible snapshot', async () => {
     vi.mocked(issuesApi.markRead).mockResolvedValue()
     vi.mocked(issuesApi.get).mockResolvedValue({
       ...issue,
@@ -61,15 +62,14 @@ describe('IssueReadStatusButton', () => {
       next_unread_issue_id: 99,
       next_unread_issue_number: '25',
     })
-    const onSnapshotChange = vi.fn()
-
-    render(
-      <IssueReadStatusButton
-        issue={issue}
-        snapshot={{ issues: [issue], thread }}
-        onSnapshotChange={onSnapshotChange}
-      />,
+    let snapshot: IssueMutationSnapshot = { issues: [issue], thread }
+    const onSnapshotChange = vi.fn(
+      (update: (current: IssueMutationSnapshot) => IssueMutationSnapshot) => {
+        snapshot = update(snapshot)
+      },
     )
+
+    render(<IssueReadStatusButton issue={issue} onSnapshotChange={onSnapshotChange} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Mark read' }))
 
@@ -77,7 +77,7 @@ describe('IssueReadStatusButton', () => {
     expect(issuesApi.markRead).toHaveBeenCalledWith(11)
     expect(issuesApi.get).toHaveBeenCalledWith(11)
     expect(threadsApi.get).toHaveBeenCalledWith(7)
-    expect(onSnapshotChange).toHaveBeenCalledWith({
+    expect(snapshot).toEqual({
       issues: [{ ...issue, status: 'read', read_at: '2026-08-03T18:30:00Z' }],
       thread: {
         ...thread,
@@ -88,17 +88,52 @@ describe('IssueReadStatusButton', () => {
     })
   })
 
+  it('applies a delayed result without overwriting a newer row transition', async () => {
+    vi.mocked(issuesApi.markRead).mockResolvedValue()
+    vi.mocked(issuesApi.get).mockResolvedValue({
+      ...issue,
+      status: 'read',
+      read_at: '2026-08-03T18:30:00Z',
+    })
+    vi.mocked(threadsApi.get).mockResolvedValue({
+      ...thread,
+      issues_remaining: 0,
+      next_unread_issue_id: null,
+      next_unread_issue_number: null,
+    })
+    const otherIssue: Issue = {
+      ...issue,
+      id: 12,
+      issue_number: '3',
+      status: 'read',
+      read_at: '2026-08-03T18:29:00Z',
+    }
+    let snapshot: IssueMutationSnapshot = {
+      issues: [issue, { ...otherIssue, status: 'unread', read_at: null }],
+      thread,
+    }
+    const onSnapshotChange = (
+      update: (current: IssueMutationSnapshot) => IssueMutationSnapshot,
+    ) => {
+      snapshot = {
+        ...snapshot,
+        issues: snapshot.issues.map((item) => (item.id === 12 ? otherIssue : item)),
+      }
+      snapshot = update(snapshot)
+    }
+
+    render(<IssueReadStatusButton issue={issue} onSnapshotChange={onSnapshotChange} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Mark read' }))
+
+    await waitFor(() => expect(snapshot.issues[0].status).toBe('read'))
+    expect(snapshot.issues[1]).toEqual(otherIssue)
+  })
+
   it('keeps the current snapshot and shows a retryable error when the mutation fails', async () => {
     vi.mocked(issuesApi.markRead).mockRejectedValue(new Error('network'))
     const onSnapshotChange = vi.fn()
 
-    render(
-      <IssueReadStatusButton
-        issue={issue}
-        snapshot={{ issues: [issue], thread }}
-        onSnapshotChange={onSnapshotChange}
-      />,
-    )
+    render(<IssueReadStatusButton issue={issue} onSnapshotChange={onSnapshotChange} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Mark read' }))
 
