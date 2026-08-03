@@ -10,14 +10,14 @@ import {
 
 interface IssueReadStatusButtonProps {
   issue: Issue
-  snapshot: IssueMutationSnapshot
-  onSnapshotChange: (snapshot: IssueMutationSnapshot) => void
+  onSnapshotChange: (
+    update: (snapshot: IssueMutationSnapshot) => IssueMutationSnapshot,
+  ) => void
 }
 
 /** Toggle one visible issue and reconcile only the affected row plus thread summary. */
 export function IssueReadStatusButton({
   issue,
-  snapshot,
   onSnapshotChange,
 }: IssueReadStatusButtonProps) {
   const [isPending, setIsPending] = useState(false)
@@ -46,7 +46,9 @@ export function IssueReadStatusButton({
         next_unread_issue_number: updatedThread.next_unread_issue_number ?? null,
       }
 
-      onSnapshotChange(applyIssueReadStatus(snapshot, issue.id, result))
+      onSnapshotChange((currentSnapshot) =>
+        applyIssueReadStatus(currentSnapshot, issue.id, result),
+      )
     } catch {
       setError('Failed to update issue')
     } finally {
