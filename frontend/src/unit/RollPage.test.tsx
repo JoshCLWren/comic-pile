@@ -1234,34 +1234,34 @@ describe('Rating View', () => {
   })
 
   describe('Post-action refresh contract', () => {
-    it('rate: does not refetch threads or stale threads', async () => {
+    it('rate: refetches only bootstrap', async () => {
       const { threadsApi } = await import('../services/api')
       vi.spyOn(threadsApi, 'setPending').mockResolvedValue(baseRollResponse)
 
       const mockRate = vi.fn().mockResolvedValue(baseRollResponse)
       mockedUseRate.mockReturnValue({ mutate: mockRate, isPending: false })
 
-      const mockRefetchThreads = vi.fn()
-      const mockRefetchStale = vi.fn()
-      const mockRefetchSession = vi.fn().mockResolvedValue({})
+      const mockRefetchBootstrap = vi.fn().mockResolvedValue({})
 
-      mockedUseThreads.mockReturnValue({
-        data: [{ id: 1, title: 'Saga', format: 'Comics', status: 'active' }],
-        refetch: mockRefetchThreads,
-      })
-      mockedUseStaleThreads.mockReturnValue({ data: [], refetch: mockRefetchStale })
-      mockedUseSession.mockReturnValue({
+      mockedUseRollBootstrap.mockReturnValue({
         data: {
-          id: 1,
           current_die: 6,
           last_rolled_result: null,
           manual_die: null,
           pending_thread_id: 1,
-          has_restore_point: false,
+          active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1, total_issues: 50, last_rolled_result: null },
           snoozed_threads: [],
-          active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1, total_issues: 50 },
+          snoozed_count: 0,
+          roll_pool: [{ id: 1, title: 'Saga', format: 'Comics' }],
+          blocked_count: 0,
+          blocked_threads: [],
+          stale_thread_count: 0,
+          stale_thread: null,
         },
-        refetch: mockRefetchSession,
+        refetch: mockRefetchBootstrap,
+        isPending: false,
+        isError: false,
+        error: null,
       })
 
       const user = userEvent.setup()
@@ -1274,37 +1274,35 @@ describe('Rating View', () => {
       await user.click(screen.getByText('Save & Continue'))
 
       await waitFor(() => {
-        expect(mockRefetchSession).toHaveBeenCalled()
+        expect(mockRefetchBootstrap).toHaveBeenCalled()
       })
-      expect(mockRefetchThreads).not.toHaveBeenCalled()
-      expect(mockRefetchStale).not.toHaveBeenCalled()
     })
 
-    it('snooze: only refetches session', async () => {
+    it('snooze: only refetches bootstrap', async () => {
       const snoozeSpy = vi.fn().mockResolvedValue({})
       mockedUseSnooze.mockReturnValue({ mutate: snoozeSpy, isPending: false })
 
-      const mockRefetchThreads = vi.fn()
-      const mockRefetchStale = vi.fn()
-      const mockRefetchSession = vi.fn().mockResolvedValue({})
+      const mockRefetchBootstrap = vi.fn().mockResolvedValue({})
 
-      mockedUseThreads.mockReturnValue({
-        data: [{ id: 1, title: 'Saga', format: 'Comics', status: 'active' }],
-        refetch: mockRefetchThreads,
-      })
-      mockedUseStaleThreads.mockReturnValue({ data: [], refetch: mockRefetchStale })
-      mockedUseSession.mockReturnValue({
+      mockedUseRollBootstrap.mockReturnValue({
         data: {
-          id: 1,
           current_die: 6,
           last_rolled_result: 3,
           manual_die: null,
           pending_thread_id: 1,
-          has_restore_point: false,
+          active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1, total_issues: 50, last_rolled_result: null },
           snoozed_threads: [],
-          active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1, total_issues: 50 },
+          snoozed_count: 0,
+          roll_pool: [{ id: 1, title: 'Saga', format: 'Comics' }],
+          blocked_count: 0,
+          blocked_threads: [],
+          stale_thread_count: 0,
+          stale_thread: null,
         },
-        refetch: mockRefetchSession,
+        refetch: mockRefetchBootstrap,
+        isPending: false,
+        isError: false,
+        error: null,
       })
 
       const user = userEvent.setup()
@@ -1318,37 +1316,38 @@ describe('Rating View', () => {
 
       await waitFor(() => {
         expect(snoozeSpy).toHaveBeenCalled()
-        expect(mockRefetchSession).toHaveBeenCalled()
+        expect(mockRefetchBootstrap).toHaveBeenCalled()
       })
-      expect(mockRefetchThreads).not.toHaveBeenCalled()
-      expect(mockRefetchStale).not.toHaveBeenCalled()
     })
 
-    it('dismiss: only refetches session', async () => {
+    it('dismiss: only refetches bootstrap', async () => {
       const dismissSpy = vi.fn().mockResolvedValue({})
       mockedUseDismissPending.mockReturnValue({ mutate: dismissSpy, isPending: false })
 
-      const mockRefetchThreads = vi.fn()
-      const mockRefetchStale = vi.fn()
-      const mockRefetchSession = vi.fn().mockResolvedValue({})
+      const mockRefetchBootstrap = vi.fn().mockResolvedValue({})
 
-      mockedUseThreads.mockReturnValue({
-        data: [
-          { id: 1, title: 'Saga', format: 'Comics', status: 'active', queue_position: 1 },
-          { id: 2, title: 'X-Men', format: 'Comics', status: 'active', queue_position: 2 },
-        ],
-        refetch: mockRefetchThreads,
-      })
-      mockedUseStaleThreads.mockReturnValue({ data: [], refetch: mockRefetchStale })
-      mockedUseSession.mockReturnValue({
+      mockedUseRollBootstrap.mockReturnValue({
         data: {
           current_die: 6,
           last_rolled_result: 2,
-          pending_thread_id: 1,
           manual_die: null,
-          active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1, total_issues: 50 },
+          pending_thread_id: 1,
+          active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1, total_issues: 50, last_rolled_result: null },
+          snoozed_threads: [],
+          snoozed_count: 0,
+          roll_pool: [
+            { id: 1, title: 'Saga', format: 'Comics' },
+            { id: 2, title: 'X-Men', format: 'Comics' },
+          ],
+          blocked_count: 0,
+          blocked_threads: [],
+          stale_thread_count: 0,
+          stale_thread: null,
         },
-        refetch: mockRefetchSession,
+        refetch: mockRefetchBootstrap,
+        isPending: false,
+        isError: false,
+        error: null,
       })
 
       const user = userEvent.setup()
@@ -1362,7 +1361,7 @@ describe('Rating View', () => {
 
       await waitFor(() => {
         expect(dismissSpy).toHaveBeenCalled()
-        expect(mockRefetchSession).toHaveBeenCalled()
+        expect(mockRefetchBootstrap).toHaveBeenCalled()
       })
       expect(mockRefetchThreads).not.toHaveBeenCalled()
       expect(mockRefetchStale).not.toHaveBeenCalled()
