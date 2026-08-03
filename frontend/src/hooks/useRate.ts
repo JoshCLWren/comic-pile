@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { applyRatedThreadCache } from '../query/cacheEffects'
+import { queryClient } from '../query/queryClient'
 import { rateApi } from '../services/api'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { RatePayload } from '../types'
@@ -11,7 +13,9 @@ export function useRate() {
     setIsPending(true)
     setIsError(false)
     try {
-      return await rateApi.rate(data)
+      const thread = await rateApi.rate(data)
+      await applyRatedThreadCache(queryClient, thread)
+      return thread
     } catch (error: unknown) {
       setIsError(true)
       console.error('Failed to rate thread:', getApiErrorDetail(error))
