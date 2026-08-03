@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { RollBootstrapResponse } from '../types';
-import { rollApi } from '../services/api';
+import type { RollBootstrapResponse } from '../types/rollBootstrap';
+import { rollBootstrapApi } from '../services/rollBootstrapApi';
 import { useToast } from '../contexts/useToast';
 
 const STORAGE_KEY_PREFIX = 'comic_pile_last_session_id';
@@ -18,7 +18,7 @@ export function useRollBootstrap() {
     setIsError(false);
     setError(null);
     try {
-      const result = await rollApi.bootstrap();
+      const result = await rollBootstrapApi.get();
 
       const currentSessionId = result.session_id;
       const currentUserId = result.user_id ?? 'anonymous';
