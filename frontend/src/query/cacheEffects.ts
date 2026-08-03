@@ -2,6 +2,40 @@ import type { QueryClient } from '@tanstack/react-query'
 import type { Thread } from '../types'
 import { queryKeys } from './queryKeys'
 
+export type ThreadCacheRollback = () => void
+
+export function optimisticallyUpdateThreadCache(
+  client: QueryClient,
+  threadId: number,
+  update: (thread: Thread) => Thread,
+): ThreadCacheRollback {
+  const detailKey = queryKeys.thread.detail(threadId)
+  const summaryKey = queryKeys.thread.summary(threadId)
+  const previousDetail = client.getQueryData<Thread>(detailKey)
+  const previousSummary = client.getQueryData<Thread>(summaryKey)
+
+  if (previousDetail) {
+    client.setQueryData(detailKey, update(previousDetail))
+  }
+  if (previousSummary) {
+    client.setQueryData(summaryKey, update(previousSummary))
+  }
+
+  return () => {
+    if (previousDetail) {
+      client.setQueryData(detailKey, previousDetail)
+    } else {
+      client.removeQueries({ queryKey: detailKey, exact: true })
+    }
+
+    if (previousSummary) {
+      client.setQueryData(summaryKey, previousSummary)
+    } else {
+      client.removeQueries({ queryKey: summaryKey, exact: true })
+    }
+  }
+}
+
 export async function applyRatedThreadCache(
   client: QueryClient,
   thread: Thread,
