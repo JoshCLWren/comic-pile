@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -25,6 +25,7 @@ from app.schemas import (
 )
 from app.schemas.session import SnoozedThreadInfo
 from app.services.ownership import get_owned_session_or_404
+from app.services.session_history_projection import project_session_history_events
 from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.session import get_current_die, get_or_create, is_active
 
@@ -84,6 +85,54 @@ async def _fetch_thread_issue_metadata(
     if next_issue:
         return next_issue.id, next_issue.issue_number
     return None, None
+
+
+async def _bulk_unread_counts(threads: list[Thread], db: AsyncSession) -> dict[int, int]:
+    """Bulk-load unread issue counts for migrated threads in one grouped query.
+
+    Unmigrated threads (``total_issues`` null) fall back to their stored
+    ``issues_remaining`` value and are omitted from the returned map.
+
+    Args:
+        threads: Threads that may appear as an active thread in the History page.
+        db: Database session.
+
+    Returns:
+        Mapping of migrated thread ID to its unread issue count.
+    """
+    migrated_ids = [t.id for t in threads if t.uses_issue_tracking()]
+    if not migrated_ids:
+        return {}
+
+    result = await db.execute(
+        select(Issue.thread_id, func.count())
+        .where(Issue.thread_id.in_(migrated_ids))
+        .where(Issue.status == "unread")
+        .group_by(Issue.thread_id)
+    )
+    return {row[0]: row[1] for row in result.all()}
+
+
+async def _bulk_next_issue_numbers(threads: list[Thread], db: AsyncSession) -> dict[int, str]:
+    """Bulk-load next-unread issue numbers in one query.
+
+    Args:
+        threads: Threads that may appear as an active thread in the History page.
+        db: Database session.
+
+    Returns:
+        Mapping of issue ID to issue number for every referenced next-unread issue.
+    """
+    issue_ids = {
+        t.next_unread_issue_id
+        for t in threads
+        if t.uses_issue_tracking() and t.next_unread_issue_id is not None
+    }
+    if not issue_ids:
+        return {}
+
+    result = await db.execute(select(Issue.id, Issue.issue_number).where(Issue.id.in_(issue_ids)))
+    return {row[0]: row[1] for row in result.all()}
 
 
 async def get_session_with_thread_safe(
@@ -355,21 +404,18 @@ async def get_current_session(
 
     while retries < max_retries:
         try:
-            active_sessions_result = await db.execute(
+            active_session_result = await db.execute(
                 select(SessionModel)
                 .where(SessionModel.user_id == current_user.id)
                 .where(SessionModel.ended_at.is_(None))
                 .order_by(SessionModel.started_at.desc(), SessionModel.id.desc())
+                .limit(1)
             )
-            active_sessions = active_sessions_result.scalars().all()
+            active_session = active_session_result.scalars().first()
 
-            active_session = None
-            for session in active_sessions:
-                if await is_active(session.started_at, session.ended_at, db):
-                    active_session = session
-                    break
-
-            if not active_session:
+            if active_session is None or not await is_active(
+                active_session.started_at, active_session.ended_at, db
+            ):
                 active_session = await get_or_create(db, user_id=current_user.id)
 
             await db.refresh(active_session)
@@ -452,7 +498,7 @@ async def list_sessions(
         SessionHistoryListResponse with paginated sessions and next_page_token if more exist.
     """
     from fastapi import HTTPException, status
-    from sqlalchemy import func, or_
+    from sqlalchemy import or_
 
     query = select(SessionModel).where(SessionModel.user_id == current_user.id)
     query = query.order_by(SessionModel.started_at.desc(), SessionModel.id.desc())
@@ -488,15 +534,20 @@ async def list_sessions(
 
     session_ids = [s.id for s in sessions_to_return]
 
-    active_threads_result = await db.execute(
+    history_events_result = await db.execute(
         select(Event)
         .where(Event.session_id.in_(session_ids))
-        .where(Event.type == "roll")
-        .where(Event.selected_thread_id.is_not(None))
-        .distinct(Event.session_id)
-        .order_by(Event.session_id, Event.timestamp.desc())
+        .where(
+            or_(
+                (Event.type == "roll") & (Event.selected_thread_id.is_not(None)),
+                (Event.type.in_(("rate", "snooze", "undo"))) & (Event.die_after.is_not(None)),
+            )
+        )
+        .order_by(Event.session_id, Event.timestamp, Event.id)
     )
-    active_thread_events = active_threads_result.scalars().all()
+    history_events = history_events_result.scalars().all()
+
+    projection = project_session_history_events(session_ids, history_events)
 
     snapshot_count_result = await db.execute(
         select(Snapshot.session_id, func.count())
@@ -505,76 +556,60 @@ async def list_sessions(
     )
     snapshot_counts = {row[0]: row[1] for row in snapshot_count_result.all()}
 
-    ladder_events_result = await db.execute(
-        select(Event)
-        .where(Event.session_id.in_(session_ids))
-        .where(Event.type.in_(("rate", "snooze", "undo")))
-        .where(Event.die_after.is_not(None))
-        .order_by(Event.session_id, Event.timestamp, Event.id)
-    )
-    ladder_events = ladder_events_result.scalars().all()
-
-    die_events_result = await db.execute(
-        select(Event)
-        .where(Event.session_id.in_(session_ids))
-        .where(Event.type.in_(("rate", "snooze", "undo")))
-        .where(Event.die_after.is_not(None))
-        .order_by(Event.session_id, Event.timestamp.desc(), Event.id.desc())
-    )
-    die_events = die_events_result.scalars().all()
+    sessions_by_id = {s.id: s for s in sessions_to_return}
 
     ladder_paths: dict[int, str] = {}
     for sid in session_ids:
-        sid_events = [e for e in ladder_events if e.session_id == sid]
-        session = next(s for s in sessions_to_return if s.id == sid)
-        if not sid_events:
-            ladder_paths[sid] = str(session.start_die)
-            continue
-        path = [session.start_die]
-        for event in sid_events:
-            if event.die_after:
-                path.append(event.die_after)
+        session = sessions_by_id[sid]
+        die_path = projection.die_path_by_session[sid]
+        path = [session.start_die, *die_path]
         ladder_paths[sid] = " → ".join(str(d) for d in path)
 
     current_die: dict[int, int] = {}
     for sid in session_ids:
-        session = next(s for s in sessions_to_return if s.id == sid)
+        session = sessions_by_id[sid]
         if session.manual_die:
             current_die[sid] = session.manual_die
             continue
+        current_die[sid] = projection.latest_die_by_session.get(sid, session.start_die)
 
-        sid_events = [e for e in die_events if e.session_id == sid]
-        if sid_events:
-            current_die[sid] = (
-                sid_events[0].die_after if sid_events[0].die_after else session.start_die
-            )
-        else:
-            current_die[sid] = session.start_die
-
-    thread_ids = set()
-    for event in active_thread_events:
-        if event.selected_thread_id:
-            thread_ids.add(event.selected_thread_id)
+    thread_ids = {
+        event.selected_thread_id
+        for event in projection.latest_roll_by_session.values()
+        if event.selected_thread_id is not None
+    }
 
     active_threads_dict: dict[int, ActiveThreadInfo | None] = {}
     if thread_ids:
         threads_result = await db.execute(select(Thread).where(Thread.id.in_(thread_ids)))
         threads_by_id = {t.id: t for t in threads_result.scalars().all()}
+        threads = list(threads_by_id.values())
+        unread_counts = await _bulk_unread_counts(threads, db)
+        issue_numbers = await _bulk_next_issue_numbers(threads, db)
 
         for sid in session_ids:
-            sid_events = [e for e in active_thread_events if e.session_id == sid]
-            if sid_events and sid_events[0].selected_thread_id:
-                thread = threads_by_id.get(sid_events[0].selected_thread_id)
+            roll_event = projection.latest_roll_by_session.get(sid)
+            if roll_event is not None and roll_event.selected_thread_id is not None:
+                thread = threads_by_id.get(roll_event.selected_thread_id)
                 if thread:
-                    issues_remaining = await thread.get_issues_remaining(db)
-                    issue_id, issue_number = await _fetch_thread_issue_metadata(thread, db)
+                    if thread.uses_issue_tracking():
+                        issues_remaining = unread_counts.get(thread.id, 0)
+                    else:
+                        issues_remaining = thread.issues_remaining
+                    issue_id: int | None = None
+                    issue_number: str | None = None
+                    if thread.uses_issue_tracking() and thread.next_unread_issue_id is not None:
+                        resolved_number = issue_numbers.get(thread.next_unread_issue_id)
+                        if resolved_number is not None:
+                            issue_id = thread.next_unread_issue_id
+                            issue_number = resolved_number
                     active_threads_dict[sid] = ActiveThreadInfo(
                         id=thread.id,
                         title=thread.title,
                         format=thread.format,
                         issues_remaining=issues_remaining,
                         queue_position=thread.queue_position,
-                        last_rolled_result=sid_events[0].result,
+                        last_rolled_result=roll_event.result,
                         total_issues=thread.total_issues,
                         reading_progress=thread.reading_progress,
                         issue_id=issue_id,
