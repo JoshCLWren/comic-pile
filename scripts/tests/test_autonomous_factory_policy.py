@@ -56,7 +56,7 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
     def test_remaining_work_cannot_be_a_stop_report(self) -> None:
         """Reject allowing workers to list executable work and leave."""
         mutated = self.policy.replace(
-            "Naming executable remaining work and then stopping is a policy failure.",
+            "Merely naming remaining work proves the opposite and requires continuing.",
             "List remaining work before stopping.",
         )
         with self.assertRaisesRegex(SystemExit, "missing required policy text"):
