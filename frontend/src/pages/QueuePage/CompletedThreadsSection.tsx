@@ -20,6 +20,11 @@ export default function CompletedThreadsSection({
 
   if (threads.length === 0) return null
 
+  const handleReactivate = (thread: CompletedThread | null) => {
+    setIsExpanded(false)
+    onReactivate(thread)
+  }
+
   return (
     <section className="space-y-4" aria-labelledby="completed-threads-heading">
       <header className="flex items-center justify-between gap-3 px-2">
@@ -31,7 +36,7 @@ export default function CompletedThreadsSection({
             Completed Threads
           </h2>
           <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
-            {threads.length} finished {threads.length === 1 ? 'series' : 'series'} hidden from the queue
+            {threads.length} finished series hidden from the queue
           </p>
         </div>
         <button
@@ -50,7 +55,7 @@ export default function CompletedThreadsSection({
           <div className="flex justify-end px-2">
             <button
               type="button"
-              onClick={() => onReactivate(null)}
+              onClick={() => handleReactivate(null)}
               aria-label="Choose completed thread to reactivate"
               className="h-8 md:h-10 px-3 md:px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10"
             >
@@ -69,7 +74,7 @@ export default function CompletedThreadsSection({
                   </div>
                   <button
                     type="button"
-                    onClick={() => onReactivate(thread)}
+                    onClick={() => handleReactivate(thread)}
                     aria-label={`Reactivate ${thread.title}`}
                     className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[9px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10"
                   >
