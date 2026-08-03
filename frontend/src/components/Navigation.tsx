@@ -97,10 +97,6 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
             <span className="text-2xl" aria-hidden="true">📜</span>
             <span className="hidden md:block text-[10px] uppercase tracking-widest font-bold nav-label">History</span>
           </Link>
-          <Link to="/analytics" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/analytics') ? 'active' : 'hover:bg-white/5'}`} aria-label="Analytics page">
-            <span className="text-2xl" aria-hidden="true">📊</span>
-            <span className="hidden md:block text-[10px] uppercase tracking-widest font-bold nav-label">Stats</span>
-          </Link>
           <Link
             to="/help"
             className={`hidden md:flex nav-item flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/help') ? 'active' : 'hover:bg-white/5'}`}

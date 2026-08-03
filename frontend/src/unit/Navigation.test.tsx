@@ -59,7 +59,7 @@ const renderWithoutAuth = () => {
   )
 }
 
-test('renders navigation links when authenticated', async () => {
+test('renders retained navigation links when authenticated', async () => {
   renderWithAuth()
 
   await waitFor(() => {
@@ -67,7 +67,7 @@ test('renders navigation links when authenticated', async () => {
   })
   expect(screen.getByRole('link', { name: /queue page/i })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /history page/i })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /analytics page/i })).toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: /analytics page/i })).not.toBeInTheDocument()
 })
 
 test('does not render when not authenticated', async () => {
