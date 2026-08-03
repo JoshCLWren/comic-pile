@@ -483,4 +483,6 @@ async def roll_bootstrap(
         blocked_threads=blocked_threads,
         stale_thread_count=stale_thread_count,
         stale_thread=stale_thread,
+        session_id=current_session_id,
+        user_id=user_id,
     )

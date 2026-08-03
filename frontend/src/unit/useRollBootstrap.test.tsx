@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { rollApi } from '../services/api'
 import type { RollBootstrapResponse } from '../types'
+import { ToastProvider } from '../contexts/ToastProvider'
 
 vi.mock('../services/api', () => ({
   rollApi: {
@@ -13,6 +14,8 @@ vi.mock('../services/api', () => ({
 const mockedBootstrap = vi.mocked(rollApi.bootstrap)
 
 const bootstrapResponse = {
+  session_id: 1,
+  user_id: 1,
   current_die: 6,
   manual_die: null,
   pending_thread_id: null,
@@ -27,15 +30,24 @@ const bootstrapResponse = {
   stale_thread: null,
 } as RollBootstrapResponse
 
+function renderBootstrap() {
+  return renderHook(() => useRollBootstrap(), {
+    wrapper: ({ children }: { children: React.ReactNode }) => (
+      <ToastProvider>{children}</ToastProvider>
+    ),
+  })
+}
+
 beforeEach(() => {
   mockedBootstrap.mockReset()
+  localStorage.clear()
 })
 
 describe('useRollBootstrap', () => {
   it('loads bootstrap data and exposes a successful refetch', async () => {
     mockedBootstrap.mockResolvedValue(bootstrapResponse)
 
-    const { result } = renderHook(() => useRollBootstrap())
+    const { result } = renderBootstrap()
 
     expect(result.current.isPending).toBe(true)
     expect(result.current.data).toBeNull()
@@ -58,7 +70,7 @@ describe('useRollBootstrap', () => {
       .mockRejectedValueOnce(new Error('bootstrap unavailable'))
       .mockResolvedValueOnce(bootstrapResponse)
 
-    const { result } = renderHook(() => useRollBootstrap())
+    const { result } = renderBootstrap()
 
     await waitFor(() => expect(result.current.isError).toBe(true))
 
@@ -78,7 +90,7 @@ describe('useRollBootstrap', () => {
   it('normalizes non-Error failures', async () => {
     mockedBootstrap.mockRejectedValue('offline')
 
-    const { result } = renderHook(() => useRollBootstrap())
+    const { result } = renderBootstrap()
 
     await waitFor(() => expect(result.current.isPending).toBe(false))
 

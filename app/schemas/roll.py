@@ -56,6 +56,8 @@ class RollBootstrapResponse(BaseModel):
     Does not include the full queue, collection data, or secondary detail panels.
     """
 
+    session_id: int
+    user_id: int
     current_die: int
     manual_die: int | None
     pending_thread_id: int | None

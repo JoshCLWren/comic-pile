@@ -26,6 +26,7 @@ function makeBootstrapData(overrides: Partial<ReturnType<typeof useRollBootstrap
   const { refetch: r, ...dataOverrides } = overrides
   return {
     data: {
+      session_id: 1, user_id: 1,
       current_die: 6, last_rolled_result: null, manual_die: null, pending_thread_id: null,
       active_thread: null, snoozed_threads: [], snoozed_count: 0,
       roll_pool: [] as Array<{ id: number; title: string; format: string }>,
