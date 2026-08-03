@@ -122,6 +122,7 @@ test('clears authentication when the user lookup returns unauthorized', async ()
 })
 
 test('falls back to an empty username when the user profile omits it', async () => {
+  // L43 `setUsername(user.username || '')` — username falsy
   mockApiGet.mockResolvedValue({ username: '', email: 'empty@test.com' })
   render(
     <MemoryRouter initialEntries={['/']}>
@@ -133,5 +134,6 @@ test('falls back to an empty username when the user profile omits it', async () 
     </MemoryRouter>,
   )
   await waitFor(() => expect(screen.getByRole('button', { name: /log out/i })).toBeInTheDocument())
+  // empty username is falsy, so no username span is rendered for it
   expect(screen.queryByText('testuser')).not.toBeInTheDocument()
 })
