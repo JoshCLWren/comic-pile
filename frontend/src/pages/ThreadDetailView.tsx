@@ -11,6 +11,8 @@ import { getApiErrorDetail } from '../utils/apiError'
 import type { ChangeEvent, FormEvent } from 'react'
 import { DEFAULT_CREATE_STATE, type QueueFormState } from '../pages/QueuePage/types'
 import { IssueToggleList } from '../pages/QueuePage/IssueToggleList'
+import { IssueReadStatusButton } from './thread-detail/IssueReadStatusButton'
+import type { IssueMutationSnapshot } from './thread-detail/issueMutationState'
 
 export default function ThreadDetailView() {
   const { id } = useParams<{ id: string }>()
@@ -105,12 +107,22 @@ export default function ThreadDetailView() {
     }
   }
 
+  function handleIssueSnapshotChange(snapshot: IssueMutationSnapshot) {
+    setIssues(snapshot.issues)
+    setThread(snapshot.thread)
+  }
+
   const handleEditSubmit = async (event: FormEvent) => {
     event.preventDefault()
     const currentThread = thread!
 
     try {
-      const updateData: { title: string; format: string; notes: string | null; issues_remaining?: number } = {
+      const updateData: {
+        title: string
+        format: string
+        notes: string | null
+        issues_remaining?: number
+      } = {
         title: editForm.title,
         format: editForm.format,
         notes: editForm.notes || null,
@@ -176,12 +188,14 @@ export default function ThreadDetailView() {
     return (
       <div className="space-y-6 md:space-y-8 pb-20">
         <header className="px-2">
-          <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase">Thread Details</h1>
-          <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">View thread information</p>
+          <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase">
+            Thread Details
+          </h1>
+          <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
+            View thread information
+          </p>
         </header>
-        <div className="text-center text-stone-500">
-          {error || 'Thread not found'}
-        </div>
+        <div className="text-center text-stone-500">{error || 'Thread not found'}</div>
       </div>
     )
   }
@@ -201,8 +215,12 @@ export default function ThreadDetailView() {
           >
             ← Back to Queue
           </button>
-          <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase truncate">{thread.title}</h1>
-          <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">{thread.format}</p>
+          <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase truncate">
+            {thread.title}
+          </h1>
+          <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
+            {thread.format}
+          </p>
         </div>
         <button
           type="button"
@@ -217,7 +235,9 @@ export default function ThreadDetailView() {
         {progressPercentage && (
           <div className="glass-card p-3 md:p-4 space-y-3">
             <div className="flex justify-between items-center">
-              <span className="text-xs font-black uppercase tracking-widest text-stone-500">Reading Progress</span>
+              <span className="text-xs font-black uppercase tracking-widest text-stone-500">
+                Reading Progress
+              </span>
               <span className="text-sm font-black text-amber-400">{progressPercentage}</span>
             </div>
             <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
@@ -232,7 +252,9 @@ export default function ThreadDetailView() {
 
         {thread.notes && (
           <div className="glass-card p-3 md:p-4 space-y-2">
-            <span className="text-xs font-black uppercase tracking-widest text-stone-500">Notes</span>
+            <span className="text-xs font-black uppercase tracking-widest text-stone-500">
+              Notes
+            </span>
             <p className="text-sm text-stone-300 whitespace-pre-wrap">{thread.notes}</p>
           </div>
         )}
@@ -272,7 +294,7 @@ export default function ThreadDetailView() {
                     <button
                       type="button"
                       onClick={() => {
-                        if (thread && thread.total_issues !== null) {
+                        if (thread.total_issues !== null) {
                           setIssues([])
                           setNextPageToken(null)
                           void loadIssuesPage(thread.id, null)
@@ -294,7 +316,7 @@ export default function ThreadDetailView() {
                     {issues.map((issue) => (
                       <div
                         key={issue.id}
-                        className={`flex items-center justify-between p-2 rounded-lg border ${
+                        className={`flex items-center justify-between gap-3 p-2 rounded-lg border ${
                           issue.status === 'read'
                             ? 'bg-green-500/10 border-green-500/20'
                             : 'bg-white/5 border-white/10'
@@ -303,13 +325,20 @@ export default function ThreadDetailView() {
                         <span className="text-sm font-medium text-stone-300">
                           #{issue.issue_number}
                         </span>
-                        <span className="text-xs font-black uppercase tracking-widest">
-                          {issue.status === 'read' ? (
-                            <span className="text-green-400">Read</span>
-                          ) : (
-                            <span className="text-stone-500">Unread</span>
-                          )}
-                        </span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs font-black uppercase tracking-widest">
+                            {issue.status === 'read' ? (
+                              <span className="text-green-400">Read</span>
+                            ) : (
+                              <span className="text-stone-500">Unread</span>
+                            )}
+                          </span>
+                          <IssueReadStatusButton
+                            issue={issue}
+                            snapshot={{ issues, thread }}
+                            onSnapshotChange={handleIssueSnapshotChange}
+                          />
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -335,28 +364,42 @@ export default function ThreadDetailView() {
 
         {!isMigrated && (
           <div className="glass-card p-3 md:p-4 space-y-2">
-            <span className="text-xs font-black uppercase tracking-widest text-stone-500">Issues Remaining</span>
+            <span className="text-xs font-black uppercase tracking-widest text-stone-500">
+              Issues Remaining
+            </span>
             <p className="text-sm text-stone-300">{thread.issues_remaining} issues</p>
           </div>
         )}
 
-
         <div className="glass-card p-3 md:p-4 space-y-2">
-          <span className="text-xs font-black uppercase tracking-widest text-stone-500">Queue Position</span>
+          <span className="text-xs font-black uppercase tracking-widest text-stone-500">
+            Queue Position
+          </span>
           <p className="text-sm text-stone-300">Position #{thread.queue_position}</p>
         </div>
 
         <div className="glass-card p-3 md:p-4 space-y-2">
-          <span className="text-xs font-black uppercase tracking-widest text-stone-500">Status</span>
+          <span className="text-xs font-black uppercase tracking-widest text-stone-500">
+            Status
+          </span>
           <p className="text-sm font-black uppercase">{thread.status}</p>
         </div>
       </div>
 
-      <Modal isOpen={isEditOpen} title="Edit Thread" onClose={() => { setIsEditOpen(false) }} overlayClassName="edit-modal__overlay">
+      <Modal
+        isOpen={isEditOpen}
+        title="Edit Thread"
+        onClose={() => {
+          setIsEditOpen(false)
+        }}
+        overlayClassName="edit-modal__overlay"
+      >
         <div className="space-y-4">
           <form id="edit-thread-form" className="space-y-4" onSubmit={handleEditSubmit}>
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Title</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+                Title
+              </label>
               <input
                 value={editForm.title}
                 onChange={(event) => setEditForm({ ...editForm, title: event.target.value })}
@@ -366,7 +409,9 @@ export default function ThreadDetailView() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Format</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+                Format
+              </label>
               <FormatSelect
                 value={editForm.format}
                 onChange={(value) => setEditForm({ ...editForm, format: value })}
@@ -376,7 +421,9 @@ export default function ThreadDetailView() {
 
             {thread.total_issues === null && (
               <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues Remaining</label>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+                  Issues Remaining
+                </label>
                 <input
                   type="number"
                   min="0"
@@ -393,7 +440,9 @@ export default function ThreadDetailView() {
             )}
 
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Notes</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+                Notes
+              </label>
               <textarea
                 value={editForm.notes}
                 onChange={(event) => setEditForm({ ...editForm, notes: event.target.value })}
@@ -402,9 +451,7 @@ export default function ThreadDetailView() {
             </div>
           </form>
 
-          {thread.total_issues !== null && (
-            <IssueToggleList threadId={thread.id} />
-          )}
+          {thread.total_issues !== null && <IssueToggleList threadId={thread.id} />}
 
           <button
             type="submit"
