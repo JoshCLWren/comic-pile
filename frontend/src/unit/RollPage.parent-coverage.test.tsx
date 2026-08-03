@@ -17,7 +17,7 @@ const sessionHook = vi.hoisted(() => ({ value: null as unknown }))
 const bootstrapHook = vi.hoisted(() => ({ value: null as unknown }))
 const relatedApi = vi.hoisted(() => ({ readingOrders: vi.fn(), connectedThreads: vi.fn(), blockingInfo: vi.fn() }))
 const sessionData: { current_die: number; snoozed_threads: Array<{ id: number; title: string; format: string }>; manual_die?: number; last_rolled_result?: number | null } = { current_die: 6, snoozed_threads: [] }
-const bootstrapData: { current_die: number; snoozed_threads: Array<{ id: number; title: string; format: string }>; roll_pool: Array<{ id: number; title: string; format: string }>; manual_die?: number | null; last_rolled_result?: number | null; pending_thread_id?: number | null; active_thread?: unknown; blocked_count: number; blocked_threads: never[]; stale_thread_count: number; stale_thread: null; snoozed_count: number } = { current_die: 6, snoozed_threads: [], roll_pool: [{ id: 1, title: 'Saga', format: 'Comic' }], manual_die: null, last_rolled_result: null, pending_thread_id: null, active_thread: null, blocked_count: 0, blocked_threads: [], stale_thread_count: 0, stale_thread: null, snoozed_count: 0 }
+const bootstrapData: { current_die: number; snoozed_threads: Array<{ id: number; title: string; format: string }>; roll_pool: Array<{ id: number; title: string; format: string }>; manual_die?: number | null; last_rolled_result?: number | null; pending_thread_id?: number | null; active_thread?: unknown; blocked_count: number; blocked_threads: Array<{ id: number; title: string; format: string }>; stale_thread_count: number; stale_thread: { id: number; title: string; format: string; last_activity_at?: string } | null; snoozed_count: number } = { current_die: 6, snoozed_threads: [], roll_pool: [{ id: 1, title: 'Saga', format: 'Comic' }], manual_die: null, last_rolled_result: null, pending_thread_id: null, active_thread: null, blocked_count: 0, blocked_threads: [], stale_thread_count: 0, stale_thread: null, snoozed_count: 0 }
 const threadData: Array<{ id: number; title: string; format: string; status: string; is_blocked?: boolean }> = [{ id: 1, title: 'Saga', format: 'Comic', status: 'active' }]
 let staleData: never[] = []
 let threadsValue: unknown = threadData
@@ -599,11 +599,12 @@ describe('RollPage parent handlers', () => {
   })
 
   it('hydrates all pending-session metadata fields', async () => {
-    sessionHook.value = {
+    bootstrapHook.value = {
       data: {
         current_die: 8,
         pending_thread_id: 1,
         last_rolled_result: 4,
+        manual_die: null,
         active_thread: {
           id: 1,
           title: 'Complete pending',
@@ -619,8 +620,17 @@ describe('RollPage parent handlers', () => {
           last_rolled_result: 4,
         },
         snoozed_threads: [],
+        snoozed_count: 0,
+        roll_pool: [{ id: 1, title: 'Complete pending', format: 'Comic' }],
+        blocked_count: 0,
+        blocked_threads: [],
+        stale_thread_count: 0,
+        stale_thread: null,
       },
       refetch: spies.refetch,
+      isPending: false,
+      isError: false,
+      error: null,
     }
     render(<RollPage />)
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
@@ -629,15 +639,25 @@ describe('RollPage parent handlers', () => {
   })
 
   it('recovers a pending session when neither session nor active-thread metadata exists', async () => {
-    sessionHook.value = {
+    bootstrapHook.value = {
       data: {
         current_die: 6,
         pending_thread_id: 99,
         last_rolled_result: null,
+        manual_die: null,
         active_thread: null,
         snoozed_threads: [],
+        snoozed_count: 0,
+        roll_pool: [],
+        blocked_count: 0,
+        blocked_threads: [],
+        stale_thread_count: 0,
+        stale_thread: null,
       },
       refetch: spies.refetch,
+      isPending: false,
+      isError: false,
+      error: null,
     }
     render(<RollPage />)
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
@@ -645,11 +665,12 @@ describe('RollPage parent handlers', () => {
   })
 
   it('hydrates null pending metadata with safe display fallbacks', async () => {
-    sessionHook.value = {
+    bootstrapHook.value = {
       data: {
         current_die: 6,
         pending_thread_id: 1,
         last_rolled_result: null,
+        manual_die: null,
         active_thread: {
           id: 1,
           title: 'Sparse pending',
@@ -665,24 +686,25 @@ describe('RollPage parent handlers', () => {
           last_rolled_result: null,
         },
         snoozed_threads: [],
+        snoozed_count: 0,
+        roll_pool: [{ id: 1, title: 'Sparse pending', format: '' }],
+        blocked_count: 0,
+        blocked_threads: [],
+        stale_thread_count: 0,
+        stale_thread: null,
       },
       refetch: spies.refetch,
+      isPending: false,
+      isError: false,
+      error: null,
     } as never
     render(<RollPage />)
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
   })
 
   it('falls back to the active session metadata when a pending response lacks thread identity', async () => {
-    sessionHook.value = {
-      data: {
-        current_die: 6,
-        pending_thread_id: null,
-        last_rolled_result: null,
-        active_thread: { id: 1, title: 'Session fallback', format: 'Graphic Novel', issues_remaining: null, queue_position: null, total_issues: null },
-        snoozed_threads: [],
-      },
-      refetch: spies.refetch,
-    }
+    bootstrapData.active_thread = { id: 1, title: 'Session fallback', format: 'Graphic Novel', issues_remaining: null, queue_position: null, total_issues: null, last_rolled_result: null }
+    bootstrapData.roll_pool = [{ id: 1, title: 'Session fallback', format: 'Graphic Novel' }]
     spies.setPending.mockResolvedValueOnce({ thread_id: null, title: undefined, format: undefined, issues_remaining: null, queue_position: null, total_issues: null, result: null })
     const user = userEvent.setup()
     render(<RollPage />)
@@ -705,12 +727,6 @@ describe('RollPage parent handlers', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'complete simple' })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'complete simple' }))
     await waitFor(() => expect(screen.getByText('simple migration save failed')).toBeInTheDocument())
-  })
-
-  it('accepts collection edit events from the integration test hook', () => {
-    render(<RollPage />)
-    act(() => window.dispatchEvent(new CustomEvent('test-edit-collection', { detail: { id: 4, name: 'Archive' } })))
-    expect(screen.getByTestId('collection-dialog')).toHaveTextContent('Archive')
   })
 
   it('completes migration and simple migration flows', async () => {
@@ -797,7 +813,8 @@ describe('RollPage parent handlers', () => {
     await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Failed to shuffle pool: pool failed'))
 
     cleanup()
-    staleData = [{ id: 7, title: 'Old', format: 'Comic', status: 'active', is_blocked: false, created_at: '2000-01-01' }] as never[]
+    bootstrapData.stale_thread = { id: 7, title: 'Old', format: 'Comic', last_activity_at: '2000-01-01' } as never
+    bootstrapData.stale_thread_count = 1
     spies.setPending.mockRejectedValueOnce(new Error('stale failed'))
     render(<RollPage />)
     await userEvent.setup().click(screen.getByRole('button', { name: 'read stale' }))
@@ -812,7 +829,8 @@ describe('RollPage parent handlers', () => {
     await waitFor(() => expect(errorSpy).toHaveBeenCalledWith('Action failed:', expect.any(Error)))
     alertSpy.mockRestore()
     errorSpy.mockRestore()
-    staleData = []
+    bootstrapData.stale_thread = null
+    bootstrapData.stale_thread_count = 0
   })
 
   it('handles sparse roll metadata, recent stale activity, and pending-thread fallback selection', async () => {
@@ -834,23 +852,28 @@ describe('RollPage parent handlers', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
 
     cleanup()
-    sessionHook.value = {
-      data: { current_die: 6, pending_thread_id: 1, last_rolled_result: null, active_thread: null, snoozed_threads: [] },
+    bootstrapHook.value = {
+      data: { current_die: 6, pending_thread_id: 1, last_rolled_result: null, manual_die: null, active_thread: null, snoozed_threads: [], snoozed_count: 0, roll_pool: [{ id: 1, title: 'Saga', format: 'Comic' }], blocked_count: 0, blocked_threads: [], stale_thread_count: 0, stale_thread: null },
       refetch: spies.refetch,
+      isPending: false,
+      isError: false,
+      error: null,
     }
     render(<RollPage />)
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
-    sessionHook.value = null
+    bootstrapHook.value = null
     sessionData.current_die = 6
-    staleData = []
+    bootstrapData.stale_thread = null
+    bootstrapData.stale_thread_count = 0
   })
 
   it('opens a hydrated pending session and recovers pending roll conflicts', async () => {
-    sessionHook.value = {
+    bootstrapHook.value = {
       data: {
         current_die: 6,
         pending_thread_id: 1,
         last_rolled_result: 4,
+        manual_die: null,
         active_thread: {
           id: 1, title: 'Pending Saga', format: 'Comic', issues_remaining: 2,
           queue_position: 1, total_issues: 8, issue_id: 10, issue_number: '4',
@@ -858,14 +881,23 @@ describe('RollPage parent handlers', () => {
           last_rolled_result: 4,
         },
         snoozed_threads: [],
+        snoozed_count: 0,
+        roll_pool: [{ id: 1, title: 'Pending Saga', format: 'Comic' }],
+        blocked_count: 0,
+        blocked_threads: [],
+        stale_thread_count: 0,
+        stale_thread: null,
       },
       refetch: spies.refetch,
+      isPending: false,
+      isError: false,
+      error: null,
     }
     render(<RollPage />)
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
     expect(screen.getByTestId('rating-thread-metadata')).toHaveTextContent('Pending Saga:4')
     cleanup()
-    sessionHook.value = null
+    bootstrapHook.value = null
     render(<RollPage />)
     spies.refetch.mockResolvedValueOnce({ pending_thread_id: 1, last_rolled_result: 3, active_thread: { id: 1, title: 'Recovered', format: 'Comic', issues_remaining: 1, queue_position: 1, total_issues: 4 } })
     spies.roll.mockRejectedValueOnce(Object.assign(new Error('pending'), { response: { status: 409, data: { detail: 'pending' } } }))

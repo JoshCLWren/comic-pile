@@ -22,6 +22,23 @@ import type { RollResponse } from '../types'
 
 const navigateSpy = vi.fn()
 
+function makeBootstrapData(overrides: Partial<ReturnType<typeof useRollBootstrap>['data']> & { refetch?: ReturnType<typeof vi.fn> } = {}) {
+  const { refetch: r, ...dataOverrides } = overrides
+  return {
+    data: {
+      current_die: 6, last_rolled_result: null, manual_die: null, pending_thread_id: null,
+      active_thread: null, snoozed_threads: [], snoozed_count: 0,
+      roll_pool: [] as Array<{ id: number; title: string; format: string }>,
+      blocked_count: 0, blocked_threads: [], stale_thread_count: 0, stale_thread: null,
+      ...dataOverrides,
+    },
+    refetch: r ?? vi.fn(),
+    isPending: false,
+    isError: false,
+    error: null,
+  }
+}
+
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom')
   return {
@@ -139,30 +156,12 @@ function getPoolItem(title: string): HTMLElement {
 }
 
 beforeEach(() => {
-  const mockBootstrapData = {
-    current_die: 6,
-    last_rolled_result: null,
-    manual_die: null,
-    pending_thread_id: null,
-    active_thread: null,
-    snoozed_threads: [],
-    snoozed_count: 0,
+  mockedUseRollBootstrap.mockReturnValue(makeBootstrapData({
     roll_pool: [
       { id: 1, title: 'Saga', format: 'Comics' },
       { id: 2, title: 'X-Men', format: 'Comics' },
     ],
-    blocked_count: 0,
-    blocked_threads: [],
-    stale_thread_count: 0,
-    stale_thread: null,
-  }
-  mockedUseRollBootstrap.mockReturnValue({
-    data: mockBootstrapData,
-    refetch: vi.fn(),
-    isPending: false,
-    isError: false,
-    error: null,
-  })
+  }))
   const mockSessionData = {
     current_die: 6,
     last_rolled_result: null,
@@ -272,29 +271,13 @@ describe('Action Sheet', () => {
       ],
       refetch: mockRefetchThreads,
     })
-    mockedUseRollBootstrap.mockReturnValue({
-      data: {
-        current_die: 6,
-        last_rolled_result: null,
-        manual_die: null,
-        pending_thread_id: null,
-        active_thread: null,
-        snoozed_threads: [],
-        snoozed_count: 0,
-        roll_pool: [
-          { id: 1, title: 'Saga', format: 'Comics' },
-          { id: 2, title: 'X-Men', format: 'Comics' },
-        ],
-        blocked_count: 0,
-        blocked_threads: [],
-        stale_thread_count: 0,
-        stale_thread: null,
-      },
+    mockedUseRollBootstrap.mockReturnValue(makeBootstrapData({
+      roll_pool: [
+        { id: 1, title: 'Saga', format: 'Comics' },
+        { id: 2, title: 'X-Men', format: 'Comics' },
+      ],
       refetch: mockRefetchBootstrap,
-      isPending: false,
-      isError: false,
-      error: null,
-    })
+    }))
   })
 
   it('opens action sheet when clicking pool item', async () => {
@@ -336,29 +319,23 @@ describe('Action Sheet', () => {
       },
       refetch: mockRefetchSession,
     })
-    mockedUseRollBootstrap.mockReturnValue({
-      data: {
-        current_die: 6,
-        last_rolled_result: null,
-        manual_die: null,
-        pending_thread_id: null,
-        active_thread: null,
-        snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }],
-        snoozed_count: 1,
-        roll_pool: [
+    mockedUseRollBootstrap.mockReturnValue(makeBootstrapData({
+      current_die: 6,
+      last_rolled_result: null,
+      manual_die: null,
+      pending_thread_id: null,
+      active_thread: null,
+      snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }],
+      snoozed_count: 1,
+      roll_pool: [
           { id: 1, title: 'Saga', format: 'Comic' },
           { id: 2, title: 'X-Men', format: 'Comic' },
         ],
-        blocked_count: 0,
-        blocked_threads: [],
-        stale_thread_count: 0,
-        stale_thread: null,
-      },
-      refetch: vi.fn(),
-      isPending: false,
-      isError: false,
-      error: null,
-    })
+      blocked_count: 0,
+      blocked_threads: [],
+      stale_thread_count: 0,
+      stale_thread: null
+    }))
     mockUnsnoozeMutation.mutate.mockReset()
 
     const user = userEvent.setup()
@@ -427,29 +404,24 @@ describe('Action Sheet', () => {
     const mockShuffle = { mutate: vi.fn(), isPending: false }
     const localRefetchBootstrap = vi.fn()
     mockedUseShuffleQueue.mockReturnValue(mockShuffle)
-    mockedUseRollBootstrap.mockReturnValue({
-      data: {
-        current_die: 6,
-        last_rolled_result: null,
-        manual_die: null,
-        pending_thread_id: null,
-        active_thread: null,
-        snoozed_threads: [],
-        snoozed_count: 0,
-        roll_pool: [
+    mockedUseRollBootstrap.mockReturnValue(makeBootstrapData({
+      current_die: 6,
+      last_rolled_result: null,
+      manual_die: null,
+      pending_thread_id: null,
+      active_thread: null,
+      snoozed_threads: [],
+      snoozed_count: 0,
+      roll_pool: [
           { id: 1, title: 'Saga', format: 'Comics' },
           { id: 2, title: 'X-Men', format: 'Comics' },
         ],
-        blocked_count: 0,
-        blocked_threads: [],
-        stale_thread_count: 0,
-        stale_thread: null,
-      },
-      refetch: localRefetchBootstrap,
-      isPending: false,
-      isError: false,
-      error: null,
-    })
+      blocked_count: 0,
+      blocked_threads: [],
+      stale_thread_count: 0,
+      stale_thread: null,
+      refetch: localRefetchBootstrap
+    }))
 
     const user = userEvent.setup()
     render(<RollPage />)
@@ -637,31 +609,29 @@ describe('Rating View', () => {
     expect(within(poolList).getByText('X-Men')).toBeInTheDocument()
   })
 
-  it('[P4] refetches session but not threads after successful rating', async () => {
+  it('[P4] refetches bootstrap after successful rating', async () => {
     const { threadsApi } = await import('../services/api')
     vi.spyOn(threadsApi, 'setPending').mockResolvedValue(baseRollResponse)
 
     const mockRate = vi.fn().mockResolvedValue(baseRollResponse)
     mockedUseRate.mockReturnValue({ mutate: mockRate, isPending: false })
 
-    const mockRefetchThreads = vi.fn()
-    const mockRefetchSession = vi.fn().mockResolvedValue({})
-    mockedUseThreads.mockReturnValue({
-      data: [{ id: 1, title: 'Saga', format: 'Comics', status: 'active' }],
-      refetch: mockRefetchThreads
-    })
-    mockedUseSession.mockReturnValue({
-      data: {
-        id: 1,
-        current_die: 6,
-        last_rolled_result: null,
-        manual_die: null,
-        pending_thread_id: 1,
-        snoozed_threads: [],
-        active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1, total_issues: 50 },
-      },
-      refetch: mockRefetchSession,
-    })
+    const mockRefetchBootstrap = vi.fn().mockResolvedValue({})
+    mockedUseRollBootstrap.mockReturnValue(makeBootstrapData({
+      current_die: 6,
+      last_rolled_result: null,
+      manual_die: null,
+      pending_thread_id: 1,
+      snoozed_threads: [],
+      snoozed_count: 0,
+      roll_pool: [{ id: 1, title: 'Saga', format: 'Comics' }],
+      active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1, total_issues: 50, last_rolled_result: null },
+      blocked_count: 0,
+      blocked_threads: [],
+      stale_thread_count: 0,
+      stale_thread: null,
+      refetch: mockRefetchBootstrap
+    }))
 
     const user = userEvent.setup()
     render(<RollPage />)
@@ -673,9 +643,8 @@ describe('Rating View', () => {
     await user.click(screen.getByText('Save & Continue'))
 
     await waitFor(() => {
-      expect(mockRefetchSession).toHaveBeenCalled()
+      expect(mockRefetchBootstrap).toHaveBeenCalled()
     })
-    expect(mockRefetchThreads).not.toHaveBeenCalled()
   })
 
   it('[P5] closes rating view even if post-save refresh fails', async () => {
@@ -685,21 +654,23 @@ describe('Rating View', () => {
     const mockRate = vi.fn().mockResolvedValue(baseRollResponse)
     mockedUseRate.mockReturnValue({ mutate: mockRate, isPending: false })
 
-    const refetchSessionError = new Error('session refresh failed')
-    const mockRefetchSession = vi.fn().mockRejectedValue(refetchSessionError)
-    mockedUseSession.mockReturnValue({
-      data: {
-        id: 1,
-        current_die: 6,
-        last_rolled_result: null,
-        manual_die: null,
-        pending_thread_id: 1,
-        has_restore_point: false,
-        snoozed_threads: [],
-        active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1, total_issues: 50 },
-      },
-      refetch: mockRefetchSession,
-    })
+    const refetchBootstrapError = new Error('session refresh failed')
+    const mockRefetchBootstrap = vi.fn().mockRejectedValue(refetchBootstrapError)
+    mockedUseRollBootstrap.mockReturnValue(makeBootstrapData({
+      current_die: 6,
+      last_rolled_result: null,
+      manual_die: null,
+      pending_thread_id: 1,
+      snoozed_threads: [],
+      snoozed_count: 0,
+      roll_pool: [{ id: 1, title: 'Saga', format: 'Comics' }],
+      active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1, total_issues: 50, last_rolled_result: null },
+      blocked_count: 0,
+      blocked_threads: [],
+      stale_thread_count: 0,
+      stale_thread: null,
+      refetch: mockRefetchBootstrap
+    }))
 
     const user = userEvent.setup()
     render(<RollPage />)
@@ -712,27 +683,29 @@ describe('Rating View', () => {
     await waitFor(() => expect(screen.getByText(/failed to refresh/i)).toBeInTheDocument())
   })
 
-  it('[P5b] closes rating view when session refresh succeeds after successful rating', async () => {
+  it('[P5b] closes rating view when bootstrap refresh succeeds after successful rating', async () => {
     const { threadsApi } = await import('../services/api')
     vi.spyOn(threadsApi, 'setPending').mockResolvedValue(baseRollResponse)
 
     const mockRate = vi.fn().mockResolvedValue(baseRollResponse)
     mockedUseRate.mockReturnValue({ mutate: mockRate, isPending: false })
 
-    const mockRefetchSession = vi.fn().mockResolvedValue({})
-    mockedUseSession.mockReturnValue({
-      data: {
-        id: 1,
-        current_die: 6,
-        last_rolled_result: null,
-        manual_die: null,
-        pending_thread_id: 1,
-        has_restore_point: false,
-        snoozed_threads: [],
-        active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1, total_issues: 50 },
-      },
-      refetch: mockRefetchSession,
-    })
+    const mockRefetchBootstrap = vi.fn().mockResolvedValue({})
+    mockedUseRollBootstrap.mockReturnValue(makeBootstrapData({
+      current_die: 6,
+      last_rolled_result: null,
+      manual_die: null,
+      pending_thread_id: 1,
+      snoozed_threads: [],
+      snoozed_count: 0,
+      roll_pool: [{ id: 1, title: 'Saga', format: 'Comics' }],
+      active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1, total_issues: 50, last_rolled_result: null },
+      blocked_count: 0,
+      blocked_threads: [],
+      stale_thread_count: 0,
+      stale_thread: null,
+      refetch: mockRefetchBootstrap
+    }))
 
     const user = userEvent.setup()
     render(<RollPage />)
@@ -743,7 +716,7 @@ describe('Rating View', () => {
     await user.click(screen.getByText('Save & Continue'))
 
     await waitFor(() => {
-      expect(mockRefetchSession).toHaveBeenCalled()
+      expect(mockRefetchBootstrap).toHaveBeenCalled()
     })
     expect(screen.queryByText(/failed to refresh/i)).not.toBeInTheDocument()
   })
@@ -821,23 +794,29 @@ describe('Rating View', () => {
     expect(selectedPoolItem).toBeNull()
   })
 
-  it('restores pending rating view from session state on load', async () => {
-    mockedUseSession.mockReturnValue({
-      data: {
-        current_die: 6,
-        last_rolled_result: 6,
-        pending_thread_id: 1,
-        manual_die: null,
-        active_thread: {
+  it('restores pending rating view from bootstrap state on load', async () => {
+    mockedUseRollBootstrap.mockReturnValue(makeBootstrapData({
+      current_die: 6,
+      last_rolled_result: 6,
+      pending_thread_id: 1,
+      manual_die: null,
+      active_thread: {
           id: 1,
           title: 'Saga',
           format: 'Comics',
           issues_remaining: 5,
           queue_position: 2,
+          total_issues: 50,
+          last_rolled_result: null,
         },
-      },
-      refetch: vi.fn(),
-    })
+      snoozed_threads: [],
+      snoozed_count: 0,
+      roll_pool: [{ id: 1, title: 'Saga', format: 'Comics' }],
+      blocked_count: 0,
+      blocked_threads: [],
+      stale_thread_count: 0,
+      stale_thread: null
+    }))
 
     render(<RollPage />)
 
@@ -848,8 +827,8 @@ describe('Rating View', () => {
     })
   })
 
-  it('hydrates pending thread metadata when active threads arrive after initial render', async () => {
-    const sessionData = {
+  it('hydrates pending thread metadata when bootstrap data arrives after initial render', async () => {
+    let bootstrapDataVal = {
       current_die: 6,
       last_rolled_result: 5,
       pending_thread_id: 2,
@@ -860,20 +839,24 @@ describe('Rating View', () => {
         format: 'Comics',
         issues_remaining: 5,
         queue_position: 1,
+        total_issues: 50,
+        last_rolled_result: null,
       },
+      snoozed_threads: [],
+      snoozed_count: 0,
+      roll_pool: [] as Array<{ id: number; title: string; format: string }>,
+      blocked_count: 0,
+      blocked_threads: [],
+      stale_thread_count: 0,
+      stale_thread: null,
     }
 
-    const refetchSessionSpy = vi.fn()
-    const refetchThreadsSpy = vi.fn()
-    let threadsData: MockThread[] = []
-
-    mockedUseSession.mockImplementation(() => ({
-      data: sessionData,
-      refetch: refetchSessionSpy,
-    }))
-    mockedUseThreads.mockImplementation(() => ({
-      data: threadsData,
-      refetch: refetchThreadsSpy,
+    mockedUseRollBootstrap.mockImplementation(() => ({
+      data: bootstrapDataVal,
+      refetch: vi.fn(),
+      isPending: false,
+      isError: false,
+      error: null,
     }))
 
     const { rerender } = render(<RollPage />)
@@ -883,16 +866,16 @@ describe('Rating View', () => {
       expect(screen.getByText('Loading...')).toBeInTheDocument()
     })
 
-    threadsData = [
-      {
-        id: 2,
-        title: 'X-Men',
-        format: 'Comics',
-        issues_remaining: 7,
-        queue_position: 3,
-        status: 'active',
-      },
-    ]
+    bootstrapDataVal = {
+      ...bootstrapDataVal,
+      roll_pool: [
+        {
+          id: 2,
+          title: 'X-Men',
+          format: 'Comics',
+        },
+      ],
+    }
 
     rerender(<RollPage />)
 
@@ -902,22 +885,28 @@ describe('Rating View', () => {
   })
 
   it('does not render invalid rolled zero text when pending roll result is missing', async () => {
-    mockedUseSession.mockReturnValue({
-      data: {
-        current_die: 6,
-        last_rolled_result: null,
-        pending_thread_id: 1,
-        manual_die: null,
-        active_thread: {
+    mockedUseRollBootstrap.mockReturnValue(makeBootstrapData({
+      current_die: 6,
+      last_rolled_result: null,
+      pending_thread_id: 1,
+      manual_die: null,
+      active_thread: {
           id: 1,
           title: 'Saga',
           format: 'Comics',
           issues_remaining: 5,
           queue_position: 2,
+          total_issues: 50,
+          last_rolled_result: null,
         },
-      },
-      refetch: vi.fn(),
-    })
+      snoozed_threads: [],
+      snoozed_count: 0,
+      roll_pool: [{ id: 1, title: 'Saga', format: 'Comics' }],
+      blocked_count: 0,
+      blocked_threads: [],
+      stale_thread_count: 0,
+      stale_thread: null
+    }))
 
     render(<RollPage />)
 
@@ -928,22 +917,28 @@ describe('Rating View', () => {
   })
 
   it('does not render invalid rolled zero text when pending roll result is zero', async () => {
-    mockedUseSession.mockReturnValue({
-      data: {
-        current_die: 6,
-        last_rolled_result: 0,
-        pending_thread_id: 1,
-        manual_die: null,
-        active_thread: {
+    mockedUseRollBootstrap.mockReturnValue(makeBootstrapData({
+      current_die: 6,
+      last_rolled_result: 0,
+      pending_thread_id: 1,
+      manual_die: null,
+      active_thread: {
           id: 1,
           title: 'Saga',
           format: 'Comics',
           issues_remaining: 5,
           queue_position: 2,
+          total_issues: 50,
+          last_rolled_result: null,
         },
-      },
-      refetch: vi.fn(),
-    })
+      snoozed_threads: [],
+      snoozed_count: 0,
+      roll_pool: [{ id: 1, title: 'Saga', format: 'Comics' }],
+      blocked_count: 0,
+      blocked_threads: [],
+      stale_thread_count: 0,
+      stale_thread: null
+    }))
 
     render(<RollPage />)
 
@@ -953,7 +948,7 @@ describe('Rating View', () => {
     })
   })
 
-  it('recovers from roll conflicts by refetching session and reopening rating view', async () => {
+  it('recovers from roll conflicts by refetching bootstrap and reopening rating view', async () => {
     const conflictError = {
       response: {
         status: 409,
@@ -961,7 +956,7 @@ describe('Rating View', () => {
       },
     }
     const mockRoll = vi.fn().mockRejectedValue(conflictError)
-    const refetchSessionSpy = vi.fn().mockResolvedValue({
+    const refetchBootstrapSpy = vi.fn().mockResolvedValue({
       current_die: 6,
       last_rolled_result: 5,
       pending_thread_id: 2,
@@ -971,27 +966,40 @@ describe('Rating View', () => {
         format: 'Comics',
         issues_remaining: 7,
         queue_position: 1,
+        total_issues: 50,
+        last_rolled_result: null,
       },
       snoozed_threads: [],
+      snoozed_count: 0,
+      roll_pool: [
+        { id: 2, title: 'X-Men', format: 'Comics' },
+        { id: 1, title: 'Saga', format: 'Comics' },
+      ],
+      blocked_count: 0,
+      blocked_threads: [],
+      stale_thread_count: 0,
+      stale_thread: null,
     })
 
     mockedUseRoll.mockReturnValue({ mutate: mockRoll, isPending: false })
-    mockedUseSession.mockReturnValue({
-      data: {
-        current_die: 6,
-        last_rolled_result: null,
-        pending_thread_id: null,
-        snoozed_threads: [],
-      },
-      refetch: refetchSessionSpy,
-    })
-    mockedUseThreads.mockReturnValue({
-      data: [
-        { id: 2, title: 'X-Men', format: 'Comics', status: 'active', queue_position: 1 },
-        { id: 1, title: 'Saga', format: 'Comics', status: 'active', queue_position: 2 },
-      ],
-      refetch: vi.fn(),
-    })
+    mockedUseRollBootstrap.mockReturnValue(makeBootstrapData({
+      current_die: 6,
+      last_rolled_result: null,
+      pending_thread_id: null,
+      manual_die: null,
+      snoozed_threads: [],
+      snoozed_count: 0,
+      roll_pool: [
+          { id: 2, title: 'X-Men', format: 'Comics' },
+          { id: 1, title: 'Saga', format: 'Comics' },
+        ],
+      active_thread: null,
+      blocked_count: 0,
+      blocked_threads: [],
+      stale_thread_count: 0,
+      stale_thread: null,
+      refetch: refetchBootstrapSpy
+    }))
 
     const user = userEvent.setup()
     render(<RollPage />)
@@ -1002,7 +1010,7 @@ describe('Rating View', () => {
       expect(mockRoll).toHaveBeenCalled()
     }, { timeout: 2500 })
     await waitFor(() => {
-      expect(refetchSessionSpy).toHaveBeenCalled()
+      expect(refetchBootstrapSpy).toHaveBeenCalled()
     }, { timeout: 2500 })
     await waitFor(() => {
       expect(screen.getByText('How was it?')).toBeInTheDocument()
@@ -1011,22 +1019,28 @@ describe('Rating View', () => {
   })
 
   it('renders current die in rating preview (not predicted)', async () => {
-    mockedUseSession.mockReturnValue({
-      data: {
-        current_die: 6,
-        last_rolled_result: 6,
-        pending_thread_id: 1,
-        manual_die: null,
-        active_thread: {
+    mockedUseRollBootstrap.mockReturnValue(makeBootstrapData({
+      current_die: 6,
+      last_rolled_result: 6,
+      pending_thread_id: 1,
+      manual_die: null,
+      active_thread: {
           id: 1,
           title: 'Saga',
           format: 'Comics',
           issues_remaining: 5,
           queue_position: 2,
+          total_issues: 50,
+          last_rolled_result: null,
         },
-      },
-      refetch: vi.fn(),
-    })
+      snoozed_threads: [],
+      snoozed_count: 0,
+      roll_pool: [{ id: 1, title: 'Saga', format: 'Comics' }],
+      blocked_count: 0,
+      blocked_threads: [],
+      stale_thread_count: 0,
+      stale_thread: null
+    }))
 
     render(<RollPage />)
 
@@ -1045,32 +1059,35 @@ describe('Rating View', () => {
 
   it('cancels pending roll through dismiss mutation', async () => {
     const dismissSpy = vi.fn().mockResolvedValue({})
-    const refetchSessionSpy = vi.fn().mockResolvedValue({})
+    const refetchBootstrapSpy = vi.fn().mockResolvedValue({})
 
     mockedUseDismissPending.mockReturnValue({ mutate: dismissSpy, isPending: false })
-    mockedUseSession.mockReturnValue({
-      data: {
-        current_die: 6,
-        last_rolled_result: 2,
-        pending_thread_id: 1,
-        manual_die: null,
-        active_thread: {
+    mockedUseRollBootstrap.mockReturnValue(makeBootstrapData({
+      current_die: 6,
+      last_rolled_result: 2,
+      pending_thread_id: 1,
+      manual_die: null,
+      active_thread: {
           id: 1,
           title: 'Saga',
           format: 'Comics',
           issues_remaining: 5,
           queue_position: 1,
+          total_issues: 50,
+          last_rolled_result: null,
         },
-      },
-      refetch: refetchSessionSpy,
-    })
-    mockedUseThreads.mockReturnValue({
-      data: [
-        { id: 1, title: 'Saga', format: 'Comics', status: 'active', queue_position: 1 },
-        { id: 2, title: 'X-Men', format: 'Comics', status: 'active', queue_position: 2 },
-      ],
-      refetch: vi.fn(),
-    })
+      snoozed_threads: [],
+      snoozed_count: 0,
+      roll_pool: [
+          { id: 1, title: 'Saga', format: 'Comics' },
+          { id: 2, title: 'X-Men', format: 'Comics' },
+        ],
+      blocked_count: 0,
+      blocked_threads: [],
+      stale_thread_count: 0,
+      stale_thread: null,
+      refetch: refetchBootstrapSpy
+    }))
 
     const user = userEvent.setup()
     render(<RollPage />)
@@ -1083,27 +1100,26 @@ describe('Rating View', () => {
 
     await waitFor(() => {
       expect(dismissSpy).toHaveBeenCalled()
-      expect(refetchSessionSpy).toHaveBeenCalled()
+      expect(refetchBootstrapSpy).toHaveBeenCalled()
     })
   })
 
   describe('Empty state', () => {
     it('shows empty state with "Nothing to roll yet" when no threads exist', async () => {
-      mockedUseSession.mockReturnValue({
-        data: {
-          current_die: 6,
-          last_rolled_result: null,
-          manual_die: null,
-          has_restore_point: false,
-          snoozed_threads: [],
-        },
-        refetch: vi.fn(),
-      })
-      mockedUseThreads.mockReturnValue({
-        data: [],
-        refetch: vi.fn(),
-      })
-      mockedUseStaleThreads.mockReturnValue({ data: [], refetch: vi.fn().mockResolvedValue(undefined) })
+      mockedUseRollBootstrap.mockReturnValue(makeBootstrapData({
+      current_die: 6,
+      last_rolled_result: null,
+      manual_die: null,
+      pending_thread_id: null,
+      active_thread: null,
+      snoozed_threads: [],
+      snoozed_count: 0,
+      roll_pool: [],
+      blocked_count: 0,
+      blocked_threads: [],
+      stale_thread_count: 0,
+      stale_thread: null
+      }))
 
       render(<RollPage />)
 
@@ -1116,23 +1132,22 @@ describe('Rating View', () => {
     })
 
     it('shows "All threads are blocked or snoozed" when threads exist but all blocked', async () => {
-      mockedUseSession.mockReturnValue({
-        data: {
-          current_die: 6,
-          last_rolled_result: null,
-          manual_die: null,
-          has_restore_point: false,
-          snoozed_threads: [],
-        },
-        refetch: vi.fn(),
-      })
-      mockedUseThreads.mockReturnValue({
-        data: [
-          { id: 1, title: 'Saga', format: 'Comics', status: 'active', is_blocked: true },
-        ],
-        refetch: vi.fn(),
-      })
-      mockedUseStaleThreads.mockReturnValue({ data: [], refetch: vi.fn().mockResolvedValue(undefined) })
+      mockedUseRollBootstrap.mockReturnValue(makeBootstrapData({
+      current_die: 6,
+      last_rolled_result: null,
+      manual_die: null,
+      pending_thread_id: null,
+      active_thread: null,
+      snoozed_threads: [],
+      snoozed_count: 0,
+      roll_pool: [],
+      blocked_count: 1,
+      blocked_threads: [
+            { id: 1, title: 'Saga', format: 'Comics' },
+          ],
+      stale_thread_count: 0,
+      stale_thread: null
+      }))
 
       render(<RollPage />)
 
@@ -1144,24 +1159,23 @@ describe('Rating View', () => {
     })
 
     it('shows "All threads are blocked or snoozed" when threads exist but all snoozed', async () => {
-      mockedUseSession.mockReturnValue({
-        data: {
-          current_die: 6,
-          last_rolled_result: null,
-          manual_die: null,
-          has_restore_point: false,
-          snoozed_threads: [
+      mockedUseRollBootstrap.mockReturnValue(makeBootstrapData({
+      current_die: 6,
+      last_rolled_result: null,
+      manual_die: null,
+      pending_thread_id: null,
+      active_thread: null,
+      snoozed_threads: [
             { id: 1, title: 'Saga', format: 'Comics' },
             { id: 2, title: 'X-Men', format: 'Comics' },
           ],
-        },
-        refetch: vi.fn(),
-      })
-      mockedUseThreads.mockReturnValue({
-        data: [],
-        refetch: vi.fn(),
-      })
-      mockedUseStaleThreads.mockReturnValue({ data: [], refetch: vi.fn().mockResolvedValue(undefined) })
+      snoozed_count: 2,
+      roll_pool: [],
+      blocked_count: 0,
+      blocked_threads: [],
+      stale_thread_count: 0,
+      stale_thread: null
+      }))
 
       render(<RollPage />)
 
@@ -1173,21 +1187,20 @@ describe('Rating View', () => {
     })
 
     it('navigates to queue with openCreate when clicking "Add a Thread"', async () => {
-      mockedUseSession.mockReturnValue({
-        data: {
-          current_die: 6,
-          last_rolled_result: null,
-          manual_die: null,
-          has_restore_point: false,
-          snoozed_threads: [],
-        },
-        refetch: vi.fn(),
-      })
-      mockedUseThreads.mockReturnValue({
-        data: [],
-        refetch: vi.fn(),
-      })
-      mockedUseStaleThreads.mockReturnValue({ data: [], refetch: vi.fn().mockResolvedValue(undefined) })
+      mockedUseRollBootstrap.mockReturnValue(makeBootstrapData({
+      current_die: 6,
+      last_rolled_result: null,
+      manual_die: null,
+      pending_thread_id: null,
+      active_thread: null,
+      snoozed_threads: [],
+      snoozed_count: 0,
+      roll_pool: [],
+      blocked_count: 0,
+      blocked_threads: [],
+      stale_thread_count: 0,
+      stale_thread: null
+      }))
 
       const user = userEvent.setup()
       render(<RollPage />)
@@ -1202,23 +1215,22 @@ describe('Rating View', () => {
     })
 
     it('navigates to queue when clicking "Go to Queue" in blocked/snoozed state', async () => {
-      mockedUseSession.mockReturnValue({
-        data: {
-          current_die: 6,
-          last_rolled_result: null,
-          manual_die: null,
-          has_restore_point: false,
-          snoozed_threads: [
+      mockedUseRollBootstrap.mockReturnValue(makeBootstrapData({
+      current_die: 6,
+      last_rolled_result: null,
+      manual_die: null,
+      pending_thread_id: null,
+      active_thread: null,
+      snoozed_threads: [
             { id: 1, title: 'Saga', format: 'Comics' },
           ],
-        },
-        refetch: vi.fn(),
-      })
-      mockedUseThreads.mockReturnValue({
-        data: [],
-        refetch: vi.fn(),
-      })
-      mockedUseStaleThreads.mockReturnValue({ data: [], refetch: vi.fn().mockResolvedValue(undefined) })
+      snoozed_count: 1,
+      roll_pool: [],
+      blocked_count: 0,
+      blocked_threads: [],
+      stale_thread_count: 0,
+      stale_thread: null
+      }))
 
       const user = userEvent.setup()
       render(<RollPage />)
@@ -1243,26 +1255,21 @@ describe('Rating View', () => {
 
       const mockRefetchBootstrap = vi.fn().mockResolvedValue({})
 
-      mockedUseRollBootstrap.mockReturnValue({
-        data: {
-          current_die: 6,
-          last_rolled_result: null,
-          manual_die: null,
-          pending_thread_id: 1,
-          active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1, total_issues: 50, last_rolled_result: null },
-          snoozed_threads: [],
-          snoozed_count: 0,
-          roll_pool: [{ id: 1, title: 'Saga', format: 'Comics' }],
-          blocked_count: 0,
-          blocked_threads: [],
-          stale_thread_count: 0,
-          stale_thread: null,
-        },
-        refetch: mockRefetchBootstrap,
-        isPending: false,
-        isError: false,
-        error: null,
-      })
+      mockedUseRollBootstrap.mockReturnValue(makeBootstrapData({
+      current_die: 6,
+      last_rolled_result: null,
+      manual_die: null,
+      pending_thread_id: 1,
+      active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1, total_issues: 50, last_rolled_result: null },
+      snoozed_threads: [],
+      snoozed_count: 0,
+      roll_pool: [{ id: 1, title: 'Saga', format: 'Comics' }],
+      blocked_count: 0,
+      blocked_threads: [],
+      stale_thread_count: 0,
+      stale_thread: null,
+      refetch: mockRefetchBootstrap
+      }))
 
       const user = userEvent.setup()
       render(<RollPage />)
@@ -1284,26 +1291,21 @@ describe('Rating View', () => {
 
       const mockRefetchBootstrap = vi.fn().mockResolvedValue({})
 
-      mockedUseRollBootstrap.mockReturnValue({
-        data: {
-          current_die: 6,
-          last_rolled_result: 3,
-          manual_die: null,
-          pending_thread_id: 1,
-          active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1, total_issues: 50, last_rolled_result: null },
-          snoozed_threads: [],
-          snoozed_count: 0,
-          roll_pool: [{ id: 1, title: 'Saga', format: 'Comics' }],
-          blocked_count: 0,
-          blocked_threads: [],
-          stale_thread_count: 0,
-          stale_thread: null,
-        },
-        refetch: mockRefetchBootstrap,
-        isPending: false,
-        isError: false,
-        error: null,
-      })
+      mockedUseRollBootstrap.mockReturnValue(makeBootstrapData({
+      current_die: 6,
+      last_rolled_result: 3,
+      manual_die: null,
+      pending_thread_id: 1,
+      active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1, total_issues: 50, last_rolled_result: null },
+      snoozed_threads: [],
+      snoozed_count: 0,
+      roll_pool: [{ id: 1, title: 'Saga', format: 'Comics' }],
+      blocked_count: 0,
+      blocked_threads: [],
+      stale_thread_count: 0,
+      stale_thread: null,
+      refetch: mockRefetchBootstrap
+      }))
 
       const user = userEvent.setup()
       render(<RollPage />)
@@ -1326,29 +1328,24 @@ describe('Rating View', () => {
 
       const mockRefetchBootstrap = vi.fn().mockResolvedValue({})
 
-      mockedUseRollBootstrap.mockReturnValue({
-        data: {
-          current_die: 6,
-          last_rolled_result: 2,
-          manual_die: null,
-          pending_thread_id: 1,
-          active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1, total_issues: 50, last_rolled_result: null },
-          snoozed_threads: [],
-          snoozed_count: 0,
-          roll_pool: [
+      mockedUseRollBootstrap.mockReturnValue(makeBootstrapData({
+      current_die: 6,
+      last_rolled_result: 2,
+      manual_die: null,
+      pending_thread_id: 1,
+      active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1, total_issues: 50, last_rolled_result: null },
+      snoozed_threads: [],
+      snoozed_count: 0,
+      roll_pool: [
             { id: 1, title: 'Saga', format: 'Comics' },
             { id: 2, title: 'X-Men', format: 'Comics' },
           ],
-          blocked_count: 0,
-          blocked_threads: [],
-          stale_thread_count: 0,
-          stale_thread: null,
-        },
-        refetch: mockRefetchBootstrap,
-        isPending: false,
-        isError: false,
-        error: null,
-      })
+      blocked_count: 0,
+      blocked_threads: [],
+      stale_thread_count: 0,
+      stale_thread: null,
+      refetch: mockRefetchBootstrap
+      }))
 
       const user = userEvent.setup()
       render(<RollPage />)
@@ -1363,8 +1360,6 @@ describe('Rating View', () => {
         expect(dismissSpy).toHaveBeenCalled()
         expect(mockRefetchBootstrap).toHaveBeenCalled()
       })
-      expect(mockRefetchThreads).not.toHaveBeenCalled()
-      expect(mockRefetchStale).not.toHaveBeenCalled()
     })
   })
 })
