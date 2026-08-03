@@ -54,7 +54,7 @@ vi.mock('../services/api', async (importOriginal) => {
   return {
     ...actual,
     threadsApi: {
-      list: vi.fn().mockResolvedValue({ threads: [] }),
+      list: vi.fn().mockResolvedValue({ threads: [], next_page_token: null }),
       setPending: vi.fn(),
     },
     dependenciesApi: {
@@ -88,7 +88,7 @@ const bootstrap = {
 }
 
 beforeEach(() => {
-  navigateSpy.mockReset()
+  vi.clearAllMocks()
   mockedUseRollBootstrap.mockReturnValue({
     data: bootstrap,
     refetch: vi.fn().mockResolvedValue(bootstrap),
@@ -138,19 +138,28 @@ it('opens the retained thread action sheet from a bootstrap pool item', async ()
   expect(screen.getByText('Edit Thread')).toBeInTheDocument()
 })
 
-it('loads full thread choices only after the Override modal opens', async () => {
+it('loads every active override page only after the modal opens', async () => {
   const user = userEvent.setup()
-  vi.mocked(threadsApi.list).mockResolvedValueOnce({
-    threads: [{ id: 9, title: 'Override Choice', format: 'Comic', status: 'active' }],
-  } as any)
+  vi.mocked(threadsApi.list)
+    .mockResolvedValueOnce({
+      threads: [{ id: 9, title: 'First Choice', format: 'Comic', status: 'active' }],
+      next_page_token: 'page-2',
+    } as any)
+    .mockResolvedValueOnce({
+      threads: [{ id: 10, title: 'Second Choice', format: 'Comic', status: 'active' }],
+      next_page_token: null,
+    } as any)
 
   render(<RollPage />)
   expect(threadsApi.list).not.toHaveBeenCalled()
 
   await user.click(screen.getByRole('button', { name: /override/i }))
 
-  await waitFor(() => expect(threadsApi.list).toHaveBeenCalledWith({ page_size: 200 }))
-  expect(await screen.findByRole('option', { name: 'Override Choice (Comic)' })).toBeInTheDocument()
+  await waitFor(() => expect(threadsApi.list).toHaveBeenCalledTimes(2))
+  expect(threadsApi.list).toHaveBeenNthCalledWith(1, { page_size: 200 }, undefined)
+  expect(threadsApi.list).toHaveBeenNthCalledWith(2, { page_size: 200 }, 'page-2')
+  expect(await screen.findByRole('option', { name: 'First Choice (Comic)' })).toBeInTheDocument()
+  expect(await screen.findByRole('option', { name: 'Second Choice (Comic)' })).toBeInTheDocument()
 })
 
 it('shows a retry action when bootstrap loading fails', async () => {
