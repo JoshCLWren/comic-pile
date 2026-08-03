@@ -138,7 +138,6 @@ async def _restore_thread_from_state(
             last_rating=state.get("last_rating"),
             queue_position=state.get("queue_position", 1),
             status=state.get("status", "active"),
-            review_url=state.get("review_url"),
             notes=state.get("notes"),
             is_test=state.get("is_test", False),
             is_blocked=state.get("is_blocked", False),
@@ -147,7 +146,6 @@ async def _restore_thread_from_state(
             or datetime.now(UTC),
         )
         thread.last_activity_at = _deserialize_datetime(state.get("last_activity_at"))
-        thread.last_review_at = _deserialize_datetime(state.get("last_review_at"))
         db.add(thread)
         await db.flush()
     else:
@@ -163,8 +161,6 @@ async def _restore_thread_from_state(
             thread.queue_position = state["queue_position"]
         if "status" in state:
             thread.status = state["status"]
-        if "review_url" in state:
-            thread.review_url = state["review_url"]
         if "notes" in state:
             thread.notes = state["notes"]
         if "is_test" in state:
@@ -173,8 +169,6 @@ async def _restore_thread_from_state(
             thread.is_blocked = state["is_blocked"]
         if "last_activity_at" in state:
             thread.last_activity_at = _deserialize_datetime(state["last_activity_at"])
-        if "last_review_at" in state:
-            thread.last_review_at = _deserialize_datetime(state["last_review_at"])
 
     await _restore_issue_states(db, thread, state)
 

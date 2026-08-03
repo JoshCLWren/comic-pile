@@ -303,26 +303,6 @@ Thread 5,Comic,2"""
 
 
 @pytest.mark.asyncio
-async def test_import_reviews_invalid_thread_id(
-    client: AsyncClient, enable_internal_ops: None
-) -> None:
-    """Test POST /admin/import/reviews/ returns error for non-integer thread_id."""
-    _ = enable_internal_ops
-    csv_content = """thread_id,review_url,review_timestamp
-abc,https://example.com/review,2024-01-15T10:30:00"""
-    csv_file = io.BytesIO(csv_content.encode())
-    files = {"file": ("reviews.csv", csv_file, "text/csv")}
-
-    response = await client.post("/api/admin/import/reviews/", files=files)
-    assert response.status_code == 200
-
-    data = response.json()
-    assert data["imported"] == 0
-    assert len(data["errors"]) == 1
-    assert "must be an integer" in data["errors"][0]
-
-
-@pytest.mark.asyncio
 async def test_import_then_export_roundtrip(
     auth_client: AsyncClient, enable_internal_ops: None
 ) -> None:
@@ -361,56 +341,3 @@ Wonder Woman,Trade Paperback,3"""
     assert "Superman" in content
     assert "Batman" in content
     assert "Wonder Woman" in content
-
-
-@pytest.mark.asyncio
-async def test_import_reviews_invalid_timestamp(
-    client: AsyncClient, sample_data: dict, async_db: AsyncSession, enable_internal_ops: None
-) -> None:
-    """Test POST /admin/import/reviews/ returns error for invalid datetime format."""
-    _ = sample_data
-    _ = enable_internal_ops
-    result = await async_db.execute(select(Thread))
-    threads = result.scalars().all()
-    assert len(threads) >= 1
-
-    csv_content = f"""thread_id,review_url,review_timestamp
-{threads[0].id},https://example.com/review,invalid-date"""
-    csv_file = io.BytesIO(csv_content.encode())
-    files = {"file": ("reviews.csv", csv_file, "text/csv")}
-
-    response = await client.post("/api/admin/import/reviews/", files=files)
-    assert response.status_code == 200
-
-    data = response.json()
-    assert data["imported"] == 0
-    assert len(data["errors"]) == 1
-    assert "must be ISO format datetime" in data["errors"][0]
-
-
-@pytest.mark.asyncio
-async def test_import_reviews_non_csv_file(client: AsyncClient, enable_internal_ops: None) -> None:
-    """Test POST /admin/import/reviews/ returns error for non-CSV file."""
-    _ = enable_internal_ops
-    txt_content = "This is not a CSV file"
-    txt_file = io.BytesIO(txt_content.encode())
-    files = {"file": ("test.txt", txt_file, "text/plain")}
-
-    response = await client.post("/api/admin/import/reviews/", files=files)
-    assert response.status_code == 400
-
-
-@pytest.mark.asyncio
-async def test_import_reviews_empty_file(client: AsyncClient, enable_internal_ops: None) -> None:
-    """Test POST /admin/import/reviews/ handles empty CSV gracefully."""
-    _ = enable_internal_ops
-    csv_content = """thread_id,review_url,review_timestamp"""
-    csv_file = io.BytesIO(csv_content.encode())
-    files = {"file": ("reviews.csv", csv_file, "text/csv")}
-
-    response = await client.post("/api/admin/import/reviews/", files=files)
-    assert response.status_code == 200
-
-    data = response.json()
-    assert data["imported"] == 0
-    assert len(data["errors"]) == 0

@@ -84,10 +84,6 @@ async def create_session_start_snapshot(db: AsyncSession, session: Session) -> N
             else None,
             "queue_position": thread.queue_position,
             "status": thread.status,
-            "review_url": thread.review_url,
-            "last_review_at": thread.last_review_at.isoformat()
-            if thread.last_review_at
-            else None,
             "notes": thread.notes,
             "is_test": thread.is_test,
             "is_blocked": thread.is_blocked,

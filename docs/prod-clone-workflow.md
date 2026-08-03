@@ -41,7 +41,7 @@ python -m scripts.clone_prod_to_local export \
 
 The output is a private (`0600`) JSON file. It contains user-scoped
 threads, issues, dependencies, reading orders, sessions, events,
-snapshots, and reviews. It does not contain `password_hash`, revoked tokens,
+and snapshots. It does not contain `password_hash`, revoked tokens,
 failed-login records, or database credentials.
 
 ## Validate without writing
@@ -92,7 +92,7 @@ production password to work.
 2. Keep export and pre-import backup files private; do not commit them.
 3. Run `--dry-run` against the intended local database.
 4. Keep the pre-import backup until the clone has been verified.
-5. Confirm thread counts, reading orders, sessions, and reviews in the local UI.
+5. Confirm thread counts, reading orders, and sessions in the local UI.
 
 The command never mutates production. It only reads production during export;
 the import connects to the local database URL supplied by configuration or

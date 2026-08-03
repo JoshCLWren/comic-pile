@@ -35,7 +35,7 @@ async def clone_user():
 
             await db.execute(
                 text(
-                    "INSERT INTO threads (title, format, issues_remaining, queue_position, status, last_rating, last_activity_at, review_url, last_review_at, notes, is_test, user_id, created_at) SELECT title, format, issues_remaining, queue_position, status, last_rating, last_activity_at, review_url, last_review_at, notes, True, :uid, NOW() FROM threads WHERE user_id = :sid"
+                    "INSERT INTO threads (title, format, issues_remaining, queue_position, status, last_rating, last_activity_at, notes, is_test, user_id, created_at) SELECT title, format, issues_remaining, queue_position, status, last_rating, last_activity_at, notes, True, :uid, NOW() FROM threads WHERE user_id = :sid"
                 ),
                 {"uid": new_id, "sid": sid},
             )

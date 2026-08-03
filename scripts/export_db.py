@@ -47,8 +47,6 @@ async def export_database():
                     "status": t.status,
                     "last_rating": t.last_rating,
                     "last_activity_at": t.last_activity_at,
-                    "review_url": t.review_url,
-                    "last_review_at": t.last_review_at,
                     "created_at": t.created_at,
                     "user_id": t.user_id,
                 }

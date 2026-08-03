@@ -123,7 +123,7 @@ Important database-heavy paths include `app/api/session.py:get_current_session`,
 `app/api/rate.py:snapshot_thread_states`; broad admin exports; and dependency enrichment in
 `app/api/dependency.py`. Several paths use `.scalars().all()` over historical or export data.
 The repository has useful indexes on thread ownership/status/position, issue thread/position,
-event session/time, session user/time, reviews, dependencies, and snapshots.
+event session/time, session user/time, dependencies, and snapshots.
 
 Two Uvicorn workers create two independent SQLAlchemy engines and pools, allowing up to six
 database connections under the configured pool settings. Worker-count experiments therefore
@@ -132,7 +132,7 @@ also change database concurrency.
 Railway database persistence and topology are not provable from the repository. The app has
 no database volume; `docker-compose.prod.yml` only defines a local named PostgreSQL volume.
 Using production `DATABASE_URL` for writes can mutate real users, queues, sessions, events,
-reviews, and tokens. Use a cloned database/isolated Railway service for write tests. For read
+and tokens. Use a cloned database/isolated Railway service for write tests. For read
 tests, use a frozen benchmark user and GET-only routes.
 
 ## Endpoint candidates
@@ -155,7 +155,7 @@ Other recommended workloads:
 
 All registered route modules are under `app/api/`: auth, threads, queue, roll, rate,
 snooze, undo, sessions, analytics, admin exports/imports, bug reports, issues,
-dependencies, reading orders, reviews, debug, and test helpers. `app/main.py` also registers
+dependencies, reading orders, debug, and test helpers. `app/main.py` also registers
 `/api/v1/sessions/*` as an alias for `/api/sessions/*`.
 
 ## CPU candidates

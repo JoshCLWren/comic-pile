@@ -23,12 +23,10 @@ def _thread_state(thread: Thread, *, issues_remaining: int) -> dict:
         "last_rating": None,
         "queue_position": thread.queue_position,
         "status": "active",
-        "review_url": None,
         "notes": None,
         "is_test": False,
         "is_blocked": False,
         "last_activity_at": None,
-        "last_review_at": None,
     }
 
 

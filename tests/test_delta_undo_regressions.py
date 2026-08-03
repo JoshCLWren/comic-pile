@@ -7,7 +7,7 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Dependency, Event, Issue, Review, Snapshot, Thread, User
+from app.models import Dependency, Event, Issue, Snapshot, Thread, User
 from app.models import Session as SessionModel
 from app.services.snapshot_contract import (
     BLOCKED_CHANGES_KEY,
@@ -87,13 +87,6 @@ async def test_delta_undo_preserves_issue_associations_and_die(
         source_issue_id=issue_one.id,
         target_issue_id=issue_two.id,
     )
-    review = Review(
-        user_id=default_user.id,
-        thread_id=thread.id,
-        issue_id=issue_one.id,
-        rating=4.5,
-        review_text="Keep this attached.",
-    )
     roll_event = Event(
         type="roll",
         session_id=session.id,
@@ -102,10 +95,9 @@ async def test_delta_undo_preserves_issue_associations_and_die(
         die=6,
         result=1,
     )
-    async_db.add_all([dependency, review, roll_event])
+    async_db.add_all([dependency, roll_event])
     await async_db.commit()
     await async_db.refresh(dependency)
-    await async_db.refresh(review)
     await async_db.refresh(roll_event)
 
     rate_response = await auth_client.post(
@@ -136,9 +128,7 @@ async def test_delta_undo_preserves_issue_associations_and_die(
     assert restored_dependency.source_issue_id == issue_one.id
     assert restored_dependency.target_issue_id == issue_two.id
 
-    await async_db.refresh(review)
     await async_db.refresh(roll_event)
-    assert review.issue_id == issue_one.id
     assert roll_event.issue_id == issue_one.id
 
     event_types_result = await async_db.execute(

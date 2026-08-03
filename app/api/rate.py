@@ -55,8 +55,6 @@ async def _capture_thread_pre_state(thread: Thread, db: AsyncSession) -> dict:
         else None,
         "queue_position": thread.queue_position,
         "status": thread.status,
-        "review_url": thread.review_url,
-        "last_review_at": thread.last_review_at.isoformat() if thread.last_review_at else None,
         "notes": thread.notes,
         "is_test": thread.is_test,
         "created_at": thread.created_at.isoformat(),

@@ -388,8 +388,6 @@ The export file is JSON with all datetime fields converted to ISO format strings
       "status": "active",
       "last_rating": 4.5,
       "last_activity_at": "2026-01-01T22:31:46.619742",
-      "review_url": null,
-      "last_review_at": null,
       "created_at": "2026-01-02T02:26:51.737941",
       "user_id": 1
     }

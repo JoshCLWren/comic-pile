@@ -3,7 +3,7 @@
  *
  * A deliberate subset of Thread — the list endpoint does not return
  * detail-only fields like reading_progress, next_unread_issue_id,
- * last_rating, review_url, last_review_at, or is_test to reduce payload
+ * last_rating, or is_test to reduce payload
  * size for large lists.
  */
 export interface ThreadListItem {

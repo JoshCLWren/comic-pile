@@ -45,7 +45,6 @@ from app.models import (
     Issue,
     ReadingOrder,
     ReadingOrderItem,
-    Review,
     Session,
     Snapshot,
     Thread,
@@ -65,7 +64,6 @@ EXPORT_TABLES = [
     "sessions",
     "events",
     "snapshots",
-    "reviews",
 ]
 
 type JsonValue = None | bool | int | float | str | list[JsonValue] | dict[str, JsonValue]
@@ -104,8 +102,6 @@ class ExportThreadRecord(TypedDict, total=False):
     status: str
     last_rating: float | None
     last_activity_at: str | None
-    review_url: str | None
-    last_review_at: str | None
     notes: str | None
     is_test: bool
     is_blocked: bool
@@ -201,19 +197,6 @@ class ExportSnapshotRecord(TypedDict, total=False):
     description: str | None
 
 
-class ExportReviewRecord(TypedDict, total=False):
-    """Serialized review record for export."""
-
-    id: int
-    user_id: int
-    thread_id: int
-    issue_id: int
-    rating: float | None
-    review_text: str | None
-    created_at: str | None
-    updated_at: str | None
-
-
 class ExportDocument(TypedDict):
     """Top-level versioned export document."""
 
@@ -230,7 +213,6 @@ class ExportDocument(TypedDict):
     sessions: list[ExportSessionRecord]
     events: list[ExportEventRecord]
     snapshots: list[ExportSnapshotRecord]
-    reviews: list[ExportReviewRecord]
 
 
 type ExportRecord = (
@@ -242,7 +224,6 @@ type ExportRecord = (
     | ExportSessionRecord
     | ExportEventRecord
     | ExportSnapshotRecord
-    | ExportReviewRecord
 )
 
 
@@ -338,8 +319,6 @@ def _export_thread(thread: Thread) -> ExportThreadRecord:
         "status": thread.status,
         "last_rating": thread.last_rating,
         "last_activity_at": _datetime_to_iso(thread.last_activity_at),
-        "review_url": thread.review_url,
-        "last_review_at": _datetime_to_iso(thread.last_review_at),
         "notes": thread.notes,
         "is_test": thread.is_test,
         "is_blocked": thread.is_blocked,
@@ -436,19 +415,6 @@ def _export_snapshot(snapshot: Snapshot) -> ExportSnapshotRecord:
     })
 
 
-def _export_review(review: Review) -> ExportReviewRecord:
-    return ExportReviewRecord(**{
-        "id": review.id,
-        "user_id": review.user_id,
-        "thread_id": review.thread_id,
-        "issue_id": review.issue_id,
-        "rating": review.rating,
-        "review_text": review.review_text,
-        "created_at": _datetime_to_iso(review.created_at),
-        "updated_at": _datetime_to_iso(review.updated_at),
-    })
-
-
 def _records_for_table(export: ExportDocument, table: str) -> list[ExportRecord]:
     """Return typed records for a non-user export table."""
     records: object
@@ -469,8 +435,6 @@ def _records_for_table(export: ExportDocument, table: str) -> list[ExportRecord]
             records = export["events"]
         case "snapshots":
             records = export["snapshots"]
-        case "reviews":
-            records = export["reviews"]
         case _:
             raise ValueError(f"Unsupported export table {table!r}")
     return cast(list[ExportRecord], records)
@@ -519,7 +483,6 @@ async def _export_via_db(db_url: str, username: str) -> ExportDocument:
             "sessions": [],
             "events": [],
             "snapshots": [],
-            "reviews": [],
         }
 
         result = await db.execute(
@@ -586,11 +549,6 @@ async def _export_via_db(db_url: str, username: str) -> ExportDocument:
             )
             export["snapshots"] = [_export_snapshot(snap) for snap in result.scalars().all()]
 
-        result = await db.execute(
-            select(Review).where(Review.user_id == user_id).order_by(Review.id)
-        )
-        export["reviews"] = [_export_review(r) for r in result.scalars().all()]
-
     await engine.dispose()
     return export
 
@@ -654,11 +612,6 @@ def _validate_export(export: ExportDocument) -> None:
             ("issue_id", "issues"),
         ],
         "snapshots": [("session_id", "sessions"), ("event_id", "events")],
-        "reviews": [
-            ("user_id", "user"),
-            ("thread_id", "threads"),
-            ("issue_id", "issues"),
-        ],
     }
     for table, fields in checks.items():
         for record in _records_for_table(export, table):
@@ -694,7 +647,6 @@ async def _delete_local_user_data(db: AsyncSession, user_id: int) -> None:
     order_ids = select(ReadingOrder.id).where(ReadingOrder.user_id == user_id)
     await db.execute(delete(Snapshot).where(Snapshot.session_id.in_(session_ids)))
     await db.execute(delete(Event).where(Event.session_id.in_(session_ids)))
-    await db.execute(delete(Review).where(Review.user_id == user_id))
     await db.execute(delete(ReadingOrderItem).where(ReadingOrderItem.reading_order_id.in_(order_ids)))
     await db.execute(delete(ReadingOrder).where(ReadingOrder.user_id == user_id))
     await db.execute(delete(Dependency).where(
@@ -717,7 +669,6 @@ async def _sync_id_sequences(db: AsyncSession) -> None:
         "sessions",
         "events",
         "snapshots",
-        "reviews",
     )
     for table in tables:
         await db.execute(
@@ -800,8 +751,7 @@ async def _import_document(
                         total_issues=record.get("total_issues"), next_unread_issue_id=None,
                         reading_progress=record.get("reading_progress"), queue_position=record.get("queue_position", 0),
                         status=record.get("status", "active"), last_rating=record.get("last_rating"),
-                        last_activity_at=_parse_datetime(record.get("last_activity_at")), review_url=record.get("review_url"),
-                        last_review_at=_parse_datetime(record.get("last_review_at")), notes=record.get("notes"),
+                        last_activity_at=_parse_datetime(record.get("last_activity_at")), notes=record.get("notes"),
                         is_test=record.get("is_test", False), is_blocked=record.get("is_blocked", False),
                         created_at=_parse_datetime(record.get("created_at")) or datetime.now(UTC),
                         user_id=local_user.id,
@@ -881,12 +831,6 @@ async def _import_document(
                         session_id=session_map[record["session_id"]], event_id=_remap(record.get("event_id"), event_map),
                         thread_states=record.get("thread_states", {}), session_state=record.get("session_state"),
                         created_at=_parse_datetime(record.get("created_at")) or datetime.now(UTC), description=record.get("description"),
-                    ))
-                for record in export["reviews"]:
-                    db.add(Review(
-                        user_id=local_user.id, thread_id=thread_map[record["thread_id"]], issue_id=_remap(record.get("issue_id"), issue_map),
-                        rating=record["rating"], review_text=record.get("review_text"), created_at=_parse_datetime(record.get("created_at")) or datetime.now(UTC),
-                        updated_at=_parse_datetime(record.get("updated_at")) or datetime.now(UTC),
                     ))
                 await db.flush()
 

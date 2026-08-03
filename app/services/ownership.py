@@ -3,9 +3,8 @@
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from app.models import Issue, Review, Session as SessionModel, Thread
+from app.models import Issue, Session as SessionModel, Thread
 
 
 async def get_owned_thread_or_404(
@@ -43,27 +42,6 @@ async def get_owned_issue_or_404(db: AsyncSession, user_id: int, issue_id: int) 
             detail=f"Issue {issue_id} not found",
         )
     return issue
-
-
-async def get_owned_review_or_404(
-    db: AsyncSession,
-    user_id: int,
-    review_id: int,
-    *,
-    include_relations: bool = False,
-) -> Review:
-    """Fetch a review by ID only if it belongs to the user."""
-    query = select(Review).where(Review.id == review_id, Review.user_id == user_id)
-    if include_relations:
-        query = query.options(selectinload(Review.thread), selectinload(Review.issue))
-    result = await db.execute(query)
-    review = result.scalar_one_or_none()
-    if review is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Review {review_id} not found",
-        )
-    return review
 
 
 async def get_owned_session_or_404(db: AsyncSession, user_id: int, session_id: int) -> SessionModel:
