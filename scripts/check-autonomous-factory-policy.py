@@ -48,7 +48,7 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "comic-pile-factory-implement-progress-v3",
         "comic-pile-factory-review-claim-v2",
         "comic-pile-factory-review-v2:<sha>:pass",
-        "comic-pile-factory-review-v2:<sha>:changes-required",
+        "changes-required",
         "comic-pile-factory-fix-claim-v3",
         "comic-pile-factory-fix-progress-v3",
         "comic-pile-factory-ready-v2",
