@@ -1,17 +1,15 @@
-import { expect, test, vi, beforeEach, describe } from 'vitest'
+import { expect, test, vi, beforeEach, describe, afterEach } from 'vitest'
 import { render, screen, waitFor, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { useEffect } from 'react'
 import type { AuthContextValue } from '../App'
 
-// Create mock function for API get
 const mockApiGet = vi.fn()
 const mockCollectionsList = vi.fn()
 const mockSetAccessToken = vi.fn()
 const mockClearAccessToken = vi.fn()
 const mockGetAccessToken = vi.fn<() => string | null>(() => 'test-token')
 
-// Mock the API module with a factory that doesn't reference outer scope
 vi.mock('../services/api', () => {
   return {
     default: {
@@ -42,7 +40,6 @@ vi.mock('../pages/RatePage', () => ({ default: () => <div data-testid="rate-page
 vi.mock('../pages/QueuePage', () => ({ default: () => <div data-testid="queue-page">Queue</div> }))
 vi.mock('../pages/HistoryPage', () => ({ default: () => <div data-testid="history-page">History</div> }))
 vi.mock('../pages/SessionPage', () => ({ default: () => <div data-testid="session-page">Session</div> }))
-vi.mock('../pages/AnalyticsPage', () => ({ default: () => <div data-testid="analytics-page">Analytics</div> }))
 vi.mock('../pages/ThreadDetailView', () => ({ default: () => <div data-testid="thread-detail-page">Thread detail</div> }))
 vi.mock('../pages/HelpPage', () => ({ default: () => <div data-testid="help-page">Help</div> }))
 
@@ -73,7 +70,7 @@ const renderWithAuth = (initialEntry = '/') => {
   )
 }
 
-test('renders navigation labels', async () => {
+test('renders retained navigation labels', async () => {
   mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
   renderWithAuth('/')
 
@@ -82,7 +79,7 @@ test('renders navigation labels', async () => {
   })
   expect(screen.getByRole('link', { name: /queue page/i })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /history page/i })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /analytics page/i })).toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: /analytics page/i })).not.toBeInTheDocument()
 })
 
 test('throws when the auth hook is used outside its provider', () => {
@@ -145,13 +142,12 @@ test('ignores an auth failure that arrives after the provider unmounts', async (
   })
 })
 
-test('loads each authenticated lazy route', async () => {
+test('loads each retained authenticated lazy route', async () => {
   mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
   const routes = {
     '/queue': 'queue-page',
     '/history': 'history-page',
     '/sessions/1': 'session-page',
-    '/analytics': 'analytics-page',
     '/help': 'help-page',
     '/thread/1': 'thread-detail-page',
   }
@@ -160,6 +156,14 @@ test('loads each authenticated lazy route', async () => {
     await waitFor(() => expect(screen.getByTestId(testId)).toBeInTheDocument())
     unmount()
   }
+})
+
+test('redirects the retired analytics route to Roll', async () => {
+  mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
+  renderWithAuth('/analytics')
+
+  await waitFor(() => expect(screen.getByTestId('roll-page')).toBeInTheDocument())
+  expect(screen.queryByText('Analytics')).not.toBeInTheDocument()
 })
 
 test('broadcasts logout events and closes the auth channel', async () => {
