@@ -18,54 +18,61 @@ const thread: Thread = {
 }
 
 const issues: Issue[] = [
-  {
-    id: 10,
-    thread_id: 7,
-    issue_number: '1',
-    status: 'read',
-    read_at: '2026-08-01T00:00:00Z',
-    created_at: '2026-07-01T00:00:00Z',
-  },
-  {
-    id: 11,
-    thread_id: 7,
-    issue_number: '2',
-    status: 'unread',
-    read_at: null,
-    created_at: '2026-07-02T00:00:00Z',
-  },
-  {
-    id: 12,
-    thread_id: 7,
-    issue_number: '3',
-    status: 'unread',
-    read_at: null,
-    created_at: '2026-07-03T00:00:00Z',
-  },
+  { id: 10, thread_id: 7, issue_number: '1', status: 'read', read_at: '2026-08-01T00:00:00Z', created_at: '2026-07-01T00:00:00Z' },
+  { id: 11, thread_id: 7, issue_number: '2', status: 'unread', read_at: null, created_at: '2026-07-02T00:00:00Z' },
+  { id: 12, thread_id: 7, issue_number: '3', status: 'unread', read_at: null, created_at: '2026-07-03T00:00:00Z' },
 ]
 
 describe('applyIssueReadStatus', () => {
-  it('marks a visible issue read and advances the thread summary', () => {
-    const result = applyIssueReadStatus({ issues, thread }, 11, 'read')
+  it('uses authoritative thread metadata when marking a visible issue read', () => {
+    const result = applyIssueReadStatus({ issues, thread }, 11, {
+      status: 'read',
+      read_at: '2026-08-03T17:30:00Z',
+      issues_remaining: 1,
+      next_unread_issue_id: 99,
+      next_unread_issue_number: '25',
+    })
 
-    expect(result.issues.map((issue) => issue.status)).toEqual(['read', 'read', 'unread'])
-    expect(result.thread.issues_remaining).toBe(1)
-    expect(result.thread.next_unread_issue_id).toBe(12)
-    expect(result.thread.next_unread_issue_number).toBe('3')
+    expect(result.issues[1]).toMatchObject({ status: 'read', read_at: '2026-08-03T17:30:00Z' })
+    expect(result.thread).toMatchObject({
+      issues_remaining: 1,
+      next_unread_issue_id: 99,
+      next_unread_issue_number: '25',
+    })
   })
 
-  it('marks a visible issue unread and restores it as next unread', () => {
-    const result = applyIssueReadStatus({ issues, thread }, 10, 'unread')
+  it('clears read_at when marking a visible issue unread', () => {
+    const result = applyIssueReadStatus({ issues, thread }, 10, {
+      status: 'unread',
+      read_at: null,
+      issues_remaining: 3,
+      next_unread_issue_id: 10,
+      next_unread_issue_number: '1',
+    })
 
-    expect(result.issues[0]?.status).toBe('unread')
+    expect(result.issues[0]).toMatchObject({ status: 'unread', read_at: null })
     expect(result.thread.issues_remaining).toBe(3)
-    expect(result.thread.next_unread_issue_id).toBe(10)
-    expect(result.thread.next_unread_issue_number).toBe('1')
   })
 
-  it('returns the original snapshot when the requested status is already applied', () => {
+  it('returns the original snapshot when the authoritative result is already applied', () => {
     const snapshot = { issues, thread }
+    expect(applyIssueReadStatus(snapshot, 11, {
+      status: 'unread',
+      read_at: null,
+      issues_remaining: 2,
+      next_unread_issue_id: 11,
+      next_unread_issue_number: '2',
+    })).toBe(snapshot)
+  })
 
-    expect(applyIssueReadStatus(snapshot, 11, 'unread')).toBe(snapshot)
+  it('returns the original snapshot when the issue is not visible', () => {
+    const snapshot = { issues, thread }
+    expect(applyIssueReadStatus(snapshot, 999, {
+      status: 'read',
+      read_at: '2026-08-03T17:30:00Z',
+      issues_remaining: 1,
+      next_unread_issue_id: 12,
+      next_unread_issue_number: '3',
+    })).toBe(snapshot)
   })
 })
