@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Modal from '../components/Modal'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -16,6 +16,7 @@ export default function ThreadDetailView() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const updateMutation = useUpdateThread()
+  const activeThreadIdRef = useRef<number | null>(null)
 
   const [thread, setThread] = useState<Thread | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -31,20 +32,36 @@ export default function ThreadDetailView() {
   const [issuesTotal, setIssuesTotal] = useState(0)
 
   useEffect(() => {
+    const threadId = id ? Number(id) : null
+    activeThreadIdRef.current = threadId
+    setThread(null)
+    setError(null)
+    setIssues([])
+    setIssuesExpanded(false)
+    setIssuesLoading(false)
+    setIssuesError(null)
+    setIssuesLoaded(false)
+    setNextPageToken(null)
+    setIssuesTotal(0)
+
     async function fetchThread() {
-      if (!id) {
+      if (threadId === null) {
         setIsLoading(false)
         return
       }
 
       try {
         setIsLoading(true)
-        const threadData = await threadsApi.get(Number(id))
+        const threadData = await threadsApi.get(threadId)
+        if (activeThreadIdRef.current !== threadId) return
         setThread(threadData)
       } catch (err: unknown) {
+        if (activeThreadIdRef.current !== threadId) return
         setError(getApiErrorDetail(err))
       } finally {
-        setIsLoading(false)
+        if (activeThreadIdRef.current === threadId) {
+          setIsLoading(false)
+        }
       }
     }
 
@@ -59,14 +76,18 @@ export default function ThreadDetailView() {
         page_size: 100,
         ...(pageToken ? { page_token: pageToken } : {}),
       })
+      if (activeThreadIdRef.current !== threadId) return
       setIssues((prev) => (pageToken ? [...prev, ...data.issues] : data.issues))
       setNextPageToken(data.next_page_token)
       setIssuesTotal(data.total_count)
       setIssuesLoaded(true)
     } catch {
+      if (activeThreadIdRef.current !== threadId) return
       setIssuesError('Failed to load issues')
     } finally {
-      setIssuesLoading(false)
+      if (activeThreadIdRef.current === threadId) {
+        setIssuesLoading(false)
+      }
     }
   }
 
