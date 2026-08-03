@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.api import roll as roll_api
+from app.schemas import RollBootstrapResponse, RollBootstrapThread
 
 
 class _Result:
@@ -74,3 +75,32 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
             "last_activity_at": None,
         }
     ]
+
+
+def test_bootstrap_schema_bounds_summary_lists_without_losing_counts():
+    """Keep the HTTP payload bounded while preserving complete summary counts."""
+    summaries = [
+        RollBootstrapThread(id=index, title=f"Thread {index}", format="ongoing")
+        for index in range(1, 26)
+    ]
+
+    response = RollBootstrapResponse(
+        current_die=100,
+        manual_die=None,
+        pending_thread_id=None,
+        last_rolled_result=None,
+        active_thread=None,
+        roll_pool=summaries,
+        snoozed_threads=summaries,
+        snoozed_count=len(summaries),
+        blocked_count=len(summaries),
+        blocked_threads=summaries,
+        stale_thread_count=0,
+        stale_thread=None,
+    )
+
+    assert len(response.roll_pool) == 25
+    assert len(response.snoozed_threads) == response.summary_limit
+    assert len(response.blocked_threads) == response.summary_limit
+    assert response.snoozed_count == 25
+    assert response.blocked_count == 25
