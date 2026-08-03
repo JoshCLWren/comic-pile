@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import type { RollBootstrapThread } from '../../types'
+import type { RollBootstrapThread } from '../../types/rollBootstrap'
 import type { RatingThread } from './types'
 
 export interface RollPageState {
