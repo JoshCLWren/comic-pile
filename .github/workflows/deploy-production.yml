@@ -113,6 +113,58 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: bash .github/scripts/prune-oldest-vcr-image.sh
 
+      - name: Set up Python and runtime dependencies
+        uses: astral-sh/setup-uv@v9
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Install locked runtime dependencies
+        run: uv sync --locked --no-dev
+
+      - name: Get production database connection string
+        id: neon
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$NEON_API_KEY" || -z "$NEON_PROJECT_ID" ]]; then
+            echo "NEON_API_KEY secret and NEON_PROJECT_ID variable are required for production migrations." >&2
+            exit 1
+          fi
+          uri="$(curl --fail --silent --show-error \
+            --url "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri?database_name=neondb&role_name=neondb_owner" \
+            --header 'Accept: application/json' \
+            --header "Authorization: Bearer ${NEON_API_KEY}" \
+            | jq -r '.uri')"
+          if [[ -z "$uri" || "$uri" == "null" ]]; then
+            echo "Failed to retrieve the Neon production connection string." >&2
+            exit 1
+          fi
+          echo "::add-mask::$uri"
+          echo "db_url=$uri" >> "$GITHUB_OUTPUT"
+
+      - name: Check single Alembic head
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+        run: |
+          HEADS=$(.venv/bin/alembic heads 2>/dev/null | grep -c "(head)")
+          if [ "$HEADS" -ne 1 ]; then
+            echo "ERROR: $HEADS Alembic heads detected - resolve before deploying"
+            .venv/bin/alembic heads
+            exit 1
+          fi
+          echo "Single head confirmed"
+
+      - name: Migrate production database before deploy
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+        run: |
+          .venv/bin/alembic upgrade head
+          echo "Current production revision:"
+          .venv/bin/alembic current
+
       - name: Deploy main to production
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}

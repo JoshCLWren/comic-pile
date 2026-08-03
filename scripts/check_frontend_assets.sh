@@ -5,7 +5,7 @@ BASE_URL="${1:-${PROD_BASE_URL:-}}"
 
 if [ -z "$BASE_URL" ]; then
   echo "Usage: scripts/check_frontend_assets.sh <BASE_URL>"
-  echo "Example: scripts/check_frontend_assets.sh https://app-production-72b9.up.railway.app"
+  echo "Example: scripts/check_frontend_assets.sh https://comic-pile.vercel.app"
   exit 1
 fi
 

@@ -29,7 +29,7 @@ from typing import Final
 
 import httpx
 
-DEFAULT_BASE_URL: Final[str] = "https://app-production-72b9.up.railway.app"
+DEFAULT_BASE_URL: Final[str] = "https://comic-pile.vercel.app"
 DEFAULT_TOKEN_ENV: Final[str] = "RAILWAY_BENCHMARK_TOKEN"
 RESULT_SCHEMA_VERSION: Final[int] = 2
 HARNESS_VERSION: Final[str] = "railway-loadtest-v2"
