@@ -50,13 +50,13 @@ def _result(*, scalars: list[Thread] | None = None, rows: list[object] | None = 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("thread_count", [1, 50])
 async def test_queue_query_count_is_constant_for_page_size(thread_count: int) -> None:
-    """Queue construction uses three SQL executions regardless of returned rows."""
+    """Queue construction hydrates every row with three SQL executions at any page size."""
     threads = [_thread(thread_id) for thread_id in range(1, thread_count + 1)]
     issue_rows = [
         IssueNumberRow(thread.next_unread_issue_id, str(thread.id + 1))
         for thread in threads
     ]
-    remaining_rows = [(thread.id, 1) for thread in threads]
+    remaining_rows = [(thread.id, thread.id + 10) for thread in threads]
 
     db = AsyncMock()
     db.execute.side_effect = [
@@ -86,3 +86,9 @@ async def test_queue_query_count_is_constant_for_page_size(thread_count: int) ->
 
     assert len(response.threads) == thread_count
     assert db.execute.await_count == 3
+
+    for thread_id, queue_thread in enumerate(response.threads, start=1):
+        assert queue_thread.id == thread_id
+        assert queue_thread.next_unread_issue_id == 10_000 + thread_id
+        assert queue_thread.next_unread_issue_number == str(thread_id + 1)
+        assert queue_thread.issues_remaining == thread_id + 10
