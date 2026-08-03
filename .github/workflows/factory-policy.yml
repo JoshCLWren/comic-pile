@@ -7,6 +7,7 @@ on:
       - docs/AUTONOMOUS_FACTORY_POLICY.md
       - docs/ISSUE_EXECUTION_PROTOCOL.md
       - scripts/comic-pile-opencode-factory.sh
+      - scripts/comic-pile-opencode-factory-heartbeat.sh
       - scripts/comic-pile-opencode-factory-overnight.sh
       - scripts/opencode-model-manifest.sh
       - scripts/opencode-model-scout.sh
@@ -14,6 +15,7 @@ on:
       - .githooks/prepare-commit-msg
       - scripts/check-autonomous-factory-policy.py
       - scripts/tests/test_autonomous_factory_policy.py
+      - scripts/tests/test_opencode_model_tools.py
       - .github/workflows/factory-policy.yml
   push:
     branches:
@@ -23,6 +25,7 @@ on:
       - docs/AUTONOMOUS_FACTORY_POLICY.md
       - docs/ISSUE_EXECUTION_PROTOCOL.md
       - scripts/comic-pile-opencode-factory.sh
+      - scripts/comic-pile-opencode-factory-heartbeat.sh
       - scripts/comic-pile-opencode-factory-overnight.sh
       - scripts/opencode-model-manifest.sh
       - scripts/opencode-model-scout.sh
@@ -30,6 +33,7 @@ on:
       - .githooks/prepare-commit-msg
       - scripts/check-autonomous-factory-policy.py
       - scripts/tests/test_autonomous_factory_policy.py
+      - scripts/tests/test_opencode_model_tools.py
       - .github/workflows/factory-policy.yml
 
 permissions:
@@ -43,12 +47,19 @@ jobs:
       - name: Check local factory shell syntax
         run: |
           bash -n scripts/comic-pile-opencode-factory.sh
+          bash -n scripts/comic-pile-opencode-factory-heartbeat.sh
           bash -n scripts/comic-pile-opencode-factory-overnight.sh
           bash -n scripts/opencode-model-manifest.sh
           bash -n scripts/opencode-model-scout.sh
       - name: Compile factory policy checker and tests
-        run: python -m py_compile scripts/check-autonomous-factory-policy.py scripts/tests/test_autonomous_factory_policy.py
+        run: |
+          python -m py_compile \
+            scripts/check-autonomous-factory-policy.py \
+            scripts/tests/test_autonomous_factory_policy.py \
+            scripts/tests/test_opencode_model_tools.py
       - name: Check canonical factory invariants
         run: python scripts/check-autonomous-factory-policy.py
       - name: Test policy drift detection
         run: python -m unittest scripts/tests/test_autonomous_factory_policy.py
+      - name: Test model rotation and scout supervision
+        run: python -m unittest scripts/tests/test_opencode_model_tools.py

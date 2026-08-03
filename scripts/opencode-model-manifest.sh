@@ -1,23 +1,8 @@
 #!/usr/bin/env bash
 # OpenCode model manifest helper.
 #
-# Tracks probe results and usage for opencode models used by the ComicPile
-# factory. Shared by the model scout and the factory runner.
-#
 # Manifest layout ($STATE_DIR/model_manifest.tsv):
 #   model_id<TAB>status<TAB>tool_support<TAB>last_probed<TAB>use_count
-#
-# status:       untested | confirmed | failed
-# tool_support: unknown | yes | no
-#
-# Usage:
-#   opencode-model-manifest.sh init [STATE_DIR]
-#   opencode-model-manifest.sh set MODEL STATUS TOOL [STATE_DIR]
-#   opencode-model-manifest.sh record MODEL [STATE_DIR]
-#   opencode-model-manifest.sh confirmed [STATE_DIR]
-#   opencode-model-manifest.sh next DEFAULT_MODEL [STATE_DIR]
-#   opencode-model-manifest.sh pending [STATE_DIR]
-#   opencode-model-manifest.sh summary [STATE_DIR]
 
 set -Eeuo pipefail
 
@@ -62,14 +47,12 @@ manifest_unlock() {
   flock -u 9 2>/dev/null || true
 }
 
-# set MODEL STATUS TOOL STATE_DIR
 manifest_set() {
   local model="$1" status="$2" tool="$3" dir="$4"
   manifest_init "$dir"
-  local file
+  local file tmp
   file="$(manifest_path "$dir")"
   manifest_lock "$dir"
-  local tmp
   tmp="$(mktemp "$dir/.manifest.XXXXXX")"
   awk -F'\t' -v model="$model" -v status="$status" -v tool="$tool" -v now="$(date +%s)" \
     'BEGIN{OFS="\t"}
@@ -82,14 +65,12 @@ manifest_set() {
   manifest_unlock
 }
 
-# record MODEL STATE_DIR  (bump use_count, mark confirmed)
 manifest_record() {
   local model="$1" dir="$2"
   manifest_init "$dir"
-  local file
+  local file tmp
   file="$(manifest_path "$dir")"
   manifest_lock "$dir"
-  local tmp
   tmp="$(mktemp "$dir/.manifest.XXXXXX")"
   awk -F'\t' -v model="$model" -v now="$(date +%s)" \
     'BEGIN{OFS="\t"}
@@ -102,54 +83,59 @@ manifest_record() {
   manifest_unlock
 }
 
-# confirmed STATE_DIR  -> newline-separated confirmed model ids
 manifest_confirmed() {
   local dir="$1"
   manifest_init "$dir"
-  local file
-  file="$(manifest_path "$dir")"
-  [[ -f "$file" ]] || return 0
-  awk -F'\t' 'NR>1 && $2=="confirmed" && $1!="" {print $1}' "$file"
+  awk -F'\t' 'NR>1 && $2=="confirmed" && $1!="" {print $1}' "$(manifest_path "$dir")"
 }
 
-# pending STATE_DIR  -> models that are untested or failed (candidates for re-probe)
 manifest_pending() {
   local dir="$1"
   manifest_init "$dir"
-  local file
-  file="$(manifest_path "$dir")"
-  [[ -f "$file" ]] || return 0
-  awk -F'\t' 'NR>1 && ($2=="untested" || $2=="failed") && $1!="" {print $1}' "$file"
+  awk -F'\t' 'NR>1 && ($2=="untested" || $2=="failed") && $1!="" {print $1}' "$(manifest_path "$dir")"
 }
 
-# next DEFAULT STATE_DIR -> round-robin confirmed model, or DEFAULT when none.
-# Uses $dir/model_cursor for round-robin across confirmed models (least-used first).
+# Return confirmed models in least-used order while rotating ties/order between calls.
+# The cursor read and update are protected by the same lock as manifest writes so
+# concurrent factory processes cannot all select the same position.
 manifest_next() {
   local default="$1" dir="$2"
-  local models
-  models="$(manifest_confirmed "$dir" | sort -t$'\t' -k5,5n)"
-  [[ -n "$models" ]] || { printf '%s\n' "$default"; return 0; }
-  local cursor_file="$dir/model_cursor"
-  local cursor=0
+  manifest_init "$dir"
+  local file cursor_file rows cursor count n selected
+  file="$(manifest_path "$dir")"
+  cursor_file="$dir/model_cursor"
+
+  manifest_lock "$dir"
+  rows="$(awk -F'\t' 'NR>1 && $2=="confirmed" && $1!="" {print}' "$file" \
+    | sort -t$'\t' -k5,5n -k1,1)"
+  if [[ -z "$rows" ]]; then
+    manifest_unlock
+    printf '%s\n' "$default"
+    return 0
+  fi
+
+  cursor=0
   [[ -f "$cursor_file" ]] && cursor="$(cat "$cursor_file" 2>/dev/null || printf 0)"
   [[ "$cursor" =~ ^[0-9]+$ ]] || cursor=0
-  local count n
-  count="$(printf '%s\n' "$models" | sed '/^$/d' | wc -l | tr -d ' ')"
-  ((count > 0)) || { printf '%s\n' "$default"; return 0; }
+  count="$(printf '%s\n' "$rows" | wc -l | tr -d ' ')"
   n=$((cursor % count + 1))
+  selected="$(printf '%s\n' "$rows" | sed -n "${n}p" | cut -f1)"
   printf '%s\n' "$((cursor + 1))" >"$cursor_file"
-  printf '%s\n' "$models" | sed -n "${n}p"
+  manifest_unlock
+  printf '%s\n' "$selected"
 }
 
-# summary STATE_DIR -> human-readable one-line-per-model summary
 manifest_summary() {
   local dir="$1"
   manifest_init "$dir"
   local file
   file="$(manifest_path "$dir")"
-  [[ -f "$file" ]] || return 0
   printf '%-45s %-10s %-8s %-12s %s\n' MODEL STATUS TOOLS PROBED USES
-  tail -n +2 "$file" | column -t -s $'\t'
+  if command -v column >/dev/null 2>&1; then
+    tail -n +2 "$file" | column -t -s $'\t'
+  else
+    tail -n +2 "$file"
+  fi
 }
 
 main() {
@@ -162,17 +148,17 @@ main() {
       ;;
     set)
       (($# >= 3)) || { printf 'usage: %s set MODEL STATUS TOOL [STATE_DIR]\n' "$0" >&2; exit 2; }
-      local model="$1" status="$2" tool="$3" dir
+      local set_model="$1" set_status="$2" set_tool="$3" set_dir
       shift 3
-      dir="$(state_dir_for "${1:-}")"
-      manifest_set "$model" "$status" "$tool" "$dir"
+      set_dir="$(state_dir_for "${1:-}")"
+      manifest_set "$set_model" "$set_status" "$set_tool" "$set_dir"
       ;;
     record)
       (($# >= 1)) || { printf 'usage: %s record MODEL [STATE_DIR]\n' "$0" >&2; exit 2; }
-      local model="$1" dir
+      local record_model="$1" record_dir
       shift
-      dir="$(state_dir_for "${1:-}")"
-      manifest_record "$model" "$dir"
+      record_dir="$(state_dir_for "${1:-}")"
+      manifest_record "$record_model" "$record_dir"
       ;;
     confirmed)
       manifest_confirmed "$(state_dir_for "${1:-}")"
@@ -182,10 +168,10 @@ main() {
       ;;
     next)
       (($# >= 1)) || { printf 'usage: %s next DEFAULT_MODEL [STATE_DIR]\n' "$0" >&2; exit 2; }
-      local default="$1" dir
+      local next_default="$1" next_dir
       shift
-      dir="$(state_dir_for "${1:-}")"
-      manifest_next "$default" "$dir"
+      next_dir="$(state_dir_for "${1:-}")"
+      manifest_next "$next_default" "$next_dir"
       ;;
     summary)
       manifest_summary "$(state_dir_for "${1:-}")"
