@@ -5,7 +5,7 @@ import ThreadDetailView from '../pages/ThreadDetailView'
 import { useUpdateThread } from '../hooks/useThread'
 import { threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
-import type { Thread } from '../types'
+import type { IssueListResponse, Thread } from '../types'
 
 const routeParams = { id: '1' }
 
@@ -42,7 +42,7 @@ function threadResult(id: number): Thread {
   } as unknown as Thread
 }
 
-function issueResult(threadId: number) {
+function issueResult(threadId: number): IssueListResponse {
   return {
     issues: [{
       id: threadId,
@@ -69,6 +69,7 @@ function deferred<T>() {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks()
   routeParams.id = '1'
   mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
   mockedThreadsApiGet.mockImplementation(async (id: number) => threadResult(id))
@@ -125,7 +126,7 @@ it('ignores stale successful and failed thread requests after navigation', async
 
 it('ignores stale successful and failed issue requests after navigation', async () => {
   const user = userEvent.setup()
-  const firstIssues = deferred<ReturnType<typeof issueResult>>()
+  const firstIssues = deferred<IssueListResponse>()
   mockedIssuesApiList.mockImplementation((threadId: number) => (
     threadId === 1 ? firstIssues.promise : Promise.resolve(issueResult(threadId))
   ))
@@ -140,7 +141,7 @@ it('ignores stale successful and failed issue requests after navigation', async 
   firstIssues.resolve(issueResult(1))
   await waitFor(() => expect(screen.queryByText('#Saga 1')).not.toBeInTheDocument())
 
-  const rejectedIssues = deferred<ReturnType<typeof issueResult>>()
+  const rejectedIssues = deferred<IssueListResponse>()
   mockedIssuesApiList.mockImplementation((threadId: number) => (
     threadId === 1 ? rejectedIssues.promise : Promise.resolve(issueResult(threadId))
   ))
