@@ -247,10 +247,12 @@ describe('Action Sheet', () => {
   const mockUnsnoozeMutation = { mutate: vi.fn(), isPending: false }
   const mockRefetchSession = vi.fn()
   const mockRefetchThreads = vi.fn()
+  const mockRefetchBootstrap = vi.fn()
 
   beforeEach(() => {
     mockSnoozeMutation.mutate.mockReset()
     mockUnsnoozeMutation.mutate.mockReset()
+    mockRefetchBootstrap.mockReset()
     mockedUseSnooze.mockReturnValue(mockSnoozeMutation)
     mockedUseUnsnooze.mockReturnValue(mockUnsnoozeMutation)
     mockedUseSession.mockReturnValue({
@@ -269,6 +271,29 @@ describe('Action Sheet', () => {
         { id: 2, title: 'X-Men', format: 'Comics', status: 'active' },
       ],
       refetch: mockRefetchThreads,
+    })
+    mockedUseRollBootstrap.mockReturnValue({
+      data: {
+        current_die: 6,
+        last_rolled_result: null,
+        manual_die: null,
+        pending_thread_id: null,
+        active_thread: null,
+        snoozed_threads: [],
+        snoozed_count: 0,
+        roll_pool: [
+          { id: 1, title: 'Saga', format: 'Comics' },
+          { id: 2, title: 'X-Men', format: 'Comics' },
+        ],
+        blocked_count: 0,
+        blocked_threads: [],
+        stale_thread_count: 0,
+        stale_thread: null,
+      },
+      refetch: mockRefetchBootstrap,
+      isPending: false,
+      isError: false,
+      error: null,
     })
   })
 
@@ -362,7 +387,7 @@ describe('Action Sheet', () => {
     expect(navigateSpy).toHaveBeenCalledWith('/queue', { state: { editThreadId: 1 } })
   })
 
-  it('refetches threads and session after move-front action', async () => {
+  it('refetches bootstrap after move-front action', async () => {
     const mockMoveToFront = { mutate: vi.fn(), isPending: false }
     mockedUseMoveToFront.mockReturnValue(mockMoveToFront)
 
@@ -376,12 +401,11 @@ describe('Action Sheet', () => {
     await user.click(moveFrontButton)
 
     await waitFor(() => {
-      expect(mockRefetchSession).toHaveBeenCalled()
-      expect(mockRefetchThreads).toHaveBeenCalled()
+      expect(mockRefetchBootstrap).toHaveBeenCalled()
     })
   })
 
-  it('refetches threads and session after move-back action', async () => {
+  it('refetches bootstrap after move-back action', async () => {
     const mockMoveToBack = { mutate: vi.fn(), isPending: false }
     mockedUseMoveToBack.mockReturnValue(mockMoveToBack)
 
@@ -395,21 +419,36 @@ describe('Action Sheet', () => {
     await user.click(moveBackButton)
 
     await waitFor(() => {
-      expect(mockRefetchSession).toHaveBeenCalled()
-      expect(mockRefetchThreads).toHaveBeenCalled()
+      expect(mockRefetchBootstrap).toHaveBeenCalled()
     })
   })
 
   it('shuffles the roll pool from the header control', async () => {
     const mockShuffle = { mutate: vi.fn(), isPending: false }
-    const mockRefetchThreads = vi.fn()
+    const localRefetchBootstrap = vi.fn()
     mockedUseShuffleQueue.mockReturnValue(mockShuffle)
-    mockedUseThreads.mockReturnValue({
-      data: [
-        { id: 1, title: 'Saga', format: 'Comics', status: 'active' },
-        { id: 2, title: 'X-Men', format: 'Comics', status: 'active' },
-      ],
-      refetch: mockRefetchThreads,
+    mockedUseRollBootstrap.mockReturnValue({
+      data: {
+        current_die: 6,
+        last_rolled_result: null,
+        manual_die: null,
+        pending_thread_id: null,
+        active_thread: null,
+        snoozed_threads: [],
+        snoozed_count: 0,
+        roll_pool: [
+          { id: 1, title: 'Saga', format: 'Comics' },
+          { id: 2, title: 'X-Men', format: 'Comics' },
+        ],
+        blocked_count: 0,
+        blocked_threads: [],
+        stale_thread_count: 0,
+        stale_thread: null,
+      },
+      refetch: localRefetchBootstrap,
+      isPending: false,
+      isError: false,
+      error: null,
     })
 
     const user = userEvent.setup()
@@ -419,7 +458,7 @@ describe('Action Sheet', () => {
 
     await waitFor(() => {
       expect(mockShuffle.mutate).toHaveBeenCalled()
-      expect(mockRefetchThreads).toHaveBeenCalled()
+      expect(localRefetchBootstrap).toHaveBeenCalled()
     })
   })
 })
