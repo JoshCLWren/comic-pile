@@ -47,7 +47,7 @@ describe('CompletedThreadsSection', () => {
     expect(screen.getByText('Paper Girls')).toBeInTheDocument()
   })
 
-  it('preserves accessible targeted and picker-based reactivation paths', async () => {
+  it('preserves distinct reactivation paths and collapses after each selection', async () => {
     const user = userEvent.setup()
     const onReactivate = vi.fn()
 
@@ -62,11 +62,23 @@ describe('CompletedThreadsSection', () => {
     await user.click(
       screen.getByRole('button', { name: 'Choose completed thread to reactivate' }),
     )
-    await user.click(screen.getByRole('button', { name: 'Reactivate Descender' }))
 
     expect(onReactivate).toHaveBeenNthCalledWith(1, null)
+    expect(screen.getByRole('button', { name: 'Show Completed (2)' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+    expect(screen.queryByText('Descender')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Show Completed (2)' }))
+    await user.click(screen.getByRole('button', { name: 'Reactivate Descender' }))
+
     expect(onReactivate).toHaveBeenNthCalledWith(2, completedThreads[0])
-    expect(screen.getByRole('button', { name: 'Reactivate Paper Girls' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Show Completed (2)' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+    expect(screen.queryByRole('button', { name: 'Reactivate Paper Girls' })).not.toBeInTheDocument()
   })
 
   it('renders nothing when there are no completed threads', () => {
