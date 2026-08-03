@@ -24,6 +24,11 @@ export default function ThreadDetailView() {
   const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
   const [issues, setIssues] = useState<Issue[]>([])
   const [issuesExpanded, setIssuesExpanded] = useState(false)
+  const [issuesLoading, setIssuesLoading] = useState(false)
+  const [issuesError, setIssuesError] = useState<string | null>(null)
+  const [issuesLoaded, setIssuesLoaded] = useState(false)
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null)
+  const [issuesTotal, setIssuesTotal] = useState(0)
 
   useEffect(() => {
     async function fetchThread() {
@@ -36,11 +41,6 @@ export default function ThreadDetailView() {
         setIsLoading(true)
         const threadData = await threadsApi.get(Number(id))
         setThread(threadData)
-
-        if (threadData && threadData.total_issues !== null) {
-          await fetchIssues(Number(id))
-        }
-
       } catch (err: unknown) {
         setError(getApiErrorDetail(err))
       } finally {
@@ -51,23 +51,36 @@ export default function ThreadDetailView() {
     fetchThread()
   }, [id])
 
-  async function fetchIssues(threadId: number) {
+  async function loadIssuesPage(threadId: number, pageToken: string | null) {
+    setIssuesLoading(true)
+    setIssuesError(null)
     try {
-      const allIssues: Issue[] = []
-      let nextPageToken: string | null = null
+      const data = await issuesApi.list(threadId, {
+        page_size: 100,
+        ...(pageToken ? { page_token: pageToken } : {}),
+      })
+      setIssues((prev) => (pageToken ? [...prev, ...data.issues] : data.issues))
+      setNextPageToken(data.next_page_token)
+      setIssuesTotal(data.total_count)
+      setIssuesLoaded(true)
+    } catch {
+      setIssuesError('Failed to load issues')
+    } finally {
+      setIssuesLoading(false)
+    }
+  }
 
-      do {
-        const data = await issuesApi.list(threadId, {
-          page_size: 100,
-          ...(nextPageToken ? { page_token: nextPageToken } : {}),
-        })
-        allIssues.push(...data.issues)
-        nextPageToken = data.next_page_token
-      } while (nextPageToken)
+  function handleToggleIssues() {
+    const next = !issuesExpanded
+    setIssuesExpanded(next)
+    if (next && thread && thread.total_issues !== null && !issuesLoaded) {
+      void loadIssuesPage(thread.id, null)
+    }
+  }
 
-      setIssues(allIssues)
-    } catch (err: unknown) {
-      console.error('Failed to fetch issues:', err)
+  function handleLoadMore() {
+    if (thread && thread.total_issues !== null && nextPageToken) {
+      void loadIssuesPage(thread.id, nextPageToken)
     }
   }
 
@@ -94,8 +107,10 @@ export default function ThreadDetailView() {
       setThread(updatedThread)
       setIsEditOpen(false)
 
-      if (updatedThread.total_issues !== null) {
-        await fetchIssues(updatedThread.id)
+      if (updatedThread.total_issues !== null && issuesLoaded) {
+        setIssues([])
+        setNextPageToken(null)
+        await loadIssuesPage(updatedThread.id, null)
       }
     } catch {
       console.error('Failed to update thread')
@@ -201,15 +216,15 @@ export default function ThreadDetailView() {
           </div>
         )}
 
-        {isMigrated && issues.length > 0 && (
+        {isMigrated && (
           <div className="glass-card p-3 md:p-4 space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-xs font-black uppercase tracking-widest text-stone-500">
-                Issues ({issues.length})
+                Issues ({issuesTotal > 0 ? issuesTotal : issues.length})
               </span>
               <button
                 type="button"
-                onClick={() => setIssuesExpanded(!issuesExpanded)}
+                onClick={handleToggleIssues}
                 className="text-xs font-black uppercase tracking-widest text-amber-400 hover:text-amber-300"
               >
                 {issuesExpanded ? 'Collapse' : 'Expand'}
@@ -226,27 +241,72 @@ export default function ThreadDetailView() {
 
             {issuesExpanded && (
               <div className="space-y-2 mt-3">
-                {issues.map((issue) => (
-                  <div
-                    key={issue.id}
-                    className={`flex items-center justify-between p-2 rounded-lg border ${
-                      issue.status === 'read'
-                        ? 'bg-green-500/10 border-green-500/20'
-                        : 'bg-white/5 border-white/10'
-                    }`}
-                  >
-                    <span className="text-sm font-medium text-stone-300">
-                      #{issue.issue_number}
-                    </span>
-                    <span className="text-xs font-black uppercase tracking-widest">
-                      {issue.status === 'read' ? (
-                        <span className="text-green-400">Read</span>
-                      ) : (
-                        <span className="text-stone-500">Unread</span>
-                      )}
-                    </span>
+                {issuesLoading && issues.length === 0 && (
+                  <p className="text-xs text-stone-500">Loading issues...</p>
+                )}
+
+                {issuesError && !issuesLoading && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-red-400">{issuesError}</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (thread && thread.total_issues !== null) {
+                          setIssues([])
+                          setNextPageToken(null)
+                          void loadIssuesPage(thread.id, null)
+                        }
+                      }}
+                      className="text-xs font-black uppercase tracking-widest text-amber-400 hover:text-amber-300"
+                    >
+                      Retry
+                    </button>
                   </div>
-                ))}
+                )}
+
+                {issuesLoaded && !issuesLoading && !issuesError && issues.length === 0 && (
+                  <p className="text-xs text-stone-500">No issues yet</p>
+                )}
+
+                {issuesLoaded && issues.length > 0 && (
+                  <div className="space-y-2">
+                    {issues.map((issue) => (
+                      <div
+                        key={issue.id}
+                        className={`flex items-center justify-between p-2 rounded-lg border ${
+                          issue.status === 'read'
+                            ? 'bg-green-500/10 border-green-500/20'
+                            : 'bg-white/5 border-white/10'
+                        }`}
+                      >
+                        <span className="text-sm font-medium text-stone-300">
+                          #{issue.issue_number}
+                        </span>
+                        <span className="text-xs font-black uppercase tracking-widest">
+                          {issue.status === 'read' ? (
+                            <span className="text-green-400">Read</span>
+                          ) : (
+                            <span className="text-stone-500">Unread</span>
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {nextPageToken && !issuesLoading && (
+                  <button
+                    type="button"
+                    onClick={handleLoadMore}
+                    className="w-full py-2 rounded-lg border border-white/10 text-xs font-black uppercase tracking-widest text-amber-400 hover:text-amber-300 hover:border-white/20"
+                  >
+                    Load more
+                  </button>
+                )}
+
+                {issuesLoading && issues.length > 0 && (
+                  <p className="text-xs text-stone-500">Loading more...</p>
+                )}
               </div>
             )}
           </div>

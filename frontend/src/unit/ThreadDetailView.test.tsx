@@ -44,14 +44,108 @@ it('renders a thread without legacy rating content', async () => {
   expect(screen.queryByText(/Reviews/)).not.toBeInTheDocument()
 })
 
+it('does not fetch issues before the Issues section expands', async () => {
+  mockedThreadsApiGet.mockResolvedValue({
+    id: 1, title: 'Saga', format: 'Comics', issues_remaining: 2, queue_position: 1,
+    status: 'active', total_issues: 10, next_unread_issue_number: '3', notes: null,
+  } as never)
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+  expect(mockedIssuesApiList).not.toHaveBeenCalled()
+  expect(screen.getByText(/Next up: #3/)).toBeInTheDocument()
+})
+
+it('fetches one bounded page when the Issues section expands', async () => {
+  mockedThreadsApiGet.mockResolvedValue({
+    id: 1, title: 'Saga', format: 'Comics', issues_remaining: 2, queue_position: 1,
+    status: 'active', total_issues: 10, next_unread_issue_number: '3', notes: null,
+  } as never)
+  mockedIssuesApiList.mockResolvedValueOnce({
+    issues: [{ id: 1, thread_id: 1, issue_number: '1', status: 'read', read_at: 'now', created_at: 'now' }],
+    next_page_token: 'next', total_count: 2, page_size: 100,
+  })
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Expand' }))
+  await waitFor(() => expect(mockedIssuesApiList).toHaveBeenCalledTimes(1))
+  expect(mockedIssuesApiList).toHaveBeenCalledWith(1, { page_size: 100 })
+  expect(screen.getByText('#1')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Load more' })).toBeInTheDocument()
+})
+
+it('loads the next page without duplicates or gaps', async () => {
+  mockedThreadsApiGet.mockResolvedValue({
+    id: 1, title: 'Saga', format: 'Comics', issues_remaining: 2, queue_position: 1,
+    status: 'active', total_issues: 10, next_unread_issue_number: '3', notes: null,
+  } as never)
+  mockedIssuesApiList
+    .mockResolvedValueOnce({
+      issues: [{ id: 1, thread_id: 1, issue_number: '1', status: 'read', read_at: 'now', created_at: 'now' }],
+      next_page_token: 'next', total_count: 2, page_size: 100,
+    })
+    .mockResolvedValueOnce({
+      issues: [{ id: 2, thread_id: 1, issue_number: '2', status: 'unread', read_at: null, created_at: 'now' }],
+      next_page_token: null, total_count: 2, page_size: 100,
+    })
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Expand' }))
+  await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+  await user.click(screen.getByRole('button', { name: 'Load more' }))
+  await waitFor(() => expect(screen.getByText('#2')).toBeInTheDocument())
+  expect(mockedIssuesApiList).toHaveBeenCalledWith(1, { page_size: 100, page_token: 'next' })
+  expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
+})
+
+it('shows an empty state when the thread has no issues', async () => {
+  mockedThreadsApiGet.mockResolvedValue({
+    id: 1, title: 'Saga', format: 'Comics', issues_remaining: 0, queue_position: 1,
+    status: 'complete', total_issues: 0, next_unread_issue_number: null, notes: null,
+  } as never)
+  mockedIssuesApiList.mockResolvedValueOnce({
+    issues: [], next_page_token: null, total_count: 0, page_size: 100,
+  })
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Expand' }))
+  await waitFor(() => expect(screen.getByText('No issues yet')).toBeInTheDocument())
+})
+
+it('shows a retry action when loading issues fails', async () => {
+  mockedThreadsApiGet.mockResolvedValue({
+    id: 1, title: 'Saga', format: 'Comics', issues_remaining: 2, queue_position: 1,
+    status: 'active', total_issues: 10, next_unread_issue_number: '3', notes: null,
+  } as never)
+  mockedIssuesApiList
+    .mockRejectedValueOnce(new Error('issues unavailable'))
+    .mockResolvedValueOnce({
+      issues: [{ id: 1, thread_id: 1, issue_number: '1', status: 'read', read_at: 'now', created_at: 'now' }],
+      next_page_token: null, total_count: 1, page_size: 100,
+    })
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Expand' }))
+  await waitFor(() => expect(screen.getByText('Failed to load issues')).toBeInTheDocument())
+  await user.click(screen.getByRole('button', { name: 'Retry' }))
+  await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+})
+
 it('renders migrated progress, paginated issues, and saves edits', async () => {
   mockedThreadsApiGet.mockResolvedValue({
     id: 1, title: 'Saga', format: 'Comics', issues_remaining: 2, queue_position: 1,
     status: 'active', total_issues: 10, next_unread_issue_number: '3', notes: 'Keep reading',
   } as never)
-  mockedIssuesApiList
-    .mockResolvedValueOnce({ issues: [{ id: 1, thread_id: 1, issue_number: '1', status: 'read', read_at: 'now', created_at: 'now' }], next_page_token: 'next', total_count: 2, page_size: 100 })
-    .mockResolvedValueOnce({ issues: [{ id: 2, thread_id: 1, issue_number: '2', status: 'unread', read_at: null, created_at: 'now' }], next_page_token: null, total_count: 2, page_size: 100 })
+  mockedIssuesApiList.mockResolvedValue({
+    issues: [
+      { id: 1, thread_id: 1, issue_number: '1', status: 'read', read_at: 'now', created_at: 'now' },
+      { id: 2, thread_id: 1, issue_number: '2', status: 'unread', read_at: null, created_at: 'now' },
+    ],
+    next_page_token: null, total_count: 2, page_size: 100,
+  })
   const mutate = vi.fn().mockResolvedValue({})
   mockedUseUpdateThread.mockReturnValue({ mutate, isPending: false } as never)
   renderPage()
