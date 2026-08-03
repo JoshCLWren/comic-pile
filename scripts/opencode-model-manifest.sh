@@ -120,7 +120,7 @@ manifest_next() {
   count="$(printf '%s\n' "$rows" | wc -l | tr -d ' ')"
   n=$((cursor % count + 1))
   selected="$(printf '%s\n' "$rows" | sed -n "${n}p" | cut -f1)"
-  printf '%s\n' "$((cursor + 1))" >"$cursor_file"
+  printf '%s\n' "$(((cursor + 1) % count))" >"$cursor_file"
   manifest_unlock
   printf '%s\n' "$selected"
 }

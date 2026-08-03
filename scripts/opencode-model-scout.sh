@@ -123,7 +123,9 @@ done
 # Scout heartbeats are deliberately isolated from factory-run heartbeats.
 HB_DIR="$STATE_DIR/scout-heartbeats"
 LOG_DIR="$STATE_DIR/scout"
+PROBE_PGID_FILE="$STATE_DIR/scout-probe-pgids"
 mkdir -p "$HB_DIR" "$LOG_DIR"
+: >"$PROBE_PGID_FILE"
 "$MANIFEST_HELPER" init "$STATE_DIR"
 
 safe_name() {
@@ -164,6 +166,8 @@ probe_model() {
   # for filesystem safety and must never be written back to the manifest.
   printf '%s\t%s\n' "$$" "$model" >"$hb"
   touch "$hb"
+  # Record the probe's process group so the shutdown trap can terminate it.
+  printf '%s\n' "$$" >>"$PROBE_PGID_FILE"
 
   set +e
   out="$(opencode run --model "$model" --auto --format json --print-logs=false "$prompt" 2>&1 \
@@ -193,7 +197,14 @@ probe_model() {
 }
 
 export -f safe_name probe_model
-export HB_DIR LOG_DIR MANIFEST_HELPER STATE_DIR
+export HB_DIR LOG_DIR MANIFEST_HELPER STATE_DIR PROBE_PGID_FILE
+
+file_mtime() {
+  # GNU stat prints seconds via -c %Y; BSD/macOS needs -f %m. Prefer GNU and
+  # fall back to BSD, defaulting to "now" so a missing value never kills a
+  # healthy probe.
+  stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || date +%s
+}
 
 watchdog() {
   while :; do
@@ -201,7 +212,7 @@ watchdog() {
     now="$(date +%s)"
     for hb in "$HB_DIR"/*.hb; do
       [[ -f "$hb" ]] || continue
-      age=$((now - $(stat -c %Y "$hb" 2>/dev/null || printf '%s' "$now")))
+      age=$((now - $(file_mtime "$hb")))
       ((age > TIMEOUT)) || continue
       IFS=$'\t' read -r pgid model <"$hb" || true
       [[ "$pgid" =~ ^[0-9]+$ && -n "$model" ]] || { rm -f "$hb"; continue; }
@@ -230,13 +241,13 @@ prune_finished_jobs() {
 }
 
 run_pass() {
-  local candidates total model status
+  local candidates total model confirmed
   candidates="$(discover_candidates | sed '/^$/d')"
   if [[ "$FORCE" != "1" ]]; then
+    confirmed="$("$MANIFEST_HELPER" confirmed "$STATE_DIR" 2>/dev/null || true)"
     candidates="$(printf '%s\n' "$candidates" | while IFS= read -r model; do
       [[ -n "$model" ]] || continue
-      status="$(awk -F'\t' -v model="$model" 'NR>1 && $1==model {print $2}' "$STATE_DIR/model_manifest.tsv" | head -1)"
-      [[ "$status" != "confirmed" ]] && printf '%s\n' "$model"
+      grep -Fxq -- "$model" <<<"$confirmed" || printf '%s\n' "$model"
     done)"
   fi
   candidates="$(printf '%s\n' "$candidates" | sed '/^$/d' | sort -u)"
@@ -272,7 +283,17 @@ run_pass() {
 
 watchdog &
 WATCHDOG_PID=$!
-trap 'kill "$WATCHDOG_PID" 2>/dev/null || true' EXIT
+
+stop_probes() {
+  local pgid
+  while IFS= read -r pgid; do
+    [[ "$pgid" =~ ^[0-9]+$ ]] || continue
+    kill -TERM -- "-$pgid" 2>/dev/null || true
+  done <"$PROBE_PGID_FILE"
+  rm -f "$PROBE_PGID_FILE"
+}
+
+trap 'kill "$WATCHDOG_PID" 2>/dev/null || true; stop_probes' EXIT
 
 printf 'OpenCode model scout (state=%s, parallel=%s, silence timeout=%ss)\n' "$STATE_DIR" "$PARALLEL" "$TIMEOUT"
 if ((WATCH == 1)); then

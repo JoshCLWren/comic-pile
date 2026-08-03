@@ -9,8 +9,8 @@
 - The factory runner (`comic-pile-opencode-factory.sh`) now rotates across confirmed models instead of always using the paid DeepSeek subscription: an explicit `--model` or `OPENCODE_MODEL` wins, otherwise it round-robins least-used confirmed models via `next`, falling back to `COMIC_PILE_DEFAULT_MODEL`.
 - The runner writes a per-heartbeat heartbeat file and a watchdog kills a hung run that has produced no output for `FACTORY_HEARTBEAT_TIMEOUT` (default 900s).
 - The overnight supervisor (`comic-pile-opencode-factory-overnight.sh`) now launches the model scout in `--watch` mode alongside the factory, tracks it with its own pid file, and reports confirmed models in `status`.
-- Added `.githooks/prepare-commit-msg`: every commit is signed with a `Model: <id>` trailer from `OPENCODE_MODEL` (skipped for merges/amends). Factory PR bodies are signed with the producing model.
-- `scripts/install-git-hooks.sh` installs the new hook; `factory-policy.yml` syntax-checks the two new scripts.
+- Added `.githooks/prepare-commit-msg`: every commit is attributed with a `Model: <id>` trailer from `OPENCODE_MODEL` (skipped for merges, amends, and squash commits). Factory PR bodies are attributed with the producing model.
+- `scripts/install-git-hooks.sh` installs the new hook, preserving any original user hooks in `.sample` backups on first run; `factory-policy.yml` syntax-checks the new shell scripts.
 
 **Production migrations on Vercel/Neon**
 

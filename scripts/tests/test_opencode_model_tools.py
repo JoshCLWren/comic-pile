@@ -26,6 +26,7 @@ class ModelToolTests(unittest.TestCase):
         self.scripts.mkdir()
         for name in (
             "comic-pile-opencode-factory.sh",
+            "comic-pile-opencode-factory-heartbeat.sh",
             "opencode-model-manifest.sh",
             "opencode-model-scout.sh",
         ):
@@ -265,6 +266,90 @@ class ModelToolTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("provider/active\tconfirmed\tyes", (state / "model_manifest.tsv").read_text())
+
+    def test_manifest_cursor_wraps_modulo_count(self) -> None:
+        """Persist the selection cursor wrapped to the confirmed-model count."""
+        state = self.root / "state"
+        helper = self.scripts / "opencode-model-manifest.sh"
+        subprocess.run([helper, "set", "model/alpha", "confirmed", "yes", state], check=True)
+        subprocess.run([helper, "set", "model/beta", "confirmed", "yes", state], check=True)
+
+        selected = []
+        for _ in range(4):
+            result = self.run_command(str(helper), "next", "fallback/model", str(state))
+            selected.append(result.stdout.strip())
+        cursor = int((state / "model_cursor").read_text().strip())
+
+        self.assertEqual(selected, ["model/alpha", "model/beta", "model/alpha", "model/beta"])
+        self.assertLess(cursor, 2)
+
+    def test_factory_wrapper_uses_fallback_model_on_empty_manifest(self) -> None:
+        """Select the documented fallback model when the manifest is empty."""
+        state = self.root / "state"
+        state.mkdir()
+
+        heartbeat = self.scripts / "comic-pile-opencode-factory-heartbeat.sh"
+        heartbeat.write_text(
+            textwrap.dedent(
+                """\
+                #!/usr/bin/env bash
+                set -euo pipefail
+                state=""
+                model=""
+                while (($#)); do
+                  case "$1" in
+                    --state-dir) state="$2"; shift 2 ;;
+                    --model) model="$2"; shift 2 ;;
+                    *) shift ;;
+                  esac
+                done
+                mkdir -p "$state"
+                printf '%s\n' "$model" >>"$state/models.log"
+                printf 'FACTORY_RESULT: idle\\n'
+                """
+            )
+        )
+        heartbeat.chmod(0o755)
+
+        result = self.run_command(
+            str(self.scripts / "comic-pile-opencode-factory.sh"),
+            "--state-dir",
+            str(state),
+            timeout=10,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((state / "models.log").read_text().strip(), "deepseek/deepseek-v4-flash")
+
+    def test_heartbeat_rejects_zero_heartbeat_timeout(self) -> None:
+        """Reject a zero FACTORY_HEARTBEAT_TIMEOUT before starting any heartbeat."""
+        state = self.root / "state"
+        heartbeat = self.scripts / "comic-pile-opencode-factory-heartbeat.sh"
+
+        result = self.run_command(
+            str(heartbeat),
+            "--state-dir",
+            str(state),
+            env={"FACTORY_HEARTBEAT_TIMEOUT": "0"},
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("FACTORY_HEARTBEAT_TIMEOUT", result.stderr)
+
+    def test_heartbeat_rejects_nonnumeric_heartbeat_timeout(self) -> None:
+        """Reject a nonnumeric FACTORY_HEARTBEAT_TIMEOUT before starting any heartbeat."""
+        state = self.root / "state"
+        heartbeat = self.scripts / "comic-pile-opencode-factory-heartbeat.sh"
+
+        result = self.run_command(
+            str(heartbeat),
+            "--state-dir",
+            str(state),
+            env={"FACTORY_HEARTBEAT_TIMEOUT": "abc"},
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("FACTORY_HEARTBEAT_TIMEOUT", result.stderr)
 
 
 if __name__ == "__main__":

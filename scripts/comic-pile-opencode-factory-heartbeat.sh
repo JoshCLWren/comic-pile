@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 WORKTREE="${COMIC_PILE_FACTORY_WORKTREE:-}"
 STATE_DIR="${COMIC_PILE_FACTORY_STATE_DIR:-${SOURCE_REPO%/}-factory-state}"
 MANIFEST_HELPER="$SCRIPT_DIR/opencode-model-manifest.sh"
-DEFAULT_MODEL="${COMIC_PILE_DEFAULT_MODEL:-deepseek/deepseek-v4-pro}"
+DEFAULT_MODEL="${COMIC_PILE_DEFAULT_MODEL:-deepseek/deepseek-v4-flash}"
 MODEL=""
 AGENT="${OPENCODE_AGENT:-}"
 USE_AUTO="${OPENCODE_AUTO:-1}"
@@ -72,6 +72,7 @@ is_nonnegative_integer "$IDLE_SECONDS" || die "FACTORY_IDLE_SECONDS must be an i
 is_nonnegative_integer "$FAILURE_BACKOFF_SECONDS" || die "FACTORY_FAILURE_BACKOFF_SECONDS must be an integer"
 is_nonnegative_integer "$MAX_FAILURES" || die "FACTORY_MAX_FAILURES must be an integer"
 ((MAX_FAILURES >= 1)) || die "FACTORY_MAX_FAILURES must be at least 1"
+[[ "$HEARTBEAT_TIMEOUT" =~ ^[1-9][0-9]*$ ]] || die "FACTORY_HEARTBEAT_TIMEOUT must be a positive integer"
 
 for command in git gh opencode flock tee grep date sleep stat tail touch setsid; do
   command -v "$command" >/dev/null 2>&1 || die "required command not found: $command"
@@ -330,8 +331,16 @@ while true; do
   set -e
 
   # Mark the model as used (confirmed) when the run completed successfully.
+  # A failed record leaves the usage count unset and skews rotation, so treat it
+  # as a retryable failure rather than swallowing it.
   if ((opencode_status == 0)); then
-    "$MANIFEST_HELPER" record "$MODEL" "$STATE_DIR" >/dev/null 2>&1 || true
+    if ! "$MANIFEST_HELPER" record "$MODEL" "$STATE_DIR" >/dev/null 2>&1; then
+      consecutive_failures=$((consecutive_failures + 1))
+      printf 'Heartbeat succeeded but failed to record model usage (%d/%d): %s\n' "$consecutive_failures" "$MAX_FAILURES" "$log_file" >&2
+      ((consecutive_failures < MAX_FAILURES)) || die "stopping after $consecutive_failures consecutive OpenCode failures"
+      sleep "$FAILURE_BACKOFF_SECONDS"
+      continue
+    fi
   fi
 
   if ((opencode_status != 0)); then

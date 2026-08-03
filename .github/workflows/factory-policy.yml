@@ -54,6 +54,7 @@ jobs:
           bash -n scripts/opencode-model-manifest.sh
           bash -n scripts/opencode-model-scout.sh
           bash -n scripts/install-git-hooks.sh
+          bash -n .githooks/prepare-commit-msg
       - name: Compile factory policy checker and tests
         run: |
           python -m py_compile \
