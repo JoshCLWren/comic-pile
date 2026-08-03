@@ -1,4 +1,3 @@
-import { createContext, useContext } from 'react'
 import type { ReactNode } from 'react'
 import type { Collection, CollectionCreate, CollectionUpdate } from '../types'
 
@@ -7,7 +6,7 @@ interface CollectionError {
   status?: number
 }
 
-interface CollectionContextType {
+interface RemovedCollectionsState {
   collections: Collection[]
   activeCollectionId: number | null
   setActiveCollectionId: (id: number | null) => void
@@ -20,7 +19,7 @@ interface CollectionContextType {
   retry: () => void
 }
 
-const removedCollectionsContext: CollectionContextType = {
+const removedCollectionsState: RemovedCollectionsState = {
   collections: [],
   activeCollectionId: null,
   setActiveCollectionId: () => undefined,
@@ -33,23 +32,19 @@ const removedCollectionsContext: CollectionContextType = {
   retry: () => undefined,
 }
 
-const CollectionContext = createContext<CollectionContextType>(removedCollectionsContext)
-
 /**
- * Transitional compatibility provider for #636.
- *
- * Collections are no longer loaded, persisted, selected, or mutated. This
- * provider remains only while the remaining Roll and Queue callers are removed
- * in follow-up slices, after which this file can be deleted entirely.
+ * Inert compatibility wrapper for test harnesses that still render the removed
+ * provider boundary. It creates no context, state, persistence, or requests.
  */
 export function CollectionProvider({ children }: { children: ReactNode }) {
-  return (
-    <CollectionContext.Provider value={removedCollectionsContext}>
-      {children}
-    </CollectionContext.Provider>
-  )
+  return children
 }
 
-export function useCollections() {
-  return useContext(CollectionContext)
+/**
+ * Temporary caller shim while the last Roll and Queue collection branches are
+ * deleted under #636. It owns no React state, context, persistence, requests,
+ * or mutation behavior and therefore requires no provider in the app shell.
+ */
+export function useCollections(): RemovedCollectionsState {
+  return removedCollectionsState
 }
