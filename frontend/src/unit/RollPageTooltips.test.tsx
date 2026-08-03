@@ -15,7 +15,6 @@ import {
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks'
-import { useCollections } from '../contexts/CollectionContext'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
@@ -62,7 +61,6 @@ vi.mock('../hooks', async (importOriginal) => {
     useRate: vi.fn(),
   }
 })
-vi.mock('../contexts/CollectionContext', () => ({ useCollections: vi.fn() }))
 const mockedUseSession = vi.mocked(useSession) as any
 const mockedUseThreads = vi.mocked(useThreads) as any
 const mockedUseStaleThreads = vi.mocked(useStaleThreads) as any
@@ -78,7 +76,6 @@ const mockedUseMoveToFront = vi.mocked(useMoveToFront) as any
 const mockedUseMoveToBack = vi.mocked(useMoveToBack) as any
 const mockedUseShuffleQueue = vi.mocked(useShuffleQueue) as any
 const mockedUseRate = vi.mocked(useRate) as any
-const mockedUseCollections = vi.mocked(useCollections) as any
 
 beforeEach(() => {
   const mockBootstrapData = {
@@ -150,12 +147,6 @@ beforeEach(() => {
   mockedUseMoveToBack.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseRate.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseCollections.mockReturnValue({
-    collections: [],
-    activeCollectionId: null,
-    setActiveCollectionId: vi.fn(),
-    isLoading: false,
-  })
 })
 
 afterEach(() => {
