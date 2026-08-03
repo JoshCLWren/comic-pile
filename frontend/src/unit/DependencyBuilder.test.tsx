@@ -53,7 +53,6 @@ function makeThread(overrides: Partial<Thread> & { id: number; title: string }):
     total_issues: 10,
     queue_position: 1,
     notes: null,
-    collection_id: null,
     reading_progress: null,
     next_unread_issue_id: null,
     next_unread_issue_number: '1',

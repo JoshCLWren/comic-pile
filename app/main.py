@@ -25,7 +25,6 @@ from app.api import (
     analytics,
     auth,
     bug_report,
-    collection,
     debug,
     dependency,
     issue,
@@ -210,7 +209,6 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(bug_report.router, prefix="/api/bug-reports", tags=["bug-reports"])
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
     app.include_router(thread.router, prefix="/api/threads", tags=["threads"])
-    app.include_router(collection.router, prefix="/api/v1/collections", tags=["collections"])
     if app_settings.environment != "production":
         app.include_router(debug.router, prefix="/api", tags=["debug"])
     app.include_router(issue.router, tags=["issues"])

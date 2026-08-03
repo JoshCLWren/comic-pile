@@ -7,7 +7,7 @@ from sqlalchemy.exc import OperationalError
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Collection, Dependency, Event, Issue, Session as SessionModel, Thread, User
+from app.models import Dependency, Event, Issue, Session as SessionModel, Thread, User
 from comic_pile.dependencies import (
     detect_circular_dependency,
 )
@@ -16,47 +16,49 @@ from comic_pile.session import get_or_create, get_current_die
 
 
 @pytest.mark.asyncio
-async def test_get_roll_pool_with_collection_id(async_db: AsyncSession, default_user: User) -> None:
-    """Test get_roll_pool filters by collection_id when provided (queue.py:251)."""
+async def test_get_roll_pool_excludes_snoozed_and_blocked(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """get_roll_pool returns active unblocked threads excluding snoozed IDs."""
     from datetime import UTC, datetime
 
-    collection = Collection(name="Test Collection", user_id=default_user.id)
-    async_db.add(collection)
-    await async_db.flush()
-
-    thread_in_collection = Thread(
-        title="Thread in Collection",
+    active = Thread(
+        title="Active Thread",
         format="Comic",
         issues_remaining=5,
         queue_position=1,
         status="active",
         user_id=default_user.id,
-        collection_id=collection.id,
         created_at=datetime.now(UTC),
     )
-
-    thread_outside_collection = Thread(
-        title="Thread Outside Collection",
+    snoozed = Thread(
+        title="Snoozed Thread",
         format="Comic",
         issues_remaining=3,
         queue_position=2,
         status="active",
         user_id=default_user.id,
-        collection_id=None,
+        created_at=datetime.now(UTC),
+    )
+    blocked = Thread(
+        title="Blocked Thread",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=3,
+        status="active",
+        is_blocked=True,
+        user_id=default_user.id,
         created_at=datetime.now(UTC),
     )
 
-    async_db.add_all([thread_in_collection, thread_outside_collection])
+    async_db.add_all([active, snoozed, blocked])
     await async_db.commit()
 
-    pool_with_collection = await get_roll_pool(
-        default_user.id, async_db, collection_id=collection.id
-    )
-    assert len(pool_with_collection) == 1
-    assert pool_with_collection[0].id == thread_in_collection.id
+    pool = await get_roll_pool(default_user.id, async_db, snoozed_ids=[snoozed.id])
+    assert [t.id for t in pool] == [active.id]
 
-    pool_without_collection = await get_roll_pool(default_user.id, async_db, collection_id=None)
-    assert len(pool_without_collection) == 2
+    full_pool = await get_roll_pool(default_user.id, async_db)
+    assert {t.id for t in full_pool} == {active.id, snoozed.id}
 
 
 @pytest.mark.asyncio

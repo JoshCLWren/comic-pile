@@ -21,7 +21,7 @@ const issue = (id: number, status: 'read' | 'unread' = 'unread'): Issue => ({
 const thread = (id: number): Thread => ({
   id, title: `Thread ${id}`, format: 'Comics', issues_remaining: 2, total_issues: 4,
   next_unread_issue_id: null, queue_position: id, status: 'active',
-  is_blocked: id === 2, blocking_reasons: [], collection_id: null, created_at: '2024-01-01', reading_progress: '50',
+  is_blocked: id === 2, blocking_reasons: [], created_at: '2024-01-01', reading_progress: '50',
 })
 
 describe('date and issue utilities', () => {

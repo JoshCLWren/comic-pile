@@ -32,10 +32,6 @@ const DEFINITIONS: Term[] = [
   {
     term: 'Dependencies',
     def: 'Reading order rules: "read X before Y".'
-  },
-  {
-    term: 'Collections',
-    def: 'Groups of threads (e.g. "Marvel", "DC", "Currently Reading").'
   }
 ]
 

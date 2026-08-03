@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { MarqueeTitle } from '../components/MarqueeTitle'
 import Swipeable from '../components/Swipeable'
 import IssueCorrectionDialog from '../components/IssueCorrectionDialog'
-import CollectionDialog from '../components/CollectionDialog'
 import MigrationDialog from '../components/MigrationDialog'
 
 const issuesApi = vi.hoisted(() => ({ list: vi.fn(), create: vi.fn(), move: vi.fn(), markRead: vi.fn(), markUnread: vi.fn() }))
@@ -97,12 +96,6 @@ describe('edge component behavior', () => {
     await waitFor(() => expect(onSuccess).toHaveBeenCalled())
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(onClose).toHaveBeenCalled()
-  })
-
-  it('does not render removed collection controls', () => {
-    const { container } = render(<CollectionDialog onClose={vi.fn()} />)
-    expect(container).toBeEmptyDOMElement()
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('shows migration warnings for near-complete and completed series', async () => {

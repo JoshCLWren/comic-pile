@@ -16,7 +16,6 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     status: overrides.status ?? 'active',
     is_blocked: overrides.is_blocked ?? false,
     blocking_reasons: overrides.blocking_reasons ?? [],
-    collection_id: overrides.collection_id ?? null,
     notes: overrides.notes ?? null,
     created_at: overrides.created_at ?? '2024-01-01T00:00:00Z',
   }

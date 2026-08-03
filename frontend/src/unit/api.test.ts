@@ -23,7 +23,7 @@ vi.mock('axios', () => ({
   },
 }))
 
-import { bugReportsApi, clearAccessToken, collectionsApi, dependenciesApi, migrationApi, queueApi, rateApi, rollApi, sessionApi, setAccessToken, snoozeApi, tasksApi, threadsApi, undoApi } from '../services/api'
+import { bugReportsApi, clearAccessToken, dependenciesApi, migrationApi, queueApi, rateApi, rollApi, sessionApi, setAccessToken, snoozeApi, tasksApi, threadsApi, undoApi } from '../services/api'
 
 const requestInterceptor = apiMock.interceptors.request.use.mock.calls[0][0] as (
   config: { method?: string; url?: string; headers?: Record<string, string> }
@@ -135,15 +135,8 @@ it('calls every remaining API resource endpoint', async () => {
   await tasksApi.getMetrics()
   await snoozeApi.snooze()
   await snoozeApi.unsnooze(2)
-  await collectionsApi.list()
-  await collectionsApi.get(1)
-  await collectionsApi.create({ name: 'C', position: 1 })
-  await collectionsApi.update(1, { name: 'D' })
-  await collectionsApi.delete(1)
-  await collectionsApi.moveThreadToCollection(2, null)
   await migrationApi.migrateThread(1, { last_issue_read: 2, total_issues: 3 })
   await bugReportsApi.create({ title: 'Bug', description: 'Description', diagnostics: {} })
-  expect(get).toHaveBeenCalledWith('/v1/collections/')
   expect(post).toHaveBeenCalledWith('/bug-reports/', { title: 'Bug', description: 'Description', diagnostics: {} })
 })
 

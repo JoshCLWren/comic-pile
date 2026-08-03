@@ -17,7 +17,6 @@ QUEUE_FIELDS = {
     "last_activity_at",
     "is_blocked",
     "blocking_reasons",
-    "collection_id",
     "total_issues",
     "next_unread_issue_number",
     "notes",
@@ -61,15 +60,15 @@ def _response_schema(path: str) -> dict[str, object]:
 
 
 def test_queue_item_contract_is_exact_and_measurably_narrower() -> None:
-    """Queue items expose only the documented 14-field screen contract."""
+    """Queue items expose only the documented 13-field screen contract."""
     full_fields = set(ThreadResponse.model_fields)
     queue_fields = set(QueueThreadListItem.model_fields)
 
     assert queue_fields == QUEUE_FIELDS
     assert full_fields - queue_fields == QUEUE_DROPPED_FIELDS
-    assert len(full_fields) == 20
-    assert len(queue_fields) == 14
-    assert (len(full_fields) - len(queue_fields)) / len(full_fields) == 0.30
+    assert len(full_fields) == 19
+    assert len(queue_fields) == 13
+    assert (len(full_fields) - len(queue_fields)) / len(full_fields) == 6 / 19
 
 
 def test_session_history_item_contract_is_exact_and_measurably_narrower() -> None:
@@ -87,7 +86,7 @@ def test_session_history_item_contract_is_exact_and_measurably_narrower() -> Non
 def test_thread_detail_preserves_the_complete_thread_contract() -> None:
     """Thread detail remains a named compatibility contract with every full field."""
     assert set(ThreadDetail.model_fields) == set(ThreadResponse.model_fields)
-    assert len(ThreadDetail.model_fields) == 20
+    assert len(ThreadDetail.model_fields) == 19
 
 
 def test_routes_publish_the_screen_specific_openapi_contracts() -> None:

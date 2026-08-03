@@ -5,13 +5,10 @@ import Modal from '../../components/Modal'
 import Tooltip from '../../components/Tooltip'
 import MigrationDialog from '../../components/MigrationDialog'
 import SimpleMigrationDialog from '../../components/SimpleMigrationDialog'
-import CollectionDialog from '../../components/CollectionDialog'
-import CollectionToolbar from '../../components/CollectionToolbar'
 import { useNavigate } from 'react-router-dom'
 import { DICE_LADDER } from '../../components/diceLadder'
 import { useSession } from '../../hooks/useSession'
 import { useStaleThreads, useThreads } from '../../hooks/useThread'
-import { useCollections } from '../../contexts/CollectionContext'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import {
   useClearManualDie,
@@ -27,7 +24,7 @@ import { threadsApi, dependenciesApi } from '../../services/api'
 import { readingOrdersApi } from '../../services/api-reading-orders'
 import { getApiErrorStatus, getApiErrorDetail } from '../../utils/apiError'
 import { isDiceSide } from '../../components/diceTypes'
-import type { Thread, RollResponse, SessionThread, Collection, ConnectedThreadInfo } from '../../types'
+import type { Thread, RollResponse, SessionThread, ConnectedThreadInfo } from '../../types'
 import { useRollPageState } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
 import {
@@ -57,7 +54,6 @@ export default function RollPage() {
     selectedThread, setSelectedThread,
     isActionSheetOpen, setIsActionSheetOpen,
     activeRatingThread, setActiveRatingThread,
-    isCollectionDialogOpen, setIsCollectionDialogOpen,
     blockingReasonMap, setBlockingReasonMap,
     showMigrationDialog, setShowMigrationDialog,
     threadToMigrate, setThreadToMigrate,
@@ -71,14 +67,12 @@ export default function RollPage() {
     rollTimeoutRef,
   } = state
 
-  const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
   const [readingOrders, setReadingOrders] = useState<import('../../services/api-reading-orders').ReadingOrder[]>([])
   const [connectedThreads, setConnectedThreads] = useState<ConnectedThreadInfo[]>([])
 
   const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
-  const { activeCollectionId = null } = useCollections()
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
-  const { data: threads, refetch: refetchThreads } = useThreads('', activeCollectionId)
+  const { data: threads, refetch: refetchThreads } = useThreads('')
   const { data: staleThreads } = useStaleThreads(7)
   const navigate = useNavigate()
 
@@ -88,16 +82,6 @@ export default function RollPage() {
       if (status === 401) navigate('/login')
     }
   }, [isSessionError, sessionError, navigate])
-
-  useEffect(() => {
-    const handleTestEditCollection = ((e: CustomEvent<Collection>) => {
-      setEditingCollection(e.detail)
-      setIsCollectionDialogOpen(true)
-    }) as EventListener
-
-    window.addEventListener('test-edit-collection', handleTestEditCollection)
-    return () => window.removeEventListener('test-edit-collection', handleTestEditCollection)
-  }, [setIsCollectionDialogOpen])
 
   const setDieMutation = useSetDie()
   const clearManualDieMutation = useClearManualDie()
@@ -342,12 +326,6 @@ case 'read': {
       })
       return
     }
-    if (isCollectionDialogOpen) {
-      setRestoreAction(() => {
-        setIsCollectionDialogOpen(true)
-      })
-      return
-    }
     if (isOverrideOpen) {
       setRestoreAction(() => {
         setIsOverrideOpen(true)
@@ -364,11 +342,9 @@ case 'read': {
   }, [
     clearRestoreAction,
     isActionSheetOpen,
-    isCollectionDialogOpen,
     isOverrideOpen,
     selectedThread,
     setIsActionSheetOpen,
-    setIsCollectionDialogOpen,
     setIsOverrideOpen,
     setRestoreAction,
     setShowMigrationDialog,
@@ -767,7 +743,6 @@ useEffect(() => {
           </Tooltip>
         </div>
       </header>
-      <CollectionToolbar onNewCollection={() => setIsCollectionDialogOpen(true)} />
 
       <div className="flex-1 flex flex-col min-h-0">
         <div className="flex-1 flex flex-col relative md:glass-card md:rounded-xl">
@@ -845,10 +820,6 @@ useEffect(() => {
         </div>
 
         <div id="explosion-layer" className="explosion-wrap"></div>
-
-        {isCollectionDialogOpen && (
-          <CollectionDialog collection={editingCollection} onClose={() => { setIsCollectionDialogOpen(false); setEditingCollection(null) }} />
-        )}
 
         {showMigrationDialog && threadToMigrate && (
           <MigrationDialog thread={threadToMigrate} onComplete={handleMigrationComplete} onSkip={handleMigrationSkip} onClose={handleMigrationClose} />

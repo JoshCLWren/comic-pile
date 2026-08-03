@@ -35,7 +35,7 @@ from app.schemas import (
 )
 from app.schemas.review import ReviewResponse
 from app.schemas.migration import MigrateToIssuesSimpleRequest
-from app.services.ownership import get_owned_collection_or_404, get_owned_thread_or_404
+from app.services.ownership import get_owned_thread_or_404
 from comic_pile.session import get_current_die, get_or_create
 
 router = APIRouter(tags=["threads"])
@@ -109,7 +109,6 @@ async def thread_to_response(
         notes=thread.notes,
         is_test=thread.is_test,
         is_blocked=thread.is_blocked,
-        collection_id=thread.collection_id,
         created_at=thread.created_at,
         total_issues=thread.total_issues,
         reading_progress=reading_progress,
@@ -176,7 +175,6 @@ def _to_queue_list_item(tr: ThreadResponse) -> QueueThreadListItem:
         status=tr.status,
         is_blocked=tr.is_blocked,
         blocking_reasons=tr.blocking_reasons,
-        collection_id=tr.collection_id,
         last_activity_at=tr.last_activity_at,
         total_issues=tr.total_issues,
         next_unread_issue_number=tr.next_unread_issue_number,
@@ -224,7 +222,6 @@ async def list_threads(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
     search: str | None = Query(default=None, min_length=1),
-    collection_id: int | None = Query(default=None),
     page_size: int = Query(
         default=50,
         ge=1,
@@ -240,7 +237,6 @@ async def list_threads(
     Args:
         request: FastAPI request object for rate limiting.
         search: Optional case-insensitive title search filter.
-        collection_id: Optional collection ID to filter threads.
         page_size: Number of threads to return per page (default 50, max 200).
         page_token: Token for pagination continuation (queue_position,thread_id).
         current_user: The authenticated user making the request.
@@ -251,9 +247,6 @@ async def list_threads(
     """
     normalized_search = search.strip() if search is not None else None
     query = select(Thread).where(Thread.user_id == current_user.id)
-
-    if collection_id is not None:
-        query = query.where(Thread.collection_id == collection_id)
 
     if normalized_search:
         query = query.where(Thread.title.ilike(f"%{normalized_search}%"))
@@ -397,10 +390,6 @@ async def create_thread(
     Raises:
         RuntimeError: If failed after max retries.
     """
-    # If collection_id is provided, verify it belongs to the user
-    if thread_data.collection_id is not None:
-        await get_owned_collection_or_404(db, current_user.id, thread_data.collection_id)
-
     max_retries = 3
     initial_delay = 0.1
     retries = 0
@@ -422,7 +411,6 @@ async def create_thread(
                 user_id=current_user.id,
                 notes=thread_data.notes,
                 is_test=thread_data.is_test,
-                collection_id=thread_data.collection_id,
             )
             db.add(new_thread)
             await db.commit()
@@ -506,12 +494,6 @@ async def update_thread(
         thread.notes = thread_data.notes
     if thread_data.is_test is not None:
         thread.is_test = thread_data.is_test
-    # Check if collection_id was explicitly provided in the request using model_fields_set
-    if "collection_id" in thread_data.model_fields_set:
-        # If collection_id is provided (can be None to clear), verify ownership
-        if thread_data.collection_id is not None:
-            await get_owned_collection_or_404(db, current_user.id, thread_data.collection_id)
-        thread.collection_id = thread_data.collection_id
     await db.commit()
     await db.refresh(thread)
 
@@ -773,42 +755,6 @@ async def set_pending_thread(
         total_issues=thread_total_issues,
         reading_progress=thread_reading_progress,
     )
-
-
-@router.post("/{thread_id}:moveToCollection", response_model=ThreadResponse)
-async def move_thread_to_collection(
-    thread_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    collection_id: int | None = Query(None),
-) -> ThreadResponse:
-    """Move a thread to a collection (or remove from collection if collection_id is None).
-
-    Args:
-        thread_id: The thread ID to move.
-        collection_id: The collection ID to move the thread to (None to remove from collection).
-        current_user: The authenticated user making the request.
-        db: SQLAlchemy session for database operations.
-
-    Returns:
-        ThreadResponse with updated thread details.
-
-    Raises:
-        HTTPException: If thread not found or collection doesn't belong to user.
-    """
-    thread = await get_owned_thread_or_404(db, current_user.id, thread_id)
-
-    # If collection_id is provided, verify it belongs to the user
-    if collection_id is not None:
-        await get_owned_collection_or_404(db, current_user.id, collection_id)
-
-    thread.collection_id = collection_id
-    response = await thread_to_response(thread, db)
-
-    await db.commit()
-    await _invalidate_thread_caches(current_user.id, thread_id)
-
-    return response
 
 
 @router.get("/{thread_id}/reviews", response_model=list[ReviewResponse])

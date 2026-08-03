@@ -26,10 +26,6 @@ vi.mock('../components/Swipeable', () => ({
   default: ({ children }: { children: React.ReactNode }) => <div data-testid="mock-swipeable">{children}</div>,
 }))
 
-vi.mock('../pages/QueuePage/CollectionBadge', () => ({
-  CollectionBadge: () => <span data-testid="mock-collection-badge">Collection</span>,
-}))
-
 function createMockThread(overrides: Partial<Thread> = {}): Thread {
   return {
     id: 1,
@@ -44,7 +40,6 @@ function createMockThread(overrides: Partial<Thread> = {}): Thread {
     status: 'active',
     is_blocked: false,
     blocking_reasons: [],
-    collection_id: null,
     notes: null,
     last_activity_at: null,
     created_at: '2024-01-01T00:00:00.000Z',
@@ -167,12 +162,6 @@ describe('QueueThreadCard', () => {
     const thread = createMockThread({ notes: 'This is a note' })
     renderCard(thread)
     expect(screen.getByText('This is a note')).toBeInTheDocument()
-  })
-
-  it('renders collection badge when thread has collection_id', () => {
-    const thread = createMockThread({ collection_id: 42 })
-    renderCard(thread)
-    expect(screen.getByTestId('mock-collection-badge')).toBeInTheDocument()
   })
 
   it('handles keyboard, drag, blocked dependency, and all position-menu callbacks', async () => {

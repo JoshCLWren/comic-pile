@@ -17,9 +17,8 @@ type TestUser = {
   accessToken?: string;
 };
 
-export async function getCollectionsEnabled(page: Page): Promise<boolean> {
-  void page
-  return true
+export async function getCollectionsEnabled(_page: Page): Promise<boolean> {
+  return false
 }
 
 export async function waitForQueueReady(page: Page): Promise<void> {
@@ -320,9 +319,6 @@ export async function setupAuthenticatedPage(
 
   // Use 'domcontentloaded' instead of 'load' to avoid timeout in SPAs
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  if (await getCollectionsEnabled(page)) {
-    await page.waitForSelector('[aria-label="Roll pool collection"]', { state: 'visible', timeout: 10000 }).catch(() => {});
-  }
 
   return testUser;
 }

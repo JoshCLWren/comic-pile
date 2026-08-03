@@ -15,7 +15,6 @@ const mockThread = {
   status: 'active' as const,
   queue_position: 1,
   issues_remaining: 5,
-  collection_id: null,
   notes: null,
   total_issues: null,
   next_unread_issue_id: null,

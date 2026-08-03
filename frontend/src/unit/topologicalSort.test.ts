@@ -15,7 +15,6 @@ function makeThread(id: number, title: string = `Thread ${id}`): Thread {
     status: 'active',
     is_blocked: false,
     blocking_reasons: [],
-    collection_id: null,
     created_at: '2024-01-01T00:00:00Z',
   }
 }

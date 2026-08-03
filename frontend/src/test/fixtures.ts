@@ -1,5 +1,4 @@
 import { test as base, type APIRequestContext, type Page, type TestInfo } from '@playwright/test';
-import { getCollectionsEnabled } from './helpers';
 
 type TestFixtures = {
   page: Page;
@@ -242,9 +241,7 @@ function isExpectedBrowserNoise(message: string): boolean {
   return (
     (message.includes('GPU stall due to ReadPixels') && message.includes('GL Driver Message'))
     || message.includes("Couldn't load preload assets")
-    || (message.includes('Network Error') && message.includes('/assets/'))
-    || message.includes('Failed to fetch collections: Error: Network error. Please check your connection and try again.')
-    || message.includes('Failed to fetch collections: Error @')
+    ||     (message.includes('Network Error') && message.includes('/assets/'))
     || message.includes('Failed to fetch user: Error @')
     || message.includes('Failed to rate thread: Network error. Please check your connection and try again.')
     || message.includes('Failed to snooze thread: Network error. Please check your connection and try again.')
@@ -405,10 +402,6 @@ export const test = base.extend<TestFixtures>({
      // Navigate to home page
      // Use 'domcontentloaded' instead of 'load' to avoid timeout in SPAs
      await page.goto('/', { waitUntil: 'domcontentloaded' });
-
-     if (await getCollectionsEnabled(page)) {
-       await page.locator('[aria-label="Filter by collection"]').waitFor({ state: 'visible' });
-     }
 
      await page.locator('#root').waitFor({ state: 'visible' });
 
