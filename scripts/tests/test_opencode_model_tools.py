@@ -1,3 +1,5 @@
+"""Regression tests for OpenCode model discovery and factory rotation tooling."""
+
 from __future__ import annotations
 
 import os
@@ -14,7 +16,10 @@ SOURCE_ROOT = Path(__file__).resolve().parents[2]
 
 
 class ModelToolTests(unittest.TestCase):
+    """Exercise manifest selection, heartbeat rotation, and scout supervision."""
+
     def setUp(self) -> None:
+        """Create an isolated executable copy of the model tooling."""
         self.tempdir = tempfile.TemporaryDirectory()
         self.root = Path(self.tempdir.name)
         self.scripts = self.root / "scripts"
@@ -30,6 +35,7 @@ class ModelToolTests(unittest.TestCase):
             target.chmod(0o755)
 
     def tearDown(self) -> None:
+        """Remove the isolated test directory."""
         self.tempdir.cleanup()
 
     def run_command(
@@ -38,6 +44,7 @@ class ModelToolTests(unittest.TestCase):
         env: dict[str, str] | None = None,
         timeout: float = 15,
     ) -> subprocess.CompletedProcess[str]:
+        """Run a command from the isolated test root and capture its result."""
         command_env = os.environ.copy()
         if env:
             command_env.update(env)
@@ -52,6 +59,7 @@ class ModelToolTests(unittest.TestCase):
         )
 
     def test_manifest_next_uses_usage_count_and_returns_only_model_id(self) -> None:
+        """Select the least-used confirmed model and emit only its identifier."""
         state = self.root / "state"
         helper = self.scripts / "opencode-model-manifest.sh"
         subprocess.run([helper, "set", "model/high", "confirmed", "yes", state], check=True)
@@ -66,6 +74,7 @@ class ModelToolTests(unittest.TestCase):
         self.assertNotIn("\t", result.stdout)
 
     def test_factory_wrapper_reselects_model_between_heartbeats(self) -> None:
+        """Resolve a fresh manifest model for each wrapper heartbeat."""
         state = self.root / "state"
         helper = self.scripts / "opencode-model-manifest.sh"
         subprocess.run([helper, "set", "model/one", "confirmed", "yes", state], check=True)
@@ -113,6 +122,7 @@ class ModelToolTests(unittest.TestCase):
         self.assertEqual((state / "models.log").read_text().splitlines(), ["model/one", "model/two"])
 
     def install_fake_opencode(self) -> tuple[Path, dict[str, str]]:
+        """Install a controllable fake OpenCode executable for scout tests."""
         bin_dir = self.root / "bin"
         bin_dir.mkdir()
         fake_state = self.root / "fake-opencode"
@@ -182,6 +192,7 @@ class ModelToolTests(unittest.TestCase):
         return fake_state, env
 
     def test_scout_never_exceeds_parallel_limit(self) -> None:
+        """Keep simultaneous scout probes within the configured worker limit."""
         fake_state, env = self.install_fake_opencode()
         state = self.root / "state"
         models = " ".join(f"provider/model-{number}" for number in range(8))
@@ -206,6 +217,7 @@ class ModelToolTests(unittest.TestCase):
         self.assertEqual(manifest.count("\tconfirmed\t"), 8)
 
     def test_scout_timeout_uses_original_model_id(self) -> None:
+        """Record a timed-out probe against its original unsanitized model ID."""
         _, env = self.install_fake_opencode()
         state = self.root / "state"
         started = time.monotonic()
@@ -233,6 +245,7 @@ class ModelToolTests(unittest.TestCase):
         self.assertEqual(list((state / "scout-heartbeats").glob("*.hb")), [])
 
     def test_active_probe_is_not_killed_by_silence_timeout(self) -> None:
+        """Allow a probe that emits progress to outlive the silence timeout."""
         _, env = self.install_fake_opencode()
         state = self.root / "state"
 
