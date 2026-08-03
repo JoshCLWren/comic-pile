@@ -7,8 +7,7 @@ import MigrationDialog from '../../components/MigrationDialog'
 import SimpleMigrationDialog from '../../components/SimpleMigrationDialog'
 import { useNavigate } from 'react-router-dom'
 import { DICE_LADDER } from '../../components/diceLadder'
-import { useSession } from '../../hooks/useSession'
-import { useStaleThreads, useThreads } from '../../hooks/useThread'
+import { useRollBootstrap } from '../../hooks/useRollBootstrap'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import {
   useClearManualDie,
@@ -24,7 +23,8 @@ import { threadsApi, dependenciesApi } from '../../services/api'
 import { readingOrdersApi } from '../../services/api-reading-orders'
 import { getApiErrorStatus, getApiErrorDetail } from '../../utils/apiError'
 import { isDiceSide } from '../../components/diceTypes'
-import type { Thread, RollResponse, SessionThread, ConnectedThreadInfo } from '../../types'
+import type { Thread, ConnectedThreadInfo } from '../../types'
+import type { RollBootstrapThread } from '../../types/rollBootstrap'
 import { useRollPageState } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
 import {
@@ -70,18 +70,16 @@ export default function RollPage() {
   const [readingOrders, setReadingOrders] = useState<import('../../services/api-reading-orders').ReadingOrder[]>([])
   const [connectedThreads, setConnectedThreads] = useState<ConnectedThreadInfo[]>([])
 
-  const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
+  const { data: bootstrap, refetch: refetchBootstrap, isPending: isBootstrapLoading, isError: isBootstrapError, error: bootstrapError } = useRollBootstrap()
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
-  const { data: threads, refetch: refetchThreads } = useThreads('')
-  const { data: staleThreads } = useStaleThreads(7)
   const navigate = useNavigate()
 
   useEffect(() => {
-    if (isSessionError && sessionError) {
-      const status = getApiErrorStatus(sessionError)
+    if (isBootstrapError && bootstrapError) {
+      const status = getApiErrorStatus(bootstrapError)
       if (status === 401) navigate('/login')
     }
-  }, [isSessionError, sessionError, navigate])
+  }, [isBootstrapError, bootstrapError, navigate])
 
   const setDieMutation = useSetDie()
   const clearManualDieMutation = useClearManualDie()
@@ -98,7 +96,7 @@ export default function RollPage() {
   async function handleUnsnooze(threadId: number) {
     try {
       await unsnoozeMutation.mutate(threadId)
-      await refetchSession()
+      await refetchBootstrap()
     } catch (error) {
       console.error('Unsnooze failed:', error)
     }
@@ -107,7 +105,7 @@ export default function RollPage() {
   async function handleShufflePool() {
     try {
       await shuffleQueueMutation.mutate()
-      await refetchThreads()
+      await refetchBootstrap()
     } catch (error) {
       console.error('Shuffle failed:', error)
       alert(`Failed to shuffle pool: ${getApiErrorDetail(error)}`)
@@ -137,13 +135,14 @@ export default function RollPage() {
     }
   }
 
-  function handleThreadClick(thread: Thread) {
+  function handleThreadClick(thread: RollBootstrapThread) {
     setSelectedThread(thread)
     setIsActionSheetOpen(true)
   }
 
   async function handleToggleBlocked() {
     if (!blockedExpanded) {
+      const blockedThreads = bootstrap?.blocked_threads ?? []
       const details = await Promise.all(
         blockedThreads.map(async (thread): Promise<[number, string[]]> => {
           try {
@@ -160,16 +159,13 @@ export default function RollPage() {
   }
 
   const enterRatingView = useCallback(async (threadId: number | null, result: number | null = null, threadMetadata: ThreadMetadata | null = null) => {
-    const ratingThread = buildRatingThread(threadId, result, threadMetadata, session?.active_thread)
+    const ratingThread = buildRatingThread(threadId, result, threadMetadata, bootstrap?.active_thread)
     if (!ratingThread) {
       setErrorMessage('Unable to load the selected thread.')
       setIsRatingView(false)
       return
     }
 
-    // The rating panel is the single active layer for the roll workflow.
-    // Close any competing modal layers (selected-thread action sheet, override,
-    // die selector) so no backdrop can intercept the primary action.
     setIsActionSheetOpen(false)
     setIsOverrideOpen(false)
     setIsDieModalOpen(false)
@@ -205,25 +201,24 @@ export default function RollPage() {
       setReadingOrders([])
       setConnectedThreads([])
     }
-  }, [session, currentDie, suppressPendingAutoOpenRef, setSelectedThreadId, setRolledResult, setActiveRatingThread, setRating, setErrorMessage, setPredictedDie, setIsRatingView, setIsActionSheetOpen, setIsOverrideOpen, setIsDieModalOpen])
+  }, [bootstrap, currentDie, suppressPendingAutoOpenRef, setSelectedThreadId, setRolledResult, setActiveRatingThread, setRating, setErrorMessage, setPredictedDie, setIsRatingView, setIsActionSheetOpen, setIsOverrideOpen, setIsDieModalOpen])
 
-const handleMigrationComplete = useCallback((migratedThread: Thread) => {
-  refetchThreads()
-  refetchSession()
-  setShowMigrationDialog(false)
-  setThreadToMigrate(null)
-  enterRatingView(migratedThread.id, null, migratedThread)
-}, [refetchThreads, refetchSession, enterRatingView, setShowMigrationDialog, setThreadToMigrate])
+  const handleMigrationComplete = useCallback((migratedThread: Thread) => {
+    refetchBootstrap()
+    setShowMigrationDialog(false)
+    setThreadToMigrate(null)
+    enterRatingView(migratedThread.id, null, migratedThread)
+  }, [refetchBootstrap, enterRatingView, setShowMigrationDialog, setThreadToMigrate])
 
-const handleMigrationSkip = useCallback(() => {
-  setShowMigrationDialog(false)
-  if (threadToMigrate) enterRatingView(threadToMigrate.id, null, threadToMigrate)
-}, [threadToMigrate, enterRatingView, setShowMigrationDialog])
+  const handleMigrationSkip = useCallback(() => {
+    setShowMigrationDialog(false)
+    if (threadToMigrate) enterRatingView(threadToMigrate.id, null, threadToMigrate)
+  }, [threadToMigrate, enterRatingView, setShowMigrationDialog])
 
-const handleMigrationClose = useCallback(() => {
-  setShowMigrationDialog(false)
-  setThreadToMigrate(null)
-}, [setShowMigrationDialog, setThreadToMigrate])
+  const handleMigrationClose = useCallback(() => {
+    setShowMigrationDialog(false)
+    setThreadToMigrate(null)
+  }, [setShowMigrationDialog, setThreadToMigrate])
 
   const handleSimpleMigrationComplete = useCallback((issueNumber: string) => {
     setShowSimpleMigration(false)
@@ -249,46 +244,44 @@ const handleMigrationClose = useCallback(() => {
       setSelectedThreadId(null)
       setActiveRatingThread(null)
       setErrorMessage('')
-      refetchSession()
+      refetchBootstrap()
     }).catch((error: unknown) => {
       setErrorMessage(getApiErrorDetail(error))
     })
-  }, [activeRatingThread, rating, rateMutation, refetchSession, setShowSimpleMigration, suppressPendingAutoOpenRef, setIsRolling, setIsRatingView, setRolledResult, setSelectedThreadId, setActiveRatingThread, setErrorMessage])
+  }, [activeRatingThread, rating, rateMutation, refetchBootstrap, setShowSimpleMigration, suppressPendingAutoOpenRef, setIsRolling, setIsRatingView, setRolledResult, setSelectedThreadId, setActiveRatingThread, setErrorMessage])
 
   async function handleAction(action: string) {
     setIsActionSheetOpen(false)
-    const isSnoozed = session?.snoozed_threads?.some((t) => t.id === selectedThread!.id) ?? false
+    const isSnoozed = bootstrap?.snoozed_threads?.some((t) => t.id === selectedThread!.id) ?? false
 
     try {
       switch (action) {
-case 'read': {
-      const response = await threadsApi.setPending(selectedThread!.id)
-      const threadMetadata: ThreadMetadata = {
-        id: response.thread_id, title: response.title, format: response.format,
-        issues_remaining: response.issues_remaining, queue_position: response.queue_position,
-        total_issues: response.total_issues, reading_progress: response.reading_progress ?? null,
-        issue_id: response.issue_id, issue_number: response.issue_number,
-        next_issue_id: response.next_issue_id, next_issue_number: response.next_issue_number,
-        last_rolled_result: response.result ?? response.last_rolled_result,
-      }
-      if (response.total_issues === null) {
-        setThreadToMigrate(threadMetadata as RatingThread)
-        setShowMigrationDialog(true)
-      } else {
-        suppressPendingAutoOpenRef.current = true
-        enterRatingView(response.thread_id, response.result, threadMetadata)
-      }
-      break
-    }
+        case 'read': {
+          const response = await threadsApi.setPending(selectedThread!.id)
+          const threadMetadata: ThreadMetadata = {
+            id: response.thread_id, title: response.title, format: response.format,
+            issues_remaining: response.issues_remaining, queue_position: response.queue_position,
+            total_issues: response.total_issues, reading_progress: response.reading_progress ?? null,
+            issue_id: response.issue_id, issue_number: response.issue_number,
+            next_issue_id: response.next_issue_id, next_issue_number: response.next_issue_number,
+            last_rolled_result: response.result ?? response.last_rolled_result,
+          }
+          if (response.total_issues === null) {
+            setThreadToMigrate(threadMetadata as RatingThread)
+            setShowMigrationDialog(true)
+          } else {
+            suppressPendingAutoOpenRef.current = true
+            enterRatingView(response.thread_id, response.result, threadMetadata)
+          }
+          break
+        }
         case 'move-front':
           await moveToFrontMutation.mutate(selectedThread!.id)
-          await refetchSession()
-          await refetchThreads()
+          await refetchBootstrap()
           break
         case 'move-back':
           await moveToBackMutation.mutate(selectedThread!.id)
-          await refetchSession()
-          await refetchThreads()
+          await refetchBootstrap()
           break
         case 'snooze':
           if (isSnoozed) {
@@ -296,7 +289,7 @@ case 'read': {
           } else {
             await snoozeMutation.mutate()
           }
-          await refetchSession()
+          await refetchBootstrap()
           break
         case 'edit':
           navigate('/queue', { state: { editThreadId: selectedThread!.id } })
@@ -307,11 +300,47 @@ case 'read': {
     }
   }
 
-  const snoozedThreads = session?.snoozed_threads ?? []
-  const snoozedIds = useMemo(() => new Set(snoozedThreads.map((t) => t.id)), [snoozedThreads])
-  const activeThreads = useMemo(() => threads?.filter((t) => t.status === 'active' && !t.is_blocked && !snoozedIds.has(t.id)) ?? [], [threads, snoozedIds])
-  const blockedThreads = useMemo(() => threads?.filter((t) => t.status === 'active' && t.is_blocked) ?? [], [threads])
+  const snoozedThreads = bootstrap?.snoozed_threads ?? []
+  const rollPool = useMemo(() => bootstrap?.roll_pool ?? [], [bootstrap?.roll_pool])
+  const blockedThreads = bootstrap?.blocked_threads ?? []
   const displayDie = isDiceSide(currentDie) ? currentDie : 6
+
+  const [overrideThreads, setOverrideThreads] = useState<Thread[] | null>(null)
+  useEffect(() => {
+    if (!isOverrideOpen || overrideThreads) return
+
+    let cancelled = false
+    const snoozedIds = new Set(snoozedThreads.map((thread) => thread.id))
+
+    async function loadAllOverrideThreads() {
+      const collected: Thread[] = []
+      let pageToken: string | null = null
+      do {
+        const result = await threadsApi.list(
+          { page_size: 200 },
+          pageToken ?? undefined,
+        )
+        collected.push(...result.threads)
+        pageToken = result.next_page_token ?? null
+      } while (pageToken)
+
+      if (!cancelled) {
+        setOverrideThreads(
+          collected.filter(
+            (thread) => thread.status === 'active' && !snoozedIds.has(thread.id),
+          ),
+        )
+      }
+    }
+
+    loadAllOverrideThreads().catch(() => {
+      if (!cancelled) setOverrideThreads([])
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [isOverrideOpen, overrideThreads, snoozedThreads])
 
   useEffect(() => {
     if (showSimpleMigration) {
@@ -354,17 +383,16 @@ case 'read': {
     threadToMigrate,
   ])
 
-
-useEffect(() => {
-  if (session?.current_die) setCurrentDie(session.current_die)
-  if (session?.last_rolled_result !== undefined && session?.last_rolled_result !== null) {
-    setRolledResult(session.last_rolled_result)
-  }
-}, [session?.current_die, session?.last_rolled_result, setCurrentDie, setRolledResult])
+  useEffect(() => {
+    if (bootstrap?.current_die) setCurrentDie(bootstrap.current_die)
+    if (bootstrap?.last_rolled_result !== undefined && bootstrap?.last_rolled_result !== null) {
+      setRolledResult(bootstrap.last_rolled_result)
+    }
+  }, [bootstrap?.current_die, bootstrap?.last_rolled_result, setCurrentDie, setRolledResult])
 
   useEffect(() => {
     if (suppressPendingAutoOpenRef.current) return
-    const pendingThreadId = session?.pending_thread_id
+    const pendingThreadId = bootstrap?.pending_thread_id
     if (!pendingThreadId) return
 
     const pendingId = Number(pendingThreadId)
@@ -373,31 +401,31 @@ useEffect(() => {
 
     if (isRatingView && isCurrentPendingSelection && hasHydratedPendingMetadata) return
 
-    const pendingFromSession = session?.active_thread && session.active_thread.id === pendingId
-      ? { id: session.active_thread.id, title: session.active_thread.title, format: session.active_thread.format,
-          issues_remaining: session.active_thread.issues_remaining ?? 0, queue_position: session.active_thread.queue_position ?? 0,
-          total_issues: session.active_thread.total_issues ?? null, reading_progress: session.active_thread.reading_progress ?? null,
-          issue_id: session.active_thread.issue_id ?? null, issue_number: session.active_thread.issue_number ?? null,
-          next_issue_id: session.active_thread.next_issue_id ?? null, next_issue_number: session.active_thread.next_issue_number ?? null,
-          last_rolled_result: session.last_rolled_result ?? session.active_thread.last_rolled_result ?? null }
+    const pendingFromSession = bootstrap?.active_thread && bootstrap.active_thread.id === pendingId
+      ? { id: bootstrap.active_thread.id, title: bootstrap.active_thread.title, format: bootstrap.active_thread.format,
+          issues_remaining: bootstrap.active_thread.issues_remaining ?? 0, queue_position: bootstrap.active_thread.queue_position ?? 0,
+          total_issues: bootstrap.active_thread.total_issues ?? null, reading_progress: bootstrap.active_thread.reading_progress ?? null,
+          issue_id: bootstrap.active_thread.issue_id ?? null, issue_number: bootstrap.active_thread.issue_number ?? null,
+          next_issue_id: bootstrap.active_thread.next_issue_id ?? null, next_issue_number: bootstrap.active_thread.next_issue_number ?? null,
+          last_rolled_result: bootstrap.last_rolled_result ?? bootstrap.active_thread.last_rolled_result ?? null }
       : null
 
-    const pendingFromThreads = !pendingFromSession && activeThreads.length > 0
-      ? activeThreads.find((t) => t.id === pendingId) : null
+    const pendingFromPool = !pendingFromSession && rollPool.length > 0
+      ? rollPool.find((thread) => thread.id === pendingId) : null
 
-    const pendingResult = pendingFromSession?.last_rolled_result ?? session?.last_rolled_result ?? null
-    const pendingMetadata = (pendingFromSession ?? pendingFromThreads) as ThreadMetadata | null
+    const pendingResult = pendingFromSession?.last_rolled_result ?? bootstrap?.last_rolled_result ?? null
+    const pendingMetadata = (pendingFromSession ?? pendingFromPool) as ThreadMetadata | null
     const shouldInitializeRatingView = !isRatingView || !isCurrentPendingSelection
 
     setSelectedThreadId(pendingId)
     if (pendingResult !== null && pendingResult !== undefined) setRolledResult(pendingResult)
     if (pendingMetadata && pendingMetadata.title) {
-        setActiveRatingThread({
-          id: pendingMetadata.id ?? pendingId, title: pendingMetadata.title, format: pendingMetadata.format ?? '',
-          issues_remaining: pendingMetadata.issues_remaining ?? 0, queue_position: pendingMetadata.queue_position ?? 0,
-          issue_id: pendingMetadata.issue_id ?? null, issue_number: pendingMetadata.issue_number ?? null,
-          next_issue_id: pendingMetadata.next_issue_id ?? null, next_issue_number: pendingMetadata.next_issue_number ?? null,
-          total_issues: pendingMetadata.total_issues ?? null, reading_progress: pendingMetadata.reading_progress ?? null,
+      setActiveRatingThread({
+        id: pendingMetadata.id ?? pendingId, title: pendingMetadata.title, format: pendingMetadata.format ?? '',
+        issues_remaining: pendingMetadata.issues_remaining ?? 0, queue_position: pendingMetadata.queue_position ?? 0,
+        issue_id: pendingMetadata.issue_id ?? null, issue_number: pendingMetadata.issue_number ?? null,
+        next_issue_id: pendingMetadata.next_issue_id ?? null, next_issue_number: pendingMetadata.next_issue_number ?? null,
+        total_issues: pendingMetadata.total_issues ?? null, reading_progress: pendingMetadata.reading_progress ?? null,
         last_rolled_result: pendingMetadata.last_rolled_result ?? pendingResult,
       })
     }
@@ -409,37 +437,31 @@ useEffect(() => {
       setPredictedDie(idx > 0 ? DICE_LADDER[idx - 1] : DICE_LADDER[0])
       setIsRatingView(true)
     }
-    // The rating panel is the single active layer for the roll workflow. Close
-    // any competing modal layers so no backdrop can intercept the primary action.
     setIsActionSheetOpen(false)
     setIsOverrideOpen(false)
     setIsDieModalOpen(false)
-  }, [session?.pending_thread_id, session?.active_thread, session?.last_rolled_result, activeThreads, activeRatingThread, currentDie, isRatingView, selectedThreadId, suppressPendingAutoOpenRef, setSelectedThreadId, setRolledResult, setActiveRatingThread, setRating, setErrorMessage, setPredictedDie, setIsRatingView, setIsActionSheetOpen, setIsOverrideOpen, setIsDieModalOpen])
+  }, [bootstrap?.pending_thread_id, bootstrap?.active_thread, bootstrap?.last_rolled_result, rollPool, activeRatingThread, currentDie, isRatingView, selectedThreadId, suppressPendingAutoOpenRef, setSelectedThreadId, setRolledResult, setActiveRatingThread, setRating, setErrorMessage, setPredictedDie, setIsRatingView, setIsActionSheetOpen, setIsOverrideOpen, setIsDieModalOpen])
 
-useEffect(() => {
-  const actionable = staleThreads?.filter(t => !t.is_blocked) ?? []
-  if (actionable.length > 0) {
-    const thread = actionable[0]
-    const lastActivity = thread.last_activity_at ? new Date(thread.last_activity_at) : new Date(thread.created_at)
-    const diffDays = Math.floor((Date.now() - lastActivity.getTime()) / (1000 * 60 * 60 * 24))
-    setStaleThread(diffDays >= 7 ? { ...thread, days: diffDays } : null)
-    setStaleThreadCount(actionable.filter(t => {
-      const activity = t.last_activity_at ? new Date(t.last_activity_at) : new Date(t.created_at)
-      const days = Math.floor((Date.now() - activity.getTime()) / (1000 * 60 * 60 * 24))
-      return days >= 7
-    }).length)
-  } else {
-    setStaleThread(null)
-    setStaleThreadCount(0)
-  }
-}, [staleThreads, setStaleThread, setStaleThreadCount])
+  useEffect(() => {
+    const staleFromBootstrap = bootstrap?.stale_thread ?? null
+    const count = bootstrap?.stale_thread_count ?? 0
+    if (staleFromBootstrap && count > 0) {
+      const lastActivity = staleFromBootstrap.last_activity_at ? new Date(staleFromBootstrap.last_activity_at) : new Date()
+      const diffDays = Math.floor((Date.now() - lastActivity.getTime()) / (1000 * 60 * 60 * 24))
+      setStaleThread({ ...staleFromBootstrap, days: Math.max(diffDays, 7) })
+      setStaleThreadCount(count)
+    } else {
+      setStaleThread(null)
+      setStaleThreadCount(0)
+    }
+  }, [bootstrap?.stale_thread, bootstrap?.stale_thread_count, setStaleThread, setStaleThreadCount])
 
-useEffect(() => {
-  return () => {
-    if (rollIntervalRef.current) clearInterval(rollIntervalRef.current)
-    if (rollTimeoutRef.current) clearTimeout(rollTimeoutRef.current)
-  }
-}, [rollIntervalRef, rollTimeoutRef])
+  useEffect(() => {
+    return () => {
+      if (rollIntervalRef.current) clearInterval(rollIntervalRef.current)
+      if (rollTimeoutRef.current) clearTimeout(rollTimeoutRef.current)
+    }
+  }, [rollIntervalRef, rollTimeoutRef])
 
   function updateRatingUI(val: string) {
     const num = parseFloat(val)
@@ -460,8 +482,8 @@ useEffect(() => {
     if (rating >= RATING_THRESHOLD) createExplosion()
 
     const freshTotalIssues =
-      session?.active_thread?.id === activeRatingThread?.id
-        ? session?.active_thread?.total_issues ?? activeRatingThread?.total_issues
+      bootstrap?.active_thread?.id === activeRatingThread?.id
+        ? bootstrap?.active_thread?.total_issues ?? activeRatingThread?.total_issues
         : activeRatingThread?.total_issues
 
     if (activeRatingThread && freshTotalIssues === null) {
@@ -473,13 +495,13 @@ useEffect(() => {
 
     try {
       const rateResponse = await rateMutation.mutate({
-        thread_id: activeRatingThread!.id,
+        thread_id: activeRatingThread.id,
         rating,
         finish_session: finishSession,
-        issue_number: activeRatingThread!.issue_number || undefined
+        issue_number: activeRatingThread.issue_number || undefined,
       })
 
-      if (rateResponse && activeRatingThread) {
+      if (rateResponse) {
         setActiveRatingThread({
           ...activeRatingThread,
           issues_remaining: rateResponse.issues_remaining,
@@ -493,7 +515,7 @@ useEffect(() => {
       }
 
       try {
-        await refetchSession()
+        await refetchBootstrap()
       } catch {
         setErrorMessage('Rating saved but failed to refresh. Please refresh the page.')
         return
@@ -510,12 +532,10 @@ useEffect(() => {
     }
   }
 
-  
-
   async function handleSnooze() {
     try {
       await snoozeMutation.mutate()
-      await refetchSession()
+      await refetchBootstrap()
       setIsRolling(false)
       setIsRatingView(false)
       setRolledResult(null)
@@ -528,8 +548,8 @@ useEffect(() => {
 
   async function handleRefreshThread() {
     try {
-      const latestSession = await refetchSession()
-      const refreshedThread = latestSession?.active_thread
+      const latest = await refetchBootstrap()
+      const refreshedThread = latest?.active_thread
 
       if (activeRatingThread && refreshedThread?.id === activeRatingThread.id) {
         setActiveRatingThread({
@@ -551,7 +571,7 @@ useEffect(() => {
   }
 
   const dieSize = currentDie || 6
-  const filteredThreads = activeThreads.filter(t => !isRatingView || t.id !== (selectedThreadId ? Number(selectedThreadId) : null))
+  const filteredThreads = rollPool.filter((thread) => !isRatingView || thread.id !== (selectedThreadId ? Number(selectedThreadId) : null))
   const pool = filteredThreads.slice(0, dieSize)
   const hasValidRolledResult = Number.isInteger(rolledResult) && rolledResult !== null && rolledResult >= 1 && rolledResult <= currentDie
 
@@ -575,27 +595,27 @@ useEffect(() => {
   }
 
   async function recoverPendingRollConflict() {
-    const latestSession = await refetchSession()
-    const pendingId = Number(latestSession?.pending_thread_id ?? session?.pending_thread_id ?? 0)
+    const latest = await refetchBootstrap()
+    const pendingId = Number(latest?.pending_thread_id ?? bootstrap?.pending_thread_id ?? 0)
     if (!pendingId) return false
-    const pendingMetadata = latestSession?.active_thread && latestSession.active_thread.id === pendingId
-      ? latestSession.active_thread : activeThreads.find((t) => t.id === pendingId)
-    enterRatingView(pendingId, latestSession?.last_rolled_result ?? session?.last_rolled_result ?? null, pendingMetadata)
+    const pendingMetadata = latest?.active_thread && latest.active_thread.id === pendingId
+      ? latest.active_thread : latest?.roll_pool?.find((thread) => thread.id === pendingId)
+    enterRatingView(pendingId, latest?.last_rolled_result ?? bootstrap?.last_rolled_result ?? null, pendingMetadata)
     return true
   }
 
   function handleRoll() {
     if (isRolling) return
     navigator.vibrate?.(15)
-    if (session?.pending_thread_id && !suppressPendingAutoOpenRef.current) {
-      const pendingId = Number(session.pending_thread_id)
-      const pendingMetadata = session?.active_thread && session.active_thread.id === pendingId
-        ? session.active_thread : activeThreads.find((t) => t.id === pendingId)
-      enterRatingView(pendingId, session?.last_rolled_result ?? null, pendingMetadata)
+    if (bootstrap?.pending_thread_id && !suppressPendingAutoOpenRef.current) {
+      const pendingId = Number(bootstrap.pending_thread_id)
+      const pendingMetadata = bootstrap?.active_thread && bootstrap.active_thread.id === pendingId
+        ? bootstrap.active_thread : rollPool.find((thread) => thread.id === pendingId)
+      enterRatingView(pendingId, bootstrap?.last_rolled_result ?? null, pendingMetadata)
       return
     }
 
-    if (suppressPendingAutoOpenRef.current && session?.pending_thread_id) {
+    if (suppressPendingAutoOpenRef.current && bootstrap?.pending_thread_id) {
       suppressPendingAutoOpenRef.current = false
     }
 
@@ -642,8 +662,6 @@ useEffect(() => {
     }
   }
 
-
-
   function handleOverrideSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!overrideThreadId) return
@@ -657,13 +675,13 @@ useEffect(() => {
     })
   }
 
-  if (isSessionLoading && !isSessionError) {
+  if (isBootstrapLoading && !bootstrap && !isBootstrapError) {
     return <div className="text-center py-10 text-stone-500 font-black uppercase tracking-widest text-[10px]">Loading...</div>
   }
 
-  if (isSessionError || !session) {
-    const errorDetail = getApiErrorDetail(sessionError)
-    const status = getApiErrorStatus(sessionError)
+  if (isBootstrapError || !bootstrap) {
+    const errorDetail = getApiErrorDetail(bootstrapError)
+    const status = getApiErrorStatus(bootstrapError)
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4">
         <div className="text-center space-y-4">
@@ -675,7 +693,7 @@ useEffect(() => {
               Go to Login
             </button>
           ) : (
-            <button onClick={() => refetchSession()} className="px-4 py-2 bg-amber-600/20 border border-amber-600/50 rounded-lg text-xs font-black uppercase tracking-widest text-amber-500 hover:bg-amber-600/30 transition-colors">
+            <button onClick={() => refetchBootstrap()} className="px-4 py-2 bg-amber-600/20 border border-amber-600/50 rounded-lg text-xs font-black uppercase tracking-widest text-amber-500 hover:bg-amber-600/30 transition-colors">
               Retry
             </button>
           )}
@@ -711,8 +729,8 @@ useEffect(() => {
                 </button>
               ))}
               <button onClick={handleClearManualDie} disabled={clearManualDieMutation.isPending}
-                className={`px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${session.manual_die ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
-                title={session.manual_die ? `Exit manual mode (currently d${session.manual_die})` : 'Return to automatic dice ladder mode'}>
+                className={`px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${bootstrap.manual_die ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
+                title={bootstrap.manual_die ? `Exit manual mode (currently d${bootstrap.manual_die})` : 'Return to automatic dice ladder mode'}>
                 Auto
               </button>
             </div>
@@ -737,7 +755,7 @@ useEffect(() => {
             </div>
           </div>
           <Tooltip content="Manually select a thread to override the next roll result.">
-            <button type="button" onClick={() => setIsOverrideOpen(true)} className="px-2 md:px-3 py-1.5 md:py-2 bg-white/5 border border-white/10 text-stone-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all">
+            <button type="button" onClick={() => { setOverrideThreads(null); setIsOverrideOpen(true) }} className="px-2 md:px-3 py-1.5 md:py-2 bg-white/5 border border-white/10 text-stone-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all">
               Override
             </button>
           </Tooltip>
@@ -780,7 +798,7 @@ useEffect(() => {
                 onCancel={async () => {
                   try {
                     await dismissPendingMutation.mutate()
-                    await refetchSession()
+                    await refetchBootstrap()
                   } catch (error) {
                     setErrorMessage(getApiErrorDetail(error))
                     return
@@ -794,28 +812,28 @@ useEffect(() => {
               />
             )}
 
-  <ThreadPool
-    pool={pool}
-    blockedThreads={blockedThreads}
-    blockingReasonMap={blockingReasonMap}
-    isRatingView={isRatingView}
-    isRolling={isRolling}
-    rolledResult={rolledResult}
-    selectedThreadId={selectedThreadId}
-    staleThread={staleThread}
-    staleThreadCount={staleThreadCount}
-    snoozedThreads={snoozedThreads}
-    snoozedExpanded={snoozedExpanded}
-    blockedExpanded={blockedExpanded}
-    onThreadClick={handleThreadClick}
-    onUnsnooze={handleUnsnooze}
-    onReadStale={handleReadStale}
-    onToggleSnoozed={() => setSnoozedExpanded(!snoozedExpanded)}
-    onToggleBlocked={handleToggleBlocked}
-    onShuffle={handleShufflePool}
-    unsnoozeIsPending={unsnoozeMutation.isPending}
-    shuffleIsPending={shuffleQueueMutation.isPending}
-  />
+            <ThreadPool
+              pool={pool}
+              blockedThreads={blockedThreads}
+              blockingReasonMap={blockingReasonMap}
+              isRatingView={isRatingView}
+              isRolling={isRolling}
+              rolledResult={rolledResult}
+              selectedThreadId={selectedThreadId}
+              staleThread={staleThread}
+              staleThreadCount={staleThreadCount}
+              snoozedThreads={snoozedThreads}
+              snoozedExpanded={snoozedExpanded}
+              blockedExpanded={blockedExpanded}
+              onThreadClick={handleThreadClick}
+              onUnsnooze={handleUnsnooze}
+              onReadStale={handleReadStale}
+              onToggleSnoozed={() => setSnoozedExpanded(!snoozedExpanded)}
+              onToggleBlocked={handleToggleBlocked}
+              onShuffle={handleShufflePool}
+              unsnoozeIsPending={unsnoozeMutation.isPending}
+              shuffleIsPending={shuffleQueueMutation.isPending}
+            />
           </div>
         </div>
 
@@ -834,15 +852,15 @@ useEffect(() => {
             <p className="text-xs text-stone-400">Pick a thread to force next roll result.</p>
             <div className="space-y-2">
               <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Thread</label>
-              <select value={overrideThreadId} onChange={(event) => setOverrideThreadId(event.target.value)}
+              <select value={overrideThreadId} onChange={(event: ChangeEvent<HTMLSelectElement>) => setOverrideThreadId(event.target.value)}
                 className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors" required>
                 <option value="">Select a thread...</option>
                 <optgroup label="Active Threads">
-                  {activeThreads.map((thread) => (<option key={thread.id} value={thread.id}>{thread.title} ({thread.format})</option>))}
+                  {(overrideThreads ?? []).map((thread) => (<option key={thread.id} value={thread.id}>{thread.title} ({thread.format})</option>))}
                 </optgroup>
                 {snoozedThreads.length > 0 && (
                   <optgroup label="Snoozed Threads">
-                {snoozedThreads.map((thread) => (<option key={thread.id} value={thread.id}>{thread.title} ({thread.format})</option>))}
+                    {snoozedThreads.map((thread) => (<option key={thread.id} value={thread.id}>{thread.title} ({thread.format})</option>))}
                   </optgroup>
                 )}
               </select>
@@ -868,7 +886,7 @@ useEffect(() => {
             ))}
             <button onClick={async () => { await handleClearManualDie(); setIsDieModalOpen(false) }}
               disabled={clearManualDieMutation.isPending}
-              className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${session.manual_die ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
+              className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${bootstrap.manual_die ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
               Auto
             </button>
           </div>
@@ -886,15 +904,14 @@ useEffect(() => {
               <span className="text-lg">⬇️</span><span>Move to Back</span>
             </button>
             <button type="button" onClick={() => handleAction('snooze')} className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3">
-              <span className="text-lg">{snoozedThreads.some((t) => t.id === selectedThread?.id) ? '🔔' : '😴'}</span>
-              <span>{snoozedThreads.some((t) => t.id === selectedThread?.id) ? 'Unsnooze' : 'Snooze'}</span>
+              <span className="text-lg">{snoozedThreads.some((thread) => thread.id === selectedThread?.id) ? '🔔' : '😴'}</span>
+              <span>{snoozedThreads.some((thread) => thread.id === selectedThread?.id) ? 'Unsnooze' : 'Snooze'}</span>
             </button>
             <button type="button" onClick={() => handleAction('edit')} className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3">
               <span className="text-lg">✏️</span><span>Edit Thread</span>
             </button>
           </div>
         </Modal>
-
       </div>
     </div>
   )

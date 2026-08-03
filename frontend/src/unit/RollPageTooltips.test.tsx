@@ -15,6 +15,7 @@ import {
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks'
+import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 
@@ -36,6 +37,7 @@ vi.mock('../components/LazyDice3D', () => ({
 
 vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
 vi.mock('../hooks/useThread', () => ({ useThreads: vi.fn(), useStaleThreads: vi.fn() }))
+vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
 vi.mock('../hooks/useRoll', () => ({
   useSetDie: vi.fn(),
   useClearManualDie: vi.fn(),
@@ -62,6 +64,7 @@ vi.mock('../hooks', async (importOriginal) => {
 const mockedUseSession = vi.mocked(useSession) as any
 const mockedUseThreads = vi.mocked(useThreads) as any
 const mockedUseStaleThreads = vi.mocked(useStaleThreads) as any
+const mockedUseRollBootstrap = vi.mocked(useRollBootstrap) as any
 const mockedUseSetDie = vi.mocked(useSetDie) as any
 const mockedUseClearManualDie = vi.mocked(useClearManualDie) as any
 const mockedUseRoll = vi.mocked(useRoll) as any
@@ -75,18 +78,49 @@ const mockedUseShuffleQueue = vi.mocked(useShuffleQueue) as any
 const mockedUseRate = vi.mocked(useRate) as any
 
 beforeEach(() => {
-  const mockSessionData = {
+  const mockBootstrapData = {
     current_die: 6,
     last_rolled_result: null,
     manual_die: null,
-    has_restore_point: false,
+    pending_thread_id: null,
+    active_thread: null,
     snoozed_threads: [
       { id: 1, title: 'Saga', format: 'Comics' },
-      { id: 2, title: 'X-Men', format: 'Comics' }
+      { id: 2, title: 'X-Men', format: 'Comics' },
     ],
+    snoozed_count: 2,
+    roll_pool: [
+      { id: 1, title: 'Saga', format: 'Comics' },
+      { id: 2, title: 'X-Men', format: 'Comics' },
+      { id: 3, title: 'Descender', format: 'Comics' },
+      { id: 4, title: 'Black Science', format: 'Comics' },
+      { id: 5, title: 'East of West', format: 'Comics' },
+      { id: 6, title: 'Monstress', format: 'Comics' },
+      { id: 7, title: 'Paper Girls', format: 'Comics' },
+    ],
+    blocked_count: 0,
+    blocked_threads: [],
+    stale_thread_count: 0,
+    stale_thread: null,
   }
+  mockedUseRollBootstrap.mockReturnValue({
+    data: mockBootstrapData,
+    refetch: vi.fn(),
+    isPending: false,
+    isError: false,
+    error: null,
+  })
   mockedUseSession.mockReturnValue({
-    data: mockSessionData,
+    data: {
+      current_die: 6,
+      last_rolled_result: null,
+      manual_die: null,
+      has_restore_point: false,
+      snoozed_threads: [
+        { id: 1, title: 'Saga', format: 'Comics' },
+        { id: 2, title: 'X-Men', format: 'Comics' },
+      ],
+    },
     refetch: vi.fn(),
   })
   mockedUseThreads.mockReturnValue({
@@ -184,15 +218,33 @@ it('renders tooltip for ladder indicator', async () => {
 })
 
 it('does not render snoozed indicators when no snoozed threads', async () => {
-  mockedUseSession.mockReturnValue({
+  mockedUseRollBootstrap.mockReturnValue({
     data: {
       current_die: 6,
       last_rolled_result: null,
       manual_die: null,
-      has_restore_point: false,
+      pending_thread_id: null,
+      active_thread: null,
       snoozed_threads: [],
+      snoozed_count: 0,
+      roll_pool: [
+        { id: 1, title: 'Saga', format: 'Comics' },
+        { id: 2, title: 'X-Men', format: 'Comics' },
+        { id: 3, title: 'Descender', format: 'Comics' },
+        { id: 4, title: 'Black Science', format: 'Comics' },
+        { id: 5, title: 'East of West', format: 'Comics' },
+        { id: 6, title: 'Monstress', format: 'Comics' },
+        { id: 7, title: 'Paper Girls', format: 'Comics' },
+      ],
+      blocked_count: 0,
+      blocked_threads: [],
+      stale_thread_count: 0,
+      stale_thread: null,
     },
     refetch: vi.fn(),
+    isPending: false,
+    isError: false,
+    error: null,
   })
 
   render(

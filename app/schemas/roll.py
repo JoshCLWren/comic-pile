@@ -1,6 +1,10 @@
 """Roll-related Pydantic schemas for request/response validation."""
 
-from pydantic import BaseModel, ConfigDict
+from typing import ClassVar
+
+from pydantic import BaseModel, ConfigDict, model_validator
+
+from app.schemas.session import ActiveThreadInfo
 
 
 class RollRequest(BaseModel):
@@ -33,3 +37,50 @@ class OverrideRequest(BaseModel):
     """Schema for manual thread override."""
 
     thread_id: int
+
+
+class RollBootstrapThread(BaseModel):
+    """Lightweight thread summary for the roll bootstrap pool."""
+
+    id: int
+    title: str
+    format: str
+    last_activity_at: str | None = None
+
+
+class RollBootstrapResponse(BaseModel):
+    """Bounded bootstrap payload for the Roll initial render.
+
+    Returns only the retained data required for the first interactive screen.
+    Does not include the full queue, collection data, or secondary detail panels.
+    """
+
+    session_id: int
+    user_id: int
+    summary_limit: ClassVar[int] = 20
+
+    current_die: int
+    manual_die: int | None
+    pending_thread_id: int | None
+    last_rolled_result: int | None
+    active_thread: ActiveThreadInfo | None
+    roll_pool: list[RollBootstrapThread]
+    snoozed_threads: list[RollBootstrapThread]
+    snoozed_count: int
+    blocked_count: int
+    blocked_threads: list[RollBootstrapThread]
+    stale_thread_count: int
+    stale_thread: RollBootstrapThread | None
+
+    @model_validator(mode="before")
+    @classmethod
+    def bound_summary_lists(cls, data: object) -> object:
+        """Keep summary collections bounded even when stored session IDs grow."""
+        if not isinstance(data, dict):
+            return data
+
+        for field_name in ("snoozed_threads", "blocked_threads"):
+            values = data.get(field_name)
+            if isinstance(values, list):
+                data[field_name] = values[: cls.summary_limit]
+        return data
