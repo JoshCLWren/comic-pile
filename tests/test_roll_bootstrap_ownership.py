@@ -85,6 +85,8 @@ def test_bootstrap_schema_bounds_summary_lists_without_losing_counts():
     ]
 
     response = RollBootstrapResponse(
+        session_id=1,
+        user_id=1,
         current_die=100,
         manual_die=None,
         pending_thread_id=None,
