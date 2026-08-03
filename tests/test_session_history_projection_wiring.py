@@ -351,3 +351,259 @@ async def test_history_duplicate_timestamps_break_ties_by_event_id(
 
     assert item["current_die"] == 12
     assert item["ladder_path"] == "6 → 8 → 12"
+
+
+@pytest.mark.asyncio
+async def test_history_active_thread_metadata_loads_in_bulk(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    db_engine: AsyncEngine,
+    default_user: User,
+) -> None:
+    """Migrated unread counts and issue numbers are bulk-loaded, not per-thread."""
+    from app.models import Issue
+
+    migrated = Thread(
+        title="Migrated Comic",
+        format="Comic",
+        issues_remaining=0,
+        queue_position=1,
+        user_id=default_user.id,
+        total_issues=5,
+        reading_progress="in_progress",
+    )
+    unmigrated = Thread(
+        title="Legacy Comic",
+        format="Comic",
+        issues_remaining=42,
+        queue_position=2,
+        user_id=default_user.id,
+    )
+    async_db.add_all([migrated, unmigrated])
+    await async_db.flush()
+    session_a = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    session_b = SessionModel(start_die=8, user_id=default_user.id, started_at=datetime.now(UTC))
+    async_db.add_all([session_a, session_b])
+    await async_db.flush()
+
+    for i in range(1, 6):
+        async_db.add(
+            Issue(
+                thread_id=migrated.id,
+                issue_number=str(i),
+                position=i,
+                status="read" if i <= 3 else "unread",
+            )
+        )
+    await async_db.flush()
+    async_db.add_all(
+        [
+            _roll_event(session_a, migrated, timestamp=1),
+            _roll_event(session_b, unmigrated, timestamp=1),
+        ]
+    )
+    await _commit_all(async_db)
+
+    statements: list[str] = []
+
+    def record_statement(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        _parameters: object,
+        _context: object,
+        _executemany: bool,
+    ) -> None:
+        statements.append(statement)
+
+    sa_event.listen(db_engine.sync_engine, "before_cursor_execute", record_statement)
+    try:
+        response = await auth_client.get("/api/sessions/")
+    finally:
+        sa_event.remove(db_engine.sync_engine, "before_cursor_execute", record_statement)
+
+    assert response.status_code == 200
+    sessions = {s["id"]: s for s in response.json()["sessions"]}
+
+    migrated_active = sessions[session_a.id]["active_thread"]
+    assert migrated_active is not None
+    assert migrated_active["title"] == "Migrated Comic"
+    assert migrated_active["issues_remaining"] == 2
+    assert migrated_active["total_issues"] == 5
+
+    unmigrated_active = sessions[session_b.id]["active_thread"]
+    assert unmigrated_active is not None
+    assert unmigrated_active["title"] == "Legacy Comic"
+    assert unmigrated_active["issues_remaining"] == 42
+
+    issue_reads = [s for s in statements if "from issues" in s.lower()]
+    assert len(issue_reads) <= 2, (
+        f"Expected bounded issue reads, got {len(issue_reads)}: {issue_reads}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_history_missing_next_issue_yields_null_issue_metadata(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """A dangling next_unread_issue_id produces null issue fields, not an error."""
+    from app.models import Issue
+
+    migrated = Thread(
+        title="Broken Reference Comic",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=1,
+        user_id=default_user.id,
+        total_issues=5,
+        reading_progress="in_progress",
+    )
+    async_db.add(migrated)
+    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    async_db.add(session)
+    await async_db.flush()
+
+    issues = [
+        Issue(
+            thread_id=migrated.id,
+            issue_number=str(i),
+            position=i,
+            status="read" if i <= 3 else "unread",
+        )
+        for i in range(1, 6)
+    ]
+    async_db.add_all(issues)
+    await async_db.flush()
+    migrated.next_unread_issue_id = issues[0].id
+    await _commit_all(async_db)
+
+    await async_db.delete(issues[0])
+    await _commit_all(async_db)
+
+    async_db.add(_roll_event(session, migrated, timestamp=1))
+    await _commit_all(async_db)
+
+    response = await auth_client.get("/api/sessions/")
+    assert response.status_code == 200
+    item = next(s for s in response.json()["sessions"] if s["id"] == session.id)
+
+    assert item["active_thread"] is not None
+    assert item["active_thread"]["issues_remaining"] == 2
+    assert item["active_thread"]["issue_id"] is None
+    assert item["active_thread"]["issue_number"] is None
+    assert item["active_thread"]["next_issue_id"] is None
+    assert item["active_thread"]["next_issue_number"] is None
+
+
+@pytest.mark.asyncio
+async def test_history_issue_reads_stay_bounded_across_page_sizes(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    db_engine: AsyncEngine,
+    default_user: User,
+) -> None:
+    """Issue metadata reads stay bounded as the History page grows."""
+    from app.models import Issue
+
+    for i in range(10):
+        migrated = Thread(
+            title=f"Bulk Comic {i}",
+            format="Comic",
+            issues_remaining=0,
+            queue_position=i + 1,
+            user_id=default_user.id,
+            total_issues=5,
+            reading_progress="in_progress",
+        )
+        async_db.add(migrated)
+        session = SessionModel(
+            start_die=6,
+            user_id=default_user.id,
+            started_at=datetime(2026, 8, 2, 12, 1, i, tzinfo=UTC),
+        )
+        async_db.add(session)
+        await _commit_all(async_db)
+        for j in range(1, 6):
+            async_db.add(
+                Issue(
+                    thread_id=migrated.id,
+                    issue_number=str(j),
+                    position=j,
+                    status="unread" if j <= 2 else "read",
+                )
+            )
+        await _commit_all(async_db)
+        async_db.add(_roll_event(session, migrated, timestamp=i))
+        await _commit_all(async_db)
+
+    statements: list[str] = []
+
+    def record_statement(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        _parameters: object,
+        _context: object,
+        _executemany: bool,
+    ) -> None:
+        statements.append(statement)
+
+    sa_event.listen(db_engine.sync_engine, "before_cursor_execute", record_statement)
+    try:
+        response = await auth_client.get("/api/sessions/?page_size=200")
+    finally:
+        sa_event.remove(db_engine.sync_engine, "before_cursor_execute", record_statement)
+
+    assert response.status_code == 200
+    sessions = response.json()["sessions"]
+    assert len(sessions) == 10
+
+    issue_reads = [s for s in statements if "from issues" in s.lower()]
+    assert len(issue_reads) <= 2, (
+        f"Expected bounded issue reads, got {len(issue_reads)}: {issue_reads}"
+    )
+
+    active_threads = [s["active_thread"] for s in sessions]
+    assert all(t is not None and t["issues_remaining"] == 2 for t in active_threads)
+
+
+@pytest.mark.asyncio
+async def test_history_migrated_zero_unread_returns_zero_not_stored_counter(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """A migrated thread with no unread issues reports 0, not a stale counter."""
+    from app.models import Issue
+
+    migrated = Thread(
+        title="All Read Comic",
+        format="Comic",
+        issues_remaining=99,
+        queue_position=1,
+        user_id=default_user.id,
+        total_issues=5,
+        reading_progress="in_progress",
+    )
+    async_db.add(migrated)
+    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    async_db.add(session)
+    await async_db.flush()
+
+    for i in range(1, 6):
+        async_db.add(
+            Issue(
+                thread_id=migrated.id,
+                issue_number=str(i),
+                position=i,
+                status="read",
+            )
+        )
+    await async_db.flush()
+    async_db.add(_roll_event(session, migrated, timestamp=1))
+    await _commit_all(async_db)
+
+    response = await auth_client.get("/api/sessions/")
+    assert response.status_code == 200
+    item = next(s for s in response.json()["sessions"] if s["id"] == session.id)
+
+    assert item["active_thread"] is not None
+    assert item["active_thread"]["issues_remaining"] == 0

@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -85,6 +85,54 @@ async def _fetch_thread_issue_metadata(
     if next_issue:
         return next_issue.id, next_issue.issue_number
     return None, None
+
+
+async def _bulk_unread_counts(threads: list[Thread], db: AsyncSession) -> dict[int, int]:
+    """Bulk-load unread issue counts for migrated threads in one grouped query.
+
+    Unmigrated threads (``total_issues`` null) fall back to their stored
+    ``issues_remaining`` value and are omitted from the returned map.
+
+    Args:
+        threads: Threads that may appear as an active thread in the History page.
+        db: Database session.
+
+    Returns:
+        Mapping of migrated thread ID to its unread issue count.
+    """
+    migrated_ids = [t.id for t in threads if t.uses_issue_tracking()]
+    if not migrated_ids:
+        return {}
+
+    result = await db.execute(
+        select(Issue.thread_id, func.count())
+        .where(Issue.thread_id.in_(migrated_ids))
+        .where(Issue.status == "unread")
+        .group_by(Issue.thread_id)
+    )
+    return {row[0]: row[1] for row in result.all()}
+
+
+async def _bulk_next_issue_numbers(threads: list[Thread], db: AsyncSession) -> dict[int, str]:
+    """Bulk-load next-unread issue numbers in one query.
+
+    Args:
+        threads: Threads that may appear as an active thread in the History page.
+        db: Database session.
+
+    Returns:
+        Mapping of issue ID to issue number for every referenced next-unread issue.
+    """
+    issue_ids = {
+        t.next_unread_issue_id
+        for t in threads
+        if t.uses_issue_tracking() and t.next_unread_issue_id is not None
+    }
+    if not issue_ids:
+        return {}
+
+    result = await db.execute(select(Issue.id, Issue.issue_number).where(Issue.id.in_(issue_ids)))
+    return {row[0]: row[1] for row in result.all()}
 
 
 async def get_session_with_thread_safe(
@@ -453,7 +501,7 @@ async def list_sessions(
         SessionHistoryListResponse with paginated sessions and next_page_token if more exist.
     """
     from fastapi import HTTPException, status
-    from sqlalchemy import func, or_
+    from sqlalchemy import or_
 
     query = select(SessionModel).where(SessionModel.user_id == current_user.id)
     query = query.order_by(SessionModel.started_at.desc(), SessionModel.id.desc())
@@ -538,14 +586,26 @@ async def list_sessions(
     if thread_ids:
         threads_result = await db.execute(select(Thread).where(Thread.id.in_(thread_ids)))
         threads_by_id = {t.id: t for t in threads_result.scalars().all()}
+        threads = list(threads_by_id.values())
+        unread_counts = await _bulk_unread_counts(threads, db)
+        issue_numbers = await _bulk_next_issue_numbers(threads, db)
 
         for sid in session_ids:
             roll_event = projection.latest_roll_by_session.get(sid)
             if roll_event is not None and roll_event.selected_thread_id is not None:
                 thread = threads_by_id.get(roll_event.selected_thread_id)
                 if thread:
-                    issues_remaining = await thread.get_issues_remaining(db)
-                    issue_id, issue_number = await _fetch_thread_issue_metadata(thread, db)
+                    if thread.uses_issue_tracking():
+                        issues_remaining = unread_counts.get(thread.id, 0)
+                    else:
+                        issues_remaining = thread.issues_remaining
+                    issue_id: int | None = None
+                    issue_number: str | None = None
+                    if thread.uses_issue_tracking() and thread.next_unread_issue_id is not None:
+                        resolved_number = issue_numbers.get(thread.next_unread_issue_id)
+                        if resolved_number is not None:
+                            issue_id = thread.next_unread_issue_id
+                            issue_number = resolved_number
                     active_threads_dict[sid] = ActiveThreadInfo(
                         id=thread.id,
                         title=thread.title,
