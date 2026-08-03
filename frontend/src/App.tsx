@@ -12,7 +12,6 @@ import type { DiagnosticData } from './hooks/useDiagnostics'
 import { ToastProvider } from './contexts/ToastProvider'
 import { CacheProvider } from './contexts/CacheContext'
 import { BugReportRestoreProvider } from './contexts/BugReportRestoreContext'
-import { CollectionProvider } from './contexts/CollectionContext'
 import './index.css'
 
 declare global {
@@ -245,10 +244,7 @@ function AppRoutes() {
             </PublicRoute>
           }
         />
-        <Route
-          path="/rate"
-          element={<Navigate to="/" replace />}
-        />
+        <Route path="/rate" element={<Navigate to="/" replace />} />
         <Route
           path="/"
           element={
@@ -329,7 +325,7 @@ function AppRoutes() {
             </ProtectedRoute>
           }
         />
-        </Routes>
+      </Routes>
       {isAuthenticated && <BugReportConnected onSubmit={submit} />}
     </Suspense>
   )
@@ -343,9 +339,7 @@ function App() {
           <ToastProvider>
             <CacheProvider>
               <AuthProvider>
-                <AuthenticatedCollectionProvider>
-                  <AppRoutes />
-                </AuthenticatedCollectionProvider>
+                <AppRoutes />
               </AuthProvider>
             </CacheProvider>
           </ToastProvider>
@@ -353,16 +347,6 @@ function App() {
       </QueryClientProvider>
     </BrowserRouter>
   )
-}
-
-function AuthenticatedCollectionProvider({ children }: { children: ReactNode }) {
-  const { isAuthenticated } = useAuth()
-
-  if (!isAuthenticated) {
-    return children
-  }
-
-  return <CollectionProvider>{children}</CollectionProvider>
 }
 
 export { AppRoutes }
