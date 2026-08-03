@@ -41,7 +41,6 @@ vi.mock('../services/api', () => ({
     listBlockedThreadIds: vi.fn().mockResolvedValue([]),
     getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),
   },
-  collectionsApi: { list: vi.fn().mockResolvedValue([]) },
 }))
 
 vi.mock('../services/api-issues', () => ({
@@ -50,21 +49,6 @@ vi.mock('../services/api-issues', () => ({
     markRead: vi.fn().mockResolvedValue(undefined),
     migrateThread: vi.fn().mockResolvedValue({}),
   },
-}))
-
-vi.mock('../contexts/CollectionContext', () => ({
-  CollectionProvider: ({ children }: { children: ReactNode }) => children,
-  useCollections: vi.fn().mockReturnValue({
-    collections: [],
-    activeCollectionId: null,
-    activeCollection: null,
-    setActiveCollectionId: vi.fn(),
-    createCollection: vi.fn(),
-    updateCollection: vi.fn(),
-    deleteCollection: vi.fn(),
-    moveCollection: vi.fn(),
-    isLoading: false,
-  }),
 }))
 
 vi.mock('../contexts/useToast', () => ({

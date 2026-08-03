@@ -50,9 +50,6 @@ vi.mock('../services/api', () => ({
     listBlockedThreadIds: vi.fn().mockResolvedValue([]),
     getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),
   },
-  collectionsApi: {
-    list: vi.fn().mockResolvedValue([]),
-  },
 }))
 
 vi.mock('../services/api-issues', () => ({

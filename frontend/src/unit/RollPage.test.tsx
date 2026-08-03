@@ -533,7 +533,7 @@ describe('Rating View', () => {
     await user.click(screen.getByText('Read Now'))
 
     // In rating view, Saga should be HIDDEN from the pool at the bottom
-    const poolList = screen.getByLabelText('Roll pool collection')
+    const poolList = screen.getByLabelText('Roll pool')
     expect(within(poolList).queryByText('Saga')).not.toBeInTheDocument()
     // Other threads (X-Men) should still be there
     expect(within(poolList).getByText('X-Men')).toBeInTheDocument()
