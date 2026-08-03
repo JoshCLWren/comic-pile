@@ -8,6 +8,7 @@ const api = vi.hoisted(() => ({
   rollApi: { roll: vi.fn(), override: vi.fn(), dismissPending: vi.fn(), setDie: vi.fn(), clearManualDie: vi.fn(), reroll: vi.fn(), bootstrap: vi.fn() },
   undoApi: { listSnapshots: vi.fn(), undo: vi.fn() },
   tasksApi: { getMetrics: vi.fn() },
+  threadsApi: { listStale: vi.fn() },
   sessionApi: { getCurrent: vi.fn(), list: vi.fn(), getDetails: vi.fn(), getSnapshots: vi.fn(), restoreSessionStart: vi.fn() },
 }))
 vi.mock('../services/api', () => api)
@@ -23,6 +24,7 @@ import { useSession, useSessions, useSessionDetails, useSessionSnapshots, useRes
 import { useSnapshots, useUndo } from '../hooks/useUndo'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
+import { useStaleThreads } from '../hooks/useThread'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -266,5 +268,11 @@ describe('data hooks', () => {
       expect(stringHook.result.current.isError).toBe(true)
       expect(stringHook.result.current.error?.message).toBe('Failed to fetch roll bootstrap')
     })
+  })
+
+  it('covers stale thread error path', async () => {
+    api.threadsApi.listStale.mockRejectedValueOnce(new Error('stale fetch failed'))
+    const stale = renderHook(() => useStaleThreads())
+    await waitFor(() => expect(stale.result.current.isError).toBe(true))
   })
 })
