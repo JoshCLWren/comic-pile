@@ -130,4 +130,23 @@ describe('useRollBootstrap', () => {
       })
     }
   })
+
+  it('records a changed session id and suppresses duplicate notifications', async () => {
+    localStorage.setItem('comic_pile_last_session_id_1', '99')
+    mockedBootstrap.mockResolvedValue(bootstrapResponse)
+
+    const { result } = renderBootstrap()
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+    expect(result.current.data).toBe(bootstrapResponse)
+    expect(localStorage.getItem('comic_pile_last_session_id_1')).toBe('1')
+
+    localStorage.setItem('comic_pile_last_session_id_1', '98')
+    await act(async () => {
+      await result.current.refetch()
+    })
+
+    expect(result.current.data).toBe(bootstrapResponse)
+    expect(result.current.isError).toBe(false)
+  })
 })
