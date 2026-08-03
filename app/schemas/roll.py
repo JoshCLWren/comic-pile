@@ -2,7 +2,7 @@
 
 from typing import ClassVar
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from app.schemas.session import ActiveThreadInfo
 
@@ -10,10 +10,7 @@ from app.schemas.session import ActiveThreadInfo
 class RollRequest(BaseModel):
     """Schema for roll request."""
 
-    collection_id: int | None = Field(
-        default=None,
-        description="Optional collection ID to filter the roll pool by",
-    )
+    model_config = ConfigDict(extra="forbid")
 
 
 class RollResponse(BaseModel):
