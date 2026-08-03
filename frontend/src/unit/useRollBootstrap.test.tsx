@@ -149,4 +149,33 @@ describe('useRollBootstrap', () => {
     expect(result.current.data).toBe(bootstrapResponse)
     expect(result.current.isError).toBe(false)
   })
+
+  it('uses the anonymous storage key when the bootstrap has no user id', async () => {
+    const anonymousResponse = {
+      ...bootstrapResponse,
+      session_id: 7,
+      user_id: undefined,
+    } as unknown as RollBootstrapResponse
+    mockedBootstrap.mockResolvedValue(anonymousResponse)
+
+    const { result } = renderBootstrap()
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+
+    expect(result.current.data).toBe(anonymousResponse)
+    expect(localStorage.getItem('comic_pile_last_session_id_anonymous')).toBe('7')
+  })
+
+  it('ignores a malformed stored session id and replaces it with the current id', async () => {
+    localStorage.setItem('comic_pile_last_session_id_1', 'not-a-number')
+    mockedBootstrap.mockResolvedValue(bootstrapResponse)
+
+    const { result } = renderBootstrap()
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+
+    expect(result.current.data).toBe(bootstrapResponse)
+    expect(result.current.isError).toBe(false)
+    expect(localStorage.getItem('comic_pile_last_session_id_1')).toBe('1')
+  })
 })
