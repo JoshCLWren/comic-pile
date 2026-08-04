@@ -43,7 +43,7 @@ beforeEach(() => {
         { id: 1, timestamp: '2024-05-01T10:15:00Z', type: 'roll', thread_title: 'Saga', result: 3, die: 6 },
       ],
     },
-    isLoading: false,
+    isPending: false,
     refetch: refetchDetailsSpy,
   })
   mockedUseSessionSnapshots.mockReturnValue({
@@ -119,8 +119,11 @@ it('renders fallback labels for sparse summaries and events', () => {
   })
   render(<MemoryRouter><SessionPage /></MemoryRouter>)
   expect(screen.getAllByText('None').length).toBeGreaterThan(0)
-  expect(screen.getByText('Thread')).toBeInTheDocument()
+  expect(screen.getByText('Thread unavailable')).toBeInTheDocument()
   expect(screen.getByText('Snapshot')).toBeInTheDocument()
+  expect(screen.getByText('Rating 0')).toBeInTheDocument()
+  expect(screen.getByText('Rolled 0')).toBeInTheDocument()
+  expect(screen.getByText('d0')).toBeInTheDocument()
 })
 
 it('shows session-start snapshots as history instead of rating undo targets', () => {
@@ -151,4 +154,51 @@ it('renders pending restore state and optional event metadata', () => {
   render(<MemoryRouter><SessionPage /></MemoryRouter>)
   expect(screen.getByRole('button', { name: 'Restoring...' })).toBeDisabled()
   expect(screen.getByText('Queue move: front')).toBeInTheDocument()
+})
+
+it('renders a complete rate event as one labeled record', () => {
+  mockedUseSessionDetails.mockReturnValue({ data: {
+    session_id: 16, started_at: '2024-01-01', ended_at: '2024-01-02', start_die: 6, current_die: 8,
+    ladder_path: 'd6 → d8', narrative_summary: {},
+    events: [{
+      id: 7,
+      timestamp: '2024-01-01',
+      type: 'rate',
+      thread_title: 'A Very Long Saga Title That Must Wrap Safely On Mobile',
+      issue_number: '5',
+      issues_read: 1,
+      rating: 4,
+      die: 6,
+      die_after: 8,
+      selection_method: 'dice_roll',
+    }],
+  }, isPending: false, refetch: refetchDetailsSpy })
+
+  render(<MemoryRouter><SessionPage /></MemoryRouter>)
+
+  expect(screen.getByText('Rated')).toBeInTheDocument()
+  expect(screen.getByText('Issue 5')).toBeInTheDocument()
+  expect(screen.getByText('1 issue read')).toBeInTheDocument()
+  expect(screen.getByText('Rating 4')).toBeInTheDocument()
+  expect(screen.getByText('d6')).toBeInTheDocument()
+  expect(screen.getByText('Die after: d8')).toBeInTheDocument()
+  expect(screen.getByText('Selected by dice roll')).toBeInTheDocument()
+})
+
+it('uses human labels and explicit fallback text for sparse events', () => {
+  mockedUseSessionDetails.mockReturnValue({ data: {
+    session_id: 17, started_at: '2024-01-01', ended_at: null, start_die: 4, current_die: 4,
+    ladder_path: 'd4', narrative_summary: {},
+    events: [
+      { id: 8, timestamp: '2024-01-01', type: 'snooze', thread_title: 'Saga' },
+      { id: 9, timestamp: '2024-01-01', type: 'undo', thread_title: null },
+    ],
+  }, isPending: false, refetch: refetchDetailsSpy })
+
+  render(<MemoryRouter><SessionPage /></MemoryRouter>)
+
+  expect(screen.getByText('Snoozed')).toBeInTheDocument()
+  expect(screen.getByText('Restored')).toBeInTheDocument()
+  expect(screen.getByText('Thread unavailable')).toBeInTheDocument()
+  expect(screen.getAllByText('No additional event details recorded.')).toHaveLength(2)
 })
