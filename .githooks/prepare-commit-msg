@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# prepare-commit-msg — attribute each commit to the OpenCode model that produced it.
+#
+# When OPENCODE_MODEL is set (by the ComicPile factory runner or exported
+# manually), append a real "Model: <model-id>" commit trailer. The factory tracks
+# per-model usage in its manifest so confirmed models can rotate between runs.
+#
+# Skipped for merges, amends, and squash commits (source=merge|commit|squash),
+# and when the same model trailer is already present.
+
+set -euo pipefail
+
+MSG_FILE="${1:-}"
+SOURCE="${2:-}"
+
+if [[ -z "${OPENCODE_MODEL:-}" ]]; then
+  exit 0
+fi
+if [[ "$SOURCE" == "merge" || "$SOURCE" == "commit" || "$SOURCE" == "squash" ]]; then
+  exit 0
+fi
+[[ -n "$MSG_FILE" && -f "$MSG_FILE" ]] || exit 0
+
+if git interpret-trailers --parse "$MSG_FILE" | grep -Fxq "Model: $OPENCODE_MODEL"; then
+  exit 0
+fi
+
+git interpret-trailers --in-place --trailer "Model: $OPENCODE_MODEL" "$MSG_FILE"

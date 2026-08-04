@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 POLICY = ROOT / "docs" / "AUTONOMOUS_FACTORY_POLICY.md"
 PROTOCOL = ROOT / "docs" / "ISSUE_EXECUTION_PROTOCOL.md"
 ENTRYPOINT = ROOT / "scripts" / "comic-pile-opencode-factory.sh"
+HEARTBEAT_ENTRYPOINT = ROOT / "scripts" / "comic-pile-opencode-factory-heartbeat.sh"
 
 
 def require(text: str, needle: str, source: Path) -> None:
@@ -92,12 +93,22 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         forbid(entrypoint, obsolete, ENTRYPOINT)
 
 
+def read_entrypoint_text() -> str:
+    """Read the orchestration wrapper and the single-heartbeat policy prompt."""
+    return "\n".join(
+        (
+            ENTRYPOINT.read_text(encoding="utf-8"),
+            HEARTBEAT_ENTRYPOINT.read_text(encoding="utf-8"),
+        )
+    )
+
+
 def main() -> None:
     """Read repository policy sources and validate their alignment."""
     validate_texts(
         POLICY.read_text(encoding="utf-8"),
         PROTOCOL.read_text(encoding="utf-8"),
-        ENTRYPOINT.read_text(encoding="utf-8"),
+        read_entrypoint_text(),
     )
     print("Autonomous factory policy invariants are aligned.")
 

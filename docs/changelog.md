@@ -2,6 +2,16 @@
 
 ## 2026-08-03
 
+**OpenCode model discovery, rotation, and attribution (factory tooling)**
+
+- Added `scripts/opencode-model-manifest.sh`: a shared, flock-protected model manifest helper (`init`, `set`, `record`, `confirmed`, `next`, `pending`, `summary`) that tracks probe status, tool-call support, last probe time, and per-model usage.
+- Added `scripts/opencode-model-scout.sh`: a concurrent ACP tool-call prober that probes candidate models through `opencode run` in parallel, kills any probe that stops writing to its heartbeat file (default 15 minutes), and updates the manifest eagerly as each probe finishes.
+- The factory runner (`comic-pile-opencode-factory.sh`) now rotates across confirmed models instead of always using the paid DeepSeek subscription: an explicit `--model` or `OPENCODE_MODEL` wins, otherwise it round-robins least-used confirmed models via `next`, falling back to `COMIC_PILE_DEFAULT_MODEL`.
+- The runner writes a per-heartbeat heartbeat file and a watchdog kills a hung run that has produced no output for `FACTORY_HEARTBEAT_TIMEOUT` (default 900s).
+- The overnight supervisor (`comic-pile-opencode-factory-overnight.sh`) now launches the model scout in `--watch` mode alongside the factory, tracks it with its own pid file, and reports confirmed models in `status`.
+- Added `.githooks/prepare-commit-msg`: every commit is attributed with a `Model: <id>` trailer from `OPENCODE_MODEL` (skipped for merges, amends, and squash commits). Factory PR bodies are attributed with the producing model.
+- `scripts/install-git-hooks.sh` installs the new hook, preserving any original user hooks in `.sample` backups on first run; `factory-policy.yml` syntax-checks the new shell scripts.
+
 **Production migrations on Vercel/Neon**
 
 - Production schema migrations now run automatically in the GitHub Actions `deploy-production.yml` workflow, before `vercel deploy`, against the Neon main-branch database.

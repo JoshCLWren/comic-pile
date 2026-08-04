@@ -21,7 +21,7 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
         """Load the checked-in policy sources once for mutation tests."""
         cls.policy = CHECKER.POLICY.read_text(encoding="utf-8")
         cls.protocol = CHECKER.PROTOCOL.read_text(encoding="utf-8")
-        cls.entrypoint = CHECKER.ENTRYPOINT.read_text(encoding="utf-8")
+        cls.entrypoint = CHECKER.read_entrypoint_text()
 
     def validate(self, *, policy: str | None = None, entrypoint: str | None = None) -> None:
         """Validate optional mutated text against unchanged companion sources."""
