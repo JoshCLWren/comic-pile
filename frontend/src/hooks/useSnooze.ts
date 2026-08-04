@@ -1,21 +1,64 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { snoozeApi } from '../services/api'
 import { getApiErrorDetail } from '../utils/apiError'
+import {
+  fetchAndPublishRollBootstrap,
+  isAmbiguousNetworkFailure,
+  reconcileAmbiguousRollMutation,
+} from './rollMutationReconciliation'
+
+type SnoozeResult = Awaited<ReturnType<typeof snoozeApi.snooze>> | undefined
 
 export function useSnooze() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
+  const inFlightRequest = useRef<Promise<SnoozeResult> | null>(null)
 
-  const mutate = async () => {
+  const mutate = async (expectedPendingThreadId?: number): Promise<SnoozeResult> => {
+    if (inFlightRequest.current) return inFlightRequest.current
+
     setIsPending(true)
     setIsError(false)
+
+    const request: Promise<SnoozeResult> = (async () => {
+      try {
+        const result = await snoozeApi.snooze()
+
+        try {
+          await fetchAndPublishRollBootstrap()
+        } catch (reconciliationError: unknown) {
+          console.error(
+            'Snooze saved but authoritative Roll state failed to refresh:',
+            getApiErrorDetail(reconciliationError),
+          )
+        }
+
+        return result
+      } catch (error: unknown) {
+        if (isAmbiguousNetworkFailure(error)) {
+          try {
+            const committed = await reconcileAmbiguousRollMutation(expectedPendingThreadId)
+            if (committed) return undefined
+          } catch (reconciliationError: unknown) {
+            console.error(
+              'Failed to reconcile ambiguous snooze result:',
+              getApiErrorDetail(reconciliationError),
+            )
+          }
+        }
+
+        setIsError(true)
+        console.error('Failed to snooze thread:', getApiErrorDetail(error))
+        throw error
+      }
+    })()
+
+    inFlightRequest.current = request
+
     try {
-      await snoozeApi.snooze()
-    } catch (error: unknown) {
-      setIsError(true)
-      console.error('Failed to snooze thread:', getApiErrorDetail(error))
-      throw error
+      return await request
     } finally {
+      inFlightRequest.current = null
       setIsPending(false)
     }
   }
