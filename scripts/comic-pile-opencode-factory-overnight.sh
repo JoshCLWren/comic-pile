@@ -29,12 +29,13 @@ Environment defaults:
   FACTORY_FAILURE_BACKOFF_SECONDS=5
   FACTORY_MAX_FAILURES=2
 
-Additional arguments are passed to comic-pile-opencode-factory.sh after --watch.
+Additional factory options are passed to comic-pile-opencode-factory.sh after the selected command.
 Examples:
   bash scripts/comic-pile-opencode-factory-overnight.sh start
+  bash scripts/comic-pile-opencode-factory-overnight.sh start --idle-seconds 30
+  bash scripts/comic-pile-opencode-factory-overnight.sh run --idle-seconds 30
   bash scripts/comic-pile-opencode-factory-overnight.sh status
   bash scripts/comic-pile-opencode-factory-overnight.sh stop
-  bash scripts/comic-pile-opencode-factory-overnight.sh run --idle-seconds 30
 USAGE
 }
 
