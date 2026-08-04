@@ -33,7 +33,9 @@ it('starts and stops the marquee as observed dimensions change', () => {
 
   vi.stubGlobal('ResizeObserver', ResizeObserverMock)
 
-  const { container } = render(<MarqueeTitle title="A deliberately long comic title" />)
+  const { container, unmount } = render(
+    <MarqueeTitle title="A deliberately long comic title" />
+  )
   const wrapper = container.firstElementChild as HTMLDivElement
   const heading = screen.getByRole('heading', { name: 'A deliberately long comic title' })
 
@@ -61,6 +63,6 @@ it('starts and stops the marquee as observed dimensions change', () => {
   expect(heading).toHaveClass('truncate')
   expect(screen.getAllByText('A deliberately long comic title')).toHaveLength(1)
 
-  container.remove()
+  unmount()
   expect(disconnect).toHaveBeenCalledOnce()
 })
