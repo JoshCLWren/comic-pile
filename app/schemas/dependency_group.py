@@ -24,7 +24,7 @@ class DependencyGroupMemberCreate(BaseModel):
     issue_id: int | None = Field(default=None, gt=0)
 
     @model_validator(mode="after")
-    def validate_one_target(self) -> "DependencyGroupMemberCreate":
+    def validate_one_target(self) -> DependencyGroupMemberCreate:
         """Require exactly one membership target."""
         if (self.thread_id is None) == (self.issue_id is None):
             raise ValueError("Exactly one of thread_id or issue_id is required")
