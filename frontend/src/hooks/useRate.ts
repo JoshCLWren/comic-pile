@@ -23,10 +23,8 @@ export function useRate() {
       console.error('Failed to rate thread:', getApiErrorDetail(error))
       throw error
     } finally {
-      if (inFlightRequest.current === request) {
-        inFlightRequest.current = null
-        setIsPending(false)
-      }
+      inFlightRequest.current = null
+      setIsPending(false)
     }
   }
 
