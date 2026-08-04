@@ -87,13 +87,15 @@ def _remap_thread_state_keys(
                 if not isinstance(nested, dict):
                     raise RestoreRemapError(f"snapshots.thread_states.{key} must be an object")
                 remapped[key] = {
-                    str(_remap_reference(
-                        int(thread_id),
-                        table="snapshots.thread_states",
-                        field=key,
-                        target_table="threads",
-                        id_maps=id_maps,
-                    )): state
+                    str(
+                        _remap_reference(
+                            int(thread_id),
+                            table="snapshots.thread_states",
+                            field=key,
+                            target_table="threads",
+                            id_maps=id_maps,
+                        )
+                    ): state
                     for thread_id, state in nested.items()
                 }
             else:
@@ -225,6 +227,7 @@ def remap_export(
 
 
 def main() -> int:
+    """Remap a clone-export document and write the local insertion artifact."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("file", type=Path)
     parser.add_argument("--local-user-id", required=True, type=int)
