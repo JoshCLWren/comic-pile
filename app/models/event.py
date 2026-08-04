@@ -86,6 +86,12 @@ class Event(Base):
         Index("ix_event_session_id", "session_id"),
         Index("ix_event_timestamp", "timestamp"),
         Index("ix_event_session_type_timestamp", "session_id", "type", "timestamp"),
+        Index(
+            "ix_event_session_latest_action",
+            "session_id",
+            timestamp.desc(),
+            id.desc(),
+        ),
         Index("ix_event_session_type_die_after", "session_id", "type", "die_after"),
     )
 
