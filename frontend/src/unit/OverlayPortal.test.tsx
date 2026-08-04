@@ -46,3 +46,20 @@ it('shares one overlay root across concurrent overlays', async () => {
   second.unmount()
   expect(document.getElementById('comic-pile-overlay-root')).not.toBeInTheDocument()
 })
+
+it('keeps the shared root connected while a direct text portal remains mounted', async () => {
+  const first = render(<OverlayPortal>First text overlay</OverlayPortal>)
+  const second = render(<OverlayPortal>Second text overlay</OverlayPortal>)
+
+  await screen.findByText('Second text overlay')
+
+  first.unmount()
+
+  const overlayRoot = document.getElementById('comic-pile-overlay-root')
+  expect(overlayRoot).toBeInTheDocument()
+  expect(overlayRoot?.isConnected).toBe(true)
+  expect(overlayRoot).toHaveTextContent('Second text overlay')
+
+  second.unmount()
+  expect(document.getElementById('comic-pile-overlay-root')).not.toBeInTheDocument()
+})
