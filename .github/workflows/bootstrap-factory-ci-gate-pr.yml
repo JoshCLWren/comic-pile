@@ -93,6 +93,7 @@ jobs:
         run: |
           rm .github/workflows/bootstrap-factory-ci-gate.yml
           rm .github/workflows/bootstrap-factory-ci-gate-pr.yml
+          rm -f .github/ci-gate-bootstrap-trigger
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
