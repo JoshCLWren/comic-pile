@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
@@ -176,13 +176,14 @@ it('renders a complete rate event as one labeled record', () => {
 
   render(<MemoryRouter><SessionPage /></MemoryRouter>)
 
+  const eventDetails = within(screen.getByRole('list', { name: 'Event details' }))
   expect(screen.getByText('Rated')).toBeInTheDocument()
-  expect(screen.getByText('Issue 5')).toBeInTheDocument()
-  expect(screen.getByText('1 issue read')).toBeInTheDocument()
-  expect(screen.getByText('Rating 4')).toBeInTheDocument()
-  expect(screen.getByText('d6')).toBeInTheDocument()
-  expect(screen.getByText('Die after: d8')).toBeInTheDocument()
-  expect(screen.getByText('Selected by dice roll')).toBeInTheDocument()
+  expect(eventDetails.getByText('Issue 5')).toBeInTheDocument()
+  expect(eventDetails.getByText('1 issue read')).toBeInTheDocument()
+  expect(eventDetails.getByText('Rating 4')).toBeInTheDocument()
+  expect(eventDetails.getByText('d6')).toBeInTheDocument()
+  expect(eventDetails.getByText('Die after: d8')).toBeInTheDocument()
+  expect(eventDetails.getByText('Selected by dice roll')).toBeInTheDocument()
 })
 
 it('uses human labels and explicit fallback text for sparse events', () => {
