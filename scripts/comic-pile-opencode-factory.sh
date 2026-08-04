@@ -216,8 +216,6 @@ while true; do
     continue
   fi
 
-  "$MANIFEST_HELPER" record "$model" "$STATE_DIR" >/dev/null 2>&1 || true
-
   if grep -Fq 'FACTORY_RESULT: changed' "$result_file"; then
     rm -f "$result_file"
     if ((RUN_ONCE == 1)); then
