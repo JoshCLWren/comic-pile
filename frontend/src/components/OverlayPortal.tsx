@@ -6,6 +6,7 @@ interface OverlayPortalProps {
 }
 
 const OVERLAY_ROOT_ID = 'comic-pile-overlay-root'
+let mountedPortalCount = 0
 
 function getOrCreateOverlayRoot(): HTMLElement {
   const existingRoot = document.getElementById(OVERLAY_ROOT_ID)
@@ -23,10 +24,12 @@ export default function OverlayPortal({ children }: OverlayPortalProps) {
 
   useEffect(() => {
     const root = getOrCreateOverlayRoot()
+    mountedPortalCount += 1
     setOverlayRoot(root)
 
     return () => {
-      if (root.childElementCount === 0) root.remove()
+      mountedPortalCount -= 1
+      if (mountedPortalCount === 0) root.remove()
     }
   }, [])
 
