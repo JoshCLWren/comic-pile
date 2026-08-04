@@ -1,0 +1,299 @@
+name: Bootstrap Factory CI Gate
+
+on:
+  push:
+    branches:
+      - factory/ci-approval-gate
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  patch-gate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out bootstrap branch
+        uses: actions/checkout@v7
+        with:
+          ref: factory/ci-approval-gate
+          fetch-depth: 0
+
+      - name: Patch CI and factory policy
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          ROOT = Path('.')
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              target = ROOT / path
+              text = target.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one replacement, found {count}: {old!r}')
+              target.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          ci_path = ROOT / '.github/workflows/ci.yml'
+          ci = ci_path.read_text(encoding='utf-8')
+          old_trigger = "on:\n  pull_request:\n  push:\n"
+          new_trigger = "on:\n  pull_request:\n    types:\n      - labeled\n  push:\n"
+          if ci.count(old_trigger) != 1:
+              raise SystemExit('ci.yml: pull_request trigger shape changed')
+          ci = ci.replace(old_trigger, new_trigger, 1)
+
+          old_jobs = "jobs:\n  build:\n    name: Build Docker Image\n"
+          new_jobs = """jobs:
+  factory-approval:
+    name: Factory Approval
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.label.name == 'factory-ci-approved'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    steps:
+      - name: Verify exact-SHA factory pass
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const sha = context.payload.pull_request.head.sha
+            const marker = `<!-- comic-pile-factory-review-v2:${sha}:pass -->`
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                per_page: 100,
+              },
+            )
+            const approved = comments.some(
+              (comment) =>
+                comment.user?.login === context.repo.owner &&
+                comment.body?.includes(marker),
+            )
+            if (!approved) {
+              core.setFailed(`Missing owner-authored exact-SHA factory pass marker for ${sha}`)
+            }
+
+  build:
+    name: Build Docker Image
+    needs: factory-approval
+"""
+          if ci.count(old_jobs) != 1:
+              raise SystemExit('ci.yml: jobs/build shape changed')
+          ci = ci.replace(old_jobs, new_jobs, 1)
+
+          old_summary = "    if: always()\n    steps:\n      - name: Check job results\n"
+          new_summary = """    if: >-
+      always() &&
+      (github.event_name != 'pull_request' ||
+       github.event.label.name == 'factory-ci-approved')
+    steps:
+      - name: Check job results
+"""
+          if ci.count(old_summary) != 1:
+              raise SystemExit('ci.yml: CI Summary condition shape changed')
+          ci = ci.replace(old_summary, new_summary, 1)
+          ci_path.write_text(ci, encoding='utf-8')
+
+          approval_workflow = """name: Factory CI Approval Reset
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - closed
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  revoke-stale-approval:
+    name: Revoke stale factory CI approval
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove approval label after head changes
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const label = 'factory-ci-approved'
+            const issue_number = context.payload.pull_request.number
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number,
+                name: label,
+              })
+              core.notice(`Removed stale ${label} label from PR #${issue_number}`)
+            } catch (error) {
+              if (error.status !== 404) throw error
+              core.notice(`PR #${issue_number} had no ${label} label to remove`)
+            }
+"""
+          (ROOT / '.github/workflows/factory-ci-approval.yml').write_text(
+              approval_workflow,
+              encoding='utf-8',
+          )
+
+          policy_path = ROOT / 'docs/AUTONOMOUS_FACTORY_POLICY.md'
+          policy = policy_path.read_text(encoding='utf-8')
+          if policy.count('Version: 11') != 1:
+              raise SystemExit('policy version is not 11')
+          policy = policy.replace('Version: 11', 'Version: 12', 1)
+          ci_section = """## CI approval gate
+
+Full CI must not run merely because a PR opened or a commit was pushed. The factory first completes an exact-SHA review using the diff, issue contract, focused local validation, and all available review evidence.
+
+When that exact-SHA review passes:
+
+1. post `<!-- comic-pile-factory-review-v2:<sha>:pass -->` on the PR;
+2. ensure the repository label `factory-ci-approved` exists;
+3. apply `factory-ci-approved` to the PR using the authenticated factory identity.
+
+The label authorizes the expensive CI matrix only when the owner-authored pass marker matches the current 40-character head SHA. A pass marker authorizes CI; it does not make the PR merge-ready. Every new commit invalidates the pass and automatically removes the label. Never reapply it until a fresh exact-SHA review passes. Post the ready marker only after approved CI is green, actionable threads are resolved, mergeability is clean, and the exact head is rechecked.
+
+"""
+          marker = '## Validation and repair\n\n'
+          if policy.count(marker) != 1:
+              raise SystemExit('policy validation heading changed')
+          policy = policy.replace(marker, ci_section + marker, 1)
+          policy = policy.replace(
+              'Run focused tests, lint, type checks, migration checks, or browser specs that directly exercise each change. Let CI carry the expensive configured matrix.',
+              'Run focused tests, lint, type checks, migration checks, or browser specs that directly exercise each change. Full CI is intentionally withheld until exact-SHA factory approval; after approval, let CI carry the expensive configured matrix.',
+              1,
+          )
+          policy = policy.replace(
+              'Every push invalidates prior review and readiness. Re-fetch the exact SHA, complete conversation, mergeability, and CI before declaring readiness.',
+              'Every push invalidates prior review and readiness and revokes `factory-ci-approved`. Re-fetch the exact SHA, complete conversation, mergeability, and approved CI before declaring readiness.',
+              1,
+          )
+          policy = policy.replace(
+              '- ready: `<!-- comic-pile-factory-ready-v2:<sha> -->`\n',
+              '- ready: `<!-- comic-pile-factory-ready-v2:<sha> -->`\n- CI approval label: `factory-ci-approved`\n',
+              1,
+          )
+          policy_path.write_text(policy, encoding='utf-8')
+
+          heartbeat_path = ROOT / 'scripts/comic-pile-opencode-factory-heartbeat.sh'
+          heartbeat = heartbeat_path.read_text(encoding='utf-8')
+          heartbeat = heartbeat.replace(
+              '3. green PR needing strict review or repair;\n4. ready PR awaiting Josh\'s explicit merge authorization;\n5. highest-value unclaimed executable issue;\n6. factory maintenance only when factory behavior blocks delivery.',
+              '3. unapproved PR needing strict exact-SHA review and CI authorization;\n4. approved PR with CI failure or post-CI readiness work;\n5. ready PR awaiting Josh\'s explicit merge authorization;\n6. highest-value unclaimed executable issue;\n7. factory maintenance only when factory behavior blocks delivery.',
+              1,
+          )
+          heartbeat = heartbeat.replace(
+              'Select issue -> claim issue -> implement full contract -> focused validation -> push ->\nreview -> escalate REVIEW -> FIX when needed -> CI debug loop -> fresh-SHA review -> ready\n-> wait for explicit merge -> verify issue closure or continue remaining work.',
+              'Select issue -> claim issue -> implement full contract -> focused validation -> push ->\nexact-SHA review -> post pass marker and apply `factory-ci-approved` -> approved CI debug\nloop -> fresh exact-SHA readiness check -> ready -> wait for explicit merge -> verify issue\nclosure or continue remaining work.',
+              1,
+          )
+          heartbeat = heartbeat.replace(
+              'Ready:\n`<!-- comic-pile-factory-ready-v2:<sha> -->`\n',
+              'Ready:\n`<!-- comic-pile-factory-ready-v2:<sha> -->`\nCI approval label:\n`factory-ci-approved`\n',
+              1,
+          )
+          heartbeat = heartbeat.replace(
+              'Run the narrowest focused tests, lint, type checks, migration checks, or browser specs that\ndirectly exercise the change. Let CI carry the expensive configured matrix. Inspect exact\nfailure logs and make evidence-grounded repairs. Never add ornamental tests only to move a\ncoverage percentage.',
+              'Run the narrowest focused tests, lint, type checks, migration checks, or browser specs that\ndirectly exercise the change. Do not wait for broad CI before the exact-SHA factory pass.\nAfter posting the pass marker, run `gh label create factory-ci-approved --color 1f883d\n--description "Exact-SHA factory review passed; full CI authorized" --force` and then\n`gh pr edit <number> --add-label factory-ci-approved`. Inspect approved CI failure logs and\nmake evidence-grounded repairs. Never add ornamental tests only to move a coverage percentage.',
+              1,
+          )
+          heartbeat = heartbeat.replace(
+              'Green CI is necessary but not sufficient. Match claims with evidence for contracts, query',
+              'Green approved CI is necessary for readiness but follows the exact-SHA factory pass that authorizes it. Match claims with evidence for contracts, query',
+              1,
+          )
+          heartbeat = heartbeat.replace(
+              'Freshly review every new SHA. Account for the full issue contract, all changed files,\nregressions, security, ownership, concurrency, failure behavior, unresolved threads, and\nexact-SHA CI. A PR is ready only after strict pass, green required CI or a proven non-branch\nexception, resolved actionable threads, coherent scope, truthful metadata, and no conflict.',
+              'Freshly review every new SHA before spending broad CI. Account for the full issue contract,\nall changed files, regressions, security, ownership, concurrency, failure behavior, and\nunresolved threads. On pass, post the exact-SHA pass marker and apply `factory-ci-approved`.\nAny new push invalidates that approval. A PR is ready only after approved exact-SHA CI is\ngreen or a proven non-branch exception exists, actionable threads are resolved, scope and\nmetadata are truthful, mergeability is clean, and the exact head is rechecked.',
+              1,
+          )
+          heartbeat_path.write_text(heartbeat, encoding='utf-8')
+
+          checker_path = ROOT / 'scripts/check-autonomous-factory-policy.py'
+          checker = checker_path.read_text(encoding='utf-8')
+          checker = checker.replace('"Version: 11",', '"Version: 12",', 1)
+          checker = checker.replace(
+              '        "CI is pending, queued, or green;",\n',
+              '        "CI is pending, queued, or green;",\n        "Full CI must not run merely because a PR opened or a commit was pushed.",\n        "`factory-ci-approved`",\n        "A pass marker authorizes CI; it does not make the PR merge-ready.",\n',
+              1,
+          )
+          checker = checker.replace(
+              '        "comic-pile-factory-ready-v2",\n',
+              '        "comic-pile-factory-ready-v2",\n        "factory-ci-approved",\n        "Do not wait for broad CI before the exact-SHA factory pass",\n',
+              1,
+          )
+          checker_path.write_text(checker, encoding='utf-8')
+
+          test_path = ROOT / 'scripts/tests/test_autonomous_factory_policy.py'
+          tests = test_path.read_text(encoding='utf-8')
+          new_test = """    def test_ci_approval_gate_is_required(self) -> None:
+        \"\"\"Reject restoring automatic full CI before exact-SHA factory review.\"\"\"
+        mutated = self.policy.replace(
+            \"Full CI must not run merely because a PR opened or a commit was pushed.\",
+            \"Full CI runs automatically for every pull request push.\",
+        )
+        with self.assertRaisesRegex(SystemExit, \"missing required policy text\"):
+            self.validate(policy=mutated)
+
+"""
+          insertion = '    def test_planning_pr_ban_is_required(self) -> None:\n'
+          if tests.count(insertion) != 1:
+              raise SystemExit('policy test insertion point changed')
+          tests = tests.replace(insertion, new_test + insertion, 1)
+          test_path.write_text(tests, encoding='utf-8')
+
+          factory_policy_path = ROOT / '.github/workflows/factory-policy.yml'
+          factory_policy = factory_policy_path.read_text(encoding='utf-8')
+          workflow_line = '      - .github/workflows/factory-policy.yml\n'
+          if factory_policy.count(workflow_line) != 2:
+              raise SystemExit('factory-policy workflow path lists changed')
+          factory_policy = factory_policy.replace(
+              workflow_line,
+              workflow_line
+              + '      - .github/workflows/ci.yml\n'
+              + '      - .github/workflows/factory-ci-approval.yml\n',
+          )
+          factory_policy_path.write_text(factory_policy, encoding='utf-8')
+          PY
+
+      - name: Validate patched policy
+        run: |
+          bash -n scripts/comic-pile-opencode-factory-heartbeat.sh
+          python scripts/check-autonomous-factory-policy.py
+          python -m unittest scripts/tests/test_autonomous_factory_policy.py
+          ruby -e "require 'yaml'; YAML.load_file('.github/workflows/ci.yml'); YAML.load_file('.github/workflows/factory-ci-approval.yml')"
+
+      - name: Ensure approval label exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create factory-ci-approved \
+            --color 1f883d \
+            --description "Exact-SHA factory review passed; full CI authorized" \
+            --force
+
+      - name: Commit patched gate and remove bootstrap
+        run: |
+          rm .github/workflows/bootstrap-factory-ci-gate.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .github/workflows/ci.yml \
+            .github/workflows/factory-ci-approval.yml \
+            .github/workflows/factory-policy.yml \
+            docs/AUTONOMOUS_FACTORY_POLICY.md \
+            scripts/comic-pile-opencode-factory-heartbeat.sh \
+            scripts/check-autonomous-factory-policy.py \
+            scripts/tests/test_autonomous_factory_policy.py \
+            .github/workflows/bootstrap-factory-ci-gate.yml
+          git commit -m "Gate full CI on exact-SHA factory approval"
+          git push origin HEAD:factory/ci-approval-gate
