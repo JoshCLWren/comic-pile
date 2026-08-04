@@ -1,10 +1,12 @@
 import { expect, test } from '@playwright/test'
+import { setupAuthenticatedPage } from './helpers'
 
 const MOBILE_WIDTHS = [320, 375, 414] as const
 
 for (const width of MOBILE_WIDTHS) {
   test(`mobile form controls remain contained at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 812 })
+    await setupAuthenticatedPage(page)
     await page.goto('/queue')
     await expect(page.getByRole('heading', { name: 'Read Queue' })).toBeVisible()
 
