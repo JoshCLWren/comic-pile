@@ -32,6 +32,21 @@ jobs:
             capture { sub(/^          /, ""); print }
           ' .github/workflows/bootstrap-factory-ci-gate.yml > /tmp/patch_factory_ci_gate.py
           python /tmp/patch_factory_ci_gate.py
+          python <<'PY'
+          from pathlib import Path
+
+          path = Path('docs/AUTONOMOUS_FACTORY_POLICY.md')
+          text = path.read_text(encoding='utf-8')
+          anchor = (
+              'Full CI must not run merely because a PR opened or a commit was pushed. '
+              'The factory first completes an exact-SHA review using the diff, issue contract, '
+              'focused local validation, and all available review evidence.'
+          )
+          replacement = anchor + ' Do not wait for broad CI before the exact-SHA factory pass.'
+          if text.count(anchor) != 1:
+              raise SystemExit('CI approval policy anchor changed')
+          path.write_text(text.replace(anchor, replacement, 1), encoding='utf-8')
+          PY
 
       - name: Validate patched policy
         run: |
