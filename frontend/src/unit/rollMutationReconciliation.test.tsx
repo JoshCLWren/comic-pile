@@ -1,7 +1,12 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../contexts/ToastProvider'
-import { publishRollBootstrap } from '../hooks/rollMutationReconciliation'
+import {
+  isAmbiguousNetworkFailure,
+  publishRollBootstrap,
+  reconcileAmbiguousRollMutation,
+  ROLL_BOOTSTRAP_RECONCILED_EVENT,
+} from '../hooks/rollMutationReconciliation'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
@@ -39,27 +44,78 @@ beforeEach(() => {
   localStorage.clear()
 })
 
-it('replaces mounted Roll bootstrap state when a mutation publishes reconciliation', async () => {
-  const initial = bootstrapState(6, 7)
-  const reconciled = bootstrapState(8, null)
-  mockedBootstrap.mockResolvedValue(initial)
-
-  const { result } = renderHook(() => useRollBootstrap(), {
-    wrapper: ({ children }: { children: React.ReactNode }) => (
-      <ToastProvider>{children}</ToastProvider>
-    ),
+describe('Roll mutation reconciliation', () => {
+  it('classifies only response-less timeout and network failures as ambiguous', () => {
+    expect(isAmbiguousNetworkFailure(null)).toBe(false)
+    expect(isAmbiguousNetworkFailure('timeout')).toBe(false)
+    expect(isAmbiguousNetworkFailure({ response: { status: 500 }, code: 'ECONNABORTED' })).toBe(false)
+    expect(isAmbiguousNetworkFailure({ code: 'ECONNABORTED' })).toBe(true)
+    expect(isAmbiguousNetworkFailure({ code: 'ETIMEDOUT' })).toBe(true)
+    expect(isAmbiguousNetworkFailure(new Error('request timeout'))).toBe(true)
+    expect(isAmbiguousNetworkFailure(new Error('Network Error'))).toBe(true)
+    expect(isAmbiguousNetworkFailure(new Error('ordinary failure'))).toBe(false)
   })
 
-  await waitFor(() => expect(result.current.data).toBe(initial))
+  it('distinguishes committed and still-pending mutations with and without an expected thread', async () => {
+    mockedBootstrap
+      .mockResolvedValueOnce(bootstrapState(12, null))
+      .mockResolvedValueOnce(bootstrapState(12, 7))
+      .mockResolvedValueOnce(bootstrapState(12, 7))
+      .mockResolvedValueOnce(bootstrapState(12, 9))
+      .mockResolvedValueOnce({
+        ...bootstrapState(12, null),
+        pending_thread_id: 'invalid' as unknown as number,
+      })
 
-  act(() => {
-    publishRollBootstrap(reconciled)
+    await expect(reconcileAmbiguousRollMutation()).resolves.toBe(true)
+    await expect(reconcileAmbiguousRollMutation()).resolves.toBe(false)
+    await expect(reconcileAmbiguousRollMutation(7)).resolves.toBe(false)
+    await expect(reconcileAmbiguousRollMutation(7)).resolves.toBe(true)
+    await expect(reconcileAmbiguousRollMutation()).resolves.toBe(true)
+    expect(mockedBootstrap).toHaveBeenCalledTimes(5)
   })
 
-  expect(result.current.data).toBe(reconciled)
-  expect(result.current.data?.current_die).toBe(8)
-  expect(result.current.data?.pending_thread_id).toBeNull()
-  expect(result.current.isPending).toBe(false)
-  expect(result.current.isError).toBe(false)
-  expect(result.current.error).toBeNull()
+  it('does not publish when the browser CustomEvent API is unavailable', () => {
+    const reconciled = vi.fn()
+    window.addEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
+    vi.stubGlobal('CustomEvent', undefined)
+
+    try {
+      publishRollBootstrap(bootstrapState(8, null))
+      expect(reconciled).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+      window.removeEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
+    }
+  })
+
+  it('replaces mounted Roll bootstrap state when a mutation publishes reconciliation', async () => {
+    const initial = bootstrapState(6, 7)
+    const reconciled = bootstrapState(8, null)
+    mockedBootstrap.mockResolvedValue(initial)
+
+    const { result } = renderHook(() => useRollBootstrap(), {
+      wrapper: ({ children }: { children: React.ReactNode }) => (
+        <ToastProvider>{children}</ToastProvider>
+      ),
+    })
+
+    await waitFor(() => expect(result.current.data).toBe(initial))
+
+    act(() => {
+      window.dispatchEvent(new Event(ROLL_BOOTSTRAP_RECONCILED_EVENT))
+    })
+    expect(result.current.data).toBe(initial)
+
+    act(() => {
+      publishRollBootstrap(reconciled)
+    })
+
+    expect(result.current.data).toBe(reconciled)
+    expect(result.current.data?.current_die).toBe(8)
+    expect(result.current.data?.pending_thread_id).toBeNull()
+    expect(result.current.isPending).toBe(false)
+    expect(result.current.isError).toBe(false)
+    expect(result.current.error).toBeNull()
+  })
 })
