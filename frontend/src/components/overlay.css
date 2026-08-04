@@ -5,13 +5,13 @@
   --overlay-layer-global-effect: 400;
 }
 
-#comic-pile-overlay-root {
+.comic-pile-overlay-root {
   position: relative;
   z-index: var(--overlay-layer-menu);
   isolation: isolate;
   pointer-events: none;
 }
 
-#comic-pile-overlay-root > * {
+.comic-pile-overlay-root > * {
   pointer-events: auto;
 }
