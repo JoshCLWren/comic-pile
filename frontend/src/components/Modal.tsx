@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import OverlayPortal from './OverlayPortal'
 
 interface ModalProps {
@@ -42,6 +42,7 @@ export default function Modal({
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const onCloseRef = useRef(onClose)
+  const titleId = useId()
 
   const modalIdRef = useRef<number | null>(null)
   if (modalIdRef.current === null) {
@@ -170,13 +171,13 @@ export default function Modal({
           className="relative w-full max-w-lg h-[calc(100dvh-1rem)] md:h-auto modal-card max-h-[calc(100dvh-1rem)] md:max-h-[85vh] flex flex-col overflow-hidden rounded-t-2xl md:rounded-lg animate-slide-up md:animate-fade-in pb-[env(safe-area-inset-bottom)]"
           role="dialog"
           aria-modal="true"
-          aria-labelledby="modal-title"
+          aria-labelledby={titleId}
         >
           <div className="flex justify-center pt-2 pb-1 md:hidden shrink-0">
             <div className="w-10 h-1 bg-white/20 rounded-full" />
           </div>
           <div className="flex items-start justify-between gap-2 md:gap-4 px-4 md:px-6 pt-2 md:pt-0 pb-3 md:pb-4 shrink-0">
-            <h2 id="modal-title" className="min-w-0 flex-1 text-base md:text-xl font-black tracking-tight text-stone-200 uppercase">{title}</h2>
+            <h2 id={titleId} className="min-w-0 flex-1 text-base md:text-xl font-black tracking-tight text-stone-200 uppercase">{title}</h2>
             <button
               ref={closeButtonRef}
               type="button"
