@@ -133,15 +133,16 @@ describe('snooze hooks', () => {
 
     try {
       const snooze = renderHook(() => useSnooze())
-      let request: Promise<unknown> | undefined
+      let request!: Promise<unknown>
 
       act(() => {
         request = snooze.result.current.mutate(7)
       })
 
+      const rejection = expect(request).rejects.toBe(timeout)
       await act(async () => {
         await vi.advanceTimersByTimeAsync(10_000)
-        await expect(request).rejects.toBe(timeout)
+        await rejection
       })
 
       expect(rollBootstrapApi.get).toHaveBeenCalledTimes(1)
