@@ -13,6 +13,8 @@ export function useRollBootstrap() {
   const [error, setError] = useState<Error | null>(null);
   const { showToast } = useToast();
   const lastNotifiedSessionIdRef = useRef<number | null>(null);
+  const justReconciledRef = useRef<RollBootstrapResponse | null>(null);
+  const reconciliationExpiryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchBootstrap = useCallback(async () => {
     setIsPending(true);
@@ -63,6 +65,20 @@ export function useRollBootstrap() {
     }
   }, [showToast]);
 
+  const refetchBootstrap = useCallback(async () => {
+    const reconciled = justReconciledRef.current;
+    if (reconciled) {
+      justReconciledRef.current = null;
+      if (reconciliationExpiryRef.current) {
+        clearTimeout(reconciliationExpiryRef.current);
+        reconciliationExpiryRef.current = null;
+      }
+      return reconciled;
+    }
+
+    return fetchBootstrap();
+  }, [fetchBootstrap]);
+
   useEffect(() => {
     // Defer the request by one microtask so consumers can reliably observe the
     // initial loading state before even an already-resolved test or cache value settles.
@@ -74,6 +90,13 @@ export function useRollBootstrap() {
       const reconciled = (event as CustomEvent<RollBootstrapResponse>).detail;
       if (!reconciled) return;
 
+      justReconciledRef.current = reconciled;
+      if (reconciliationExpiryRef.current) clearTimeout(reconciliationExpiryRef.current);
+      reconciliationExpiryRef.current = setTimeout(() => {
+        if (justReconciledRef.current === reconciled) justReconciledRef.current = null;
+        reconciliationExpiryRef.current = null;
+      }, 0);
+
       setData(reconciled);
       setIsPending(false);
       setIsError(false);
@@ -83,8 +106,9 @@ export function useRollBootstrap() {
     window.addEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, handleReconciledBootstrap);
     return () => {
       window.removeEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, handleReconciledBootstrap);
+      if (reconciliationExpiryRef.current) clearTimeout(reconciliationExpiryRef.current);
     };
   }, []);
 
-  return { data, isPending, isError, error, refetch: fetchBootstrap };
+  return { data, isPending, isError, error, refetch: refetchBootstrap };
 }
