@@ -25,7 +25,14 @@ class DependencyGroupMemberCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_one_target(self) -> DependencyGroupMemberCreate:
-        """Require exactly one membership target."""
+        """Require exactly one membership target.
+
+        Args:
+            self: The membership request model being validated.
+
+        Returns:
+            The validated membership request model.
+        """
         if (self.thread_id is None) == (self.issue_id is None):
             raise ValueError("Exactly one of thread_id or issue_id is required")
         return self
