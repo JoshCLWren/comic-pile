@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import OverlayPortal from './OverlayPortal'
 
 interface ModalProps {
@@ -37,7 +37,7 @@ export default function Modal({
   overlayClassName,
   autoFocus = true,
 }: ModalProps) {
-  const overlayRef = useRef<HTMLDivElement>(null)
+  const [overlayElement, setOverlayElement] = useState<HTMLDivElement | null>(null)
   const modalRef = useRef<HTMLDivElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
@@ -53,20 +53,21 @@ export default function Modal({
     onCloseRef.current = onClose
   })
 
-  // Register and layer open modals before paint so logical dismissal order and
-  // visual stacking cannot diverge when an earlier DOM modal reopens.
+  // OverlayPortal creates its shared root after the parent modal's first commit.
+  // Wait until the portaled overlay node is attached before registering, layering,
+  // or focusing the modal. This avoids dereferencing a ref that cannot exist yet.
   useLayoutEffect(() => {
-    if (!isOpen) return
+    if (!isOpen || !overlayElement || !modalRef.current) return
 
     const modalId = modalIdRef.current!
     // This effect's cleanup always removes its entry before a rerun, so every
     // active modal has exactly one stack entry.
     openModalStack.push(modalId)
-    overlayRef.current!.style.zIndex = String(nextModalLayer++)
+    overlayElement.style.zIndex = String(nextModalLayer++)
 
     previousFocusRef.current = document.activeElement as HTMLElement
 
-    const modal = modalRef.current!
+    const modal = modalRef.current
 
     const focusableElements = modal.querySelectorAll<HTMLElement>(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
@@ -121,7 +122,7 @@ export default function Modal({
         previousFocusRef.current?.focus()
       }
     }
-  }, [autoFocus, isOpen])
+  }, [autoFocus, isOpen, overlayElement])
 
   // Lock the #root scroller while a modal is open (fixes iOS scroll-bleed).
   // The dialog itself is portaled to document.body, so locking #root no longer
@@ -151,7 +152,7 @@ export default function Modal({
   return (
     <OverlayPortal>
       <div
-        ref={overlayRef}
+        ref={setOverlayElement}
         className={`fixed inset-0 flex items-end md:items-center justify-center md:px-4 ${overlayClassName || ''}`}
         style={{ zIndex: 60 }}
       >
