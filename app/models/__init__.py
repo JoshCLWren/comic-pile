@@ -1,6 +1,7 @@
 """SQLAlchemy database models."""
 
 from app.models.dependency import Dependency
+from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
 from app.models.event import Event
 from app.models.failed_login_attempt import FailedLoginAttempt
 from app.models.issue import Issue
@@ -13,6 +14,8 @@ from app.models.user import User
 
 __all__ = [
     "Dependency",
+    "DependencyGroup",
+    "DependencyGroupMembership",
     "Event",
     "FailedLoginAttempt",
     "Issue",
