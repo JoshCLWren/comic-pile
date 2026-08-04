@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RollBootstrapResponse } from '../types/rollBootstrap';
 import { rollBootstrapApi } from '../services/rollBootstrapApi';
 import { useToast } from '../contexts/useToast';
+import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from './rollMutationReconciliation';
 
 const STORAGE_KEY_PREFIX = 'comic_pile_last_session_id';
 
@@ -67,6 +68,23 @@ export function useRollBootstrap() {
     // initial loading state before even an already-resolved test or cache value settles.
     void Promise.resolve().then(fetchBootstrap).catch(() => undefined);
   }, [fetchBootstrap]);
+
+  useEffect(() => {
+    const handleReconciledBootstrap = (event: Event) => {
+      const reconciled = (event as CustomEvent<RollBootstrapResponse>).detail;
+      if (!reconciled) return;
+
+      setData(reconciled);
+      setIsPending(false);
+      setIsError(false);
+      setError(null);
+    };
+
+    window.addEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, handleReconciledBootstrap);
+    return () => {
+      window.removeEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, handleReconciledBootstrap);
+    };
+  }, []);
 
   return { data, isPending, isError, error, refetch: fetchBootstrap };
 }
