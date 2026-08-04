@@ -4,6 +4,7 @@ from scripts.cancel_stale_ci_runs import select_superseded_runs
 
 
 def test_selects_only_older_active_runs_for_same_pull_request_branch() -> None:
+    """Select only superseded active runs from the matching pull-request branch."""
     runs = [
         {
             "id": 10,
@@ -66,6 +67,7 @@ def test_selects_only_older_active_runs_for_same_pull_request_branch() -> None:
 
 
 def test_accepts_all_github_active_run_states_and_orders_by_run_id() -> None:
+    """Accept every active GitHub run state and return matches in stable order."""
     runs = [
         {
             "id": run_id,
@@ -94,6 +96,7 @@ def test_accepts_all_github_active_run_states_and_orders_by_run_id() -> None:
 
 
 def test_ignores_malformed_workflow_run_payloads() -> None:
+    """Ignore malformed workflow-run payloads instead of selecting unsafe rows."""
     selected = select_superseded_runs(
         [
             {},
