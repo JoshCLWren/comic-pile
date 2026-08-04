@@ -10,6 +10,7 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 HEARTBEAT_RUNNER="$SCRIPT_DIR/comic-pile-opencode-factory-heartbeat.sh"
 MANIFEST_HELPER="$SCRIPT_DIR/opencode-model-manifest.sh"
+MODEL_SCOUT="$SCRIPT_DIR/opencode-model-scout.sh"
 SOURCE_REPO="${COMIC_PILE_REPO:-/mnt/extra/josh/code/comic-pile}"
 STATE_DIR="${COMIC_PILE_FACTORY_STATE_DIR:-}"
 DEFAULT_MODEL="${COMIC_PILE_DEFAULT_MODEL:-deepseek/deepseek-v4-flash}"
@@ -20,6 +21,12 @@ RUN_ONCE=0
 STATE_DIR_EXPLICIT=0
 FORWARD_ARGS=()
 MAX_FAILURES="${FACTORY_MAX_FAILURES:-2}"
+WAIT_FOR_SCOUT="${COMIC_PILE_FACTORY_WAIT_FOR_SCOUT:-0}"
+SCOUT_READY_FILE="${COMIC_PILE_FACTORY_SCOUT_READY_FILE:-}"
+SCOUT_PID_FILE="${COMIC_PILE_FACTORY_SCOUT_PID_FILE:-}"
+AUTO_SCOUT="${COMIC_PILE_FACTORY_AUTO_SCOUT:-1}"
+SCOUT_PARALLEL="${SCOUT_PARALLEL:-4}"
+SCOUT_TIMEOUT="${MODEL_SCOUT_TIMEOUT:-${FACTORY_HEARTBEAT_TIMEOUT:-60}}"
 
 usage() {
   "$HEARTBEAT_RUNNER" --help
@@ -81,14 +88,79 @@ done
 if [[ -z "$STATE_DIR" || "$STATE_DIR_EXPLICIT" == "0" && -z "${COMIC_PILE_FACTORY_STATE_DIR:-}" ]]; then
   STATE_DIR="${SOURCE_REPO%/}-factory-state"
 fi
+[[ -n "$SCOUT_READY_FILE" ]] || SCOUT_READY_FILE="$STATE_DIR/scout-initial-pass.done"
 
 is_nonnegative_integer "$IDLE_SECONDS" || die "FACTORY_IDLE_SECONDS must be an integer"
 is_nonnegative_integer "$MAX_FAILURES" || die "FACTORY_MAX_FAILURES must be an integer"
 ((MAX_FAILURES >= 1)) || die "FACTORY_MAX_FAILURES must be at least 1"
+is_nonnegative_integer "$SCOUT_PARALLEL" || die "SCOUT_PARALLEL must be an integer"
+((SCOUT_PARALLEL >= 1)) || die "SCOUT_PARALLEL must be at least 1"
+[[ "$SCOUT_TIMEOUT" =~ ^[1-9][0-9]*$ ]] || die "MODEL_SCOUT_TIMEOUT must be a positive integer"
+[[ "$AUTO_SCOUT" == "0" || "$AUTO_SCOUT" == "1" ]] || die "COMIC_PILE_FACTORY_AUTO_SCOUT must be 0 or 1"
 [[ -x "$HEARTBEAT_RUNNER" ]] || die "heartbeat runner is not executable: $HEARTBEAT_RUNNER"
 [[ -x "$MANIFEST_HELPER" ]] || die "manifest helper is not executable: $MANIFEST_HELPER"
 mkdir -p "$STATE_DIR"
 "$MANIFEST_HELPER" init "$STATE_DIR"
+
+non_chat_model() {
+  [[ "$1" == *embedding* || "$1" == *rerank* || "$1" == *whisper* || "$1" == *tts* \
+    || "$1" == *-image* || "$1" == *image-* || "$1" == *safeguard* \
+    || "$1" == *content-safety* || "$1" == *cosmos* || "$1" == *riva* \
+    || "$1" == *nemotron-mini* || "$1" == *prompt-guard* || "$1" == *esm* ]]
+}
+
+wait_for_initial_scout() {
+  [[ "$WAIT_FOR_SCOUT" == "1" ]] || return 0
+  printf 'Waiting for the model scout to complete its initial pass...\n'
+  while [[ ! -f "$SCOUT_READY_FILE" ]]; do
+    if [[ -n "$SCOUT_PID_FILE" && -f "$SCOUT_PID_FILE" ]]; then
+      local scout_pid
+      scout_pid="$(cat "$SCOUT_PID_FILE" 2>/dev/null || true)"
+      if [[ "$scout_pid" =~ ^[0-9]+$ ]] && ! kill -0 -- "-$scout_pid" 2>/dev/null; then
+        die "model scout exited before completing its initial pass"
+      fi
+    fi
+    sleep 2
+  done
+  printf 'Model scout initial pass complete; refreshing the complete provider list.\n'
+}
+
+refresh_model_manifest() {
+  local cooldown="${1:-3600}"
+  local candidates_file model
+
+  [[ -z "$PINNED_MODEL" && "$AUTO_SCOUT" == "1" ]] || return 0
+  command -v opencode >/dev/null 2>&1 || return 0
+  [[ -x "$MODEL_SCOUT" ]] || {
+    printf 'WARNING: model scout is not executable: %s\n' "$MODEL_SCOUT" >&2
+    return 1
+  }
+
+  candidates_file="$(mktemp "$STATE_DIR/.model-candidates.XXXXXX")"
+  while IFS= read -r model; do
+    [[ -n "$model" ]] || continue
+    non_chat_model "$model" || printf '%s\n' "$model"
+  done < <(opencode models 2>/dev/null) >"$candidates_file"
+
+  if [[ ! -s "$candidates_file" ]]; then
+    rm -f "$candidates_file"
+    printf 'WARNING: opencode models returned no usable chat models; keeping the existing manifest.\n' >&2
+    return 1
+  fi
+
+  printf 'Refreshing OpenCode model manifest from all available providers...\n'
+  set +e
+  MODEL_SCOUT_FAILURE_COOLDOWN_SECONDS="$cooldown" \
+    "$MODEL_SCOUT" --once \
+    --state-dir "$STATE_DIR" \
+    --parallel "$SCOUT_PARALLEL" \
+    --timeout "$SCOUT_TIMEOUT" \
+    --candidates-file "$candidates_file"
+  local status=$?
+  set -e
+  rm -f "$candidates_file"
+  return "$status"
+}
 
 select_model() {
   if [[ -n "$PINNED_MODEL" ]]; then
@@ -98,7 +170,11 @@ select_model() {
   fi
 }
 
+wait_for_initial_scout
+refresh_model_manifest 3600 || true
+
 heartbeat=0
+recovery_scout_attempted=0
 while true; do
   heartbeat=$((heartbeat + 1))
   model="$(select_model)"
@@ -125,8 +201,15 @@ while true; do
       exit "$status"
     fi
     if ! "$MANIFEST_HELPER" confirmed "$STATE_DIR" | grep -q .; then
-      printf 'Factory stopped: no confirmed models remain after failure of %s.\n' "$model" >&2
-      exit "$status"
+      if ((recovery_scout_attempted == 0)) && [[ "$AUTO_SCOUT" == "1" ]]; then
+        recovery_scout_attempted=1
+        printf 'No confirmed models remain; immediately re-probing every available provider.\n' >&2
+        refresh_model_manifest 0 || true
+      fi
+      if ! "$MANIFEST_HELPER" confirmed "$STATE_DIR" | grep -q .; then
+        printf 'Factory stopped: no confirmed models remain after exhausting all available providers.\n' >&2
+        exit "$status"
+      fi
     fi
     printf 'Heartbeat failed for %s; immediately rotating to the next model (no cooldown).\n' \
       "$model" >&2
