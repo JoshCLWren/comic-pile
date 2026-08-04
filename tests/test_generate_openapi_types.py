@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
-from unittest.mock import call
 
 import pytest
 
@@ -79,10 +78,10 @@ def test_main_generates_default_schema_and_types(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Refresh the schema before generating the checked-in TypeScript artifact."""
-    recorded: list[call] = []
+    recorded: list[tuple[list[str], bool]] = []
 
     def fake_run(command: list[str], *, check: bool) -> None:
-        recorded.append(call(command, check=check))
+        recorded.append((command, check))
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     monkeypatch.setattr(
@@ -101,19 +100,19 @@ def test_main_generates_default_schema_and_types(
 
     assert generate_openapi_types.main() == 0
     assert recorded == [
-        call(
+        (
             [
                 generate_openapi_types.sys.executable,
                 "scripts/export_openapi_schema.py",
             ],
-            check=True,
+            True,
         ),
-        call(
+        (
             generate_openapi_types.generator_command(
                 generate_openapi_types.SCHEMA_OUTPUT,
                 generate_openapi_types.TYPES_OUTPUT,
             ),
-            check=True,
+            True,
         ),
     ]
     assert "openapi-typescript@7.10.1" in capsys.readouterr().out
