@@ -33,19 +33,44 @@ jobs:
           ' .github/workflows/bootstrap-factory-ci-gate.yml > /tmp/patch_factory_ci_gate.py
           python /tmp/patch_factory_ci_gate.py
           python <<'PY'
+          import re
           from pathlib import Path
 
-          path = Path('docs/AUTONOMOUS_FACTORY_POLICY.md')
-          text = path.read_text(encoding='utf-8')
+          policy_path = Path('docs/AUTONOMOUS_FACTORY_POLICY.md')
+          policy = policy_path.read_text(encoding='utf-8')
           anchor = (
               'Full CI must not run merely because a PR opened or a commit was pushed. '
               'The factory first completes an exact-SHA review using the diff, issue contract, '
               'focused local validation, and all available review evidence.'
           )
           replacement = anchor + ' Do not wait for broad CI before the exact-SHA factory pass.'
-          if text.count(anchor) != 1:
+          if policy.count(anchor) != 1:
               raise SystemExit('CI approval policy anchor changed')
-          path.write_text(text.replace(anchor, replacement, 1), encoding='utf-8')
+          policy_path.write_text(policy.replace(anchor, replacement, 1), encoding='utf-8')
+
+          test_path = Path('scripts/tests/test_autonomous_factory_policy.py')
+          tests = test_path.read_text(encoding='utf-8')
+          pattern = re.compile(
+              r'\n\s*def test_ci_approval_gate_is_required\(self\) -> None:.*?'
+              r'\n\s*def test_planning_pr_ban_is_required\(self\) -> None:\n',
+              re.DOTALL,
+          )
+          corrected = '''
+    def test_ci_approval_gate_is_required(self) -> None:
+        """Reject restoring automatic full CI before exact-SHA factory review."""
+        mutated = self.policy.replace(
+            "Full CI must not run merely because a PR opened or a commit was pushed.",
+            "Full CI runs automatically for every pull request push.",
+        )
+        with self.assertRaisesRegex(SystemExit, "missing required policy text"):
+            self.validate(policy=mutated)
+
+    def test_planning_pr_ban_is_required(self) -> None:
+'''
+          tests, count = pattern.subn(corrected, tests, count=1)
+          if count != 1:
+              raise SystemExit(f'expected one malformed CI approval test block, found {count}')
+          test_path.write_text(tests, encoding='utf-8')
           PY
 
       - name: Validate patched policy
