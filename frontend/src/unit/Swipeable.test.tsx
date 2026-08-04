@@ -45,19 +45,20 @@ function createTouchEvent(type: string, options: { x: number; y: number }) {
   return event
 }
 
-it('fills a stretched grid row so swipe actions stay behind the card', () => {
-  const { slidingCard } = renderSwipeable()
+it('fills a stretched grid row and strictly clips swipe actions behind the card', () => {
+  const { wrapper, slidingCard } = renderSwipeable()
 
+  expect(wrapper).toHaveClass('overflow-hidden')
   expect(slidingCard).toHaveClass('h-full')
+  expect(slidingCard.style.touchAction).toBe('pan-y')
 })
 
-it('does not reveal actions on vertical scroll when dx is locked by direction threshold', () => {
+it('does not reveal actions on vertical scroll when direction resolves to vertical', () => {
   const { slidingCard } = renderSwipeable()
 
   act(() => {
     slidingCard.dispatchEvent(createTouchEvent('touchstart', { x: 200, y: 100 }))
   })
-  // Move vertically: dx=5 (< 12 threshold), dy=100 (large) → direction resolves to vertical
   act(() => {
     slidingCard.dispatchEvent(createTouchEvent('touchmove', { x: 205, y: 200 }))
   })
@@ -65,34 +66,54 @@ it('does not reveal actions on vertical scroll when dx is locked by direction th
     slidingCard.dispatchEvent(createTouchEvent('touchend', { x: 205, y: 200 }))
   })
 
-  // Card must remain closed
   expect(slidingCard.style.transform).toBe('translateX(0px)')
 })
 
-it('does not reveal actions when both axes are within direction-lock threshold (tiny jitter)', () => {
+it('does not reveal actions when both axes are within the larger intent threshold', () => {
   const { slidingCard } = renderSwipeable()
 
   act(() => {
     slidingCard.dispatchEvent(createTouchEvent('touchstart', { x: 200, y: 100 }))
   })
-  // Both dx and dy are < 12 → early return before direction is resolved
   act(() => {
-    slidingCard.dispatchEvent(createTouchEvent('touchmove', { x: 208, y: 108 }))
+    slidingCard.dispatchEvent(createTouchEvent('touchmove', { x: 218, y: 118 }))
   })
   act(() => {
-    slidingCard.dispatchEvent(createTouchEvent('touchend', { x: 208, y: 108 }))
+    slidingCard.dispatchEvent(createTouchEvent('touchend', { x: 218, y: 118 }))
   })
 
   expect(slidingCard.style.transform).toBe('translateX(0px)')
 })
 
-it('reveals actions on horizontal swipe past threshold', () => {
+it('locks diagonal mobile scrolling vertically unless horizontal movement is dominant', () => {
   const { slidingCard } = renderSwipeable()
 
   act(() => {
     slidingCard.dispatchEvent(createTouchEvent('touchstart', { x: 200, y: 100 }))
   })
-  // Swipe left 150px: dx=-150, dy=5 → horizontal → past SWIPE_THRESHOLD(64)
+  // A common diagonal scroll gesture exceeds the threshold on both axes, but
+  // horizontal movement is not 1.5x the vertical movement.
+  act(() => {
+    slidingCard.dispatchEvent(createTouchEvent('touchmove', { x: 165, y: 130 }))
+  })
+  act(() => {
+    slidingCard.dispatchEvent(createTouchEvent('touchmove', { x: 120, y: 180 }))
+  })
+  act(() => {
+    slidingCard.dispatchEvent(createTouchEvent('touchend', { x: 120, y: 180 }))
+  })
+
+  expect(slidingCard.style.transform).toBe('translateX(0px)')
+})
+
+it('reveals actions only after deliberate horizontal intent passes the swipe threshold', () => {
+  const { slidingCard } = renderSwipeable()
+
+  act(() => {
+    slidingCard.dispatchEvent(createTouchEvent('touchstart', { x: 200, y: 100 }))
+  })
+  // Swipe left 150px with minimal vertical drift: horizontal intent is clear
+  // and the movement passes SWIPE_THRESHOLD(64).
   act(() => {
     slidingCard.dispatchEvent(createTouchEvent('touchmove', { x: 50, y: 105 }))
   })
@@ -100,17 +121,15 @@ it('reveals actions on horizontal swipe past threshold', () => {
     slidingCard.dispatchEvent(createTouchEvent('touchend', { x: 50, y: 105 }))
   })
 
-  // Card should stay open at -ACTION_WIDTH
   expect(slidingCard.style.transform).toBe('translateX(-192px)')
 })
 
-it('snaps closed when horizontal swipe is released before SWIPE_THRESHOLD', () => {
+it('snaps closed when deliberate horizontal swipe is released before SWIPE_THRESHOLD', () => {
   const { slidingCard } = renderSwipeable()
 
   act(() => {
     slidingCard.dispatchEvent(createTouchEvent('touchstart', { x: 200, y: 100 }))
   })
-  // Swipe left only 30px: dx=-30, dy=5 → horizontal but < SWIPE_THRESHOLD(64)
   act(() => {
     slidingCard.dispatchEvent(createTouchEvent('touchmove', { x: 170, y: 105 }))
   })
@@ -118,7 +137,6 @@ it('snaps closed when horizontal swipe is released before SWIPE_THRESHOLD', () =
     slidingCard.dispatchEvent(createTouchEvent('touchend', { x: 170, y: 105 }))
   })
 
-  // Card should snap back closed
   expect(slidingCard.style.transform).toBe('translateX(0px)')
 })
 
@@ -128,7 +146,6 @@ it('fires onCardClick when card is tapped without swiping', () => {
   act(() => {
     slidingCard.dispatchEvent(createTouchEvent('touchstart', { x: 200, y: 100 }))
   })
-  // Move within direction-lock threshold — acting as a tap
   act(() => {
     slidingCard.dispatchEvent(createTouchEvent('touchmove', { x: 203, y: 103 }))
   })
