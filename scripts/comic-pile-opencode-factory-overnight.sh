@@ -25,8 +25,9 @@ Commands:
 Environment defaults:
   OPENCODE_MODEL=deepseek/deepseek-v4-flash
   FACTORY_IDLE_SECONDS=60
-  FACTORY_FAILURE_BACKOFF_SECONDS=30
-  FACTORY_MAX_FAILURES=5
+  FACTORY_HEARTBEAT_TIMEOUT=60
+  FACTORY_FAILURE_BACKOFF_SECONDS=5
+  FACTORY_MAX_FAILURES=2
 
 Additional arguments are passed to comic-pile-opencode-factory.sh after --watch.
 Examples:
@@ -72,8 +73,9 @@ run_factory() {
   fi
   export COMIC_PILE_DEFAULT_MODEL="${COMIC_PILE_DEFAULT_MODEL:-$DEFAULT_MODEL}"
   export FACTORY_IDLE_SECONDS="${FACTORY_IDLE_SECONDS:-60}"
-  export FACTORY_FAILURE_BACKOFF_SECONDS="${FACTORY_FAILURE_BACKOFF_SECONDS:-30}"
-  export FACTORY_MAX_FAILURES="${FACTORY_MAX_FAILURES:-5}"
+  export FACTORY_HEARTBEAT_TIMEOUT="${FACTORY_HEARTBEAT_TIMEOUT:-60}"
+  export FACTORY_FAILURE_BACKOFF_SECONDS="${FACTORY_FAILURE_BACKOFF_SECONDS:-5}"
+  export FACTORY_MAX_FAILURES="${FACTORY_MAX_FAILURES:-2}"
   "$RUNNER" --watch "$@"
 }
 
@@ -104,12 +106,12 @@ start_scout() {
   fi
   [[ -x "$SCOUT" ]] || die "model scout is not executable: $SCOUT"
   printf 'Starting model scout (parallel=%s, heartbeat timeout=%ss). Scout log: %s\n' \
-    "$SCOUT_PARALLEL" "${FACTORY_HEARTBEAT_TIMEOUT:-900}" "$SUPERVISOR_LOG"
+    "$SCOUT_PARALLEL" "${FACTORY_HEARTBEAT_TIMEOUT:-60}" "$SUPERVISOR_LOG"
   nohup setsid env \
     COMIC_PILE_FACTORY_STATE_DIR="$STATE_DIR" \
     "$SCOUT" --watch --state-dir "$STATE_DIR" \
     --parallel "$SCOUT_PARALLEL" \
-    --timeout "${FACTORY_HEARTBEAT_TIMEOUT:-900}" \
+    --timeout "${FACTORY_HEARTBEAT_TIMEOUT:-60}" \
     >>"$SUPERVISOR_LOG" 2>&1 &
   local pid=$!
   printf '%s\n' "$pid" >"$SCOUT_PID_FILE"

@@ -122,6 +122,94 @@ class ModelToolTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((state / "models.log").read_text().splitlines(), ["model/one", "model/two"])
 
+    def test_factory_wrapper_rotates_after_failed_heartbeat(self) -> None:
+        """Retire a failed model and retry the next confirmed model."""
+        state = self.root / "state"
+        helper = self.scripts / "opencode-model-manifest.sh"
+        subprocess.run([helper, "set", "model/one", "confirmed", "yes", state], check=True)
+        subprocess.run([helper, "set", "model/two", "confirmed", "yes", state], check=True)
+
+        heartbeat = self.scripts / "comic-pile-opencode-factory-heartbeat.sh"
+        heartbeat.write_text(
+            textwrap.dedent(
+                """\
+                #!/usr/bin/env bash
+                set -euo pipefail
+                state=""
+                model=""
+                while (($#)); do
+                  case "$1" in
+                    --state-dir) state="$2"; shift 2 ;;
+                    --model) model="$2"; shift 2 ;;
+                    *) shift ;;
+                  esac
+                done
+                mkdir -p "$state"
+                printf '%s\n' "$model" >>"$state/models.log"
+                if [[ "$model" == "model/one" ]]; then exit 7; fi
+                printf 'FACTORY_RESULT: idle\n'
+                """
+            )
+        )
+        heartbeat.chmod(0o755)
+
+        result = self.run_command(
+            str(self.scripts / "comic-pile-opencode-factory.sh"),
+            "--state-dir",
+            str(state),
+            env={"FACTORY_FAILURE_BACKOFF_SECONDS": "0"},
+            timeout=10,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((state / "models.log").read_text().splitlines(), ["model/one", "model/two"])
+        self.assertIn("model/one\tfailed", (state / "model_manifest.tsv").read_text())
+
+    def test_factory_wrapper_rotates_token_limit_without_backoff(self) -> None:
+        """Rotate immediately on token exhaustion and do not count it as a retry."""
+        state = self.root / "state"
+        helper = self.scripts / "opencode-model-manifest.sh"
+        subprocess.run([helper, "set", "model/one", "confirmed", "yes", state], check=True)
+        subprocess.run([helper, "set", "model/two", "confirmed", "yes", state], check=True)
+
+        heartbeat = self.scripts / "comic-pile-opencode-factory-heartbeat.sh"
+        heartbeat.write_text(
+            textwrap.dedent(
+                """\
+                #!/usr/bin/env bash
+                set -euo pipefail
+                state=""
+                model=""
+                while (($#)); do
+                  case "$1" in
+                    --state-dir) state="$2"; shift 2 ;;
+                    --model) model="$2"; shift 2 ;;
+                    *) shift ;;
+                  esac
+                done
+                mkdir -p "$state"
+                printf '%s\n' "$model" >>"$state/models.log"
+                if [[ "$model" == "model/one" ]]; then
+                  printf 'Error: Tokens per minute limit exceeded - too many tokens processed.\n'
+                  exit 1
+                fi
+                printf 'FACTORY_RESULT: idle\n'
+                """
+            )
+        )
+        heartbeat.chmod(0o755)
+
+        result = self.run_command(
+            str(self.scripts / "comic-pile-opencode-factory.sh"),
+            "--state-dir",
+            str(state),
+            env={"FACTORY_FAILURE_BACKOFF_SECONDS": "30", "FACTORY_MAX_FAILURES": "1"},
+            timeout=3,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((state / "models.log").read_text().splitlines(), ["model/one", "model/two"])
+
     def install_fake_opencode(self) -> tuple[Path, dict[str, str]]:
         """Install a controllable fake OpenCode executable for scout tests."""
         bin_dir = self.root / "bin"
@@ -216,6 +304,7 @@ class ModelToolTests(unittest.TestCase):
         self.assertLessEqual(int((fake_state / "max").read_text().strip()), 2)
         manifest = (state / "model_manifest.tsv").read_text()
         self.assertEqual(manifest.count("\tconfirmed\t"), 8)
+        self.assertIn("\tyes\t", manifest)
 
     def test_scout_timeout_uses_original_model_id(self) -> None:
         """Record a timed-out probe against its original unsanitized model ID."""

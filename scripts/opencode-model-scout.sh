@@ -166,6 +166,9 @@ probe_model() {
   # for filesystem safety and must never be written back to the manifest.
   printf '%s\t%s\n' "$$" "$model" >"$hb"
   touch "$hb"
+  # The discovery list is the authoritative availability snapshot for this
+  # pass; tool support is recorded separately by the probe result.
+  "$MANIFEST_HELPER" availability "$model" yes "$STATE_DIR"
   # Record the probe's process group so the shutdown trap can terminate it.
   printf '%s\n' "$$" >>"$PROBE_PGID_FILE"
 

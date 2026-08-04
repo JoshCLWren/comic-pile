@@ -2,7 +2,7 @@
 # OpenCode model manifest helper.
 #
 # Manifest layout ($STATE_DIR/model_manifest.tsv):
-#   model_id<TAB>status<TAB>tool_support<TAB>last_probed<TAB>use_count
+#   model_id<TAB>status<TAB>tool_support<TAB>availability<TAB>last_probed<TAB>use_count
 
 set -Eeuo pipefail
 
@@ -33,7 +33,15 @@ manifest_init() {
   local file
   file="$(manifest_path "$dir")"
   if [[ ! -f "$file" ]]; then
-    printf 'model_id\tstatus\ttool_support\tlast_probed\tuse_count\n' >"$file"
+    printf 'model_id\tstatus\ttool_support\tavailability\tlast_probed\tuse_count\n' >"$file"
+  elif ! head -1 "$file" | grep -Fq $'\tavailability\t'; then
+    local migrated
+    migrated="$(mktemp "$dir/.manifest-migrate.XXXXXX")"
+    awk -F'\t' 'BEGIN{OFS="\t"}
+      NR==1{print "model_id", "status", "tool_support", "availability", "last_probed", "use_count"; next}
+      {print $1, $2, ($3==""?"unknown":$3), "yes", ($4==""?0:$4), ($5==""?0:$5)}' \
+      "$file" >"$migrated"
+    mv "$migrated" "$file"
   fi
 }
 
@@ -57,9 +65,9 @@ manifest_set() {
   awk -F'\t' -v model="$model" -v status="$status" -v tool="$tool" -v now="$(date +%s)" \
     'BEGIN{OFS="\t"}
      NR==1{print; next}
-     $1==model{print model, status, tool, now, ($5==""?0:$5); found=1; next}
+     $1==model{print model, status, tool, ($4==""?"yes":$4), now, ($6==""?0:$6); found=1; next}
      {print}
-     END{if(!found) print model, status, tool, now, 0}' \
+     END{if(!found) print model, status, tool, "yes", now, 0}' \
     "$file" >"$tmp"
   mv "$tmp" "$file"
   manifest_unlock
@@ -75,9 +83,46 @@ manifest_record() {
   awk -F'\t' -v model="$model" -v now="$(date +%s)" \
     'BEGIN{OFS="\t"}
      NR==1{print; next}
-     $1==model{print model, "confirmed", ($3==""?"unknown":$3), now, ($5==""?1:$5+1); found=1; next}
+     $1==model{print model, "confirmed", ($3==""?"unknown":$3), ($4==""?"yes":$4), now, ($6==""?1:$6+1); found=1; next}
      {print}
-     END{if(!found) print model, "confirmed", "unknown", now, 1}' \
+     END{if(!found) print model, "confirmed", "unknown", "yes", now, 1}' \
+    "$file" >"$tmp"
+  mv "$tmp" "$file"
+  manifest_unlock
+}
+
+manifest_failure() {
+  local model="$1" dir="$2"
+  manifest_init "$dir"
+  local file tmp
+  file="$(manifest_path "$dir")"
+  manifest_lock "$dir"
+  tmp="$(mktemp "$dir/.manifest.XXXXXX")"
+  awk -F'\t' -v model="$model" -v now="$(date +%s)" \
+    'BEGIN{OFS="\t"}
+     NR==1{print; next}
+     $1==model{print model, "failed", ($3==""?"unknown":$3), ($4==""?"yes":$4), now, ($6==""?0:$6); found=1; next}
+     {print}
+     END{if(!found) print model, "failed", "unknown", "yes", now, 0}' \
+    "$file" >"$tmp"
+  mv "$tmp" "$file"
+  manifest_unlock
+}
+
+manifest_availability() {
+  local model="$1" availability="$2" dir="$3"
+  [[ "$availability" == "yes" || "$availability" == "no" ]] || return 2
+  manifest_init "$dir"
+  local file tmp
+  file="$(manifest_path "$dir")"
+  manifest_lock "$dir"
+  tmp="$(mktemp "$dir/.manifest.XXXXXX")"
+  awk -F'\t' -v model="$model" -v availability="$availability" \
+    'BEGIN{OFS="\t"}
+     NR==1{print; next}
+     $1==model{$4=availability; print; found=1; next}
+     {print}
+     END{if(!found) print model, "untested", "unknown", availability, 0, 0}' \
     "$file" >"$tmp"
   mv "$tmp" "$file"
   manifest_unlock
@@ -106,8 +151,8 @@ manifest_next() {
   cursor_file="$dir/model_cursor"
 
   manifest_lock "$dir"
-  rows="$(awk -F'\t' 'NR>1 && $2=="confirmed" && $1!="" {print}' "$file" \
-    | sort -t$'\t' -k5,5n -k1,1)"
+  rows="$(awk -F'\t' 'NR>1 && $2=="confirmed" && $4!="no" && $1!="" {print}' "$file" \
+    | sort -t$'\t' -k6,6n -k1,1)"
   if [[ -z "$rows" ]]; then
     manifest_unlock
     printf '%s\n' "$default"
@@ -130,7 +175,7 @@ manifest_summary() {
   manifest_init "$dir"
   local file
   file="$(manifest_path "$dir")"
-  printf '%-45s %-10s %-8s %-12s %s\n' MODEL STATUS TOOLS PROBED USES
+  printf '%-45s %-10s %-8s %-12s %-12s %s\n' MODEL STATUS TOOLS AVAILABILITY PROBED USES
   if command -v column >/dev/null 2>&1; then
     tail -n +2 "$file" | column -t -s $'\t'
   else
@@ -152,6 +197,20 @@ main() {
       shift 3
       set_dir="$(state_dir_for "${1:-}")"
       manifest_set "$set_model" "$set_status" "$set_tool" "$set_dir"
+      ;;
+    fail)
+      (($# >= 1)) || { printf 'usage: %s fail MODEL [STATE_DIR]\n' "$0" >&2; exit 2; }
+      local fail_model="$1" fail_dir
+      shift
+      fail_dir="$(state_dir_for "${1:-}")"
+      manifest_failure "$fail_model" "$fail_dir"
+      ;;
+    availability)
+      (($# >= 2)) || { printf 'usage: %s availability MODEL yes|no [STATE_DIR]\n' "$0" >&2; exit 2; }
+      local availability_model="$1" availability_value="$2" availability_dir
+      shift 2
+      availability_dir="$(state_dir_for "${1:-}")"
+      manifest_availability "$availability_model" "$availability_value" "$availability_dir"
       ;;
     record)
       (($# >= 1)) || { printf 'usage: %s record MODEL [STATE_DIR]\n' "$0" >&2; exit 2; }
