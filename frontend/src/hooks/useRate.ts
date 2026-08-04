@@ -4,6 +4,8 @@ import { rollBootstrapApi } from '../services/rollBootstrapApi'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { RatePayload } from '../types'
 
+type RateResult = Awaited<ReturnType<typeof rateApi.rate>> | undefined
+
 function isAmbiguousNetworkFailure(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
 
@@ -19,15 +21,15 @@ function isAmbiguousNetworkFailure(error: unknown): boolean {
 export function useRate() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
-  const inFlightRequest = useRef<Promise<unknown> | null>(null)
+  const inFlightRequest = useRef<Promise<RateResult> | null>(null)
 
-  const mutate = async (data: RatePayload) => {
+  const mutate = async (data: RatePayload): Promise<RateResult> => {
     if (inFlightRequest.current) return inFlightRequest.current
 
     setIsPending(true)
     setIsError(false)
 
-    const request = (async () => {
+    const request: Promise<RateResult> = (async () => {
       try {
         return await rateApi.rate(data)
       } catch (error: unknown) {
