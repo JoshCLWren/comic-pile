@@ -86,7 +86,10 @@ describe('PositionMenu', () => {
 
     await user.click(screen.getByRole('button', { name: /thread actions/i }))
 
-    expect(screen.getByRole('menu').parentElement).toBe(document.body)
+    const overlayRoot = document.querySelector('[data-overlay-root="true"]')
+    expect(overlayRoot).not.toBeNull()
+    expect(screen.getByRole('menu').parentElement).toBe(overlayRoot)
+    expect(overlayRoot?.parentElement).toBe(document.body)
   })
 
   it('repositions the portaled menu when the viewport changes', async () => {
@@ -473,107 +476,104 @@ describe('PositionMenu', () => {
     trigger.focus()
     await user.keyboard('{Enter}')
 
-     const menuItems = screen.getAllByRole('menuitem')
-     expect(document.activeElement).toBe(menuItems[0])
- 
-     await user.keyboard('{ArrowDown}')
-     expect(document.activeElement).toBe(menuItems[1])
- 
-     await user.keyboard('{ArrowDown}')
-     expect(document.activeElement).toBe(menuItems[2])
- 
-     await user.keyboard('{ArrowDown}')
-     expect(document.activeElement).toBe(menuItems[3])
- 
-     await user.keyboard('{ArrowDown}')
-     expect(document.activeElement).toBe(menuItems[4])
- 
-     await user.keyboard('{ArrowDown}')
-     expect(document.activeElement).toBe(menuItems[5])
- 
-     await user.keyboard('{ArrowDown}')
-     expect(document.activeElement).toBe(menuItems[0])
-   })
+    const menuItems = screen.getAllByRole('menuitem')
+    expect(document.activeElement).toBe(menuItems[0])
 
-   it('moves focus upward through portaled menu items and back to its trigger', async () => {
-     const user = userEvent.setup()
-     render(
-       <PositionMenu
-         thread={mockThread}
-         onMoveToFront={vi.fn()}
-         onReposition={vi.fn()}
-         onMoveToBack={vi.fn()}
-         onEdit={vi.fn()}
-         onDependencies={vi.fn()}
-         onDelete={vi.fn()}
-       />
-     )
+    await user.keyboard('{ArrowDown}')
+    expect(document.activeElement).toBe(menuItems[1])
 
-     const trigger = screen.getByRole('button', { name: /thread actions/i })
-     await user.click(trigger)
-     const menuItems = screen.getAllByRole('menuitem')
-     menuItems[1].focus()
+    await user.keyboard('{ArrowDown}')
+    expect(document.activeElement).toBe(menuItems[2])
 
-     await user.keyboard('{ArrowUp}')
-     expect(document.activeElement).toBe(menuItems[0])
-     await user.keyboard('{ArrowUp}')
-     expect(document.activeElement).toBe(trigger)
-   })
+    await user.keyboard('{ArrowDown}')
+    expect(document.activeElement).toBe(menuItems[3])
 
-   it('only one overflow menu can be open at a time', async () => {
-     const user = userEvent.setup()
-     const mockThread1 = {
-       ...mockThread,
-       id: 1,
-       title: 'Thread 1',
-     }
-     const mockThread2 = {
-       ...mockThread,
-       id: 2,
-       title: 'Thread 2',
-     }
+    await user.keyboard('{ArrowDown}')
+    expect(document.activeElement).toBe(menuItems[4])
 
-     render(
-       <>
-         <PositionMenu
-           thread={mockThread1}
-           onMoveToFront={vi.fn()}
-           onReposition={vi.fn()}
-            onMoveToBack={vi.fn()}
-            onEdit={vi.fn()}
-            onDependencies={vi.fn()}
-            onDelete={vi.fn()}
-          />
-         <PositionMenu
-           thread={mockThread2}
-           onMoveToFront={vi.fn()}
-           onReposition={vi.fn()}
-            onMoveToBack={vi.fn()}
-            onEdit={vi.fn()}
-            onDependencies={vi.fn()}
-            onDelete={vi.fn()}
-          />
-       </>
-     )
+    await user.keyboard('{ArrowDown}')
+    expect(document.activeElement).toBe(menuItems[5])
 
-     const triggers = screen.getAllByRole('button', { name: /thread actions/i })
+    await user.keyboard('{ArrowDown}')
+    expect(document.activeElement).toBe(menuItems[0])
+  })
 
-     // Open first menu
-     await user.click(triggers[0])
-     expect(screen.getAllByRole('menu')).toHaveLength(1)
-     expect(triggers[0]).toHaveAttribute('aria-expanded', 'true')
-     expect(triggers[1]).toHaveAttribute('aria-expanded', 'false')
+  it('moves focus upward through portaled menu items and back to its trigger', async () => {
+    const user = userEvent.setup()
+    render(
+      <PositionMenu
+        thread={mockThread}
+        onMoveToFront={vi.fn()}
+        onReposition={vi.fn()}
+        onMoveToBack={vi.fn()}
+        onEdit={vi.fn()}
+        onDependencies={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    )
 
-     // Open second menu - first should close automatically
-     await user.click(triggers[1])
-     expect(screen.getAllByRole('menu')).toHaveLength(1)
-     expect(triggers[0]).toHaveAttribute('aria-expanded', 'false')
-     expect(triggers[1]).toHaveAttribute('aria-expanded', 'true')
+    const trigger = screen.getByRole('button', { name: /thread actions/i })
+    await user.click(trigger)
+    const menuItems = screen.getAllByRole('menuitem')
+    menuItems[1].focus()
 
-     // Click first again - second should close
-     await user.click(triggers[0])
-     expect(screen.getAllByRole('menu')).toHaveLength(1)
-     expect(triggers[0]).toHaveAttribute('aria-expanded', 'true')
-     expect(triggers[1]).toHaveAttribute('aria-expanded', 'false')
-   })
- })
+    await user.keyboard('{ArrowUp}')
+    expect(document.activeElement).toBe(menuItems[0])
+    await user.keyboard('{ArrowUp}')
+    expect(document.activeElement).toBe(trigger)
+  })
+
+  it('only one overflow menu can be open at a time', async () => {
+    const user = userEvent.setup()
+    const mockThread1 = {
+      ...mockThread,
+      id: 1,
+      title: 'Thread 1',
+    }
+    const mockThread2 = {
+      ...mockThread,
+      id: 2,
+      title: 'Thread 2',
+    }
+
+    render(
+      <>
+        <PositionMenu
+          thread={mockThread1}
+          onMoveToFront={vi.fn()}
+          onReposition={vi.fn()}
+          onMoveToBack={vi.fn()}
+          onEdit={vi.fn()}
+          onDependencies={vi.fn()}
+          onDelete={vi.fn()}
+        />
+        <PositionMenu
+          thread={mockThread2}
+          onMoveToFront={vi.fn()}
+          onReposition={vi.fn()}
+          onMoveToBack={vi.fn()}
+          onEdit={vi.fn()}
+          onDependencies={vi.fn()}
+          onDelete={vi.fn()}
+        />
+      </>
+    )
+
+    const triggers = screen.getAllByRole('button', { name: /thread actions/i })
+
+    await user.click(triggers[0])
+    expect(screen.getAllByRole('menu')).toHaveLength(1)
+    expect(triggers[0]).toHaveAttribute('aria-expanded', 'true')
+    expect(triggers[1]).toHaveAttribute('aria-expanded', 'false')
+
+    await user.click(triggers[1])
+    expect(screen.getAllByRole('menu')).toHaveLength(1)
+    expect(triggers[0]).toHaveAttribute('aria-expanded', 'false')
+    expect(triggers[1]).toHaveAttribute('aria-expanded', 'true')
+
+    await user.click(triggers[0])
+    expect(screen.getAllByRole('menu')).toHaveLength(1)
+    expect(triggers[0]).toHaveAttribute('aria-expanded', 'true')
+    expect(triggers[1]).toHaveAttribute('aria-expanded', 'false')
+  })
+})
