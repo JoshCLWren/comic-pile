@@ -1,0 +1,60 @@
+name: Run Factory CI Gate Bootstrap
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  run-bootstrap:
+    if: github.head_ref == 'factory/ci-approval-gate' && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out bootstrap branch
+        uses: actions/checkout@v7
+        with:
+          ref: factory/ci-approval-gate
+          fetch-depth: 0
+
+      - name: Extract and execute patch program
+        run: |
+          awk '
+            /python <<'"'"'PY'"'"'/ { capture=1; next }
+            capture && /^          PY$/ { capture=0; exit }
+            capture { sub(/^          /, ""); print }
+          ' .github/workflows/bootstrap-factory-ci-gate.yml > /tmp/patch_factory_ci_gate.py
+          python /tmp/patch_factory_ci_gate.py
+
+      - name: Validate patched policy
+        run: |
+          bash -n scripts/comic-pile-opencode-factory-heartbeat.sh
+          python scripts/check-autonomous-factory-policy.py
+          python -m unittest scripts/tests/test_autonomous_factory_policy.py
+          ruby -e "require 'yaml'; YAML.load_file('.github/workflows/ci.yml'); YAML.load_file('.github/workflows/factory-ci-approval.yml')"
+
+      - name: Ensure approval label exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create factory-ci-approved \
+            --color 1f883d \
+            --description "Exact-SHA factory review passed; full CI authorized" \
+            --force
+
+      - name: Commit patched gate and remove bootstrap files
+        run: |
+          rm .github/workflows/bootstrap-factory-ci-gate.yml
+          rm .github/workflows/bootstrap-factory-ci-gate-pr.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "Gate full CI on exact-SHA factory approval"
+          git push origin HEAD:factory/ci-approval-gate
