@@ -18,6 +18,7 @@ class ProviderRotationTests(unittest.TestCase):
     """Verify direct factory runs discover every usable OpenCode provider."""
 
     def test_direct_run_refreshes_providers_before_rotation(self) -> None:
+        """Refresh live providers and rotate away from a failed Cerebras model."""
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             scripts = root / "scripts"
