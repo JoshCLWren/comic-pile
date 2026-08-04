@@ -33,7 +33,9 @@ beforeEach(() => {
     active_thread: null,
     roll_pool: [],
     blocked_threads: [],
+    blocked_count: 0,
     snoozed_threads: [],
+    snoozed_count: 0,
     stale_thread: null,
     stale_thread_count: 0,
   })
@@ -93,7 +95,9 @@ it('reconciles a timeout that committed and prevents a second rating request', a
     active_thread: null,
     roll_pool: [],
     blocked_threads: [],
+    blocked_count: 0,
     snoozed_threads: [],
+    snoozed_count: 0,
     stale_thread: null,
     stale_thread_count: 0,
   })
