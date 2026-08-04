@@ -5,6 +5,7 @@ import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from '../hooks/rollMutationReconcilia
 import { rateApi } from '../services/api'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
 import type { RatePayload } from '../types'
+import type { RollBootstrapResponse } from '../types/rollBootstrap'
 
 vi.mock('../services/api', () => ({
   rateApi: {
@@ -21,7 +22,10 @@ vi.mock('../services/rollBootstrapApi', () => ({
 const mockedRateApi = vi.mocked(rateApi)
 const mockedRollBootstrapApi = vi.mocked(rollBootstrapApi)
 
-const bootstrapState = (pendingThreadId: number | null, currentDie = 8) => ({
+const bootstrapState = (
+  pendingThreadId: number | null,
+  currentDie: RollBootstrapResponse['current_die'] = 8,
+): RollBootstrapResponse => ({
   session_id: 1,
   user_id: 1,
   current_die: currentDie,
@@ -144,7 +148,11 @@ it('surfaces a delayed timeout when authoritative state still has the same pendi
   try {
     const { result } = renderHook(() => useRate())
     const payload: RatePayload = { thread_id: 1, rating: 3 }
-    const request = result.current.mutate(payload)
+    let request: Promise<unknown> | undefined
+
+    act(() => {
+      request = result.current.mutate(payload)
+    })
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(10_000)
