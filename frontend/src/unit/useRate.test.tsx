@@ -148,15 +148,16 @@ it('surfaces a delayed timeout when authoritative state still has the same pendi
   try {
     const { result } = renderHook(() => useRate())
     const payload: RatePayload = { thread_id: 1, rating: 3 }
-    let request: Promise<unknown> | undefined
+    let request!: Promise<unknown>
 
     act(() => {
       request = result.current.mutate(payload)
     })
 
+    const rejection = expect(request).rejects.toBe(timeout)
     await act(async () => {
       await vi.advanceTimersByTimeAsync(10_000)
-      await expect(request).rejects.toBe(timeout)
+      await rejection
     })
 
     expect(mockedRollBootstrapApi.get).toHaveBeenCalledTimes(1)
