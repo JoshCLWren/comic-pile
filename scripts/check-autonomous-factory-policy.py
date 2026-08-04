@@ -25,22 +25,21 @@ def forbid(text: str, needle: str, source: Path) -> None:
 def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
     """Validate policy source text against canonical delivery invariants."""
     for needle in (
-        "Version: 11",
-        "Finish the issue. Do not stop at a commit, PR, review, CI run, or ready marker.",
-        "Is there executable work remaining for this owned issue that I can safely do now?",
-        "Merely naming remaining work proves the opposite and requires continuing.",
-        "one substantive commit was pushed;",
-        "CI is pending, queued, or green;",
-        "the diff became large;",
-        "the next task is harder than the first task.",
+        "Version: 15",
+        "Deliver substantive issue implementations without allowing a few existing pull requests to consume the entire factory.",
+        "When fewer than four substantive implementation PRs are open",
+        "A green, ready, review-passed, or Josh-waiting PR is excluded from work selection.",
+        "Do not repeatedly claim an issue whose next required edit is impossible in the current runtime.",
+        "Do not create replacement PRs merely because `main` advanced.",
+        "At most one implementation worker may own an issue",
+        "Waiting for CI, Josh, review, a safer runtime, or a merge is not a global stop condition",
         "Implement the whole issue in one coherent non-draft PR whenever reasonably reviewable.",
-        "Never open planning-only, architecture-only, inventory-only, or implementation-plan PRs",
-        "Do not start a new issue while an owned issue has executable remaining work.",
-        "A merged partial PR does not release the parent issue.",
-        "Do not wait passively for broad CI when independent issue work can continue safely",
+        "push substantive code, tests, or a migration;",
+        "repair a blocking defect or merge conflict;",
+        "open a coherent non-draft implementation PR for an executable issue;",
         "Never push directly to `main`.",
-        "Never create or convert a draft PR unless Josh explicitly requests it.",
-        "Never merge or enable auto-merge without Josh explicitly ordering that specific merge.",
+        "Never create or convert a draft PR unless Josh explicitly requests a draft.",
+        "Never merge or enable auto-merge without Josh explicitly authorizing that merge.",
     ):
         require(policy, needle, POLICY)
 
@@ -63,6 +62,7 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "Planning PRs are encouraged",
         "Always split large PRs into stages",
         "A heartbeat may stop after one substantive commit",
+        "Do not start a new issue while an owned issue has executable remaining work.",
     ):
         forbid(policy, obsolete, POLICY)
 
