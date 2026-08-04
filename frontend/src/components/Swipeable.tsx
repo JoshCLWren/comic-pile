@@ -43,7 +43,8 @@ export default function Swipeable({
     }
   }, [])
 
-  const DIRECTION_LOCK_THRESHOLD = 12
+  const DIRECTION_LOCK_THRESHOLD = 20
+  const HORIZONTAL_INTENT_RATIO = 1.5
 
   function handleTouchStart(e: TouchEvent) {
     const touch = e.touches[0]
@@ -64,10 +65,19 @@ export default function Swipeable({
     const touch = e.touches[0]
     const dx = touch.clientX - startXRef.current
     const dy = touch.clientY - startYRef.current
+    const absDx = Math.abs(dx)
+    const absDy = Math.abs(dy)
 
     if (isHorizontalRef.current === null) {
-      if (Math.abs(dx) < DIRECTION_LOCK_THRESHOLD && Math.abs(dy) < DIRECTION_LOCK_THRESHOLD) return
-      isHorizontalRef.current = Math.abs(dx) > Math.abs(dy)
+      if (absDx < DIRECTION_LOCK_THRESHOLD && absDy < DIRECTION_LOCK_THRESHOLD) return
+
+      if (absDx >= DIRECTION_LOCK_THRESHOLD && absDx >= absDy * HORIZONTAL_INTENT_RATIO) {
+        isHorizontalRef.current = true
+      } else if (absDy >= DIRECTION_LOCK_THRESHOLD) {
+        isHorizontalRef.current = false
+      } else {
+        return
+      }
     }
 
     if (!isHorizontalRef.current) return
@@ -127,6 +137,7 @@ export default function Swipeable({
         style={{
           transform: `translateX(${offset}px)`,
           transitionDuration: isSwiping ? '0ms' : '200ms',
+          touchAction: 'pan-y',
         }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
