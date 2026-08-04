@@ -26,7 +26,7 @@ Environment defaults:
   OPENCODE_MODEL=deepseek/deepseek-v4-flash
   FACTORY_IDLE_SECONDS=60
   FACTORY_HEARTBEAT_TIMEOUT=60
-  FACTORY_FAILURE_BACKOFF_SECONDS=5
+  FACTORY_FAILURE_BACKOFF_SECONDS=0
   FACTORY_MAX_FAILURES=2
 
 Additional factory options are passed to comic-pile-opencode-factory.sh after the selected command.
@@ -75,7 +75,7 @@ run_factory() {
   export COMIC_PILE_DEFAULT_MODEL="${COMIC_PILE_DEFAULT_MODEL:-$DEFAULT_MODEL}"
   export FACTORY_IDLE_SECONDS="${FACTORY_IDLE_SECONDS:-60}"
   export FACTORY_HEARTBEAT_TIMEOUT="${FACTORY_HEARTBEAT_TIMEOUT:-60}"
-  export FACTORY_FAILURE_BACKOFF_SECONDS="${FACTORY_FAILURE_BACKOFF_SECONDS:-5}"
+  export FACTORY_FAILURE_BACKOFF_SECONDS="${FACTORY_FAILURE_BACKOFF_SECONDS:-0}"
   export FACTORY_MAX_FAILURES="${FACTORY_MAX_FAILURES:-2}"
   "$RUNNER" --watch "$@"
 }
@@ -106,6 +106,7 @@ start_scout() {
     return 0
   fi
   [[ -x "$SCOUT" ]] || die "model scout is not executable: $SCOUT"
+  rm -f "$STATE_DIR/scout-initial-pass.done"
   printf 'Starting model scout (parallel=%s, heartbeat timeout=%ss). Scout log: %s\n' \
     "$SCOUT_PARALLEL" "${FACTORY_HEARTBEAT_TIMEOUT:-60}" "$SUPERVISOR_LOG"
   nohup setsid env \
@@ -160,17 +161,20 @@ case "$command" in
       exit 0
     fi
 
+    start_scout
     printf 'Starting ComicPile overnight factory with model %s. Supervisor log: %s\n' "${OPENCODE_MODEL:-$DEFAULT_MODEL}" "$SUPERVISOR_LOG"
     nohup setsid env \
       ${OPENCODE_MODEL:+OPENCODE_MODEL="$OPENCODE_MODEL"} \
       COMIC_PILE_DEFAULT_MODEL="${COMIC_PILE_DEFAULT_MODEL:-$DEFAULT_MODEL}" \
       FACTORY_IDLE_SECONDS="${FACTORY_IDLE_SECONDS:-60}" \
-      FACTORY_FAILURE_BACKOFF_SECONDS="${FACTORY_FAILURE_BACKOFF_SECONDS:-30}" \
-      FACTORY_MAX_FAILURES="${FACTORY_MAX_FAILURES:-5}" \
+      FACTORY_FAILURE_BACKOFF_SECONDS="${FACTORY_FAILURE_BACKOFF_SECONDS:-0}" \
+      FACTORY_MAX_FAILURES="${FACTORY_MAX_FAILURES:-1}" \
+      COMIC_PILE_FACTORY_WAIT_FOR_SCOUT=1 \
+      COMIC_PILE_FACTORY_SCOUT_READY_FILE="$STATE_DIR/scout-initial-pass.done" \
+      COMIC_PILE_FACTORY_SCOUT_PID_FILE="$SCOUT_PID_FILE" \
       "$RUNNER" --watch "$@" >>"$SUPERVISOR_LOG" 2>&1 &
     pid=$!
     printf '%s\n' "$pid" >"$PID_FILE"
-    start_scout
     sleep 1
 
     if ! kill -0 -- "-$pid" 2>/dev/null; then
@@ -229,6 +233,9 @@ case "$command" in
   run)
     start_scout
     trap 'stop_scout' EXIT
+    export COMIC_PILE_FACTORY_WAIT_FOR_SCOUT=1
+    export COMIC_PILE_FACTORY_SCOUT_READY_FILE="$STATE_DIR/scout-initial-pass.done"
+    export COMIC_PILE_FACTORY_SCOUT_PID_FILE="$SCOUT_PID_FILE"
     run_factory "$@"
     ;;
 

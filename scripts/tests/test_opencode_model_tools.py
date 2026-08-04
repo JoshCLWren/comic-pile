@@ -157,7 +157,7 @@ class ModelToolTests(unittest.TestCase):
             str(self.scripts / "comic-pile-opencode-factory.sh"),
             "--state-dir",
             str(state),
-            env={"FACTORY_FAILURE_BACKOFF_SECONDS": "0"},
+            env={"FACTORY_FAILURE_BACKOFF_SECONDS": "30"},
             timeout=10,
         )
 
@@ -305,6 +305,7 @@ class ModelToolTests(unittest.TestCase):
         manifest = (state / "model_manifest.tsv").read_text()
         self.assertEqual(manifest.count("\tconfirmed\t"), 8)
         self.assertIn("\tyes\t", manifest)
+        self.assertTrue((state / "scout-initial-pass.done").is_file())
 
     def test_scout_timeout_uses_original_model_id(self) -> None:
         """Record a timed-out probe against its original unsanitized model ID."""

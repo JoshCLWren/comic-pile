@@ -12,8 +12,11 @@ AGENT="${OPENCODE_AGENT:-}"
 USE_AUTO="${OPENCODE_AUTO:-1}"
 HEARTBEAT_TIMEOUT="${FACTORY_HEARTBEAT_TIMEOUT:-60}"
 IDLE_SECONDS="${FACTORY_IDLE_SECONDS:-10}"
-FAILURE_BACKOFF_SECONDS="${FACTORY_FAILURE_BACKOFF_SECONDS:-5}"
+FAILURE_BACKOFF_SECONDS="${FACTORY_FAILURE_BACKOFF_SECONDS:-0}"
 MAX_FAILURES="${FACTORY_MAX_FAILURES:-2}"
+WAIT_FOR_SCOUT="${COMIC_PILE_FACTORY_WAIT_FOR_SCOUT:-0}"
+SCOUT_READY_FILE="${COMIC_PILE_FACTORY_SCOUT_READY_FILE:-$STATE_DIR/scout-initial-pass.done}"
+SCOUT_PID_FILE="${COMIC_PILE_FACTORY_SCOUT_PID_FILE:-}"
 WORKER_ID="${OPENCODE_FACTORY_WORKER_ID:-local-opencode-${HOSTNAME:-host}}"
 WORKER_ID="${WORKER_ID//[^a-zA-Z0-9._-]/-}"
 MODE="drain"
@@ -84,6 +87,20 @@ gh auth status >/dev/null 2>&1 || die "GitHub CLI is not authenticated; run: gh 
 [[ -x "$MANIFEST_HELPER" ]] || die "manifest helper is not executable: $MANIFEST_HELPER"
 mkdir -p "$STATE_DIR"
 "$MANIFEST_HELPER" init "$STATE_DIR"
+
+if [[ "$WAIT_FOR_SCOUT" == "1" ]]; then
+  printf 'Waiting for the model scout to complete its initial pass...\n'
+  while [[ ! -f "$SCOUT_READY_FILE" ]]; do
+    if [[ -n "$SCOUT_PID_FILE" && -f "$SCOUT_PID_FILE" ]]; then
+      scout_pid="$(cat "$SCOUT_PID_FILE" 2>/dev/null || true)"
+      if [[ "$scout_pid" =~ ^[0-9]+$ ]] && ! kill -0 -- "-$scout_pid" 2>/dev/null; then
+        die "model scout exited before completing its initial pass"
+      fi
+    fi
+    sleep 2
+  done
+  printf 'Model scout initial pass complete; using the confirmed-model manifest.\n'
+fi
 
 # Select the model: explicit --model wins, then OPENCODE_MODEL, then rotation
 # across confirmed models (round-robin), falling back to the default model.
@@ -316,12 +333,19 @@ while true; do
   ( # Watchdog: kill the run's process group when the heartbeat goes stale.
     while kill -0 "$run_pid" 2>/dev/null; do
       age=$(( $(date +%s) - $(stat -c %Y "$hb_file" 2>/dev/null || printf '%s' "$(date +%s)") ))
+      if grep -Eiq 'Tokens per minute limit exceeded|too many tokens processed' "$log_file" 2>/dev/null; then
+        printf 'WATCHDOG: stopping heartbeat %d immediately after token-per-minute limit.\n' "$heartbeat" >&2
+        kill -TERM -- "-$run_pid" 2>/dev/null || kill -TERM "$run_pid" 2>/dev/null || true
+        sleep 1
+        kill -KILL -- "-$run_pid" 2>/dev/null || kill -KILL "$run_pid" 2>/dev/null || true
+        break
+      fi
       if ((age > HEARTBEAT_TIMEOUT)); then
         printf 'WATCHDOG: killing heartbeat %d run %s — no output for %ss\n' "$heartbeat" "$run_pid" "$age" >&2
         kill -9 -- "-$run_pid" 2>/dev/null || kill -9 "$run_pid" 2>/dev/null || true
         break
       fi
-      sleep 10
+      sleep 1
     done
   ) &
   watchdog_pid=$!

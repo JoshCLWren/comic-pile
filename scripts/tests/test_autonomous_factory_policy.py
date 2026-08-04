@@ -14,7 +14,7 @@ SPEC.loader.exec_module(CHECKER)
 
 
 class AutonomousFactoryPolicyTests(unittest.TestCase):
-    """Verify no-early-exit factory drift is detected."""
+    """Verify V15 throughput and anti-loop policy drift is detected."""
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -31,72 +31,69 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
             entrypoint if entrypoint is not None else self.entrypoint,
         )
 
+    def assert_policy_mutation_fails(self, original: str, replacement: str) -> None:
+        """Assert replacing one required policy invariant is rejected."""
+        mutated = self.policy.replace(original, replacement)
+        self.assertNotEqual(mutated, self.policy)
+        with self.assertRaisesRegex(SystemExit, "missing required policy text"):
+            self.validate(policy=mutated)
+
     def test_current_policy_sources_are_aligned(self) -> None:
         """Accept the checked-in canonical policy sources."""
         self.validate()
 
-    def test_no_early_exit_north_star_is_required(self) -> None:
-        """Reject returning to commit-sized heartbeat completion."""
-        mutated = self.policy.replace(
-            "Finish the issue. Do not stop at a commit, PR, review, CI run, or ready marker.",
-            "Stop after one substantive commit.",
-        )
-        with self.assertRaisesRegex(SystemExit, "missing required policy text"):
-            self.validate(policy=mutated)
+    def test_v15_version_is_required(self) -> None:
+        """Reject a checker-policy pair that silently falls back to V11."""
+        self.assert_policy_mutation_fails("Version: 15", "Version: 11")
 
-    def test_mandatory_continue_check_is_required(self) -> None:
-        """Reject removing the post-action continuation decision."""
-        mutated = self.policy.replace(
-            "Is there executable work remaining for this owned issue that I can safely do now?",
-            "Was one commit pushed?",
+    def test_throughput_floor_is_required(self) -> None:
+        """Reject removing the fresh-implementation throughput preference."""
+        self.assert_policy_mutation_fails(
+            "When fewer than four substantive implementation PRs are open",
+            "When no pull requests are open",
         )
-        with self.assertRaisesRegex(SystemExit, "missing required policy text"):
-            self.validate(policy=mutated)
 
-    def test_remaining_work_cannot_be_a_stop_report(self) -> None:
-        """Reject allowing workers to list executable work and leave."""
-        mutated = self.policy.replace(
-            "Merely naming remaining work proves the opposite and requires continuing.",
-            "List remaining work before stopping.",
+    def test_ready_prs_are_excluded_from_selection(self) -> None:
+        """Reject allowing green waiting PRs to monopolize workers."""
+        self.assert_policy_mutation_fails(
+            "A green, ready, review-passed, or Josh-waiting PR is excluded from work selection.",
+            "A green PR may always receive more cleanup.",
         )
-        with self.assertRaisesRegex(SystemExit, "missing required policy text"):
-            self.validate(policy=mutated)
 
-    def test_one_commit_is_not_a_stop_condition(self) -> None:
-        """Reject restoring one-commit heartbeat completion."""
-        mutated = self.policy.replace(
-            "one substantive commit was pushed;",
-            "A heartbeat may stop after one substantive commit",
+    def test_impossible_claims_do_not_loop(self) -> None:
+        """Reject repeated claims whose next edit cannot run in the current runtime."""
+        self.assert_policy_mutation_fails(
+            "Do not repeatedly claim an issue whose next required edit is impossible in the current runtime.",
+            "Retry blocked issues on every heartbeat.",
         )
-        with self.assertRaisesRegex(SystemExit, "missing required policy text"):
-            self.validate(policy=mutated)
 
-    def test_pending_ci_is_not_a_stop_condition(self) -> None:
-        """Reject allowing a worker to stop merely because CI is pending."""
-        mutated = self.policy.replace(
-            "CI is pending, queued, or green;",
-            "CI is pending, so stop the heartbeat;",
+    def test_main_advancing_does_not_force_replacement_prs(self) -> None:
+        """Reject replacement PR churn caused only by new main commits."""
+        self.assert_policy_mutation_fails(
+            "Do not create replacement PRs merely because `main` advanced.",
+            "Create a replacement PR whenever `main` advances.",
         )
-        with self.assertRaisesRegex(SystemExit, "missing required policy text"):
-            self.validate(policy=mutated)
 
-    def test_planning_pr_ban_is_required(self) -> None:
-        """Reject restoring planning-only PRs as normal delivery."""
-        mutated = self.policy.replace(
-            "Never open planning-only, architecture-only, inventory-only, or implementation-plan PRs",
-            "Planning PRs are encouraged",
+    def test_single_worker_issue_ownership_is_required(self) -> None:
+        """Reject duplicate implementation ownership without file separation."""
+        self.assert_policy_mutation_fails(
+            "At most one implementation worker may own an issue",
+            "Any number of workers may edit the same issue",
         )
-        with self.assertRaisesRegex(SystemExit, "missing required policy text"):
-            self.validate(policy=mutated)
+
+    def test_waiting_is_not_a_global_stop_condition(self) -> None:
+        """Reject stopping the workforce while unrelated executable work exists."""
+        self.assert_policy_mutation_fails(
+            "Waiting for CI, Josh, review, a safer runtime, or a merge is not a global stop condition",
+            "Waiting for CI stops all workers",
+        )
 
     def test_large_coherent_pr_rule_is_required(self) -> None:
         """Reject restoring automatic stage splitting."""
-        mutated = self.policy.replace(
+        self.assert_policy_mutation_fails(
             "Implement the whole issue in one coherent non-draft PR whenever reasonably reviewable.",
             "Always split large PRs into stages",
         )
-        with self.assertRaisesRegex(SystemExit, "missing required policy text"):
-            self.validate(policy=mutated)
 
     def test_stage_fast_path_cannot_return(self) -> None:
         """Reject reintroducing the obsolete stage fast path."""

@@ -13,6 +13,7 @@ STATE_DIR="${COMIC_PILE_FACTORY_STATE_DIR:-${SOURCE_REPO%/}-factory-state}"
 PARALLEL="${MODEL_SCOUT_PARALLEL:-4}"
 TIMEOUT="${MODEL_SCOUT_TIMEOUT:-900}"
 WATCHDOG_POLL_SECONDS="${MODEL_SCOUT_WATCHDOG_POLL_SECONDS:-15}"
+FAILURE_COOLDOWN_SECONDS="${MODEL_SCOUT_FAILURE_COOLDOWN_SECONDS:-3600}"
 WATCH=0
 RECHECK_SECONDS=600
 FORCE=0
@@ -114,6 +115,7 @@ is_nonnegative_integer "$WATCHDOG_POLL_SECONDS" || die "MODEL_SCOUT_WATCHDOG_POL
 ((WATCHDOG_POLL_SECONDS >= 1)) || die "MODEL_SCOUT_WATCHDOG_POLL_SECONDS must be at least 1"
 is_nonnegative_integer "$RECHECK_SECONDS" || die "--recheck-seconds must be an integer"
 is_nonnegative_integer "$LIMIT" || die "--limit must be an integer"
+is_nonnegative_integer "$FAILURE_COOLDOWN_SECONDS" || die "MODEL_SCOUT_FAILURE_COOLDOWN_SECONDS must be an integer"
 
 for command in opencode jq date kill grep flock setsid stat sort sed wc tr awk head touch; do
   command -v "$command" >/dev/null 2>&1 || die "required command not found: $command"
@@ -124,8 +126,10 @@ done
 HB_DIR="$STATE_DIR/scout-heartbeats"
 LOG_DIR="$STATE_DIR/scout"
 PROBE_PGID_FILE="$STATE_DIR/scout-probe-pgids"
+INITIAL_PASS_FILE="$STATE_DIR/scout-initial-pass.done"
 mkdir -p "$HB_DIR" "$LOG_DIR"
 : >"$PROBE_PGID_FILE"
+rm -f "$INITIAL_PASS_FILE"
 "$MANIFEST_HELPER" init "$STATE_DIR"
 
 safe_name() {
@@ -201,6 +205,7 @@ probe_model() {
 
 export -f safe_name probe_model
 export HB_DIR LOG_DIR MANIFEST_HELPER STATE_DIR PROBE_PGID_FILE
+export INITIAL_PASS_FILE
 
 file_mtime() {
   # GNU stat prints seconds via -c %Y; BSD/macOS needs -f %m. Prefer GNU and
@@ -244,13 +249,19 @@ prune_finished_jobs() {
 }
 
 run_pass() {
-  local candidates total model confirmed
+  local candidates total model pending
   candidates="$(discover_candidates | sed '/^$/d')"
   if [[ "$FORCE" != "1" ]]; then
-    confirmed="$("$MANIFEST_HELPER" confirmed "$STATE_DIR" 2>/dev/null || true)"
+    pending="$("$MANIFEST_HELPER" pending "$STATE_DIR" "$FAILURE_COOLDOWN_SECONDS" 2>/dev/null || true)"
     candidates="$(printf '%s\n' "$candidates" | while IFS= read -r model; do
       [[ -n "$model" ]] || continue
-      grep -Fxq -- "$model" <<<"$confirmed" || printf '%s\n' "$model"
+      # Models not present in the manifest are untested and must enter the
+      # initial pass. Previously the cooldown filter accidentally removed
+      # those candidates before probe_model could create their manifest rows.
+      if ! grep -Fq -- "$model"$'\t' "$STATE_DIR/model_manifest.tsv" \
+        || grep -Fxq -- "$model" <<<"$pending"; then
+        printf '%s\n' "$model"
+      fi
     done)"
   fi
   candidates="$(printf '%s\n' "$candidates" | sed '/^$/d' | sort -u)"
@@ -302,11 +313,13 @@ printf 'OpenCode model scout (state=%s, parallel=%s, silence timeout=%ss)\n' "$S
 if ((WATCH == 1)); then
   while true; do
     run_pass
+    touch "$INITIAL_PASS_FILE"
     printf 'Scout: sleeping %ss before re-scan.\n' "$RECHECK_SECONDS"
     sleep "$RECHECK_SECONDS"
   done
 else
   run_pass
+  touch "$INITIAL_PASS_FILE"
 fi
 
 printf '\n=== Confirmed models ===\n'
