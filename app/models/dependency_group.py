@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -58,6 +58,11 @@ class DependencyGroupMembership(Base):
     )
 
     __table_args__ = (
+        CheckConstraint(
+            "(thread_id IS NOT NULL AND issue_id IS NULL) OR "
+            "(thread_id IS NULL AND issue_id IS NOT NULL)",
+            name="ck_dependency_group_membership_one_target",
+        ),
         UniqueConstraint("group_id", "thread_id", name="uq_dependency_group_thread"),
         UniqueConstraint("group_id", "issue_id", name="uq_dependency_group_issue"),
         Index("ix_dependency_group_memberships_group_id", "group_id"),
