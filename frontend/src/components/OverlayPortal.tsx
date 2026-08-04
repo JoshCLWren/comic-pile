@@ -7,6 +7,7 @@ interface OverlayPortalProps {
 }
 
 const OVERLAY_ROOT_ID = 'comic-pile-overlay-root'
+const OVERLAY_ROOT_CLASS = 'comic-pile-overlay-root'
 let mountedPortalCount = 0
 
 function getOrCreateOverlayRoot(): HTMLElement {
@@ -15,6 +16,7 @@ function getOrCreateOverlayRoot(): HTMLElement {
 
   const overlayRoot = document.createElement('div')
   overlayRoot.id = OVERLAY_ROOT_ID
+  overlayRoot.className = OVERLAY_ROOT_CLASS
   overlayRoot.dataset.overlayRoot = 'true'
   overlayRoot.dataset.overlayLayer = 'menu'
   document.body.appendChild(overlayRoot)
