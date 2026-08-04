@@ -8,7 +8,7 @@ it('renders content and handles close actions', async () => {
   const user = userEvent.setup()
   const handleClose = vi.fn()
 
-  const { container } = render(
+  render(
     <Modal isOpen title="Test Modal" onClose={handleClose}>
       <p>Modal content</p>
     </Modal>
@@ -16,7 +16,7 @@ it('renders content and handles close actions', async () => {
 
   expect(screen.getByText('Modal content')).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: /close modal/i }))
-  const backdrop = container.querySelector('[aria-hidden="true"]')
+  const backdrop = document.querySelector('[data-overlay-root="true"] [aria-hidden="true"]')
   if (!backdrop) {
     throw new Error('Backdrop not found')
   }
@@ -57,14 +57,14 @@ it('keeps focus on a controlled input while typing across parent rerenders', asy
 })
 
 it('uses a translucent modal surface with a softened overlay', () => {
-  const { container } = render(
+  render(
     <Modal isOpen title="Translucent Modal" onClose={() => {}}>
       <p>Modal content</p>
     </Modal>
   )
 
   const dialog = screen.getByRole('dialog', { name: 'Translucent Modal' })
-  const overlay = container.querySelector('[aria-hidden="true"]')
+  const overlay = document.querySelector('[data-overlay-root="true"] [aria-hidden="true"]')
 
   expect(dialog).toHaveClass('modal-card')
   expect(dialog.className).toContain('modal-card')
@@ -144,14 +144,14 @@ it('uses the close button as the autofocus fallback', () => {
 
 it('does not wrap focus when tabbing from a middle focusable element', () => {
   // Covers the false arms of the shift/non-shift focus-wrap guards in the keydown handler
-  const { container } = render(
+  render(
     <Modal isOpen title="Focus Wrap" onClose={() => {}}>
       <input aria-label="First field" />
       <input aria-label="Middle field" />
       <button type="button">Last</button>
     </Modal>,
   )
-  const middle = container.querySelectorAll('input')[1] as HTMLElement
+  const middle = screen.getByLabelText('Middle field')
   middle.focus()
   // shift+tab from a non-first element: activeElement !== firstElement -> no wrap
   fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
@@ -186,7 +186,7 @@ it('backdrop click on the topmost overlapping modal closes only it', async () =>
   const firstOnClose = vi.fn()
   const secondOnClose = vi.fn()
 
-  const { container } = render(
+  render(
     <Modal isOpen title="One" onClose={firstOnClose}>
       <button type="button">One action</button>
     </Modal>,
@@ -197,7 +197,7 @@ it('backdrop click on the topmost overlapping modal closes only it', async () =>
     </Modal>,
   )
 
-  const backdrops = container.parentElement!.querySelectorAll('[aria-hidden="true"]')
+  const backdrops = document.querySelectorAll('[data-overlay-root="true"] [aria-hidden="true"]')
   const topmostBackdrop = backdrops[backdrops.length - 1]
   await user.click(topmostBackdrop as HTMLElement)
   expect(secondOnClose).toHaveBeenCalledTimes(1)
