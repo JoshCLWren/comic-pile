@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import './overlay.css'
 
 interface OverlayPortalProps {
   children: React.ReactNode
@@ -15,6 +16,7 @@ function getOrCreateOverlayRoot(): HTMLElement {
   const overlayRoot = document.createElement('div')
   overlayRoot.id = OVERLAY_ROOT_ID
   overlayRoot.dataset.overlayRoot = 'true'
+  overlayRoot.dataset.overlayLayer = 'menu'
   document.body.appendChild(overlayRoot)
   return overlayRoot
 }
