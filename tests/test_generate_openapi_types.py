@@ -79,9 +79,6 @@ def test_main_generates_default_schema_and_types(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Refresh the schema before generating the checked-in TypeScript artifact."""
-    run = pytest.MonkeyPatch()
-    del run
-    process = monkeypatch.setattr
     recorded: list[call] = []
 
     def fake_run(command: list[str], *, check: bool) -> None:
