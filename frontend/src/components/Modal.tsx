@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
+import OverlayPortal from './OverlayPortal'
 
 interface ModalProps {
   isOpen: boolean
@@ -87,11 +88,9 @@ export default function Modal({
             e.preventDefault()
             lastElement?.focus()
           }
-        } else {
-          if (document.activeElement === lastElement) {
-            e.preventDefault()
-            firstElement?.focus()
-          }
+        } else if (document.activeElement === lastElement) {
+          e.preventDefault()
+          firstElement?.focus()
         }
       }
     }
@@ -125,14 +124,9 @@ export default function Modal({
   }, [autoFocus, isOpen])
 
   // Lock the #root scroller while a modal is open (fixes iOS scroll-bleed).
-  // This app scrolls via #root, NOT <body> (see src/styles.css: html/body are
-  // overflow:hidden, so locking <body> is a no-op). Use overflow:hidden ONLY on
-  // #root, do NOT set touch-action:none on #root: the modal content is a DOM
-  // descendant of #root (Modal renders inline, no portal), and an ancestor
-  // touch-action:none would disable touch-panning for descendants, breaking
-  // in-modal scrolling on mobile.
-  // Uses a module-level ref count so nested/overlapping modals don't prematurely
-  // unlock #root, the lock is only released when the last modal closes.
+  // The dialog itself is portaled to document.body, so locking #root no longer
+  // affects touch-panning inside modal content. The ref count still protects
+  // nested and overlapping dialogs from prematurely restoring page scrolling.
   useEffect(() => {
     if (!isOpen) return
     const root = document.getElementById('root')
@@ -155,46 +149,48 @@ export default function Modal({
   if (!isOpen) return null
 
   return (
-    <div
-      ref={overlayRef}
-      className={`fixed inset-0 flex items-end md:items-center justify-center md:px-4 ${overlayClassName || ''}`}
-      style={{ zIndex: 60 }}
-    >
+    <OverlayPortal>
       <div
-        className="absolute inset-0 bg-[#110e0a]/60 backdrop-blur-sm touch-none"
-        onClick={() => {
-          if (isTopmostModal(modalIdRef.current!)) onClose()
-        }}
-        aria-hidden="true"
-      ></div>
-      <div
-        ref={modalRef}
-        data-testid={testId}
-        tabIndex={-1}
-        className="relative w-full max-w-lg h-[calc(100dvh-1rem)] md:h-auto modal-card max-h-[calc(100dvh-1rem)] md:max-h-[85vh] flex flex-col overflow-hidden rounded-t-2xl md:rounded-lg animate-slide-up md:animate-fade-in pb-[env(safe-area-inset-bottom)]"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title"
+        ref={overlayRef}
+        className={`fixed inset-0 flex items-end md:items-center justify-center md:px-4 ${overlayClassName || ''}`}
+        style={{ zIndex: 60 }}
       >
-        <div className="flex justify-center pt-2 pb-1 md:hidden shrink-0">
-          <div className="w-10 h-1 bg-white/20 rounded-full" />
-        </div>
-        <div className="flex items-start justify-between gap-2 md:gap-4 px-4 md:px-6 pt-2 md:pt-0 pb-3 md:pb-4 shrink-0">
-          <h2 id="modal-title" className="min-w-0 flex-1 text-base md:text-xl font-black tracking-tight text-stone-200 uppercase">{title}</h2>
-          <button
-            ref={closeButtonRef}
-            type="button"
-            onClick={onClose}
-            className="text-stone-500 hover:text-stone-300 transition-colors text-2xl leading-none"
-            aria-label="Close modal"
-          >
-            &times;
-          </button>
-        </div>
-        <div className="overflow-y-auto space-y-4 md:space-y-6 min-h-0 px-4 md:px-6 pb-4 md:pb-6 overscroll-contain">
-          {children}
+        <div
+          className="absolute inset-0 bg-[#110e0a]/60 backdrop-blur-sm touch-none"
+          onClick={() => {
+            if (isTopmostModal(modalIdRef.current!)) onClose()
+          }}
+          aria-hidden="true"
+        ></div>
+        <div
+          ref={modalRef}
+          data-testid={testId}
+          tabIndex={-1}
+          className="relative w-full max-w-lg h-[calc(100dvh-1rem)] md:h-auto modal-card max-h-[calc(100dvh-1rem)] md:max-h-[85vh] flex flex-col overflow-hidden rounded-t-2xl md:rounded-lg animate-slide-up md:animate-fade-in pb-[env(safe-area-inset-bottom)]"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-title"
+        >
+          <div className="flex justify-center pt-2 pb-1 md:hidden shrink-0">
+            <div className="w-10 h-1 bg-white/20 rounded-full" />
+          </div>
+          <div className="flex items-start justify-between gap-2 md:gap-4 px-4 md:px-6 pt-2 md:pt-0 pb-3 md:pb-4 shrink-0">
+            <h2 id="modal-title" className="min-w-0 flex-1 text-base md:text-xl font-black tracking-tight text-stone-200 uppercase">{title}</h2>
+            <button
+              ref={closeButtonRef}
+              type="button"
+              onClick={onClose}
+              className="text-stone-500 hover:text-stone-300 transition-colors text-2xl leading-none"
+              aria-label="Close modal"
+            >
+              &times;
+            </button>
+          </div>
+          <div className="overflow-y-auto space-y-4 md:space-y-6 min-h-0 px-4 md:px-6 pb-4 md:pb-6 overscroll-contain">
+            {children}
+          </div>
         </div>
       </div>
-    </div>
+    </OverlayPortal>
   )
 }
