@@ -8,19 +8,21 @@ it('ignores a lower modal backdrop while a higher modal is open', async () => {
   const lowerOnClose = vi.fn()
   const upperOnClose = vi.fn()
 
-  const lower = render(
+  render(
     <Modal isOpen title="Lower" onClose={lowerOnClose}>
       <button type="button">Lower action</button>
     </Modal>,
   )
-  const upper = render(
+  render(
     <Modal isOpen title="Upper" onClose={upperOnClose}>
       <button type="button">Upper action</button>
     </Modal>,
   )
 
-  const lowerBackdrop = lower.container.querySelector('[aria-hidden="true"]')
-  const upperBackdrop = upper.container.querySelector('[aria-hidden="true"]')
+  const overlayRoot = document.querySelector('[data-overlay-root="true"]')
+  const backdrops = overlayRoot?.querySelectorAll('[aria-hidden="true"]')
+  const lowerBackdrop = backdrops?.[0]
+  const upperBackdrop = backdrops?.[1]
   if (!lowerBackdrop || !upperBackdrop) {
     throw new Error('Expected both modal backdrops to be rendered')
   }
