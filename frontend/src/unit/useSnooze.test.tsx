@@ -22,7 +22,9 @@ const bootstrapState = (
   last_rolled_result: pendingThreadId === null ? null : 1,
   active_thread: null,
   roll_pool: [],
-  snoozed_threads: pendingThreadId === null ? [{ id: 7, title: 'Doom Patrol' }] : [],
+  snoozed_threads: pendingThreadId === null
+    ? [{ id: 7, title: 'Doom Patrol', format: 'series' }]
+    : [],
   snoozed_count: pendingThreadId === null ? 1 : 0,
   blocked_count: 0,
   blocked_threads: [],
@@ -99,7 +101,11 @@ describe('snooze hooks', () => {
 
     try {
       const snooze = renderHook(() => useSnooze())
-      const request = snooze.result.current.mutate(7)
+      let request: Promise<unknown> | undefined
+
+      act(() => {
+        request = snooze.result.current.mutate(7)
+      })
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(10_000)
@@ -127,7 +133,11 @@ describe('snooze hooks', () => {
 
     try {
       const snooze = renderHook(() => useSnooze())
-      const request = snooze.result.current.mutate(7)
+      let request: Promise<unknown> | undefined
+
+      act(() => {
+        request = snooze.result.current.mutate(7)
+      })
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(10_000)
