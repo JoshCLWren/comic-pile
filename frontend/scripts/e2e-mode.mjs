@@ -19,7 +19,7 @@ function affectedSpecs() {
   return configured.split(',').map((value) => value.trim()).filter(Boolean)
 }
 
-function buildArgs(mode) {
+function buildArgs(mode, extraArgs = []) {
   const args = ['playwright', 'test']
   if (mode === 'smoke') args.push(...SMOKE_SPECS)
   if (mode === 'affected') args.push(...affectedSpecs())
@@ -27,13 +27,16 @@ function buildArgs(mode) {
   const browser = process.env.E2E_BROWSER?.trim()
   if (browser && browser !== 'all') args.push(`--project=${browser}`)
 
+  args.push(...extraArgs)
   return args
 }
 
 const mode = parseMode(process.argv[2] ?? 'smoke')
-const args = buildArgs(mode)
+const printOnly = process.argv.includes('--print')
+const extraArgs = process.argv.slice(3).filter((argument) => argument !== '--print')
+const args = buildArgs(mode, extraArgs)
 
-if (process.argv.includes('--print')) {
+if (printOnly) {
   console.log(['pnpm', 'exec', ...args].join(' '))
   process.exit(0)
 }
