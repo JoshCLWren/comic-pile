@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { createPortal } from 'react-dom'
 import type { Thread } from '../types'
 import { usePositionMenu } from '../contexts/usePositionMenu'
+import OverlayPortal from './OverlayPortal'
 
 interface PositionMenuProps {
   thread: Thread
@@ -236,37 +236,38 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
       >
         &#x22EE;
       </button>
-      {isOpen && menuPosition && createPortal(
-        <div
-          ref={menuRef}
-          className="fixed w-52 bg-[#1a1410]/95 border border-white/10 rounded-xl shadow-2xl z-[1000] py-1 overflow-hidden"
-          style={menuPosition}
-          role="menu"
-          aria-label="Thread actions"
-        >
-          {menuItems.map((item, index) => (
-            <button
-              key={item.label}
-              ref={(el) => { menuItemsRef.current[index] = el }}
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                item.action()
-              }}
-              aria-label={item.ariaLabel}
-              className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-3 focus:outline-none focus-visible:bg-white/10 ${
-                item.destructive
-                  ? 'text-red-400 hover:bg-red-500/10 hover:text-red-300 focus-visible:bg-red-500/10 focus-visible:text-red-300'
-                  : 'text-stone-300 hover:bg-white/10 hover:text-white focus-visible:bg-white/10 focus-visible:text-white'
-              }`}
-              role="menuitem"
-            >
-              <span className="text-base">{item.icon}</span>
-              <span className="font-medium">{item.label}</span>
-            </button>
-          ))}
-        </div>,
-        document.body,
+      {isOpen && menuPosition && (
+        <OverlayPortal>
+          <div
+            ref={menuRef}
+            className="fixed w-52 bg-[#1a1410]/95 border border-white/10 rounded-xl shadow-2xl z-[1000] py-1 overflow-hidden"
+            style={menuPosition}
+            role="menu"
+            aria-label="Thread actions"
+          >
+            {menuItems.map((item, index) => (
+              <button
+                key={item.label}
+                ref={(el) => { menuItemsRef.current[index] = el }}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  item.action()
+                }}
+                aria-label={item.ariaLabel}
+                className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-3 focus:outline-none focus-visible:bg-white/10 ${
+                  item.destructive
+                    ? 'text-red-400 hover:bg-red-500/10 hover:text-red-300 focus-visible:bg-red-500/10 focus-visible:text-red-300'
+                    : 'text-stone-300 hover:bg-white/10 hover:text-white focus-visible:bg-white/10 focus-visible:text-white'
+                }`}
+                role="menuitem"
+              >
+                <span className="text-base">{item.icon}</span>
+                <span className="font-medium">{item.label}</span>
+              </button>
+            ))}
+          </div>
+        </OverlayPortal>
       )}
     </div>
   )
