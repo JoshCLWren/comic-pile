@@ -1,0 +1,32 @@
+name: Cancel Stale CI
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+concurrency:
+  group: cancel-stale-ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cancel-superseded-runs:
+    name: Cancel superseded CI runs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Cancel older active CI runs for this pull request branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python scripts/cancel_stale_ci_runs.py \
+            --repo "${{ github.repository }}" \
+            --workflow ci.yml \
+            --head-branch "${{ github.event.pull_request.head.ref }}" \
+            --current-sha "${{ github.event.pull_request.head.sha }}"
