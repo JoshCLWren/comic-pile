@@ -135,9 +135,11 @@ manifest_confirmed() {
 }
 
 manifest_pending() {
-  local dir="$1"
+  local dir="$1" cooldown="${2:-0}"
   manifest_init "$dir"
-  awk -F'\t' 'NR>1 && ($2=="untested" || $2=="failed") && $1!="" {print $1}' "$(manifest_path "$dir")"
+  awk -F'\t' -v now="$(date +%s)" -v cooldown="$cooldown" \
+    'NR>1 && $1!="" && ($2=="untested" || ($2=="failed" && (cooldown==0 || now-$5>=cooldown))) {print $1}' \
+    "$(manifest_path "$dir")"
 }
 
 # Return confirmed models in least-used order while rotating ties/order between calls.
@@ -223,7 +225,9 @@ main() {
       manifest_confirmed "$(state_dir_for "${1:-}")"
       ;;
     pending)
-      manifest_pending "$(state_dir_for "${1:-}")"
+      pending_dir="$(state_dir_for "${1:-}")"
+      pending_cooldown="${2:-0}"
+      manifest_pending "$pending_dir" "$pending_cooldown"
       ;;
     next)
       (($# >= 1)) || { printf 'usage: %s next DEFAULT_MODEL [STATE_DIR]\n' "$0" >&2; exit 2; }

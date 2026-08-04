@@ -19,7 +19,6 @@ MODE="drain"
 RUN_ONCE=0
 STATE_DIR_EXPLICIT=0
 FORWARD_ARGS=()
-FAILURE_BACKOFF_SECONDS="${FACTORY_FAILURE_BACKOFF_SECONDS:-5}"
 MAX_FAILURES="${FACTORY_MAX_FAILURES:-2}"
 
 usage() {
@@ -84,7 +83,6 @@ if [[ -z "$STATE_DIR" || "$STATE_DIR_EXPLICIT" == "0" && -z "${COMIC_PILE_FACTOR
 fi
 
 is_nonnegative_integer "$IDLE_SECONDS" || die "FACTORY_IDLE_SECONDS must be an integer"
-is_nonnegative_integer "$FAILURE_BACKOFF_SECONDS" || die "FACTORY_FAILURE_BACKOFF_SECONDS must be an integer"
 is_nonnegative_integer "$MAX_FAILURES" || die "FACTORY_MAX_FAILURES must be an integer"
 ((MAX_FAILURES >= 1)) || die "FACTORY_MAX_FAILURES must be at least 1"
 [[ -x "$HEARTBEAT_RUNNER" ]] || die "heartbeat runner is not executable: $HEARTBEAT_RUNNER"
@@ -100,12 +98,7 @@ select_model() {
   fi
 }
 
-is_token_rate_limit_error() {
-  grep -Eiq 'Tokens per minute limit exceeded|too many tokens processed' "$1"
-}
-
 heartbeat=0
-consecutive_failures=0
 while true; do
   heartbeat=$((heartbeat + 1))
   model="$(select_model)"
@@ -126,31 +119,21 @@ while true; do
     # Retire this model from confirmed rotation so the next heartbeat gets a
     # different known-good candidate. Keep the failure in the manifest.
     "$MANIFEST_HELPER" fail "$model" "$STATE_DIR" >/dev/null 2>&1 || true
-    if is_token_rate_limit_error "$result_file"; then
-      rm -f "$result_file"
-      if [[ -n "$PINNED_MODEL" ]]; then
-        printf 'Factory stopped: token-per-minute limit reached for pinned model %s.\n' "$model" >&2
-        exit "$status"
-      fi
-      if ! "$MANIFEST_HELPER" confirmed "$STATE_DIR" | grep -q .; then
-        printf 'Factory stopped: token-per-minute limit reached and no models remain.\n' >&2
-        exit "$status"
-      fi
-      printf 'Token-per-minute limit reached for %s; immediately rotating without backoff.\n' \
-        "$model" >&2
-      continue
-    fi
-    consecutive_failures=$((consecutive_failures + 1))
-    printf 'Factory heartbeat failed for %s (%d/%d); rotating model.\n' \
-      "$model" "$consecutive_failures" "$MAX_FAILURES" >&2
     rm -f "$result_file"
-    ((consecutive_failures < MAX_FAILURES)) || exit "$status"
-    sleep "$FAILURE_BACKOFF_SECONDS"
+    if [[ -n "$PINNED_MODEL" ]]; then
+      printf 'Factory stopped after failure of pinned model %s.\n' "$model" >&2
+      exit "$status"
+    fi
+    if ! "$MANIFEST_HELPER" confirmed "$STATE_DIR" | grep -q .; then
+      printf 'Factory stopped: no confirmed models remain after failure of %s.\n' "$model" >&2
+      exit "$status"
+    fi
+    printf 'Heartbeat failed for %s; immediately rotating to the next model (no cooldown).\n' \
+      "$model" >&2
     continue
   fi
 
   if grep -Fq 'FACTORY_RESULT: changed' "$result_file"; then
-    consecutive_failures=0
     rm -f "$result_file"
     if ((RUN_ONCE == 1)); then
       exit 0
