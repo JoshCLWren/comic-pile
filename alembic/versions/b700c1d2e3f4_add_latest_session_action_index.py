@@ -9,6 +9,7 @@ Create Date: 2026-08-04 18:05:00.000000
 from collections.abc import Sequence
 
 from alembic import op
+import sqlalchemy as sa
 
 revision: str = "b700c1d2e3f4"
 down_revision: str | Sequence[str] | None = "a613b7c9d201"
@@ -21,9 +22,8 @@ def upgrade() -> None:
     op.create_index(
         "ix_event_session_latest_action",
         "events",
-        ["session_id", op.f("timestamp"), op.f("id")],
+        ["session_id", sa.text("timestamp DESC"), sa.text("id DESC")],
         unique=False,
-        postgresql_ops={"timestamp": "DESC", "id": "DESC"},
     )
 
 
