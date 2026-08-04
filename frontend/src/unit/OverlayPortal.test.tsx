@@ -17,8 +17,25 @@ it('renders overlay content outside the application root', async () => {
   const overlayRoot = document.getElementById('comic-pile-overlay-root')
 
   expect(overlayRoot).toHaveAttribute('data-overlay-root', 'true')
+  expect(overlayRoot).toHaveAttribute('data-overlay-layer', 'menu')
+  expect(overlayRoot).toHaveClass('comic-pile-overlay-root')
   expect(overlayRoot).toContainElement(menu)
   expect(overlayRoot?.parentElement).toBe(document.body)
+})
+
+it('applies the canonical shared layer contract to interactive overlays', async () => {
+  render(
+    <OverlayPortal>
+      <button type="button">Overlay action</button>
+    </OverlayPortal>,
+  )
+
+  const action = await screen.findByRole('button', { name: 'Overlay action' })
+  const overlayRoot = document.getElementById('comic-pile-overlay-root')
+
+  expect(overlayRoot).toHaveClass('comic-pile-overlay-root')
+  expect(overlayRoot).toHaveAttribute('data-overlay-layer', 'menu')
+  expect(overlayRoot).toContainElement(action)
 })
 
 it('shares one overlay root across concurrent overlays', async () => {
