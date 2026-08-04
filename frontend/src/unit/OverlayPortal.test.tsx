@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
 import OverlayPortal from '../components/OverlayPortal'
 
@@ -51,7 +51,11 @@ it('keeps the shared root connected while a direct text portal remains mounted',
   const first = render(<OverlayPortal>First text overlay</OverlayPortal>)
   const second = render(<OverlayPortal>Second text overlay</OverlayPortal>)
 
-  await screen.findByText('Second text overlay')
+  await waitFor(() => {
+    expect(document.getElementById('comic-pile-overlay-root')).toHaveTextContent(
+      'First text overlaySecond text overlay',
+    )
+  })
 
   first.unmount()
 
