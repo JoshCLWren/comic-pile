@@ -60,6 +60,32 @@ describe('useDependencyGroups', () => {
     expect(result.current.groups).toEqual([{ id: 9, name: 'Infinity' }])
   })
 
+  it('ignores stale errors while preserving the current Error instance', async () => {
+    let rejectFirst: ((reason: Error) => void) | undefined
+    mockedDependencyGroupsApi.listForThread
+      .mockImplementationOnce(
+        () => new Promise((_, reject) => {
+          rejectFirst = reject
+        }),
+      )
+      .mockRejectedValueOnce(new Error('current request failed'))
+
+    const { result, rerender } = renderHook(
+      ({ threadId }) => useDependencyGroups(threadId),
+      { initialProps: { threadId: 42 } },
+    )
+
+    rerender({ threadId: 99 })
+    await waitFor(() => expect(result.current.error?.message).toBe('current request failed'))
+
+    rejectFirst?.(new Error('stale request failed'))
+    await Promise.resolve()
+
+    expect(result.current.error?.message).toBe('current request failed')
+    expect(result.current.groups).toEqual([])
+    expect(result.current.isLoading).toBe(false)
+  })
+
   it('returns a normalized error when loading fails', async () => {
     mockedDependencyGroupsApi.listForThread.mockRejectedValue('offline')
 
