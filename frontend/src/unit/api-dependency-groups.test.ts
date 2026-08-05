@@ -37,6 +37,22 @@ describe('dependencyGroupsApi', () => {
     )
   })
 
+  it('loads group details', async () => {
+    const group = {
+      id: 3,
+      name: 'Infinity',
+      created_at: '2026-01-01T00:00:00Z',
+      memberships: [],
+    }
+    apiMock.get.mockResolvedValueOnce(group)
+
+    await expect(dependencyGroupsApi.get(3)).resolves.toEqual(group)
+
+    expect(apiMock.get).toHaveBeenCalledWith(
+      '/v1/dependencies/reading-order-groups/3',
+    )
+  })
+
   it('supports group rename and deletion', async () => {
     apiMock.patch.mockResolvedValue({ id: 3, name: 'Infinity', memberships: [] })
     apiMock.delete.mockResolvedValue(undefined)
