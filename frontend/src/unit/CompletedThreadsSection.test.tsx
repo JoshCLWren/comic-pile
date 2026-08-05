@@ -58,10 +58,7 @@ describe('CompletedThreadsSection', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: 'Show Completed (2)' }))
-    await user.click(
-      screen.getByRole('button', { name: 'Choose completed thread to reactivate' }),
-    )
+    await user.click(screen.getByRole('button', { name: 'Reactivate' }))
 
     expect(onReactivate).toHaveBeenNthCalledWith(1, null)
     expect(screen.getByRole('button', { name: 'Show Completed (2)' })).toHaveAttribute(
