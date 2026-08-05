@@ -27,6 +27,8 @@ SCOUT_PID_FILE="${COMIC_PILE_FACTORY_SCOUT_PID_FILE:-}"
 AUTO_SCOUT="${COMIC_PILE_FACTORY_AUTO_SCOUT:-1}"
 SCOUT_PARALLEL="${SCOUT_PARALLEL:-4}"
 SCOUT_TIMEOUT="${MODEL_SCOUT_TIMEOUT:-${FACTORY_HEARTBEAT_TIMEOUT:-60}}"
+ALLOWED_PROVIDERS="${COMIC_PILE_FACTORY_ALLOWED_PROVIDERS:-opencode nvidia fcm-nvidia openrouter}"
+FAILURE_THRESHOLD="${FACTORY_FAILURE_THRESHOLD:-2}"
 
 usage() {
   "$HEARTBEAT_RUNNER" --help
@@ -96,6 +98,8 @@ is_nonnegative_integer "$MAX_FAILURES" || die "FACTORY_MAX_FAILURES must be an i
 is_nonnegative_integer "$SCOUT_PARALLEL" || die "SCOUT_PARALLEL must be an integer"
 ((SCOUT_PARALLEL >= 1)) || die "SCOUT_PARALLEL must be at least 1"
 [[ "$SCOUT_TIMEOUT" =~ ^[1-9][0-9]*$ ]] || die "MODEL_SCOUT_TIMEOUT must be a positive integer"
+is_nonnegative_integer "$FAILURE_THRESHOLD" || die "FACTORY_FAILURE_THRESHOLD must be an integer"
+((FAILURE_THRESHOLD >= 1)) || die "FACTORY_FAILURE_THRESHOLD must be at least 1"
 [[ "$AUTO_SCOUT" == "0" || "$AUTO_SCOUT" == "1" ]] || die "COMIC_PILE_FACTORY_AUTO_SCOUT must be 0 or 1"
 [[ -x "$HEARTBEAT_RUNNER" ]] || die "heartbeat runner is not executable: $HEARTBEAT_RUNNER"
 [[ -x "$MANIFEST_HELPER" ]] || die "manifest helper is not executable: $MANIFEST_HELPER"
@@ -139,7 +143,17 @@ refresh_model_manifest() {
   candidates_file="$(mktemp "$STATE_DIR/.model-candidates.XXXXXX")"
   while IFS= read -r model; do
     [[ -n "$model" ]] || continue
-    non_chat_model "$model" || printf '%s\n' "$model"
+    non_chat_model "$model" && continue
+    for provider in $ALLOWED_PROVIDERS; do
+      [[ "$model" == "$provider/"* ]] || continue
+      # OpenRouter exposes paid models alongside :free ones; only free routes
+      # belong in the curated pool.
+      if [[ "$provider" == "openrouter" ]]; then
+        [[ "$model" == *:free ]] || continue
+      fi
+      printf '%s\n' "$model"
+      break
+    done
   done < <(opencode models 2>/dev/null) >"$candidates_file"
 
   if [[ ! -s "$candidates_file" ]]; then
@@ -170,6 +184,10 @@ select_model() {
   fi
 }
 
+failure_count_file() {
+  printf '%s\n' "$STATE_DIR/model-failures/$(printf '%s' "$1" | tr '/:@._ ' '______')"
+}
+
 wait_for_initial_scout
 refresh_model_manifest 3600 || true
 
@@ -191,10 +209,34 @@ while true; do
   # process lifetime. Remove completed files so they cannot accumulate forever.
   rm -f "$STATE_DIR"/heartbeats/factory_heartbeat_*.hb 2>/dev/null || true
 
+  if ((status == 0)); then
+    rm -f -- "$(failure_count_file "$model")"
+  fi
+
   if ((status != 0)); then
-    # Retire this model from confirmed rotation so the next heartbeat gets a
-    # different known-good candidate. Keep the failure in the manifest.
+    # A watchdog kill (token-per-minute limit or heartbeat silence timeout) is a
+    # transient interruption, not evidence the model is broken. Productive runs
+    # are frequently silent for long stretches (long test suites, git push
+    # hooks), so rotate away without retiring the model.
+    if grep -Eiq 'WATCHDOG:|tokens per minute' "$result_file"; then
+      printf 'Heartbeat for %s was interrupted by the watchdog; rotating without retiring.\n' "$model" >&2
+      rm -f "$result_file"
+      continue
+    fi
+    # Genuine failures retire a model only after FACTORY_FAILURE_THRESHOLD
+    # consecutive wrapper heartbeats, so a single bad run cannot drain the
+    # manifest of verified models.
+    mkdir -p "$STATE_DIR/model-failures"
+    fail_file="$(failure_count_file "$model")"
+    fail_count=$(( $(cat "$fail_file" 2>/dev/null || printf 0) + 1 ))
+    printf '%s\n' "$fail_count" >"$fail_file"
+    if ((fail_count < FAILURE_THRESHOLD)); then
+      printf 'Heartbeat failed for %s (%d/%d); rotating without retiring.\n' "$model" "$fail_count" "$FAILURE_THRESHOLD" >&2
+      rm -f "$result_file"
+      continue
+    fi
     "$MANIFEST_HELPER" fail "$model" "$STATE_DIR" >/dev/null 2>&1 || true
+    rm -f -- "$fail_file"
     rm -f "$result_file"
     if [[ -n "$PINNED_MODEL" ]]; then
       printf 'Factory stopped after failure of pinned model %s.\n' "$model" >&2

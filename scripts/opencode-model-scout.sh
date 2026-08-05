@@ -14,6 +14,7 @@ PARALLEL="${MODEL_SCOUT_PARALLEL:-4}"
 TIMEOUT="${MODEL_SCOUT_TIMEOUT:-900}"
 WATCHDOG_POLL_SECONDS="${MODEL_SCOUT_WATCHDOG_POLL_SECONDS:-15}"
 FAILURE_COOLDOWN_SECONDS="${MODEL_SCOUT_FAILURE_COOLDOWN_SECONDS:-3600}"
+ALLOWED_PROVIDERS="${COMIC_PILE_FACTORY_ALLOWED_PROVIDERS:-opencode nvidia fcm-nvidia openrouter}"
 WATCH=0
 RECHECK_SECONDS=600
 FORCE=0
@@ -144,6 +145,7 @@ non_chat() {
 }
 
 discover_candidates() {
+  local provider candidate
   if ((${#EXPLICIT_MODELS[@]} > 0)); then
     printf '%s\n' "${EXPLICIT_MODELS[@]}"
     return
@@ -153,8 +155,18 @@ discover_candidates() {
     grep -v '^[[:space:]]*#' "$CANDIDATES_FILE" | grep -v '^[[:space:]]*$'
     return
   fi
-  opencode models 2>/dev/null | grep -vE '^opencode/' | while IFS= read -r candidate; do
-    non_chat "$candidate" || printf '%s\n' "$candidate"
+  opencode models 2>/dev/null | while IFS= read -r candidate; do
+    non_chat "$candidate" && continue
+    for provider in $ALLOWED_PROVIDERS; do
+      [[ "$candidate" == "$provider/"* ]] || continue
+      # OpenRouter exposes paid models alongside :free ones; only free routes
+      # belong in the curated pool.
+      if [[ "$provider" == "openrouter" ]]; then
+        [[ "$candidate" == *:free ]] || continue
+      fi
+      printf '%s\n' "$candidate"
+      break
+    done
   done
 }
 

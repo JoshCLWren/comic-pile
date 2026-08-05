@@ -116,6 +116,7 @@ class ModelToolTests(unittest.TestCase):
             str(self.scripts / "comic-pile-opencode-factory.sh"),
             "--state-dir",
             str(state),
+            env={"COMIC_PILE_FACTORY_AUTO_SCOUT": "0"},
             timeout=10,
         )
 
@@ -157,7 +158,11 @@ class ModelToolTests(unittest.TestCase):
             str(self.scripts / "comic-pile-opencode-factory.sh"),
             "--state-dir",
             str(state),
-            env={"FACTORY_FAILURE_BACKOFF_SECONDS": "30"},
+            env={
+                "FACTORY_FAILURE_BACKOFF_SECONDS": "30",
+                "FACTORY_FAILURE_THRESHOLD": "1",
+                "COMIC_PILE_FACTORY_AUTO_SCOUT": "0",
+            },
             timeout=10,
         )
 
@@ -203,7 +208,7 @@ class ModelToolTests(unittest.TestCase):
             str(self.scripts / "comic-pile-opencode-factory.sh"),
             "--state-dir",
             str(state),
-            env={"FACTORY_FAILURE_BACKOFF_SECONDS": "30", "FACTORY_MAX_FAILURES": "1"},
+            env={"FACTORY_FAILURE_BACKOFF_SECONDS": "30", "FACTORY_MAX_FAILURES": "1", "COMIC_PILE_FACTORY_AUTO_SCOUT": "0"},
             timeout=3,
         )
 
@@ -405,6 +410,7 @@ class ModelToolTests(unittest.TestCase):
             str(self.scripts / "comic-pile-opencode-factory.sh"),
             "--state-dir",
             str(state),
+            env={"COMIC_PILE_FACTORY_AUTO_SCOUT": "0"},
             timeout=10,
         )
 
