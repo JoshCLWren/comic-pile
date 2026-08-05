@@ -95,16 +95,10 @@ def _install_recorder(
     return recorder
 
 
-def _verification_calls() -> list[tuple[str, object]]:
+def _expected_upgrade_calls(row_count: int) -> list[tuple[str, object]]:
     return [
         ("execute", {"sql": "LOCK TABLE reviews IN ACCESS EXCLUSIVE MODE", "parameters": None}),
         ("execute", {"sql": "SELECT COUNT(*) FROM reviews", "parameters": None}),
-    ]
-
-
-def _expected_upgrade_calls(row_count: int) -> list[tuple[str, object]]:
-    return [
-        *_verification_calls(),
         ("create_table", "migration_data_deletion_audit"),
         (
             "execute",
@@ -128,64 +122,18 @@ def _expected_upgrade_calls(row_count: int) -> list[tuple[str, object]]:
     ]
 
 
-def test_upgrade_records_scope_before_removing_retired_reviews(
+@pytest.mark.parametrize("row_count", [0, 3])
+def test_upgrade_audits_and_removes_retired_reviews(
     monkeypatch: pytest.MonkeyPatch,
+    row_count: int,
 ) -> None:
-    """Record the confirmed deletion scope before dropping retained Reviews rows."""
+    """Record the exact deletion scope and remove Reviews without a manual gate."""
     migration = _load_migration()
-    recorder = _install_recorder(monkeypatch, migration, row_count=3)
-    monkeypatch.setenv(migration.CONFIRMATION_ENV, "3")
+    recorder = _install_recorder(monkeypatch, migration, row_count=row_count)
 
     migration.upgrade()
 
-    assert recorder.calls == _expected_upgrade_calls(3)
-
-
-def test_upgrade_records_empty_reviews_table(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Allow and audit cleanup when the Reviews table is already empty."""
-    migration = _load_migration()
-    recorder = _install_recorder(monkeypatch, migration, row_count=0)
-    monkeypatch.delenv(migration.CONFIRMATION_ENV, raising=False)
-
-    migration.upgrade()
-
-    assert recorder.calls == _expected_upgrade_calls(0)
-
-
-def test_upgrade_requires_recorded_row_count(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Refuse destructive cleanup without an exact retained-row confirmation."""
-    migration = _load_migration()
-    recorder = _install_recorder(monkeypatch, migration, row_count=4)
-    monkeypatch.delenv(migration.CONFIRMATION_ENV, raising=False)
-
-    with pytest.raises(RuntimeError, match="current count: 4"):
-        migration.upgrade()
-
-    assert recorder.calls == _verification_calls()
-
-
-def test_upgrade_rejects_malformed_row_count(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Refuse cleanup when the retained-row confirmation is not an integer."""
-    migration = _load_migration()
-    recorder = _install_recorder(monkeypatch, migration, row_count=4)
-    monkeypatch.setenv(migration.CONFIRMATION_ENV, "not-a-number")
-
-    with pytest.raises(RuntimeError, match="must be an integer row count"):
-        migration.upgrade()
-
-    assert recorder.calls == _verification_calls()
-
-
-def test_upgrade_rejects_changed_row_count(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Refuse cleanup when the live Reviews row count changed after confirmation."""
-    migration = _load_migration()
-    recorder = _install_recorder(monkeypatch, migration, row_count=5)
-    monkeypatch.setenv(migration.CONFIRMATION_ENV, "4")
-
-    with pytest.raises(RuntimeError, match="expected 4, found 5"):
-        migration.upgrade()
-
-    assert recorder.calls == _verification_calls()
+    assert recorder.calls == _expected_upgrade_calls(row_count)
 
 
 def test_migration_is_forward_only() -> None:
