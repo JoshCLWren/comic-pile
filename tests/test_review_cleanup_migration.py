@@ -123,6 +123,7 @@ def _expected_upgrade_calls(row_count: int) -> list[tuple[str, object]]:
 def test_upgrade_records_scope_before_removing_retired_reviews(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Record the confirmed deletion scope before dropping retained Reviews rows."""
     migration = _load_migration()
     recorder = _install_recorder(monkeypatch, migration, row_count=3)
     monkeypatch.setenv(migration.CONFIRMATION_ENV, "3")
@@ -133,6 +134,7 @@ def test_upgrade_records_scope_before_removing_retired_reviews(
 
 
 def test_upgrade_records_empty_reviews_table(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Allow and audit cleanup when the Reviews table is already empty."""
     migration = _load_migration()
     recorder = _install_recorder(monkeypatch, migration, row_count=0)
     monkeypatch.delenv(migration.CONFIRMATION_ENV, raising=False)
@@ -143,6 +145,7 @@ def test_upgrade_records_empty_reviews_table(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_upgrade_requires_recorded_row_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Refuse destructive cleanup without an exact retained-row confirmation."""
     migration = _load_migration()
     recorder = _install_recorder(monkeypatch, migration, row_count=4)
     monkeypatch.delenv(migration.CONFIRMATION_ENV, raising=False)
@@ -154,6 +157,7 @@ def test_upgrade_requires_recorded_row_count(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_upgrade_rejects_changed_row_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Refuse cleanup when the live Reviews row count changed after confirmation."""
     migration = _load_migration()
     recorder = _install_recorder(monkeypatch, migration, row_count=5)
     monkeypatch.setenv(migration.CONFIRMATION_ENV, "4")
@@ -165,6 +169,7 @@ def test_upgrade_rejects_changed_row_count(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 def test_migration_is_forward_only() -> None:
+    """Reject downgrade because deleted Reviews data requires backup restoration."""
     migration = _load_migration()
 
     with pytest.raises(RuntimeError, match="restore a database backup"):
