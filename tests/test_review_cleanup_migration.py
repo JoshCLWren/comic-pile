@@ -36,9 +36,9 @@ class _BindRecorder:
         parameters: dict[str, object] | None = None,
     ) -> _ScalarResult:
         statement_text = str(statement)
+        self.calls.append(("execute", {"sql": statement_text, "parameters": parameters}))
         if statement_text == "SELECT COUNT(*) FROM reviews":
             return _ScalarResult(self.row_count)
-        self.calls.append(("execute", {"sql": statement_text, "parameters": parameters}))
         return _ScalarResult(0)
 
 
@@ -95,8 +95,16 @@ def _install_recorder(
     return recorder
 
 
+def _verification_calls() -> list[tuple[str, object]]:
+    return [
+        ("execute", {"sql": "LOCK TABLE reviews IN ACCESS EXCLUSIVE MODE", "parameters": None}),
+        ("execute", {"sql": "SELECT COUNT(*) FROM reviews", "parameters": None}),
+    ]
+
+
 def _expected_upgrade_calls(row_count: int) -> list[tuple[str, object]]:
     return [
+        *_verification_calls(),
         ("create_table", "migration_data_deletion_audit"),
         (
             "execute",
@@ -153,7 +161,7 @@ def test_upgrade_requires_recorded_row_count(monkeypatch: pytest.MonkeyPatch) ->
     with pytest.raises(RuntimeError, match="current count: 4"):
         migration.upgrade()
 
-    assert recorder.calls == []
+    assert recorder.calls == _verification_calls()
 
 
 def test_upgrade_rejects_changed_row_count(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -165,7 +173,7 @@ def test_upgrade_rejects_changed_row_count(monkeypatch: pytest.MonkeyPatch) -> N
     with pytest.raises(RuntimeError, match="expected 4, found 5"):
         migration.upgrade()
 
-    assert recorder.calls == []
+    assert recorder.calls == _verification_calls()
 
 
 def test_migration_is_forward_only() -> None:
