@@ -17,12 +17,14 @@ async function installShortAxiosTimeout(page: import('@playwright/test').Page): 
       throw new Error('XMLHttpRequest.timeout is not patchable in this browser');
     }
 
+    const nativeTimeoutGetter = descriptor.get;
+    const nativeTimeoutSetter = descriptor.set;
     Object.defineProperty(XMLHttpRequest.prototype, 'timeout', {
       configurable: true,
       enumerable: descriptor.enumerable,
-      get: descriptor.get,
+      get: nativeTimeoutGetter,
       set(value: number) {
-        descriptor.set?.call(this, Math.min(Number(value), timeoutMs));
+        nativeTimeoutSetter.call(this, Math.min(Number(value), timeoutMs));
       },
     });
   }, timeoutMs);
@@ -79,7 +81,14 @@ for (const mutationCase of mutationCases) {
       mutationRequests += 1;
       const committedResponse = await route.fetch();
       await new Promise((resolve) => setTimeout(resolve, RESPONSE_TAIL_DELAY_MS));
-      await route.fulfill({ response: committedResponse });
+      try {
+        await route.fulfill({ response: committedResponse });
+      } catch {
+        // The browser is expected to abandon the original XHR after 50 ms.
+        // The backend fetch already completed, so reconciliation must observe
+        // the committed authoritative state even when the late response cannot
+        // be delivered to the timed-out client request.
+      }
     });
     await page.route('**/api/sessions/current/**', async (route) => {
       reconciliationRequests += 1;
