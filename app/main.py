@@ -244,6 +244,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     @app.api_route(
         "/api/{path:path}",
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+        include_in_schema=False,
     )
     async def api_not_found(path: str) -> JSONResponse:
         """Return a JSON 404 for unknown API routes.
@@ -417,13 +418,3 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
                 await cache.initialize(local_url=redis_settings.redis_url)
         else:
             logger.info("Redis cache not configured - caching disabled")
-
-    @app.on_event("shutdown")
-    async def shutdown_event():
-        """Close cache connection on application shutdown."""
-        await cache.close()
-
-    return app
-
-
-app = create_app()
