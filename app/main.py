@@ -271,15 +271,11 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
                 A Starlette response with cache-control headers for hashed assets.
             """
             response = await super().get_response(path, scope)
-            # Add cache headers for hashed assets (they have content hashes in filename)
             if hasattr(response, "headers"):
-                # Cache hashed assets (contain hash like index-DsWHcseo.js) for 1 year
-                # These never change content for the same URL
                 response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
             return response
 
     if serve_frontend:
-        # Mount static files. In production, enforce artifact presence before mounting.
         if app_settings.environment == "production":
             _assert_production_frontend_assets()
             app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -406,7 +402,6 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         """Initialize database and cache on application startup."""
         await init_database(app_settings.environment)
 
-        # Initialize Redis cache if configured
         redis_settings = get_redis_settings()
         if redis_settings.is_configured:
             if redis_settings.upstash_redis_rest_url and redis_settings.upstash_redis_rest_token:
@@ -418,3 +413,13 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
                 await cache.initialize(local_url=redis_settings.redis_url)
         else:
             logger.info("Redis cache not configured - caching disabled")
+
+    @app.on_event("shutdown")
+    async def shutdown_event():
+        """Close cache connection on application shutdown."""
+        await cache.close()
+
+    return app
+
+
+app = create_app()
