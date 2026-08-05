@@ -40,7 +40,20 @@ jobs:
           corepack prepare pnpm@10.15.0 --activate
           pnpm --version
 
-      - name: Verify deterministic OpenAPI schema and TypeScript output
+      - name: Regenerate deterministic OpenAPI schema and TypeScript output
         env:
           PYTHONPATH: .
-        run: uv run python scripts/generate_openapi_types.py --check
+        run: uv run python scripts/generate_openapi_types.py
+
+      - name: Upload regenerated artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: generated-openapi-types
+          path: |
+            frontend/src/generated/openapi.json
+            frontend/src/generated/openapi.ts
+          if-no-files-found: error
+
+      - name: Verify generated artifacts are committed
+        run: git diff --exit-code -- frontend/src/generated/openapi.json frontend/src/generated/openapi.ts
