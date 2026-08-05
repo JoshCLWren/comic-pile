@@ -8,6 +8,7 @@ import { RATING_THRESHOLD, getProgressPercentage } from '../utils'
 import type { RatingThread } from '../types'
 import type { ReadingOrder } from '../../../services/api-reading-orders'
 import type { ConnectedThreadInfo } from '../../../types'
+import { ReadingOrderGroups } from './ReadingOrderGroups'
 
 interface RatingViewProps {
   activeRatingThread: RatingThread | null
@@ -145,6 +146,8 @@ export function RatingView({
           </div>
         </div>
       )}
+
+      <ReadingOrderGroups threadId={activeRatingThread?.id} />
 
       <div className="space-y-5 md:space-y-8">
         <div id="rating-preview-dice" className="dice-perspective">
