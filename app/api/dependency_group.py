@@ -94,6 +94,42 @@ async def create_group(
     return await _owned_group(db, group.id, current_user.id)
 
 
+@router.get("/threads/{thread_id}/groups", response_model=list[DependencyGroupSummary])
+async def list_thread_groups(
+    thread_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> list[DependencyGroupSummary]:
+    """List groups containing an owned thread or any of its owned issues.
+
+    Args:
+        thread_id: The owned thread identifier used for the lookup.
+        current_user: The authenticated thread and group owner.
+        db: The asynchronous database session.
+
+    Returns:
+        Distinct group summaries ordered by name and identifier.
+    """
+    thread = await db.get(Thread, thread_id)
+    if thread is None or thread.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
+    issue_ids = select(Issue.id).where(Issue.thread_id == thread_id)
+    result = await db.execute(
+        select(DependencyGroup.id, DependencyGroup.name)
+        .join(DependencyGroupMembership)
+        .where(
+            DependencyGroup.user_id == current_user.id,
+            or_(
+                DependencyGroupMembership.thread_id == thread_id,
+                DependencyGroupMembership.issue_id.in_(issue_ids),
+            ),
+        )
+        .distinct()
+        .order_by(DependencyGroup.name, DependencyGroup.id)
+    )
+    return [DependencyGroupSummary(id=row.id, name=row.name) for row in result]
+
+
 @router.get("/{group_id}", response_model=DependencyGroupResponse)
 async def get_group(
     group_id: int,
@@ -235,39 +271,3 @@ async def remove_member(
     await db.delete(member)
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-@router.get("/threads/{thread_id}/groups", response_model=list[DependencyGroupSummary])
-async def list_thread_groups(
-    thread_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> list[DependencyGroupSummary]:
-    """List groups containing an owned thread or any of its owned issues.
-
-    Args:
-        thread_id: The owned thread identifier used for the lookup.
-        current_user: The authenticated thread and group owner.
-        db: The asynchronous database session.
-
-    Returns:
-        Distinct group summaries ordered by name and identifier.
-    """
-    thread = await db.get(Thread, thread_id)
-    if thread is None or thread.user_id != current_user.id:
-        raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
-    issue_ids = select(Issue.id).where(Issue.thread_id == thread_id)
-    result = await db.execute(
-        select(DependencyGroup.id, DependencyGroup.name)
-        .join(DependencyGroupMembership)
-        .where(
-            DependencyGroup.user_id == current_user.id,
-            or_(
-                DependencyGroupMembership.thread_id == thread_id,
-                DependencyGroupMembership.issue_id.in_(issue_ids),
-            ),
-        )
-        .distinct()
-        .order_by(DependencyGroup.name, DependencyGroup.id)
-    )
-    return [DependencyGroupSummary(id=row.id, name=row.name) for row in result]
