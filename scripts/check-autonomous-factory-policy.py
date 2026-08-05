@@ -11,19 +11,46 @@ HEARTBEAT_ENTRYPOINT = ROOT / "scripts/comic-pile-opencode-factory-heartbeat.sh"
 
 
 def require(text: str, needle: str, source: Path) -> None:
-    """Require one invariant string in a policy source."""
+    """Require one invariant string in a policy source.
+
+    Args:
+        text: Complete source text to inspect.
+        needle: Required invariant text.
+        source: Source path used in the failure message.
+
+    Returns:
+        None.
+    """
     if needle not in text:
         raise SystemExit(f"{source}: missing required policy text: {needle!r}")
 
 
 def forbid(text: str, needle: str, source: Path) -> None:
-    """Reject one known contradictory policy string."""
+    """Reject one known contradictory policy string.
+
+    Args:
+        text: Complete source text to inspect.
+        needle: Forbidden contradictory text.
+        source: Source path used in the failure message.
+
+    Returns:
+        None.
+    """
     if needle in text:
         raise SystemExit(f"{source}: forbidden policy drift found: {needle!r}")
 
 
 def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
-    """Validate policy source text against canonical delivery invariants."""
+    """Validate all factory control-plane texts against canonical invariants.
+
+    Args:
+        policy: Canonical autonomous factory policy text.
+        protocol: GitHub issue execution protocol text.
+        entrypoint: Combined local factory wrapper and heartbeat prompt text.
+
+    Returns:
+        None.
+    """
     for needle in (
         "Version: 16",
         "Drive the open issue backlog to zero",
@@ -78,9 +105,26 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
     ):
         forbid(policy, obsolete, POLICY)
 
-    require(protocol, "docs/AUTONOMOUS_FACTORY_POLICY.md", PROTOCOL)
-    require(protocol, "Never create a draft pull request unless Josh explicitly requests a draft.", PROTOCOL)
-    require(protocol, "Autonomous factory workers may merge", PROTOCOL)
+    for needle in (
+        "docs/AUTONOMOUS_FACTORY_POLICY.md",
+        "Never create a draft pull request unless Josh explicitly requests a draft.",
+        "Before pass, readiness, or merge, inspect the exact current head SHA",
+        "An unresolved actionable correctness, security, ownership, data-integrity, migration, concurrency, recovery, or test-validity finding blocks readiness and merge.",
+        "green on every required check",
+        "free of unresolved actionable review findings",
+        "The merge operation must include the exact expected head SHA.",
+        "Never enable auto-merge.",
+        "Autonomous factory workers may merge",
+    ):
+        require(protocol, needle, PROTOCOL)
+
+    for obsolete in (
+        "Autonomous factory workers may merge whenever CI is green.",
+        "Autonomous factory workers may ignore unresolved review findings.",
+        "Autonomous factory workers must wait for Josh's explicit authorization for every merge.",
+        "Auto-merge may be enabled after CI starts.",
+    ):
+        forbid(protocol, obsolete, PROTOCOL)
 
     for needle in (
         "docs/AUTONOMOUS_FACTORY_POLICY.md",
@@ -123,7 +167,11 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
 
 
 def read_entrypoint_text() -> str:
-    """Read the orchestration wrapper and the single-heartbeat policy prompt."""
+    """Read the orchestration wrapper and single-heartbeat policy prompt.
+
+    Returns:
+        The combined wrapper and heartbeat source text.
+    """
     return "\n".join(
         (
             ENTRYPOINT.read_text(encoding="utf-8"),
@@ -133,7 +181,11 @@ def read_entrypoint_text() -> str:
 
 
 def main() -> None:
-    """Read repository policy sources and validate their alignment."""
+    """Read checked-in policy sources and validate their alignment.
+
+    Returns:
+        None.
+    """
     validate_texts(
         POLICY.read_text(encoding="utf-8"),
         PROTOCOL.read_text(encoding="utf-8"),
