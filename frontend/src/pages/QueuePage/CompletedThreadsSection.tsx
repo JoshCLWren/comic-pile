@@ -39,29 +39,28 @@ export default function CompletedThreadsSection<T extends CompletedThread>({
             {threads.length} finished series hidden from the queue
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setIsExpanded((expanded) => !expanded)}
-          aria-expanded={isExpanded}
-          aria-controls="completed-thread-list"
-          className="h-8 md:h-10 px-3 md:px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10"
-        >
-          {isExpanded ? 'Hide Completed' : `Show Completed (${threads.length})`}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => handleReactivate(null)}
+            className="h-8 md:h-10 px-3 md:px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10"
+          >
+            Reactivate
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsExpanded((expanded) => !expanded)}
+            aria-expanded={isExpanded}
+            aria-controls="completed-thread-list"
+            className="h-8 md:h-10 px-3 md:px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10"
+          >
+            {isExpanded ? 'Hide Completed' : `Show Completed (${threads.length})`}
+          </button>
+        </div>
       </header>
 
       {isExpanded && (
         <div id="completed-thread-list" className="space-y-4">
-          <div className="flex justify-end px-2">
-            <button
-              type="button"
-              onClick={() => handleReactivate(null)}
-              aria-label="Choose completed thread to reactivate"
-              className="h-8 md:h-10 px-3 md:px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10"
-            >
-              Reactivate
-            </button>
-          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {threads.map((thread) => (
               <div key={thread.id} className="glass-card p-4 space-y-2">
