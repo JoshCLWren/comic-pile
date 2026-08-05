@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: openapi-generated-types-${{ github.workflow }}-${{ github.ref }}
@@ -22,8 +22,6 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Python 3.14
         uses: actions/setup-python@v6
@@ -46,25 +44,6 @@ jobs:
         env:
           PYTHONPATH: .
         run: uv run python scripts/generate_openapi_types.py
-
-      - name: Commit generated artifacts to this factory branch
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        shell: bash
-        env:
-          HEAD_BRANCH: ${{ github.head_ref }}
-        run: |
-          artifacts=(
-            frontend/src/generated/openapi.json
-            frontend/src/generated/openapi.ts
-          )
-
-          if [[ -n "$(git status --short --untracked-files=all -- "${artifacts[@]}")" ]]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -- "${artifacts[@]}"
-            git commit -m "Generate current OpenAPI artifacts"
-            git push origin "HEAD:${HEAD_BRANCH}"
-          fi
 
       - name: Upload regenerated artifacts
         if: always()
