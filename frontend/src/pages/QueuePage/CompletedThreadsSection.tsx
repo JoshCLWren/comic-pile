@@ -59,33 +59,31 @@ export default function CompletedThreadsSection<T extends CompletedThread>({
         </div>
       </header>
 
-      {isExpanded && (
-        <div id="completed-thread-list" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {threads.map((thread) => (
-              <div key={thread.id} className="glass-card p-4 space-y-2">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-black text-stone-300 truncate">{thread.title}</p>
-                    <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest">
-                      {thread.format}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleReactivate(thread)}
-                    aria-label={`Reactivate ${thread.title}`}
-                    className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[9px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10"
-                  >
-                    Reactivate
-                  </button>
+      <div id="completed-thread-list" className="space-y-4" hidden={!isExpanded}>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {threads.map((thread) => (
+            <div key={thread.id} className="glass-card p-4 space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-black text-stone-300 truncate">{thread.title}</p>
+                  <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest">
+                    {thread.format}
+                  </p>
                 </div>
-                {thread.notes && <p className="text-xs text-stone-500">{thread.notes}</p>}
+                <button
+                  type="button"
+                  onClick={() => handleReactivate(thread)}
+                  aria-label={`Reactivate ${thread.title}`}
+                  className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[9px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10"
+                >
+                  Reactivate
+                </button>
               </div>
-            ))}
-          </div>
+              {thread.notes && <p className="text-xs text-stone-500">{thread.notes}</p>}
+            </div>
+          ))}
         </div>
-      )}
+      </div>
     </section>
   )
 }
