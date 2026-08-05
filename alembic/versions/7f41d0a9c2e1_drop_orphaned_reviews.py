@@ -24,8 +24,11 @@ CONFIRMATION_ENV = "CONFIRM_DROP_REVIEWS_ROW_COUNT"
 
 
 def _require_verified_row_count() -> None:
-    """Require an exact operator-confirmed row count before destructive cleanup."""
+    """Require confirmation before deleting retained review rows."""
     actual_count = int(op.get_bind().execute(sa.text("SELECT COUNT(*) FROM reviews")).scalar_one())
+    if actual_count == 0:
+        return
+
     expected_count = os.getenv(CONFIRMATION_ENV)
     if expected_count is None:
         raise RuntimeError(
