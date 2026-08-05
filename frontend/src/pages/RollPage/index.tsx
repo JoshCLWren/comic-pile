@@ -74,6 +74,8 @@ export default function RollPage() {
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
   const navigate = useNavigate()
 
+  const snoozedThreads = useMemo(() => bootstrap?.snoozed_threads ?? [], [bootstrap?.snoozed_threads])
+
   useEffect(() => {
     if (isBootstrapError && bootstrapError) {
       const status = getApiErrorStatus(bootstrapError)
@@ -307,7 +309,6 @@ export default function RollPage() {
     }
   }
 
-  const snoozedThreads = bootstrap?.snoozed_threads ?? []
   const rollPool = useMemo(() => bootstrap?.roll_pool ?? [], [bootstrap?.roll_pool])
   const blockedThreads = bootstrap?.blocked_threads ?? []
   const displayDie = isDiceSide(currentDie) ? currentDie : 6

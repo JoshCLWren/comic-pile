@@ -10,6 +10,7 @@ import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } fro
 import { useCreateThread, useDeleteThread, useReactivateThread, useThreads, useUpdateThread } from '../../hooks/useThread'
 import { useSession } from '../../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
+import { SnoozeControls } from '../../components/SnoozeControls'
 import { threadsApi } from '../../services/api'
 import { issuesApi } from '../../services/api-issues'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
@@ -578,11 +579,12 @@ export default function QueuePage() {
         <div className="text-center text-stone-500">No threads match your search</div>
       ) : (
         <>
-          {reorderError && (
-            <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl text-sm font-medium">
-              {reorderError}
-            </div>
-          )}
+            {reorderError && (
+              <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl text-sm font-medium">
+                {reorderError}
+              </div>
+            )}
+            <SnoozeControls />
           {filteredThreads.length > VIRTUALIZATION_THRESHOLD ? (
             <VirtualizedThreadList
               threads={filteredThreads}

@@ -5,6 +5,7 @@ import {
   fetchAndPublishRollBootstrap,
   isAmbiguousNetworkFailure,
   reconcileAmbiguousRollMutation,
+  publishRollBootstrap,
 } from './rollMutationReconciliation'
 
 type SnoozeResult = Awaited<ReturnType<typeof snoozeApi.snooze>> | undefined
@@ -12,6 +13,9 @@ type SnoozeResult = Awaited<ReturnType<typeof snoozeApi.snooze>> | undefined
 export function useSnooze() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
+  const [refreshError, setRefreshError] = useState<unknown>(null)
+  const [refreshRetryCount, setRefreshRetryCount] = useState(0)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const inFlightRequest = useRef<Promise<SnoozeResult> | null>(null)
 
   const mutate = async (expectedPendingThreadId?: number): Promise<SnoozeResult> => {
@@ -19,6 +23,8 @@ export function useSnooze() {
 
     setIsPending(true)
     setIsError(false)
+    setRefreshError(null)
+    setRefreshRetryCount(0)
 
     const request: Promise<SnoozeResult> = (async () => {
       try {
@@ -31,6 +37,7 @@ export function useSnooze() {
             'Snooze saved but authoritative Roll state failed to refresh:',
             getApiErrorDetail(reconciliationError),
           )
+          setRefreshError(reconciliationError)
         }
 
         return result
@@ -63,7 +70,34 @@ export function useSnooze() {
     }
   }
 
-  return { mutate, isPending, isError }
+  const retryRefresh = async (): Promise<void> => {
+    if (isRefreshing) return
+
+    setIsRefreshing(true)
+    setRefreshError(null)
+
+    try {
+      const state = await fetchAndPublishRollBootstrap()
+      publishRollBootstrap(state)
+      setRefreshRetryCount(0)
+    } catch (error: unknown) {
+      console.error(
+        'Failed to refresh Roll state after retry:',
+        getApiErrorDetail(error),
+      )
+      const newRetryCount = refreshRetryCount + 1
+      setRefreshRetryCount(newRetryCount)
+      setRefreshError(error)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
+  const clearRefreshError = (): void => {
+    setRefreshError(null)
+  }
+
+  return { mutate, retryRefresh, clearRefreshError, isPending, isError, refreshError, isRefreshing, refreshRetryCount }
 }
 
 export function useUnsnooze() {
@@ -85,4 +119,33 @@ export function useUnsnooze() {
   }
 
   return { mutate, isPending, isError }
+}
+
+export function useSnoozeRefresh() {
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [refreshError, setRefreshError] = useState<unknown>(null)
+
+  const refresh = async (): Promise<void> => {
+    setIsRefreshing(true)
+    setRefreshError(null)
+
+    try {
+      const state = await fetchAndPublishRollBootstrap()
+      publishRollBootstrap(state)
+    } catch (error: unknown) {
+      console.error(
+        'Failed to refresh Roll state:',
+        getApiErrorDetail(error),
+      )
+      setRefreshError(error)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
+  const clearError = (): void => {
+    setRefreshError(null)
+  }
+
+  return { refresh, isRefreshing, refreshError, clearError }
 }
