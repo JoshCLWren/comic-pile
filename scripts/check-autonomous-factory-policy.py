@@ -37,9 +37,11 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "Workers may merge a PR without asking again only after all of these gates are satisfied",
         "the worker supplies the exact expected head SHA",
         "Never enable auto-merge.",
-        "when the executable backlog reaches zero, restore and run the full configured end-to-end test coverage",
-        "create a GitHub issue for every reproducible defect surfaced by E2E",
+        "Issue #679 is excluded from ordinary executable-backlog selection",
+        "restore the maintained Chromium Playwright CI suite",
+        "create one focused issue per independent reproducible product defect",
         "preserve `user-reported` only for bugs actually reported by a user",
+        "Firefox and WebKit may be run manually",
         "Never push directly to `main`.",
         "Never create or convert a draft PR unless Josh explicitly requests a draft.",
     ):
@@ -69,11 +71,14 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "ready PR awaiting Josh's explicit merge authorization",
         "Never merge.",
         "Never merge or enable auto-merge without Josh explicitly authorizing that merge.",
+        "full configured end-to-end test coverage",
+        "full configured E2E matrix",
     ):
         forbid(policy, obsolete, POLICY)
 
     require(protocol, "docs/AUTONOMOUS_FACTORY_POLICY.md", PROTOCOL)
     require(protocol, "Never create a draft pull request unless Josh explicitly requests a draft.", PROTOCOL)
+    require(protocol, "Autonomous factory workers may merge", PROTOCOL)
 
     for needle in (
         "docs/AUTONOMOUS_FACTORY_POLICY.md",
@@ -84,8 +89,10 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "fetch all current-SHA review submissions and inline review threads",
         "exact expected head SHA",
         "Never enable auto-merge",
-        "restore the full configured E2E matrix",
-        "create one GitHub issue per independent reproducible E2E defect",
+        "Issue #679 is deferred",
+        "Chromium Playwright E2E suite",
+        "create one GitHub issue per independent reproducible Chromium product defect",
+        "Firefox and WebKit are optional diagnostics",
         "Never create or convert a draft PR unless Josh explicitly",
         "comic-pile-factory-review-claim-v2",
         "comic-pile-factory-fix-claim-v3",
@@ -102,6 +109,8 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "ready PR awaiting Josh's explicit merge authorization",
         "Never merge.",
         "Never merge or enable auto-merge without Josh explicitly authorizing that merge.",
+        "full configured E2E matrix",
+        "Firefox + WebKit + Chromium",
     ):
         forbid(entrypoint, obsolete, ENTRYPOINT)
 
