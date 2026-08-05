@@ -77,9 +77,10 @@ def _load_migration() -> ModuleType:
 
 
 def test_upgrade_removes_only_retired_reviews_persistence(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Drop only the retired Reviews table and thread metadata."""
     migration = _load_migration()
     recorder = _OperationRecorder(row_count=3)
-    migration.op = recorder
+    setattr(migration, "op", recorder)
     monkeypatch.setenv(migration.CONFIRMATION_ENV, "3")
 
     migration.upgrade()
@@ -93,9 +94,10 @@ def test_upgrade_removes_only_retired_reviews_persistence(monkeypatch: pytest.Mo
 
 
 def test_upgrade_requires_recorded_row_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Abort before mutation when no operator-confirmed count is supplied."""
     migration = _load_migration()
     recorder = _OperationRecorder(row_count=4)
-    migration.op = recorder
+    setattr(migration, "op", recorder)
     monkeypatch.delenv(migration.CONFIRMATION_ENV, raising=False)
 
     with pytest.raises(RuntimeError, match="current count: 4"):
@@ -105,9 +107,10 @@ def test_upgrade_requires_recorded_row_count(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_upgrade_rejects_changed_row_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Abort before mutation when the live count differs from confirmation."""
     migration = _load_migration()
     recorder = _OperationRecorder(row_count=5)
-    migration.op = recorder
+    setattr(migration, "op", recorder)
     monkeypatch.setenv(migration.CONFIRMATION_ENV, "4")
 
     with pytest.raises(RuntimeError, match="expected 4, found 5"):
@@ -117,6 +120,7 @@ def test_upgrade_rejects_changed_row_count(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 def test_migration_is_forward_only() -> None:
+    """Require backup restoration instead of fabricating deleted review data."""
     migration = _load_migration()
 
     with pytest.raises(RuntimeError, match="restore a database backup"):
