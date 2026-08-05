@@ -60,6 +60,10 @@ export function useSnooze() {
 
   const mutate = async (expectedPendingThreadId?: number): Promise<SnoozeResult> => {
     if (inFlightRequest.current) return inFlightRequest.current
+    if (refreshRequest.current) {
+      await refreshRequest.current
+      return undefined
+    }
 
     setIsPending(true)
     setIsError(false)
