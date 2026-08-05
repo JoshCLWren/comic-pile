@@ -7,20 +7,20 @@ interface CompletedThread {
   notes?: string | null
 }
 
-interface CompletedThreadsSectionProps {
-  threads: CompletedThread[]
-  onReactivate: (thread: CompletedThread | null) => void
+interface CompletedThreadsSectionProps<T extends CompletedThread> {
+  threads: T[]
+  onReactivate: (thread: T | null) => void
 }
 
-export default function CompletedThreadsSection({
+export default function CompletedThreadsSection<T extends CompletedThread>({
   threads,
   onReactivate,
-}: CompletedThreadsSectionProps) {
+}: CompletedThreadsSectionProps<T>) {
   const [isExpanded, setIsExpanded] = useState(false)
 
   if (threads.length === 0) return null
 
-  const handleReactivate = (thread: CompletedThread | null) => {
+  const handleReactivate = (thread: T | null) => {
     setIsExpanded(false)
     onReactivate(thread)
   }
