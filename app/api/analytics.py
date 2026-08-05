@@ -12,10 +12,11 @@ from app.models import Event, Thread
 from app.models import Session as SessionModel
 from app.models.user import User
 
-router = APIRouter(prefix="/analytics", tags=["analytics"])
+router = APIRouter(tags=["analytics"])
 
 
-@router.get("/metrics")
+@router.get("/analytics/metrics", include_in_schema=False)
+@router.get("/v1/analytics/metrics")
 async def get_metrics(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -34,12 +35,10 @@ async def get_metrics(
         total_threads, active_threads, completed_threads, completion_rate,
         average_session_hours, recent_sessions, event_stats, and top_rated_threads.
     """
-    # Total threads
     total_threads = (
         await db.scalar(select(func.count(Thread.id)).where(Thread.user_id == current_user.id)) or 0
     )
 
-    # Active threads
     active_threads = (
         await db.scalar(
             select(func.count(Thread.id)).where(
@@ -49,7 +48,6 @@ async def get_metrics(
         or 0
     )
 
-    # Completed threads
     completed_threads = (
         await db.scalar(
             select(func.count(Thread.id)).where(
@@ -59,12 +57,10 @@ async def get_metrics(
         or 0
     )
 
-    # Completion rate
     completion_rate = (
         round((completed_threads / total_threads) * 100, 1) if total_threads > 0 else 0
     )
 
-    # Average session duration (in hours)
     avg_duration_result = (
         await db.execute(
             select(
@@ -80,7 +76,6 @@ async def get_metrics(
 
     avg_session_hours = round(avg_duration_result, 1) if avg_duration_result is not None else 0
 
-    # Recent reading sessions (last 7 days)
     seven_days_ago = datetime.now(UTC) - timedelta(days=7)
     recent_sessions = (
         await db.scalars(
@@ -94,7 +89,6 @@ async def get_metrics(
         )
     ).all()
 
-    # Reading events by type
     event_counts = (
         await db.execute(
             select(Event.type, func.count(Event.id))
@@ -108,7 +102,6 @@ async def get_metrics(
     for event_type, count in event_counts:
         event_stats[event_type] = count
 
-    # Top rated threads (rating >= 4.0)
     top_threads = (
         await db.scalars(
             select(Thread)
