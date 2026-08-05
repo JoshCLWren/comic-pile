@@ -18,7 +18,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    """Index deterministic latest-action reads by session.
+    """Index deterministic latest-action reads by session without blocking writes.
 
     Args:
         None.
@@ -26,16 +26,18 @@ def upgrade() -> None:
     Returns:
         None.
     """
-    op.create_index(
-        "ix_event_session_latest_action",
-        "events",
-        ["session_id", sa.text("timestamp DESC"), sa.text("id DESC")],
-        unique=False,
-    )
+    with op.get_context().autocommit_block():
+        op.create_index(
+            "ix_event_session_latest_action",
+            "events",
+            ["session_id", sa.text("timestamp DESC"), sa.text("id DESC")],
+            unique=False,
+            postgresql_concurrently=True,
+        )
 
 
 def downgrade() -> None:
-    """Remove the latest-action lookup index.
+    """Remove the latest-action lookup index without blocking writes.
 
     Args:
         None.
@@ -43,4 +45,9 @@ def downgrade() -> None:
     Returns:
         None.
     """
-    op.drop_index("ix_event_session_latest_action", table_name="events")
+    with op.get_context().autocommit_block():
+        op.drop_index(
+            "ix_event_session_latest_action",
+            table_name="events",
+            postgresql_concurrently=True,
+        )
