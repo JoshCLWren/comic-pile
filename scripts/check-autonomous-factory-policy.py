@@ -4,10 +4,10 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-POLICY = ROOT / "docs" / "AUTONOMOUS_FACTORY_POLICY.md"
-PROTOCOL = ROOT / "docs" / "ISSUE_EXECUTION_PROTOCOL.md"
-ENTRYPOINT = ROOT / "scripts" / "comic-pile-opencode-factory.sh"
-HEARTBEAT_ENTRYPOINT = ROOT / "scripts" / "comic-pile-opencode-factory-heartbeat.sh"
+POLICY = ROOT / "docs/AUTONOMOUS_FACTORY_POLICY.md"
+PROTOCOL = ROOT / "docs/ISSUE_EXECUTION_PROTOCOL.md"
+ENTRYPOINT = ROOT / "scripts/comic-pile-opencode-factory.sh"
+HEARTBEAT_ENTRYPOINT = ROOT / "scripts/comic-pile-opencode-factory-heartbeat.sh"
 
 
 def require(text: str, needle: str, source: Path) -> None:
@@ -25,21 +25,23 @@ def forbid(text: str, needle: str, source: Path) -> None:
 def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
     """Validate policy source text against canonical delivery invariants."""
     for needle in (
-        "Version: 15",
-        "Deliver substantive issue implementations without allowing a few existing pull requests to consume the entire factory.",
+        "Version: 16",
+        "Drive the open issue backlog to zero",
+        "The newest unclaimed open issue labeled both `user-reported` and `bug`.",
+        "The highest-priority unclaimed reproducible E2E-discovered `bug` issue.",
         "When fewer than four substantive implementation PRs are open",
-        "A green, ready, review-passed, or Josh-waiting PR is excluded from work selection.",
-        "Do not repeatedly claim an issue whose next required edit is impossible in the current runtime.",
-        "Do not create replacement PRs merely because `main` advanced.",
         "At most one implementation worker may own an issue",
-        "Waiting for CI, Josh, review, a safer runtime, or a merge is not a global stop condition",
-        "Implement the whole issue in one coherent non-draft PR whenever reasonably reviewable.",
-        "push substantive code, tests, or a migration;",
-        "repair a blocking defect or merge conflict;",
-        "open a coherent non-draft implementation PR for an executable issue;",
+        "Existing open PRs are not automatically higher priority than unclaimed issues.",
+        "fetch review submissions and all current inline review threads",
+        "A worker's own review conclusion does not silently override existing human or bot feedback.",
+        "Workers may merge a PR without asking again only after all of these gates are satisfied",
+        "the worker supplies the exact expected head SHA",
+        "Never enable auto-merge.",
+        "when the executable backlog reaches zero, restore and run the full configured end-to-end test coverage",
+        "create a GitHub issue for every reproducible defect surfaced by E2E",
+        "preserve `user-reported` only for bugs actually reported by a user",
         "Never push directly to `main`.",
         "Never create or convert a draft PR unless Josh explicitly requests a draft.",
-        "Never merge or enable auto-merge without Josh explicitly authorizing that merge.",
     ):
         require(policy, needle, POLICY)
 
@@ -63,21 +65,28 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "Always split large PRs into stages",
         "A heartbeat may stop after one substantive commit",
         "Do not start a new issue while an owned issue has executable remaining work.",
+        "Prefer finishing already-started issues over starting new ones.",
+        "ready PR awaiting Josh's explicit merge authorization",
+        "Never merge.",
+        "Never merge or enable auto-merge without Josh explicitly authorizing that merge.",
     ):
         forbid(policy, obsolete, POLICY)
 
     require(protocol, "docs/AUTONOMOUS_FACTORY_POLICY.md", PROTOCOL)
     require(protocol, "Never create a draft pull request unless Josh explicitly requests a draft.", PROTOCOL)
-    require(protocol, "Never merge without Josh's explicit authorization", PROTOCOL)
 
     for needle in (
         "docs/AUTONOMOUS_FACTORY_POLICY.md",
+        "Drive the open issue backlog to zero",
+        "newest unclaimed open issue labeled both `user-reported` and `bug`",
+        "reproducible E2E-discovered",
+        "fewer than four substantive implementation PRs",
+        "fetch all current-SHA review submissions and inline review threads",
+        "exact expected head SHA",
+        "Never enable auto-merge",
+        "restore the full configured E2E matrix",
+        "create one GitHub issue per independent reproducible E2E defect",
         "Never create or convert a draft PR unless Josh explicitly",
-        "Never merge.",
-        "FINISH WHAT YOU START",
-        "OWN AN ISSUE, NOT A PR",
-        "NO PLANNING PRS",
-        "ONE COHERENT PR BY DEFAULT",
         "comic-pile-factory-review-claim-v2",
         "comic-pile-factory-fix-claim-v3",
         "comic-pile-factory-ready-v2",
@@ -87,8 +96,12 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
     for obsolete in (
         "open a truthful draft PR",
         "mark a draft ready when",
-        "merge the pull request",
         "HONEST STAGE FAST PATH",
+        "Prefer finishing already-started issues over starting new ones.",
+        "Do not start a new issue while an owned issue has executable remaining work.",
+        "ready PR awaiting Josh's explicit merge authorization",
+        "Never merge.",
+        "Never merge or enable auto-merge without Josh explicitly authorizing that merge.",
     ):
         forbid(entrypoint, obsolete, ENTRYPOINT)
 
