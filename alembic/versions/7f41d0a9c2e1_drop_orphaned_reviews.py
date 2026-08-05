@@ -25,7 +25,9 @@ AUDIT_TABLE = "migration_data_deletion_audit"
 
 def _verified_row_count() -> int:
     """Return the confirmed number of retained review rows."""
-    actual_count = int(op.get_bind().execute(sa.text("SELECT COUNT(*) FROM reviews")).scalar_one())
+    bind = op.get_bind()
+    bind.execute(sa.text("LOCK TABLE reviews IN ACCESS EXCLUSIVE MODE"))
+    actual_count = int(bind.execute(sa.text("SELECT COUNT(*) FROM reviews")).scalar_one())
     if actual_count == 0:
         return actual_count
 
@@ -54,7 +56,7 @@ def _record_deletion_scope(row_count: int) -> None:
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column("migration_revision", sa.String(length=32), nullable=False),
         sa.Column("resource", sa.String(length=100), nullable=False),
-        sa.Column("row_count", sa.Integer(), nullable=False),
+        sa.Column("row_count", sa.BigInteger(), nullable=False),
         sa.Column(
             "recorded_at",
             sa.DateTime(timezone=True),
