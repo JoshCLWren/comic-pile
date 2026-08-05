@@ -164,6 +164,18 @@ def test_upgrade_requires_recorded_row_count(monkeypatch: pytest.MonkeyPatch) ->
     assert recorder.calls == _verification_calls()
 
 
+def test_upgrade_rejects_malformed_row_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Refuse cleanup when the retained-row confirmation is not an integer."""
+    migration = _load_migration()
+    recorder = _install_recorder(monkeypatch, migration, row_count=4)
+    monkeypatch.setenv(migration.CONFIRMATION_ENV, "not-a-number")
+
+    with pytest.raises(RuntimeError, match="must be an integer row count"):
+        migration.upgrade()
+
+    assert recorder.calls == _verification_calls()
+
+
 def test_upgrade_rejects_changed_row_count(monkeypatch: pytest.MonkeyPatch) -> None:
     """Refuse cleanup when the live Reviews row count changed after confirmation."""
     migration = _load_migration()
