@@ -56,4 +56,22 @@ jobs:
           if-no-files-found: error
 
       - name: Verify generated artifacts are committed
-        run: git diff --exit-code -- frontend/src/generated/openapi.json frontend/src/generated/openapi.ts
+        shell: bash
+        run: |
+          artifacts=(
+            frontend/src/generated/openapi.json
+            frontend/src/generated/openapi.ts
+          )
+
+          git diff -- "${artifacts[@]}"
+          git status --short --untracked-files=all -- "${artifacts[@]}"
+
+          if ! git diff --quiet -- "${artifacts[@]}"; then
+            echo "Generated OpenAPI artifacts differ from the committed files." >&2
+            exit 1
+          fi
+
+          if [[ -n "$(git ls-files --others --exclude-standard -- "${artifacts[@]}")" ]]; then
+            echo "Generated OpenAPI artifacts are untracked and must be committed." >&2
+            exit 1
+          fi
