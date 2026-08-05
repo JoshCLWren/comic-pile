@@ -91,7 +91,7 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "Never enable auto-merge",
         "Issue #679 is deferred",
         "Chromium Playwright E2E suite",
-        "create one GitHub issue per independent reproducible Chromium product defect",
+        "Create one GitHub issue per independent reproducible Chromium product defect",
         "Firefox and WebKit are optional diagnostics",
         "Never create or convert a draft PR unless Josh explicitly",
         "comic-pile-factory-review-claim-v2",
