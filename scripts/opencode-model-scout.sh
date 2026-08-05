@@ -14,7 +14,10 @@ PARALLEL="${MODEL_SCOUT_PARALLEL:-4}"
 TIMEOUT="${MODEL_SCOUT_TIMEOUT:-900}"
 WATCHDOG_POLL_SECONDS="${MODEL_SCOUT_WATCHDOG_POLL_SECONDS:-15}"
 FAILURE_COOLDOWN_SECONDS="${MODEL_SCOUT_FAILURE_COOLDOWN_SECONDS:-3600}"
-ALLOWED_PROVIDERS="${COMIC_PILE_FACTORY_ALLOWED_PROVIDERS:-opencode nvidia fcm-nvidia openrouter}"
+ALLOWED_PROVIDERS="${COMIC_PILE_FACTORY_ALLOWED_PROVIDERS:-opencode nvidia fcm-nvidia openrouter google}"
+# Only these Google models are verified free on the free tier; probing the whole
+# google/ prefix would otherwise probe paid pro models.
+GOOGLE_FREE_MODELS="${COMIC_PILE_GOOGLE_FREE_MODELS:-google/gemini-3.1-flash-lite google/gemini-2.5-flash-lite}"
 WATCH=0
 RECHECK_SECONDS=600
 FORCE=0
@@ -160,9 +163,14 @@ discover_candidates() {
     for provider in $ALLOWED_PROVIDERS; do
       [[ "$candidate" == "$provider/"* ]] || continue
       # OpenRouter exposes paid models alongside :free ones; only free routes
-      # belong in the curated pool.
+      # and the free router belong in the curated pool.
       if [[ "$provider" == "openrouter" ]]; then
-        [[ "$candidate" == *:free ]] || continue
+        [[ "$candidate" == *:free || "$candidate" == "openrouter/openrouter/free" ]] || continue
+      fi
+      # Google free-tier models are curated per-model so the prefix filter does
+      # not probe paid pro models.
+      if [[ "$provider" == "google" ]]; then
+        [[ " $GOOGLE_FREE_MODELS " == *" $candidate "* ]] || continue
       fi
       printf '%s\n' "$candidate"
       break

@@ -102,6 +102,10 @@ class ProviderRotationTests(unittest.TestCase):
                       fcm-nvidia/step \
                       openrouter/vendor/free-model:free \
                       openrouter/vendor/paid-model \
+                      openrouter/openrouter/free \
+                      google/gemini-3.1-flash-lite \
+                      google/gemini-2.5-flash-lite \
+                      google/gemini-2.5-pro \
                       nvidia/text-embedding
                     """
                 )
@@ -139,12 +143,16 @@ class ProviderRotationTests(unittest.TestCase):
                 "opencode/zen\tconfirmed",
                 "fcm-nvidia/step\tconfirmed",
                 "openrouter/vendor/free-model:free\tconfirmed",
+                "openrouter/openrouter/free\tconfirmed",
+                "google/gemini-3.1-flash-lite\tconfirmed",
+                "google/gemini-2.5-flash-lite\tconfirmed",
             ):
                 self.assertIn(curated, manifest)
             for excluded in (
                 "cerebras/gemma",
                 "deepseek/deepseek-v4-flash",
                 "openrouter/vendor/paid-model",
+                "google/gemini-2.5-pro",
                 "nvidia/text-embedding",
             ):
                 self.assertNotIn(excluded, manifest)

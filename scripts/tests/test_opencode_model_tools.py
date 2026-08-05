@@ -432,6 +432,104 @@ class ModelToolTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("FACTORY_HEARTBEAT_TIMEOUT", result.stderr)
 
+    def test_heartbeat_refreshes_worktree_to_origin_main(self) -> None:
+        """Re-point a stale worktree to origin/main before each heartbeat."""
+        state = self.root / "state"
+        state.mkdir()
+        bare = self.root / "origin.git"
+        repo = self.root / "repo"
+        worktree = self.root / "factory"
+        bare.mkdir()
+        repo.mkdir()
+        worktree.mkdir()
+
+        subprocess.run(["git", "init", "-q", "--bare", str(bare)], check=True)
+        subprocess.run(["git", "init", "-q", str(repo)], check=True)
+        subprocess.run(["git", "-C", str(repo), "config", "user.email", "test@example.com"], check=True)
+        subprocess.run(["git", "-C", str(repo), "config", "user.name", "Test"], check=True)
+        subprocess.run(["git", "-C", str(repo), "remote", "add", "origin", str(bare)], check=True)
+        (repo / "code.txt").write_text("v1\n")
+        subprocess.run(["git", "-C", str(repo), "add", "code.txt"], check=True)
+        subprocess.run(["git", "-C", str(repo), "commit", "-qm", "initial"], check=True)
+        subprocess.run(["git", "-C", str(repo), "branch", "-M", "main"], check=True)
+        subprocess.run(["git", "-C", str(repo), "push", "-qu", "origin", "main"], check=True)
+
+        subprocess.run(["git", "-C", str(repo), "worktree", "add", "--detach", str(worktree), "origin/main"], check=True)
+
+        (repo / "code.txt").write_text("v2\n")
+        subprocess.run(["git", "-C", str(repo), "add", "code.txt"], check=True)
+        subprocess.run(["git", "-C", str(repo), "commit", "-qm", "second"], check=True)
+        subprocess.run(["git", "-C", str(repo), "push", "-qu", "origin", "main"], check=True)
+
+        (worktree / "code.txt").write_text("stale\n")
+
+        # Install a fake opencode and gh so the heartbeat's model-existence and
+        # auth checks pass without real credentials.
+        bin_dir = self.root / "bin"
+        bin_dir.mkdir()
+        opencode = bin_dir / "opencode"
+        opencode.write_text(
+            textwrap.dedent(
+                """\
+                #!/usr/bin/env bash
+                [[ "${1:-}" == "models" ]] || exit 2
+                printf 'some/model\\n'
+                """
+            )
+        )
+        opencode.chmod(0o755)
+        gh = bin_dir / "gh"
+        gh.write_text(
+            textwrap.dedent(
+                """\
+                #!/usr/bin/env bash
+                exit 0
+                """
+            )
+        )
+        gh.chmod(0o755)
+
+        # Keep the real heartbeat bootstrap (including the worktree refresh) but
+        # stub out the agent execution after the prompt is built. The marker is
+        # consumed by the split, so re-add it and close the here-doc.
+        heartbeat = self.scripts / "comic-pile-opencode-factory-heartbeat.sh"
+        real = heartbeat.read_text()
+        marker = 'FACTORY_PROMPT="$(cat <<'
+        head, _tail = real.split(marker, 1)
+        heartbeat.write_text(
+            head
+            + marker
+            + "'PROMPT'\n"
+            + "PROMPT\n"
+            + ')"\n'
+            + '\n'
+            + 'printf \'REFRESHED:%s\\n\' "$(git -C "$WORKTREE" rev-parse --short HEAD)" >>"$STATE_DIR/log"\n'
+            + 'printf \'FACTORY_RESULT: idle\\n\'\n'
+            + 'exit 0\n'
+        )
+
+        result = self.run_command(
+            str(heartbeat),
+            "--repo",
+            str(repo),
+            "--worktree",
+            str(worktree),
+            "--state-dir",
+            str(state),
+            "--model",
+            "some/model",
+            env={
+                "PATH": f"{bin_dir}:{os.environ['PATH']}",
+                "COMIC_PILE_FACTORY_AUTO_SCOUT": "0",
+            },
+            timeout=15,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Refreshing factory worktree to latest origin/main", result.stdout)
+        self.assertEqual((worktree / "code.txt").read_text(), "v2\n")
+        self.assertIn("REFRESHED:", (state / "log").read_text())
+
     def test_heartbeat_rejects_nonnumeric_heartbeat_timeout(self) -> None:
         """Reject a nonnumeric FACTORY_HEARTBEAT_TIMEOUT before starting any heartbeat."""
         state = self.root / "state"
