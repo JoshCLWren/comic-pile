@@ -26,17 +26,26 @@ class _ScalarResult:
 
 
 class _BindRecorder:
-    def __init__(self, row_count: int) -> None:
+    def __init__(self, row_count: int, calls: list[tuple[str, object]]) -> None:
         self.row_count = row_count
+        self.calls = calls
 
-    def execute(self, _statement: object) -> _ScalarResult:
-        return _ScalarResult(self.row_count)
+    def execute(
+        self,
+        statement: object,
+        parameters: dict[str, object] | None = None,
+    ) -> _ScalarResult:
+        statement_text = str(statement)
+        if statement_text == "SELECT COUNT(*) FROM reviews":
+            return _ScalarResult(self.row_count)
+        self.calls.append(("execute", {"sql": statement_text, "parameters": parameters}))
+        return _ScalarResult(0)
 
 
 class _BatchRecorder:
     """Record batch table operations in execution order."""
 
-    def __init__(self, calls: list[tuple[str, str]]) -> None:
+    def __init__(self, calls: list[tuple[str, object]]) -> None:
         self.calls = calls
 
     def __enter__(self) -> Self:
@@ -53,11 +62,14 @@ class _OperationRecorder:
     """Minimal Alembic operation facade used to verify migration intent."""
 
     def __init__(self, row_count: int = 0) -> None:
-        self.calls: list[tuple[str, str]] = []
-        self.bind = _BindRecorder(row_count)
+        self.calls: list[tuple[str, object]] = []
+        self.bind = _BindRecorder(row_count, self.calls)
 
     def get_bind(self) -> _BindRecorder:
         return self.bind
+
+    def create_table(self, table_name: str, *_columns: object) -> None:
+        self.calls.append(("create_table", table_name))
 
     def drop_table(self, table_name: str) -> None:
         self.calls.append(("drop_table", table_name))
@@ -87,40 +99,57 @@ def _install_recorder(
     return recorder
 
 
-def test_upgrade_removes_only_retired_reviews_persistence(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Drop only the retired Reviews table and thread metadata."""
+def _expected_upgrade_calls(row_count: int) -> list[tuple[str, object]]:
+    return [
+        ("create_table", "migration_data_deletion_audit"),
+        (
+            "execute",
+            {
+                "sql": (
+                    "INSERT INTO migration_data_deletion_audit "
+                    "(migration_revision, resource, row_count) "
+                    "VALUES (:migration_revision, :resource, :row_count)"
+                ),
+                "parameters": {
+                    "migration_revision": "7f41d0a9c2e1",
+                    "resource": "reviews",
+                    "row_count": row_count,
+                },
+            },
+        ),
+        ("drop_table", "reviews"),
+        ("batch_alter_table", "threads"),
+        ("drop_column", "review_url"),
+        ("drop_column", "last_review_at"),
+    ]
+
+
+def test_upgrade_records_scope_before_removing_retired_reviews(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Persist the confirmed row count before dropping Reviews storage."""
     migration = _load_migration()
     recorder = _install_recorder(monkeypatch, migration, row_count=3)
     monkeypatch.setenv(migration.CONFIRMATION_ENV, "3")
 
     migration.upgrade()
 
-    assert recorder.calls == [
-        ("drop_table", "reviews"),
-        ("batch_alter_table", "threads"),
-        ("drop_column", "review_url"),
-        ("drop_column", "last_review_at"),
-    ]
+    assert recorder.calls == _expected_upgrade_calls(3)
 
 
-def test_upgrade_allows_empty_reviews_table(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Allow fresh and already-empty databases to migrate without operator input."""
+def test_upgrade_records_empty_reviews_table(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Audit fresh and already-empty databases without operator input."""
     migration = _load_migration()
     recorder = _install_recorder(monkeypatch, migration, row_count=0)
     monkeypatch.delenv(migration.CONFIRMATION_ENV, raising=False)
 
     migration.upgrade()
 
-    assert recorder.calls == [
-        ("drop_table", "reviews"),
-        ("batch_alter_table", "threads"),
-        ("drop_column", "review_url"),
-        ("drop_column", "last_review_at"),
-    ]
+    assert recorder.calls == _expected_upgrade_calls(0)
 
 
 def test_upgrade_requires_recorded_row_count(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Abort before mutation when retained rows lack operator confirmation."""
+    """Abort before audit or mutation when retained rows lack confirmation."""
     migration = _load_migration()
     recorder = _install_recorder(monkeypatch, migration, row_count=4)
     monkeypatch.delenv(migration.CONFIRMATION_ENV, raising=False)
@@ -132,7 +161,7 @@ def test_upgrade_requires_recorded_row_count(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_upgrade_rejects_changed_row_count(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Abort before mutation when the live count differs from confirmation."""
+    """Abort before audit or mutation when the live count differs from confirmation."""
     migration = _load_migration()
     recorder = _install_recorder(monkeypatch, migration, row_count=5)
     monkeypatch.setenv(migration.CONFIRMATION_ENV, "4")
