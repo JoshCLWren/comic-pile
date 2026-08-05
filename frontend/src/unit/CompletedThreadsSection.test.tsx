@@ -34,8 +34,8 @@ describe('CompletedThreadsSection', () => {
       'aria-expanded',
       'false',
     )
-    expect(screen.queryByText('Descender')).not.toBeInTheDocument()
-    expect(screen.queryByText('Paper Girls')).not.toBeInTheDocument()
+    expect(screen.getByText('Descender')).not.toBeVisible()
+    expect(screen.getByText('Paper Girls')).not.toBeVisible()
 
     await user.click(screen.getByRole('button', { name: 'Show Completed (2)' }))
 
@@ -43,8 +43,8 @@ describe('CompletedThreadsSection', () => {
       'aria-expanded',
       'true',
     )
-    expect(screen.getByText('Descender')).toBeInTheDocument()
-    expect(screen.getByText('Paper Girls')).toBeInTheDocument()
+    expect(screen.getByText('Descender')).toBeVisible()
+    expect(screen.getByText('Paper Girls')).toBeVisible()
   })
 
   it('preserves distinct reactivation paths and collapses after each selection', async () => {
@@ -65,7 +65,7 @@ describe('CompletedThreadsSection', () => {
       'aria-expanded',
       'false',
     )
-    expect(screen.queryByText('Descender')).not.toBeInTheDocument()
+    expect(screen.getByText('Descender')).not.toBeVisible()
 
     await user.click(screen.getByRole('button', { name: 'Show Completed (2)' }))
     await user.click(screen.getByRole('button', { name: 'Reactivate Descender' }))
