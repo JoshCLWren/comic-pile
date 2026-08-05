@@ -27,7 +27,7 @@ async function installShortAxiosTimeout(page: import('@playwright/test').Page): 
         nativeTimeoutSetter.call(this, Math.min(Number(value), timeoutMs));
       },
     });
-  }, timeoutMs);
+  }, CLIENT_TIMEOUT_MS);
 }
 
 async function openRatingView(page: import('@playwright/test').Page): Promise<void> {
