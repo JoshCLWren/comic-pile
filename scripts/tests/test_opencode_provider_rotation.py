@@ -18,7 +18,7 @@ class ProviderRotationTests(unittest.TestCase):
     """Verify direct factory runs discover every usable OpenCode provider."""
 
     def test_direct_run_refreshes_providers_before_rotation(self) -> None:
-        """Refresh live providers and rotate away from a failed Cerebras model."""
+        """Refresh only curated free-model providers before rotating heartbeats."""
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             scripts = root / "scripts"
@@ -99,6 +99,9 @@ class ProviderRotationTests(unittest.TestCase):
                       deepseek/deepseek-v4-flash \
                       nvidia/nemotron \
                       opencode/zen \
+                      fcm-nvidia/step \
+                      openrouter/vendor/free-model:free \
+                      openrouter/vendor/paid-model \
                       nvidia/text-embedding
                     """
                 )
@@ -127,14 +130,24 @@ class ProviderRotationTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             used = (state / "models-used.log").read_text().splitlines()
-            self.assertEqual(used[0], "cerebras/gemma")
-            self.assertNotEqual(used[1].split("/", 1)[0], "cerebras")
+            self.assertEqual(used, ["fcm-nvidia/step"])
+            self.assertNotIn("cerebras/gemma", used)
 
             manifest = (state / "model_manifest.tsv").read_text()
-            self.assertIn("deepseek/deepseek-v4-flash\tconfirmed", manifest)
-            self.assertIn("nvidia/nemotron\tconfirmed", manifest)
-            self.assertIn("opencode/zen\tconfirmed", manifest)
-            self.assertNotIn("nvidia/text-embedding", manifest)
+            for curated in (
+                "nvidia/nemotron\tconfirmed",
+                "opencode/zen\tconfirmed",
+                "fcm-nvidia/step\tconfirmed",
+                "openrouter/vendor/free-model:free\tconfirmed",
+            ):
+                self.assertIn(curated, manifest)
+            for excluded in (
+                "cerebras/gemma",
+                "deepseek/deepseek-v4-flash",
+                "openrouter/vendor/paid-model",
+                "nvidia/text-embedding",
+            ):
+                self.assertNotIn(excluded, manifest)
             self.assertIn(
                 "Refreshing OpenCode model manifest from all available providers",
                 result.stdout,
