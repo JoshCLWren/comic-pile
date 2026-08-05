@@ -1,7 +1,7 @@
 """Drop the retired Reviews persistence.
 
 Revision ID: 7f41d0a9c2e1
-Revises: d3a1c2b4e5f6
+Revises: b700c1d2e3f4
 Create Date: 2026-08-05 08:55:00.000000
 
 The Reviews product surface was removed before this migration. Production data
@@ -16,7 +16,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "7f41d0a9c2e1"
-down_revision: str | Sequence[str] | None = "d3a1c2b4e5f6"
+down_revision: str | Sequence[str] | None = "b700c1d2e3f4"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
