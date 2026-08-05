@@ -89,6 +89,84 @@ describe('snooze hooks', () => {
     expect(snooze.result.current.isError).toBe(false)
   })
 
+  it('retries a failed post-snooze refresh once and publishes authoritative state', async () => {
+    const refreshFailure = new Error('bootstrap unavailable')
+    rollBootstrapApi.get
+      .mockRejectedValueOnce(refreshFailure)
+      .mockResolvedValueOnce(bootstrapState(null, 20))
+    const reconciled = vi.fn()
+    window.addEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
+
+    try {
+      const snooze = renderHook(() => useSnooze())
+      await act(async () => await snooze.result.current.mutate(7))
+
+      expect(snoozeApi.snooze).toHaveBeenCalledTimes(1)
+      expect(rollBootstrapApi.get).toHaveBeenCalledTimes(2)
+      expect(reconciled).toHaveBeenCalledTimes(1)
+      expect(snooze.result.current.isError).toBe(false)
+      expect(snooze.result.current.hasRefreshError).toBe(false)
+    } finally {
+      window.removeEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
+    }
+  })
+
+  it('exposes exhausted refresh recovery and retries without repeating the snooze', async () => {
+    const refreshFailure = new Error('bootstrap unavailable')
+    rollBootstrapApi.get.mockRejectedValue(refreshFailure)
+    const snooze = renderHook(() => useSnooze())
+
+    await act(async () => await snooze.result.current.mutate(7))
+
+    expect(snoozeApi.snooze).toHaveBeenCalledTimes(1)
+    expect(rollBootstrapApi.get).toHaveBeenCalledTimes(2)
+    expect(snooze.result.current.isError).toBe(false)
+    expect(snooze.result.current.hasRefreshError).toBe(true)
+    expect(snooze.result.current.refreshError).toBe(refreshFailure)
+
+    rollBootstrapApi.get.mockResolvedValue(bootstrapState(null, 20))
+    await act(async () => {
+      await expect(snooze.result.current.retryRefresh()).resolves.toBe(true)
+    })
+
+    expect(snoozeApi.snooze).toHaveBeenCalledTimes(1)
+    expect(rollBootstrapApi.get).toHaveBeenCalledTimes(3)
+    expect(snooze.result.current.hasRefreshError).toBe(false)
+    expect(snooze.result.current.isPending).toBe(false)
+  })
+
+  it('blocks duplicate snooze submission while an explicit refresh retry is pending', async () => {
+    const refreshFailure = new Error('bootstrap unavailable')
+    rollBootstrapApi.get.mockRejectedValue(refreshFailure)
+    const snooze = renderHook(() => useSnooze())
+
+    await act(async () => await snooze.result.current.mutate(7))
+
+    let resolveRefresh: ((value: RollBootstrapResponse) => void) | undefined
+    rollBootstrapApi.get.mockReturnValue(new Promise((resolve) => {
+      resolveRefresh = resolve
+    }))
+
+    let retryRequest: Promise<boolean> | undefined
+    let duplicateRequest: Promise<unknown> | undefined
+    act(() => {
+      retryRequest = snooze.result.current.retryRefresh()
+      duplicateRequest = snooze.result.current.mutate(7)
+    })
+
+    expect(snoozeApi.snooze).toHaveBeenCalledTimes(1)
+    expect(snooze.result.current.isPending).toBe(true)
+
+    await act(async () => {
+      resolveRefresh?.(bootstrapState(null, 20))
+      await Promise.all([retryRequest, duplicateRequest])
+    })
+
+    expect(snoozeApi.snooze).toHaveBeenCalledTimes(1)
+    expect(snooze.result.current.isPending).toBe(false)
+    expect(snooze.result.current.hasRefreshError).toBe(false)
+  })
+
   it('reconciles a committed snooze after the delayed response crosses the client timeout', async () => {
     vi.useFakeTimers()
     const timeout = Object.assign(new Error('timeout of 10000ms exceeded'), {
