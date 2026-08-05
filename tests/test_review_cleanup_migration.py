@@ -76,11 +76,21 @@ def _load_migration() -> ModuleType:
     return module
 
 
+def _install_recorder(
+    monkeypatch: pytest.MonkeyPatch,
+    migration: ModuleType,
+    *,
+    row_count: int,
+) -> _OperationRecorder:
+    recorder = _OperationRecorder(row_count=row_count)
+    monkeypatch.setattr(migration, "op", recorder)
+    return recorder
+
+
 def test_upgrade_removes_only_retired_reviews_persistence(monkeypatch: pytest.MonkeyPatch) -> None:
     """Drop only the retired Reviews table and thread metadata."""
     migration = _load_migration()
-    recorder = _OperationRecorder(row_count=3)
-    setattr(migration, "op", recorder)
+    recorder = _install_recorder(monkeypatch, migration, row_count=3)
     monkeypatch.setenv(migration.CONFIRMATION_ENV, "3")
 
     migration.upgrade()
@@ -93,11 +103,26 @@ def test_upgrade_removes_only_retired_reviews_persistence(monkeypatch: pytest.Mo
     ]
 
 
-def test_upgrade_requires_recorded_row_count(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Abort before mutation when no operator-confirmed count is supplied."""
+def test_upgrade_allows_empty_reviews_table(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Allow fresh and already-empty databases to migrate without operator input."""
     migration = _load_migration()
-    recorder = _OperationRecorder(row_count=4)
-    setattr(migration, "op", recorder)
+    recorder = _install_recorder(monkeypatch, migration, row_count=0)
+    monkeypatch.delenv(migration.CONFIRMATION_ENV, raising=False)
+
+    migration.upgrade()
+
+    assert recorder.calls == [
+        ("drop_table", "reviews"),
+        ("batch_alter_table", "threads"),
+        ("drop_column", "review_url"),
+        ("drop_column", "last_review_at"),
+    ]
+
+
+def test_upgrade_requires_recorded_row_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Abort before mutation when retained rows lack operator confirmation."""
+    migration = _load_migration()
+    recorder = _install_recorder(monkeypatch, migration, row_count=4)
     monkeypatch.delenv(migration.CONFIRMATION_ENV, raising=False)
 
     with pytest.raises(RuntimeError, match="current count: 4"):
@@ -109,8 +134,7 @@ def test_upgrade_requires_recorded_row_count(monkeypatch: pytest.MonkeyPatch) ->
 def test_upgrade_rejects_changed_row_count(monkeypatch: pytest.MonkeyPatch) -> None:
     """Abort before mutation when the live count differs from confirmation."""
     migration = _load_migration()
-    recorder = _OperationRecorder(row_count=5)
-    setattr(migration, "op", recorder)
+    recorder = _install_recorder(monkeypatch, migration, row_count=5)
     monkeypatch.setenv(migration.CONFIRMATION_ENV, "4")
 
     with pytest.raises(RuntimeError, match="expected 4, found 5"):
