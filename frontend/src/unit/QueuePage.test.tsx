@@ -144,8 +144,10 @@ it('renders queue items and opens create modal', async () => {
   )
 
   expect(screen.getAllByText('Saga')[0]).toBeInTheDocument()
-  expect(screen.getByText('Descender')).toBeInTheDocument()
   expect(screen.getByText('#1')).toBeInTheDocument()
+
+  await user.click(screen.getByRole('button', { name: 'Show Completed (1)' }))
+  expect(screen.getByText('Descender')).toBeInTheDocument()
 
   const addButtons = screen.getAllByRole('button', { name: /add thread/i })
   await user.click(addButtons[0])
@@ -374,6 +376,7 @@ it('filters and sorts active threads while preserving completed threads', async 
     ], isLoading: false, refetch: vi.fn(),
   })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  await user.click(screen.getByRole('button', { name: 'Show Completed (1)' }))
   expect(screen.getByText('Done')).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'A-Z' }))
   const cards = screen.getAllByTestId('queue-thread-item')
@@ -417,7 +420,8 @@ it('opens edit, reposition, dependency, and completed reactivation flows', async
   await user.click(screen.getByRole('menuitem', { name: /reposition/i }))
   expect(screen.getByTestId('position-slider-modal')).toBeInTheDocument()
   await user.click(screen.getByTestId('position-slider-cancel'))
-  await user.click(screen.getAllByRole('button', { name: /^reactivate$/i })[0]!)
+  await user.click(screen.getByRole('button', { name: 'Show Completed (1)' }))
+  await user.click(screen.getByRole('button', { name: 'Choose completed thread to reactivate' }))
   await user.selectOptions(screen.getAllByRole('combobox').at(-1)!, '2')
   await user.click(screen.getByRole('button', { name: /reactivate thread/i }))
   expect(refetch).toHaveBeenCalled()
@@ -606,14 +610,16 @@ it('handles reactivation success and failure from completed threads', async () =
   mockedUseReactivateThread.mockReturnValue({ mutate: reactivate, isPending: false })
   mockedUseThreads.mockReturnValue({ data: [{ id: 2, title: 'Done', format: 'Comic', status: 'completed', issues_remaining: 0 }], isPending: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  await user.click(screen.getAllByRole('button', { name: /^reactivate$/i })[0])
+  await user.click(screen.getByRole('button', { name: 'Show Completed (1)' }))
+  await user.click(screen.getByRole('button', { name: 'Choose completed thread to reactivate' }))
   await user.selectOptions(screen.getAllByRole('combobox').at(-1)!, '2')
   fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '3' } })
   await user.click(screen.getByRole('button', { name: /reactivate thread/i }))
   await waitFor(() => expect(reactivate).toHaveBeenCalledWith({ thread_id: 2, issues_to_add: 3 }))
 
   mockedUseReactivateThread.mockReturnValue({ mutate: vi.fn().mockRejectedValue(new Error('reactivate failed')), isPending: false })
-  await user.click(screen.getAllByRole('button', { name: /^reactivate$/i })[0])
+  await user.click(screen.getByRole('button', { name: 'Show Completed (1)' }))
+  await user.click(screen.getByRole('button', { name: 'Choose completed thread to reactivate' }))
   await user.selectOptions(screen.getAllByRole('combobox').at(-1)!, '2')
   await user.click(screen.getByRole('button', { name: /reactivate thread/i }))
   await waitFor(() => expect(screen.getByRole('heading', { name: /reactivate thread/i })).toBeInTheDocument())
