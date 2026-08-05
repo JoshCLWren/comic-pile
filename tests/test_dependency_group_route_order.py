@@ -27,4 +27,4 @@ def test_thread_group_lookup_is_not_shadowed_by_group_id_route() -> None:
     ]
 
     assert full_matches
-    assert full_matches[0].name == "list_thread_groups"
+    assert getattr(full_matches[0], "name", None) == "list_thread_groups"
