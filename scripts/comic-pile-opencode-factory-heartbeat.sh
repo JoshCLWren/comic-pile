@@ -140,12 +140,16 @@ Drive the open issue backlog to zero. Success means issues truthfully closed and
 removed, not PR count, comments, commits, reviews, labels, or hours spent.
 
 CONTINUOUS CYCLE
-1. Drain every executable open issue.
-2. Only when the executable backlog is zero, restore the full configured E2E matrix.
-3. Create one GitHub issue per independent reproducible E2E defect with failure evidence
-   and the `bug` label.
+1. Drain every executable issue except deferred backlog-zero checkpoint #679.
+2. When #679 is the only remaining executable checkpoint, restore the complete maintained
+   Chromium Playwright E2E suite.
+3. Create one GitHub issue per independent reproducible Chromium product defect with failure
+   evidence and the `bug` label.
 4. Resume draining the replenished backlog immediately.
 5. Preserve `user-reported` only for bugs actually reported by a user.
+
+Firefox and WebKit are optional diagnostics for browser-specific investigations. They are
+not required factory release coverage and must not delay issue closure or merges.
 
 SELECTION ORDER
 Before choosing work, enumerate current open PRs, current review threads, leases, and open
@@ -154,8 +158,8 @@ issues. Select exactly in this order:
    prevents an active implementation PR from becoming mergeable.
 2. The newest unclaimed open issue labeled both `user-reported` and `bug`.
 3. The highest-priority unclaimed reproducible E2E-discovered `bug` issue.
-4. The highest-value unclaimed executable issue, honoring explicit priorities and
-   dependencies.
+4. The highest-value unclaimed executable issue, honoring priorities and dependencies while
+   excluding #679 until every other executable issue is closed.
 5. Existing PR work only when required to complete its issue contract or make it mergeable.
 6. Factory maintenance only when factory behavior blocks issue delivery.
 
@@ -212,9 +216,16 @@ merge when gated -> verify issue closure`
 
 A normal heartbeat while executable work exists must push substantive code/tests/migration,
 repair a blocking defect/conflict/review finding, open a coherent non-draft implementation
-PR, perform a fully gated exact-head merge, create evidence-backed E2E bug issues during the
-backlog-zero phase, or repair factory code that blocks delivery. Comments, labels, claims,
-reviews, PR-body edits, and ready markers alone do not count.
+PR, perform a fully gated exact-head merge, create evidence-backed Chromium bug issues during
+the backlog-zero phase, or repair factory code that blocks delivery. Comments, labels,
+claims, reviews, PR-body edits, and ready markers alone do not count.
+
+BACKLOG-ZERO CHROMIUM PHASE
+Issue #679 is deferred and excluded from ordinary executable selection while any other
+executable issue remains open. Once all other executable issues are closed, restore and run
+the maintained Chromium suite, distinguish product failures from infrastructure failures,
+create one focused `bug` issue per independent reproducible product defect, and resume
+normal backlog draining. Firefox and WebKit are optional diagnostics, not completion gates.
 
 REPOSITORY SAFETY
 - Never push directly to main.
@@ -256,9 +267,9 @@ The model running this heartbeat is `__MODEL_ID__`. Sign PR bodies you open or u
 `Model: __MODEL_ID__`
 
 STOP CONDITIONS
-Stop only when no executable work exists outside the backlog-zero E2E cycle, Josh redirects
-the work, a genuine human-only irreversible/product/credential decision is required, all
-safe write paths fail, or an evidence-grounded repair ceiling is reached.
+Stop only when no executable work exists outside the deferred #679 Chromium cycle, Josh
+redirects the work, a genuine human-only irreversible/product/credential decision is
+required, all safe write paths fail, or an evidence-grounded repair ceiling is reached.
 
 TERMINAL RESULT
 The final line must be exactly one of:
