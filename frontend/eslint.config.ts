@@ -44,6 +44,12 @@ export default [
     },
   },
   {
+    files: ['src/generated/**/*.{ts,tsx}'],
+    rules: {
+      'max-lines': 'off',
+    },
+  },
+  {
     files: ['src/test/**/*.{ts,tsx}'],
     rules: {
       'react-hooks/rules-of-hooks': 'off',
