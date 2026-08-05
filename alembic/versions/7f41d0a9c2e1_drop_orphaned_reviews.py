@@ -21,13 +21,14 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 CONFIRMATION_ENV = "CONFIRM_DROP_REVIEWS_ROW_COUNT"
+AUDIT_TABLE = "migration_data_deletion_audit"
 
 
-def _require_verified_row_count() -> None:
-    """Require confirmation before deleting retained review rows."""
+def _verified_row_count() -> int:
+    """Return the confirmed number of retained review rows."""
     actual_count = int(op.get_bind().execute(sa.text("SELECT COUNT(*) FROM reviews")).scalar_one())
     if actual_count == 0:
-        return
+        return actual_count
 
     expected_count = os.getenv(CONFIRMATION_ENV)
     if expected_count is None:
@@ -44,11 +45,48 @@ def _require_verified_row_count() -> None:
             f"Verified reviews row count changed: expected {confirmed_count}, found {actual_count}. "
             "Re-check retained data before applying this irreversible migration."
         )
+    return actual_count
+
+
+def _record_deletion_scope(row_count: int) -> None:
+    """Persist the confirmed deletion scope before removing Reviews data."""
+    op.create_table(
+        AUDIT_TABLE,
+        sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
+        sa.Column("migration_revision", sa.String(length=32), nullable=False),
+        sa.Column("resource", sa.String(length=100), nullable=False),
+        sa.Column("row_count", sa.Integer(), nullable=False),
+        sa.Column(
+            "recorded_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+    )
+    op.get_bind().execute(
+        sa.text(
+            f"INSERT INTO {AUDIT_TABLE} (migration_revision, resource, row_count) "
+            "VALUES (:migration_revision, :resource, :row_count)"
+        ),
+        {
+            "migration_revision": revision,
+            "resource": "reviews",
+            "row_count": row_count,
+        },
+    )
 
 
 def upgrade() -> None:
-    """Remove orphaned Reviews storage and thread metadata."""
-    _require_verified_row_count()
+    """Remove orphaned Reviews storage and thread metadata.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    row_count = _verified_row_count()
+    _record_deletion_scope(row_count)
     op.drop_table("reviews")
 
     with op.batch_alter_table("threads", schema=None) as batch_op:
@@ -57,7 +95,14 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Refuse to recreate destructively removed review data."""
+    """Refuse to recreate destructively removed review data.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
     raise RuntimeError(
         "The retired Reviews data cannot be restored by downgrade; restore a database backup instead."
     )
