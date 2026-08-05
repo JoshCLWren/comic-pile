@@ -1,4 +1,4 @@
-"""Regression tests for the autonomous factory policy drift checker."""
+"""Regression tests for autonomous factory policy drift."""
 
 import unittest
 from importlib.util import module_from_spec, spec_from_file_location
@@ -6,106 +6,110 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CHECKER_PATH = ROOT / "scripts" / "check-autonomous-factory-policy.py"
-SPEC = spec_from_file_location("autonomous_factory_policy_checker", CHECKER_PATH)
+SPEC = spec_from_file_location("factory_policy_checker", CHECKER_PATH)
 if SPEC is None or SPEC.loader is None:
-    raise RuntimeError(f"Unable to load policy checker from {CHECKER_PATH}")
+    raise RuntimeError(f"Unable to load {CHECKER_PATH}")
 CHECKER = module_from_spec(SPEC)
 SPEC.loader.exec_module(CHECKER)
 
 
 class AutonomousFactoryPolicyTests(unittest.TestCase):
-    """Verify V15 throughput and anti-loop policy drift is detected."""
+    """Verify backlog, review, merge, and Chromium policy invariants."""
 
     @classmethod
     def setUpClass(cls) -> None:
-        """Load the checked-in policy sources once for mutation tests."""
         cls.policy = CHECKER.POLICY.read_text(encoding="utf-8")
         cls.protocol = CHECKER.PROTOCOL.read_text(encoding="utf-8")
         cls.entrypoint = CHECKER.read_entrypoint_text()
 
-    def validate(self, *, policy: str | None = None, entrypoint: str | None = None) -> None:
-        """Validate optional mutated text against unchanged companion sources."""
+    def validate(self, policy: str | None = None, entrypoint: str | None = None) -> None:
         CHECKER.validate_texts(
             policy if policy is not None else self.policy,
             self.protocol,
             entrypoint if entrypoint is not None else self.entrypoint,
         )
 
-    def assert_policy_mutation_fails(self, original: str, replacement: str) -> None:
-        """Assert replacing one required policy invariant is rejected."""
+    def assert_policy_change_fails(self, original: str, replacement: str) -> None:
         mutated = self.policy.replace(original, replacement)
         self.assertNotEqual(mutated, self.policy)
         with self.assertRaisesRegex(SystemExit, "missing required policy text"):
             self.validate(policy=mutated)
 
-    def test_current_policy_sources_are_aligned(self) -> None:
-        """Accept the checked-in canonical policy sources."""
+    def assert_runtime_rule_fails(self, rule: str) -> None:
+        with self.assertRaisesRegex(SystemExit, "forbidden policy drift"):
+            self.validate(entrypoint=f"{self.entrypoint}\n{rule}\n")
+
+    def test_current_sources_are_aligned(self) -> None:
         self.validate()
 
-    def test_v15_version_is_required(self) -> None:
-        """Reject a checker-policy pair that silently falls back to V11."""
-        self.assert_policy_mutation_fails("Version: 15", "Version: 11")
+    def test_version_and_backlog_goal_are_required(self) -> None:
+        self.assert_policy_change_fails("Version: 16", "Version: 15")
+        self.assert_policy_change_fails(
+            "Drive the open issue backlog to zero",
+            "Keep existing pull requests busy",
+        )
 
-    def test_throughput_floor_is_required(self) -> None:
-        """Reject removing the fresh-implementation throughput preference."""
-        self.assert_policy_mutation_fails(
+    def test_user_reported_bug_priority_is_required(self) -> None:
+        self.assert_policy_change_fails(
+            "The newest unclaimed open issue labeled both `user-reported` and `bug`.",
+            "Any existing pull request.",
+        )
+
+    def test_throughput_and_single_owner_rules_are_required(self) -> None:
+        self.assert_policy_change_fails(
             "When fewer than four substantive implementation PRs are open",
             "When no pull requests are open",
         )
-
-    def test_ready_prs_are_excluded_from_selection(self) -> None:
-        """Reject allowing green waiting PRs to monopolize workers."""
-        self.assert_policy_mutation_fails(
-            "A green, ready, review-passed, or Josh-waiting PR is excluded from work selection.",
-            "A green PR may always receive more cleanup.",
-        )
-
-    def test_impossible_claims_do_not_loop(self) -> None:
-        """Reject repeated claims whose next edit cannot run in the current runtime."""
-        self.assert_policy_mutation_fails(
-            "Do not repeatedly claim an issue whose next required edit is impossible in the current runtime.",
-            "Retry blocked issues on every heartbeat.",
-        )
-
-    def test_main_advancing_does_not_force_replacement_prs(self) -> None:
-        """Reject replacement PR churn caused only by new main commits."""
-        self.assert_policy_mutation_fails(
-            "Do not create replacement PRs merely because `main` advanced.",
-            "Create a replacement PR whenever `main` advances.",
-        )
-
-    def test_single_worker_issue_ownership_is_required(self) -> None:
-        """Reject duplicate implementation ownership without file separation."""
-        self.assert_policy_mutation_fails(
+        self.assert_policy_change_fails(
             "At most one implementation worker may own an issue",
-            "Any number of workers may edit the same issue",
+            "Any number of workers may own an issue",
         )
 
-    def test_waiting_is_not_a_global_stop_condition(self) -> None:
-        """Reject stopping the workforce while unrelated executable work exists."""
-        self.assert_policy_mutation_fails(
-            "Waiting for CI, Josh, review, a safer runtime, or a merge is not a global stop condition",
-            "Waiting for CI stops all workers",
+    def test_review_feedback_gate_is_required(self) -> None:
+        self.assert_policy_change_fails(
+            "fetch review submissions and all current inline review threads",
+            "inspect only the worker review",
+        )
+        self.assert_policy_change_fails(
+            "A worker's own review conclusion does not silently override existing human or bot feedback.",
+            "The worker review overrides all feedback.",
         )
 
-    def test_large_coherent_pr_rule_is_required(self) -> None:
-        """Reject restoring automatic stage splitting."""
-        self.assert_policy_mutation_fails(
-            "Implement the whole issue in one coherent non-draft PR whenever reasonably reviewable.",
-            "Always split large PRs into stages",
+    def test_gated_merge_and_expected_sha_are_required(self) -> None:
+        self.assert_policy_change_fails(
+            "Workers may merge a PR without asking again only after all of these gates are satisfied",
+            "Workers may merge whenever convenient",
+        )
+        self.assert_policy_change_fails(
+            "the worker supplies the exact expected head SHA",
+            "the worker merges whichever head is current",
         )
 
-    def test_stage_fast_path_cannot_return(self) -> None:
-        """Reject reintroducing the obsolete stage fast path."""
-        mutated = f"{self.entrypoint}\nHONEST STAGE FAST PATH\n"
-        with self.assertRaisesRegex(SystemExit, "forbidden policy drift"):
-            self.validate(entrypoint=mutated)
+    def test_chromium_backlog_zero_cycle_is_required(self) -> None:
+        self.assert_policy_change_fails(
+            "Issue #679 is excluded from ordinary executable-backlog selection",
+            "Issue #679 outranks product bugs",
+        )
+        self.assert_policy_change_fails(
+            "Firefox and WebKit may be run manually",
+            "All browsers are mandatory",
+        )
 
-    def test_entrypoint_cannot_restore_merge_behavior(self) -> None:
-        """Reject local entrypoint instructions to merge autonomously."""
-        mutated = f"{self.entrypoint}\n# merge the pull request after CI\n"
-        with self.assertRaisesRegex(SystemExit, "forbidden policy drift"):
-            self.validate(entrypoint=mutated)
+    def test_runtime_rejects_pr_orbit_rules(self) -> None:
+        self.assert_runtime_rule_fails(
+            "Prefer finishing already-started issues over starting new ones."
+        )
+        self.assert_runtime_rule_fails(
+            "Do not start a new issue while an owned issue has executable remaining work."
+        )
+
+    def test_runtime_rejects_bad_merge_rules(self) -> None:
+        self.assert_runtime_rule_fails("Never merge.")
+        self.assert_runtime_rule_fails("merge the pull request after CI")
+
+    def test_runtime_rejects_ignored_feedback_and_browser_sprawl(self) -> None:
+        self.assert_runtime_rule_fails("ignore unresolved review threads")
+        self.assert_runtime_rule_fails("Firefox + WebKit + Chromium")
 
 
 if __name__ == "__main__":
