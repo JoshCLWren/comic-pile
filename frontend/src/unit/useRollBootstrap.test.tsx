@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
+import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from '../hooks/rollMutationReconciliation'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import { ToastProvider } from '../contexts/ToastProvider'
@@ -29,6 +30,16 @@ const bootstrapResponse = {
   stale_thread_count: 0,
   stale_thread: null,
 } as RollBootstrapResponse
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve
+    reject = promiseReject
+  })
+  return { promise, resolve, reject }
+}
 
 function renderBootstrap() {
   return renderHook(() => useRollBootstrap(), {
@@ -211,5 +222,58 @@ describe('useRollBootstrap', () => {
     expect(result.current.data).toBe(bootstrapResponse)
     expect(result.current.isError).toBe(false)
     expect(localStorage.getItem('comic_pile_last_session_id_1')).toBe('1')
+  })
+
+  it('keeps reconciled state when an older bootstrap request resolves later', async () => {
+    const initialRequest = deferred<RollBootstrapResponse>()
+    mockedBootstrap.mockReturnValueOnce(initialRequest.promise)
+    const reconciled = { ...bootstrapResponse, current_die: 8 }
+    const { result } = renderBootstrap()
+
+    await waitFor(() => expect(mockedBootstrap).toHaveBeenCalledTimes(1))
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(ROLL_BOOTSTRAP_RECONCILED_EVENT, { detail: reconciled }),
+      )
+    })
+
+    expect(result.current.data).toEqual(reconciled)
+    expect(result.current.isPending).toBe(false)
+
+    await act(async () => {
+      initialRequest.resolve(bootstrapResponse)
+      await initialRequest.promise
+    })
+
+    expect(result.current.data).toEqual(reconciled)
+    expect(result.current.isPending).toBe(false)
+    expect(result.current.isError).toBe(false)
+    expect(result.current.error).toBeNull()
+  })
+
+  it('ignores an older bootstrap failure after successful reconciliation', async () => {
+    const initialRequest = deferred<RollBootstrapResponse>()
+    mockedBootstrap.mockReturnValueOnce(initialRequest.promise)
+    const reconciled = { ...bootstrapResponse, current_die: 8 }
+    const { result } = renderBootstrap()
+
+    await waitFor(() => expect(mockedBootstrap).toHaveBeenCalledTimes(1))
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(ROLL_BOOTSTRAP_RECONCILED_EVENT, { detail: reconciled }),
+      )
+    })
+
+    await act(async () => {
+      initialRequest.reject(new Error('stale bootstrap failure'))
+      await expect(initialRequest.promise).rejects.toThrow('stale bootstrap failure')
+    })
+
+    expect(result.current.data).toEqual(reconciled)
+    expect(result.current.isPending).toBe(false)
+    expect(result.current.isError).toBe(false)
+    expect(result.current.error).toBeNull()
   })
 })
