@@ -1,118 +1,121 @@
 # GitHub Issue Execution Protocol
 
-This document is the mandatory operating procedure for agents executing GitHub issues in Comic Pile, including DeepSeek running through local agent tooling.
+This document is the mandatory operating procedure for agents executing GitHub issues in Comic Pile, including local OpenCode agents.
 
 ## Autonomous factory policy
 
 Workers operating as part of the autonomous software-delivery factory must also read and follow [`docs/AUTONOMOUS_FACTORY_POLICY.md`](AUTONOMOUS_FACTORY_POLICY.md).
 
-For autonomous factory runs, that policy is the canonical source for lifecycle, claim leases, exact-SHA review, readiness, draft-PR prohibition, CI-assisted repair loops, and escalation boundaries. It overrides contradictory generic instructions in this file or `AGENTS.md` about requiring the entire local matrix before every push, never using CI for evidence-grounded debugging, or opening draft PRs.
+For autonomous factory runs, that policy is the canonical source for backlog selection, lifecycle, claim leases, exact-SHA review, gated merges, draft-PR prohibition, CI-assisted repair loops, Chromium backlog-zero E2E, and escalation boundaries. It overrides contradictory generic instructions in this file or `AGENTS.md`.
 
 Repository engineering rules still apply. Factory workers may not skip tests, weaken gates, bypass hooks, add linter suppressions, violate async PostgreSQL requirements, or misrepresent CI evidence as local evidence.
 
 ## Source of truth
 
-- The GitHub issue is the source of truth for task scope and acceptance criteria.
-- When an issue links a local plan file, that file is the source of truth for implementation details. GitHub contains a compact pointer to it.
-- GitHub Issues, labels, issue links, and issue bodies are the source of truth for backlog priority, status, and dependencies.
-- `make next-task` is the canonical local helper for selecting the next executable issue.
+- The GitHub issue is the source of truth for scope and acceptance criteria.
+- GitHub issues, labels, links, bodies, and durable comments are the source of truth for priority, status, dependencies, claims, and blockers.
+- A linked local plan file is authoritative for implementation details.
 - `AGENTS.md` is mandatory for repository engineering constraints.
 - `docs/AUTONOMOUS_FACTORY_POLICY.md` is mandatory and takes precedence for autonomous factory lifecycle behavior.
 
 ## Before changing code
 
-1. Read the selected GitHub issue body, `AGENTS.md`, and this protocol. Autonomous factory workers must also read `docs/AUTONOMOUS_FACTORY_POLICY.md`.
-2. Read the complete durable PR or issue conversation required by the factory policy. Do not blindly dump irrelevant history into model context, but do not omit top-level comments, submitted reviews, inline threads, claims, verdicts, current CI, or commits that affect the contract.
-3. If the issue links a local plan file, read that file in bounded chunks and treat it as authoritative.
-4. If the issue is marked **Planning required**, do not edit application code. Create the local plan file first.
-5. Confirm every dependency listed on the issue and board is complete or explicitly marked non-blocking.
-6. Inspect the named files and existing tests before editing.
-7. Claim work using the current factory lease protocol before implementation. For non-factory agents, replace `ralph-status:pending` with `ralph-status:in-progress` before editing.
-8. Do not broaden scope. If a discovered bug is required to complete the issue, document and include it coherently. If it is unrelated, preserve it and report it without contaminating the branch.
+1. Read the selected issue, relevant `AGENTS.md`, this protocol, and the autonomous policy when applicable.
+2. Read all durable context that affects the contract, including top-level comments, submitted reviews, current inline review threads, claims, verdicts, commits, and current CI.
+3. Confirm dependencies are complete or explicitly non-blocking.
+4. Inspect the named files, surrounding data flow, and existing tests before editing.
+5. Claim work using the current factory lease protocol before implementation.
+6. Do not broaden scope. Include a discovered defect only when it is required for coherent issue completion. Preserve unrelated defects as separate issues.
 
 ## Planning gate
 
-For issues marked **Planning required** in the issue workflow:
+For issues explicitly marked **Planning required**:
 
-1. The planning agent must create a local plan file at `docs/issue-plans/<issue-number>.md` before implementation begins.
-2. The plan must name files to inspect or change, explain the current data flow, identify likely failure or design risks, describe implementation steps, list regression tests, and provide exact local verification commands.
-3. The plan must explicitly state whether database migrations, API schema changes, authorization checks, or frontend/backend contract changes are required.
-4. The plan must include a rollback or containment strategy for risky schema or behavior changes.
-5. Add a compact GitHub comment pointing to the local plan file. Do not paste a large duplicate plan into the issue thread.
-6. Only after the plan file exists and is linked from the issue may implementation begin.
+1. Create `docs/issue-plans/<issue-number>.md` before implementation.
+2. Identify files, current flow, risks, implementation steps, tests, verification commands, migrations, authorization changes, API contract changes, and rollback strategy.
+3. Add a compact GitHub comment linking the plan.
+4. Begin implementation only after the plan exists.
+
+Do not create planning-only pull requests unless the issue itself requests documentation.
 
 ## While implementing
 
-- Implement the smallest coherent change that satisfies the complete issue or a truthful staged slice.
-- Do not delete, weaken, skip, quarantine, or conditionally disable tests.
-- Do not use `--no-verify`, `# noqa`, `# type: ignore`, or equivalent suppressions.
+- Implement the full issue in one coherent PR whenever reasonably reviewable.
+- Split only under the exceptions in the autonomous policy.
+- Do not delete, weaken, skip, quarantine, or conditionally disable meaningful tests.
+- Do not use `--no-verify`, `# noqa`, `# type: ignore`, or equivalent suppressions to force green.
 - Preserve unrelated working-tree changes.
 - Follow the repository's async-only PostgreSQL rule in application code.
-- Add regression coverage for the reported failure, not only the happy path.
-- Update documentation when behavior, API contracts, or user-visible workflows change.
-- Inspect recently merged overlapping work before resolving conflicts or rebasing. Conflict resolution is semantic integration, not mechanical ours/theirs selection.
+- Add regression coverage for the reported failure and important failure paths.
+- Resolve conflicts semantically after inspecting overlapping work.
 
-### CI usage
+## Validation
 
-Ordinary one-shot agents should complete the relevant local verification before handing off work.
+Run focused checks that directly exercise the change. Let configured CI carry expensive broad validation when the autonomous policy permits it.
 
-Autonomous factory workers follow the canonical factory policy: run focused local validation that directly exercises the change, push a grounded repair, let CI execute the configured broader matrix, inspect exact job logs, and iterate only from evidence. They must not make speculative remote edits or call branch-caused failures infrastructure without investigation.
-
-## Required verification
-
-Run the checks appropriate to the behavioral risk and acceptance contract.
-
-For frontend or E2E work, available commands include:
+Common frontend checks include:
 
 ```bash
 cd frontend && pnpm run lint
 cd frontend && pnpm run typecheck
 cd frontend && pnpm run build
 cd frontend && pnpm test
-cd frontend && pnpm run build && REUSE_EXISTING_SERVER=true npx playwright test --project=chromium
 ```
 
-The Playwright command requires the backend running on port 9000. Start it with:
-
-```bash
-.venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 9000
-```
-
-For backend work, run focused tests first and broaden when useful:
+Common backend checks include:
 
 ```bash
 pytest <focused-test-file-or-test>
 pytest
 ```
 
-A non-factory agent must not move an issue to Validation while required local commands are failing or omitted.
+Chromium Playwright is the required browser E2E target when browser validation is required. Firefox and WebKit are optional diagnostics for browser-specific investigations.
 
-An autonomous factory worker may rely on the configured CI matrix for expensive broad verification after focused local validation, but must preserve exact evidence and continue the repair loop until the branch has a trustworthy outcome.
+The deferred backlog-zero E2E lifecycle is tracked by #679. Autonomous workers must not prioritize #679 while any other executable issue remains open, unless disabled Chromium coverage itself blocks safe delivery.
+
+## Review feedback
+
+Every push invalidates prior review and readiness.
+
+Before pass, readiness, or merge, inspect the exact current head SHA, submitted reviews, and every current inline review thread. Each actionable finding must be fixed, demonstrably outdated by a specific later change, or rebutted with concrete evidence. Non-actionable status noise such as summaries, rate-limit notices, release notes, and optional finishing-touch suggestions does not block readiness.
+
+An unresolved actionable correctness, security, ownership, data-integrity, migration, concurrency, recovery, or test-validity finding blocks readiness and merge.
 
 ## Pull-request rules
 
 - Open pull requests ready for review by default.
 - Never create a draft pull request unless Josh explicitly requests a draft.
-- A staged pull request must use `Part of #N` or a plain reference, describe `Stage scope`, list `Remaining work`, and leave the parent issue open.
-- Do not use closure keywords or full-completion language for an incomplete stage.
-- Never merge without Josh's explicit authorization for that merge.
+- Use a closure keyword only when merge will truthfully satisfy the complete issue.
+- Do not use `Stage scope` or `Remaining work` to justify avoidable splitting.
+- PR metadata, comments, labels, and review prose are not substitutes for implementation.
 
-## Issue handoff states
+## Merge rules
 
-1. **In progress**: code changes are actively being made.
-2. **Validation**: implementation is complete and the applicable local and CI checks are running or complete. No further design work remains for the declared scope.
-3. **Integration ready**: the exact PR SHA passed strict review, required checks are green, blocking feedback is resolved, metadata is truthful, and no merge conflict exists.
-4. **Done**: only after the authorized PR is merged, acceptance criteria are verified, documentation is updated, and the GitHub issue is correctly closed.
+Autonomous factory workers may merge after every gate in `docs/AUTONOMOUS_FACTORY_POLICY.md` is verified for the exact current head SHA.
 
-When updating an issue, preserve its priority, dependencies, and acceptance criteria. Do not silently change priority or dependencies.
+The worker must verify that the PR is open, non-draft, conflict-free, mergeable, green on every required check, complete for its declared scope, safe to integrate, and free of unresolved actionable review findings. The merge operation must include the exact expected head SHA.
 
-## Required final comment on the GitHub issue
+Never enable auto-merge. Never merge a moved or unverified head.
 
-Before closing the issue, add a concise comment containing:
+Non-factory agents require Josh's explicit authorization before merging unless he has already granted equivalent standing authorization in the active conversation.
 
-- What changed, with file paths.
-- Which acceptance criteria were verified.
-- Tests and commands run, including their result and whether evidence was local or CI-derived.
-- Any follow-up issue numbers or remaining staged work.
+## Issue lifecycle
 
-Then add `ralph-status:done`, close the issue as completed, and include the final verification comment. A local implementation without this durable handoff is incomplete.
+1. **In progress**: implementation is actively advancing.
+2. **Validation**: focused checks and exact-head CI are running or complete.
+3. **Integration ready**: exact-head review, required checks, feedback accounting, mergeability, and metadata are complete.
+4. **Done**: the PR has merged, acceptance criteria are verified, and the issue is truthfully closed.
+
+A green or ready PR must not monopolize a worker. When another executable issue exists, preserve state and return to backlog selection.
+
+## Required final issue comment
+
+Before closing an issue, add a concise durable comment containing:
+
+- what changed, with relevant file paths;
+- which acceptance criteria were verified;
+- tests and commands run, including whether evidence was local or CI-derived;
+- the merge SHA or PR number;
+- any legitimate follow-up issue numbers.
+
+Then close the issue as completed only when the contract is actually satisfied.
