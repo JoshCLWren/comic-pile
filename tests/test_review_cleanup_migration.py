@@ -17,6 +17,22 @@ MIGRATION_PATH = (
 )
 
 
+class _ScalarResult:
+    def __init__(self, value: int) -> None:
+        self.value = value
+
+    def scalar_one(self) -> int:
+        return self.value
+
+
+class _BindRecorder:
+    def __init__(self, row_count: int) -> None:
+        self.row_count = row_count
+
+    def execute(self, _statement: object) -> _ScalarResult:
+        return _ScalarResult(self.row_count)
+
+
 class _BatchRecorder:
     """Record batch table operations in execution order."""
 
@@ -36,8 +52,12 @@ class _BatchRecorder:
 class _OperationRecorder:
     """Minimal Alembic operation facade used to verify migration intent."""
 
-    def __init__(self) -> None:
+    def __init__(self, row_count: int = 0) -> None:
         self.calls: list[tuple[str, str]] = []
+        self.bind = _BindRecorder(row_count)
+
+    def get_bind(self) -> _BindRecorder:
+        return self.bind
 
     def drop_table(self, table_name: str) -> None:
         self.calls.append(("drop_table", table_name))
@@ -56,10 +76,11 @@ def _load_migration() -> ModuleType:
     return module
 
 
-def test_upgrade_removes_only_retired_reviews_persistence() -> None:
+def test_upgrade_removes_only_retired_reviews_persistence(monkeypatch: pytest.MonkeyPatch) -> None:
     migration = _load_migration()
-    recorder = _OperationRecorder()
+    recorder = _OperationRecorder(row_count=3)
     migration.op = recorder
+    monkeypatch.setenv(migration.CONFIRMATION_ENV, "3")
 
     migration.upgrade()
 
@@ -69,6 +90,30 @@ def test_upgrade_removes_only_retired_reviews_persistence() -> None:
         ("drop_column", "review_url"),
         ("drop_column", "last_review_at"),
     ]
+
+
+def test_upgrade_requires_recorded_row_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    migration = _load_migration()
+    recorder = _OperationRecorder(row_count=4)
+    migration.op = recorder
+    monkeypatch.delenv(migration.CONFIRMATION_ENV, raising=False)
+
+    with pytest.raises(RuntimeError, match="current count: 4"):
+        migration.upgrade()
+
+    assert recorder.calls == []
+
+
+def test_upgrade_rejects_changed_row_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    migration = _load_migration()
+    recorder = _OperationRecorder(row_count=5)
+    migration.op = recorder
+    monkeypatch.setenv(migration.CONFIRMATION_ENV, "4")
+
+    with pytest.raises(RuntimeError, match="expected 4, found 5"):
+        migration.upgrade()
+
+    assert recorder.calls == []
 
 
 def test_migration_is_forward_only() -> None:
