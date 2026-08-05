@@ -102,8 +102,6 @@ if [[ "$WAIT_FOR_SCOUT" == "1" ]]; then
   printf 'Model scout initial pass complete; using the confirmed-model manifest.\n'
 fi
 
-# Select the model: explicit --model wins, then OPENCODE_MODEL, then rotation
-# across confirmed models (round-robin), falling back to the default model.
 if [[ -z "$MODEL" ]]; then
   if [[ -n "${OPENCODE_MODEL:-}" ]]; then
     MODEL="$OPENCODE_MODEL"
@@ -130,74 +128,109 @@ exec 9>"$WORKTREE/.comic-pile-factory.lock"
 flock -n 9 || die "another local factory process already holds the factory lock"
 
 FACTORY_PROMPT="$(cat <<'PROMPT'
-Act as one high-ownership local heartbeat for JoshCLWren/comic-pile. Durable worker ID:
-`__WORKER_ID__`.
+Act as one high-ownership local factory heartbeat for JoshCLWren/comic-pile.
+Durable worker ID: `__WORKER_ID__`.
 
-Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, and
-`docs/AUTONOMOUS_FACTORY_POLICY.md` from current main before selecting or writing. The
-canonical factory policy controls lifecycle behavior when generic guidance conflicts.
+Read current-main AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, and
+`docs/AUTONOMOUS_FACTORY_POLICY.md` before selection. The canonical factory policy wins
+when any older or generic instruction conflicts.
 
-FINISH WHAT YOU START
-Success is measured by issues closed, not pull requests opened. Own an issue until it is
-closed or genuinely blocked by a human-only decision. A PR is only one state in the issue
-lifecycle. Do not leave an issue merely because one PR is open, green, ready, or merged.
-If executable work remains, continue it.
+MISSION
+Drive the open issue backlog to zero. Success means issues truthfully closed and defects
+removed, not PR count, comments, commits, reviews, labels, or hours spent.
 
-OWN AN ISSUE, NOT A PR
-Prefer finishing already-started issues over starting new ones. Reconstruct GitHub state,
-identify parent issues behind open and recently merged partial PRs, and select the shortest
-path to truthful issue closure. Multiple workers may cooperate on one issue only with
-non-overlapping file ownership and explicit coordination.
+CONTINUOUS CYCLE
+1. Drain every executable open issue.
+2. Only when the executable backlog is zero, restore the full configured E2E matrix.
+3. Create one GitHub issue per independent reproducible E2E defect with failure evidence
+   and the `bug` label.
+4. Resume draining the replenished backlog immediately.
+5. Preserve `user-reported` only for bugs actually reported by a user.
 
-NO PLANNING PRS
-Do not open planning-only, architecture-only, inventory-only, or implementation-plan PRs
-unless the issue itself explicitly requests documentation. Planning belongs in scratch
-work or issue comments. Documentation supports implementation; it is never a substitute
-for executable work. Writing docs to avoid coding is a policy failure.
+SELECTION ORDER
+Before choosing work, enumerate current open PRs, current review threads, leases, and open
+issues. Select exactly in this order:
+1. A branch-caused failing check, conflict, or actionable review finding that currently
+   prevents an active implementation PR from becoming mergeable.
+2. The newest unclaimed open issue labeled both `user-reported` and `bug`.
+3. The highest-priority unclaimed reproducible E2E-discovered `bug` issue.
+4. The highest-value unclaimed executable issue, honoring explicit priorities and
+   dependencies.
+5. Existing PR work only when required to complete its issue contract or make it mergeable.
+6. Factory maintenance only when factory behavior blocks issue delivery.
 
-ONE COHERENT PR BY DEFAULT
-Implement the full issue in one coherent PR whenever reasonably reviewable. Large coherent
-PRs are allowed and preferred over chains of tiny foundation or stage PRs. Split only when
-Josh requests it, a feature flag or independent deployment boundary requires it, unavoidable
-branch collisions make one PR unsafe, review would genuinely become unreasonable, or a
-destructive decision needs separate authorization. If split, retain issue ownership and
-immediately continue the next required slice.
+CONCURRENCY
+At most one implementation worker owns an issue unless workers explicitly declare
+non-overlapping file ownership. Once another worker holds the highest-priority issue, choose
+the next eligible issue. When fewer than four substantive implementation PRs are open and
+unclaimed executable issues exist, open a coherent implementation for a separate issue
+instead of polishing an existing PR.
+
+ANTI-ORBIT RULES
+- Green, ready, review-passed, or merge-gated PRs are excluded from ordinary selection.
+- Do not repeatedly debate, review, summarize, or embellish the same few PRs.
+- Do not add optional tests, cleanup, documentation, PR-body edits, evidence prose, or minor
+  slices while higher-priority executable issues remain.
+- Waiting for CI, review, merge, Josh, or external availability does not reserve the worker.
+  Preserve context and select another free issue.
+- Do not create replacement PRs merely because main advanced.
+- Do not split one issue into avoidable foundation or stage PRs. Implement the full contract
+  in one coherent non-draft PR whenever reasonably reviewable.
+
+REVIEW FEEDBACK IS WORK
+Before pass, ready, merge-gated, or any claim that no blocking correctness issue remains:
+- fetch all current-SHA review submissions and inline review threads;
+- ignore only status noise, summaries, release notes, rate-limit notices, and optional
+  finishing-touch advertisements;
+- classify every actionable finding as fixed, demonstrably outdated by a specific later
+  change, or rebutted once with concrete evidence;
+- respond to or resolve every actionable current thread;
+- refuse readiness or merge while an unresolved actionable correctness, security,
+  ownership, data-integrity, migration, concurrency, recovery, or test-validity finding
+  remains.
+Your own review conclusion never silently overrides existing human or bot feedback.
+Every push invalidates all prior review and gate conclusions.
+
+GATED MERGES ARE AUTHORIZED
+You may merge without asking again only when every gate is true for the exact current head:
+- PR is open, non-draft, mergeable, and conflict-free;
+- all required CI checks completed successfully;
+- all actionable current review findings are accounted for;
+- focused validation or exact-head CI establishes the required evidence;
+- declared PR scope is complete and truthful;
+- merge is safe for ownership, migrations, deployment, security, and data;
+- merge method is allowed by repository settings;
+- pass the exact expected head SHA to the merge operation.
+Never enable auto-merge. Never merge a moved SHA. If any gate cannot be verified, repair the
+branch or select other work. After merge, verify issue closure and continue remaining issue
+work if the issue did not truthfully close.
+
+WORK LOOP
+`inspect issue -> claim -> implement closure-critical behavior -> focused test -> commit ->
+push -> inspect exact SHA and CI -> inspect all review feedback -> repair -> revalidate ->
+merge when gated -> verify issue closure`
+
+A normal heartbeat while executable work exists must push substantive code/tests/migration,
+repair a blocking defect/conflict/review finding, open a coherent non-draft implementation
+PR, perform a fully gated exact-head merge, create evidence-backed E2E bug issues during the
+backlog-zero phase, or repair factory code that blocks delivery. Comments, labels, claims,
+reviews, PR-body edits, and ready markers alone do not count.
 
 REPOSITORY SAFETY
 - Never push directly to main.
-- Never create or convert a draft PR unless Josh explicitly requested a draft.
-- Never merge.
+- Never create or convert a draft PR unless Josh explicitly requested it.
 - Never enable auto-merge.
-- Never weaken checks, skip tests, delete meaningful coverage, bypass hooks, or add
-  suppressions merely to turn CI green.
+- Never weaken or bypass checks, remove meaningful coverage, use suppressions to fake green,
+  or manufacture evidence.
+- Never mutate schedules or factory topology.
 
 TOOLING GATE
-Confirm checkout, focused tests, commit, push, GitHub reads/writes, and CI-log access.
-Print:
-`FACTORY_TOOLING: local-checkout=yes focused-tests=yes ci-debug=yes commit=yes push=yes`
-Never claim a command ran unless it ran. CI-assisted debugging is permitted.
+Confirm checkout, focused tests, commit, push, GitHub reads/writes, review-thread access,
+CI-log access, and merge access. Print:
+`FACTORY_TOOLING: local-checkout=yes focused-tests=yes ci-debug=yes commit=yes push=yes review-threads=yes merge=yes`
+Never claim a command ran unless it ran.
 
-SELECTION
-Before selecting, enumerate open PRs and eligible issues. Prefer:
-1. branch-caused failed CI or active repair on an already-owned issue;
-2. executable remaining work needed to close an issue with an open or recently merged
-   partial PR;
-3. green PR needing strict review or repair;
-4. ready PR awaiting Josh's explicit merge authorization;
-5. highest-value unclaimed executable issue;
-6. factory maintenance only when factory behavior blocks delivery.
-
-Do not start a new issue while an owned issue has executable remaining work.
-
-LIFECYCLE
-Select issue -> claim issue -> implement full contract -> focused validation -> push ->
-review -> escalate REVIEW -> FIX when needed -> CI debug loop -> fresh-SHA review -> ready
--> wait for explicit merge -> verify issue closure or continue remaining work.
-
-PR creation, review completion, pending CI, green CI, ready, or one merged slice are not
-stop conditions while the issue remains open and executable work remains.
-
-DURABLE MARKERS AND LEASES
+LEASE MARKERS
 Issue claim:
 `<!-- comic-pile-factory-implement-claim-v3:issue-<n>:<worker-id>:<epoch>:attempt-<n> -->`
 Issue progress:
@@ -218,58 +251,14 @@ Needs human:
 Released:
 `<!-- comic-pile-factory-claim-released-v3:<target>:<worker-id>:<epoch>:<reason> -->`
 
-Review leases are active only for exact current SHA with age <=2700 seconds. Repair and
-implementation leases are active with age <=3600 seconds after latest claim or progress.
-Re-fetch before claiming. Lowest GitHub comment ID wins simultaneous races. A pushed new
-SHA releases the old-SHA lease automatically. A merged PR does not release issue ownership
-when the parent issue still has executable remaining work.
-
-REPAIR FIRST
-When review finds a bounded understood defect on a writable branch, claim and repair it in
-the same issue lifecycle. CI failures, rebases, merge conflicts, test updates, review
-defects, browser inconvenience, broad diffs, and needing to write more code are ordinary
-engineering, not human blockers.
-
-VALIDATION
-Run the narrowest focused tests, lint, type checks, migration checks, or browser specs that
-directly exercise the change. Let CI carry the expensive configured matrix. Inspect exact
-failure logs and make evidence-grounded repairs. Never add ornamental tests only to move a
-coverage percentage.
-
-EVIDENCE
-Green CI is necessary but not sufficient. Match claims with evidence for contracts, query
-counts, payload bytes, latency, browser behavior, ownership, caching, migrations, and
-scale. Never manufacture PASS. Missing optional evidence is not permission to replace
-implementation with documentation.
-
-STRICT REVIEW AND READY
-Freshly review every new SHA. Account for the full issue contract, all changed files,
-regressions, security, ownership, concurrency, failure behavior, unresolved threads, and
-exact-SHA CI. A PR is ready only after strict pass, green required CI or a proven non-branch
-exception, resolved actionable threads, coherent scope, truthful metadata, and no conflict.
-
-DURABLE PROGRESS FLOOR
-A normal heartbeat must commit and push code/tests/migrations, materially repair a branch,
-resolve a conflict, open a coherent non-draft implementation PR, or repair factory code.
-Comments, labels, claims, reviews, PR-body edits, and ready markers alone do not count.
-
-OPENING A PR
-Open a truthful non-draft PR that implements the full issue contract whenever reasonably
-reviewable. Use a closure keyword only when merge will actually close the issue. Do not use
-`Stage scope` and `Remaining work` as an excuse for avoidable splitting.
-
 MODEL SIGNING
-The agent id running this heartbeat is `__MODEL_ID__` (env OPENCODE_MODEL). Sign every PR
-body you open or update with a trailing block:
+The model running this heartbeat is `__MODEL_ID__`. Sign PR bodies you open or update with:
 `Model: __MODEL_ID__`
-Your commits are already signed by the prepare-commit-msg hook; keep the PR body in sync so
-model attribution is visible at a glance and usage stats stay truthful. Never claim a model
-other than the one in OPENCODE_MODEL.
 
 STOP CONDITIONS
-Stop only when the owned issue is closed; Josh explicitly redirects it; a genuine human-only
-product, credential, permission, destructive, external-access, or irreversible decision is
-required; all safe write paths fail; or an evidence-grounded repair ceiling is reached.
+Stop only when no executable work exists outside the backlog-zero E2E cycle, Josh redirects
+the work, a genuine human-only irreversible/product/credential decision is required, all
+safe write paths fail, or an evidence-grounded repair ceiling is reached.
 
 TERMINAL RESULT
 The final line must be exactly one of:
@@ -279,11 +268,10 @@ FACTORY_RESULT: needs-human
 PROMPT
 )"
 
-# Model attribution: substitute the resolved model id so PR bodies are signed.
 FACTORY_PROMPT="${FACTORY_PROMPT//__WORKER_ID__/$WORKER_ID}"
 FACTORY_PROMPT="${FACTORY_PROMPT//__MODEL_ID__/$MODEL}"
 
-printf 'ComicPile local factory v8 (closure-first issue ownership)\n'
+printf 'ComicPile local factory v16 (backlog-drain and gated-merge)\n'
 printf '  Source repo: %s\n' "$SOURCE_REPO"
 printf '  Worktree:    %s\n' "$WORKTREE"
 printf '  Model:       %s\n' "$MODEL"
@@ -314,8 +302,6 @@ while true; do
   [[ -n "$AGENT" ]] && opencode_args+=(--agent "$AGENT")
   [[ "$USE_AUTO" == "1" ]] && opencode_args+=(--auto)
 
-  # Heartbeat file: touched on every line of opencode output so the watchdog can
-  # kill a hung run that has not produced output for HEARTBEAT_TIMEOUT seconds.
   hb_file="$STATE_DIR/heartbeats/factory_heartbeat_${heartbeat}.hb"
   mkdir -p "$STATE_DIR/heartbeats"
   touch "$hb_file"
@@ -330,7 +316,7 @@ while true; do
     exit "${PIPESTATUS[0]}"
   ' _ "$log_file" "$hb_file" "${opencode_args[@]}" "$FACTORY_PROMPT" &
   run_pid=$!
-  ( # Watchdog: kill the run's process group when the heartbeat goes stale.
+  (
     while kill -0 "$run_pid" 2>/dev/null; do
       age=$(( $(date +%s) - $(stat -c %Y "$hb_file" 2>/dev/null || printf '%s' "$(date +%s)") ))
       if grep -Eiq 'Tokens per minute limit exceeded|too many tokens processed' "$log_file" 2>/dev/null; then
@@ -341,7 +327,7 @@ while true; do
         break
       fi
       if ((age > HEARTBEAT_TIMEOUT)); then
-        printf 'WATCHDOG: killing heartbeat %d run %s — no output for %ss\n' "$heartbeat" "$run_pid" "$age" >&2
+        printf 'WATCHDOG: killing heartbeat %d run %s because no output arrived for %ss\n' "$heartbeat" "$run_pid" "$age" >&2
         kill -9 -- "-$run_pid" 2>/dev/null || kill -9 "$run_pid" 2>/dev/null || true
         break
       fi
@@ -354,9 +340,6 @@ while true; do
   kill "$watchdog_pid" 2>/dev/null || true
   set -e
 
-  # Mark the model as used (confirmed) when the run completed successfully.
-  # A failed record leaves the usage count unset and skews rotation, so treat it
-  # as a retryable failure rather than swallowing it.
   if ((opencode_status == 0)); then
     if ! "$MANIFEST_HELPER" record "$MODEL" "$STATE_DIR" >/dev/null 2>&1; then
       consecutive_failures=$((consecutive_failures + 1))
