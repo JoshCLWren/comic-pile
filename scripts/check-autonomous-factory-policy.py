@@ -109,6 +109,9 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "ready PR awaiting Josh's explicit merge authorization",
         "Never merge.",
         "Never merge or enable auto-merge without Josh explicitly authorizing that merge.",
+        "merge the pull request after CI",
+        "merge whenever CI is green",
+        "ignore unresolved review threads",
         "full configured E2E matrix",
         "Firefox + WebKit + Chromium",
     ):
