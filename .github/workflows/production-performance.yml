@@ -18,7 +18,6 @@ jobs:
     timeout-minutes: 10
     env:
       PROD_BASE_URL: https://comic-pile.vercel.app
-      PROD_PROFILE_STORAGE_STATE: ${{ runner.temp }}/production-storage-state.json
       PROD_PERFORMANCE_OUTPUT: ../test-results/production-performance.json
       PROD_DEPLOYMENT_ID: ${{ github.sha }}
     steps:
@@ -54,8 +53,10 @@ jobs:
             echo 'Missing PROD_E2E_STORAGE_STATE_JSON repository secret.' >&2
             exit 1
           fi
-          printf '%s' "$STORAGE_STATE_JSON" > "$PROD_PROFILE_STORAGE_STATE"
-          chmod 600 "$PROD_PROFILE_STORAGE_STATE"
+          storage_state_path="$RUNNER_TEMP/production-storage-state.json"
+          printf '%s' "$STORAGE_STATE_JSON" > "$storage_state_path"
+          chmod 600 "$storage_state_path"
+          echo "PROD_PROFILE_STORAGE_STATE=$storage_state_path" >> "$GITHUB_ENV"
 
       - name: Install frontend dependencies
         working-directory: frontend
