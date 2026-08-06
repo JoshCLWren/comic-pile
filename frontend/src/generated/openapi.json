@@ -197,7 +197,7 @@
         "type": "object"
       },
       "BugReportCreate": {
-        "description": "Request schema for creating a bug report.",
+        "description": "Request schema for creating a bug report or feature request.",
         "properties": {
           "description": {
             "maxLength": 2000,
@@ -214,6 +214,15 @@
                 "type": "null"
               }
             ]
+          },
+          "report_type": {
+            "default": "bug",
+            "enum": [
+              "bug",
+              "feature"
+            ],
+            "title": "Report Type",
+            "type": "string"
           },
           "title": {
             "maxLength": 200,
@@ -278,7 +287,7 @@
         "type": "object"
       },
       "BugReportResponse": {
-        "description": "Response after successfully creating a bug report issue.",
+        "description": "Response after successfully creating a GitHub issue.",
         "properties": {
           "issue_url": {
             "title": "Issue Url",
@@ -3313,7 +3322,7 @@
     },
     "/api/bug-reports/": {
       "post": {
-        "description": "Create a bug report issue on GitHub.\n\nArgs:\n    body: Bug report with title, description, and optional diagnostics\n    current_user: The authenticated user\n\nReturns:\n    Created bug report issue URL\n\nRaises:\n    HTTPException: If validation fails or GitHub integration not configured",
+        "description": "Create a bug report or feature request issue on GitHub.\n\nArgs:\n    body: Report type, title, description, and optional diagnostics.\n    current_user: The authenticated user.\n\nReturns:\n    Created GitHub issue URL.\n\nRaises:\n    HTTPException: If validation fails or GitHub integration is unavailable.",
         "operationId": "create_bug_report_api_bug_reports__post",
         "requestBody": {
           "content": {
