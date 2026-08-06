@@ -13,7 +13,20 @@ _SECRET_MARKERS = (
     "authorization",
     "credential",
     "private_key",
+    "database_url",
+    "redis_url",
+    "connection_url",
 )
+_DATABASE_SCHEMES = {
+    "postgres",
+    "postgresql",
+    "postgresql+asyncpg",
+    "postgresql+psycopg",
+    "postgresql+psycopg2",
+    "redis",
+    "rediss",
+}
+_TLS_REQUIRED_MODES = {"require", "verify-ca", "verify-full"}
 
 
 def safe_connection_metadata(connection_url: str) -> dict[str, str | int | bool | None]:
@@ -23,18 +36,24 @@ def safe_connection_metadata(connection_url: str) -> dict[str, str | int | bool 
         connection_url: A database, Redis, or HTTP connection URL.
 
     Returns:
-        Metadata containing only the scheme, host, port, database/path, and SSL mode.
+        Metadata containing only the scheme, host, port, validated database name,
+        and whether the connection requires TLS.
     """
     parsed = urlsplit(connection_url)
-    path = unquote(parsed.path.lstrip("/")) or None
+    scheme = parsed.scheme.lower()
+    database = (
+        unquote(parsed.path.lstrip("/")) or None
+        if scheme in _DATABASE_SCHEMES
+        else None
+    )
     query = dict(parse_qsl(parsed.query, keep_blank_values=True))
-    ssl_value = query.get("sslmode") or query.get("ssl")
-    ssl_required = ssl_value not in {None, "", "0", "false", "disable"}
+    ssl_value = (query.get("sslmode") or query.get("ssl") or "").lower()
+    ssl_required = scheme == "rediss" or ssl_value in _TLS_REQUIRED_MODES
     return {
         "scheme": parsed.scheme or None,
         "host": parsed.hostname,
         "port": parsed.port,
-        "database": path,
+        "database": database,
         "ssl_required": ssl_required,
     }
 
