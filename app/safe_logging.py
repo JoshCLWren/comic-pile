@@ -1,7 +1,7 @@
 """Helpers for logging configuration metadata without exposing credentials."""
 
 from collections.abc import Mapping
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qsl, unquote, urlsplit
 
 _SECRET_MARKERS = (
     "password",
@@ -27,11 +27,7 @@ def safe_connection_metadata(connection_url: str) -> dict[str, str | int | bool 
     """
     parsed = urlsplit(connection_url)
     path = unquote(parsed.path.lstrip("/")) or None
-    query = dict(
-        part.split("=", 1) if "=" in part else (part, "")
-        for part in parsed.query.split("&")
-        if part
-    )
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
     ssl_value = query.get("sslmode") or query.get("ssl")
     ssl_required = ssl_value not in {None, "", "0", "false", "disable"}
     return {
