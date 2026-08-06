@@ -1,7 +1,12 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { changelogAsset } from '../../vite.config'
 import WhatsNewPage, { parseChangelog } from './WhatsNewPage'
+
+const frontendRoot = path.resolve(import.meta.dirname, '../..')
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -18,9 +23,11 @@ describe('parseChangelog', () => {
 
 describe('WhatsNewPage', () => {
   it('renders the static changelog and external PR links', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => '## Today\n\n- Fixed `Queue` in [#866](https://github.com/JoshCLWren/comic-pile/pull/866).' }))
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, text: async () => '## Today\n\n- Fixed `Queue` in [#866](https://github.com/JoshCLWren/comic-pile/pull/866).' })
+    vi.stubGlobal('fetch', fetchMock)
     render(<WhatsNewPage />)
     expect(screen.getByRole('status')).toHaveTextContent('Loading release notes')
+    expect(fetchMock).toHaveBeenCalledWith('/changelog.md', { cache: 'no-cache' })
     expect(await screen.findByRole('heading', { name: 'Today' })).toBeInTheDocument()
     const link = screen.getByRole('link', { name: /#866/ })
     expect(link).toHaveAttribute('target', '_blank')
@@ -36,6 +43,32 @@ describe('WhatsNewPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('missing')
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/changelog.md', { cache: 'no-cache' })
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/changelog.md', { cache: 'no-cache' })
     expect(await screen.findByRole('heading', { name: 'Recovered' })).toBeInTheDocument()
+  })
+
+  it('keeps the authenticated route and More-menu link wired to the page', () => {
+    const appSource = readFileSync(path.join(frontendRoot, 'src/App.tsx'), 'utf-8')
+    const navigationSource = readFileSync(path.join(frontendRoot, 'src/components/Navigation.tsx'), 'utf-8')
+
+    expect(appSource).toContain('path="/whats-new"')
+    expect(appSource).toContain('<WhatsNewPage />')
+    expect(navigationSource).toContain('to="/whats-new"')
+    expect(navigationSource).toContain('What’s New')
+  })
+
+  it('emits the canonical changelog as the production static asset', () => {
+    const plugin = changelogAsset()
+    const emitFile = vi.fn()
+    const source = readFileSync(path.resolve(frontendRoot, '../docs/changelog.md'), 'utf-8')
+
+    plugin.generateBundle?.call({ emitFile } as never, {} as never, {} as never, false)
+
+    expect(emitFile).toHaveBeenCalledWith({
+      type: 'asset',
+      fileName: 'changelog.md',
+      source,
+    })
   })
 })
