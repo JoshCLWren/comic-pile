@@ -179,7 +179,10 @@ async def dependency_health(
             content=payload.model_dump(),
         )
     if overall == "degraded":
-        return JSONResponse(status_code=status.HTTP_207_MULTI_STATUS, content=payload.model_dump())
+        return JSONResponse(
+            status_code=status.HTTP_207_MULTI_STATUS,
+            content=payload.model_dump(),
+        )
     return payload
 
 
@@ -200,7 +203,7 @@ async def warmup(
     return await dependency_health(None, db)
 
 
-@router.get("/health", include_in_schema=False)
+@router.get("/health", include_in_schema=False, response_model=None)
 async def legacy_health(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, str] | JSONResponse:
