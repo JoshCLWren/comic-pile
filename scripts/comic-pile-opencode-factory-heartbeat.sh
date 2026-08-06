@@ -187,11 +187,13 @@ ANTI-ORBIT RULES
 - Waiting for CI, review, merge, Josh, or external availability does not reserve the worker.
   Preserve context and select another free issue.
 - Do not create replacement PRs merely because main advanced.
-- Treat docs/changelog.md as part of the completion contract for every product, behavior,
-  deployment, operational, or factory-tooling PR. Before pass, readiness, merge-gating, or merge,
-  add a current-date user-facing entry with the PR link and repair any newer merged PRs missing
-  from the changelog. Only documentation-only, test-only, generated-artifact-only, or strictly
-  internal refactors may omit it, and the PR body must say `Changelog: not user-facing`.
+- Treat the generated changelog as part of the completion contract for every product, behavior,
+  deployment, operational, or factory-tooling PR. Add exactly one isolated fragment at
+  `docs/changelog.d/YYYY-MM-DD-<pr-number>.md` with a matching date heading, the actual PR link,
+  and a user-facing explanation of what changed and why it matters. Never rewrite or backfill
+  `docs/changelog.md`; it is the frozen archive. Only documentation-only, test-only,
+  generated-artifact-only, or strictly internal refactors may omit a fragment, and the PR body
+  must say `Changelog: not user-facing`.
 - Do not split one issue into avoidable foundation or stage PRs. Implement the full contract
   in one coherent non-draft PR whenever reasonably reviewable.
 
@@ -296,7 +298,7 @@ PROMPT
 FACTORY_PROMPT="${FACTORY_PROMPT//__WORKER_ID__/$WORKER_ID}"
 FACTORY_PROMPT="${FACTORY_PROMPT//__MODEL_ID__/$MODEL}"
 
-printf 'ComicPile local factory v17 (backlog-drain, release-notes, and gated-merge)\n'
+printf 'ComicPile local factory v17 (backlog-drain, release-note fragments, and gated-merge)\n'
 printf '  Source repo: %s\n' "$SOURCE_REPO"
 printf '  Worktree:    %s\n' "$WORKTREE"
 printf '  Model:       %s\n' "$MODEL"
