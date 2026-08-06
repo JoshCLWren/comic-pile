@@ -25,7 +25,18 @@ async def create_bug_report_issue(
     username: str,
     diagnostics_data: BugReportDiagnostics | None = None,
 ) -> str:
-    """Create a GitHub issue for user feedback and return its HTML URL."""
+    """Create a GitHub issue for user feedback.
+
+    Args:
+        report_type: Whether the feedback is a bug report or feature request.
+        title: User-provided issue title.
+        description: User-provided issue description.
+        username: ComicPile username that submitted the feedback.
+        diagnostics_data: Optional browser and runtime diagnostics to append.
+
+    Returns:
+        The HTML URL of the newly created GitHub issue.
+    """
     settings = get_github_settings()
     g = Github(settings.github_token)
     try:
