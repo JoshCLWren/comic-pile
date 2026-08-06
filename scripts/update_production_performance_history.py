@@ -7,7 +7,7 @@ import argparse
 import json
 import statistics
 from pathlib import Path
-from typing import TypedDict
+from typing import TypedDict, cast
 
 
 class Sample(TypedDict):
@@ -32,6 +32,7 @@ METRICS = (
     "firstApiResponseMs",
     "queueReadyMs",
 )
+CLASSIFICATIONS = {"cold", "warm", "unknown"}
 MAX_HISTORY = 240
 REGRESSION_RATIO = 1.35
 MIN_REGRESSION_MS = 250
@@ -50,6 +51,54 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def validate_sample(payload: object) -> Sample:
+    """Validate and narrow one decoded performance record.
+
+    Args:
+        payload: Decoded JSON value.
+
+    Returns:
+        Fully validated sample.
+
+    Raises:
+        ValueError: If the value is not a complete valid sample.
+    """
+    if not isinstance(payload, dict):
+        raise ValueError("Performance sample must be a JSON object")
+
+    required_string_fields = ("capturedAt", "deploymentId", "runAttempt")
+    for key in required_string_fields:
+        if not isinstance(payload.get(key), str) or not payload[key]:
+            raise ValueError(f"Invalid required string field: {key}")
+
+    classification = payload.get("classification")
+    if classification not in CLASSIFICATIONS:
+        raise ValueError(f"Invalid classification: {classification!r}")
+
+    for metric in METRICS:
+        value = payload.get(metric)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(f"Invalid non-negative integer metric: {metric}")
+
+    first_api_path = payload.get("firstApiPath")
+    if first_api_path is not None and not isinstance(first_api_path, str):
+        raise ValueError("firstApiPath must be a string or null")
+
+    first_api_status = payload.get("firstApiStatus")
+    if first_api_status is not None and (
+        isinstance(first_api_status, bool)
+        or not isinstance(first_api_status, int)
+        or not 100 <= first_api_status <= 599
+    ):
+        raise ValueError("firstApiStatus must be an HTTP status or null")
+
+    server_timing = payload.get("serverTiming")
+    if server_timing is not None and not isinstance(server_timing, str):
+        raise ValueError("serverTiming must be a string or null")
+
+    return cast(Sample, payload)
+
+
 def load_sample(path: Path) -> Sample:
     """Load and validate one probe sample.
 
@@ -59,25 +108,30 @@ def load_sample(path: Path) -> Sample:
     Returns:
         Validated sample.
     """
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    for key in ("capturedAt", "deploymentId", "classification", *METRICS):
-        if key not in payload:
-            raise ValueError(f"Missing required sample field: {key}")
-    return payload
+    return validate_sample(json.loads(path.read_text(encoding="utf-8")))
 
 
 def load_history(path: Path) -> list[Sample]:
-    """Load JSON-lines history if present.
+    """Load and validate JSON-lines history if present.
 
     Args:
         path: History path.
 
     Returns:
-        Parsed samples.
+        Validated samples.
     """
     if not path.exists():
         return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+
+    samples: list[Sample] = []
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line:
+            continue
+        try:
+            samples.append(validate_sample(json.loads(line)))
+        except (json.JSONDecodeError, ValueError) as error:
+            raise ValueError(f"Invalid history record on line {line_number}: {error}") from error
+    return samples
 
 
 def baseline(history: list[Sample], sample: Sample, metric: str) -> float | None:
@@ -94,7 +148,7 @@ def baseline(history: list[Sample], sample: Sample, metric: str) -> float | None
     comparable = [
         int(item[metric])
         for item in history
-        if item.get("classification") == sample["classification"]
+        if item["classification"] == sample["classification"]
     ][-20:]
     return statistics.median(comparable) if comparable else None
 
