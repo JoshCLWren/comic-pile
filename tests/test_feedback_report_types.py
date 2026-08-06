@@ -14,19 +14,11 @@ def test_report_type_labels_are_distinct() -> None:
     assert _labels_for_report_type("feature") == ["enhancement", "user-reported"]
 
 
-async def _authenticated_username(auth_client: AsyncClient) -> str:
-    """Read the randomized username created by the shared auth fixture."""
-    response = await auth_client.get("/v1/auth/me")
-    assert response.status_code == 200
-    username = response.json()["username"]
-    assert isinstance(username, str)
-    return username
-
-
 @pytest.mark.asyncio
-async def test_create_feature_request_routes_selected_type(auth_client: AsyncClient) -> None:
+async def test_create_feature_request_routes_selected_type(
+    auth_client: AsyncClient, test_username: str
+) -> None:
     """The API forwards an explicit feature selection to GitHub issue creation."""
-    username = await _authenticated_username(auth_client)
     mock_settings = MagicMock(is_configured=True)
     mock_create = AsyncMock(return_value="https://github.com/test/repo/issues/9")
 
@@ -49,15 +41,16 @@ async def test_create_feature_request_routes_selected_type(auth_client: AsyncCli
         report_type="feature",
         title="Add a reading timer",
         description="Let me track time spent reading an issue.",
-        username=username,
+        username=test_username,
         diagnostics_data=None,
     )
 
 
 @pytest.mark.asyncio
-async def test_create_report_defaults_to_bug(auth_client: AsyncClient) -> None:
+async def test_create_report_defaults_to_bug(
+    auth_client: AsyncClient, test_username: str
+) -> None:
     """Older clients that omit report_type retain bug-report behavior."""
-    username = await _authenticated_username(auth_client)
     mock_settings = MagicMock(is_configured=True)
     mock_create = AsyncMock(return_value="https://github.com/test/repo/issues/10")
 
@@ -75,7 +68,7 @@ async def test_create_report_defaults_to_bug(auth_client: AsyncClient) -> None:
         report_type="bug",
         title="Broken button",
         description="The button does nothing.",
-        username=username,
+        username=test_username,
         diagnostics_data=None,
     )
 
