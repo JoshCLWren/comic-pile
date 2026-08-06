@@ -20,8 +20,8 @@ def test_cache_defaults_to_disabled_with_remote_credentials_present() -> None:
     assert settings.is_configured is False
 
 
-def test_preview_style_redis_url_defaults_to_disabled() -> None:
-    """A preview environment cannot contact Redis without an explicit opt-in."""
+def test_remote_redis_url_defaults_to_disabled() -> None:
+    """A remote Redis URL cannot activate caching without explicit opt-in."""
     settings = RedisSettings(
         _env_file=None,
         redis_url="rediss://default:test-token@example.upstash.io:6379/0",
