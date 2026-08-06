@@ -22,9 +22,15 @@ const crossover = {
   created_at: '2026-08-06T00:00:00Z',
   memberships: [],
 }
+const secondCrossover = {
+  id: 8,
+  name: 'Secret Wars',
+  created_at: '2026-08-06T00:00:00Z',
+  memberships: [],
+}
 
-function openRangeForm() {
-  fireEvent.click(screen.getByRole('button', { name: /Annihilation.*0 members/ }))
+function openRangeForm(name = /Annihilation.*0 members/) {
+  fireEvent.click(screen.getByRole('button', { name }))
 }
 
 function fillRange(threadId: string, start: string, end: string) {
@@ -83,6 +89,38 @@ describe('CrossoversPage issue ranges', () => {
     expect(screen.getByLabelText('Thread ID')).toHaveValue('')
     expect(screen.getByLabelText('Start position')).toHaveValue('')
     expect(screen.getByLabelText('End position')).toHaveValue('')
+  })
+
+  it('clears range state when expanding another crossover', async () => {
+    api.list.mockResolvedValue([crossover, secondCrossover])
+    render(<CrossoversPage />)
+    await screen.findByText('Annihilation')
+
+    openRangeForm()
+    fillRange('22', '3', '5')
+    openRangeForm(/Secret Wars.*0 members/)
+
+    expect(screen.getByLabelText('Thread ID')).toHaveValue('')
+    expect(screen.getByLabelText('Start position')).toHaveValue('')
+    expect(screen.getByLabelText('End position')).toHaveValue('')
+    expect(screen.getByRole('form', { name: 'Add issue range to Secret Wars' })).toBeInTheDocument()
+  })
+
+  it('prevents moving the pending request state to another crossover', async () => {
+    api.list.mockResolvedValue([crossover, secondCrossover])
+    api.addIssueRange.mockImplementation(() => new Promise(() => undefined))
+    render(<CrossoversPage />)
+    await screen.findByText('Annihilation')
+
+    openRangeForm()
+    fillRange('22', '3', '5')
+    fireEvent.click(screen.getByRole('button', { name: 'Add range' }))
+
+    const secondToggle = screen.getByRole('button', { name: /Secret Wars.*0 members/ })
+    expect(secondToggle).toBeDisabled()
+    fireEvent.click(secondToggle)
+    expect(screen.getByRole('form', { name: 'Add issue range to Annihilation' })).toBeInTheDocument()
+    expect(screen.queryByRole('form', { name: 'Add issue range to Secret Wars' })).not.toBeInTheDocument()
   })
 
   it('disables range controls while saving and reports API failures', async () => {
