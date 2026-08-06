@@ -1,5 +1,60 @@
 # Changelog
 
+## 2026-08-06
+
+**Faster and more resilient startup**
+
+- The production frontend is now served as static Vercel output, keeping the home page and React routes out of the FastAPI cold-start path ([#863](https://github.com/JoshCLWren/comic-pile/pull/863)).
+- A branded bootstrap shell keeps useful loading and reconnecting feedback visible until the application is actually ready ([#859](https://github.com/JoshCLWren/comic-pile/pull/859)).
+- Returning to an iOS tab after suspension now revalidates the session, refreshes cached data, and offers retry or reload recovery instead of leaving an empty app ([#854](https://github.com/JoshCLWren/comic-pile/pull/854)).
+- Production probes now track document, application shell, first API response, and Queue readiness over time, with bounded history and regression reporting ([#861](https://github.com/JoshCLWren/comic-pile/pull/861)).
+- Separate liveness, dependency-health, and warm-up endpoints make operational checks cheaper and more precise ([#860](https://github.com/JoshCLWren/comic-pile/pull/860)).
+
+**Crossovers and reading order**
+
+- Reading-order groups are now presented as Crossovers throughout the Roll experience ([#856](https://github.com/JoshCLWren/comic-pile/pull/856)).
+- A dedicated Crossovers page supports creating, inspecting, renaming, and deleting crossover groups from the app ([#857](https://github.com/JoshCLWren/comic-pile/pull/857)).
+- Crossover management can add an inclusive range of issues from a thread in one operation, with duplicate-safe results and validation ([#858](https://github.com/JoshCLWren/comic-pile/pull/858)).
+- Fixed Roll crossover loading to use the real versioned API routes ([#822](https://github.com/JoshCLWren/comic-pile/pull/822)).
+
+**Authentication, feedback, and Queue**
+
+- Authentication routes and maintained frontend callers now use canonical `/api/v1/auth/*` paths while retaining compatibility aliases ([#825](https://github.com/JoshCLWren/comic-pile/pull/825), [#826](https://github.com/JoshCLWren/comic-pile/pull/826), [#827](https://github.com/JoshCLWren/comic-pile/pull/827)).
+- Feedback can now be submitted explicitly as either a bug report or a feature request, with matching GitHub labels ([#855](https://github.com/JoshCLWren/comic-pile/pull/855)).
+- Queue reposition previews now display the full selected move distance instead of always showing one position ([#821](https://github.com/JoshCLWren/comic-pile/pull/821)).
+- Frontend API contracts now derive additional auth types from generated OpenAPI output, and shared query keys establish targeted cache-update behavior ([#820](https://github.com/JoshCLWren/comic-pile/pull/820), [#823](https://github.com/JoshCLWren/comic-pile/pull/823), [#824](https://github.com/JoshCLWren/comic-pile/pull/824)).
+
+**Factory visibility and reliability**
+
+- GitHub labels now expose factory ownership and lifecycle state on issues and pull requests ([#819](https://github.com/JoshCLWren/comic-pile/pull/819)).
+- Factory worktrees refresh from current main before each heartbeat, the free-model pool includes curated Google and OpenRouter options, and transient failures rotate models without prematurely retiring them ([#814](https://github.com/JoshCLWren/comic-pile/pull/814), [#818](https://github.com/JoshCLWren/comic-pile/pull/818)).
+
+## 2026-08-05
+
+**Roll mutation recovery**
+
+- Rating and snooze operations now reconcile server-committed changes after browser timeouts or failed refreshes, and stale bootstrap responses can no longer overwrite newer reconciled state ([#784](https://github.com/JoshCLWren/comic-pile/pull/784), [#798](https://github.com/JoshCLWren/comic-pile/pull/798), [#799](https://github.com/JoshCLWren/comic-pile/pull/799), [#800](https://github.com/JoshCLWren/comic-pile/pull/800)).
+- Deterministic latest-session lookups gained an index and phase-level observability for current-session and History reads ([#778](https://github.com/JoshCLWren/comic-pile/pull/778), [#801](https://github.com/JoshCLWren/comic-pile/pull/801)).
+
+**Reading-order foundations**
+
+- Added the ownership-scoped named dependency-group API, typed frontend client, and Roll presentation used by the later Crossovers interface ([#790](https://github.com/JoshCLWren/comic-pile/pull/790), [#805](https://github.com/JoshCLWren/comic-pile/pull/805), [#807](https://github.com/JoshCLWren/comic-pile/pull/807), [#808](https://github.com/JoshCLWren/comic-pile/pull/808), [#809](https://github.com/JoshCLWren/comic-pile/pull/809)).
+
+**Maintenance and safeguards**
+
+- Completed removal of retired Reviews persistence and kept completed Queue threads collapsed by default ([#810](https://github.com/JoshCLWren/comic-pile/pull/810), [#811](https://github.com/JoshCLWren/comic-pile/pull/811)).
+- CI now rejects stale or untracked generated OpenAPI artifacts ([#812](https://github.com/JoshCLWren/comic-pile/pull/812), [#813](https://github.com/JoshCLWren/comic-pile/pull/813)).
+- The factory now prioritizes backlog delivery, respects review gates, and may merge only after the complete exact-head gate set is satisfied ([#797](https://github.com/JoshCLWren/comic-pile/pull/797)).
+
+## 2026-08-04
+
+**Mobile overlays and data restore**
+
+- Modals and the Queue position menu now share a document-level overlay lifecycle and stable stacking contract, preventing nested overlays from being clipped or layered incorrectly ([#786](https://github.com/JoshCLWren/comic-pile/pull/786), [#787](https://github.com/JoshCLWren/comic-pile/pull/787), [#789](https://github.com/JoshCLWren/comic-pile/pull/789)).
+- Local restore now remaps retained export relationships safely instead of reusing production graph identifiers ([#785](https://github.com/JoshCLWren/comic-pile/pull/785)).
+- OpenCode provider rotation now exhausts available providers correctly instead of getting stuck on one failing provider ([#792](https://github.com/JoshCLWren/comic-pile/pull/792)).
+
+
 ## 2026-08-03
 
 **OpenCode model discovery, rotation, and attribution (factory tooling)**

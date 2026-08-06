@@ -52,7 +52,10 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         None.
     """
     for needle in (
-        "Version: 16",
+        "Version: 17",
+        "Every product, behavior, deployment, operational, or factory-tooling PR must update",
+        "Changelog: not user-facing",
+        "A missing required changelog entry is an actionable review defect",
         "Drive the open issue backlog to zero",
         "The newest unclaimed open issue labeled both `user-reported` and `bug`.",
         "The highest-priority unclaimed reproducible E2E-discovered `bug` issue.",
@@ -129,6 +132,8 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
     for needle in (
         "docs/AUTONOMOUS_FACTORY_POLICY.md",
         "Drive the open issue backlog to zero",
+        "Treat docs/changelog.md as part of the completion contract",
+        "Changelog: not user-facing",
         "newest unclaimed open issue labeled both `user-reported` and `bug`",
         "reproducible E2E-discovered",
         "fewer than four substantive implementation PRs",

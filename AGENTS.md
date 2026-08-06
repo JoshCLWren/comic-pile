@@ -336,7 +336,7 @@ make migrate  # Run migrations (or: alembic upgrade head)
 - Commit messages: imperative, component-scoped (e.g., "Add thread creation API endpoint")
 - Run `make lint` and `make pytest` before committing
 - Open PRs as **ready for review by default**. Do **not** open draft PRs unless the user explicitly asks for a draft. This repo relies on CodeRabbit signals that do not arrive on draft PRs for the current plan/tier.
-- **Update `docs/changelog.md`** when deploying changes to production (add new dated entry, group by feature area, describe what changed not how)
+- **Update `docs/changelog.md` in every product, behavior, deployment, operational, or factory-tooling PR before readiness or merge.** Add a current dated entry, group it by user-recognizable feature area, link the PR, and describe what changed and why it matters rather than how it was implemented. Documentation-only, test-only, generated-artifact-only, or strictly internal refactors may omit an entry only when the PR body explicitly says `Changelog: not user-facing`.
 
 ## GitHub Issue Workflow
 
