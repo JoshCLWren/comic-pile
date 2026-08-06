@@ -61,11 +61,43 @@ it('keeps canonical credential endpoints exempt from csrf bootstrap', async () =
   expect(apiMock.get).not.toHaveBeenCalled()
 })
 
+it('does not exempt protected requests that only mention an auth path in the query', async () => {
+  apiMock.get.mockResolvedValue({ csrf_token: 'fresh-token' })
+
+  const config = await requestInterceptor({
+    method: 'post',
+    url: '/threads/9?returnTo=/v1/auth/login',
+    headers: {},
+  })
+
+  expect(apiMock.get).toHaveBeenCalledWith('/v1/auth/csrf', { skipAuthRedirect: true })
+  expect(config.headers).toEqual({ 'X-CSRF-Token': 'fresh-token' })
+})
+
 it('refreshes expired requests through the canonical v1 auth endpoint', async () => {
   apiMock.post.mockResolvedValue({ access_token: 'refreshed-token' })
   apiMock.request.mockResolvedValue({ refreshed: true })
 
   const originalRequest = { url: '/v1/threads/42', headers: {} }
+  const result = await responseInterceptor({
+    config: originalRequest,
+    response: { status: 401 },
+  })
+
+  expect(apiMock.post).toHaveBeenCalledWith('/v1/auth/refresh')
+  expect(apiMock.request).toHaveBeenCalledWith({
+    ...originalRequest,
+    _retry: true,
+    headers: { Authorization: 'Bearer refreshed-token' },
+  })
+  expect(result).toEqual({ refreshed: true })
+})
+
+it('refreshes a protected request whose query mentions an auth path', async () => {
+  apiMock.post.mockResolvedValue({ access_token: 'refreshed-token' })
+  apiMock.request.mockResolvedValue({ refreshed: true })
+
+  const originalRequest = { url: '/v1/threads/42?returnTo=/v1/auth/login', headers: {} }
   const result = await responseInterceptor({
     config: originalRequest,
     response: { status: 401 },
