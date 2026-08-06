@@ -41,6 +41,7 @@ describe('ResumeRecovery', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   it('revalidates auth and cached application data after a BFCache restore', async () => {
@@ -104,6 +105,7 @@ describe('ResumeRecovery', () => {
 
   it('does not let an older invalidation hide a newer recovery attempt', async () => {
     let finishFirstInvalidation: (() => void) | undefined
+    const resumedAt = Date.now() + 1001
     revalidateSession.mockResolvedValue(undefined)
     invalidateQueries
       .mockImplementationOnce(
@@ -117,10 +119,8 @@ describe('ResumeRecovery', () => {
     dispatchPageShow(true)
     await waitFor(() => expect(invalidateQueries).toHaveBeenCalledOnce())
 
-    await act(async () => {
-      vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 1001)
-      fireEvent(document, new Event('visibilitychange'))
-    })
+    vi.spyOn(Date, 'now').mockReturnValue(resumedAt)
+    fireEvent(document, new Event('visibilitychange'))
     await waitFor(() => expect(revalidateSession).toHaveBeenCalledTimes(2))
 
     await act(async () => {
