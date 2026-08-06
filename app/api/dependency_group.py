@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -51,7 +52,15 @@ async def list_groups(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> list[DependencyGroup]:
-    """List the current user's groups and memberships."""
+    """List the current user's groups and memberships.
+
+    Args:
+        current_user: The authenticated owner of the requested groups.
+        db: The asynchronous database session.
+
+    Returns:
+        The user's groups with memberships eagerly loaded.
+    """
     result = await db.execute(
         select(DependencyGroup)
         .options(selectinload(DependencyGroup.memberships))
@@ -67,7 +76,16 @@ async def create_group(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> DependencyGroup:
-    """Create a user-owned named group."""
+    """Create a user-owned named group.
+
+    Args:
+        payload: The validated group creation request.
+        current_user: The authenticated group owner.
+        db: The asynchronous database session.
+
+    Returns:
+        The newly created group with memberships loaded.
+    """
     group = DependencyGroup(user_id=current_user.id, name=_normalize_name(payload.name))
     db.add(group)
     try:
@@ -84,7 +102,16 @@ async def list_thread_groups(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> list[DependencyGroupSummary]:
-    """List groups containing an owned thread or any of its owned issues."""
+    """List groups containing an owned thread or any of its owned issues.
+
+    Args:
+        thread_id: The owned thread identifier used for the lookup.
+        current_user: The authenticated thread and group owner.
+        db: The asynchronous database session.
+
+    Returns:
+        Distinct group summaries ordered by name and identifier.
+    """
     thread = await db.get(Thread, thread_id)
     if thread is None or thread.user_id != current_user.id:
         raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
@@ -111,7 +138,16 @@ async def get_group(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> DependencyGroup:
-    """Return one owned group."""
+    """Return one owned group.
+
+    Args:
+        group_id: The dependency group identifier.
+        current_user: The authenticated group owner.
+        db: The asynchronous database session.
+
+    Returns:
+        The requested owned group with memberships loaded.
+    """
     return await _owned_group(db, group_id, current_user.id)
 
 
@@ -122,7 +158,17 @@ async def update_group(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> DependencyGroup:
-    """Rename one owned group."""
+    """Rename one owned group.
+
+    Args:
+        group_id: The dependency group identifier.
+        payload: The validated group rename request.
+        current_user: The authenticated group owner.
+        db: The asynchronous database session.
+
+    Returns:
+        The renamed group with memberships loaded.
+    """
     group = await _owned_group(db, group_id, current_user.id)
     group.name = _normalize_name(payload.name)
     try:
@@ -139,7 +185,16 @@ async def delete_group(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> Response:
-    """Delete one owned group and its memberships."""
+    """Delete one owned group and its memberships.
+
+    Args:
+        group_id: The dependency group identifier.
+        current_user: The authenticated group owner.
+        db: The asynchronous database session.
+
+    Returns:
+        An empty HTTP 204 response.
+    """
     group = await _owned_group(db, group_id, current_user.id)
     await db.delete(group)
     await db.commit()
@@ -157,7 +212,17 @@ async def add_issue_range(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> DependencyGroupIssueRangeResponse:
-    """Add one inclusive issue-position range from an owned thread to a group."""
+    """Add one inclusive issue-position range from an owned thread to a group.
+
+    Args:
+        group_id: The dependency group identifier.
+        payload: The validated issue-position range request.
+        current_user: The authenticated group and thread owner.
+        db: The asynchronous database session.
+
+    Returns:
+        The idempotent range result with inserted and already-present issue IDs.
+    """
     await _owned_group(db, group_id, current_user.id)
     thread = await db.get(Thread, payload.thread_id)
     if thread is None or thread.user_id != current_user.id:
@@ -190,27 +255,22 @@ async def add_issue_range(
         )
 
     issue_ids = [issue.id for issue in issues]
-    existing_result = await db.execute(
-        select(DependencyGroupMembership.issue_id).where(
-            DependencyGroupMembership.group_id == group_id,
-            DependencyGroupMembership.issue_id.in_(issue_ids),
-        )
+    statement = (
+        pg_insert(DependencyGroupMembership)
+        .values([{"group_id": group_id, "issue_id": issue_id} for issue_id in issue_ids])
+        .on_conflict_do_nothing(constraint="uq_dependency_group_issue")
+        .returning(DependencyGroupMembership.issue_id)
     )
-    existing_ids = {issue_id for issue_id in existing_result.scalars() if issue_id is not None}
-    added_ids = [issue_id for issue_id in issue_ids if issue_id not in existing_ids]
-    db.add_all(
-        DependencyGroupMembership(group_id=group_id, issue_id=issue_id)
-        for issue_id in added_ids
-    )
-    if added_ids:
-        await db.commit()
+    added_ids = list((await db.execute(statement)).scalars())
+    await db.commit()
+    added_id_set = set(added_ids)
 
     return DependencyGroupIssueRangeResponse(
         thread_id=payload.thread_id,
         start_position=payload.start_position,
         end_position=payload.end_position,
         added_issue_ids=added_ids,
-        already_present_issue_ids=[issue_id for issue_id in issue_ids if issue_id in existing_ids],
+        already_present_issue_ids=[issue_id for issue_id in issue_ids if issue_id not in added_id_set],
     )
 
 
@@ -225,7 +285,17 @@ async def add_member(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> DependencyGroupMembership:
-    """Add one owned thread or issue to an owned group."""
+    """Add one owned thread or issue to an owned group.
+
+    Args:
+        group_id: The dependency group identifier.
+        payload: The validated thread or issue membership request.
+        current_user: The authenticated owner of the group and target.
+        db: The asynchronous database session.
+
+    Returns:
+        The newly persisted group membership.
+    """
     await _owned_group(db, group_id, current_user.id)
     if payload.thread_id is not None:
         target = await db.get(Thread, payload.thread_id)
@@ -258,7 +328,17 @@ async def remove_member(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> Response:
-    """Remove one membership from an owned group."""
+    """Remove one membership from an owned group.
+
+    Args:
+        group_id: The dependency group identifier.
+        member_id: The membership identifier to remove.
+        current_user: The authenticated group owner.
+        db: The asynchronous database session.
+
+    Returns:
+        An empty HTTP 204 response.
+    """
     await _owned_group(db, group_id, current_user.id)
     member = await db.get(DependencyGroupMembership, member_id)
     if member is None or member.group_id != group_id:
