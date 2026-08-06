@@ -42,6 +42,28 @@ describe('CrossoversPage', () => {
     expect(await screen.findByText('No crossovers yet')).toBeInTheDocument()
   })
 
+  it('blocks creation until the current list request settles', async () => {
+    let resolveList: ((groups: []) => void) | undefined
+    api.list.mockImplementation(() => new Promise((resolve) => { resolveList = resolve }))
+    api.create.mockResolvedValue(annihilation)
+
+    render(<CrossoversPage />)
+    const nameInput = screen.getByLabelText('New crossover')
+    const createButton = screen.getByRole('button', { name: 'Create crossover' })
+    expect(nameInput).toBeDisabled()
+    expect(createButton).toBeDisabled()
+
+    resolveList?.([])
+    await screen.findByText('No crossovers yet')
+    expect(nameInput).toBeEnabled()
+    expect(createButton).toBeEnabled()
+
+    fireEvent.change(nameInput, { target: { value: 'Annihilation' } })
+    fireEvent.click(createButton)
+    expect(await screen.findByText('Annihilation')).toBeInTheDocument()
+    expect(api.create).toHaveBeenCalledWith('Annihilation')
+  })
+
   it('creates a trimmed crossover and displays it', async () => {
     api.create.mockResolvedValue(annihilation)
     render(<CrossoversPage />)
@@ -73,6 +95,29 @@ describe('CrossoversPage', () => {
     await waitFor(() => expect(screen.queryByText('Annihilation Conquest')).not.toBeInTheDocument())
     expect(window.confirm).toHaveBeenCalled()
     expect(api.delete).toHaveBeenCalledWith(7)
+  })
+
+  it('blocks competing mutations while a rename is pending', async () => {
+    const secretWars = { ...annihilation, id: 8, name: 'Secret Wars' }
+    let resolveRename: ((group: typeof annihilation) => void) | undefined
+    api.list.mockResolvedValue([annihilation, secretWars])
+    api.rename.mockImplementation(() => new Promise((resolve) => { resolveRename = resolve }))
+    render(<CrossoversPage />)
+
+    await screen.findByText('Annihilation')
+    const renameButtons = screen.getAllByRole('button', { name: 'Rename' })
+    fireEvent.click(renameButtons[0])
+    fireEvent.change(screen.getByLabelText('Rename Annihilation'), { target: { value: 'Annihilation Conquest' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(screen.getByRole('button', { name: 'Rename' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }))
+    expect(screen.queryByLabelText('Rename Secret Wars')).not.toBeInTheDocument()
+
+    resolveRename?.({ ...annihilation, name: 'Annihilation Conquest' })
+    expect(await screen.findByText('Annihilation Conquest')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Rename' })[1]).toBeEnabled()
   })
 
   it('opens crossover detail with issue and thread counts', async () => {
