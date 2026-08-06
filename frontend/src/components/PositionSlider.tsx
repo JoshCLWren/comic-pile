@@ -38,7 +38,7 @@ export default function PositionSlider({
   const [sliderValue, setSliderValue] = useState(Math.max(0, currentIndex))
 
   const maxPosition = sortedThreads.length - 1
-  const selectedOffset = sliderValue - currentIndex
+  const selectedOffset = currentIndex - sliderValue
   const formattedOffset = selectedOffset > 0 ? `+${selectedOffset}` : `${selectedOffset}`
 
   // Get context threads (2-3 above and below current slider position)
