@@ -127,6 +127,15 @@ mkdir -p "$WORKTREE/.opencode_logs" "$WORKTREE/.opencode_handoff"
 exec 9>"$WORKTREE/.comic-pile-factory.lock"
 flock -n 9 || die "another local factory process already holds the factory lock"
 
+# Every heartbeat runs against a fresh origin/main checkout so merged factory
+# tooling and policy land before the next heartbeat selects work. Without this a
+# long-lived worktree silently goes stale after each merge to main.
+printf 'Refreshing factory worktree to latest origin/main...\n'
+git -C "$SOURCE_REPO" fetch --prune origin
+git -C "$WORKTREE" switch -f --detach origin/main
+printf 'Factory worktree is now at %s (%s).\n' \
+  "$(git -C "$WORKTREE" rev-parse --short origin/main)" "$(git -C "$WORKTREE" log -1 --format='%s' origin/main)"
+
 FACTORY_PROMPT="$(cat <<'PROMPT'
 Act as one high-ownership local factory heartbeat for JoshCLWren/comic-pile.
 Durable worker ID: `__WORKER_ID__`.
