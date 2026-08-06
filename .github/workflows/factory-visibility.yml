@@ -56,6 +56,13 @@ jobs:
               'factory:ready',
               'factory:blocked',
             ];
+            const trustedAssociations = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
+
+            function isTrustedActor(login, association) {
+              return trustedAssociations.has(association)
+                || login === 'coderabbitai[bot]'
+                || login === 'coderabbitai';
+            }
 
             async function ensureLabels() {
               const existing = await github.paginate(github.rest.issues.listLabelsForRepo, {
@@ -222,8 +229,12 @@ jobs:
             await ensureLabels();
 
             if (context.eventName === 'issue_comment') {
-              const body = context.payload.comment?.body || '';
-              if (!body.includes('comic-pile-factory-')) {
+              const comment = context.payload.comment;
+              const body = comment?.body || '';
+              if (
+                !body.includes('comic-pile-factory-')
+                || !isTrustedActor(comment?.user?.login, comment?.author_association)
+              ) {
                 return;
               }
 
@@ -249,9 +260,14 @@ jobs:
             if (context.eventName === 'pull_request_target') {
               const pr = context.payload.pull_request;
               const number = pr.number;
-              const isFactory = pr.head.ref.startsWith('factory/')
-                || (pr.body || '').includes('comic-pile-factory-')
-                || (pr.labels || []).some((label) => label.name === 'factory');
+              const sameRepository = pr.head.repo?.full_name === context.payload.repository.full_name;
+              const isFactory = (
+                sameRepository
+                && (
+                  pr.head.ref.startsWith('factory/')
+                  || (pr.body || '').includes('comic-pile-factory-')
+                )
+              ) || (pr.labels || []).some((label) => label.name === 'factory');
               if (!isFactory) {
                 return;
               }
@@ -280,6 +296,9 @@ jobs:
               }
 
               const review = context.payload.review;
+              if (!isTrustedActor(review.user?.login, review.author_association)) {
+                return;
+              }
               const state = (review.state || '').toUpperCase();
               const body = review.body || '';
               if (state === 'CHANGES_REQUESTED') {
