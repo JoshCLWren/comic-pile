@@ -105,7 +105,7 @@ describe('ResumeRecovery', () => {
 
   it('does not let an older invalidation hide a newer recovery attempt', async () => {
     let finishFirstInvalidation: (() => void) | undefined
-    const resumedAt = Date.now() + 1001
+    const now = vi.spyOn(Date, 'now').mockReturnValue(10_000)
     revalidateSession.mockResolvedValue(undefined)
     invalidateQueries
       .mockImplementationOnce(
@@ -119,7 +119,7 @@ describe('ResumeRecovery', () => {
     dispatchPageShow(true)
     await waitFor(() => expect(invalidateQueries).toHaveBeenCalledOnce())
 
-    vi.spyOn(Date, 'now').mockReturnValue(resumedAt)
+    now.mockReturnValue(11_001)
     fireEvent(document, new Event('visibilitychange'))
     await waitFor(() => expect(revalidateSession).toHaveBeenCalledTimes(2))
 
