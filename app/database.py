@@ -1,11 +1,13 @@
 """Database connection and session management."""
 
+import asyncio
 import logging
 import os
 import time
 from collections.abc import AsyncIterator
 
-from sqlalchemy import event, text
+from fastapi import HTTPException, status
+from sqlalchemy import event, exc as sqlalchemy_exc, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -26,6 +28,13 @@ else:
     DATABASE_URL = _db_settings.database_url
 ASYNC_DATABASE_URL = _db_settings.async_url
 
+# Keep a missing or sleeping Neon endpoint from holding a serverless request open
+# indefinitely. The dependency timeout covers the first pool acquisition, while
+# asyncpg's connect and command timeouts bound lower-level network waits.
+DATABASE_DEPENDENCY_TIMEOUT_SECONDS = 10.0
+DATABASE_CONNECT_TIMEOUT_SECONDS = 3.0
+DATABASE_COMMAND_TIMEOUT_SECONDS = 8.0
+
 # Log only an allowlisted metadata projection. Rendering a URL, even with its
 # password hidden, risks exposing usernames, query credentials, or encoded secrets.
 logger.info(
@@ -38,8 +47,12 @@ async_engine = create_async_engine(
     pool_recycle=3600,
     pool_size=1,
     max_overflow=2,
-    pool_timeout=30,
+    pool_timeout=DATABASE_CONNECT_TIMEOUT_SECONDS,
     pool_pre_ping=True,
+    connect_args={
+        "timeout": DATABASE_CONNECT_TIMEOUT_SECONDS,
+        "command_timeout": DATABASE_COMMAND_TIMEOUT_SECONDS,
+    },
 )
 
 
@@ -86,16 +99,40 @@ class Base(DeclarativeBase):
 
 
 async def get_db() -> AsyncIterator[AsyncSession]:
-    """Get async database session.
+    """Get an async database session with bounded first connection acquisition.
 
     Yields:
         AsyncSession: Database session for use in dependency injection.
+
+    Raises:
+        HTTPException: If the first pool acquisition cannot complete within the
+            configured dependency timeout.
     """
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
+    started_at = time.perf_counter()
+    try:
+        async with AsyncSessionLocal() as session:
+            async with asyncio.timeout(DATABASE_DEPENDENCY_TIMEOUT_SECONDS):
+                await session.connection()
+            logger.info(
+                "database_dependency_opened duration_ms=%.2f",
+                (time.perf_counter() - started_at) * 1000,
+            )
+            try:
+                yield session
+            finally:
+                await session.close()
+    except (TimeoutError, sqlalchemy_exc.TimeoutError, sqlalchemy_exc.DBAPIError) as error:
+        elapsed_ms = (time.perf_counter() - started_at) * 1000
+        logger.warning(
+            "database_dependency_unavailable duration_ms=%.2f limit_seconds=%.1f error=%s",
+            elapsed_ms,
+            DATABASE_DEPENDENCY_TIMEOUT_SECONDS,
+            type(error).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database temporarily unavailable",
+        ) from error
 
 
 async def test_database_connection() -> bool:
@@ -105,9 +142,10 @@ async def test_database_connection() -> bool:
         True if connection successful, False otherwise.
     """
     try:
-        async with AsyncSessionLocal() as session:
-            await session.execute(text("SELECT 1"))
-            return True
+        async with asyncio.timeout(DATABASE_DEPENDENCY_TIMEOUT_SECONDS):
+            async with AsyncSessionLocal() as session:
+                await session.execute(text("SELECT 1"))
+                return True
     except Exception as error:
         logger.error(
             "Database connection test failed",
