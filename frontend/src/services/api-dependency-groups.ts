@@ -24,28 +24,28 @@ export type DependencyGroupMemberTarget =
 
 export const dependencyGroupsApi = {
   list: async (): Promise<DependencyGroup[]> => {
-    return api.get<DependencyGroup[]>('/v1/dependencies/reading-order-groups/')
+    return api.get<DependencyGroup[]>('/v1/reading-order-groups/')
   },
 
   create: async (name: string): Promise<DependencyGroup> => {
-    return api.post<DependencyGroup>('/v1/dependencies/reading-order-groups/', { name })
+    return api.post<DependencyGroup>('/v1/reading-order-groups/', { name })
   },
 
   get: async (groupId: number): Promise<DependencyGroup> => {
-    return api.get<DependencyGroup>(`/v1/dependencies/reading-order-groups/${groupId}`)
+    return api.get<DependencyGroup>(`/v1/reading-order-groups/${groupId}`)
   },
 
   rename: async (groupId: number, name: string): Promise<DependencyGroup> => {
-    return api.patch<DependencyGroup>(`/v1/dependencies/reading-order-groups/${groupId}`, { name })
+    return api.patch<DependencyGroup>(`/v1/reading-order-groups/${groupId}`, { name })
   },
 
   delete: async (groupId: number): Promise<void> => {
-    await api.delete(`/v1/dependencies/reading-order-groups/${groupId}`)
+    await api.delete(`/v1/reading-order-groups/${groupId}`)
   },
 
   listForThread: async (threadId: number): Promise<DependencyGroupSummary[]> => {
     return api.get<DependencyGroupSummary[]>(
-      `/v1/dependencies/reading-order-groups/threads/${threadId}/groups`,
+      `/v1/reading-order-groups/threads/${threadId}/groups`,
     )
   },
 
@@ -54,14 +54,14 @@ export const dependencyGroupsApi = {
     target: DependencyGroupMemberTarget,
   ): Promise<DependencyGroupMember> => {
     return api.post<DependencyGroupMember>(
-      `/v1/dependencies/reading-order-groups/${groupId}/members`,
+      `/v1/reading-order-groups/${groupId}/members`,
       target,
     )
   },
 
   removeMember: async (groupId: number, memberId: number): Promise<void> => {
     await api.delete(
-      `/v1/dependencies/reading-order-groups/${groupId}/members/${memberId}`,
+      `/v1/reading-order-groups/${groupId}/members/${memberId}`,
     )
   },
 }
