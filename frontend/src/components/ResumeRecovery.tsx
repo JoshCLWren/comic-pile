@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import api from '../services/api'
 import { queryClient } from '../query/queryClient'
 
 const RESUME_REQUEST_TIMEOUT_MS = 8000
@@ -10,13 +9,14 @@ type RecoveryState = 'idle' | 'reconnecting' | 'failed'
 
 interface ResumeRecoveryProps {
   children: ReactNode
+  revalidateSession: (timeout: number) => Promise<void>
 }
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds))
 }
 
-export default function ResumeRecovery({ children }: ResumeRecoveryProps) {
+export default function ResumeRecovery({ children, revalidateSession }: ResumeRecoveryProps) {
   const [recoveryState, setRecoveryState] = useState<RecoveryState>('idle')
   const requestSequence = useRef(0)
   const lastValidationAt = useRef(0)
@@ -32,14 +32,14 @@ export default function ResumeRecovery({ children }: ResumeRecoveryProps) {
 
     for (let attempt = 1; attempt <= MAX_RESUME_ATTEMPTS; attempt += 1) {
       try {
-        await api.get('/v1/auth/me', {
-          timeout: RESUME_REQUEST_TIMEOUT_MS,
-          skipAuthRedirect: false,
-        })
+        await revalidateSession(RESUME_REQUEST_TIMEOUT_MS)
         if (sequence !== requestSequence.current) {
           return
         }
         await queryClient.invalidateQueries()
+        if (sequence !== requestSequence.current) {
+          return
+        }
         setRecoveryState('idle')
         return
       } catch (error) {
@@ -53,7 +53,7 @@ export default function ResumeRecovery({ children }: ResumeRecoveryProps) {
     if (sequence === requestSequence.current) {
       setRecoveryState('failed')
     }
-  }, [])
+  }, [revalidateSession])
 
   useEffect(() => {
     const handlePageShow = (event: PageTransitionEvent) => {
