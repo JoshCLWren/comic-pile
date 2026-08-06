@@ -20,7 +20,22 @@ describe('bug report and issue correction dialogs', () => {
     await waitFor(() => expect(screen.getByText('failed')).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(onClose).toHaveBeenCalled()
+  })
 
+  it('switches to feature request copy and submits the selected type', async () => {
+    const user = userEvent.setup(); const onSubmit = vi.fn().mockResolvedValue(undefined)
+    render(<BugReportModal isOpen onClose={vi.fn()} onSubmit={onSubmit} diagnosticData={null} />)
+
+    await user.click(screen.getByRole('radio', { name: '✨ Feature request' }))
+    expect(screen.getByRole('heading', { name: 'Request a Feature' })).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Briefly describe the feature')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('What would you like ComicPile to do, and how would it help?')).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText('Title'), ' Reading timer ')
+    await user.type(screen.getByLabelText('Description'), ' Track time per issue. ')
+    await user.click(screen.getByRole('button', { name: 'Submit Request' }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith('feature', 'Reading timer', 'Track time per issue.'))
   })
 
   it('loads issues and submits an existing issue correction', async () => {
