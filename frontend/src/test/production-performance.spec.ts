@@ -16,6 +16,11 @@ type PerformanceSample = {
   serverTiming: string | null
 }
 
+type TimedResponse = {
+  response: Response
+  arrivedAtMs: number
+}
+
 const outputPath = process.env.PROD_PERFORMANCE_OUTPUT ?? '../test-results/production-performance.json'
 
 function elapsedSince(startedAt: number): number {
@@ -30,16 +35,17 @@ function classifyInvocation(serverTiming: string | null): PerformanceSample['cla
   return 'unknown'
 }
 
-async function waitForFirstApiResponse(page: Page): Promise<Response> {
-  return page.waitForResponse((response) => {
-    const path = new URL(response.url()).pathname
-    return path.startsWith('/api/') && response.request().resourceType() !== 'document'
+async function waitForFirstApiResponse(page: Page, startedAt: number): Promise<TimedResponse> {
+  const response = await page.waitForResponse((candidate) => {
+    const path = new URL(candidate.url()).pathname
+    return path.startsWith('/api/') && candidate.request().resourceType() !== 'document'
   })
+  return { response, arrivedAtMs: elapsedSince(startedAt) }
 }
 
 test('records production startup and queue milestones', async ({ page }, testInfo) => {
   const startedAt = performance.now()
-  const firstApiResponsePromise = waitForFirstApiResponse(page)
+  const firstApiResponsePromise = waitForFirstApiResponse(page, startedAt)
 
   const documentResponse = await page.goto('/', { waitUntil: 'domcontentloaded' })
   expect(documentResponse, 'Initial document response').not.toBeNull()
@@ -55,9 +61,8 @@ test('records production startup and queue milestones', async ({ page }, testInf
   await expect(page.locator('[data-app-shell-ready="true"]')).toBeVisible({ timeout: 60_000 })
   const shellReadyMs = elapsedSince(startedAt)
 
-  const firstApiResponse = await firstApiResponsePromise
-  await firstApiResponse.finished()
-  const firstApiResponseMs = elapsedSince(startedAt)
+  const { response: firstApiResponse, arrivedAtMs: firstApiResponseMs } =
+    await firstApiResponsePromise
   const firstApiHeaders = await firstApiResponse.allHeaders()
   const serverTiming = firstApiHeaders['server-timing'] ?? null
 
@@ -87,5 +92,6 @@ test('records production startup and queue milestones', async ({ page }, testInf
   })
 
   expect(sample.documentResponseMs).toBeGreaterThanOrEqual(0)
+  expect(sample.firstApiResponseMs).toBeGreaterThanOrEqual(0)
   expect(sample.firstApiStatus).toBeLessThan(400)
 })
