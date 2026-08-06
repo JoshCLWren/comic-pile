@@ -61,10 +61,10 @@ it('keeps canonical credential endpoints exempt from csrf bootstrap', async () =
   expect(apiMock.get).not.toHaveBeenCalled()
 })
 
-it('matches absolute canonical credential URLs by pathname', async () => {
+it('matches absolute canonical client URLs by pathname', async () => {
   const login = await requestInterceptor({
     method: 'post',
-    url: 'https://comic-pile.example/api/v1/auth/login?returnTo=/queue',
+    url: 'https://comic-pile.example/v1/auth/login?returnTo=/queue',
     headers: {},
   })
 
