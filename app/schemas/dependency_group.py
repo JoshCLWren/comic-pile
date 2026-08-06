@@ -38,6 +38,25 @@ class DependencyGroupMemberCreate(BaseModel):
         return self
 
 
+class DependencyGroupIssueRangeCreate(BaseModel):
+    """Add a bounded inclusive issue-position range from one owned thread."""
+
+    thread_id: int = Field(gt=0)
+    start_position: int = Field(gt=0)
+    end_position: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def validate_position_order(self) -> DependencyGroupIssueRangeCreate:
+        """Require a forward inclusive range.
+
+        Returns:
+            The validated range request.
+        """
+        if self.end_position < self.start_position:
+            raise ValueError("end_position must be greater than or equal to start_position")
+        return self
+
+
 class DependencyGroupMemberResponse(BaseModel):
     """One persisted group membership."""
 
@@ -46,6 +65,16 @@ class DependencyGroupMemberResponse(BaseModel):
     id: int
     thread_id: int | None
     issue_id: int | None
+
+
+class DependencyGroupIssueRangeResponse(BaseModel):
+    """Summary of an idempotent issue-range membership operation."""
+
+    thread_id: int
+    start_position: int
+    end_position: int
+    added_issue_ids: list[int]
+    already_present_issue_ids: list[int]
 
 
 class DependencyGroupResponse(BaseModel):

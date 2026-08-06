@@ -382,6 +382,73 @@
         "title": "DependencyGroupCreate",
         "type": "object"
       },
+      "DependencyGroupIssueRangeCreate": {
+        "description": "Add a bounded inclusive issue-position range from one owned thread.",
+        "properties": {
+          "end_position": {
+            "exclusiveMinimum": 0.0,
+            "title": "End Position",
+            "type": "integer"
+          },
+          "start_position": {
+            "exclusiveMinimum": 0.0,
+            "title": "Start Position",
+            "type": "integer"
+          },
+          "thread_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Thread Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "thread_id",
+          "start_position",
+          "end_position"
+        ],
+        "title": "DependencyGroupIssueRangeCreate",
+        "type": "object"
+      },
+      "DependencyGroupIssueRangeResponse": {
+        "description": "Summary of an idempotent issue-range membership operation.",
+        "properties": {
+          "added_issue_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Added Issue Ids",
+            "type": "array"
+          },
+          "already_present_issue_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Already Present Issue Ids",
+            "type": "array"
+          },
+          "end_position": {
+            "title": "End Position",
+            "type": "integer"
+          },
+          "start_position": {
+            "title": "Start Position",
+            "type": "integer"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "thread_id",
+          "start_position",
+          "end_position",
+          "added_issue_ids",
+          "already_present_issue_ids"
+        ],
+        "title": "DependencyGroupIssueRangeResponse",
+        "type": "object"
+      },
       "DependencyGroupMemberCreate": {
         "description": "Add exactly one thread or issue to a group.",
         "properties": {
@@ -5788,7 +5855,7 @@
     },
     "/api/v1/reading-order-groups/": {
       "get": {
-        "description": "List the current user's groups and memberships.\n\nArgs:\n    current_user: The authenticated owner of the requested groups.\n    db: The asynchronous database session.\n\nReturns:\n    The user's groups with eagerly loaded memberships.",
+        "description": "List the current user's groups and memberships.",
         "operationId": "list_groups_api_v1_reading_order_groups__get",
         "responses": {
           "200": {
@@ -5819,7 +5886,7 @@
         ]
       },
       "post": {
-        "description": "Create a user-owned named group.\n\nArgs:\n    payload: The validated group creation request.\n    current_user: The authenticated group owner.\n    db: The asynchronous database session.\n\nReturns:\n    The newly created group with memberships loaded.",
+        "description": "Create a user-owned named group.",
         "operationId": "create_group_api_v1_reading_order_groups__post",
         "requestBody": {
           "content": {
@@ -5868,7 +5935,7 @@
     },
     "/api/v1/reading-order-groups/threads/{thread_id}/groups": {
       "get": {
-        "description": "List groups containing an owned thread or any of its owned issues.\n\nArgs:\n    thread_id: The owned thread identifier used for the lookup.\n    current_user: The authenticated thread and group owner.\n    db: The asynchronous database session.\n\nReturns:\n    Distinct group summaries ordered by name and identifier.",
+        "description": "List groups containing an owned thread or any of its owned issues.",
         "operationId": "list_thread_groups_api_v1_reading_order_groups_threads__thread_id__groups_get",
         "parameters": [
           {
@@ -5922,7 +5989,7 @@
     },
     "/api/v1/reading-order-groups/{group_id}": {
       "delete": {
-        "description": "Delete one owned group and its memberships.\n\nArgs:\n    group_id: The dependency group identifier.\n    current_user: The authenticated group owner.\n    db: The asynchronous database session.\n\nReturns:\n    An empty HTTP 204 response.",
+        "description": "Delete one owned group and its memberships.",
         "operationId": "delete_group_api_v1_reading_order_groups__group_id__delete",
         "parameters": [
           {
@@ -5963,7 +6030,7 @@
         ]
       },
       "get": {
-        "description": "Return one owned group.\n\nArgs:\n    group_id: The dependency group identifier.\n    current_user: The authenticated group owner.\n    db: The asynchronous database session.\n\nReturns:\n    The requested owned group with memberships loaded.",
+        "description": "Return one owned group.",
         "operationId": "get_group_api_v1_reading_order_groups__group_id__get",
         "parameters": [
           {
@@ -6011,7 +6078,7 @@
         ]
       },
       "patch": {
-        "description": "Rename one owned group.\n\nArgs:\n    group_id: The dependency group identifier.\n    payload: The validated group rename request.\n    current_user: The authenticated group owner.\n    db: The asynchronous database session.\n\nReturns:\n    The renamed group with memberships loaded.",
+        "description": "Rename one owned group.",
         "operationId": "update_group_api_v1_reading_order_groups__group_id__patch",
         "parameters": [
           {
@@ -6069,9 +6136,69 @@
         ]
       }
     },
+    "/api/v1/reading-order-groups/{group_id}/issue-ranges": {
+      "post": {
+        "description": "Add one inclusive issue-position range from an owned thread to a group.",
+        "operationId": "add_issue_range_api_v1_reading_order_groups__group_id__issue_ranges_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "title": "Group Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DependencyGroupIssueRangeCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyGroupIssueRangeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add Issue Range",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "reading-order-groups"
+        ]
+      }
+    },
     "/api/v1/reading-order-groups/{group_id}/members": {
       "post": {
-        "description": "Add one owned thread or issue to an owned group.\n\nArgs:\n    group_id: The dependency group identifier.\n    payload: The validated thread or issue membership request.\n    current_user: The authenticated owner of the group and target.\n    db: The asynchronous database session.\n\nReturns:\n    The newly persisted group membership.",
+        "description": "Add one owned thread or issue to an owned group.",
         "operationId": "add_member_api_v1_reading_order_groups__group_id__members_post",
         "parameters": [
           {
@@ -6131,7 +6258,7 @@
     },
     "/api/v1/reading-order-groups/{group_id}/members/{member_id}": {
       "delete": {
-        "description": "Remove one membership from an owned group.\n\nArgs:\n    group_id: The dependency group identifier.\n    member_id: The membership identifier to remove.\n    current_user: The authenticated group owner.\n    db: The asynchronous database session.\n\nReturns:\n    An empty HTTP 204 response.",
+        "description": "Remove one membership from an owned group.",
         "operationId": "remove_member_api_v1_reading_order_groups__group_id__members__member_id__delete",
         "parameters": [
           {

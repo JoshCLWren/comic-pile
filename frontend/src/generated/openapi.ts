@@ -1845,27 +1845,12 @@ export interface paths {
         /**
          * List Groups
          * @description List the current user's groups and memberships.
-         *
-         *     Args:
-         *         current_user: The authenticated owner of the requested groups.
-         *         db: The asynchronous database session.
-         *
-         *     Returns:
-         *         The user's groups with eagerly loaded memberships.
          */
         get: operations["list_groups_api_v1_reading_order_groups__get"];
         put?: never;
         /**
          * Create Group
          * @description Create a user-owned named group.
-         *
-         *     Args:
-         *         payload: The validated group creation request.
-         *         current_user: The authenticated group owner.
-         *         db: The asynchronous database session.
-         *
-         *     Returns:
-         *         The newly created group with memberships loaded.
          */
         post: operations["create_group_api_v1_reading_order_groups__post"];
         delete?: never;
@@ -1884,14 +1869,6 @@ export interface paths {
         /**
          * List Thread Groups
          * @description List groups containing an owned thread or any of its owned issues.
-         *
-         *     Args:
-         *         thread_id: The owned thread identifier used for the lookup.
-         *         current_user: The authenticated thread and group owner.
-         *         db: The asynchronous database session.
-         *
-         *     Returns:
-         *         Distinct group summaries ordered by name and identifier.
          */
         get: operations["list_thread_groups_api_v1_reading_order_groups_threads__thread_id__groups_get"];
         put?: never;
@@ -1912,14 +1889,6 @@ export interface paths {
         /**
          * Get Group
          * @description Return one owned group.
-         *
-         *     Args:
-         *         group_id: The dependency group identifier.
-         *         current_user: The authenticated group owner.
-         *         db: The asynchronous database session.
-         *
-         *     Returns:
-         *         The requested owned group with memberships loaded.
          */
         get: operations["get_group_api_v1_reading_order_groups__group_id__get"];
         put?: never;
@@ -1927,14 +1896,6 @@ export interface paths {
         /**
          * Delete Group
          * @description Delete one owned group and its memberships.
-         *
-         *     Args:
-         *         group_id: The dependency group identifier.
-         *         current_user: The authenticated group owner.
-         *         db: The asynchronous database session.
-         *
-         *     Returns:
-         *         An empty HTTP 204 response.
          */
         delete: operations["delete_group_api_v1_reading_order_groups__group_id__delete"];
         options?: never;
@@ -1942,17 +1903,28 @@ export interface paths {
         /**
          * Update Group
          * @description Rename one owned group.
-         *
-         *     Args:
-         *         group_id: The dependency group identifier.
-         *         payload: The validated group rename request.
-         *         current_user: The authenticated group owner.
-         *         db: The asynchronous database session.
-         *
-         *     Returns:
-         *         The renamed group with memberships loaded.
          */
         patch: operations["update_group_api_v1_reading_order_groups__group_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/reading-order-groups/{group_id}/issue-ranges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Issue Range
+         * @description Add one inclusive issue-position range from an owned thread to a group.
+         */
+        post: operations["add_issue_range_api_v1_reading_order_groups__group_id__issue_ranges_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/reading-order-groups/{group_id}/members": {
@@ -1967,15 +1939,6 @@ export interface paths {
         /**
          * Add Member
          * @description Add one owned thread or issue to an owned group.
-         *
-         *     Args:
-         *         group_id: The dependency group identifier.
-         *         payload: The validated thread or issue membership request.
-         *         current_user: The authenticated owner of the group and target.
-         *         db: The asynchronous database session.
-         *
-         *     Returns:
-         *         The newly persisted group membership.
          */
         post: operations["add_member_api_v1_reading_order_groups__group_id__members_post"];
         delete?: never;
@@ -1997,15 +1960,6 @@ export interface paths {
         /**
          * Remove Member
          * @description Remove one membership from an owned group.
-         *
-         *     Args:
-         *         group_id: The dependency group identifier.
-         *         member_id: The membership identifier to remove.
-         *         current_user: The authenticated group owner.
-         *         db: The asynchronous database session.
-         *
-         *     Returns:
-         *         An empty HTTP 204 response.
          */
         delete: operations["remove_member_api_v1_reading_order_groups__group_id__members__member_id__delete"];
         options?: never;
@@ -2752,6 +2706,34 @@ export interface components {
         DependencyGroupCreate: {
             /** Name */
             name: string;
+        };
+        /**
+         * DependencyGroupIssueRangeCreate
+         * @description Add a bounded inclusive issue-position range from one owned thread.
+         */
+        DependencyGroupIssueRangeCreate: {
+            /** End Position */
+            end_position: number;
+            /** Start Position */
+            start_position: number;
+            /** Thread Id */
+            thread_id: number;
+        };
+        /**
+         * DependencyGroupIssueRangeResponse
+         * @description Summary of an idempotent issue-range membership operation.
+         */
+        DependencyGroupIssueRangeResponse: {
+            /** Added Issue Ids */
+            added_issue_ids: number[];
+            /** Already Present Issue Ids */
+            already_present_issue_ids: number[];
+            /** End Position */
+            end_position: number;
+            /** Start Position */
+            start_position: number;
+            /** Thread Id */
+            thread_id: number;
         };
         /**
          * DependencyGroupMemberCreate
@@ -5788,6 +5770,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DependencyGroupResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_issue_range_api_v1_reading_order_groups__group_id__issue_ranges_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                group_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DependencyGroupIssueRangeCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DependencyGroupIssueRangeResponse"];
                 };
             };
             /** @description Validation Error */
