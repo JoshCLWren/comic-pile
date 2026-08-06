@@ -23,16 +23,16 @@ describe('ReadingOrderGroups', () => {
     expect(mockedUseDependencyGroups).toHaveBeenCalledWith(null)
   })
 
-  it('announces loading without showing stale group names', () => {
+  it('announces crossover loading without showing stale names', () => {
     mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: true, error: null })
 
     render(<ReadingOrderGroups threadId={17} />)
 
-    expect(screen.getByRole('status')).toHaveTextContent('Loading reading-order groups')
+    expect(screen.getByRole('status')).toHaveTextContent('Loading crossovers')
     expect(screen.queryByRole('list')).not.toBeInTheDocument()
   })
 
-  it('renders an accessible error state', () => {
+  it('renders an accessible crossover error state', () => {
     mockedUseDependencyGroups.mockReturnValue({
       groups: [],
       isLoading: false,
@@ -41,10 +41,10 @@ describe('ReadingOrderGroups', () => {
 
     render(<ReadingOrderGroups threadId={17} />)
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Unable to load reading-order groups.')
+    expect(screen.getByRole('alert')).toHaveTextContent('Unable to load crossovers.')
   })
 
-  it('does not add an empty section for threads without groups', () => {
+  it('does not add an empty section for threads without crossovers', () => {
     mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: false, error: null })
 
     const { container } = render(<ReadingOrderGroups threadId={17} />)
@@ -52,11 +52,11 @@ describe('ReadingOrderGroups', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it('renders every owned group name and preserves long-name wrapping', () => {
+  it('renders every owned crossover name and preserves long-name wrapping', () => {
     mockedUseDependencyGroups.mockReturnValue({
       groups: [
         { id: 1, name: 'Bwa Haha-era Justice League' },
-        { id: 2, name: 'A deliberately long reading-order group name for narrow mobile screens' },
+        { id: 2, name: 'A deliberately long crossover name for narrow mobile screens' },
       ],
       isLoading: false,
       error: null,
@@ -64,11 +64,11 @@ describe('ReadingOrderGroups', () => {
 
     render(<ReadingOrderGroups threadId={17} />)
 
-    expect(screen.getByRole('heading', { name: 'Reading-order groups' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Crossovers' })).toBeInTheDocument()
     expect(screen.getByRole('list')).toBeInTheDocument()
     expect(screen.getByText('Bwa Haha-era Justice League')).toBeInTheDocument()
     expect(
-      screen.getByText('A deliberately long reading-order group name for narrow mobile screens'),
+      screen.getByText('A deliberately long crossover name for narrow mobile screens'),
     ).toHaveClass('break-words')
   })
 })
