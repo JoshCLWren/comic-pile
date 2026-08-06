@@ -39,6 +39,10 @@ jobs:
         with:
           python-version: '3.14'
 
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
       - name: Restore bounded performance history
         uses: actions/cache/restore@v4
         with:
@@ -59,6 +63,25 @@ jobs:
           printf '%s' "$STORAGE_STATE_JSON" > "$storage_state_path"
           chmod 600 "$storage_state_path"
           echo "PROD_PROFILE_STORAGE_STATE=$storage_state_path" >> "$GITHUB_ENV"
+
+      - name: Install backend dependencies
+        run: uv sync --frozen
+
+      - name: Remove stale production E2E records
+        env:
+          DATABASE_URL: ${{ secrets.PROD_E2E_DATABASE_URL }}
+          PROD_E2E_ACCOUNT_EMAIL: ${{ secrets.PROD_E2E_ACCOUNT_EMAIL }}
+        run: |
+          if [ -z "$DATABASE_URL" ] || [ -z "$PROD_E2E_ACCOUNT_EMAIL" ]; then
+            echo 'Missing dedicated production E2E cleanup secrets.' >&2
+            exit 1
+          fi
+          uv run python scripts/cleanup_production_e2e_data.py --max-age-hours 24 \
+            | tee production-e2e-cleanup.json
+          echo '### Production E2E cleanup' >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat production-e2e-cleanup.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Install frontend dependencies
         working-directory: frontend
@@ -93,6 +116,7 @@ jobs:
         with:
           name: production-performance-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
+            production-e2e-cleanup.json
             test-results/production-performance.json
             test-results/production-performance-history.jsonl
             test-results/production-performance-summary.md
