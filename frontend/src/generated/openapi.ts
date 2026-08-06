@@ -360,17 +360,17 @@ export interface paths {
         put?: never;
         /**
          * Create Bug Report
-         * @description Create a bug report issue on GitHub.
+         * @description Create a bug report or feature request issue on GitHub.
          *
          *     Args:
-         *         body: Bug report with title, description, and optional diagnostics
-         *         current_user: The authenticated user
+         *         body: Report type, title, description, and optional diagnostics.
+         *         current_user: The authenticated user.
          *
          *     Returns:
-         *         Created bug report issue URL
+         *         Created GitHub issue URL.
          *
          *     Raises:
-         *         HTTPException: If validation fails or GitHub integration not configured
+         *         HTTPException: If validation fails or GitHub integration is unavailable.
          */
         post: operations["create_bug_report_api_bug_reports__post"];
         delete?: never;
@@ -2670,12 +2670,18 @@ export interface components {
         };
         /**
          * BugReportCreate
-         * @description Request schema for creating a bug report.
+         * @description Request schema for creating a bug report or feature request.
          */
         BugReportCreate: {
             /** Description */
             description: string;
             diagnostics?: components["schemas"]["BugReportDiagnostics"] | null;
+            /**
+             * Report Type
+             * @default bug
+             * @enum {string}
+             */
+            report_type: "bug" | "feature";
             /** Title */
             title: string;
         };
@@ -2699,7 +2705,7 @@ export interface components {
         };
         /**
          * BugReportResponse
-         * @description Response after successfully creating a bug report issue.
+         * @description Response after successfully creating a GitHub issue.
          */
         BugReportResponse: {
             /** Issue Url */

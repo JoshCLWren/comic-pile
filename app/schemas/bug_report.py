@@ -1,6 +1,10 @@
 """Bug report request/response schemas."""
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
+
+ReportType = Literal["bug", "feature"]
 
 
 class DiagnosticScreen(BaseModel):
@@ -59,14 +63,15 @@ class BugReportDiagnostics(BaseModel):
 
 
 class BugReportCreate(BaseModel):
-    """Request schema for creating a bug report."""
+    """Request schema for creating a bug report or feature request."""
 
+    report_type: ReportType = "bug"
     title: str = Field(..., min_length=1, max_length=200)
     description: str = Field(..., min_length=1, max_length=2000)
     diagnostics: BugReportDiagnostics | None = None
 
 
 class BugReportResponse(BaseModel):
-    """Response after successfully creating a bug report issue."""
+    """Response after successfully creating a GitHub issue."""
 
     issue_url: str

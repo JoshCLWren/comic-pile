@@ -5,6 +5,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from './query/queryClient'
 import Navigation from './components/Navigation'
 import BugReportButton from './components/BugReportButton'
+import type { ReportType } from './components/BugReportModal'
 import ResumeRecovery from './components/ResumeRecovery'
 import api, { clearAccessToken, setAccessToken, getAccessToken } from './services/api'
 import type { AuthUser } from './types'
@@ -22,6 +23,7 @@ declare global {
 }
 
 type BugReportSubmit = (
+  reportType: ReportType,
   title: string,
   description: string,
   diagnosticData: DiagnosticData | null,

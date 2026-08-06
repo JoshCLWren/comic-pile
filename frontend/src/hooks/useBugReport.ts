@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { bugReportsApi } from '../services/api'
 import { getApiErrorDetail } from '../utils/apiError'
+import type { ReportType } from '../components/BugReportModal'
 import type { DiagnosticData } from './useDiagnostics'
 
 export function useBugReport() {
@@ -9,6 +10,7 @@ export function useBugReport() {
   const [issueUrl, setIssueUrl] = useState<string | null>(null)
 
   const submit = useCallback(async (
+    reportType: ReportType,
     title: string,
     description: string,
     diagnosticData: DiagnosticData | null,
@@ -17,14 +19,21 @@ export function useBugReport() {
     setError(null)
     setIssueUrl(null)
     try {
-      const response = await bugReportsApi.create({
+      const createReport = bugReportsApi.create as (data: {
+        report_type: ReportType
+        title: string
+        description: string
+        diagnostics?: DiagnosticData
+      }) => Promise<{ issue_url: string }>
+      const response = await createReport({
+        report_type: reportType,
         title,
         description,
         ...(diagnosticData ? { diagnostics: diagnosticData } : {}),
       })
       setIssueUrl(response.issue_url)
     } catch (err: unknown) {
-      setError(getApiErrorDetail(err) ?? 'Failed to submit bug report')
+      setError(getApiErrorDetail(err) ?? 'Failed to submit report')
       throw err
     } finally {
       setIsSubmitting(false)

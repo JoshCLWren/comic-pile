@@ -35,7 +35,7 @@ describe('useBugReport', () => {
     const { result } = renderHook(() => useBugReport())
 
     act(() => {
-      void result.current.submit('Test title', 'Test description', null)
+      void result.current.submit('bug', 'Test title', 'Test description', null)
     })
 
     expect(result.current.isSubmitting).toBe(true)
@@ -48,7 +48,7 @@ describe('useBugReport', () => {
     const { result } = renderHook(() => useBugReport())
 
     await act(async () => {
-      await result.current.submit('Test title', 'Test description', null)
+      await result.current.submit('bug', 'Test title', 'Test description', null)
     })
 
     await waitFor(() => {
@@ -67,7 +67,7 @@ describe('useBugReport', () => {
     let thrownError: Error | null = null
     await act(async () => {
       try {
-        await result.current.submit('Test title', 'Test description', null)
+        await result.current.submit('bug', 'Test title', 'Test description', null)
       } catch (err) {
         thrownError = err as Error
       }
@@ -88,14 +88,14 @@ describe('useBugReport', () => {
     const { result } = renderHook(() => useBugReport())
 
     await act(async () => {
-      await expect(result.current.submit('Test title', 'Test description', null)).rejects.toBe(error)
+      await expect(result.current.submit('bug', 'Test title', 'Test description', null)).rejects.toBe(error)
     })
 
-    expect(result.current.error).toBe('Failed to submit bug report')
+    expect(result.current.error).toBe('Failed to submit report')
     expect(result.current.isSubmitting).toBe(false)
   })
 
-  it('should include diagnostics in payload when provided', async () => {
+  it('should include diagnostics and report type in payload when provided', async () => {
     const mockResponse = { issue_url: 'https://github.com/test/issues/1' }
     bugReportsApiMock.create.mockResolvedValue(mockResponse)
 
@@ -113,10 +113,11 @@ describe('useBugReport', () => {
     }
 
     await act(async () => {
-      await result.current.submit('Test title', 'Test description', diagnosticData)
+      await result.current.submit('feature', 'Test title', 'Test description', diagnosticData)
     })
 
     expect(bugReportsApiMock.create).toHaveBeenCalledWith({
+      report_type: 'feature',
       title: 'Test title',
       description: 'Test description',
       diagnostics: diagnosticData,
@@ -130,10 +131,11 @@ describe('useBugReport', () => {
     const { result } = renderHook(() => useBugReport())
 
     await act(async () => {
-      await result.current.submit('Test title', 'Test description', null)
+      await result.current.submit('bug', 'Test title', 'Test description', null)
     })
 
     expect(bugReportsApiMock.create).toHaveBeenCalledWith({
+      report_type: 'bug',
       title: 'Test title',
       description: 'Test description',
     })
@@ -149,7 +151,7 @@ describe('useBugReport', () => {
 
     await act(async () => {
       try {
-        await result.current.submit('Test title', 'Test description', null)
+        await result.current.submit('bug', 'Test title', 'Test description', null)
       } catch {
         // Expected error
       }
