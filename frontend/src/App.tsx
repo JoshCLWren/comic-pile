@@ -194,7 +194,7 @@ function PublicRoute({ children }: { children: ReactNode }) {
 
 function AuthenticatedLayout({ children, onBugReportSubmit }: { children: ReactNode; onBugReportSubmit: BugReportSubmit }) {
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen" data-app-shell-ready>
       <main className="flex-1 container mx-auto px-3 md:px-4 py-4 md:py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-28">{children}</main>
       <Navigation onBugReportSubmit={onBugReportSubmit} />
     </div>
@@ -203,7 +203,7 @@ function AuthenticatedLayout({ children, onBugReportSubmit }: { children: ReactN
 
 function PublicLayout({ children, onBugReportSubmit }: { children: ReactNode; onBugReportSubmit: BugReportSubmit }) {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen" data-app-shell-ready>
       <main className="container mx-auto px-3 md:px-4 py-4 md:py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-28">{children}</main>
       <Navigation onBugReportSubmit={onBugReportSubmit} />
     </div>
