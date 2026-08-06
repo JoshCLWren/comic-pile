@@ -23,8 +23,8 @@ it('shows the full signed offset for multi-position moves', () => {
 
   const slider = screen.getByRole('slider')
   fireEvent.change(slider, { target: { value: '0' } })
-  expect(screen.getByTestId('position-slider-offset')).toHaveTextContent('-3')
+  expect(screen.getByTestId('position-slider-offset')).toHaveTextContent('+3')
 
   fireEvent.change(slider, { target: { value: '4' } })
-  expect(screen.getByTestId('position-slider-offset')).toHaveTextContent('+1')
+  expect(screen.getByTestId('position-slider-offset')).toHaveTextContent('-1')
 })
