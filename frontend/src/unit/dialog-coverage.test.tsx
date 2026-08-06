@@ -26,7 +26,10 @@ describe('bug report and issue correction dialogs', () => {
     const user = userEvent.setup(); const onSubmit = vi.fn().mockResolvedValue(undefined)
     render(<BugReportModal isOpen onClose={vi.fn()} onSubmit={onSubmit} diagnosticData={null} />)
 
+    expect(screen.getByRole('radio', { name: '🐛 Bug report' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: '✨ Feature request' })).not.toBeChecked()
     await user.click(screen.getByRole('radio', { name: '✨ Feature request' }))
+    expect(screen.getByRole('radio', { name: '✨ Feature request' })).toBeChecked()
     expect(screen.getByRole('heading', { name: 'Request a Feature' })).toBeInTheDocument()
     expect(screen.getByPlaceholderText('Briefly describe the feature')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('What would you like ComicPile to do, and how would it help?')).toBeInTheDocument()
