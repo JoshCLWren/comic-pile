@@ -27,6 +27,13 @@ _DATABASE_SCHEMES = {
     "rediss",
 }
 _TLS_REQUIRED_MODES = {"require", "verify-ca", "verify-full"}
+_EMPTY_CONNECTION_METADATA: dict[str, str | int | bool | None] = {
+    "scheme": None,
+    "host": None,
+    "port": None,
+    "database": None,
+    "ssl_required": False,
+}
 
 
 def safe_connection_metadata(connection_url: str) -> dict[str, str | int | bool | None]:
@@ -37,10 +44,17 @@ def safe_connection_metadata(connection_url: str) -> dict[str, str | int | bool 
 
     Returns:
         Metadata containing only the scheme, host, port, validated database name,
-        and whether the connection requires TLS.
+        and whether the connection requires TLS. Malformed URLs return empty metadata
+        so diagnostic logging cannot break application startup.
     """
-    parsed = urlsplit(connection_url)
-    scheme = parsed.scheme.lower()
+    try:
+        parsed = urlsplit(connection_url)
+        scheme = parsed.scheme.lower()
+        host = parsed.hostname
+        port = parsed.port
+    except ValueError:
+        return _EMPTY_CONNECTION_METADATA.copy()
+
     database = (
         unquote(parsed.path.lstrip("/")) or None
         if scheme in _DATABASE_SCHEMES
@@ -51,8 +65,8 @@ def safe_connection_metadata(connection_url: str) -> dict[str, str | int | bool 
     ssl_required = scheme == "rediss" or ssl_value in _TLS_REQUIRED_MODES
     return {
         "scheme": parsed.scheme or None,
-        "host": parsed.hostname,
-        "port": parsed.port,
+        "host": host,
+        "port": port,
         "database": database,
         "ssl_required": ssl_required,
     }
