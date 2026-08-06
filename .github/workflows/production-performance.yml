@@ -1,0 +1,101 @@
+name: Production Performance
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-performance
+  cancel-in-progress: false
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PROD_BASE_URL: https://comic-pile.vercel.app
+      PROD_PERFORMANCE_OUTPUT: ../test-results/production-performance.json
+      PROD_DEPLOYMENT_ID: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Restore bounded performance history
+        uses: actions/cache/restore@v4
+        with:
+          path: test-results/production-performance-history.jsonl
+          key: production-performance-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            production-performance-
+
+      - name: Prepare authenticated storage state
+        env:
+          STORAGE_STATE_JSON: ${{ secrets.PROD_E2E_STORAGE_STATE_JSON }}
+        run: |
+          if [ -z "$STORAGE_STATE_JSON" ]; then
+            echo 'Missing PROD_E2E_STORAGE_STATE_JSON repository secret.' >&2
+            exit 1
+          fi
+          storage_state_path="$RUNNER_TEMP/production-storage-state.json"
+          printf '%s' "$STORAGE_STATE_JSON" > "$storage_state_path"
+          chmod 600 "$storage_state_path"
+          echo "PROD_PROFILE_STORAGE_STATE=$storage_state_path" >> "$GITHUB_ENV"
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Measure production milestones
+        working-directory: frontend
+        run: pnpm exec playwright test --config=playwright.prod-performance.config.ts
+
+      - name: Append history and detect regressions
+        run: |
+          python scripts/update_production_performance_history.py \
+            --sample test-results/production-performance.json \
+            --history test-results/production-performance-history.jsonl \
+            --summary test-results/production-performance-summary.md
+          cat test-results/production-performance-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save bounded performance history
+        if: success()
+        uses: actions/cache/save@v4
+        with:
+          path: test-results/production-performance-history.jsonl
+          key: production-performance-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Upload measurement evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-performance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            test-results/production-performance.json
+            test-results/production-performance-history.jsonl
+            test-results/production-performance-summary.md
+            playwright-report-prod-performance
+          if-no-files-found: warn
+          retention-days: 30
