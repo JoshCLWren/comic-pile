@@ -211,22 +211,14 @@ async def warmup(
     return await dependency_health(None, db)
 
 
-@router.get("/health", include_in_schema=False, response_model=None)
-async def legacy_health(
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> dict[str, str] | JSONResponse:
-    """Preserve the legacy database-only health contract without operational details.
+@router.get("/health", include_in_schema=False)
+async def legacy_health() -> dict[str, str]:
+    """Preserve the public legacy health URL as dependency-free liveness.
 
-    Args:
-        db: Async database session.
+    Database and cache checks live only on the explicit bounded operational
+    endpoints so an uptime probe cannot wake Neon or wait on Redis.
 
     Returns:
-        Stable database connectivity status without timings or cache metadata.
+        Stable liveness response.
     """
-    database_probe = await _timed_probe(lambda: _database_probe(db))
-    if database_probe.status == "healthy":
-        return {"status": "healthy", "database": "connected"}
-    return JSONResponse(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        content={"status": "unhealthy", "database": "disconnected"},
-    )
+    return {"status": "alive"}

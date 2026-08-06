@@ -1,4 +1,4 @@
-"""Application startup lifecycle (database initialization)."""
+"""Application startup lifecycle for local database initialization."""
 
 import asyncio
 import logging
@@ -12,11 +12,11 @@ logger = logging.getLogger(__name__)
 
 
 async def init_database(environment: str) -> None:
-    """Connect to the database with retries and create tables in non-production envs.
+    """Initialize database tables only for non-production environments.
 
-    Attempts to connect to the database up to three times with a fixed delay.
-    In non-production environments, creates tables via SQLAlchemy metadata.
-    In production, table creation is skipped (migrations are required).
+    Production migrations run in the deployment workflow. A production function
+    must not acquire a Neon connection merely to prove connectivity or inspect
+    schema state during application startup.
 
     Args:
         environment: The current application environment.
@@ -24,6 +24,12 @@ async def init_database(environment: str) -> None:
     Raises:
         RuntimeError: If table creation fails in a non-production environment.
     """
+    if environment == "production":
+        logger.info(
+            "Production database startup is lazy; deployment migrations own schema setup"
+        )
+        return
+
     max_retries = 3
     retry_delay = 1
 
@@ -35,26 +41,27 @@ async def init_database(environment: str) -> None:
                 database_ready = True
                 logger.info("Database connection established successfully")
                 break
-        except sqlalchemy_exc.DBAPIError as e:
-            # Catch database connection and execution errors (OperationalError, InterfaceError, etc.)
-            logger.warning(f"Database connection attempt {attempt}/{max_retries} failed: {e}")
+        except sqlalchemy_exc.DBAPIError as error:
+            logger.warning(
+                "Database connection attempt %d/%d failed (%s)",
+                attempt,
+                max_retries,
+                type(error).__name__,
+            )
             if attempt < max_retries:
-                logger.info(f"Retrying in {retry_delay} seconds...")
+                logger.info("Retrying database connection in %d second(s)", retry_delay)
                 await asyncio.sleep(retry_delay)
             else:
                 logger.error("All database connection attempts failed")
 
-    if database_ready:
-        if environment == "production":
-            logger.info("Production mode: Skipping table creation (migrations required)")
-        else:
-            try:
-                async with async_engine.begin() as conn:
-                    await conn.run_sync(Base.metadata.create_all)
-                logger.info("Database tables created successfully")
-            except sqlalchemy_exc.DBAPIError as e:
-                # Fail fast instead of exiting the process from inside the app factory.
-                logger.error(f"Failed to create database tables: {e}")
-                raise RuntimeError(f"Failed to create database tables: {e}") from e
-    else:
-        logger.warning("Skipping database initialization due to connection failure")
+    if not database_ready:
+        logger.warning("Skipping local database initialization due to connection failure")
+        return
+
+    try:
+        async with async_engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
+        logger.info("Database tables created successfully")
+    except sqlalchemy_exc.DBAPIError as error:
+        logger.error("Failed to create database tables (%s)", type(error).__name__)
+        raise RuntimeError("Failed to create database tables") from error
