@@ -142,4 +142,19 @@ describe('CrossoversPage issue ranges', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Range unavailable')
     await waitFor(() => expect(screen.getByRole('button', { name: 'Add range' })).toBeEnabled())
   })
+
+  it('clears expanded range state when deleting the expanded crossover', async () => {
+    api.delete.mockResolvedValue(undefined)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    render(<CrossoversPage />)
+    await screen.findByText('Annihilation')
+    openRangeForm()
+    fillRange('22', '3', '5')
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+
+    await waitFor(() => expect(api.delete).toHaveBeenCalledWith(7))
+    expect(screen.queryByText('Annihilation')).not.toBeInTheDocument()
+    expect(screen.queryByRole('form', { name: 'Add issue range to Annihilation' })).not.toBeInTheDocument()
+  })
 })
