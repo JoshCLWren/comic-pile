@@ -284,7 +284,9 @@ jobs:
               const pr = context.payload.pull_request;
               const number = pr.number;
               const current = await getCurrentLabelNames(number);
-              const isFactory = pr.head.ref.startsWith('factory/') || current.has('factory');
+              const sameRepository = pr.head.repo?.full_name === context.payload.repository.full_name;
+              const isFactory = (sameRepository && pr.head.ref.startsWith('factory/'))
+                || current.has('factory');
               if (!isFactory) {
                 return;
               }
