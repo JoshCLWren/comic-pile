@@ -1,10 +1,11 @@
-import { lazy, Suspense, createContext, useContext, useState, useEffect } from 'react'
+import { lazy, Suspense, createContext, useContext, useState, useEffect, useCallback } from 'react'
 import type { ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from './query/queryClient'
 import Navigation from './components/Navigation'
 import BugReportButton from './components/BugReportButton'
+import ResumeRecovery from './components/ResumeRecovery'
 import api, { clearAccessToken, setAccessToken, getAccessToken } from './services/api'
 import type { AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
@@ -41,6 +42,7 @@ export interface AuthContextValue {
   user: AuthUser | null
   login: (accessToken: string) => Promise<void>
   logout: () => void
+  revalidateSession: (timeout?: number) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -58,6 +60,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [user, setUser] = useState<AuthUser | null>(null)
+
+  const revalidateSession = useCallback(async (timeout?: number) => {
+    try {
+      const response = await api.get<AuthUser>('/v1/auth/me', {
+        timeout,
+        skipAuthRedirect: false,
+      })
+      setUser(response)
+      setIsAuthenticated(true)
+    } catch (error) {
+      clearAccessToken()
+      setIsAuthenticated(false)
+      setUser(null)
+      throw error
+    }
+  }, [])
 
   useEffect(() => {
     let isMounted = true
@@ -135,7 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const value = { isAuthenticated, isLoading, user, login, logout }
+  const value = { isAuthenticated, isLoading, user, login, logout, revalidateSession }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
@@ -171,50 +189,26 @@ function PublicRoute({ children }: { children: ReactNode }) {
   return children
 }
 
-function AuthenticatedLayout({
-  children,
-  onBugReportSubmit,
-}: {
-  children: ReactNode
-  onBugReportSubmit: BugReportSubmit
-}) {
+function AuthenticatedLayout({ children, onBugReportSubmit }: { children: ReactNode; onBugReportSubmit: BugReportSubmit }) {
   return (
     <div className="flex min-h-screen">
-      <main className="flex-1 container mx-auto px-3 md:px-4 py-4 md:py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-28">
-        {children}
-      </main>
+      <main className="flex-1 container mx-auto px-3 md:px-4 py-4 md:py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-28">{children}</main>
       <Navigation onBugReportSubmit={onBugReportSubmit} />
     </div>
   )
 }
 
-function PublicLayout({
-  children,
-  onBugReportSubmit,
-}: {
-  children: ReactNode
-  onBugReportSubmit: BugReportSubmit
-}) {
+function PublicLayout({ children, onBugReportSubmit }: { children: ReactNode; onBugReportSubmit: BugReportSubmit }) {
   return (
     <div className="min-h-screen">
-      <main className="container mx-auto px-3 md:px-4 py-4 md:py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-28">
-        {children}
-      </main>
+      <main className="container mx-auto px-3 md:px-4 py-4 md:py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-28">{children}</main>
       <Navigation onBugReportSubmit={onBugReportSubmit} />
     </div>
   )
 }
 
-function BugReportConnected({
-  onSubmit,
-}: {
-  onSubmit: BugReportSubmit
-}) {
-  return (
-    <div className="hidden md:block">
-      <BugReportButton onSubmit={onSubmit} />
-    </div>
-  )
+function BugReportConnected({ onSubmit }: { onSubmit: BugReportSubmit }) {
+  return <div className="hidden md:block"><BugReportButton onSubmit={onSubmit} /></div>
 }
 
 function AppRoutes() {
@@ -223,102 +217,26 @@ function AppRoutes() {
   return (
     <Suspense fallback={<div className="text-center text-stone-500">Loading page...</div>}>
       <Routes>
-        <Route
-          path="/login"
-          element={
-            <PublicRoute>
-              <PublicLayout onBugReportSubmit={submit}>
-                <LoginPage />
-              </PublicLayout>
-            </PublicRoute>
-          }
-        />
-        <Route
-          path="/register"
-          element={
-            <PublicRoute>
-              <PublicLayout onBugReportSubmit={submit}>
-                <RegisterPage />
-              </PublicLayout>
-            </PublicRoute>
-          }
-        />
+        <Route path="/login" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><LoginPage /></PublicLayout></PublicRoute>} />
+        <Route path="/register" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><RegisterPage /></PublicLayout></PublicRoute>} />
         <Route path="/rate" element={<Navigate to="/" replace />} />
         <Route path="/analytics" element={<Navigate to="/" replace />} />
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <AuthenticatedLayout onBugReportSubmit={submit}>
-                <RollPage />
-              </AuthenticatedLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/queue"
-          element={
-            <ProtectedRoute>
-              <AuthenticatedLayout onBugReportSubmit={submit}>
-                <QueuePage />
-              </AuthenticatedLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/thread/:id"
-          element={
-            <ProtectedRoute>
-              <AuthenticatedLayout onBugReportSubmit={submit}>
-                <ThreadDetailView />
-              </AuthenticatedLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/history"
-          element={
-            <ProtectedRoute>
-              <AuthenticatedLayout onBugReportSubmit={submit}>
-                <HistoryPage />
-              </AuthenticatedLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/sessions/:id"
-          element={
-            <ProtectedRoute>
-              <AuthenticatedLayout onBugReportSubmit={submit}>
-                <SessionPage />
-              </AuthenticatedLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/help"
-          element={
-            <ProtectedRoute>
-              <AuthenticatedLayout onBugReportSubmit={submit}>
-                <HelpPage />
-              </AuthenticatedLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/glossary"
-          element={
-            <ProtectedRoute>
-              <AuthenticatedLayout onBugReportSubmit={submit}>
-                <HelpPage />
-              </AuthenticatedLayout>
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><RollPage /></AuthenticatedLayout></ProtectedRoute>} />
+        <Route path="/queue" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><QueuePage /></AuthenticatedLayout></ProtectedRoute>} />
+        <Route path="/thread/:id" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><ThreadDetailView /></AuthenticatedLayout></ProtectedRoute>} />
+        <Route path="/history" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><HistoryPage /></AuthenticatedLayout></ProtectedRoute>} />
+        <Route path="/sessions/:id" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><SessionPage /></AuthenticatedLayout></ProtectedRoute>} />
+        <Route path="/help" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><HelpPage /></AuthenticatedLayout></ProtectedRoute>} />
+        <Route path="/glossary" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><HelpPage /></AuthenticatedLayout></ProtectedRoute>} />
       </Routes>
       {isAuthenticated && <BugReportConnected onSubmit={submit} />}
     </Suspense>
   )
+}
+
+function AuthResumeBoundary({ children }: { children: ReactNode }) {
+  const { revalidateSession } = useAuth()
+  return <ResumeRecovery revalidateSession={revalidateSession}>{children}</ResumeRecovery>
 }
 
 function App() {
@@ -329,7 +247,9 @@ function App() {
           <ToastProvider>
             <CacheProvider>
               <AuthProvider>
-                <AppRoutes />
+                <AuthResumeBoundary>
+                  <AppRoutes />
+                </AuthResumeBoundary>
               </AuthProvider>
             </CacheProvider>
           </ToastProvider>

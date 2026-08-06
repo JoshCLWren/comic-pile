@@ -1,5 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import AppErrorBoundary from './components/AppErrorBoundary'
 import { SessionProvider } from './contexts/SessionContext'
 import { ToastProvider } from './contexts/ToastProvider'
 import './index.css'
@@ -13,11 +14,13 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <SessionProvider>
-      <ToastProvider>
-        <App />
-      </ToastProvider>
-    </SessionProvider>
+    <AppErrorBoundary>
+      <SessionProvider>
+        <ToastProvider>
+          <App />
+        </ToastProvider>
+      </SessionProvider>
+    </AppErrorBoundary>
   </StrictMode>,
 )
 
