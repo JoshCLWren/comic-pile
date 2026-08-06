@@ -200,16 +200,22 @@ async def warmup(
     return await dependency_health(None, db)
 
 
-@router.get("/health", response_model=DependencyHealthResponse, include_in_schema=False)
+@router.get("/health", include_in_schema=False)
 async def legacy_health(
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> DependencyHealthResponse | JSONResponse:
-    """Preserve the legacy health URL as the dependency-health boundary.
+) -> dict[str, str] | JSONResponse:
+    """Preserve the legacy database-only health contract without operational details.
 
     Args:
         db: Async database session.
 
     Returns:
-        Structured dependency health without operational authorization.
+        Stable database connectivity status without timings or cache metadata.
     """
-    return await dependency_health(None, db)
+    database_probe = await _timed_probe(lambda: _database_probe(db))
+    if database_probe.status == "healthy":
+        return {"status": "healthy", "database": "connected"}
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"status": "unhealthy", "database": "disconnected"},
+    )
