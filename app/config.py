@@ -18,10 +18,6 @@ class DatabaseSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=[".env.test", ".env", ".envrc"], extra="ignore")
 
-    # Provide a safe default for tests when no DATABASE_URL is configured.
-    # This allows test environments to boot without requiring a local DB URL
-    # to be present in the environment. The real tests should override this
-    # with TEST_DATABASE_URL or DATABASE_URL in CI environments.
     database_url: str = Field(
         default_factory=lambda: (
             os.environ.get("DATABASE_URL")
@@ -77,10 +73,7 @@ class AuthSettings(BaseSettings):
         description="Secret key for JWT token signing (required)",
         json_schema_extra={"env": "SECRET_KEY"},
     )
-    algorithm: str = Field(
-        default="HS256",
-        description="JWT signing algorithm",
-    )
+    algorithm: str = Field(default="HS256", description="JWT signing algorithm")
     access_token_expire_minutes: int = Field(
         default=30,
         description="Access token expiration time in minutes",
@@ -266,6 +259,11 @@ class RedisSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=[".env.test", ".env", ".envrc"], extra="ignore")
 
+    cache_enabled: bool = Field(
+        default=False,
+        description="Explicitly enable Redis caching; disabled by default in deployed environments",
+        json_schema_extra={"env": "CACHE_ENABLED"},
+    )
     upstash_redis_rest_url: str | None = Field(
         default=None,
         description="Upstash Redis REST URL (cloud)",
@@ -281,7 +279,6 @@ class RedisSettings(BaseSettings):
         description="Local Redis URL (e.g., redis://localhost:6379/0)",
         json_schema_extra={"env": "REDIS_URL"},
     )
-    # Cache TTL tiers (in seconds)
     cache_ttl_short: int = Field(
         default=90,
         description="Short TTL for high-frequency queries",
@@ -300,7 +297,9 @@ class RedisSettings(BaseSettings):
 
     @property
     def is_configured(self) -> bool:
-        """Return True if either Upstash or local Redis is configured."""
+        """Return whether caching is enabled and has a usable Redis configuration."""
+        if not self.cache_enabled:
+            return False
         return bool(
             (self.upstash_redis_rest_url and self.upstash_redis_rest_token) or self.redis_url
         )
@@ -311,7 +310,6 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=[".env.test", ".env", ".envrc"], extra="ignore")
 
-    # Nested settings groups
     @property
     def database(self) -> DatabaseSettings:
         """Get database settings."""
@@ -348,7 +346,6 @@ class Settings(BaseSettings):
         return get_redis_settings()
 
 
-# Cached settings instances to avoid re-reading environment on every access
 @lru_cache
 def get_database_settings() -> DatabaseSettings:
     """Get cached database settings instance."""
