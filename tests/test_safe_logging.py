@@ -1,5 +1,9 @@
 """Regression tests for credential-safe configuration logging."""
 
+import logging
+
+import pytest
+
 from app.safe_logging import (
     redact_sensitive_values,
     safe_connection_metadata,
@@ -88,3 +92,44 @@ def test_exception_metadata_does_not_serialize_secret_message() -> None:
     assert metadata == {"error_type": "RuntimeError"}
     assert password not in repr(metadata)
     assert "db.example.test" not in repr(metadata)
+
+
+def test_emitted_logs_exclude_connection_and_exception_secrets(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The actual structured log records must never serialize credential-shaped values."""
+    logger = logging.getLogger("tests.safe_logging")
+    database_password = "database-password-that-must-not-log"
+    redis_token = "redis-token-that-must-not-log"
+    database_url = (
+        "postgresql+asyncpg://comic_user:"
+        f"{database_password}@ep-example.neon.tech/comic_pile"
+        f"?sslmode=require&token={redis_token}"
+    )
+    error = RuntimeError(f"connection failed for {database_url}")
+
+    with caplog.at_level(logging.INFO, logger=logger.name):
+        logger.info(
+            "Database configured",
+            extra={"database": safe_connection_metadata(database_url)},
+        )
+        logger.error(
+            "Database connection test failed",
+            extra={"database_error": safe_exception_metadata(error)},
+        )
+
+    rendered_records = repr(caplog.records)
+    assert database_password not in caplog.text
+    assert redis_token not in caplog.text
+    assert "comic_user" not in caplog.text
+    assert database_password not in rendered_records
+    assert redis_token not in rendered_records
+    assert "comic_user" not in rendered_records
+    assert caplog.records[0].database == {
+        "scheme": "postgresql+asyncpg",
+        "host": "ep-example.neon.tech",
+        "port": None,
+        "database": "comic_pile",
+        "ssl_required": True,
+    }
+    assert caplog.records[1].database_error == {"error_type": "RuntimeError"}
