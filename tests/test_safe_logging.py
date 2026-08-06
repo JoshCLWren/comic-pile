@@ -84,6 +84,24 @@ def test_connection_metadata_does_not_mark_sslmode_prefer_as_required() -> None:
     assert metadata["ssl_required"] is False
 
 
+def test_connection_metadata_handles_malformed_port_without_raising() -> None:
+    """Diagnostic metadata must not turn malformed configuration into an import crash."""
+    secret = "password-that-must-not-log"
+
+    metadata = safe_connection_metadata(
+        f"postgresql://user:{secret}@db.example.test:not-a-port/comic_pile"
+    )
+
+    assert metadata == {
+        "scheme": None,
+        "host": None,
+        "port": None,
+        "database": None,
+        "ssl_required": False,
+    }
+    assert secret not in repr(metadata)
+
+
 def test_redact_sensitive_values_handles_nested_configuration() -> None:
     """Known secret fields must be removed from nested structured logs."""
     values = {
