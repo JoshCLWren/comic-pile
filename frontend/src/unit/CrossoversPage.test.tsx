@@ -86,6 +86,59 @@ describe('CrossoversPage', () => {
     expect(groupButton).toHaveAttribute('aria-expanded', 'true')
   })
 
+  it('shows singular and empty membership states and collapses details', async () => {
+    api.list.mockResolvedValue([
+      { ...annihilation, id: 8, name: 'Secret Wars', memberships: [{ id: 3, issue_id: 12, thread_id: null }] },
+      { ...annihilation, id: 9, name: 'House of M', memberships: [] },
+    ])
+    render(<CrossoversPage />)
+
+    const secretWars = await screen.findByRole('button', { name: /Secret Wars.*1 member/ })
+    fireEvent.click(secretWars)
+    expect(screen.getByText('1 issue memberships and 0 thread memberships.')).toBeInTheDocument()
+    fireEvent.click(secretWars)
+    expect(screen.queryByText('1 issue memberships and 0 thread memberships.')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /House of M.*0 members/ }))
+    expect(screen.getByText('This crossover has no comics yet.')).toBeInTheDocument()
+  })
+
+  it('validates rename, cancels editing, and reports rename failures', async () => {
+    api.list.mockResolvedValue([annihilation])
+    api.rename.mockRejectedValue(new Error('Rename unavailable'))
+    render(<CrossoversPage />)
+
+    await screen.findByText('Annihilation')
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }))
+    fireEvent.change(screen.getByLabelText('Rename Annihilation'), { target: { value: '   ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter a crossover name.')
+    expect(api.rename).not.toHaveBeenCalled()
+
+    fireEvent.change(screen.getByLabelText('Rename Annihilation'), { target: { value: 'Annihilation Wave' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Rename unavailable')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByLabelText('Rename Annihilation')).not.toBeInTheDocument()
+  })
+
+  it('keeps a crossover when deletion is cancelled and reports delete failures', async () => {
+    api.list.mockResolvedValue([annihilation])
+    vi.mocked(window.confirm).mockReturnValueOnce(false).mockReturnValueOnce(true)
+    api.delete.mockRejectedValue(new Error('Delete unavailable'))
+    render(<CrossoversPage />)
+
+    await screen.findByText('Annihilation')
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    expect(api.delete).not.toHaveBeenCalled()
+    expect(screen.getByText('Annihilation')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Delete unavailable')
+    expect(screen.getByText('Annihilation')).toBeInTheDocument()
+  })
+
   it('presents validation and server failures clearly', async () => {
     api.create.mockRejectedValue(new Error('Duplicate crossover name'))
     render(<CrossoversPage />)
