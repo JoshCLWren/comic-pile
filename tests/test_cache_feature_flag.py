@@ -53,13 +53,13 @@ def test_incomplete_upstash_configuration_stays_disabled() -> None:
 
 
 @pytest.mark.asyncio
-async def test_disabled_cache_reads_fall_through_without_remote_commands() -> None:
+async def test_disabled_cache_reads_fall_through_without_remote_commands(monkeypatch) -> None:
     """Decorated reads execute directly when the cache is uninitialized."""
     from app import cache as cache_module
 
     remote_client = AsyncMock()
-    cache_module.cache._initialized = False
-    cache_module.cache._client = remote_client
+    monkeypatch.setattr(cache_module.cache, "_initialized", False)
+    monkeypatch.setattr(cache_module.cache, "_client", remote_client)
     wrapped = AsyncMock(return_value={"source": "database"})
 
     @cached(ttl=60)
