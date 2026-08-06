@@ -21,17 +21,17 @@ async def create_bug_report(
     body: Annotated[BugReportCreate, Body()],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> BugReportResponse:
-    """Create a bug report issue on GitHub.
+    """Create a bug report or feature request issue on GitHub.
 
     Args:
-        body: Bug report with title, description, and optional diagnostics
-        current_user: The authenticated user
+        body: Report type, title, description, and optional diagnostics.
+        current_user: The authenticated user.
 
     Returns:
-        Created bug report issue URL
+        Created GitHub issue URL.
 
     Raises:
-        HTTPException: If validation fails or GitHub integration not configured
+        HTTPException: If validation fails or GitHub integration is unavailable.
     """
     title = body.title.strip()
     description = body.description.strip()
@@ -48,14 +48,13 @@ async def create_bug_report(
             detail="GitHub integration not configured",
         )
 
-    diagnostics_data = body.diagnostics
-
     try:
         issue_url = await create_bug_report_issue(
+            report_type=body.report_type,
             title=title,
             description=description,
             username=current_user.username,
-            diagnostics_data=diagnostics_data,
+            diagnostics_data=body.diagnostics,
         )
     except RuntimeError as e:
         raise HTTPException(
