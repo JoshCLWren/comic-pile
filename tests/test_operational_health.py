@@ -19,7 +19,7 @@ async def test_liveness_does_not_probe_dependencies(
         raise AssertionError("dependency probe must not run")
 
     monkeypatch.setattr(health, "_cache_probe", fail_if_called)
-    response = await client.get("/api/health/live")
+    response = await client.get("/api/v1/health/live")
 
     assert response.status_code == 200
     assert response.json() == {"status": "alive"}
@@ -36,7 +36,7 @@ async def test_dependency_health_reports_independent_timings(
         return None
 
     monkeypatch.setattr(health, "_cache_probe", healthy_cache)
-    response = await client.get("/api/health/dependencies")
+    response = await client.get("/api/v1/health/dependencies")
 
     assert response.status_code == 200
     payload = response.json()
@@ -59,7 +59,7 @@ async def test_dependency_health_reports_partial_failure(
         raise ConnectionError("cache offline")
 
     monkeypatch.setattr(health, "_cache_probe", unavailable_cache)
-    response = await client.get("/api/health/dependencies")
+    response = await client.get("/api/v1/health/dependencies")
 
     assert response.status_code == 207
     payload = response.json()
@@ -93,9 +93,9 @@ async def test_operational_token_hides_detailed_endpoints(
     """Configured operational endpoints return 404 without the trusted token."""
     monkeypatch.setenv("HEALTH_CHECK_TOKEN", "trusted-monitor")
 
-    hidden = await client.get("/api/health/dependencies")
+    hidden = await client.get("/api/v1/health/dependencies")
     allowed = await client.get(
-        "/api/health/dependencies",
+        "/api/v1/health/dependencies",
         headers={"X-Health-Token": "trusted-monitor"},
     )
 
@@ -116,7 +116,7 @@ async def test_warmup_uses_read_only_dependency_boundary(
         calls += 1
 
     monkeypatch.setattr(health, "_cache_probe", healthy_cache)
-    response = await client.get("/api/health/warmup")
+    response = await client.get("/api/v1/health/warmup")
 
     assert response.status_code == 200
     assert response.json()["status"] == "healthy"
