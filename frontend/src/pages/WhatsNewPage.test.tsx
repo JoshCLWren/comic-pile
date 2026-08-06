@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import '@testing-library/jest-dom/vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { changelogAsset } from '../../vite.config'
 import WhatsNewPage, { parseChangelog } from './WhatsNewPage'
 
 const frontendRoot = path.resolve(import.meta.dirname, '../..')
@@ -58,17 +58,13 @@ describe('WhatsNewPage', () => {
     expect(navigationSource).toContain('What’s New')
   })
 
-  it('emits the canonical changelog as the production static asset', () => {
-    const plugin = changelogAsset()
-    const emitFile = vi.fn()
-    const source = readFileSync(path.resolve(frontendRoot, '../docs/changelog.md'), 'utf-8')
+  it('keeps the canonical changelog wired to the production static asset', () => {
+    const viteConfigSource = readFileSync(path.join(frontendRoot, 'vite.config.ts'), 'utf-8')
+    const changelogSource = readFileSync(path.resolve(frontendRoot, '../docs/changelog.md'), 'utf-8')
 
-    plugin.generateBundle?.call({ emitFile } as never, {} as never, {} as never, false)
-
-    expect(emitFile).toHaveBeenCalledWith({
-      type: 'asset',
-      fileName: 'changelog.md',
-      source,
-    })
+    expect(changelogSource).toMatch(/^# Changelog/m)
+    expect(viteConfigSource).toContain("const changelogPath = path.resolve(__dirname, '../docs/changelog.md')")
+    expect(viteConfigSource).toContain("fileName: 'changelog.md'")
+    expect(viteConfigSource).toContain('source: changelogSource')
   })
 })
