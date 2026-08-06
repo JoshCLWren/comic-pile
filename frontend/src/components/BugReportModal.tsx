@@ -78,7 +78,7 @@ export default function BugReportModal({
             {(['bug', 'feature'] as const).map((type) => (
               <label
                 key={type}
-                className={`cursor-pointer rounded-xl border px-3 py-3 text-center text-xs font-bold transition-colors ${
+                className={`cursor-pointer rounded-xl border px-3 py-3 text-center text-xs font-bold transition-colors focus-within:ring-2 focus-within:ring-amber-400 focus-within:ring-offset-2 focus-within:ring-offset-stone-950 ${
                   reportType === type
                     ? 'border-amber-500 bg-amber-500/15 text-amber-300'
                     : 'border-stone-700 bg-white/5 text-stone-400 hover:bg-white/10'
@@ -92,7 +92,7 @@ export default function BugReportModal({
                   onChange={() => setReportType(type)}
                   className="sr-only"
                 />
-                {type === 'bug' ? '🐛 Bug report' : '✨ Feature request'}
+                {type === 'bug' ? 'Bug report' : 'Feature request'}
               </label>
             ))}
           </div>
@@ -123,11 +123,7 @@ export default function BugReportModal({
             id="report-description"
             value={description}
             onChange={(event) => setDescription(event.target.value)}
-            placeholder={
-              isFeature
-                ? 'What would you like ComicPile to do, and how would it help?'
-                : 'What were you doing, what happened, and what did you expect?'
-            }
+            placeholder={isFeature ? 'What would you like ComicPile to do, and how would it help?' : 'What were you doing, what happened, and what did you expect?'}
             className="w-full bg-white/5 border border-stone-700 rounded-xl px-3 py-2 text-sm text-stone-200 min-h-[120px] resize-y focus:outline-none focus:ring-2 focus:ring-amber-500/50"
             rows={4}
             maxLength={2000}
@@ -138,25 +134,16 @@ export default function BugReportModal({
 
         {diagnosticData && (
           <div className="text-[10px] text-stone-400 flex items-center gap-1">
-            <span aria-hidden="true" className="text-amber-500">ⓘ</span>
+            <span aria-hidden="true" className="text-amber-500">i</span>
             <span>Browser info and console errors will be included</span>
           </div>
         )}
 
         <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-3 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isSubmitting}
-            className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] min-[360px]:tracking-[0.2em] transition-all disabled:opacity-50"
-          >
+          <button type="button" onClick={onClose} disabled={isSubmitting} className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] min-[360px]:tracking-[0.2em] transition-all disabled:opacity-50">
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={isSubmitting || !title.trim() || !description.trim()}
-            className="w-full py-3 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-600/50 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] min-[360px]:tracking-[0.2em] transition-all disabled:opacity-50"
-          >
+          <button type="submit" disabled={isSubmitting || !title.trim() || !description.trim()} className="w-full py-3 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-600/50 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] min-[360px]:tracking-[0.2em] transition-all disabled:opacity-50">
             {isSubmitting ? 'Submitting...' : isFeature ? 'Submit Request' : 'Submit Report'}
           </button>
         </div>
