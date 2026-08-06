@@ -53,12 +53,13 @@ def test_incomplete_upstash_configuration_stays_disabled() -> None:
 
 
 @pytest.mark.asyncio
-async def test_disabled_cache_reads_fall_through_to_wrapped_function(monkeypatch) -> None:
-    """Decorated reads execute normally without issuing Redis commands."""
+async def test_disabled_cache_reads_fall_through_without_remote_commands() -> None:
+    """Decorated reads execute directly when the cache is uninitialized."""
     from app import cache as cache_module
 
-    monkeypatch.setattr(cache_module.cache, "get", AsyncMock(return_value=None))
-    monkeypatch.setattr(cache_module.cache, "set", AsyncMock(return_value=False))
+    remote_client = AsyncMock()
+    cache_module.cache._initialized = False
+    cache_module.cache._client = remote_client
     wrapped = AsyncMock(return_value={"source": "database"})
 
     @cached(ttl=60)
@@ -67,8 +68,8 @@ async def test_disabled_cache_reads_fall_through_to_wrapped_function(monkeypatch
 
     assert await load_value() == {"source": "database"}
     wrapped.assert_awaited_once_with()
-    cache_module.cache.get.assert_awaited_once()
-    cache_module.cache.set.assert_awaited_once()
+    remote_client.get.assert_not_awaited()
+    remote_client.set.assert_not_awaited()
 
 
 @pytest.mark.asyncio
