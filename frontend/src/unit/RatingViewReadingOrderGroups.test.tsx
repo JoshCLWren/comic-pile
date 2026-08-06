@@ -23,8 +23,8 @@ const callbacks = {
   onRefreshThread: vi.fn(),
 }
 
-describe('RatingView reading-order groups', () => {
-  it('shows names owned by the active rating thread', () => {
+describe('RatingView crossovers', () => {
+  it('shows crossover names owned by the active rating thread', () => {
     render(
       <RatingView
         activeRatingThread={{
@@ -52,11 +52,11 @@ describe('RatingView reading-order groups', () => {
       />,
     )
 
-    expect(screen.getByRole('heading', { name: 'Reading-order groups' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Crossovers' })).toBeInTheDocument()
     expect(screen.getByText('Cosmic bridge')).toBeInTheDocument()
   })
 
-  it('does not show group chrome without an active thread', () => {
+  it('does not show crossover chrome without an active thread', () => {
     render(
       <RatingView
         activeRatingThread={null}
@@ -76,6 +76,6 @@ describe('RatingView reading-order groups', () => {
       />,
     )
 
-    expect(screen.queryByRole('heading', { name: 'Reading-order groups' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Crossovers' })).not.toBeInTheDocument()
   })
 })
