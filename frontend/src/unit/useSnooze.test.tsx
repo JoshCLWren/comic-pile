@@ -2,13 +2,16 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from '../hooks/rollMutationReconciliation'
+import { queryClient } from '../query/queryClient'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 
 const snoozeApi = vi.hoisted(() => ({ snooze: vi.fn(), unsnooze: vi.fn() }))
 const rollBootstrapApi = vi.hoisted(() => ({ get: vi.fn() }))
+const invalidateCurrentSessionAfterSnooze = vi.hoisted(() => vi.fn())
 
 vi.mock('../services/api', () => ({ snoozeApi }))
 vi.mock('../services/rollBootstrapApi', () => ({ rollBootstrapApi }))
+vi.mock('../query/cacheEffects', () => ({ invalidateCurrentSessionAfterSnooze }))
 
 const bootstrapState = (
   pendingThreadId: number | null,
@@ -35,6 +38,7 @@ const bootstrapState = (
 describe('snooze hooks', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    invalidateCurrentSessionAfterSnooze.mockReset()
     snoozeApi.snooze.mockResolvedValue(undefined)
     snoozeApi.unsnooze.mockResolvedValue(undefined)
     rollBootstrapApi.get.mockResolvedValue(bootstrapState(null))
@@ -51,11 +55,14 @@ describe('snooze hooks', () => {
       expect(snoozeApi.snooze).toHaveBeenCalledTimes(1)
       expect(rollBootstrapApi.get).toHaveBeenCalledTimes(1)
       expect(reconciled).toHaveBeenCalledTimes(1)
+      expect(invalidateCurrentSessionAfterSnooze).toHaveBeenCalledWith(queryClient)
       expect(snooze.result.current.isError).toBe(false)
 
       const unsnooze = renderHook(() => useUnsnooze())
       await act(async () => await unsnooze.result.current.mutate(7))
       expect(snoozeApi.unsnooze).toHaveBeenCalledWith(7)
+      expect(invalidateCurrentSessionAfterSnooze).toHaveBeenCalledTimes(2)
+      expect(invalidateCurrentSessionAfterSnooze).toHaveBeenLastCalledWith(queryClient)
     } finally {
       window.removeEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
     }
@@ -241,5 +248,7 @@ describe('snooze hooks', () => {
     const unsnooze = renderHook(() => useUnsnooze())
     await act(async () => await expect(unsnooze.result.current.mutate(7)).rejects.toThrow('unsnooze failed'))
     await waitFor(() => expect(unsnooze.result.current.isError).toBe(true))
+
+    expect(invalidateCurrentSessionAfterSnooze).not.toHaveBeenCalled()
   })
 })

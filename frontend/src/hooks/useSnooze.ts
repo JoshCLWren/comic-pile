@@ -1,4 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
+import { invalidateCurrentSessionAfterSnooze } from '../query/cacheEffects'
+import { queryClient } from '../query/queryClient'
 import { snoozeApi } from '../services/api'
 import { getApiErrorDetail } from '../utils/apiError'
 import {
@@ -72,6 +74,7 @@ export function useSnooze() {
     const request: Promise<SnoozeResult> = (async () => {
       try {
         const result = await snoozeApi.snooze()
+        await invalidateCurrentSessionAfterSnooze(queryClient)
         await refreshAuthoritativeState()
         return result
       } catch (error: unknown) {
@@ -122,6 +125,7 @@ export function useUnsnooze() {
     setIsError(false)
     try {
       await snoozeApi.unsnooze(threadId)
+      await invalidateCurrentSessionAfterSnooze(queryClient)
     } catch (error: unknown) {
       setIsError(true)
       console.error('Failed to unsnooze thread:', getApiErrorDetail(error))
