@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 import scripts.cleanup_production_e2e_data as cleanup_module
 from app.models.thread import Thread
@@ -89,7 +89,7 @@ async def test_cleanup_deletes_only_owned_stale_managed_test_threads(
 
     async with session_factory() as session:
         owner = User(username="janitor-owner", email="automation@example.com")
-        other = User(username="janitor-other", email="other@example.com")
+        other = User(username="janitor-other", email="janitor-other@example.com")
         session.add_all([owner, other])
         await session.flush()
         candidates = [
