@@ -26,19 +26,12 @@ else:
     DATABASE_URL = _db_settings.database_url
 ASYNC_DATABASE_URL = _db_settings.async_url
 
-# Log database URLs with password redacted
+# Log only parsed, password-redacted URLs. Never log raw environment values or
+# prefixes because credentials can appear before the password delimiter.
 _redacted_database_url = make_url(DATABASE_URL).render_as_string(hide_password=True)
 _redacted_async_url = make_url(ASYNC_DATABASE_URL).render_as_string(hide_password=True)
-logger.info(f"Database URL configured: {_redacted_database_url}")
-logger.info(f"Async database URL: {_redacted_async_url}")
-
-# Additional debugging: log environment variables
-logger.info(
-    f"DATABASE_URL env var: {os.getenv('DATABASE_URL', 'NOT SET')[:50] if os.getenv('DATABASE_URL') else 'NOT SET'}..."
-)
-logger.info(
-    f"TEST_DATABASE_URL env var: {os.getenv('TEST_DATABASE_URL', 'NOT SET')[:50] if os.getenv('TEST_DATABASE_URL') else 'NOT SET'}..."
-)
+logger.info("Database URL configured: %s", _redacted_database_url)
+logger.info("Async database URL configured: %s", _redacted_async_url)
 
 async_engine = create_async_engine(
     ASYNC_DATABASE_URL,
