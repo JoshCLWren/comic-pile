@@ -38,6 +38,8 @@ export default function PositionSlider({
   const [sliderValue, setSliderValue] = useState(Math.max(0, currentIndex))
 
   const maxPosition = sortedThreads.length - 1
+  const selectedOffset = currentIndex - sliderValue
+  const formattedOffset = selectedOffset > 0 ? `+${selectedOffset}` : `${selectedOffset}`
 
   // Get context threads (2-3 above and below current slider position)
   const contextThreads = useMemo(() => {
@@ -185,8 +187,11 @@ export default function PositionSlider({
                   <span className="text-[9px] font-bold uppercase tracking-wider text-amber-500">Moving</span>
                 )}
                 {willBeDisplaced && (
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-amber-400">
-                    {sliderValue < currentIndex ? '+1' : '-1'}
+                  <span
+                    data-testid="position-slider-offset"
+                    className="text-[9px] font-bold uppercase tracking-wider text-amber-400"
+                  >
+                    {formattedOffset}
                   </span>
                 )}
               </div>
