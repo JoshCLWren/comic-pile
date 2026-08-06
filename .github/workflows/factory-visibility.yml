@@ -1,0 +1,294 @@
+name: Factory visibility
+
+on:
+  issue_comment:
+    types: [created, edited]
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+  pull_request_review:
+    types: [submitted, dismissed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  label-factory-work:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Synchronize factory owner and stage labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = {
+              factory: { color: '5319E7', description: 'Work owned or produced by an autonomous ComicPile factory' },
+              'factory:1': { color: '0366D6', description: 'Current next-action owner is ComicPile Factory 1' },
+              'factory:2': { color: '0366D6', description: 'Current next-action owner is ComicPile Factory 2' },
+              'factory:3': { color: '0366D6', description: 'Current next-action owner is ComicPile Factory 3' },
+              'factory:4': { color: '0366D6', description: 'Current next-action owner is ComicPile Factory 4' },
+              'factory:5': { color: '0366D6', description: 'Current next-action owner is ComicPile Factory 5' },
+              'factory:local': { color: '0366D6', description: 'Current next-action owner is the local OpenCode factory' },
+              'factory:unowned': { color: 'BFDADC', description: 'Factory work has no current next-action owner' },
+              'factory:building': { color: 'FBCA04', description: 'A factory is actively implementing or repairing this work' },
+              'factory:review': { color: 'D4C5F9', description: 'The exact current head needs review or re-review' },
+              'factory:changes-requested': { color: 'D73A4A', description: 'Actionable review findings currently block progress' },
+              'factory:ci': { color: '1D76DB', description: 'Review passed and required exact-head checks are being verified' },
+              'factory:ready': { color: '0E8A16', description: 'All exact-head factory merge gates are satisfied' },
+              'factory:blocked': { color: 'B60205', description: 'A genuine human, credential, or external blocker remains' },
+            };
+
+            const ownerLabels = [
+              'factory:1',
+              'factory:2',
+              'factory:3',
+              'factory:4',
+              'factory:5',
+              'factory:local',
+              'factory:unowned',
+            ];
+            const stageLabels = [
+              'factory:building',
+              'factory:review',
+              'factory:changes-requested',
+              'factory:ci',
+              'factory:ready',
+              'factory:blocked',
+            ];
+
+            async function ensureLabels() {
+              const existing = await github.paginate(github.rest.issues.listLabelsForRepo, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: 100,
+              });
+              const existingByName = new Map(existing.map((label) => [label.name, label]));
+
+              for (const [name, definition] of Object.entries(labels)) {
+                const current = existingByName.get(name);
+                if (!current) {
+                  await github.rest.issues.createLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    name,
+                    ...definition,
+                  });
+                  continue;
+                }
+
+                if (
+                  current.color.toUpperCase() !== definition.color.toUpperCase()
+                  || (current.description || '') !== definition.description
+                ) {
+                  await github.rest.issues.updateLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    name,
+                    new_name: name,
+                    ...definition,
+                  });
+                }
+              }
+            }
+
+            async function getCurrentLabelNames(number) {
+              const current = await github.paginate(github.rest.issues.listLabelsOnIssue, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: number,
+                per_page: 100,
+              });
+              return new Set(current.map((label) => label.name));
+            }
+
+            async function replaceLabelGroup(number, group, nextLabel) {
+              const current = await getCurrentLabelNames(number);
+              for (const label of group) {
+                if (label !== nextLabel && current.has(label)) {
+                  await github.rest.issues.removeLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: number,
+                    name: label,
+                  });
+                }
+              }
+              if (nextLabel && !current.has(nextLabel)) {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: number,
+                  labels: [nextLabel],
+                });
+              }
+            }
+
+            async function markFactory(number) {
+              const current = await getCurrentLabelNames(number);
+              if (!current.has('factory')) {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: number,
+                  labels: ['factory'],
+                });
+              }
+            }
+
+            function ownerLabelForWorker(worker) {
+              const scheduled = worker.match(/^chatgpt-factory-([1-5])$/);
+              if (scheduled) {
+                return `factory:${scheduled[1]}`;
+              }
+              if (worker.startsWith('local-opencode-') || worker === 'local-opencode') {
+                return 'factory:local';
+              }
+              return 'factory:unowned';
+            }
+
+            function extractWorker(body) {
+              const patterns = [
+                /comic-pile-factory-implement-(?:claim|progress)-v\d+:issue-\d+:([^:\s>]+):/,
+                /comic-pile-factory-review-claim-v\d+:[^:\s>]+:([^:\s>]+):/,
+                /comic-pile-factory-fix-(?:claim|progress)-v\d+:[^:\s>]+:([^:\s>]+):/,
+                /comic-pile-factory-claim-released-v\d+:[^:\s>]+:([^:\s>]+):/,
+              ];
+              for (const pattern of patterns) {
+                const match = body.match(pattern);
+                if (match) {
+                  return match[1];
+                }
+              }
+              return null;
+            }
+
+            function stageFromMarker(body) {
+              if (/comic-pile-factory-needs-human-v\d+:/.test(body)) {
+                return 'factory:blocked';
+              }
+              if (/comic-pile-factory-ready-v\d+:/.test(body)) {
+                return 'factory:ready';
+              }
+              if (/comic-pile-factory-review-v\d+:[^:\s>]+:changes-required/.test(body)) {
+                return 'factory:changes-requested';
+              }
+              if (/comic-pile-factory-review-v\d+:[^:\s>]+:pass/.test(body)) {
+                return 'factory:ci';
+              }
+              if (/comic-pile-factory-review-claim-v\d+:/.test(body)) {
+                return 'factory:review';
+              }
+              if (
+                /comic-pile-factory-implement-(?:claim|progress)-v\d+:/.test(body)
+                || /comic-pile-factory-fix-(?:claim|progress)-v\d+:/.test(body)
+              ) {
+                return 'factory:building';
+              }
+              return null;
+            }
+
+            async function findOwnerFromLinkedIssue(pr) {
+              const branchMatch = pr.head.ref.match(/^factory\/(\d+)(?:-|$)/);
+              const bodyMatch = (pr.body || '').match(
+                /(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/i,
+              );
+              const issueNumber = Number(branchMatch?.[1] || bodyMatch?.[1] || 0);
+              if (!issueNumber) {
+                return 'factory:unowned';
+              }
+
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                per_page: 100,
+              });
+              comments.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+              for (const comment of comments) {
+                const body = comment.body || '';
+                if (/comic-pile-factory-claim-released-v\d+:/.test(body)) {
+                  return 'factory:unowned';
+                }
+                const worker = extractWorker(body);
+                if (worker) {
+                  return ownerLabelForWorker(worker);
+                }
+              }
+              return 'factory:unowned';
+            }
+
+            await ensureLabels();
+
+            if (context.eventName === 'issue_comment') {
+              const body = context.payload.comment?.body || '';
+              if (!body.includes('comic-pile-factory-')) {
+                return;
+              }
+
+              const number = context.payload.issue.number;
+              await markFactory(number);
+
+              if (/comic-pile-factory-claim-released-v\d+:/.test(body)) {
+                await replaceLabelGroup(number, ownerLabels, 'factory:unowned');
+              } else {
+                const worker = extractWorker(body);
+                if (worker) {
+                  await replaceLabelGroup(number, ownerLabels, ownerLabelForWorker(worker));
+                }
+              }
+
+              const stage = stageFromMarker(body);
+              if (stage) {
+                await replaceLabelGroup(number, stageLabels, stage);
+              }
+              return;
+            }
+
+            if (context.eventName === 'pull_request_target') {
+              const pr = context.payload.pull_request;
+              const number = pr.number;
+              const isFactory = pr.head.ref.startsWith('factory/')
+                || (pr.body || '').includes('comic-pile-factory-')
+                || (pr.labels || []).some((label) => label.name === 'factory');
+              if (!isFactory) {
+                return;
+              }
+
+              await markFactory(number);
+              if (['opened', 'reopened', 'ready_for_review'].includes(context.payload.action)) {
+                await replaceLabelGroup(number, ownerLabels, await findOwnerFromLinkedIssue(pr));
+              }
+              await replaceLabelGroup(number, stageLabels, 'factory:review');
+              return;
+            }
+
+            if (context.eventName === 'pull_request_review') {
+              const pr = context.payload.pull_request;
+              const number = pr.number;
+              const current = await getCurrentLabelNames(number);
+              const isFactory = pr.head.ref.startsWith('factory/') || current.has('factory');
+              if (!isFactory) {
+                return;
+              }
+
+              await markFactory(number);
+              if (context.payload.action === 'dismissed') {
+                await replaceLabelGroup(number, stageLabels, 'factory:review');
+                return;
+              }
+
+              const review = context.payload.review;
+              const state = (review.state || '').toUpperCase();
+              const body = review.body || '';
+              if (state === 'CHANGES_REQUESTED') {
+                await replaceLabelGroup(number, stageLabels, 'factory:changes-requested');
+              } else if (state === 'APPROVED') {
+                await replaceLabelGroup(number, stageLabels, 'factory:ci');
+              } else if (/Actionable comments posted:\s*[1-9]\d*/i.test(body)) {
+                await replaceLabelGroup(number, stageLabels, 'factory:changes-requested');
+              } else {
+                await replaceLabelGroup(number, stageLabels, 'factory:review');
+              }
+            }
