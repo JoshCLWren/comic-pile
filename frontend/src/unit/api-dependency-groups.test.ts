@@ -79,6 +79,28 @@ describe('dependencyGroupsApi', () => {
     )
   })
 
+  it('adds inclusive issue-position ranges', async () => {
+    const result = {
+      thread_id: 42,
+      start_position: 1,
+      end_position: 8,
+      added_issue_ids: [10, 11],
+      already_present_issue_ids: [9],
+    }
+    apiMock.post.mockResolvedValueOnce(result)
+
+    await expect(dependencyGroupsApi.addIssueRange(7, 42, 1, 8)).resolves.toEqual(result)
+
+    expect(apiMock.post).toHaveBeenCalledWith(
+      '/v1/reading-order-groups/7/issue-ranges',
+      {
+        thread_id: 42,
+        start_position: 1,
+        end_position: 8,
+      },
+    )
+  })
+
   it('adds and removes both supported membership target types', async () => {
     apiMock.post
       .mockResolvedValueOnce({ id: 10, thread_id: 42, issue_id: null })
