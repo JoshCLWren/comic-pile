@@ -6,12 +6,20 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const changelogPath = path.resolve(__dirname, '../docs/changelog.md')
 
 function changelogAsset(): Plugin {
   return {
     name: 'comic-pile-changelog-asset',
+    configureServer(server) {
+      server.middlewares.use('/changelog.md', (_request, response) => {
+        response.statusCode = 200
+        response.setHeader('Content-Type', 'text/markdown; charset=utf-8')
+        response.end(readFileSync(changelogPath, 'utf-8'))
+      })
+    },
     generateBundle() {
-      const source = readFileSync(path.resolve(__dirname, '../docs/changelog.md'), 'utf-8')
+      const source = readFileSync(changelogPath, 'utf-8')
       this.emitFile({ type: 'asset', fileName: 'changelog.md', source })
     },
   }
