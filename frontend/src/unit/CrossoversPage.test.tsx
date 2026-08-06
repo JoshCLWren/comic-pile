@@ -152,6 +152,22 @@ describe('CrossoversPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Duplicate crossover name')
   })
 
+  it('uses API detail messages and safe fallbacks for non-Error failures', async () => {
+    api.list
+      .mockRejectedValueOnce({ isAxiosError: true, response: { data: { detail: 'Crossover service unavailable' } } })
+      .mockRejectedValueOnce({ isAxiosError: true, response: { data: { detail: '   ' } } })
+      .mockRejectedValueOnce('offline')
+
+    render(<CrossoversPage />)
+    expect(await screen.findByRole('alert')).toHaveTextContent('Crossover service unavailable')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load crossovers.')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load crossovers.')
+  })
+
   it('allows a failed initial load to be retried', async () => {
     api.list.mockRejectedValueOnce(new Error('Network unavailable')).mockResolvedValueOnce([annihilation])
     render(<CrossoversPage />)
