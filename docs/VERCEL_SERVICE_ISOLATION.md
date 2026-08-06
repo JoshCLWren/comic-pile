@@ -13,14 +13,13 @@ ComicPile treats Vercel Production and Preview as separate trust boundaries. Pre
 
 ## Required Vercel variables
 
-Configure these independently in the Vercel dashboard rather than sharing one value across Production and Preview:
+Configure `DATABASE_URL` and `SERVICE_DEPLOYMENT_ENV` independently for Production and Preview. `PRODUCTION_DATABASE_HOST` is a non-secret reference shared with database-backed Preview deployments so the application can compare the real connection target against the approved Production host.
 
 - `SERVICE_DEPLOYMENT_ENV`: `production` in Production and `preview` in Preview.
-- `DATABASE_SERVICE_ID`: a stable, non-secret identifier for the actual Neon branch/service used in that scope.
-- `PRODUCTION_DATABASE_SERVICE_ID`: the stable identifier for the approved Production Neon service.
+- `PRODUCTION_DATABASE_HOST`: hostname of the approved Production Neon endpoint, without scheme, credentials, port, or path. Set it in Production and in any database-backed Preview deployment.
 - `DATABASE_URL`: Production Neon in Production; a separate Preview Neon branch in Preview, or omit it when Preview does not need database integration.
 
-The guard runs before `app.main` is imported. Production must match the approved Production database identity. Preview must use a different identity. Error messages name only missing or conflicting configuration fields and never include URLs, credentials, hosts, or tokens.
+The guard runs before `app.main` is imported. Production must connect to `PRODUCTION_DATABASE_HOST`. Preview must connect to a different host. Error messages name only missing or conflicting configuration fields and never include URLs, credentials, hosts, or tokens.
 
 ## Redis behavior
 
@@ -30,11 +29,22 @@ GitHub Actions and local development remain unchanged because they do not set `V
 
 ## Vercel dashboard handoff
 
-1. Scope Production `DATABASE_URL`, `SERVICE_DEPLOYMENT_ENV=production`, and the matching database service IDs to Production only.
-2. Remove Production Neon and Upstash credentials from Preview scope.
-3. Either omit `DATABASE_URL` from Preview or provision a dedicated Neon Preview branch and set a distinct `DATABASE_SERVICE_ID`.
-4. Set `SERVICE_DEPLOYMENT_ENV=preview` in Preview.
-5. Keep Upstash variables absent from Preview. The application also strips them defensively.
-6. Redeploy Production and Preview. A mis-scoped deployment should fail immediately with a non-secret configuration error.
+1. Scope Production `DATABASE_URL` and `SERVICE_DEPLOYMENT_ENV=production` to Production only.
+2. Set `PRODUCTION_DATABASE_HOST` in Production and any database-backed Preview scope. Record only the variable name in evidence, never its value.
+3. Remove Production Neon and Upstash credentials from Preview scope.
+4. Either omit `DATABASE_URL` from Preview or provision a dedicated Neon Preview branch.
+5. Set `SERVICE_DEPLOYMENT_ENV=preview` in Preview.
+6. Keep Upstash variables absent from Preview. The application also strips them defensively.
+7. Redeploy Production and Preview.
+8. Temporarily set a non-secret invalid `PRODUCTION_DATABASE_HOST` in a disposable Preview deployment and verify startup fails with the expected safe configuration error, then restore the correct reference.
 
-Do not enable `ENABLE_DEBUG_ROUTES` or `ENABLE_INTERNAL_OPS_ROUTES` in Preview. The deployment guard rejects either setting even when Preview uses isolated data.
+## Required handoff evidence
+
+Record the following without copying secret values:
+
+- the variable names present in each Vercel scope;
+- the successful Production deployment result;
+- the successful isolated Preview deployment result, or confirmation that Preview intentionally omits `DATABASE_URL`;
+- the expected failed Preview deployment produced by the intentionally invalid non-secret host reference.
+
+Do not enable `ENABLE_DEBUG_ROUTES`, `ENABLE_INTERNAL_OPS_ROUTES`, or `TEST_ENVIRONMENT` in Preview. The deployment guard rejects those settings and forces Production-style route mounting even when Preview uses isolated data.
