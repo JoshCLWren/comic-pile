@@ -1,7 +1,6 @@
 """Helpers for logging configuration metadata without exposing credentials."""
 
 from collections.abc import Mapping
-from typing import object
 from urllib.parse import unquote, urlsplit
 
 _SECRET_MARKERS = (
