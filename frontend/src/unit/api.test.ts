@@ -55,7 +55,7 @@ it('refreshes and retries a request after an expired access token', async () => 
   const originalRequest = { url: '/v1/threads/42/reading-orders', headers: {} }
   const result = await responseInterceptor({ config: originalRequest, response: { status: 401 } })
 
-  expect(post).toHaveBeenCalledWith('/auth/refresh')
+  expect(post).toHaveBeenCalledWith('/v1/auth/refresh')
   expect(apiMock.request).toHaveBeenCalledWith({
     ...originalRequest,
     _retry: true,
@@ -193,7 +193,7 @@ it('does not attach csrf to safe or exempt requests', async () => {
   setAccessToken(null)
   const getConfig = await requestInterceptor({ method: 'get', url: '/threads/', headers: {} })
   expect(getConfig.headers).toEqual({})
-  const loginConfig = await requestInterceptor({ method: 'post', url: '/auth/login', headers: {} })
+  const loginConfig = await requestInterceptor({ method: 'post', url: '/v1/auth/login', headers: {} })
   expect(loginConfig.headers).toEqual({})
   expect(get).not.toHaveBeenCalled()
 })
@@ -207,7 +207,7 @@ it('bootstraps a csrf token before protected requests when the cookie is missing
     headers: {},
   })
 
-  expect(get).toHaveBeenCalledWith('/auth/csrf', { skipAuthRedirect: true })
+  expect(get).toHaveBeenCalledWith('/v1/auth/csrf', { skipAuthRedirect: true })
   expect(config.headers).toEqual({ 'X-CSRF-Token': 'fresh-token' })
 })
 
@@ -217,7 +217,7 @@ it('handles response success, network errors, validation errors, and auth errors
   await expect(responseInterceptor({ config: { url: '/x' }, response: undefined } as never)).rejects.toThrow('Network error')
   await expect(responseInterceptor({ config: { url: '/x' }, response: { status: 400 } } as never)).rejects.toEqual(expect.objectContaining({ response: { status: 400 } }))
   await expect(responseInterceptor({ config: {}, response: { status: 500 } } as never)).rejects.toEqual(expect.objectContaining({ response: { status: 500 } }))
-  await expect(responseInterceptor({ config: { url: '/auth/login' }, response: { status: 401 } })).rejects.toEqual(expect.objectContaining({ response: { status: 401 } }))
+  await expect(responseInterceptor({ config: { url: '/v1/auth/login' }, response: { status: 401 } })).rejects.toEqual(expect.objectContaining({ response: { status: 401 } }))
   await expect(responseInterceptor({ config: { url: '/x', _retry: true } as never, response: { status: 401 } })).rejects.toEqual(expect.objectContaining({ response: { status: 401 } }))
 })
 
@@ -226,14 +226,14 @@ it('refreshes when FastAPI rejects a request without a bearer header', async () 
   apiMock.request.mockResolvedValue({ authenticated: true })
 
   const result = responseInterceptor({
-    config: { url: '/auth/me', headers: {} },
+    config: { url: '/v1/auth/me', headers: {} },
     response: { status: 403, data: { detail: 'Not authenticated' } },
   } as never)
 
   await expect(result).resolves.toEqual({ authenticated: true })
-  expect(post).toHaveBeenCalledWith('/auth/refresh')
+  expect(post).toHaveBeenCalledWith('/v1/auth/refresh')
   expect(apiMock.request).toHaveBeenCalledWith(expect.objectContaining({
-    url: '/auth/me',
+    url: '/v1/auth/me',
     _retry: true,
     headers: { Authorization: 'Bearer refreshed-token' },
   }))
@@ -258,7 +258,7 @@ it('rejects a failed token refresh without retrying the original request', async
 it('redirects to login when the refresh endpoint itself returns unauthorized', async () => {
   window.history.pushState({}, '', '/queue')
   await expect(responseInterceptor({
-    config: { url: '/auth/refresh' },
+    config: { url: '/v1/auth/refresh' },
     response: { status: 401 },
   })).rejects.toEqual(expect.objectContaining({ response: { status: 401 } }))
   window.history.pushState({}, '', '/')
@@ -288,10 +288,10 @@ it('covers csrf fallback, redirect guards, and queued refresh rejection', async 
   get.mockResolvedValue({ csrf_token: undefined })
   const config = await requestInterceptor({ method: 'put', url: '/threads/1', headers: {} })
   expect(config.headers).toEqual({ Authorization: 'Bearer token' })
-  expect(get).toHaveBeenCalledWith('/auth/csrf', { skipAuthRedirect: true })
+  expect(get).toHaveBeenCalledWith('/v1/auth/csrf', { skipAuthRedirect: true })
 
   window.history.pushState({}, '', '/login')
-  await expect(responseInterceptor({ config: { url: '/auth/refresh' }, response: { status: 401 } })).rejects.toBeDefined()
+  await expect(responseInterceptor({ config: { url: '/v1/auth/refresh' }, response: { status: 401 } })).rejects.toBeDefined()
   window.history.pushState({}, '', '/queue')
 
   let rejectRefresh: (reason: Error) => void = () => {}
