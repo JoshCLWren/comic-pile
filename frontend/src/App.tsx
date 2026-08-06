@@ -36,6 +36,7 @@ const HistoryPage = lazy(() => import('./pages/HistoryPage'))
 const SessionPage = lazy(() => import('./pages/SessionPage'))
 const CrossoversPage = lazy(() => import('./pages/CrossoversPage'))
 const HelpPage = lazy(() => import('./pages/HelpPage'))
+const WhatsNewPage = lazy(() => import('./pages/WhatsNewPage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage'))
 
@@ -53,9 +54,7 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 // eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext)
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider')
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider')
   return context
 }
 
@@ -66,10 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const revalidateSession = useCallback(async (timeout?: number) => {
     try {
-      const response = await api.get<AuthUser>('/v1/auth/me', {
-        timeout,
-        skipAuthRedirect: false,
-      })
+      const response = await api.get<AuthUser>('/v1/auth/me', { timeout, skipAuthRedirect: false })
       setUser(response)
       setIsAuthenticated(true)
     } catch (error) {
@@ -83,10 +79,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let isMounted = true
     const authChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('comic-pile-auth') : null
-
     const validateSession = async () => {
-      const isPublicAuthPage =
-        window.location.pathname === '/login' || window.location.pathname === '/register'
+      const isPublicAuthPage = window.location.pathname === '/login' || window.location.pathname === '/register'
       if (!getAccessToken() && !window.__COMIC_PILE_ACCESS_TOKEN && isPublicAuthPage) {
         setIsLoading(false)
         return
@@ -108,12 +102,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(null)
         }
       } finally {
-        if (isMounted) {
-          setIsLoading(false)
-        }
+        if (isMounted) setIsLoading(false)
       }
     }
-
     if (authChannel) {
       authChannel.onmessage = (event: MessageEvent<{ type?: string }>) => {
         if (event.data?.type === 'logout') {
@@ -123,8 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     }
-
-    validateSession()
+    void validateSession()
     return () => {
       isMounted = false
       authChannel?.close()
@@ -156,58 +146,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const value = { isAuthenticated, isLoading, user, login, logout, revalidateSession }
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ isAuthenticated, isLoading, user, login, logout, revalidateSession }}>{children}</AuthContext.Provider>
 }
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth()
   const location = useLocation()
-
-  if (isLoading) {
-    return <div className="text-center text-stone-500">Checking authentication...</div>
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />
-  }
-
+  if (isLoading) return <div className="text-center text-stone-500">Checking authentication...</div>
+  if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />
   return children
 }
 
 function PublicRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth()
   const location = useLocation()
-
-  if (isLoading) {
-    return <div className="text-center text-stone-500">Loading...</div>
-  }
-
-  if (isAuthenticated) {
-    const from = location.state?.from?.pathname || '/'
-    return <Navigate to={from} replace />
-  }
-
+  if (isLoading) return <div className="text-center text-stone-500">Loading...</div>
+  if (isAuthenticated) return <Navigate to={location.state?.from?.pathname || '/'} replace />
   return children
 }
 
 function AuthenticatedLayout({ children, onBugReportSubmit }: { children: ReactNode; onBugReportSubmit: BugReportSubmit }) {
-  return (
-    <div className="flex min-h-screen" data-app-shell-ready>
-      <main className="flex-1 container mx-auto px-3 md:px-4 py-4 md:py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-28">{children}</main>
-      <Navigation onBugReportSubmit={onBugReportSubmit} />
-    </div>
-  )
+  return <div className="flex min-h-screen" data-app-shell-ready><main className="flex-1 container mx-auto px-3 md:px-4 py-4 md:py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-28">{children}</main><Navigation onBugReportSubmit={onBugReportSubmit} /></div>
 }
 
 function PublicLayout({ children, onBugReportSubmit }: { children: ReactNode; onBugReportSubmit: BugReportSubmit }) {
-  return (
-    <div className="min-h-screen" data-app-shell-ready>
-      <main className="container mx-auto px-3 md:px-4 py-4 md:py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-28">{children}</main>
-      <Navigation onBugReportSubmit={onBugReportSubmit} />
-    </div>
-  )
+  return <div className="min-h-screen" data-app-shell-ready><main className="container mx-auto px-3 md:px-4 py-4 md:py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-28">{children}</main><Navigation onBugReportSubmit={onBugReportSubmit} /></div>
 }
 
 function BugReportConnected({ onSubmit }: { onSubmit: BugReportSubmit }) {
@@ -230,6 +193,7 @@ function AppRoutes() {
         <Route path="/history" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><HistoryPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/sessions/:id" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><SessionPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/crossovers" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><CrossoversPage /></AuthenticatedLayout></ProtectedRoute>} />
+        <Route path="/whats-new" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><WhatsNewPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/help" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><HelpPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/glossary" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><HelpPage /></AuthenticatedLayout></ProtectedRoute>} />
       </Routes>
@@ -244,23 +208,7 @@ function AuthResumeBoundary({ children }: { children: ReactNode }) {
 }
 
 function App() {
-  return (
-    <BrowserRouter>
-      <QueryClientProvider client={queryClient}>
-        <BugReportRestoreProvider>
-          <ToastProvider>
-            <CacheProvider>
-              <AuthProvider>
-                <AuthResumeBoundary>
-                  <AppRoutes />
-                </AuthResumeBoundary>
-              </AuthProvider>
-            </CacheProvider>
-          </ToastProvider>
-        </BugReportRestoreProvider>
-      </QueryClientProvider>
-    </BrowserRouter>
-  )
+  return <BrowserRouter><QueryClientProvider client={queryClient}><BugReportRestoreProvider><ToastProvider><CacheProvider><AuthProvider><AuthResumeBoundary><AppRoutes /></AuthResumeBoundary></AuthProvider></CacheProvider></ToastProvider></BugReportRestoreProvider></QueryClientProvider></BrowserRouter>
 }
 
 export { AppRoutes }
