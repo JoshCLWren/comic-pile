@@ -14,7 +14,7 @@ SPEC.loader.exec_module(CHECKER)
 
 
 class AutonomousFactoryPolicyTests(unittest.TestCase):
-    """Verify backlog, review, merge, and Chromium policy invariants."""
+    """Verify backlog, changelog, review, merge, and Chromium policy invariants."""
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -95,7 +95,7 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
             self.validate(entrypoint=f"{self.entrypoint}\n{rule}\n")
 
     def test_current_sources_are_aligned(self) -> None:
-        """Accept the current V16 policy, protocol, and runtime prompt.
+        """Accept the current V17 policy, protocol, and runtime prompt.
 
         Returns:
             None.
@@ -108,7 +108,7 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
         Returns:
             None.
         """
-        self.assert_policy_change_fails("Version: 16", "Version: 15")
+        self.assert_policy_change_fails("Version: 17", "Version: 16")
         self.assert_policy_change_fails(
             "Drive the open issue backlog to zero",
             "Keep existing pull requests busy",
@@ -138,6 +138,21 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
         self.assert_policy_change_fails(
             "At most one implementation worker may own an issue",
             "Any number of workers may own an issue",
+        )
+
+    def test_user_facing_changelog_gate_is_required(self) -> None:
+        """Require release notes before factory readiness or merge.
+
+        Returns:
+            None.
+        """
+        self.assert_policy_change_fails(
+            "Every product, behavior, deployment, operational, or factory-tooling PR must update",
+            "Factory pull requests may skip release notes",
+        )
+        self.assert_policy_change_fails(
+            "A missing required changelog entry is an actionable review defect",
+            "Changelog omissions do not block merge",
         )
 
     def test_review_feedback_gate_is_required(self) -> None:
