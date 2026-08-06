@@ -35,7 +35,13 @@ async def test_create_feature_request_routes_selected_type(auth_client: AsyncCli
 
     assert response.status_code == 201
     assert response.json() == {"issue_url": "https://github.com/test/repo/issues/9"}
-    assert mock_create.await_args.kwargs["report_type"] == "feature"
+    mock_create.assert_awaited_once_with(
+        report_type="feature",
+        title="Add a reading timer",
+        description="Let me track time spent reading an issue.",
+        username="testuser",
+        diagnostics_data=None,
+    )
 
 
 @pytest.mark.asyncio
@@ -54,7 +60,13 @@ async def test_create_report_defaults_to_bug(auth_client: AsyncClient) -> None:
         )
 
     assert response.status_code == 201
-    assert mock_create.await_args.kwargs["report_type"] == "bug"
+    mock_create.assert_awaited_once_with(
+        report_type="bug",
+        title="Broken button",
+        description="The button does nothing.",
+        username="testuser",
+        diagnostics_data=None,
+    )
 
 
 @pytest.mark.asyncio
