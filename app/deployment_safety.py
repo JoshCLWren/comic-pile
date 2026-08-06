@@ -3,6 +3,7 @@
 import os
 from collections.abc import MutableMapping
 from typing import Literal
+from urllib.parse import urlsplit
 
 VercelEnvironment = Literal["production", "preview", "development"]
 _REMOTE_REDIS_VARIABLES = (
@@ -25,27 +26,36 @@ def _require_environment_identity(
         )
 
 
+def _database_host(database_url: str) -> str:
+    """Return the normalized connection host without exposing credentials."""
+    host = urlsplit(database_url).hostname
+    if not host:
+        raise RuntimeError("DATABASE_URL must include a valid database host")
+    return host.lower().rstrip(".")
+
+
 def _validate_database_identity(
     environment: MutableMapping[str, str],
     vercel_environment: VercelEnvironment,
 ) -> None:
-    """Prevent Production and Preview from sharing the same database identity."""
-    if not environment.get("DATABASE_URL"):
+    """Bind Production and Preview checks to the actual connection target."""
+    database_url = environment.get("DATABASE_URL")
+    if not database_url:
         if vercel_environment == "production":
             raise RuntimeError("DATABASE_URL is required for a Production deployment")
         return
 
-    service_id = environment.get("DATABASE_SERVICE_ID")
-    production_service_id = environment.get("PRODUCTION_DATABASE_SERVICE_ID")
-    if not service_id or not production_service_id:
+    production_host = environment.get("PRODUCTION_DATABASE_HOST")
+    if not production_host:
         raise RuntimeError(
-            "DATABASE_SERVICE_ID and PRODUCTION_DATABASE_SERVICE_ID are required "
-            "for Vercel data-service isolation"
+            "PRODUCTION_DATABASE_HOST is required for Vercel data-service isolation"
         )
 
-    if vercel_environment == "production" and service_id != production_service_id:
-        raise RuntimeError("Production DATABASE_SERVICE_ID does not match the approved service")
-    if vercel_environment == "preview" and service_id == production_service_id:
+    connection_host = _database_host(database_url)
+    approved_production_host = production_host.lower().rstrip(".")
+    if vercel_environment == "production" and connection_host != approved_production_host:
+        raise RuntimeError("Production DATABASE_URL does not use the approved database host")
+    if vercel_environment == "preview" and connection_host == approved_production_host:
         raise RuntimeError("Preview cannot use the Production database service")
 
 
@@ -58,8 +68,16 @@ def _disable_preview_redis(environment: MutableMapping[str, str]) -> None:
 
 def _reject_preview_internal_routes(environment: MutableMapping[str, str]) -> None:
     """Keep test-helper and internal operations routes unavailable in Preview."""
-    forbidden = ("ENABLE_DEBUG_ROUTES", "ENABLE_INTERNAL_OPS_ROUTES")
-    enabled = [name for name in forbidden if environment.get(name, "").lower() in {"1", "true", "yes"}]
+    forbidden = (
+        "ENABLE_DEBUG_ROUTES",
+        "ENABLE_INTERNAL_OPS_ROUTES",
+        "TEST_ENVIRONMENT",
+    )
+    enabled = [
+        name
+        for name in forbidden
+        if environment.get(name, "").lower() in {"1", "true", "yes"}
+    ]
     if enabled:
         raise RuntimeError("Preview deployments cannot enable debug or internal operations routes")
 
@@ -67,17 +85,7 @@ def _reject_preview_internal_routes(environment: MutableMapping[str, str]) -> No
 def validate_vercel_service_isolation(
     environment: MutableMapping[str, str] | None = None,
 ) -> None:
-    """Validate Vercel service identities before importing application configuration.
-
-    Args:
-        environment: Mutable environment mapping. Defaults to ``os.environ``.
-
-    Returns:
-        None.
-
-    Raises:
-        RuntimeError: When Production or Preview service configuration is unsafe.
-    """
+    """Validate Vercel service identities before importing application configuration."""
     values = os.environ if environment is None else environment
     raw_vercel_environment = values.get("VERCEL_ENV")
     if raw_vercel_environment not in {"production", "preview", "development"}:
@@ -93,3 +101,5 @@ def validate_vercel_service_isolation(
     if vercel_environment == "preview":
         _reject_preview_internal_routes(values)
         _disable_preview_redis(values)
+        # Preview must behave like Production for route mounting even when it uses isolated data.
+        values["ENVIRONMENT"] = "production"
