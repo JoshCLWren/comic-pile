@@ -1,5 +1,10 @@
 """Regression tests for the explicit Redis cache feature gate."""
 
+from unittest.mock import AsyncMock
+
+import pytest
+
+from app.cache import UpstashCache, cached
 from app.config import RedisSettings
 
 
@@ -45,3 +50,60 @@ def test_incomplete_upstash_configuration_stays_disabled() -> None:
     )
 
     assert settings.is_configured is False
+
+
+@pytest.mark.asyncio
+async def test_disabled_cache_reads_fall_through_to_wrapped_function(monkeypatch) -> None:
+    """Decorated reads execute normally without issuing Redis commands."""
+    from app import cache as cache_module
+
+    monkeypatch.setattr(cache_module.cache, "get", AsyncMock(return_value=None))
+    monkeypatch.setattr(cache_module.cache, "set", AsyncMock(return_value=False))
+    wrapped = AsyncMock(return_value={"source": "database"})
+
+    @cached(ttl=60)
+    async def load_value() -> dict[str, str]:
+        return await wrapped()
+
+    assert await load_value() == {"source": "database"}
+    wrapped.assert_awaited_once_with()
+    cache_module.cache.get.assert_awaited_once()
+    cache_module.cache.set.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_uninitialized_cache_invalidation_makes_no_remote_calls() -> None:
+    """Disabled invalidation remains a safe no-op."""
+    cache_client = UpstashCache()
+    remote_client = AsyncMock()
+    cache_client._initialized = False
+    cache_client._client = remote_client
+
+    assert await cache_client.delete("cache:key") is False
+    assert await cache_client.clear_pattern("cache:*") == 0
+    remote_client.delete.assert_not_awaited()
+    remote_client.scan.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_startup_skips_redis_with_credentials_when_gate_is_disabled(monkeypatch) -> None:
+    """Cold startup never initializes or pings Redis when the gate is off."""
+    from app import main
+
+    disabled_settings = RedisSettings(
+        _env_file=None,
+        upstash_redis_rest_url="https://example.upstash.io",
+        upstash_redis_rest_token="test-token",
+    )
+    initialize = AsyncMock()
+    monkeypatch.setattr(main, "get_redis_settings", lambda: disabled_settings)
+    monkeypatch.setattr(main.cache, "initialize", initialize)
+    monkeypatch.setattr(main, "init_database", AsyncMock())
+
+    application = main.create_app(serve_frontend=False)
+    startup_handler = next(
+        handler for handler in application.router.on_startup if handler.__name__ == "startup_event"
+    )
+    await startup_handler()
+
+    initialize.assert_not_awaited()
