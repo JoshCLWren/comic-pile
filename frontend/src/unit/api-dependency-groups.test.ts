@@ -30,9 +30,9 @@ describe('dependencyGroupsApi', () => {
     await dependencyGroupsApi.list()
     await dependencyGroupsApi.create('Cosmic')
 
-    expect(apiMock.get).toHaveBeenCalledWith('/v1/dependencies/reading-order-groups/')
+    expect(apiMock.get).toHaveBeenCalledWith('/v1/reading-order-groups/')
     expect(apiMock.post).toHaveBeenCalledWith(
-      '/v1/dependencies/reading-order-groups/',
+      '/v1/reading-order-groups/',
       { name: 'Cosmic' },
     )
   })
@@ -49,7 +49,7 @@ describe('dependencyGroupsApi', () => {
     await expect(dependencyGroupsApi.get(3)).resolves.toEqual(group)
 
     expect(apiMock.get).toHaveBeenCalledWith(
-      '/v1/dependencies/reading-order-groups/3',
+      '/v1/reading-order-groups/3',
     )
   })
 
@@ -61,10 +61,10 @@ describe('dependencyGroupsApi', () => {
     await dependencyGroupsApi.delete(3)
 
     expect(apiMock.patch).toHaveBeenCalledWith(
-      '/v1/dependencies/reading-order-groups/3',
+      '/v1/reading-order-groups/3',
       { name: 'Infinity' },
     )
-    expect(apiMock.delete).toHaveBeenCalledWith('/v1/dependencies/reading-order-groups/3')
+    expect(apiMock.delete).toHaveBeenCalledWith('/v1/reading-order-groups/3')
   })
 
   it('loads compact group names for the Roll view', async () => {
@@ -75,7 +75,7 @@ describe('dependencyGroupsApi', () => {
     ])
 
     expect(apiMock.get).toHaveBeenCalledWith(
-      '/v1/dependencies/reading-order-groups/threads/42/groups',
+      '/v1/reading-order-groups/threads/42/groups',
     )
   })
 
@@ -91,16 +91,16 @@ describe('dependencyGroupsApi', () => {
 
     expect(apiMock.post).toHaveBeenNthCalledWith(
       1,
-      '/v1/dependencies/reading-order-groups/7/members',
+      '/v1/reading-order-groups/7/members',
       { thread_id: 42 },
     )
     expect(apiMock.post).toHaveBeenNthCalledWith(
       2,
-      '/v1/dependencies/reading-order-groups/7/members',
+      '/v1/reading-order-groups/7/members',
       { issue_id: 99 },
     )
     expect(apiMock.delete).toHaveBeenCalledWith(
-      '/v1/dependencies/reading-order-groups/7/members/10',
+      '/v1/reading-order-groups/7/members/10',
     )
   })
 })
