@@ -10,15 +10,15 @@ from fastapi import Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.staticfiles import StaticFiles as StarletteStaticFiles
+from starlette.responses import Response as StarletteResponse
+from starlette.types import Scope
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import exc as sqlalchemy_exc
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.responses import Response as StarletteResponse
-from starlette.staticfiles import StaticFiles as StarletteStaticFiles
-from starlette.types import Scope
 
 from app.api import (
     admin,
@@ -44,7 +44,7 @@ from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, is_csrf_protected_reque
 from app.database import get_db
 from app.exception_handlers import register_exception_handlers
 from app.lifecycle import init_database
-from app.middleware import SecurityHeadersMiddleware, limiter
+from app.middleware import limiter, SecurityHeadersMiddleware
 from app.middleware.request_logging import add_request_logging_middleware
 
 logger = logging.getLogger(__name__)
@@ -107,7 +107,6 @@ def _configure_logging(environment: str) -> None:
 _db_settings = get_database_settings()
 _redacted_url = make_url(_db_settings.database_url).render_as_string(hide_password=True)
 logger.info(f"Starting with DATABASE_URL: {_redacted_url}")
-
 
 def create_app(*, serve_frontend: bool = True) -> FastAPI:
     """Create and configure the FastAPI application.
@@ -191,17 +190,22 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     register_exception_handlers(app, app_settings)
 
     # API route prefix convention:
-    # - Maintained client-facing resources are canonical under /api/v1/*.
-    # - Legacy resources remain under /api/* only as tested compatibility aliases.
-    # - Non-production tooling routes (debug, test) remain intentional bare /api/*
-    #   exceptions and are never part of the supported client contract.
+    # - Legacy resources are served under /api/* (threads, roll, queue,
+    #   rate, snooze, undo, auth, admin, analytics, bug-reports, sessions).
+    # - Newer resources are served under the versioned /api/v1/* surface
+    #   (dependencies, issues, reading-orders).
+    # - /api/v1/auth/* and /api/v1/sessions/* are explicit, tested
+    #   compatibility aliases while maintained callers migrate to v1.
+    # - Non-production tooling routes (debug, test) are also mounted under
+    #   bare /api/* but only in non-production/test environments — they are
+    #   intentional exceptions to the versioning rule, not client APIs.
     # Add new client resources under /api/v1/*; do not introduce new bare
     # /api/* routes.
     app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
     app.include_router(admin.router, prefix="/api", tags=["admin"])
     app.include_router(analytics.router, prefix="/api", tags=["analytics"])
     app.include_router(bug_report.router, prefix="/api/bug-reports", tags=["bug-reports"])
-    app.include_router(auth.router, prefix="/api/auth", tags=["auth-legacy"])
+    app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(thread.router, prefix="/api/threads", tags=["threads"])
     if app_settings.environment != "production":
@@ -258,7 +262,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         """StaticFiles with explicit cache-control headers for hashed assets."""
 
         async def get_response(self, path: str, scope: Scope) -> StarletteResponse:
-            """Get static file response with cache-control headers for hashed assets.
+            """Get static file response with cache-control headers.
 
             Args:
                 path: The path to the static file.
@@ -292,14 +296,18 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             """Serve vite favicon.
 
             Returns:
-                FileResponse with vite.svg.
+                FileResponse with vite.svg file.
             """
             from fastapi.responses import FileResponse
 
             return FileResponse("static/vite.svg", media_type="image/svg+xml")
 
         def _serve_spa_index_response() -> Response:
-            """Serve SPA index file when available, else return fallback HTMLResponse."""
+            """Serve SPA index file when available, else return fallback HTML.
+
+            Returns:
+                FileResponse for the built SPA index, or fallback HTMLResponse in test environments.
+            """
             from fastapi.responses import FileResponse, HTMLResponse
 
             spa_index = Path("static/react/index.html")
@@ -313,26 +321,42 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
         @app.get("/")
         async def serve_root():
-            """Serve React app at root URL."""
+            """Serve React app at root URL.
+
+            Returns:
+                FileResponse with React index.html.
+            """
             return _serve_spa_index_response()
 
         @app.get("/react")
         async def serve_react_redirect():
-            """Redirect /react to /."""
+            """Redirect /react to / for consistent routing.
+
+            Returns:
+                RedirectResponse to root URL.
+            """
             from fastapi.responses import RedirectResponse
 
             return RedirectResponse("/", status_code=301)
 
         @app.get("/react/")
         async def serve_react_redirect_slash():
-            """Redirect /react/ to /."""
+            """Redirect /react/ to / for consistent routing.
+
+            Returns:
+                RedirectResponse to root URL.
+            """
             from fastapi.responses import RedirectResponse
 
             return RedirectResponse("/", status_code=301)
 
     @app.get("/health", response_model=None)
     async def health_check(db: AsyncSession = Depends(get_db)) -> dict | JSONResponse:
-        """Health check endpoint that verifies basic application functionality."""
+        """Health check endpoint that verifies basic application functionality.
+
+        Returns:
+            JSON response with health status and database connection state.
+        """
         from sqlalchemy import text
 
         try:
@@ -349,7 +373,19 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
         @app.get("/{full_path:path}")
         async def serve_react_spa(full_path: str):
-            """Serve the React SPA for non-API routes."""
+            """Serve the React SPA for non-API routes.
+
+            The React app owns routing for paths like /rate, /queue, /history, etc.
+
+            Args:
+                full_path: The path to serve.
+
+            Returns:
+                FileResponse with React index.html.
+
+            Raises:
+                StarletteHTTPException: If path is blocked.
+            """
             blocked_prefixes = ("api", "static", "assets", "debug")
             blocked_exact = {"health", "openapi.json", "docs", "redoc", "vite.svg"}
 
