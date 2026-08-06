@@ -1,11 +1,17 @@
 import { useState } from 'react'
 import BugReportModal from './BugReportModal'
+import type { ReportType } from './BugReportModal'
 import { useDiagnostics } from '../hooks/useDiagnostics'
 import type { DiagnosticData } from '../hooks/useDiagnostics'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 
 interface BugReportButtonProps {
-  onSubmit: (title: string, description: string, diagnosticData: DiagnosticData | null) => Promise<void>
+  onSubmit: (
+    reportType: ReportType,
+    title: string,
+    description: string,
+    diagnosticData: DiagnosticData | null,
+  ) => Promise<void>
   variant?: 'floating' | 'nav'
 }
 
@@ -16,8 +22,7 @@ export default function BugReportButton({ onSubmit, variant = 'floating' }: BugR
   const { restoreLastView } = useBugReportRestore()
 
   const handleClick = () => {
-    const diagnostics = collectDiagnostics()
-    setDiagnosticData(diagnostics)
+    setDiagnosticData(collectDiagnostics())
     setIsModalOpen(true)
   }
 
@@ -26,8 +31,8 @@ export default function BugReportButton({ onSubmit, variant = 'floating' }: BugR
     setDiagnosticData(null)
   }
 
-  const handleSubmit = async (title: string, description: string) => {
-    await onSubmit(title, description, diagnosticData)
+  const handleSubmit = async (reportType: ReportType, title: string, description: string) => {
+    await onSubmit(reportType, title, description, diagnosticData)
     handleClose()
     restoreLastView()
   }
@@ -41,8 +46,8 @@ export default function BugReportButton({ onSubmit, variant = 'floating' }: BugR
             ? 'nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none hover:bg-white/5'
             : 'fixed bottom-32 right-4 z-50 flex items-center justify-center w-8 h-8 bg-stone-800/60 hover:bg-amber-500/80 text-stone-400 hover:text-stone-900 rounded-full shadow-sm transition-all backdrop-blur-sm'
         }
-        aria-label="Report a bug"
-        title="Report a bug"
+        aria-label="Send feedback"
+        title="Send feedback"
         type="button"
       >
         <svg
@@ -55,7 +60,7 @@ export default function BugReportButton({ onSubmit, variant = 'floating' }: BugR
           <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
         </svg>
         {variant === 'nav' ? (
-          <span className="text-[10px] uppercase tracking-widest font-bold nav-label">Report</span>
+          <span className="text-[10px] uppercase tracking-widest font-bold nav-label">Feedback</span>
         ) : null}
       </button>
 
