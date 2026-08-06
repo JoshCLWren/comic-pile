@@ -1,3 +1,4 @@
+import { CrossoverTags } from '../../../components/CrossoverTags'
 import { useDependencyGroups } from '../../../hooks/useDependencyGroups'
 
 interface ReadingOrderGroupsProps {
@@ -37,16 +38,7 @@ export function ReadingOrderGroups({ threadId }: ReadingOrderGroupsProps) {
       >
         Crossovers
       </h3>
-      <ul className="flex flex-wrap justify-center gap-2">
-        {groups.map((group) => (
-          <li
-            key={group.id}
-            className="max-w-full break-words rounded-lg border border-violet-700/30 bg-violet-900/20 px-3 py-1.5 text-xs font-bold text-violet-300"
-          >
-            {group.name}
-          </li>
-        ))}
-      </ul>
+      <CrossoverTags groups={groups} align="center" label="Crossover memberships" />
     </section>
   )
 }
