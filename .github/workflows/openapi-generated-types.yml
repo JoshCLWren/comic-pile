@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: openapi-generated-types-${{ github.workflow }}-${{ github.ref }}
@@ -22,6 +22,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          fetch-depth: 0
 
       - name: Set up Python 3.14
         uses: actions/setup-python@v6
@@ -44,6 +47,18 @@ jobs:
         env:
           PYTHONPATH: .
         run: uv run python scripts/generate_openapi_types.py
+
+      - name: Commit regenerated artifacts for same-repository pull requests
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'github-actions[bot]'
+        run: |
+          git add frontend/src/generated/openapi.json frontend/src/generated/openapi.ts
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore(api): regenerate auth OpenAPI artifacts'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
 
       - name: Upload regenerated artifacts
         if: always()
