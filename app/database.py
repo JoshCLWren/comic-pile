@@ -6,12 +6,12 @@ import time
 from collections.abc import AsyncIterator
 
 from sqlalchemy import event, text
-from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 from app.config import get_database_settings
 from app.performance_diagnostics import record_database_query
+from app.safe_logging import safe_connection_metadata, safe_exception_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -26,12 +26,12 @@ else:
     DATABASE_URL = _db_settings.database_url
 ASYNC_DATABASE_URL = _db_settings.async_url
 
-# Log only parsed, password-redacted URLs. Never log raw environment values or
-# prefixes because credentials can appear before the password delimiter.
-_redacted_database_url = make_url(DATABASE_URL).render_as_string(hide_password=True)
-_redacted_async_url = make_url(ASYNC_DATABASE_URL).render_as_string(hide_password=True)
-logger.info("Database URL configured: %s", _redacted_database_url)
-logger.info("Async database URL configured: %s", _redacted_async_url)
+# Log only an allowlisted metadata projection. Rendering a URL, even with its
+# password hidden, risks exposing usernames, query credentials, or encoded secrets.
+logger.info(
+    "Database configured",
+    extra={"database": safe_connection_metadata(ASYNC_DATABASE_URL)},
+)
 
 async_engine = create_async_engine(
     ASYNC_DATABASE_URL,
@@ -108,6 +108,9 @@ async def test_database_connection() -> bool:
         async with AsyncSessionLocal() as session:
             await session.execute(text("SELECT 1"))
             return True
-    except Exception as e:
-        logger.error(f"Database connection test failed: {e}")
+    except Exception as error:
+        logger.error(
+            "Database connection test failed",
+            extra={"database_error": safe_exception_metadata(error)},
+        )
         return False
