@@ -1,0 +1,39 @@
+name: Repair PR 825 generated OpenAPI
+
+on:
+  push:
+    branches:
+      - factory/642-auth-v1-aliases
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate-and-commit:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: factory/642-auth-v1-aliases
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - name: Install uv and restore environment
+        run: |
+          python -m pip install --disable-pip-version-check uv
+          uv sync --frozen
+      - name: Enable pinned pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.15.0 --activate
+      - name: Regenerate and commit OpenAPI artifacts
+        run: |
+          uv run python scripts/generate_openapi_types.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/src/generated/openapi.json frontend/src/generated/openapi.ts
+          git diff --cached --quiet && exit 0
+          git commit -m 'chore(api): regenerate auth OpenAPI artifacts'
+          git push origin HEAD:factory/642-auth-v1-aliases
