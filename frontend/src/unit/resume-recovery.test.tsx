@@ -2,8 +2,10 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ResumeRecovery from '../components/ResumeRecovery'
 
-const apiGet = vi.fn()
-const invalidateQueries = vi.fn()
+const { apiGet, invalidateQueries } = vi.hoisted(() => ({
+  apiGet: vi.fn(),
+  invalidateQueries: vi.fn(),
+}))
 
 vi.mock('../services/api', () => ({
   default: { get: apiGet },
