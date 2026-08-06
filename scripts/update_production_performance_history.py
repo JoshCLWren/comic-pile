@@ -191,7 +191,14 @@ def build_summary(history: list[Sample], sample: Sample) -> str:
 
 
 def main() -> None:
-    """Append the current sample and write comparison output."""
+    """Append the current sample and write comparison output.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
     args = parse_args()
     sample = load_sample(args.sample)
     history = load_history(args.history)
