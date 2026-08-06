@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from typing import cast
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -16,6 +17,18 @@ def _load_vercel_config() -> dict[str, object]:
         Parsed Vercel configuration.
     """
     return json.loads(VERCEL_CONFIG.read_text(encoding="utf-8"))
+
+
+def _routes(config: dict[str, object]) -> list[dict[str, object]]:
+    """Return the typed route list from a parsed Vercel configuration.
+
+    Args:
+        config: Parsed Vercel configuration.
+
+    Returns:
+        Ordered Vercel route definitions.
+    """
+    return cast("list[dict[str, object]]", config["routes"])
 
 
 def test_vercel_builds_static_frontend_and_api_function_separately() -> None:
@@ -36,8 +49,7 @@ def test_vercel_builds_static_frontend_and_api_function_separately() -> None:
 
 def test_vercel_routes_backend_before_spa_fallback() -> None:
     """Ensure API and documentation requests cannot be swallowed by the SPA."""
-    config = _load_vercel_config()
-    routes = config["routes"]
+    routes = _routes(_load_vercel_config())
 
     assert routes[0] == {"src": "/api(?:/.*)?", "dest": "/api/index.py"}
     assert routes[1] == {
@@ -53,11 +65,10 @@ def test_vercel_routes_backend_before_spa_fallback() -> None:
 
 def test_static_html_exposes_routing_evidence_and_security_headers() -> None:
     """Ensure static HTML remains identifiable and receives browser protections."""
-    config = _load_vercel_config()
-    routes = config["routes"]
+    routes = _routes(_load_vercel_config())
 
     for route in (routes[2], routes[-1]):
-        headers = route["headers"]
+        headers = cast("dict[str, str]", route["headers"])
         assert headers["X-ComicPile-Frontend"] == "vercel-static"
         assert headers["Cache-Control"] == "public, max-age=0, must-revalidate"
         assert headers["X-Content-Type-Options"] == "nosniff"
