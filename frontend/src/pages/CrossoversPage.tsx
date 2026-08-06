@@ -46,6 +46,20 @@ export default function CrossoversPage() {
     void loadGroups()
   }, [loadGroups])
 
+  const clearRangeState = () => {
+    setRangeThreadId('')
+    setRangeStart('')
+    setRangeEnd('')
+    setRangeMessage(null)
+  }
+
+  const toggleExpanded = (groupId: number) => {
+    if (busyId !== null) return
+    setExpandedId((current) => (current === groupId ? null : groupId))
+    clearRangeState()
+    setMutationError(null)
+  }
+
   const createGroup = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (isLoading) return
@@ -102,7 +116,10 @@ export default function CrossoversPage() {
     try {
       await dependencyGroupsApi.delete(group.id)
       setGroups((current) => current.filter((item) => item.id !== group.id))
-      if (expandedId === group.id) setExpandedId(null)
+      if (expandedId === group.id) {
+        setExpandedId(null)
+        clearRangeState()
+      }
       if (editingId === group.id) setEditingId(null)
     } catch (error) {
       setMutationError(errorMessage(error, 'Unable to delete crossover.'))
@@ -180,7 +197,7 @@ export default function CrossoversPage() {
                   </div>
                 ) : (
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <button type="button" onClick={() => { setExpandedId(isExpanded ? null : group.id); setRangeMessage(null) }} aria-expanded={isExpanded} className="min-w-0 text-left"><span className="block truncate text-lg font-black text-stone-100">{group.name}</span><span className="text-sm text-stone-500">{group.memberships.length} {group.memberships.length === 1 ? 'member' : 'members'}</span></button>
+                    <button type="button" onClick={() => toggleExpanded(group.id)} disabled={hasPendingMutation} aria-expanded={isExpanded} className="min-w-0 text-left disabled:cursor-not-allowed disabled:opacity-50"><span className="block truncate text-lg font-black text-stone-100">{group.name}</span><span className="text-sm text-stone-500">{group.memberships.length} {group.memberships.length === 1 ? 'member' : 'members'}</span></button>
                     <div className="flex gap-2"><button type="button" onClick={() => beginRename(group)} disabled={hasPendingMutation} className="flex-1 rounded-lg border border-stone-600 px-3 py-2 text-sm font-bold text-stone-300 hover:border-amber-500 disabled:opacity-50">Rename</button><button type="button" onClick={() => void deleteGroup(group)} disabled={hasPendingMutation} className="flex-1 rounded-lg border border-red-800 px-3 py-2 text-sm font-bold text-red-400 hover:bg-red-950/40 disabled:opacity-50">Delete</button></div>
                   </div>
                 )}
