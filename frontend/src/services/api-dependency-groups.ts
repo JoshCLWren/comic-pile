@@ -18,6 +18,14 @@ export interface DependencyGroupSummary {
   name: string
 }
 
+export interface DependencyGroupIssueRangeResult {
+  thread_id: number
+  start_position: number
+  end_position: number
+  added_issue_ids: number[]
+  already_present_issue_ids: number[]
+}
+
 export type DependencyGroupMemberTarget =
   | { thread_id: number; issue_id?: never }
   | { issue_id: number; thread_id?: never }
@@ -56,6 +64,22 @@ export const dependencyGroupsApi = {
     return api.post<DependencyGroupMember>(
       `/v1/reading-order-groups/${groupId}/members`,
       target,
+    )
+  },
+
+  addIssueRange: async (
+    groupId: number,
+    threadId: number,
+    startPosition: number,
+    endPosition: number,
+  ): Promise<DependencyGroupIssueRangeResult> => {
+    return api.post<DependencyGroupIssueRangeResult>(
+      `/v1/reading-order-groups/${groupId}/issue-ranges`,
+      {
+        thread_id: threadId,
+        start_position: startPosition,
+        end_position: endPosition,
+      },
     )
   },
 
