@@ -60,7 +60,7 @@ export default function RegisterPage() {
 
     try {
       const response = await api.post<AuthTokens, { username: string; email: string; password: string }>(
-        '/auth/register',
+        '/v1/auth/register',
         { username: username.trim(), email: email.trim(), password },
       )
       await login(response.access_token)
