@@ -61,6 +61,17 @@ it('keeps canonical credential endpoints exempt from csrf bootstrap', async () =
   expect(apiMock.get).not.toHaveBeenCalled()
 })
 
+it('matches absolute canonical credential URLs by pathname', async () => {
+  const login = await requestInterceptor({
+    method: 'post',
+    url: 'https://comic-pile.example/api/v1/auth/login?returnTo=/queue',
+    headers: {},
+  })
+
+  expect(login.headers).toEqual({})
+  expect(apiMock.get).not.toHaveBeenCalled()
+})
+
 it('does not exempt protected requests that only mention an auth path in the query', async () => {
   apiMock.get.mockResolvedValue({ csrf_token: 'fresh-token' })
 
