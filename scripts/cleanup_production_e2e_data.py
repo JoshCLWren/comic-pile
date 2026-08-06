@@ -7,12 +7,14 @@ import asyncio
 import json
 import os
 import re
+import sys
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, select
 
 from app.database import AsyncSessionLocal, async_engine
+from app.models.reading_order import ReadingOrderItem
 from app.models.thread import Thread
 from app.models.user import User
 
@@ -51,6 +53,9 @@ async def cleanup_stale_threads(
 ) -> CleanupResult:
     """Delete stale, unmistakably test-owned threads for one account.
 
+    Candidate rows are locked until deletion commits so no concurrent update can
+    remove a safety predicate between validation and deletion.
+
     Args:
         account_email: Exact email of the dedicated production E2E account.
         max_age_hours: Minimum thread age before deletion.
@@ -83,26 +88,32 @@ async def cleanup_stale_threads(
                 dry_run=dry_run,
             )
 
-        candidate_rows = (
-            await session.execute(
-                select(Thread.id, Thread.title)
-                .where(Thread.user_id == user_id)
-                .where(Thread.is_test.is_(True))
-                .where(Thread.created_at < cutoff)
-            )
-        ).all()
-        candidate_ids = [
-            thread_id
-            for thread_id, title in candidate_rows
-            if is_managed_e2e_title(title)
+        candidate_threads = list(
+            (
+                await session.scalars(
+                    select(Thread)
+                    .where(Thread.user_id == user_id)
+                    .where(Thread.is_test.is_(True))
+                    .where(Thread.created_at < cutoff)
+                    .with_for_update()
+                )
+            ).all()
+        )
+        managed_threads = [
+            thread
+            for thread in candidate_threads
+            if is_managed_e2e_title(thread.title)
         ]
+        candidate_ids = [thread.id for thread in managed_threads]
 
         if candidate_ids and not dry_run:
             await session.execute(
-                delete(Thread)
-                .where(Thread.user_id == user_id)
-                .where(Thread.id.in_(candidate_ids))
+                delete(ReadingOrderItem).where(
+                    ReadingOrderItem.thread_id.in_(candidate_ids)
+                )
             )
+            for thread in managed_threads:
+                await session.delete(thread)
             await session.commit()
 
         return CleanupResult(
@@ -144,7 +155,7 @@ async def _main() -> int:
         )
         print(json.dumps(asdict(result), sort_keys=True))
         if not result.account_found:
-            print("Dedicated production E2E account was not found.")
+            print("Dedicated production E2E account was not found.", file=sys.stderr)
             return 2
         return 0
     finally:
