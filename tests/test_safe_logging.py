@@ -49,10 +49,39 @@ def test_connection_metadata_excludes_redis_token_and_userinfo() -> None:
         "host": "actual-mantis-12345.upstash.io",
         "port": 6379,
         "database": "0",
-        "ssl_required": False,
+        "ssl_required": True,
     }
     assert "default" not in rendered
     assert token not in rendered
+
+
+def test_connection_metadata_omits_opaque_http_path_tokens() -> None:
+    """Generic URL paths must not be decoded or exposed as database metadata."""
+    encoded_token = "secret%2Ftoken%2Fvalue"
+
+    metadata = safe_connection_metadata(
+        f"https://api.example.test/{encoded_token}?ssl=true"
+    )
+    rendered = repr(metadata)
+
+    assert metadata == {
+        "scheme": "https",
+        "host": "api.example.test",
+        "port": None,
+        "database": None,
+        "ssl_required": False,
+    }
+    assert encoded_token not in rendered
+    assert "secret/token/value" not in rendered
+
+
+def test_connection_metadata_does_not_mark_sslmode_prefer_as_required() -> None:
+    """PostgreSQL prefer mode permits plaintext fallback and is not TLS-required."""
+    metadata = safe_connection_metadata(
+        "postgresql://db.example.test/comic_pile?sslmode=prefer"
+    )
+
+    assert metadata["ssl_required"] is False
 
 
 def test_redact_sensitive_values_handles_nested_configuration() -> None:
@@ -77,6 +106,28 @@ def test_redact_sensitive_values_handles_nested_configuration() -> None:
     assert "redis-secret" not in rendered
     assert "jwt-secret" not in rendered
     assert "github-secret" not in rendered
+    assert rendered.count("[REDACTED]") == 4
+
+
+def test_redact_sensitive_values_removes_connection_urls() -> None:
+    """URL-valued settings must be redacted even when their key lacks secret words."""
+    raw_password = "raw-password"
+    encoded_password = "encoded%2Fpassword"
+    values = {
+        "DATABASE_URL": f"postgresql://user:{raw_password}@db.example.test/app",
+        "TEST_DATABASE_URL": (
+            f"postgresql://user:{encoded_password}@db.example.test/test"
+        ),
+        "REDIS_URL": f"rediss://default:{raw_password}@cache.example.test:6379/0",
+        "CONNECTION_URL": f"https://api.example.test/{encoded_password}",
+    }
+
+    redacted = redact_sensitive_values(values)
+    rendered = repr(redacted)
+
+    assert raw_password not in rendered
+    assert encoded_password not in rendered
+    assert "encoded/password" not in rendered
     assert rendered.count("[REDACTED]") == 4
 
 
