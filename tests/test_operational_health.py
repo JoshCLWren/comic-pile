@@ -177,27 +177,30 @@ async def test_operational_token_hides_detailed_endpoints(
 
 
 @pytest.mark.asyncio
-async def test_legacy_health_never_exposes_operational_details(
+async def test_legacy_health_is_dependency_free(
     client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Verify the public legacy route remains database-only when a token is configured.
+    """Verify the public legacy route never opens database or cache connections.
 
     Args:
         client: Async HTTP client for the test application.
-        monkeypatch: Pytest fixture for setting the health token.
+        monkeypatch: Pytest fixture for replacing dependency probes.
 
     Returns:
         None.
     """
-    monkeypatch.setenv("HEALTH_CHECK_TOKEN", "trusted-monitor")
+
+    async def fail_if_called(*_: object) -> None:
+        raise AssertionError("legacy liveness must not probe dependencies")
+
+    monkeypatch.setattr(health, "_database_probe", fail_if_called)
+    monkeypatch.setattr(health, "_cache_probe", fail_if_called)
 
     response = await client.get("/api/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "healthy", "database": "connected"}
-    assert "cache" not in response.text
-    assert "duration_ms" not in response.text
+    assert response.json() == {"status": "alive"}
 
 
 @pytest.mark.asyncio
