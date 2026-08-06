@@ -47,7 +47,11 @@ async def _owned_group(db: AsyncSession, group_id: int, user_id: int) -> Depende
     return group
 
 
-@router.get("/", response_model=list[DependencyGroupResponse])
+@router.get(
+    "/",
+    response_model=list[DependencyGroupResponse],
+    description="List the current user's groups and memberships.",
+)
 async def list_groups(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -70,7 +74,12 @@ async def list_groups(
     return list(result.scalars().unique())
 
 
-@router.post("/", response_model=DependencyGroupResponse, status_code=201)
+@router.post(
+    "/",
+    response_model=DependencyGroupResponse,
+    status_code=201,
+    description="Create a user-owned named group.",
+)
 async def create_group(
     payload: DependencyGroupCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -96,7 +105,11 @@ async def create_group(
     return await _owned_group(db, group.id, current_user.id)
 
 
-@router.get("/threads/{thread_id}/groups", response_model=list[DependencyGroupSummary])
+@router.get(
+    "/threads/{thread_id}/groups",
+    response_model=list[DependencyGroupSummary],
+    description="List groups containing an owned thread or any of its owned issues.",
+)
 async def list_thread_groups(
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -132,7 +145,11 @@ async def list_thread_groups(
     return [DependencyGroupSummary(id=row.id, name=row.name) for row in result]
 
 
-@router.get("/{group_id}", response_model=DependencyGroupResponse)
+@router.get(
+    "/{group_id}",
+    response_model=DependencyGroupResponse,
+    description="Return one owned group.",
+)
 async def get_group(
     group_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -151,7 +168,11 @@ async def get_group(
     return await _owned_group(db, group_id, current_user.id)
 
 
-@router.patch("/{group_id}", response_model=DependencyGroupResponse)
+@router.patch(
+    "/{group_id}",
+    response_model=DependencyGroupResponse,
+    description="Rename one owned group.",
+)
 async def update_group(
     group_id: int,
     payload: DependencyGroupUpdate,
@@ -179,7 +200,11 @@ async def update_group(
     return await _owned_group(db, group_id, current_user.id)
 
 
-@router.delete("/{group_id}", status_code=204)
+@router.delete(
+    "/{group_id}",
+    status_code=204,
+    description="Delete one owned group and its memberships.",
+)
 async def delete_group(
     group_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -205,6 +230,7 @@ async def delete_group(
     "/{group_id}/issue-ranges",
     response_model=DependencyGroupIssueRangeResponse,
     status_code=200,
+    description="Add one inclusive issue-position range from an owned thread to a group.",
 )
 async def add_issue_range(
     group_id: int,
@@ -278,6 +304,7 @@ async def add_issue_range(
     "/{group_id}/members",
     response_model=DependencyGroupMemberResponse,
     status_code=201,
+    description="Add one owned thread or issue to an owned group.",
 )
 async def add_member(
     group_id: int,
@@ -321,7 +348,11 @@ async def add_member(
     return member
 
 
-@router.delete("/{group_id}/members/{member_id}", status_code=204)
+@router.delete(
+    "/{group_id}/members/{member_id}",
+    status_code=204,
+    description="Remove one membership from an owned group.",
+)
 async def remove_member(
     group_id: int,
     member_id: int,
