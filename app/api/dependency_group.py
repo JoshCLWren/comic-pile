@@ -14,6 +14,8 @@ from app.models import DependencyGroup, DependencyGroupMembership, Issue, Thread
 from app.models.user import User
 from app.schemas.dependency_group import (
     DependencyGroupCreate,
+    DependencyGroupIssueRangeCreate,
+    DependencyGroupIssueRangeResponse,
     DependencyGroupMemberCreate,
     DependencyGroupMemberResponse,
     DependencyGroupResponse,
@@ -22,6 +24,7 @@ from app.schemas.dependency_group import (
 )
 
 router = APIRouter(prefix="/reading-order-groups", tags=["reading-order-groups"])
+MAX_RANGE_SIZE = 250
 
 
 def _normalize_name(name: str) -> str:
@@ -31,9 +34,7 @@ def _normalize_name(name: str) -> str:
     return normalized
 
 
-async def _owned_group(
-    db: AsyncSession, group_id: int, user_id: int
-) -> DependencyGroup:
+async def _owned_group(db: AsyncSession, group_id: int, user_id: int) -> DependencyGroup:
     result = await db.execute(
         select(DependencyGroup)
         .options(selectinload(DependencyGroup.memberships))
@@ -50,15 +51,7 @@ async def list_groups(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> list[DependencyGroup]:
-    """List the current user's groups and memberships.
-
-    Args:
-        current_user: The authenticated owner of the requested groups.
-        db: The asynchronous database session.
-
-    Returns:
-        The user's groups with eagerly loaded memberships.
-    """
+    """List the current user's groups and memberships."""
     result = await db.execute(
         select(DependencyGroup)
         .options(selectinload(DependencyGroup.memberships))
@@ -74,16 +67,7 @@ async def create_group(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> DependencyGroup:
-    """Create a user-owned named group.
-
-    Args:
-        payload: The validated group creation request.
-        current_user: The authenticated group owner.
-        db: The asynchronous database session.
-
-    Returns:
-        The newly created group with memberships loaded.
-    """
+    """Create a user-owned named group."""
     group = DependencyGroup(user_id=current_user.id, name=_normalize_name(payload.name))
     db.add(group)
     try:
@@ -100,16 +84,7 @@ async def list_thread_groups(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> list[DependencyGroupSummary]:
-    """List groups containing an owned thread or any of its owned issues.
-
-    Args:
-        thread_id: The owned thread identifier used for the lookup.
-        current_user: The authenticated thread and group owner.
-        db: The asynchronous database session.
-
-    Returns:
-        Distinct group summaries ordered by name and identifier.
-    """
+    """List groups containing an owned thread or any of its owned issues."""
     thread = await db.get(Thread, thread_id)
     if thread is None or thread.user_id != current_user.id:
         raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
@@ -136,16 +111,7 @@ async def get_group(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> DependencyGroup:
-    """Return one owned group.
-
-    Args:
-        group_id: The dependency group identifier.
-        current_user: The authenticated group owner.
-        db: The asynchronous database session.
-
-    Returns:
-        The requested owned group with memberships loaded.
-    """
+    """Return one owned group."""
     return await _owned_group(db, group_id, current_user.id)
 
 
@@ -156,17 +122,7 @@ async def update_group(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> DependencyGroup:
-    """Rename one owned group.
-
-    Args:
-        group_id: The dependency group identifier.
-        payload: The validated group rename request.
-        current_user: The authenticated group owner.
-        db: The asynchronous database session.
-
-    Returns:
-        The renamed group with memberships loaded.
-    """
+    """Rename one owned group."""
     group = await _owned_group(db, group_id, current_user.id)
     group.name = _normalize_name(payload.name)
     try:
@@ -183,20 +139,79 @@ async def delete_group(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> Response:
-    """Delete one owned group and its memberships.
-
-    Args:
-        group_id: The dependency group identifier.
-        current_user: The authenticated group owner.
-        db: The asynchronous database session.
-
-    Returns:
-        An empty HTTP 204 response.
-    """
+    """Delete one owned group and its memberships."""
     group = await _owned_group(db, group_id, current_user.id)
     await db.delete(group)
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/{group_id}/issue-ranges",
+    response_model=DependencyGroupIssueRangeResponse,
+    status_code=200,
+)
+async def add_issue_range(
+    group_id: int,
+    payload: DependencyGroupIssueRangeCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> DependencyGroupIssueRangeResponse:
+    """Add one inclusive issue-position range from an owned thread to a group."""
+    await _owned_group(db, group_id, current_user.id)
+    thread = await db.get(Thread, payload.thread_id)
+    if thread is None or thread.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail=f"Thread {payload.thread_id} not found")
+
+    range_size = payload.end_position - payload.start_position + 1
+    if range_size > MAX_RANGE_SIZE:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Issue range cannot contain more than {MAX_RANGE_SIZE} positions",
+        )
+
+    issue_result = await db.execute(
+        select(Issue)
+        .where(
+            Issue.thread_id == payload.thread_id,
+            Issue.position >= payload.start_position,
+            Issue.position <= payload.end_position,
+        )
+        .order_by(Issue.position)
+    )
+    issues = list(issue_result.scalars())
+    expected_positions = list(range(payload.start_position, payload.end_position + 1))
+    actual_positions = [issue.position for issue in issues]
+    if actual_positions != expected_positions:
+        missing = sorted(set(expected_positions) - set(actual_positions))
+        raise HTTPException(
+            status_code=422,
+            detail=f"Issue range contains missing positions: {', '.join(map(str, missing))}",
+        )
+
+    issue_ids = [issue.id for issue in issues]
+    existing_result = await db.execute(
+        select(DependencyGroupMembership.issue_id).where(
+            DependencyGroupMembership.group_id == group_id,
+            DependencyGroupMembership.issue_id.in_(issue_ids),
+        )
+    )
+    existing_ids = {issue_id for issue_id in existing_result.scalars() if issue_id is not None}
+    added_ids = [issue_id for issue_id in issue_ids if issue_id not in existing_ids]
+    db.add_all(
+        DependencyGroupMembership(group_id=group_id, issue_id=issue_id)
+        for issue_id in added_ids
+    )
+    if added_ids:
+        await db.commit()
+
+    return DependencyGroupIssueRangeResponse(
+        thread_id=payload.thread_id,
+        start_position=payload.start_position,
+        end_position=payload.end_position,
+        added_issue_ids=added_ids,
+        already_present_issue_ids=[issue_id for issue_id in issue_ids if issue_id in existing_ids],
+    )
 
 
 @router.post(
@@ -210,17 +225,7 @@ async def add_member(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> DependencyGroupMembership:
-    """Add one owned thread or issue to an owned group.
-
-    Args:
-        group_id: The dependency group identifier.
-        payload: The validated thread or issue membership request.
-        current_user: The authenticated owner of the group and target.
-        db: The asynchronous database session.
-
-    Returns:
-        The newly persisted group membership.
-    """
+    """Add one owned thread or issue to an owned group."""
     await _owned_group(db, group_id, current_user.id)
     if payload.thread_id is not None:
         target = await db.get(Thread, payload.thread_id)
@@ -253,17 +258,7 @@ async def remove_member(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> Response:
-    """Remove one membership from an owned group.
-
-    Args:
-        group_id: The dependency group identifier.
-        member_id: The membership identifier to remove.
-        current_user: The authenticated group owner.
-        db: The asynchronous database session.
-
-    Returns:
-        An empty HTTP 204 response.
-    """
+    """Remove one membership from an owned group."""
     await _owned_group(db, group_id, current_user.id)
     member = await db.get(DependencyGroupMembership, member_id)
     if member is None or member.group_id != group_id:
