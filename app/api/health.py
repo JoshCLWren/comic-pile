@@ -20,7 +20,7 @@ from app.cache import cache
 from app.database import get_db
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/health", tags=["health"])
+router = APIRouter(tags=["health"])
 DEPENDENCY_TIMEOUT_SECONDS = 2.0
 
 
@@ -127,7 +127,7 @@ def _overall_status(
     return "healthy"
 
 
-@router.get("/live")
+@router.get("/v1/health/live")
 async def liveness() -> dict[str, str]:
     """Confirm that the FastAPI process can serve requests without dependencies.
 
@@ -137,7 +137,7 @@ async def liveness() -> dict[str, str]:
     return {"status": "alive"}
 
 
-@router.get("/dependencies", response_model=DependencyHealthResponse)
+@router.get("/v1/health/dependencies", response_model=DependencyHealthResponse)
 async def dependency_health(
     _: Annotated[None, Depends(_authorize_operational_probe)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -183,7 +183,7 @@ async def dependency_health(
     return payload
 
 
-@router.get("/warmup", response_model=DependencyHealthResponse)
+@router.get("/v1/health/warmup", response_model=DependencyHealthResponse)
 async def warmup(
     _: Annotated[None, Depends(_authorize_operational_probe)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -200,7 +200,7 @@ async def warmup(
     return await dependency_health(None, db)
 
 
-@router.get("", response_model=DependencyHealthResponse)
+@router.get("/health", response_model=DependencyHealthResponse, include_in_schema=False)
 async def legacy_health(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> DependencyHealthResponse | JSONResponse:
