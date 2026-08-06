@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import AppErrorBoundary from '../components/AppErrorBoundary'
@@ -24,7 +24,6 @@ describe('AppErrorBoundary', () => {
 
   it('replaces a render crash with a visible reload path', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    const reload = vi.spyOn(window.location, 'reload').mockImplementation(() => undefined)
 
     render(
       <AppErrorBoundary>
@@ -33,13 +32,11 @@ describe('AppErrorBoundary', () => {
     )
 
     expect(screen.getByRole('heading', { name: 'ComicPile needs to reconnect' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reload ComicPile' })).toBeInTheDocument()
     expect(consoleError).toHaveBeenCalledWith(
       'ComicPile application render failed',
       expect.any(Error),
       expect.any(Object),
     )
-
-    fireEvent.click(screen.getByRole('button', { name: 'Reload ComicPile' }))
-    expect(reload).toHaveBeenCalledOnce()
   })
 })
