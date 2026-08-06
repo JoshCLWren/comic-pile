@@ -194,8 +194,8 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     #   rate, snooze, undo, auth, admin, analytics, bug-reports, sessions).
     # - Newer resources are served under the versioned /api/v1/* surface
     #   (dependencies, issues, reading-orders).
-    # - /api/v1/sessions/* is an explicit, tested backwards-compat alias of
-    #   /api/sessions/* (see tests/test_route_versioning.py, issue #376).
+    # - /api/v1/auth/* and /api/v1/sessions/* are explicit, tested
+    #   compatibility aliases while maintained callers migrate to v1.
     # - Non-production tooling routes (debug, test) are also mounted under
     #   bare /api/* but only in non-production/test environments — they are
     #   intentional exceptions to the versioning rule, not client APIs.
@@ -206,6 +206,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(analytics.router, prefix="/api", tags=["analytics"])
     app.include_router(bug_report.router, prefix="/api/bug-reports", tags=["bug-reports"])
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+    app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(thread.router, prefix="/api/threads", tags=["threads"])
     if app_settings.environment != "production":
         app.include_router(debug.router, prefix="/api", tags=["debug"])

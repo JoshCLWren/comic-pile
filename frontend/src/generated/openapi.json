@@ -5050,6 +5050,222 @@
         ]
       }
     },
+    "/api/v1/auth/csrf": {
+      "get": {
+        "description": "Return a CSRF token and ensure the CSRF cookie is present.",
+        "operationId": "get_csrf_token_api_v1_auth_csrf_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Get Csrf Token Api V1 Auth Csrf Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Csrf Token",
+        "tags": [
+          "auth",
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "description": "Authenticate user and return tokens.\n\nArgs:\n    login_data: User login data (username, password).\n    request: Incoming request used for cookie security policy and IP extraction.\n    response: Outgoing response used to set auth cookies.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    TokenResponse with access and refresh tokens.\n\nRaises:\n    HTTPException: If credentials are invalid or account is locked out.",
+        "operationId": "login_user_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Login User",
+        "tags": [
+          "auth",
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "description": "Logout user by revoking their current token if valid.\n\nArgs:\n    request: FastAPI Request object for accessing authorization header.\n    response: Response object used to clear auth cookies.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    Dictionary with success message.\n\nNote:\n    This endpoint allows logout even with invalid/expired tokens to enable\n    clients to clear local storage and redirect to login.",
+        "operationId": "logout_user_api_v1_auth_logout_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Logout User Api V1 Auth Logout Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Logout User",
+        "tags": [
+          "auth",
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "description": "Get current authenticated user's information.\n\nArgs:\n    current_user: The authenticated user making the request.\n\nReturns:\n    UserResponse with user details.",
+        "operationId": "get_current_user_info_api_v1_auth_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Current User Info",
+        "tags": [
+          "auth",
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "description": "Refresh access token using refresh token.\n\nArgs:\n    request: Incoming request used to read refresh token cookies.\n    response: Outgoing response used to rotate refresh cookies.\n    refresh_data: Refresh token request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    TokenResponse with new access and refresh tokens.\n\nRaises:\n    HTTPException: If refresh token is invalid or revoked.",
+        "operationId": "refresh_access_token_api_v1_auth_refresh_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/RefreshTokenRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Refresh Data"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Refresh Access Token",
+        "tags": [
+          "auth",
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "description": "Register a new user and return tokens.\n\nArgs:\n    user_data: User registration data (username, email, password).\n    request: Incoming request used for cookie security policy.\n    response: Outgoing response used to set auth cookies.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    TokenResponse with access and refresh tokens.\n\nRaises:\n    HTTPException: If username or email already exists.",
+        "operationId": "register_user_api_v1_auth_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserRegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Register User",
+        "tags": [
+          "auth",
+          "auth"
+        ]
+      }
+    },
     "/api/v1/dependencies/": {
       "post": {
         "description": "Create a hard-block dependency between owned threads or owned issues.",
