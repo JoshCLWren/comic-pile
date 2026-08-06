@@ -72,6 +72,7 @@ jobs:
           DATABASE_URL: ${{ secrets.PROD_E2E_DATABASE_URL }}
           PROD_E2E_ACCOUNT_EMAIL: ${{ secrets.PROD_E2E_ACCOUNT_EMAIL }}
         run: |
+          set -o pipefail
           if [ -z "$DATABASE_URL" ] || [ -z "$PROD_E2E_ACCOUNT_EMAIL" ]; then
             echo 'Missing dedicated production E2E cleanup secrets.' >&2
             exit 1
