@@ -14,6 +14,7 @@
     "jiti": "^2.6.1"
   },
   "scripts": {
+    "build": "pnpm --dir frontend build",
     "lint:js": "sh -c 'if ls static/react/assets/*.js >/dev/null 2>&1 || ls static/assets/*.js >/dev/null 2>&1; then pnpm exec eslint static/react/assets/*.js static/assets/*.js; else echo \"No JavaScript files to lint\"; fi'",
     "lint:html": "pnpm exec htmlhint app/templates/*.html",
     "lint": "pnpm run lint:js && pnpm run lint:html",
