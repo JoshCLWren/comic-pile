@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const changelogPath = path.resolve(__dirname, '../docs/changelog.md')
 
-function changelogAsset(): Plugin {
+export function changelogAsset(): Plugin {
   return {
     name: 'comic-pile-changelog-asset',
     configureServer(server) {
