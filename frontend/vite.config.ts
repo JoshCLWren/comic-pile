@@ -22,6 +22,11 @@ interface ChangelogFragment {
   fileName: string
 }
 
+function isValidCalendarDate(date: string): boolean {
+  const timestamp = Date.parse(`${date}T00:00:00Z`)
+  return !Number.isNaN(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === date
+}
+
 function readFragments(fragmentsDir: string): ChangelogFragment[] {
   const fragments: ChangelogFragment[] = []
   const seenPrNumbers = new Set<number>()
@@ -37,6 +42,10 @@ function readFragments(fragmentsDir: string): ChangelogFragment[] {
     }
 
     const [, date, rawPrNumber] = match
+    if (!isValidCalendarDate(date)) {
+      throw new Error(`Invalid changelog fragment date ${date} in ${entry.name}`)
+    }
+
     const prNumber = Number(rawPrNumber)
     if (seenPrNumbers.has(prNumber)) {
       throw new Error(`Duplicate changelog fragment for PR #${prNumber}`)
