@@ -1,14 +1,33 @@
-import { defineConfig } from 'vite'
+import { readFileSync } from 'node:fs'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import sri from 'vite-plugin-sri'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const changelogPath = path.resolve(__dirname, '../docs/changelog.md')
+
+export function changelogAsset(): Plugin {
+  return {
+    name: 'comic-pile-changelog-asset',
+    configureServer(server) {
+      server.middlewares.use('/changelog.md', (_request, response) => {
+        response.statusCode = 200
+        response.setHeader('Content-Type', 'text/markdown; charset=utf-8')
+        response.end(readFileSync(changelogPath, 'utf-8'))
+      })
+    },
+    generateBundle() {
+      const source = readFileSync(changelogPath, 'utf-8')
+      this.emitFile({ type: 'asset', fileName: 'changelog.md', source })
+    },
+  }
+}
 
 export default defineConfig(() => ({
   base: '/',
-  plugins: [react(), sri({ algorithm: 'sha384' })],
+  plugins: [react(), changelogAsset(), sri({ algorithm: 'sha384' })],
   server: {
     host: '0.0.0.0',
     proxy: {
@@ -19,14 +38,14 @@ export default defineConfig(() => ({
         ws: true,
         configure: (proxy, _options) => {
           proxy.on('error', (err, _req, _res) => {
-            console.log('proxy error', err);
-          });
+            console.log('proxy error', err)
+          })
           proxy.on('proxyReq', (proxyReq, req, _res) => {
-            console.log('Sending Request to the Target:', req.method, req.url);
-          });
+            console.log('Sending Request to the Target:', req.method, req.url)
+          })
           proxy.on('proxyRes', (proxyRes, req, _res) => {
-            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
-          });
+            console.log('Received Response from the Target:', proxyRes.statusCode, req.url)
+          })
         },
       },
     },
@@ -37,12 +56,8 @@ export default defineConfig(() => ({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('three')) {
-            return 'three'
-          }
-          if (id.includes('node_modules')) {
-            return 'vendor'
-          }
+          if (id.includes('three')) return 'three'
+          if (id.includes('node_modules')) return 'vendor'
           return undefined
         },
       },

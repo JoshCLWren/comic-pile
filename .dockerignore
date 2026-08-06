@@ -36,6 +36,9 @@ playwright-report-prod/
 docs/
 *.md
 !README.md
+!docs/
+docs/*
+!docs/changelog.md
 
 # Tests
 tests/
