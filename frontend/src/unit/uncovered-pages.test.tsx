@@ -43,7 +43,7 @@ describe('LoginPage', () => {
     expect(screen.getByText('Password must be at least 6 characters')).toBeInTheDocument()
   })
 
-  it('logs in successfully and reports API errors', async () => {
+  it('logs in successfully through the canonical v1 endpoint and reports API errors', async () => {
     api.post.mockResolvedValueOnce({ access_token: 'token' })
     auth.login.mockResolvedValueOnce(undefined)
     renderRoute(<LoginPage />)
@@ -51,7 +51,7 @@ describe('LoginPage', () => {
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password' } })
     fireEvent.submit(screen.getByRole('button', { name: 'Sign In' }).closest('form')!)
     await waitFor(() => expect(auth.login).toHaveBeenCalledWith('token'))
-    expect(api.post).toHaveBeenCalledWith('/auth/login', { username: 'reader', password: 'password' })
+    expect(api.post).toHaveBeenCalledWith('/v1/auth/login', { username: 'reader', password: 'password' })
 
     api.post.mockRejectedValueOnce(new Error('network'))
     fireEvent.submit(screen.getByRole('button', { name: 'Sign In' }).closest('form')!)
@@ -83,7 +83,7 @@ describe('RegisterPage', () => {
     expect(screen.getByText('Passwords do not match')).toBeInTheDocument()
   })
 
-  it('registers successfully and reports a generic API failure', async () => {
+  it('registers successfully through the canonical v1 endpoint and reports a generic API failure', async () => {
     api.post.mockResolvedValueOnce({ access_token: 'token' })
     auth.login.mockResolvedValueOnce(undefined)
     renderRoute(<RegisterPage />)
@@ -93,6 +93,11 @@ describe('RegisterPage', () => {
     fireEvent.change(screen.getByLabelText('Confirm Password'), { target: { value: 'password' } })
     fireEvent.submit(screen.getByRole('button', { name: 'Create Account' }).closest('form')!)
     await waitFor(() => expect(auth.login).toHaveBeenCalledWith('token'))
+    expect(api.post).toHaveBeenCalledWith('/v1/auth/register', {
+      username: 'reader',
+      email: 'reader@example.com',
+      password: 'password',
+    })
 
     api.post.mockRejectedValueOnce(new Error('network'))
     fireEvent.submit(screen.getByRole('button', { name: 'Create Account' }).closest('form')!)
