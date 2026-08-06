@@ -15,16 +15,24 @@ vi.mock('../query/queryClient', () => ({
   queryClient: { invalidateQueries },
 }))
 
-function dispatchPersistedPageShow(): void {
+function dispatchPageShow(persisted: boolean): void {
   const event = new Event('pageshow')
-  Object.defineProperty(event, 'persisted', { value: true })
+  Object.defineProperty(event, 'persisted', { value: persisted })
   fireEvent(window, event)
+}
+
+function setVisibilityState(state: DocumentVisibilityState): void {
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    value: state,
+  })
 }
 
 describe('ResumeRecovery', () => {
   beforeEach(() => {
     apiGet.mockReset()
     invalidateQueries.mockReset()
+    setVisibilityState('visible')
   })
 
   afterEach(() => {
@@ -36,7 +44,7 @@ describe('ResumeRecovery', () => {
     invalidateQueries.mockResolvedValue(undefined)
 
     render(<ResumeRecovery><div>Last usable screen</div></ResumeRecovery>)
-    dispatchPersistedPageShow()
+    dispatchPageShow(true)
 
     expect(screen.getByText('Last usable screen')).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent('Reconnecting ComicPile')
@@ -50,7 +58,7 @@ describe('ResumeRecovery', () => {
     apiGet.mockRejectedValue(new Error('network suspended'))
 
     render(<ResumeRecovery><div>Last usable screen</div></ResumeRecovery>)
-    dispatchPersistedPageShow()
+    dispatchPageShow(true)
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000)
@@ -61,5 +69,32 @@ describe('ResumeRecovery', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('ComicPile could not reconnect')
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reload' })).toBeInTheDocument()
+  })
+
+  it('ignores ordinary page shows and hidden tabs, then recovers on a visible resume with one successful retry', async () => {
+    vi.useFakeTimers()
+    apiGet
+      .mockRejectedValueOnce(new Error('radio still waking'))
+      .mockResolvedValueOnce({ id: 1 })
+    invalidateQueries.mockResolvedValue(undefined)
+
+    render(<ResumeRecovery><div>Last usable screen</div></ResumeRecovery>)
+
+    dispatchPageShow(false)
+    setVisibilityState('hidden')
+    fireEvent(document, new Event('visibilitychange'))
+    expect(apiGet).not.toHaveBeenCalled()
+
+    setVisibilityState('visible')
+    fireEvent(document, new Event('visibilitychange'))
+    dispatchPageShow(true)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(750)
+    })
+
+    expect(apiGet).toHaveBeenCalledTimes(2)
+    expect(invalidateQueries).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 })
