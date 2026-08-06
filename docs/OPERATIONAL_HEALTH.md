@@ -4,10 +4,10 @@ ComicPile exposes separate bounded endpoints so monitoring can distinguish proce
 
 ## Endpoint selection
 
-- `GET /api/health/live` confirms only that the FastAPI process can serve a request. It does not query Neon or Upstash and is the correct liveness probe.
-- `GET /api/health/dependencies` checks Neon and Upstash independently with a two-second timeout per dependency. Use it for dependency alerts and diagnosis.
-- `GET /api/health/warmup` exercises the same cheap, read-only database and cache path used by dependency monitoring. Use it when intentionally warming an idle deployment.
-- `GET /health` remains the legacy database health boundary for existing callers.
+- `GET /api/v1/health/live` confirms only that the FastAPI process can serve a request. It does not query Neon or Upstash and is the correct liveness probe.
+- `GET /api/v1/health/dependencies` checks Neon and Upstash independently with a two-second timeout per dependency. Use it for dependency alerts and diagnosis.
+- `GET /api/v1/health/warmup` exercises the same cheap, read-only database and cache path used by dependency monitoring. Use it when intentionally warming an idle deployment.
+- `GET /api/health` remains the hidden legacy database health boundary for existing callers.
 
 Set `HEALTH_CHECK_TOKEN` in production and send it as `X-Health-Token` to access the detailed dependency and warm-up endpoints. Missing or invalid tokens receive a generic 404 so operational detail is not advertised. The liveness endpoint remains public because it contains no infrastructure detail.
 
