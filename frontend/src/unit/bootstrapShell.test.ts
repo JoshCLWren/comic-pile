@@ -28,7 +28,7 @@ describe('startBootstrapShellLifecycle', () => {
     expect(document.getElementById('bootstrap-shell')).toBe(shell)
   })
 
-  it('changes to a reconnecting message when bootstrap is slow', () => {
+  it('changes to a reconnecting message when bootstrap times out', () => {
     const root = document.getElementById('root') as HTMLElement
     const shell = document.getElementById('bootstrap-shell') as HTMLElement
 
@@ -38,14 +38,26 @@ describe('startBootstrapShellLifecycle', () => {
     const status = shell.querySelector<HTMLElement>('[data-bootstrap-status]')
     expect(status?.dataset.state).toBe('reconnecting')
     expect(status?.textContent).toContain('Still waking ComicPile')
+    expect(document.getElementById('bootstrap-shell')).toBe(shell)
   })
 
-  it('removes the static shell only after a real application layout renders', async () => {
+  it('does not treat a presentation class as application readiness', async () => {
     const root = document.getElementById('root') as HTMLElement
     const shell = document.getElementById('bootstrap-shell') as HTMLElement
 
     startBootstrapShellLifecycle(root, shell)
-    root.innerHTML = '<main class="min-h-screen">Ready</main>'
+    root.innerHTML = '<main class="min-h-screen">Still resolving</main>'
+    await Promise.resolve()
+
+    expect(document.getElementById('bootstrap-shell')).toBe(shell)
+  })
+
+  it('removes the static shell only after a resolved application layout renders', async () => {
+    const root = document.getElementById('root') as HTMLElement
+    const shell = document.getElementById('bootstrap-shell') as HTMLElement
+
+    startBootstrapShellLifecycle(root, shell)
+    root.innerHTML = '<main class="min-h-screen" data-app-shell-ready>Ready</main>'
     await Promise.resolve()
 
     expect(document.getElementById('bootstrap-shell')).toBeNull()
