@@ -1,4 +1,4 @@
-const READY_SELECTOR = '[data-app-shell-ready], .min-h-screen'
+const READY_SELECTOR = '[data-app-shell-ready]'
 const RECONNECTING_DELAY_MS = 8_000
 
 export interface BootstrapShellLifecycle {
