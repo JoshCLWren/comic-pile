@@ -2,9 +2,11 @@ import { act, renderHook } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { useRate } from '../hooks/useRate'
 import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from '../hooks/rollMutationReconciliation'
+import { applyRatedThreadCache } from '../query/cacheEffects'
+import { queryClient } from '../query/queryClient'
 import { rateApi } from '../services/api'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
-import type { RatePayload } from '../types'
+import type { RatePayload, Thread } from '../types'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 
 vi.mock('../services/api', () => ({
@@ -19,8 +21,26 @@ vi.mock('../services/rollBootstrapApi', () => ({
   },
 }))
 
+vi.mock('../query/cacheEffects', () => ({
+  applyRatedThreadCache: vi.fn(),
+}))
+
 const mockedRateApi = vi.mocked(rateApi)
 const mockedRollBootstrapApi = vi.mocked(rollBootstrapApi)
+const mockedApplyRatedThreadCache = vi.mocked(applyRatedThreadCache)
+
+const thread: Thread = {
+  id: 1,
+  title: 'Saga',
+  format: 'issue',
+  issues_remaining: 3,
+  total_issues: 10,
+  queue_position: 2,
+  status: 'active',
+  is_blocked: false,
+  blocking_reasons: [],
+  created_at: '2026-08-03T00:00:00Z',
+}
 
 const bootstrapState = (
   pendingThreadId: number | null,
@@ -44,11 +64,12 @@ const bootstrapState = (
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockedRateApi.rate.mockResolvedValue(undefined as never)
+  mockedRateApi.rate.mockResolvedValue(thread)
   mockedRollBootstrapApi.get.mockResolvedValue(bootstrapState(null))
+  mockedApplyRatedThreadCache.mockResolvedValue()
 })
 
-it('submits ratings and publishes authoritative Roll state', async () => {
+it('submits ratings, applies the authoritative thread cache, and publishes Roll state', async () => {
   const reconciled = vi.fn()
   window.addEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
 
@@ -56,11 +77,14 @@ it('submits ratings and publishes authoritative Roll state', async () => {
     const { result } = renderHook(() => useRate())
     const payload: RatePayload = { thread_id: 1, rating: 4 }
 
+    let response: Thread | undefined
     await act(async () => {
-      await result.current.mutate(payload)
+      response = await result.current.mutate(payload)
     })
 
     expect(mockedRateApi.rate).toHaveBeenCalledWith(payload)
+    expect(mockedApplyRatedThreadCache).toHaveBeenCalledWith(queryClient, thread)
+    expect(response).toBe(thread)
     expect(mockedRollBootstrapApi.get).toHaveBeenCalledTimes(1)
     expect(reconciled).toHaveBeenCalledTimes(1)
     expect(result.current.isError).toBe(false)
@@ -93,6 +117,7 @@ it('shares one in-flight request across repeated submissions', async () => {
     await Promise.all([firstRequest, secondRequest])
   })
 
+  expect(mockedApplyRatedThreadCache).toHaveBeenCalledTimes(1)
   expect(mockedRollBootstrapApi.get).toHaveBeenCalledTimes(1)
   expect(result.current.isPending).toBe(false)
   expect(result.current.isError).toBe(false)
@@ -127,6 +152,7 @@ it('reconciles a committed rating after the delayed response crosses the client 
       await Promise.all([firstRequest, secondRequest])
     })
 
+    expect(mockedApplyRatedThreadCache).not.toHaveBeenCalled()
     expect(mockedRollBootstrapApi.get).toHaveBeenCalledTimes(1)
     expect(result.current.isError).toBe(false)
     expect(result.current.isPending).toBe(false)
@@ -160,6 +186,7 @@ it('surfaces a delayed timeout when authoritative state still has the same pendi
       await rejection
     })
 
+    expect(mockedApplyRatedThreadCache).not.toHaveBeenCalled()
     expect(mockedRollBootstrapApi.get).toHaveBeenCalledTimes(1)
     expect(result.current.isError).toBe(true)
     expect(result.current.isPending).toBe(false)

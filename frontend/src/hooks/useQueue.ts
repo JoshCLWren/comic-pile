@@ -1,4 +1,6 @@
 import { useCallback, useState } from 'react'
+import { invalidateAfterQueueMovement } from '../query/cacheEffects'
+import { queryClient } from '../query/queryClient'
 import { queueApi } from '../services/api'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { MoveToPositionPayload } from '../types'
@@ -12,6 +14,7 @@ export function useMoveToPosition() {
       setIsPending(true)
       setIsError(false)
       await queueApi.moveToPosition(id, position)
+      await invalidateAfterQueueMovement(queryClient)
     } catch (error: unknown) {
       setIsError(true)
       console.error('Failed to move thread to position:', getApiErrorDetail(error))
@@ -33,6 +36,7 @@ export function useMoveToFront() {
       setIsPending(true)
       setIsError(false)
       await queueApi.moveToFront(id)
+      await invalidateAfterQueueMovement(queryClient)
     } catch (error: unknown) {
       setIsError(true)
       console.error('Failed to move thread to front:', getApiErrorDetail(error))
@@ -54,6 +58,7 @@ export function useMoveToBack() {
       setIsPending(true)
       setIsError(false)
       await queueApi.moveToBack(id)
+      await invalidateAfterQueueMovement(queryClient)
     } catch (error: unknown) {
       setIsError(true)
       console.error('Failed to move thread to back:', getApiErrorDetail(error))
@@ -75,6 +80,7 @@ export function useShuffleQueue() {
       setIsPending(true)
       setIsError(false)
       await queueApi.shuffle()
+      await invalidateAfterQueueMovement(queryClient)
     } catch (error: unknown) {
       setIsError(true)
       console.error('Failed to shuffle queue:', getApiErrorDetail(error))

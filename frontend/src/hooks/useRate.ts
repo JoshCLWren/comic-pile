@@ -1,4 +1,6 @@
 import { useRef, useState } from 'react'
+import { applyRatedThreadCache } from '../query/cacheEffects'
+import { queryClient } from '../query/queryClient'
 import { rateApi } from '../services/api'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { RatePayload } from '../types'
@@ -24,6 +26,7 @@ export function useRate() {
     const request: Promise<RateResult> = (async () => {
       try {
         const result = await rateApi.rate(data)
+        await applyRatedThreadCache(queryClient, result)
 
         try {
           await fetchAndPublishRollBootstrap()
