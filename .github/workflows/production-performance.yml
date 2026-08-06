@@ -22,6 +22,8 @@ jobs:
       PROD_DEPLOYMENT_ID: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v4
         with:
