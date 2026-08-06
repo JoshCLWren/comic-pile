@@ -44,6 +44,8 @@ export default function CrossoversPage() {
 
   const createGroup = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (isLoading) return
+
     const trimmedName = name.trim()
     if (!trimmedName) {
       setCreateError('Enter a crossover name.')
@@ -64,6 +66,7 @@ export default function CrossoversPage() {
   }
 
   const beginRename = (group: DependencyGroup) => {
+    if (busyId !== null) return
     setMutationError(null)
     setEditingId(group.id)
     setEditingName(group.name)
@@ -95,6 +98,7 @@ export default function CrossoversPage() {
   }
 
   const deleteGroup = async (group: DependencyGroup) => {
+    if (busyId !== null) return
     if (!window.confirm(`Delete “${group.name}”? Its comic memberships will be removed.`)) return
 
     setMutationError(null)
@@ -131,9 +135,9 @@ export default function CrossoversPage() {
             maxLength={200}
             className="min-w-0 flex-1 rounded-xl border border-stone-600 bg-stone-950 px-3 py-2.5 text-stone-100 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30"
             placeholder="Age of Apocalypse"
-            disabled={isCreating}
+            disabled={isCreating || isLoading}
           />
-          <button type="submit" disabled={isCreating} className="rounded-xl bg-amber-500 px-4 py-2.5 font-bold text-stone-950 disabled:cursor-not-allowed disabled:opacity-50">
+          <button type="submit" disabled={isCreating || isLoading} className="rounded-xl bg-amber-500 px-4 py-2.5 font-bold text-stone-950 disabled:cursor-not-allowed disabled:opacity-50">
             {isCreating ? 'Creating…' : 'Create crossover'}
           </button>
         </div>
@@ -159,6 +163,7 @@ export default function CrossoversPage() {
           {groups.map((group) => {
             const isEditing = editingId === group.id
             const isBusy = busyId === group.id
+            const hasPendingMutation = busyId !== null
             const isExpanded = expandedId === group.id
             return (
               <li key={group.id} className="rounded-2xl border border-stone-700 bg-stone-900/60 p-4">
@@ -184,8 +189,8 @@ export default function CrossoversPage() {
                       <span className="text-sm text-stone-500">{group.memberships.length} {group.memberships.length === 1 ? 'member' : 'members'}</span>
                     </button>
                     <div className="flex gap-2">
-                      <button type="button" onClick={() => beginRename(group)} disabled={isBusy} className="flex-1 rounded-lg border border-stone-600 px-3 py-2 text-sm font-bold text-stone-300 hover:border-amber-500">Rename</button>
-                      <button type="button" onClick={() => void deleteGroup(group)} disabled={isBusy} className="flex-1 rounded-lg border border-red-800 px-3 py-2 text-sm font-bold text-red-400 hover:bg-red-950/40 disabled:opacity-50">Delete</button>
+                      <button type="button" onClick={() => beginRename(group)} disabled={hasPendingMutation} className="flex-1 rounded-lg border border-stone-600 px-3 py-2 text-sm font-bold text-stone-300 hover:border-amber-500 disabled:opacity-50">Rename</button>
+                      <button type="button" onClick={() => void deleteGroup(group)} disabled={hasPendingMutation} className="flex-1 rounded-lg border border-red-800 px-3 py-2 text-sm font-bold text-red-400 hover:bg-red-950/40 disabled:opacity-50">Delete</button>
                     </div>
                   </div>
                 )}
