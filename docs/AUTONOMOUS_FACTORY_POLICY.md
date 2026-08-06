@@ -1,6 +1,6 @@
 # ComicPile Autonomous Factory Policy
 
-Version: 16
+Version: 17
 
 This is the canonical policy for every scheduled ChatGPT worker, the local OpenCode factory, and interactive factory repair sessions.
 
@@ -73,6 +73,23 @@ Repeat until the selected issue reaches closure or a valid blocker:
 `inspect contract -> implement closure-critical behavior -> focused validation -> commit -> push -> inspect exact SHA -> account for all review feedback -> repair blockers -> verify merge gates -> merge when eligible -> verify issue closure`
 
 After work becomes blocked, merge-gated, or dependent on a human-only decision, preserve durable context and return to selection rather than polishing indefinitely.
+
+## User-facing changelog gate
+
+Every product, behavior, deployment, operational, or factory-tooling PR must update
+`docs/changelog.md` before it can receive a pass verdict, ready marker, merge-gated marker, or
+merge. Add the entry under the current date, group it by user-recognizable feature area, link the
+PR number, and describe what changed and why it matters rather than narrating implementation
+steps.
+
+A documentation-only, test-only, generated-artifact-only, or strictly internal refactor PR may
+omit a changelog entry only when its PR body explicitly states `Changelog: not user-facing` and
+the worker verifies that the change has no user, operator, deployment, or factory behavior impact.
+A missing required changelog entry is an actionable review defect and blocks readiness and merge.
+
+Before merging, compare all merged PRs newer than the newest dated changelog section. If older
+factory work is missing, repair the backlog in the current PR rather than recording only the
+worker's own change.
 
 ## Review-feedback gate
 
