@@ -34,7 +34,7 @@ beforeEach(() => {
   apiMock.post.mockReset()
   apiMock.request.mockReset()
   clearAccessToken()
-  document.cookie = 'csrf_token=; expires=Thu, 01 Jan 1970 1970 00:00:00 GMT; path=/'
+  document.cookie = 'csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
 })
 
 it('bootstraps csrf through the canonical v1 auth endpoint', async () => {
