@@ -1,9 +1,9 @@
-"""GitHub service for creating bug report issues."""
+"""GitHub service for creating user feedback issues."""
 
 from github import Github, GithubException
 
 from app.config import get_github_settings
-from app.schemas.bug_report import BugReportDiagnostics
+from app.schemas.bug_report import BugReportDiagnostics, ReportType
 
 
 def _escape_markdown_code(value: str) -> str:
@@ -11,13 +11,21 @@ def _escape_markdown_code(value: str) -> str:
     return value.replace("`", "\\`")
 
 
+def _labels_for_report_type(report_type: ReportType) -> list[str]:
+    """Return the canonical GitHub labels for a user-submitted report."""
+    if report_type == "feature":
+        return ["enhancement", "user-reported"]
+    return ["bug", "user-reported"]
+
+
 async def create_bug_report_issue(
+    report_type: ReportType,
     title: str,
     description: str,
     username: str,
     diagnostics_data: BugReportDiagnostics | None = None,
 ) -> str:
-    """Create a GitHub issue for a bug report. Returns the issue HTML URL."""
+    """Create a GitHub issue for user feedback and return its HTML URL."""
     settings = get_github_settings()
     g = Github(settings.github_token)
     try:
@@ -25,7 +33,11 @@ async def create_bug_report_issue(
     except GithubException as e:
         raise RuntimeError(f"Failed to access GitHub repository: {e.data}") from e
 
-    body = f"**Reported by:** {_escape_markdown_code(username)}\n\n{description}"
+    report_label = "Feature request" if report_type == "feature" else "Bug report"
+    body = (
+        f"**Reported by:** {_escape_markdown_code(username)}\n"
+        f"**Report type:** {report_label}\n\n{description}"
+    )
 
     if diagnostics_data:
         timestamp = diagnostics_data.timestamp
@@ -82,7 +94,11 @@ async def create_bug_report_issue(
 </details>"""
 
     try:
-        issue = repo.create_issue(title=title, body=body, labels=["bug", "user-reported"])
+        issue = repo.create_issue(
+            title=title,
+            body=body,
+            labels=_labels_for_report_type(report_type),
+        )
     except GithubException as e:
         raise RuntimeError(f"Failed to create GitHub issue: {e.data}") from e
     return issue.html_url
