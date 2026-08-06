@@ -72,6 +72,7 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/auth/refresh",
             "/api/auth/register",
             "/api/bug-reports/",
+            "/api/health",
             "/api/queue/shuffle/",
             "/api/queue/threads/{thread_id}/back/",
             "/api/queue/threads/{thread_id}/front/",
