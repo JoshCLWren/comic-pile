@@ -52,7 +52,7 @@ const rawApi = axios.create({
 const CSRF_COOKIE_NAME = 'csrf_token'
 const CSRF_HEADER_NAME = 'X-CSRF-Token'
 const CSRF_PROTECTED_METHODS = new Set(['post', 'put', 'patch', 'delete'])
-const CSRF_EXEMPT_PATHS = ['/auth/login', '/auth/register', '/auth/refresh']
+const CSRF_EXEMPT_PATHS = ['/v1/auth/login', '/v1/auth/register', '/v1/auth/refresh']
 
 // Axios returns AxiosResponse by default, but the response interceptor below unwraps to response.data.
 // Cast once at the boundary so callers get strongly typed payload methods.
@@ -113,7 +113,7 @@ async function ensureCsrfToken(): Promise<string | null> {
 
   if (!csrfTokenPromise) {
     csrfTokenPromise = api
-      .get<{ csrf_token: string }>('/auth/csrf', { skipAuthRedirect: true } as ApiRequestConfig)
+      .get<{ csrf_token: string }>('/v1/auth/csrf', { skipAuthRedirect: true } as ApiRequestConfig)
       .then((response) => response.csrf_token ?? getCookieValue(CSRF_COOKIE_NAME))
       .finally(() => {
         csrfTokenPromise = null
@@ -211,11 +211,11 @@ rawApi.interceptors.response.use(
     if (isAuthenticationFailure(error) && !originalRequest._retry) {
       const requestUrl = originalRequest.url ?? ''
       const isAuthEndpoint =
-        requestUrl.includes('/auth/login') ||
-        requestUrl.includes('/auth/register') ||
-        requestUrl.includes('/auth/refresh')
+        requestUrl.includes('/v1/auth/login') ||
+        requestUrl.includes('/v1/auth/register') ||
+        requestUrl.includes('/v1/auth/refresh')
       if (isAuthEndpoint) {
-        if (requestUrl.includes('/auth/refresh')) {
+        if (requestUrl.includes('/v1/auth/refresh')) {
           redirectToLogin()
         }
         return Promise.reject(error)
@@ -236,7 +236,7 @@ rawApi.interceptors.response.use(
       isRefreshing = true
 
       try {
-        const response = await api.post<AuthTokens>('/auth/refresh')
+        const response = await api.post<AuthTokens>('/v1/auth/refresh')
 
         const { access_token } = response
         setAccessToken(access_token)
