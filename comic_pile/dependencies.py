@@ -5,7 +5,7 @@ from collections import defaultdict, deque
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.cache import TTL, cached
+from app.cache import TTL, generation_cached
 from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.thread import Thread
@@ -36,7 +36,7 @@ async def _get_blocked_thread_ids_uncached(user_id: int, db: AsyncSession) -> se
     return {row[0] for row in issue_result.all()}
 
 
-@cached(ttl=TTL.SHORT)
+@generation_cached(ttl=TTL.SHORT)
 async def get_blocked_thread_ids(user_id: int, db: AsyncSession) -> set[int]:
     """Return cached blocked thread IDs for non-transactional reads."""
     return await _get_blocked_thread_ids_uncached(user_id, db)
