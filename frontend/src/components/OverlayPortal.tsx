@@ -39,7 +39,7 @@ export default function OverlayPortal({ children, layer = 'menu' }: OverlayPorta
     setOverlayRoot(root)
 
     return () => {
-      const remaining = (mountedPortalCounts.get(layer) ?? 1) - 1
+      const remaining = mountedPortalCounts.get(layer)! - 1
       if (remaining <= 0) {
         mountedPortalCounts.delete(layer)
         root.remove()
