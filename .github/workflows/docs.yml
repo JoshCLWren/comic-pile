@@ -33,6 +33,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -47,17 +48,17 @@ jobs:
 
       - name: Run Markdown regression tests
         run: >-
-          python -m pytest --noconftest -o addopts=''
+          python -m pytest
           tests/test_markdown_docs.py
           tests/test_generate_markdown_inventory.py
           -q
 
       - name: Render Markdown inventory
-        run: python scripts/generate_markdown_inventory.py --output markdown-inventory.md
+        run: python scripts/generate_markdown_inventory.py --output docs/MARKDOWN_INVENTORY.md
 
       - name: Preserve rendered inventory
         uses: actions/upload-artifact@v7
         with:
           name: markdown-inventory
-          path: markdown-inventory.md
+          path: docs/MARKDOWN_INVENTORY.md
           if-no-files-found: error
