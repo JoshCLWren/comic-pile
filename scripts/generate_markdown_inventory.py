@@ -97,6 +97,23 @@ def default_disposition(path: str) -> tuple[str, str, str, str]:
             "keep",
             "—",
         )
+    code_coupled_docs = {
+        "docs/API.md",
+        "docs/AUTONOMOUS_FACTORY_POLICY.md",
+        "docs/DATABASE_SAVE_LOAD.md",
+        "docs/FACTORY_GITHUB_VISIBILITY.md",
+        "docs/GIT_HOOKS.md",
+        "docs/ISSUE_EXECUTION_PROTOCOL.md",
+        "docs/REACT_ARCHITECTURE.md",
+        "docs/prod-clone-workflow.md",
+    }
+    if path in code_coupled_docs:
+        return (
+            f"Code-coupled repository contract for {file_path.stem.replace('_', ' ').replace('-', ' ')}.",
+            "Linked from the authoritative docs hub and must change atomically with repository or operational behavior.",
+            "keep",
+            "—",
+        )
     if path.startswith((".github/", ".agents/", ".claude/")):
         return (
             "Repository automation, contribution, or agent execution guidance.",
