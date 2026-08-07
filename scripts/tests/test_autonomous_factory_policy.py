@@ -103,7 +103,7 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
         self.validate()
 
     def test_version_and_backlog_goal_are_required(self) -> None:
-        """Require V16 and issue-backlog closure as the prime directive.
+        """Require V17 and issue-backlog closure as the prime directive.
 
         Returns:
             None.
@@ -141,7 +141,7 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
         )
 
     def test_user_facing_changelog_gate_is_required(self) -> None:
-        """Require release notes before factory readiness or merge.
+        """Require isolated release-note fragments before readiness or merge.
 
         Returns:
             None.
@@ -151,8 +151,19 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
             "Factory pull requests may skip release notes",
         )
         self.assert_policy_change_fails(
+            "exactly one isolated Markdown fragment",
+            "one shared changelog edit",
+        )
+        self.assert_policy_change_fails(
+            "`docs/changelog.md` is the frozen historical archive",
+            "`docs/changelog.md` is rewritten by every PR",
+        )
+        self.assert_policy_change_fails(
             "A missing required changelog entry is an actionable review defect",
             "Changelog omissions do not block merge",
+        )
+        self.assert_runtime_rule_fails(
+            "Treat docs/changelog.md as part of the completion contract"
         )
 
     def test_review_feedback_gate_is_required(self) -> None:
