@@ -30,6 +30,7 @@ def test_docs_hub_contracts_are_kept_with_code() -> None:
         "docs/GIT_HOOKS.md",
         "docs/ISSUE_EXECUTION_PROTOCOL.md",
         "docs/REACT_ARCHITECTURE.md",
+        "docs/WIKI_HANDOFF.md",
         "docs/prod-clone-workflow.md",
     )
 
