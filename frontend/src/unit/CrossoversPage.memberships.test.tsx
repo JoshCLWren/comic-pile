@@ -81,7 +81,13 @@ describe('CrossoversPage membership editing', () => {
   })
 
   it('keeps a successful range add committed when the membership refresh fails', async () => {
-    api.addIssueRange.mockResolvedValue({ added_issue_ids: [31], already_present_issue_ids: [] })
+    api.addIssueRange.mockResolvedValue({
+      thread_id: 22,
+      start_position: 3,
+      end_position: 5,
+      added_issue_ids: [31],
+      already_present_issue_ids: [],
+    })
     api.get.mockRejectedValue(new Error('Refresh unavailable'))
     render(<CrossoversPage />)
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
