@@ -3,8 +3,8 @@
 from app import startup_diagnostics
 from app.main import create_app
 
-# Importing startup_diagnostics before app.main starts the user-code clock as
-# close to the Vercel Python entry boundary as practical.
-startup_diagnostics.startup_event_snapshot()
-
+# startup_diagnostics imports before app.main, so this marker captures the
+# application import phase from the earliest practical Python entry boundary.
+startup_diagnostics.mark_application_import_complete()
 app = create_app(serve_frontend=False)
+startup_diagnostics.mark_application_created()
