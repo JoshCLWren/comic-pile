@@ -4,6 +4,8 @@ import OverlayPortal from '../components/OverlayPortal'
 
 afterEach(() => {
   document.getElementById('comic-pile-overlay-root')?.remove()
+  document.getElementById('comic-pile-overlay-root-dialog')?.remove()
+  document.getElementById('comic-pile-overlay-root-global-effect')?.remove()
 })
 
 it('renders overlay content outside the application root', async () => {
@@ -19,6 +21,7 @@ it('renders overlay content outside the application root', async () => {
   expect(overlayRoot).toHaveAttribute('data-overlay-root', 'true')
   expect(overlayRoot).toHaveAttribute('data-overlay-layer', 'menu')
   expect(overlayRoot).toHaveClass('comic-pile-overlay-root')
+  expect(overlayRoot).toHaveClass('comic-pile-overlay-root--menu')
   expect(overlayRoot).toContainElement(menu)
   expect(overlayRoot?.parentElement).toBe(document.body)
 })
@@ -33,9 +36,35 @@ it('applies the canonical shared layer contract to interactive overlays', async 
   const action = await screen.findByRole('button', { name: 'Overlay action' })
   const overlayRoot = document.getElementById('comic-pile-overlay-root')
 
-  expect(overlayRoot).toHaveClass('comic-pile-overlay-root')
+  expect(overlayRoot).toHaveClass('comic-pile-overlay-root--menu')
   expect(overlayRoot).toHaveAttribute('data-overlay-layer', 'menu')
   expect(overlayRoot).toContainElement(action)
+})
+
+it('keeps dialogs in a higher independent stacking root than menus', async () => {
+  render(
+    <>
+      <OverlayPortal>
+        <div role="menu">Actions</div>
+      </OverlayPortal>
+      <OverlayPortal layer="dialog">
+        <div role="dialog">Edit thread</div>
+      </OverlayPortal>
+    </>,
+  )
+
+  const menu = await screen.findByRole('menu')
+  const dialog = await screen.findByRole('dialog')
+  const menuRoot = document.getElementById('comic-pile-overlay-root')
+  const dialogRoot = document.getElementById('comic-pile-overlay-root-dialog')
+
+  expect(menuRoot).toHaveAttribute('data-overlay-layer', 'menu')
+  expect(menuRoot).toHaveClass('comic-pile-overlay-root--menu')
+  expect(menuRoot).toContainElement(menu)
+  expect(dialogRoot).toHaveAttribute('data-overlay-layer', 'dialog')
+  expect(dialogRoot).toHaveClass('comic-pile-overlay-root--dialog')
+  expect(dialogRoot).toContainElement(dialog)
+  expect(menuRoot).not.toBe(dialogRoot)
 })
 
 it('shares one overlay root across concurrent overlays', async () => {
