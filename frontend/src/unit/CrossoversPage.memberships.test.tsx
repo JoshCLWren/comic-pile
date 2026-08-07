@@ -57,6 +57,29 @@ describe('CrossoversPage membership editing', () => {
     expect(screen.getByLabelText('Whole thread ID')).toHaveValue('')
   })
 
+  it('preserves unrelated crossovers while adding and removing memberships', async () => {
+    const unrelated = {
+      id: 8,
+      name: 'Secret Invasion',
+      created_at: '2026-08-06T00:00:00Z',
+      memberships: [{ id: 8, issue_id: 80, thread_id: null }],
+    }
+    api.list.mockResolvedValue([crossover, unrelated])
+    api.addMember.mockResolvedValue({ id: 3, issue_id: null, thread_id: 44 })
+    api.removeMember.mockResolvedValue(undefined)
+    render(<CrossoversPage />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
+    fireEvent.change(screen.getByLabelText('Whole thread ID'), { target: { value: '44' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add thread' }))
+    expect(await screen.findByText('Thread 44')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove issue 31 from Annihilation' }))
+    await waitFor(() => expect(screen.queryByText('Issue 31')).not.toBeInTheDocument())
+
+    expect(screen.getByRole('button', { name: /Secret Invasion.*1 member/ })).toBeInTheDocument()
+  })
+
   it('keeps the whole-thread form usable when adding a membership fails', async () => {
     api.addMember.mockRejectedValue(new Error('Thread lookup unavailable'))
     render(<CrossoversPage />)
