@@ -13,21 +13,23 @@ interface CrossoverGroupsState {
 const EMPTY_GROUPS: Record<number, DependencyGroupSummary[]> = {}
 
 export function useCrossoverGroups(threadIds: number[]): CrossoverGroupsState {
-  const uniqueThreadIds = useMemo(
-    () => [...new Set(threadIds)].sort((a, b) => a - b),
+  const requestKey = useMemo(
+    () => [...new Set(threadIds)].sort((a, b) => a - b).join(','),
     [threadIds],
   )
-  const requestKey = uniqueThreadIds.join(',')
   const [state, setState] = useState<CrossoverGroupsState>({
     groupsByThreadId: EMPTY_GROUPS,
-    isPending: uniqueThreadIds.length > 0,
+    isPending: requestKey.length > 0,
     error: null,
   })
 
   useEffect(() => {
     let cancelled = false
+    const requestedThreadIds = requestKey
+      ? requestKey.split(',').map((threadId) => Number(threadId))
+      : []
 
-    if (uniqueThreadIds.length === 0) {
+    if (requestedThreadIds.length === 0) {
       setState({ groupsByThreadId: EMPTY_GROUPS, isPending: false, error: null })
       return () => {
         cancelled = true
@@ -36,7 +38,7 @@ export function useCrossoverGroups(threadIds: number[]): CrossoverGroupsState {
 
     setState((current) => ({ ...current, isPending: true, error: null }))
 
-    dependencyGroupsApi.listForThreads(uniqueThreadIds)
+    dependencyGroupsApi.listForThreads(requestedThreadIds)
       .then((groupsByThreadId) => {
         if (cancelled) return
         setState({ groupsByThreadId, isPending: false, error: null })
