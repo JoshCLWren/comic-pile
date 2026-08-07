@@ -22,7 +22,11 @@ from app.performance_diagnostics import (
     get_request_diagnostics,
     install_cache_instrumentation,
 )
-from app.startup_diagnostics import mark_startup_complete, next_request_snapshot
+from app.startup_diagnostics import (
+    mark_startup_complete,
+    next_request_snapshot,
+    startup_event_snapshot,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -188,11 +192,7 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
     async def record_startup_completion() -> None:
         """Emit one process-scoped startup timing event after lifespan startup."""
         startup_duration_ms = mark_startup_complete()
-        snapshot = next_request_snapshot()
-        # The startup event must not consume the first HTTP invocation number.
-        from app.startup_diagnostics import reset_request_counter_for_startup_event
-
-        reset_request_counter_for_startup_event()
+        snapshot = startup_event_snapshot()
         logger.warning(
             "Application startup completed in %.2f ms",
             startup_duration_ms,
