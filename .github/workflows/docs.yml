@@ -31,6 +31,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -49,3 +51,6 @@ jobs:
           tests/test_markdown_docs.py
           tests/test_generate_markdown_inventory.py
           -q
+
+      - name: Render Markdown inventory
+        run: python scripts/generate_markdown_inventory.py
