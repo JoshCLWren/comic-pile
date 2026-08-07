@@ -329,6 +329,190 @@
         "title": "ConnectedThreadInfo",
         "type": "object"
       },
+      "ContinuityRuleCreate": {
+        "description": "Schema for creating a generalized continuity rule.",
+        "properties": {
+          "checkpoint_issue_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Issue Id"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "satisfaction_type": {
+            "enum": [
+              "item_read",
+              "all_members_read",
+              "checkpoint",
+              "selected_members_read"
+            ],
+            "title": "Satisfaction Type",
+            "type": "string"
+          },
+          "selected_member_issue_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 250,
+            "title": "Selected Member Issue Ids",
+            "type": "array"
+          },
+          "source_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Source Id",
+            "type": "integer"
+          },
+          "source_type": {
+            "enum": [
+              "issue",
+              "crossover"
+            ],
+            "title": "Source Type",
+            "type": "string"
+          },
+          "target_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Target Id",
+            "type": "integer"
+          },
+          "target_type": {
+            "enum": [
+              "issue",
+              "crossover"
+            ],
+            "title": "Target Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_type",
+          "source_id",
+          "target_type",
+          "target_id",
+          "satisfaction_type"
+        ],
+        "title": "ContinuityRuleCreate",
+        "type": "object"
+      },
+      "ContinuityRuleResponse": {
+        "description": "Schema for a persisted generalized continuity rule.",
+        "properties": {
+          "checkpoint_issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Issue Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "satisfaction_type": {
+            "enum": [
+              "item_read",
+              "all_members_read",
+              "checkpoint",
+              "selected_members_read"
+            ],
+            "title": "Satisfaction Type",
+            "type": "string"
+          },
+          "selected_member_issue_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Selected Member Issue Ids",
+            "type": "array"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "integer"
+          },
+          "source_type": {
+            "enum": [
+              "issue",
+              "crossover"
+            ],
+            "title": "Source Type",
+            "type": "string"
+          },
+          "target_id": {
+            "title": "Target Id",
+            "type": "integer"
+          },
+          "target_type": {
+            "enum": [
+              "issue",
+              "crossover"
+            ],
+            "title": "Target Type",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "source_type",
+          "source_id",
+          "target_type",
+          "target_id",
+          "satisfaction_type",
+          "checkpoint_issue_id",
+          "selected_member_issue_ids",
+          "note",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ContinuityRuleResponse",
+        "type": "object"
+      },
       "DependencyCreate": {
         "description": "Schema for creating dependencies.",
         "properties": {
@@ -5339,6 +5523,235 @@
         "tags": [
           "auth",
           "auth"
+        ]
+      }
+    },
+    "/api/v1/continuity-rules/": {
+      "get": {
+        "description": "List the authenticated user's continuity rules.",
+        "operationId": "list_continuity_rules_api_v1_continuity_rules__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ContinuityRuleResponse"
+                  },
+                  "title": "Response List Continuity Rules Api V1 Continuity Rules  Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Continuity Rules",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "continuity"
+        ]
+      },
+      "post": {
+        "description": "Create an owned continuity rule after validating references and cycles.",
+        "operationId": "create_continuity_rule_api_v1_continuity_rules__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinuityRuleCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityRuleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Continuity Rule",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "continuity"
+        ]
+      }
+    },
+    "/api/v1/continuity-rules/{rule_id}": {
+      "delete": {
+        "description": "Delete one owned continuity rule.",
+        "operationId": "delete_continuity_rule_api_v1_continuity_rules__rule_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rule_id",
+            "required": true,
+            "schema": {
+              "title": "Rule Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Continuity Rule",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "continuity"
+        ]
+      },
+      "get": {
+        "description": "Return one owned continuity rule.",
+        "operationId": "get_continuity_rule_api_v1_continuity_rules__rule_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rule_id",
+            "required": true,
+            "schema": {
+              "title": "Rule Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityRuleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Continuity Rule",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "continuity"
+        ]
+      },
+      "put": {
+        "description": "Replace an owned continuity rule.",
+        "operationId": "update_continuity_rule_api_v1_continuity_rules__rule_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rule_id",
+            "required": true,
+            "schema": {
+              "title": "Rule Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinuityRuleCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityRuleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Continuity Rule",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "continuity"
         ]
       }
     },
