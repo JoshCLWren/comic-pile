@@ -125,8 +125,8 @@ async def get_user_generation(client: GenerationCacheClient, user_id: int) -> in
     Raises:
         ValueError: If Redis returns an invalid generation value.
     """
-    raw_generation = await client.get(generation_key(user_id))
     command_budget.record("generation_get")
+    raw_generation = await client.get(generation_key(user_id))
     if raw_generation is None:
         return 0
 
@@ -156,8 +156,8 @@ async def bump_user_generation(client: GenerationCacheClient, user_id: int) -> i
     Raises:
         ValueError: If Redis returns an invalid generation value.
     """
-    raw_generation = await client.incr(generation_key(user_id))
     command_budget.record("generation_incr")
+    raw_generation = await client.incr(generation_key(user_id))
     try:
         generation = int(raw_generation)
     except (TypeError, ValueError) as exc:
@@ -264,6 +264,10 @@ def generation_cached(
     value ``GET``. A cache miss that is stored costs at most three: generation
     ``GET``, value ``GET``, and value ``SET``.
 
+    Cache failures are fail-open: if the generation lookup fails, the wrapped
+    database read still executes instead of turning optional Redis into a request
+    dependency.
+
     Args:
         ttl: Time-to-live in seconds or a configured TTL tier.
         falsy_ttl: Optional alternate TTL for falsy results.
@@ -294,7 +298,12 @@ def generation_cached(
             if client is None:
                 return await func(*args, **kwargs)
 
-            generation = await get_user_generation(client, user_id)
+            try:
+                generation = await get_user_generation(client, user_id)
+            except Exception as exc:
+                logger.warning("Cache generation read failed: %s", exc)
+                return await func(*args, **kwargs)
+
             func_name = getattr(func, "__name__", func.__class__.__name__)
             logical_key = _generate_cache_key(func_name, func, args, kwargs)
             cache_key = namespaced_cache_key(user_id, generation, logical_key)
