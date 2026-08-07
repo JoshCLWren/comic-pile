@@ -34,8 +34,12 @@ async def test_get_db_times_out_stalled_first_connection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A stalled first connection fails explicitly instead of hanging the request."""
+
+    async def stalled_connection() -> None:
+        await asyncio.sleep(0.02)
+
     session = AsyncMock(spec=AsyncSession)
-    session.connection.side_effect = lambda: asyncio.sleep(0.02)
+    session.connection.side_effect = stalled_connection
     monkeypatch.setattr(database, "AsyncSessionLocal", lambda: _FakeSessionContext(session))
     monkeypatch.setattr(database, "DATABASE_DEPENDENCY_TIMEOUT_SECONDS", 0.01)
 
@@ -68,8 +72,12 @@ async def test_get_db_does_not_time_out_route_work(monkeypatch: pytest.MonkeyPat
 @pytest.mark.asyncio
 async def test_database_connection_probe_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
     """The diagnostic probe returns false when its database command times out."""
+
+    async def stalled_execute(*_args: object, **_kwargs: object) -> None:
+        await asyncio.sleep(0.02)
+
     session = AsyncMock(spec=AsyncSession)
-    session.execute.side_effect = lambda *_: asyncio.sleep(0.02)
+    session.execute.side_effect = stalled_execute
     monkeypatch.setattr(database, "AsyncSessionLocal", lambda: _FakeSessionContext(session))
     monkeypatch.setattr(database, "DATABASE_DEPENDENCY_TIMEOUT_SECONDS", 0.01)
 
