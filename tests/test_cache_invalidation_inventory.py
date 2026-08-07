@@ -38,7 +38,10 @@ async def mutate_widget(user_id: int):
         ("mutate_widget", "invalidate_cache", False),
         ("mutate_widget", "invalidate_user_cache", True),
     ]
+    assert inventory.legacy_cached_count == 1
+    assert inventory.generation_cached_count == 0
     assert inventory.unbounded_invalidation_count == 1
+    assert inventory.migration_complete is False
 
 
 def test_inventory_detects_method_clear_pattern_and_generation_decorator(tmp_path: Path) -> None:
@@ -65,3 +68,33 @@ async def clear_widget(cache):
     assert inventory.cached_functions[0].cache_kind == "generation_cached"
     assert inventory.invalidation_calls[0].invalidation_kind == "clear_pattern"
     assert inventory.invalidation_calls[0].bounded is False
+    assert inventory.legacy_cached_count == 0
+    assert inventory.generation_cached_count == 1
+    assert inventory.migration_complete is False
+
+
+def test_inventory_marks_generation_only_paths_complete(tmp_path: Path) -> None:
+    """Migration gate passes only when readers and invalidations are bounded."""
+    source_root = tmp_path / "app"
+    source_root.mkdir()
+    (source_root / "sample.py").write_text(
+        """
+from app.cache_generation import generation_cached, invalidate_user_cache
+
+@generation_cached()
+async def get_widget(user_id: int):
+    return user_id
+
+async def mutate_widget(user_id: int):
+    await invalidate_user_cache(user_id)
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    inventory = build_inventory((source_root,))
+
+    assert inventory.legacy_cached_count == 0
+    assert inventory.generation_cached_count == 1
+    assert inventory.unbounded_invalidation_count == 0
+    assert inventory.migration_complete is True
