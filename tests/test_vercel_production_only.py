@@ -19,7 +19,14 @@ def test_vercel_deploys_main_and_disables_non_production_branches() -> None:
 
 
 def test_vercel_gate_covers_slash_containing_factory_branches() -> None:
-    """Factory branches must not escape the non-production deployment rule."""
+    """Factory branches must not escape the non-production deployment rule.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
     config = json.loads((REPOSITORY_ROOT / "vercel.json").read_text(encoding="utf-8"))
     deployment_rules = config["git"]["deploymentEnabled"]
 
