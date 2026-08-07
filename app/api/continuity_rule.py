@@ -5,7 +5,7 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import select
+from sqlalchemy import and_, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -20,6 +20,7 @@ from app.schemas.continuity_rule import ContinuityRuleCreate, ContinuityRuleResp
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["continuity"])
+CONTINUITY_LOCK_NAMESPACE = 1_129_274_964
 
 
 async def _invalidate_continuity_caches(user_id: int) -> None:
@@ -71,6 +72,13 @@ async def _get_owned_rule(db: AsyncSession, user_id: int, rule_id: int) -> Conti
     return rule
 
 
+async def _lock_continuity_graph(db: AsyncSession, user_id: int) -> None:
+    """Serialize continuity graph mutations for one user until transaction end."""
+    await db.execute(
+        select(func.pg_advisory_xact_lock(CONTINUITY_LOCK_NAMESPACE, user_id)),
+    )
+
+
 async def _would_create_cycle(
     db: AsyncSession,
     *,
@@ -82,36 +90,56 @@ async def _would_create_cycle(
     exclude_rule_id: int | None = None,
 ) -> bool:
     """Return whether adding source→target would close a path back to source."""
-    result = await db.execute(
-        select(
-            ContinuityRule.id,
-            ContinuityRule.source_type,
-            ContinuityRule.source_id,
-            ContinuityRule.target_type,
-            ContinuityRule.target_id,
-        ).where(ContinuityRule.user_id == user_id)
-    )
-    adjacency: dict[tuple[str, int], set[tuple[str, int]]] = {}
-    for row in result:
-        rule_id, source_kind, source_id_value, target_kind, target_id_value = row
-        if exclude_rule_id is not None and rule_id == exclude_rule_id:
-            continue
-        adjacency.setdefault((source_kind, source_id_value), set()).add(
-            (target_kind, target_id_value),
-        )
+    if source_type == target_type and source_id == target_id:
+        return True
 
-    source = (source_type, source_id)
-    stack = [(target_type, target_id)]
-    visited: set[tuple[str, int]] = set()
-    while stack:
-        node = stack.pop()
-        if node == source:
-            return True
-        if node in visited:
-            continue
-        visited.add(node)
-        stack.extend(adjacency.get(node, ()))
-    return False
+    edge = ContinuityRule.__table__.alias("continuity_edge")
+    seed_conditions = [
+        edge.c.user_id == user_id,
+        edge.c.source_type == target_type,
+        edge.c.source_id == target_id,
+    ]
+    if exclude_rule_id is not None:
+        seed_conditions.append(edge.c.id != exclude_rule_id)
+
+    reachable = (
+        select(
+            edge.c.target_type.label("node_type"),
+            edge.c.target_id.label("node_id"),
+        )
+        .where(*seed_conditions)
+        .cte("reachable_continuity_nodes", recursive=True)
+    )
+
+    recursive_edge = ContinuityRule.__table__.alias("recursive_continuity_edge")
+    recursive_conditions = [recursive_edge.c.user_id == user_id]
+    if exclude_rule_id is not None:
+        recursive_conditions.append(recursive_edge.c.id != exclude_rule_id)
+
+    reachable = reachable.union(
+        select(
+            recursive_edge.c.target_type.label("node_type"),
+            recursive_edge.c.target_id.label("node_id"),
+        )
+        .join(
+            reachable,
+            and_(
+                recursive_edge.c.source_type == reachable.c.node_type,
+                recursive_edge.c.source_id == reachable.c.node_id,
+            ),
+        )
+        .where(*recursive_conditions)
+    )
+
+    result = await db.execute(
+        select(reachable.c.node_id)
+        .where(
+            reachable.c.node_type == source_type,
+            reachable.c.node_id == source_id,
+        )
+        .limit(1)
+    )
+    return result.first() is not None
 
 
 def _cycle_conflict(payload: ContinuityRuleCreate) -> HTTPException:
@@ -131,7 +159,15 @@ async def list_continuity_rules(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> list[ContinuityRuleResponse]:
-    """List the authenticated user's continuity rules."""
+    """List the authenticated user's continuity rules.
+
+    Args:
+        current_user: Authenticated user.
+        db: Asynchronous database session.
+
+    Returns:
+        Every continuity rule owned by the user, ordered by identifier.
+    """
     result = await db.execute(
         select(ContinuityRule)
         .options(selectinload(ContinuityRule.selected_members))
@@ -147,7 +183,16 @@ async def get_continuity_rule(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> ContinuityRuleResponse:
-    """Return one owned continuity rule."""
+    """Return one owned continuity rule.
+
+    Args:
+        rule_id: Continuity rule identifier.
+        current_user: Authenticated user.
+        db: Asynchronous database session.
+
+    Returns:
+        The requested owned continuity rule.
+    """
     return _to_response(await _get_owned_rule(db, current_user.id, rule_id))
 
 
@@ -161,7 +206,20 @@ async def create_continuity_rule(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> ContinuityRuleResponse:
-    """Create an owned continuity rule after validating references and cycles."""
+    """Create an owned continuity rule after validating references and cycles.
+
+    Args:
+        payload: Validated continuity rule request.
+        current_user: Authenticated user.
+        db: Asynchronous database session.
+
+    Returns:
+        The newly created continuity rule.
+
+    Raises:
+        HTTPException: If references are invalid, a cycle exists, or the edge is duplicated.
+    """
+    await _lock_continuity_graph(db, current_user.id)
     await ensure_owned_continuity_rule_references(db, user_id=current_user.id, payload=payload)
     if await _would_create_cycle(
         db,
@@ -208,7 +266,21 @@ async def update_continuity_rule(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> ContinuityRuleResponse:
-    """Replace an owned continuity rule."""
+    """Replace an owned continuity rule.
+
+    Args:
+        rule_id: Continuity rule identifier.
+        payload: Replacement continuity rule request.
+        current_user: Authenticated user.
+        db: Asynchronous database session.
+
+    Returns:
+        The updated continuity rule.
+
+    Raises:
+        HTTPException: If references are invalid, a cycle exists, or the edge is duplicated.
+    """
+    await _lock_continuity_graph(db, current_user.id)
     rule = await _get_owned_rule(db, current_user.id, rule_id)
     await ensure_owned_continuity_rule_references(db, user_id=current_user.id, payload=payload)
     if await _would_create_cycle(
@@ -251,7 +323,19 @@ async def delete_continuity_rule(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> Response:
-    """Delete one owned continuity rule."""
+    """Delete one owned continuity rule.
+
+    Args:
+        rule_id: Continuity rule identifier.
+        current_user: Authenticated user.
+        db: Asynchronous database session.
+
+    Returns:
+        An empty 204 response.
+
+    Raises:
+        HTTPException: If the continuity rule is not owned by the user.
+    """
     rule = await _get_owned_rule(db, current_user.id, rule_id)
     await db.delete(rule)
     await db.commit()
