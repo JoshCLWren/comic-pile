@@ -57,6 +57,19 @@ describe('CrossoversPage membership editing', () => {
     expect(screen.getByLabelText('Whole thread ID')).toHaveValue('')
   })
 
+  it('keeps the whole-thread form usable when adding a membership fails', async () => {
+    api.addMember.mockRejectedValue(new Error('Thread lookup unavailable'))
+    render(<CrossoversPage />)
+    fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
+
+    fireEvent.change(screen.getByLabelText('Whole thread ID'), { target: { value: '44' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add thread' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Thread lookup unavailable')
+    expect(screen.getByLabelText('Whole thread ID')).toHaveValue('44')
+    expect(screen.getByRole('button', { name: 'Add thread' })).toBeEnabled()
+  })
+
   it('rejects an invalid whole-thread ID before calling the API', async () => {
     render(<CrossoversPage />)
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
