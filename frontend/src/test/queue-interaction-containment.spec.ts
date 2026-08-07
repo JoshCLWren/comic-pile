@@ -24,7 +24,11 @@ test.describe('Queue interaction containment (#625)', () => {
     const menu = page.getByRole('menu', { name: 'Thread actions' });
     await expect(menu).toBeVisible();
     await expect(actionsTrigger).toHaveAttribute('aria-expanded', 'true');
-    await expect(menu.getByRole('menuitem')).toHaveCount(6);
+    const menuItems = menu.getByRole('menuitem');
+    await expect(menuItems).toHaveCount(6);
+    for (let index = 0; index < 6; index += 1) {
+      await expect(menuItems.nth(index)).toBeVisible();
+    }
     await expect(menu.getByRole('menuitem', { name: 'Edit thread' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Manage dependencies' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Delete thread' })).toBeVisible();
@@ -54,15 +58,27 @@ test.describe('Queue interaction containment (#625)', () => {
     await page.goto('/queue', { waitUntil: 'domcontentloaded' });
     await waitForQueueReady(page);
 
+    const queueContainer = page.locator('#queue-container');
     const firstCard = page.locator('[data-testid="queue-thread-item"]').first();
     const foreground = firstCard.locator(':scope > div').nth(1);
+    await expect(queueContainer).toBeVisible();
     await expect(firstCard).toBeVisible();
 
     await expect
       .poll(() => foreground.evaluate((element) => getComputedStyle(element).transform))
       .toBe('matrix(1, 0, 0, 1, 0, 0)');
 
+    const initialScrollTop = await queueContainer.evaluate((element) => element.scrollTop);
+    const queueBox = await queueContainer.boundingBox();
+    expect(queueBox).not.toBeNull();
+    await page.mouse.move(
+      queueBox!.x + queueBox!.width / 2,
+      queueBox!.y + Math.min(queueBox!.height / 2, 300),
+    );
     await page.mouse.wheel(0, 500);
+    await expect
+      .poll(() => queueContainer.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(initialScrollTop);
 
     await expect
       .poll(() => foreground.evaluate((element) => getComputedStyle(element).transform))
