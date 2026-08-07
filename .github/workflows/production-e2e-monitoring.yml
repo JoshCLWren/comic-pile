@@ -28,8 +28,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: pnpm
-          cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: Enable pnpm
         run: corepack enable
@@ -43,7 +41,6 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Capture production timings
-        id: timings
         shell: bash
         run: |
           set -euo pipefail
@@ -71,7 +68,7 @@ jobs:
             echo '| --- | ---: | ---: |'
             tail -n +2 "$output" | awk -F '\t' '{printf "| `%s` | %.3fs | %.3fs |\n", $1, $2, $3}'
             echo
-            echo "First root request is treated as the cold-candidate sample only. A following warm request does not prove cold startup is fixed."
+            echo 'The first root request is a cold-candidate sample only. The following warm request does not prove cold startup is fixed.'
           } >> "$GITHUB_STEP_SUMMARY"
 
           if awk -v actual="$cold_root_ttfb" -v threshold="$ROOT_TTFB_WARNING_SECONDS" 'BEGIN { exit !(actual > threshold) }'; then
