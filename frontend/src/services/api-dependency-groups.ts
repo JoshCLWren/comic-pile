@@ -57,6 +57,15 @@ export const dependencyGroupsApi = {
     )
   },
 
+  listForThreads: async (
+    threadIds: number[],
+  ): Promise<Record<number, DependencyGroupSummary[]>> => {
+    return api.post<Record<number, DependencyGroupSummary[]>>(
+      '/v1/reading-order-groups/threads/groups:batch',
+      { thread_ids: threadIds },
+    )
+  },
+
   addMember: async (
     groupId: number,
     target: DependencyGroupMemberTarget,
