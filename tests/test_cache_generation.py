@@ -10,6 +10,7 @@ from app.cache_generation import (
     command_budget,
     generation_key,
     get_user_generation,
+    invalidate_user_cache,
     namespaced_cache_key,
     user_id_from_arguments,
 )
@@ -141,3 +142,33 @@ async def test_generation_commands_remain_isolated_between_users() -> None:
     assert await get_user_generation(client, 8) == 0
     assert client.values == {generation_key(7): 1}
     assert command_budget.total == 3
+
+
+@pytest.mark.asyncio
+async def test_invalidate_user_cache_is_noop_when_remote_cache_is_disabled(monkeypatch) -> None:
+    """Disabled remote caching must not create commands merely to invalidate."""
+    from app.cache_generation import cache
+
+    monkeypatch.setattr(cache, "_initialized", False)
+    monkeypatch.setattr(cache, "_client", None)
+    command_budget.counts.clear()
+
+    assert await invalidate_user_cache(7) is False
+    assert command_budget.total == 0
+
+
+@pytest.mark.asyncio
+async def test_invalidate_user_cache_uses_exactly_one_remote_command(monkeypatch) -> None:
+    """The production invalidation entrypoint must remain one bounded INCR."""
+    from app.cache_generation import cache
+
+    client = FakeGenerationClient()
+    monkeypatch.setattr(cache, "_initialized", True)
+    monkeypatch.setattr(cache, "_client", client)
+    command_budget.counts.clear()
+
+    assert await invalidate_user_cache(7) is True
+    assert client.values == {generation_key(7): 1}
+    assert client.get_calls == 0
+    assert client.incr_calls == 1
+    assert command_budget.counts == {"generation_incr": 1}
