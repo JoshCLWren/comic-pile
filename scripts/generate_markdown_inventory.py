@@ -33,18 +33,36 @@ def _git(*args: str) -> str:
 
 
 def tracked_markdown_files() -> list[str]:
-    """Return every tracked Markdown path in deterministic order."""
+    """Return every tracked Markdown path in deterministic order.
+
+    Returns:
+        Sorted repository-relative Markdown paths tracked by Git.
+    """
     output = _git("ls-files", "*.md")
     return sorted(line for line in output.splitlines() if line)
 
 
 def last_meaningful_update(path: str) -> str:
-    """Return the most recent commit date touching a tracked path."""
+    """Return the most recent commit date touching a tracked path.
+
+    Args:
+        path: Repository-relative tracked path to inspect.
+
+    Returns:
+        The most recent commit date in ISO calendar form, or ``unknown``.
+    """
     return _git("log", "-1", "--format=%cs", "--", path) or "unknown"
 
 
 def default_disposition(path: str) -> tuple[str, str, str, str]:
-    """Classify a Markdown path into an explicit audit disposition."""
+    """Classify a Markdown path into an explicit audit disposition.
+
+    Args:
+        path: Repository-relative Markdown path to classify.
+
+    Returns:
+        Purpose, overlap evidence, disposition action, and canonical replacement.
+    """
     file_path = Path(path)
     name = file_path.name
 
@@ -79,7 +97,10 @@ def default_disposition(path: str) -> tuple[str, str, str, str]:
     if path == "ROLLBACK.md":
         return (
             "Legacy rollback and recovery guidance.",
-            "Operational recovery guidance belongs in the maintained docs hub or Wiki, not a root-level silo.",
+            (
+                "Operational recovery guidance belongs in the maintained docs hub or Wiki, "
+                "not a root-level silo."
+            ),
             "merge",
             "docs/README.md and ComicPile Wiki troubleshooting",
         )
@@ -110,8 +131,14 @@ def default_disposition(path: str) -> tuple[str, str, str, str]:
     }
     if path in code_coupled_docs:
         return (
-            f"Code-coupled repository contract for {file_path.stem.replace('_', ' ').replace('-', ' ')}.",
-            "Linked from the authoritative docs hub and must change atomically with repository or operational behavior.",
+            (
+                "Code-coupled repository contract for "
+                f"{file_path.stem.replace('_', ' ').replace('-', ' ')}."
+            ),
+            (
+                "Linked from the authoritative docs hub and must change atomically with "
+                "repository or operational behavior."
+            ),
             "keep",
             "—",
         )
@@ -139,34 +166,50 @@ def default_disposition(path: str) -> tuple[str, str, str, str]:
     if path.startswith("docs/issue-plans/"):
         return (
             "Implementation plan retained for a specific GitHub issue.",
-            "Potentially historical after the issue closes; preserve as implementation history rather than active guidance.",
+            (
+                "Potentially historical after the issue closes; preserve as implementation "
+                "history rather than active guidance."
+            ),
             "archive",
             "Git history or ComicPile Wiki historical decisions",
         )
     if path.startswith("docs/"):
         return (
             f"Repository documentation for {file_path.stem.replace('_', ' ').replace('-', ' ')}.",
-            "Human-facing narrative should move out of the active code-coupled documentation set unless linked by the docs hub.",
+            (
+                "Human-facing narrative should move out of the active code-coupled documentation "
+                "set unless linked by the docs hub."
+            ),
             "move to Wiki",
             "ComicPile Wiki",
         )
     if name.lower() == "readme.md":
         return (
             f"Package- or directory-local documentation for {file_path.parent}.",
-            "Adjacent package guidance is discoverable where the code lives and can change atomically with it.",
+            (
+                "Adjacent package guidance is discoverable where the code lives and can change "
+                "atomically with it."
+            ),
             "keep",
             "—",
         )
     return (
         "Tracked Markdown documentation outside the canonical docs hub.",
-        "Standalone narrative documentation should not create another competing repository source of truth.",
+        (
+            "Standalone narrative documentation should not create another competing repository "
+            "source of truth."
+        ),
         "move to Wiki",
         "ComicPile Wiki",
     )
 
 
 def build_inventory() -> list[InventoryRow]:
-    """Build inventory rows covering every tracked Markdown file."""
+    """Build inventory rows covering every tracked Markdown file.
+
+    Returns:
+        One inventory row for each tracked Markdown path.
+    """
     rows: list[InventoryRow] = []
     for path in tracked_markdown_files():
         purpose, overlap, action, replacement = default_disposition(path)
@@ -184,7 +227,14 @@ def build_inventory() -> list[InventoryRow]:
 
 
 def render_markdown(rows: list[InventoryRow]) -> str:
-    """Render inventory rows as the audit table required by issue #879."""
+    """Render inventory rows as the audit table required by issue #879.
+
+    Args:
+        rows: Inventory rows to render in table order.
+
+    Returns:
+        A complete Markdown table ending with a newline.
+    """
     header = (
         "| Path | Purpose | Last meaningful update | Duplicate / contradiction evidence | "
         "Disposition | Canonical replacement |\n"
@@ -206,7 +256,11 @@ def render_markdown(rows: list[InventoryRow]) -> str:
 
 
 def main() -> int:
-    """Generate the current tracked-Markdown audit table."""
+    """Generate the current tracked-Markdown audit table.
+
+    Returns:
+        Process exit status, where zero means generation succeeded.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--output",
