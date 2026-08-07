@@ -27,7 +27,7 @@ class ContinuityRuleCreate(BaseModel):
     note: str | None = Field(default=None, max_length=500)
 
     @model_validator(mode="after")
-    def validate_shape(self) -> "ContinuityRuleCreate":
+    def validate_shape(self) -> ContinuityRuleCreate:
         """Reject ambiguous satisfaction-policy combinations.
 
         Returns:
