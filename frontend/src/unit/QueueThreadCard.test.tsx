@@ -81,45 +81,29 @@ describe('QueueThreadCard', () => {
     vi.clearAllMocks()
   })
 
-  it('renders mobile dependency action button with correct attributes', () => {
-    const thread = createMockThread()
-    renderCard(thread)
+  it('renders the shared thread action menu as the discoverable card action', () => {
+    renderCard(createMockThread())
 
-    const mobileButton = screen.getByTestId('mobile-dependency-action')
-    expect(mobileButton).toBeInTheDocument()
-    expect(mobileButton).toHaveAttribute('aria-label', 'Manage dependencies')
-    expect(mobileButton).toHaveAttribute('aria-haspopup', 'dialog')
-    expect(mobileButton).toHaveAttribute('type', 'button')
+    expect(screen.getAllByTestId('mock-position-menu')).toHaveLength(1)
+    expect(screen.queryByTestId('mobile-dependency-action')).not.toBeInTheDocument()
   })
 
-  it('calls onDependencies when mobile button is clicked', async () => {
+  it('uses the shared action menu for dependency management', async () => {
     const user = userEvent.setup()
-    const thread = createMockThread()
     const onDependencies = vi.fn()
-    renderCard(thread, { onDependencies })
+    renderCard(createMockThread(), { onDependencies })
 
-    await user.click(screen.getByTestId('mobile-dependency-action'))
+    await user.click(screen.getByTestId('mock-position-menu'))
     expect(onDependencies).toHaveBeenCalledTimes(1)
   })
 
-  it('stops propagation when mobile button is clicked', async () => {
-    const user = userEvent.setup()
-    const thread = createMockThread()
+  it('does not treat shared action-menu keyboard activation as card activation', () => {
     const onCardClick = vi.fn()
-    renderCard(thread, { onCardClick })
+    renderCard(createMockThread(), { onCardClick })
 
-    await user.click(screen.getByTestId('mobile-dependency-action'))
-    expect(onCardClick).not.toHaveBeenCalled()
-  })
-
-  it('does not treat nested control keyboard activation as card activation', () => {
-    const onCardClick = vi.fn()
-    const onDependencies = vi.fn()
-    renderCard(createMockThread(), { onCardClick, onDependencies })
-
-    const mobileButton = screen.getByTestId('mobile-dependency-action')
-    fireEvent.keyDown(mobileButton, { key: 'Enter' })
-    fireEvent.keyDown(mobileButton, { key: ' ' })
+    const actionMenu = screen.getByTestId('mock-position-menu')
+    fireEvent.keyDown(actionMenu, { key: 'Enter' })
+    fireEvent.keyDown(actionMenu, { key: ' ' })
 
     expect(onCardClick).not.toHaveBeenCalled()
   })
