@@ -105,6 +105,7 @@ def default_disposition(path: str) -> tuple[str, str, str, str]:
         "docs/GIT_HOOKS.md",
         "docs/ISSUE_EXECUTION_PROTOCOL.md",
         "docs/REACT_ARCHITECTURE.md",
+        "docs/WIKI_HANDOFF.md",
         "docs/prod-clone-workflow.md",
     }
     if path in code_coupled_docs:
