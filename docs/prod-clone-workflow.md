@@ -12,7 +12,7 @@ This workflow copies one ComicPile user's data from the production PostgreSQL da
 make migrate
 ```
 
-The local database URL can be supplied with `--local-db-url`, or the script can use the normal application database configuration.
+The local database URL can be supplied with `--local-db-url`, or the script can use the normal application database configuration. For imports, the resolved destination must be a loopback/local PostgreSQL host such as `localhost`, `127.0.0.1`, or `::1`. Do not point the import command at Neon, Vercel-connected production credentials, or any other remote database.
 
 ## Export production data
 
@@ -53,7 +53,7 @@ python -m scripts.clone_prod_to_local import \
   --local-db-url 'postgresql+asyncpg://USER:PASSWORD@localhost:5435/comic_pile'
 ```
 
-Type `yes` at the confirmation prompt after checking the destination. For non-interactive automation, add `--yes` only after validating the file and confirming that the resolved destination is a local development database.
+Type `yes` at the confirmation prompt after checking the destination. For non-interactive automation, add `--yes` only after validating the file and confirming that the resolved destination is a loopback/local development database. Until the CLI itself rejects remote import targets, treat this destination check as a mandatory safety gate rather than a suggestion.
 
 After a successful import, sign in with the imported username. The imported user has no production password hash, so set a local password through the normal registration or administrative workflow rather than expecting the production password to work.
 
@@ -62,8 +62,9 @@ After a successful import, sign in with the imported username. The imported user
 1. Confirm the explicit Neon export target is production and the username is correct.
 2. Keep export and pre-import backup files private; do not commit them.
 3. Run `--dry-run` against the intended local database.
-4. Confirm the resolved import target is a local development database before allowing writes.
-5. Keep the pre-import backup until the clone has been verified.
-6. Confirm thread counts, reading orders, and sessions in the local UI.
+4. Confirm the resolved import target is loopback/local (`localhost`, `127.0.0.1`, or `::1`) before allowing writes.
+5. Never run the import command with a Neon hostname, production Vercel database URL, or another remote PostgreSQL target.
+6. Keep the pre-import backup until the clone has been verified.
+7. Confirm thread counts, reading orders, and sessions in the local UI.
 
-The command must never mutate production. Export is the only operation that should connect to production, and import must target a local development database supplied by configuration or `--local-db-url`.
+The command must never mutate production. Export is the only operation that should connect to production, and import must target a loopback/local development database supplied by configuration or `--local-db-url`.
