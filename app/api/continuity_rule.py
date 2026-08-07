@@ -16,7 +16,11 @@ from app.continuity_rules import ensure_owned_continuity_rule_references
 from app.database import get_db
 from app.models.continuity_rule import ContinuityRule, ContinuityRuleSelectedMember
 from app.models.user import User
-from app.schemas.continuity_rule import ContinuityRuleCreate, ContinuityRuleResponse
+from app.schemas.continuity_rule import (
+    ContinuityNodeType,
+    ContinuityRuleCreate,
+    ContinuityRuleResponse,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["continuity"])
@@ -83,9 +87,9 @@ async def _would_create_cycle(
     db: AsyncSession,
     *,
     user_id: int,
-    source_type: str,
+    source_type: ContinuityNodeType,
     source_id: int,
-    target_type: str,
+    target_type: ContinuityNodeType,
     target_id: int,
     exclude_rule_id: int | None = None,
 ) -> bool:
@@ -154,10 +158,14 @@ def _cycle_conflict(payload: ContinuityRuleCreate) -> HTTPException:
     )
 
 
-@router.get("/continuity-rules/", response_model=list[ContinuityRuleResponse])
+@router.get(
+    "/continuity-rules/",
+    response_model=list[ContinuityRuleResponse],
+    description="List the authenticated user's continuity rules.",
+)
 async def list_continuity_rules(
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[ContinuityRuleResponse]:
     """List the authenticated user's continuity rules.
 
@@ -177,11 +185,15 @@ async def list_continuity_rules(
     return [_to_response(rule) for rule in result.scalars().all()]
 
 
-@router.get("/continuity-rules/{rule_id}", response_model=ContinuityRuleResponse)
+@router.get(
+    "/continuity-rules/{rule_id}",
+    response_model=ContinuityRuleResponse,
+    description="Return one owned continuity rule.",
+)
 async def get_continuity_rule(
     rule_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ContinuityRuleResponse:
     """Return one owned continuity rule.
 
@@ -200,11 +212,12 @@ async def get_continuity_rule(
     "/continuity-rules/",
     response_model=ContinuityRuleResponse,
     status_code=status.HTTP_201_CREATED,
+    description="Create an owned continuity rule after validating references and cycles.",
 )
 async def create_continuity_rule(
     payload: ContinuityRuleCreate,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ContinuityRuleResponse:
     """Create an owned continuity rule after validating references and cycles.
 
@@ -259,12 +272,16 @@ async def create_continuity_rule(
     return _to_response(await _get_owned_rule(db, current_user.id, rule.id))
 
 
-@router.put("/continuity-rules/{rule_id}", response_model=ContinuityRuleResponse)
+@router.put(
+    "/continuity-rules/{rule_id}",
+    response_model=ContinuityRuleResponse,
+    description="Replace an owned continuity rule.",
+)
 async def update_continuity_rule(
     rule_id: int,
     payload: ContinuityRuleCreate,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ContinuityRuleResponse:
     """Replace an owned continuity rule.
 
@@ -317,11 +334,15 @@ async def update_continuity_rule(
     return _to_response(await _get_owned_rule(db, current_user.id, rule_id))
 
 
-@router.delete("/continuity-rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/continuity-rules/{rule_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    description="Delete one owned continuity rule.",
+)
 async def delete_continuity_rule(
     rule_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Response:
     """Delete one owned continuity rule.
 
