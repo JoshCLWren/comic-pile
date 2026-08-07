@@ -2,40 +2,52 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import './overlay.css'
 
+export type OverlayLayer = 'menu' | 'dialog' | 'global-effect'
+
 interface OverlayPortalProps {
   children: React.ReactNode
+  layer?: OverlayLayer
 }
 
 const OVERLAY_ROOT_ID = 'comic-pile-overlay-root'
-const OVERLAY_ROOT_CLASS = 'comic-pile-overlay-root'
-let mountedPortalCount = 0
+const mountedPortalCounts = new Map<OverlayLayer, number>()
 
-function getOrCreateOverlayRoot(): HTMLElement {
-  const existingRoot = document.getElementById(OVERLAY_ROOT_ID)
+function getOverlayRootId(layer: OverlayLayer): string {
+  return layer === 'menu' ? OVERLAY_ROOT_ID : `${OVERLAY_ROOT_ID}-${layer}`
+}
+
+function getOrCreateOverlayRoot(layer: OverlayLayer): HTMLElement {
+  const rootId = getOverlayRootId(layer)
+  const existingRoot = document.getElementById(rootId)
   if (existingRoot) return existingRoot
 
   const overlayRoot = document.createElement('div')
-  overlayRoot.id = OVERLAY_ROOT_ID
-  overlayRoot.className = OVERLAY_ROOT_CLASS
+  overlayRoot.id = rootId
+  overlayRoot.className = `comic-pile-overlay-root comic-pile-overlay-root--${layer}`
   overlayRoot.dataset.overlayRoot = 'true'
-  overlayRoot.dataset.overlayLayer = 'menu'
+  overlayRoot.dataset.overlayLayer = layer
   document.body.appendChild(overlayRoot)
   return overlayRoot
 }
 
-export default function OverlayPortal({ children }: OverlayPortalProps) {
+export default function OverlayPortal({ children, layer = 'menu' }: OverlayPortalProps) {
   const [overlayRoot, setOverlayRoot] = useState<HTMLElement | null>(null)
 
   useEffect(() => {
-    const root = getOrCreateOverlayRoot()
-    mountedPortalCount += 1
+    const root = getOrCreateOverlayRoot(layer)
+    mountedPortalCounts.set(layer, (mountedPortalCounts.get(layer) ?? 0) + 1)
     setOverlayRoot(root)
 
     return () => {
-      mountedPortalCount -= 1
-      if (mountedPortalCount === 0) root.remove()
+      const remaining = mountedPortalCounts.get(layer)! - 1
+      if (remaining <= 0) {
+        mountedPortalCounts.delete(layer)
+        root.remove()
+      } else {
+        mountedPortalCounts.set(layer, remaining)
+      }
     }
-  }, [])
+  }, [layer])
 
   if (!overlayRoot) return null
   return createPortal(children, overlayRoot)

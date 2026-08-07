@@ -7,9 +7,20 @@
 
 .comic-pile-overlay-root {
   position: relative;
-  z-index: var(--overlay-layer-menu);
   isolation: isolate;
   pointer-events: none;
+}
+
+.comic-pile-overlay-root--menu {
+  z-index: var(--overlay-layer-menu);
+}
+
+.comic-pile-overlay-root--dialog {
+  z-index: var(--overlay-layer-dialog);
+}
+
+.comic-pile-overlay-root--global-effect {
+  z-index: var(--overlay-layer-global-effect);
 }
 
 .comic-pile-overlay-root > * {

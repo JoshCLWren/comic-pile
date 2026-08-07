@@ -151,7 +151,7 @@ export default function Modal({
   if (!isOpen) return null
 
   return (
-    <OverlayPortal>
+    <OverlayPortal layer="dialog">
       <div
         ref={setOverlayElement}
         className={`fixed inset-0 flex items-end md:items-center justify-center md:px-4 ${overlayClassName || ''}`}
