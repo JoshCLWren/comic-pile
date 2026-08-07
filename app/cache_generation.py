@@ -9,13 +9,26 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
+from collections.abc import Awaitable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
 
 _GENERATION_PREFIX = "cache:generation:user"
 _VALUE_PREFIX = "cache:user"
+
+
+class GenerationCacheClient(Protocol):
+    """Minimal async Redis contract used by generation operations."""
+
+    def get(self, key: str) -> Awaitable[str | int | None]:
+        """Return a generation counter value."""
+        ...
+
+    def incr(self, key: str) -> Awaitable[int]:
+        """Increment and return a generation counter value."""
+        ...
 
 
 @dataclass(slots=True)
@@ -88,6 +101,64 @@ def namespaced_cache_key(user_id: int, generation: int, logical_key: str) -> str
 
     normalized = logical_key.removeprefix("cache:")
     return f"{_VALUE_PREFIX}:{user_id}:g{generation}:{normalized}"
+
+
+async def get_user_generation(client: GenerationCacheClient, user_id: int) -> int:
+    """Read one user's current cache generation with exactly one cache command.
+
+    A missing generation means the user has never invalidated a generation-scoped
+    value, so generation zero is valid without an initialization write.
+
+    Args:
+        client: Async Redis-compatible generation client.
+        user_id: Authenticated user identifier.
+
+    Returns:
+        Current non-negative generation, defaulting to zero when no counter exists.
+
+    Raises:
+        ValueError: If Redis returns an invalid generation value.
+    """
+    raw_generation = await client.get(generation_key(user_id))
+    command_budget.record("generation_get")
+    if raw_generation is None:
+        return 0
+
+    try:
+        generation = int(raw_generation)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Cache generation must be an integer") from exc
+    if generation < 0:
+        raise ValueError("Cache generation cannot be negative")
+    return generation
+
+
+async def bump_user_generation(client: GenerationCacheClient, user_id: int) -> int:
+    """Invalidate all cached values for one user with exactly one cache command.
+
+    Existing value keys are left to expire naturally. Incrementing the generation
+    makes them unreachable immediately across every application instance without a
+    wildcard scan, key inventory, or repeated logical-family deletion.
+
+    Args:
+        client: Async Redis-compatible generation client.
+        user_id: Authenticated user identifier.
+
+    Returns:
+        Newly active positive generation.
+
+    Raises:
+        ValueError: If Redis returns an invalid generation value.
+    """
+    raw_generation = await client.incr(generation_key(user_id))
+    command_budget.record("generation_incr")
+    try:
+        generation = int(raw_generation)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Cache generation must be an integer") from exc
+    if generation <= 0:
+        raise ValueError("Incremented cache generation must be positive")
+    return generation
 
 
 def user_id_from_arguments(arguments: dict[str, Any]) -> int | None:
