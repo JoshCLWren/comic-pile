@@ -10,23 +10,24 @@ from urllib.parse import unquote, urlsplit
 MARKDOWN_LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
 ALLOWED_ROOT_MARKDOWN = {
     "AGENTS.md",
+    "COMIC_DEPENDENCIES_GUIDE.md",
     "CONTRIBUTING.md",
     "LOCAL_TESTING.md",
     "README.md",
     "ROLLBACK.md",
     "SECURITY.md",
+    "TECH_DEBT.md",
+    "prd.md",
 }
-IGNORED_DIRECTORIES = {".git", ".venv", "node_modules"}
+IGNORED_DIRECTORIES = {".git", ".venv", "node_modules", "archive"}
 
 
 def iter_markdown_files(root: Path) -> list[Path]:
-    """Return Markdown paths that should participate in documentation checks.
+    """Return current Markdown paths that should participate in documentation checks.
 
-    Args:
-        root: Repository root directory.
-
-    Returns:
-        Sorted Markdown file paths, excluding generated dependency directories.
+    Historical archive documents are intentionally excluded: they preserve point-in-time
+    evidence and may contain dead links or machine-local paths that must not become current
+    repository contracts.
     """
     return sorted(
         path
@@ -36,15 +37,7 @@ def iter_markdown_files(root: Path) -> list[Path]:
 
 
 def find_broken_local_links(root: Path, markdown_files: list[Path]) -> list[str]:
-    """Find Markdown links whose local file targets do not exist.
-
-    Args:
-        root: Repository root directory.
-        markdown_files: Markdown files to inspect.
-
-    Returns:
-        Human-readable broken-link diagnostics.
-    """
+    """Find Markdown links whose local file targets do not exist."""
     broken: list[str] = []
     for markdown_file in markdown_files:
         text = markdown_file.read_text(encoding="utf-8")
@@ -73,14 +66,7 @@ def find_broken_local_links(root: Path, markdown_files: list[Path]) -> list[str]
 
 
 def find_unapproved_root_markdown(root: Path) -> list[str]:
-    """Find new root Markdown files that bypass the documentation ownership model.
-
-    Args:
-        root: Repository root directory.
-
-    Returns:
-        Sorted root Markdown filenames that are not explicitly approved.
-    """
+    """Find new root Markdown files that bypass the documentation ownership model."""
     return sorted(
         path.name
         for path in root.glob("*.md")
@@ -89,11 +75,7 @@ def find_unapproved_root_markdown(root: Path) -> list[str]:
 
 
 def main() -> int:
-    """Run repository Markdown validation.
-
-    Returns:
-        Process status code, zero when all checks pass.
-    """
+    """Run repository Markdown validation."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--root",
@@ -117,7 +99,7 @@ def main() -> int:
             print(error)
         return 1
 
-    print(f"Validated {len(markdown_files)} Markdown files.")
+    print(f"Validated {len(markdown_files)} current Markdown files.")
     return 0
 
 
