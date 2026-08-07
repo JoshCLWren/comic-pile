@@ -357,8 +357,10 @@ async def delete_continuity_rule(
     Raises:
         HTTPException: If the continuity rule is not owned by the user.
     """
-    rule = await _get_owned_rule(db, current_user.id, rule_id)
+    user_id = current_user.id
+    await _lock_continuity_graph(db, user_id)
+    rule = await _get_owned_rule(db, user_id, rule_id)
     await db.delete(rule)
     await db.commit()
-    await _invalidate_continuity_caches(current_user.id)
+    await _invalidate_continuity_caches(user_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
