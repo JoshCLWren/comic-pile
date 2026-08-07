@@ -33,7 +33,10 @@ test.describe('Queue interaction containment (#625)', () => {
     await expect(overlayLayer).toHaveAttribute('data-overlay-root', 'true');
     await expect(overlayLayer).toHaveAttribute('data-overlay-layer', 'menu');
 
-    const menuEscapesCard = await menu.evaluate((element, card) => !card.contains(element), await firstCard.elementHandle());
+    const menuEscapesCard = await menu.evaluate((element) => {
+      const card = document.querySelector('[data-testid="queue-thread-item"]');
+      return card !== null && !card.contains(element);
+    });
     expect(menuEscapesCard).toBe(true);
 
     const menuBox = await menu.boundingBox();
