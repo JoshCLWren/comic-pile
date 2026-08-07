@@ -4,7 +4,8 @@
 This tool intentionally uses static analysis so cache-budget work can account for
 all production call sites without importing the application or opening Redis/DB
 connections. It reports cached functions and invalidation calls, including whether
-an invalidation can traverse the Redis keyspace.
+an invalidation can traverse the Redis keyspace, and can fail CI while the bounded
+cache migration is incomplete.
 """
 
 from __future__ import annotations
@@ -61,9 +62,24 @@ class CacheInventory:
     invalidation_calls: tuple[InvalidationCall, ...]
 
     @property
+    def legacy_cached_count(self) -> int:
+        """Return readers still using the legacy non-generation decorator."""
+        return sum(item.cache_kind == "cached" for item in self.cached_functions)
+
+    @property
+    def generation_cached_count(self) -> int:
+        """Return readers already using the bounded generation decorator."""
+        return sum(item.cache_kind == "generation_cached" for item in self.cached_functions)
+
+    @property
     def unbounded_invalidation_count(self) -> int:
         """Return the number of production invalidations that can scan keyspace."""
         return sum(not call.bounded for call in self.invalidation_calls)
+
+    @property
+    def migration_complete(self) -> bool:
+        """Return whether every remote cache path satisfies the bounded design."""
+        return self.legacy_cached_count == 0 and self.unbounded_invalidation_count == 0
 
 
 class _InventoryVisitor(ast.NodeVisitor):
@@ -164,7 +180,10 @@ def _render_text(inventory: CacheInventory) -> str:
             f"[{item.invalidation_kind}; {'bounded' if item.bounded else 'UNBOUNDED'}]"
             for item in inventory.invalidation_calls
         ),
+        f"Legacy cached readers: {inventory.legacy_cached_count}",
+        f"Generation cached readers: {inventory.generation_cached_count}",
         f"Unbounded invalidation calls: {inventory.unbounded_invalidation_count}",
+        f"Bounded migration complete: {'yes' if inventory.migration_complete else 'no'}",
     ]
     return "\n".join(lines)
 
@@ -173,6 +192,11 @@ def main() -> int:
     """Run the cache inventory CLI."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Exit non-zero while legacy readers or unbounded invalidations remain",
+    )
     args = parser.parse_args()
 
     inventory = build_inventory()
@@ -182,7 +206,10 @@ def main() -> int:
                 {
                     "cached_functions": [asdict(item) for item in inventory.cached_functions],
                     "invalidation_calls": [asdict(item) for item in inventory.invalidation_calls],
+                    "legacy_cached_count": inventory.legacy_cached_count,
+                    "generation_cached_count": inventory.generation_cached_count,
                     "unbounded_invalidation_count": inventory.unbounded_invalidation_count,
+                    "migration_complete": inventory.migration_complete,
                 },
                 indent=2,
                 sort_keys=True,
@@ -190,6 +217,9 @@ def main() -> int:
         )
     else:
         print(_render_text(inventory))
+
+    if args.check and not inventory.migration_complete:
+        return 1
     return 0
 
 
