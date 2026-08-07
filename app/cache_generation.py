@@ -167,6 +167,32 @@ async def bump_user_generation(client: GenerationCacheClient, user_id: int) -> i
     return generation
 
 
+async def invalidate_user_cache(user_id: int) -> bool:
+    """Invalidate every generation-scoped cached value for one user.
+
+    The production entrypoint is deliberately a no-op while remote caching is
+    disabled. When caching is configured, one successful call performs exactly one
+    Redis ``INCR`` through :func:`bump_user_generation`; old value keys expire by
+    TTL and are never scanned or deleted individually.
+
+    Args:
+        user_id: Authenticated user identifier whose cached views became stale.
+
+    Returns:
+        ``True`` when the generation was bumped, otherwise ``False`` when caching
+        is unavailable or the cache command fails.
+    """
+    if not cache.is_initialized or cache._client is None:
+        return False
+
+    try:
+        await bump_user_generation(cache._client, user_id)
+    except Exception as exc:
+        logger.warning("Cache generation invalidation failed: %s", exc)
+        return False
+    return True
+
+
 def user_id_from_arguments(arguments: dict[str, Any]) -> int | None:
     """Extract a user identifier from bound cached-function arguments.
 
