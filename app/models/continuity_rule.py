@@ -20,6 +20,9 @@ class ContinuityRule(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    legacy_dependency_id: Mapped[int | None] = mapped_column(
+        ForeignKey("dependencies.id", ondelete="CASCADE"), nullable=True, unique=True
+    )
     source_type: Mapped[str] = mapped_column(String(20), nullable=False)
     source_id: Mapped[int] = mapped_column(Integer, nullable=False)
     target_type: Mapped[str] = mapped_column(String(20), nullable=False)
