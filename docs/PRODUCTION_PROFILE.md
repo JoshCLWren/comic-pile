@@ -100,7 +100,7 @@ Consequences for the production profile report:
 
 - `serverTiming` is currently expected to be `null` for records captured against this deployment. Treat that as an observed limitation of the current deployment path, not a permanent or documented Vercel platform guarantee.
 - Timing and diagnostics evidence remains available from the per-request `X-Request-ID`, `X-App-DB-Queries`, and `X-App-Cache` headers, from the structured `Slow HTTP request` warning logs, and from Vercel runtime logs such as request `x-vercel-id` and invocation timing information.
-- A preview-deployment comparison or origin-versus-proxy capture is still required before attributing the missing header to a specific Vercel proxy layer.
+- Investigate the missing header with local origin-versus-proxy captures or production runtime evidence. ComicPile intentionally does not provision Vercel Preview deployments for comparison testing.
 
 ## Production slow-request warnings are enabled
 
