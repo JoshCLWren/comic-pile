@@ -100,15 +100,15 @@ class _InventoryVisitor(ast.NodeVisitor):
         self.generic_visit(node)
         self.function_stack.pop()
 
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # noqa: N802
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         """Visit a synchronous function."""
         self._visit_function(node)
 
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:  # noqa: N802
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         """Visit an asynchronous function."""
         self._visit_function(node)
 
-    def visit_Call(self, node: ast.Call) -> None:  # noqa: N802
+    def visit_Call(self, node: ast.Call) -> None:
         """Record cache invalidation calls."""
         name = self._call_name(node.func)
         if name in _INVALIDATION_CALLS:
