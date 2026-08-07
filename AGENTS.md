@@ -45,20 +45,20 @@ If you edit files and run tests but stop before pushing, you have **not complete
 
 ## CRITICAL: NEVER USE CI AS A LOCAL DEBUGGER
 
-**⚠️ ALL TESTS MUST PASS LOCALLY BEFORE PUSHING. NO EXCEPTIONS.**
+CI is not a debugging tool. Run focused local validation appropriate to the change before pushing whenever the execution environment provides a checkout and required dependencies.
 
-CI is not a debugging tool. Every failed CI run wastes compute, blocks the pipeline, and disrespects the reviewer's time. If you push code that fails CI and then push fix-after-fix to get it green, you are using CI as your local debugger. This is prohibited.
+For autonomous factory work, `docs/AUTONOMOUS_FACTORY_POLICY.md` is canonical for validation and browser gates. When browser validation is required, Chromium is the maintained required Playwright target. Firefox and WebKit are optional diagnostics for browser-specific investigations and must not delay ordinary issue closure or merges.
 
-**Before pushing ANY branch that has changes to frontend or E2E tests:**
-1. Run `cd frontend && pnpm run lint && pnpm run typecheck` - must be clean
-2. Run `cd frontend && pnpm run build` - must succeed
-3. Run `cd frontend && pnpm test` (vitest) - all must pass
-4. Run `make verify-e2e` against the local development API - all E2E must pass in Firefox, WebKit, and Chromium. Firefox is the primary desktop acceptance browser and WebKit covers the mobile Safari rendering path.
-5. Only after ALL of the above are green, you may push
+Before pushing frontend changes from a normal local checkout:
+1. Run `cd frontend && pnpm run lint && pnpm run typecheck`.
+2. Run `cd frontend && pnpm run build`.
+3. Run `cd frontend && pnpm test`.
+4. Run focused Chromium Playwright coverage when the change affects browser behavior.
+5. Fix every failure caused or exposed by the change before pushing.
 
 **If E2E tests need a backend:** Run `make dev` first. The API runs on port 8000 and Vite runs on port 5173.
 
-**This is a hard rule.** Violating it is the same severity as skipping tests or bypassing hooks. If you cannot run E2E tests locally for some reason, say so explicitly and ask the user before pushing.
+Never skip meaningful tests or use CI as a substitute for debugging a locally reproducible failure. Factory workers that cannot execute a local check in their runtime must state that limitation truthfully and rely only on the validation boundary permitted by the canonical factory policy.
 
 ## Project Overview
 
@@ -261,7 +261,7 @@ File: `docker-compose.test.yml` - PostgreSQL 16 on port 5437.
 
 ```bash
 make docker-test-up     # Start test environment
-make docker-test-health # Check health
+make docker-test-health # Check test environment
 make docker-test-logs   # View logs
 make docker-test-down   # Stop test environment
 ```
