@@ -157,3 +157,38 @@ async def test_generation_cached_bypasses_cache_without_user_ownership(
     assert executed == 1
     assert configured_cache.get_calls == 0
     assert command_budget.total == 0
+
+
+@pytest.mark.asyncio
+async def test_generation_cached_fails_open_when_generation_lookup_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    configured_cache: FakeGenerationClient,
+) -> None:
+    """Redis generation failure must not make the application read fail."""
+    from app.cache_generation import cache
+
+    async def failing_generation_get(_key: str) -> int:
+        configured_cache.get_calls += 1
+        raise ConnectionError("redis unavailable")
+
+    async def unexpected_value_get(_key: str) -> Any:
+        raise AssertionError("value lookup must be skipped after generation failure")
+
+    monkeypatch.setattr(configured_cache, "get", failing_generation_get)
+    monkeypatch.setattr(cache, "get", unexpected_value_get)
+
+    executed = 0
+
+    @generation_cached(ttl=60)
+    async def load_value(user_id: int) -> dict[str, int]:
+        nonlocal executed
+        executed += 1
+        return {"value": user_id}
+
+    result = await load_value(7)
+
+    assert result == {"value": 7}
+    assert executed == 1
+    assert configured_cache.get_calls == 1
+    assert command_budget.counts == {"generation_get": 1}
+    assert command_budget.total == 1
