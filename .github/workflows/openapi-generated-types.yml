@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: openapi-generated-types-${{ github.workflow }}-${{ github.ref }}
@@ -22,6 +22,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
 
       - name: Set up Python 3.14
         uses: actions/setup-python@v6
@@ -55,7 +57,7 @@ jobs:
             frontend/src/generated/openapi.ts
           if-no-files-found: error
 
-      - name: Verify generated artifacts are committed
+      - name: Commit generated artifacts
         shell: bash
         run: |
           artifacts=(
@@ -63,15 +65,12 @@ jobs:
             frontend/src/generated/openapi.ts
           )
 
-          git diff -- "${artifacts[@]}"
-          git status --short --untracked-files=all --ignored -- "${artifacts[@]}"
-
-          if ! git diff --quiet -- "${artifacts[@]}"; then
-            echo "Generated OpenAPI artifacts differ from the committed files." >&2
-            exit 1
+          if git diff --quiet -- "${artifacts[@]}"; then
+            exit 0
           fi
 
-          if [[ -n "$(git ls-files --others -- "${artifacts[@]}")" ]]; then
-            echo "Generated OpenAPI artifacts are untracked and must be committed." >&2
-            exit 1
-          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "${artifacts[@]}"
+          git commit -m "chore: refresh generated OpenAPI types"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
