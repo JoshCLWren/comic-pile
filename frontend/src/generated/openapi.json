@@ -329,6 +329,153 @@
         "title": "ConnectedThreadInfo",
         "type": "object"
       },
+      "ContinuityBlocker": {
+        "description": "One unsatisfied continuity rule blocking the requested node.",
+        "properties": {
+          "causing_issue_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Causing Issue Ids",
+            "type": "array"
+          },
+          "causing_member_issue_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Causing Member Issue Ids",
+            "type": "array"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "integer"
+          },
+          "satisfaction_type": {
+            "enum": [
+              "item_read",
+              "all_members_read",
+              "checkpoint",
+              "selected_members_read"
+            ],
+            "title": "Satisfaction Type",
+            "type": "string"
+          },
+          "satisfied": {
+            "const": false,
+            "default": false,
+            "title": "Satisfied",
+            "type": "boolean"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "integer"
+          },
+          "source_label": {
+            "title": "Source Label",
+            "type": "string"
+          },
+          "source_type": {
+            "enum": [
+              "issue",
+              "crossover"
+            ],
+            "title": "Source Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule_id",
+          "source_type",
+          "source_id",
+          "source_label",
+          "satisfaction_type"
+        ],
+        "title": "ContinuityBlocker",
+        "type": "object"
+      },
+      "ContinuityReadinessRequest": {
+        "description": "Request readiness for one owned issue, thread, or crossover.",
+        "properties": {
+          "node_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Node Id",
+            "type": "integer"
+          },
+          "node_type": {
+            "enum": [
+              "issue",
+              "thread",
+              "crossover"
+            ],
+            "title": "Node Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "node_type",
+          "node_id"
+        ],
+        "title": "ContinuityReadinessRequest",
+        "type": "object"
+      },
+      "ContinuityReadinessResponse": {
+        "description": "Machine-readable direct readiness result for one requested node.",
+        "properties": {
+          "blockers": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityBlocker"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "evaluated_issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluated Issue Id"
+          },
+          "is_readable": {
+            "title": "Is Readable",
+            "type": "boolean"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "integer"
+          },
+          "node_type": {
+            "enum": [
+              "issue",
+              "thread",
+              "crossover"
+            ],
+            "title": "Node Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "node_type",
+          "node_id",
+          "is_readable"
+        ],
+        "title": "ContinuityReadinessResponse",
+        "type": "object"
+      },
       "ContinuityRuleCreate": {
         "description": "Schema for creating a generalized continuity rule.",
         "properties": {
@@ -5748,6 +5895,55 @@
           }
         ],
         "summary": "Update Continuity Rule",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "continuity"
+        ]
+      }
+    },
+    "/api/v1/continuity/readiness": {
+      "post": {
+        "description": "Evaluate direct continuity readiness for one owned issue, thread, or crossover.",
+        "operationId": "get_continuity_readiness_api_v1_continuity_readiness_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinuityReadinessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityReadinessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Continuity Readiness",
         "tags": [
           "dependencies",
           "dependencies",

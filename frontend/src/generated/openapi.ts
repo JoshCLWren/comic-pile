@@ -1663,6 +1663,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/continuity/readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get Continuity Readiness
+         * @description Evaluate direct continuity readiness for one owned issue, thread, or crossover.
+         */
+        post: operations["get_continuity_readiness_api_v1_continuity_readiness_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dependencies/": {
         parameters: {
             query?: never;
@@ -2730,6 +2750,72 @@ export interface components {
             thread_id: number;
             /** Title */
             title: string;
+        };
+        /**
+         * ContinuityBlocker
+         * @description One unsatisfied continuity rule blocking the requested node.
+         */
+        ContinuityBlocker: {
+            /** Causing Issue Ids */
+            causing_issue_ids?: number[];
+            /** Causing Member Issue Ids */
+            causing_member_issue_ids?: number[];
+            /** Note */
+            note?: string | null;
+            /** Rule Id */
+            rule_id: number;
+            /**
+             * Satisfaction Type
+             * @enum {string}
+             */
+            satisfaction_type: "item_read" | "all_members_read" | "checkpoint" | "selected_members_read";
+            /**
+             * Satisfied
+             * @default false
+             * @constant
+             */
+            satisfied: false;
+            /** Source Id */
+            source_id: number;
+            /** Source Label */
+            source_label: string;
+            /**
+             * Source Type
+             * @enum {string}
+             */
+            source_type: "issue" | "crossover";
+        };
+        /**
+         * ContinuityReadinessRequest
+         * @description Request readiness for one owned issue, thread, or crossover.
+         */
+        ContinuityReadinessRequest: {
+            /** Node Id */
+            node_id: number;
+            /**
+             * Node Type
+             * @enum {string}
+             */
+            node_type: "issue" | "thread" | "crossover";
+        };
+        /**
+         * ContinuityReadinessResponse
+         * @description Machine-readable direct readiness result for one requested node.
+         */
+        ContinuityReadinessResponse: {
+            /** Blockers */
+            blockers?: components["schemas"]["ContinuityBlocker"][];
+            /** Evaluated Issue Id */
+            evaluated_issue_id?: number | null;
+            /** Is Readable */
+            is_readable: boolean;
+            /** Node Id */
+            node_id: number;
+            /**
+             * Node Type
+             * @enum {string}
+             */
+            node_type: "issue" | "thread" | "crossover";
         };
         /**
          * ContinuityRuleCreate
@@ -5534,6 +5620,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_continuity_readiness_api_v1_continuity_readiness_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContinuityReadinessRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityReadinessResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
