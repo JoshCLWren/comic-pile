@@ -1,0 +1,100 @@
+name: Production E2E monitoring
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/30 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-e2e-monitoring
+  cancel-in-progress: true
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PROD_BASE_URL: https://comic-pile.vercel.app
+      WORKERS: '1'
+      ROOT_TTFB_WARNING_SECONDS: '5'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Capture production timings
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p production-monitoring
+          output=production-monitoring/timings.tsv
+          printf 'path\tttfb_seconds\ttotal_seconds\n' > "$output"
+
+          probe() {
+            local path="$1"
+            curl --fail --silent --show-error --location \
+              --output /dev/null \
+              --write-out "${path}\t%{time_starttransfer}\t%{time_total}\n" \
+              "${PROD_BASE_URL}${path}" | tee -a "$output"
+          }
+
+          probe '/'
+          probe '/'
+          probe '/openapi.json'
+
+          cold_root_ttfb=$(awk -F '\t' '$1=="/" {print $2; exit}' "$output")
+          {
+            echo '## Production timing sample'
+            echo
+            echo '| Request | TTFB | Total |'
+            echo '| --- | ---: | ---: |'
+            tail -n +2 "$output" | awk -F '\t' '{printf "| `%s` | %.3fs | %.3fs |\n", $1, $2, $3}'
+            echo
+            echo 'The first root request is a cold-candidate sample only. The following warm request does not prove cold startup is fixed.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if awk -v actual="$cold_root_ttfb" -v threshold="$ROOT_TTFB_WARNING_SECONDS" 'BEGIN { exit !(actual > threshold) }'; then
+            echo "::warning::First root TTFB was ${cold_root_ttfb}s, above the ${ROOT_TTFB_WARNING_SECONDS}s monitoring threshold."
+          fi
+
+      - name: Run production Playwright suite
+        working-directory: frontend
+        run: pnpm run test:e2e:prod-all
+
+      - name: Upload timing evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-timings-${{ github.run_id }}-${{ github.run_attempt }}
+          path: production-monitoring/timings.tsv
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Playwright failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-playwright-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            playwright-report-prod-all/
+            frontend/test-results/
+          if-no-files-found: warn
+          retention-days: 14
