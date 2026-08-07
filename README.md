@@ -1,246 +1,74 @@
-# Comic Pile
+# ComicPile
 
-A dice-driven comic reading tracker built with FastAPI, React, and Tailwind CSS.
+ComicPile is a dice-driven comic reading tracker built with FastAPI, React, Vite, Tailwind CSS, PostgreSQL, and SQLAlchemy.
 
-## Features
+## Start here
 
-## 🚫 CORE PRINCIPLE: NEVER SKIP TESTS
+- [Documentation hub](docs/README.md): authoritative index for repository documentation and documentation ownership.
+- [AGENTS.md](AGENTS.md): mandatory engineering rules for coding agents.
+- [CONTRIBUTING.md](CONTRIBUTING.md): development workflow and quality requirements.
+- [Product changelog](docs/changelog.md): historical What’s New archive; new entries live in `docs/changelog.d/`.
 
-**TESTS MUST NEVER BE SKIPPED - THIS IS NON-NEGOTIABLE.**
-
-When tests fail:
-- ✅ Fix the test
-- ✅ Fix the code that breaks the test
-- ✅ Investigate the root cause
-- ❌ **NEVER skip, disable, or work around the test**
-
-This applies to ALL developers, ALL test suites, and ALL situations. No exceptions.
-
-Skipped tests create technical debt and hide broken functionality. If a test is failing, it's telling you something is broken. **Fix it.**
-
-## Tech Stack
-
-- **Backend**: FastAPI (Python 3.14)
-- **Database**: PostgreSQL with SQLAlchemy ORM (**async-only** via asyncpg)
-- **Migrations**: Alembic
-- **Frontend**: React + Vite + Tailwind CSS
-- **Styling**: Tailwind CSS
-- **Testing**: pytest with httpx.AsyncClient for API tests
-- **Auth**: JWT authentication with refresh token rotation
-- **Code Quality**: ruff linting, ty type checking, 94% coverage requirement
-
-> **⚠️ IMPORTANT: Async PostgreSQL Only in Application Code**
-> 
-> Application code uses **asyncpg (async PostgreSQL) ONLY**. Never use synchronous database drivers in `app/` or `comic_pile/`.
-> - ✅ USE in app code: `asyncpg`, `create_async_engine()`, `AsyncSession`
-> - ❌ NEVER USE in app code: `psycopg2`, `create_engine()` (sync), `Session` (sync)
-> 
-> The one exception: `psycopg` (sync, v3) is a core dependency used **only inside `alembic/`** for migrations. `app/config.py` converts `postgresql+psycopg://` back to `postgresql+asyncpg://` at runtime, so the app never runs sync DB access.
-> 
-> Mixing sync/async database code in the application will break it. See [AGENTS.md](AGENTS.md) for details.
-
-## Quick Start
+## Local development
 
 ```bash
-# Clone the repository
 git clone https://github.com/JoshCLWren/comic-pile.git
 cd comic-pile
-
-# Copy local configuration
 cp .env.example .env
-
-# Install dependencies, start PostgreSQL, migrate, and seed demo data
 make setup
-
-# Run the frontend and API development servers
 make dev
 ```
 
-Open http://localhost:5173 to use the app. The API and Swagger docs are at
-http://localhost:8000 and http://localhost:8000/docs.
+Open the frontend at `http://localhost:5173`. The FastAPI service and Swagger UI are available at `http://localhost:8000` and `http://localhost:8000/docs`.
 
-## Development Workflow
-
-### Daily Development
+Common commands:
 
 ```bash
-# Run the development servers
-make dev
-
-# Run only the API server
-make dev-api
-
-# Run the complete local verification suite
-make verify
-
-# Run browser tests (requires the development API server)
-make verify-e2e
-
-# Run tests with coverage
-pytest --cov=comic_pile --cov-report=term-missing
-
-# Run linting
-make lint
-
-# Seed database with sample data
-make seed
-
-# Run database migrations
-make migrate
+make dev          # frontend + API development servers
+make dev-api      # API only
+make verify       # complete local verification suite
+make verify-e2e   # maintained browser tests
+make lint         # lint and type checks
+make migrate      # run Alembic migrations
+make seed         # seed local sample data
 ```
 
-### Make Commands
+Tests are requirements, not obstacles. Fix failures rather than skipping, disabling, or weakening meaningful coverage.
 
-- `make dev` - Run FastAPI development server with hot reload
-- `make seed` - Populate database with Faker sample data
-- `make migrate` - Run Alembic migrations
-- `make pytest` - Run test suite with coverage
-- `make lint` - Run ruff and ty type checking
+## Architecture
 
-## Project Structure
+- **Frontend:** React + Vite + Tailwind CSS, built as static output.
+- **API:** FastAPI on Python 3.14.
+- **Database:** PostgreSQL hosted by Neon in production.
+- **Application database access:** async SQLAlchemy via `asyncpg`.
+- **Migrations:** Alembic; synchronous `psycopg` is limited to migration tooling.
+- **Production deployment:** Vercel from `main` only. Preview environments are intentionally unsupported.
 
-```
-.
-├── app/                    # FastAPI application
-│   ├── __init__.py
-│   ├── main.py            # FastAPI app factory
-│   ├── api/               # API route handlers
-│   ├── models/            # SQLAlchemy database models
-│   ├── schemas/           # Pydantic request/response schemas
-│   └── auth.py            # JWT authentication
-├── comic_pile/            # Core package (dice ladder, queue, session logic)
-├── frontend/              # React frontend (Vite + Tailwind CSS)
-├── alembic/               # Database migration files
-├── scripts/               # Utility scripts (seed data, backups)
-├── static/                # Built frontend assets
-├── tests/                 # pytest test suite
-├── tests_e2e/             # Playwright E2E tests
-├── docs/                  # Technical documentation
-├── pyproject.toml         # Project configuration
-└── uv.lock                # Dependency lockfile
+Fly.io and Railway are not current deployment targets.
+
+## Repository layout
+
+```text
+app/          FastAPI application and API routes
+comic_pile/   core reading, queue, roll, and session logic
+frontend/     React/Vite frontend
+docs/         authoritative code-coupled documentation
+alembic/      database migrations
+scripts/      repository and operational tooling
+tests/        Python tests
+tests_e2e/    Playwright browser coverage
 ```
 
-## Testing
+See [docs/README.md](docs/README.md) before adding or moving Markdown. Code-coupled contracts stay in the repository; owner-facing explanations, FAQs, longer troubleshooting narratives, and durable history belong in the GitHub Wiki when they do not need to change atomically with code.
 
-The project uses pytest with coverage reporting:
+## Database rule
 
-```bash
-# Run all tests
-pytest
+Application code is async-only for PostgreSQL. Use `asyncpg`, `create_async_engine()`, and `AsyncSession` in application paths. Do not introduce synchronous SQLAlchemy sessions or `psycopg2` into `app/` or `comic_pile/`.
 
-# Run with verbose output
-pytest -v
+## Quality
 
-# Run with coverage
-pytest --cov=comic_pile --cov-report=term-missing
-```
-
-**Coverage requirement**: Minimum 94% (configured in pyproject.toml)
-
-## Dependencies
-
-This project uses standard Python packages and does not depend on custom consolidated packages.
-
-```
-comic-pile
-├── FastAPI (web framework)
-├── SQLAlchemy (ORM)
-├── Alembic (migrations)
-├── PostgreSQL (database via asyncpg)
-├── PyJWT (authentication)
-└── React + Vite + Tailwind CSS (frontend)
-```
-
-## Code Quality
-
-### Linting
-
-```bash
-# Run linter
-ruff check .
-
-# Fix auto-fixable issues
-ruff check --fix .
-
-# Format code
-ruff format .
-```
-
-### Type Checking
-
-```bash
-# Run type checker
-ty check --error-on-warning
-```
-
-### Pre-commit Hook
-
-A pre-commit hook is installed automatically that runs:
-- Python compilation check
-- Ruff linting
-- Any type usage check (disallows `Any` type)
-- ty type checking
-
-The hook will block commits with issues. To test manually:
-
-```bash
-make githook
-```
-
-## Mobile Access
-
-The app is configured with CORS enabled for local network access. To use the app on other devices:
-
-1. Find your machine's local IP address:
-   - Linux/Mac: `ip addr show` or `ifconfig`
-   - Windows: `ipconfig`
-
-2. Access from any device on your local network:
-   - App: http://YOUR_IP:8000 (e.g., http://192.168.1.5:8000)
-   - API docs: http://YOUR_IP:8000/docs
-
-3. If firewall blocks connections, allow port 8000:
-   ```bash
-   # Linux (ufw)
-   sudo ufw allow 8000
-   ```
-
-## Documentation
-
-| Document | Description |
-|----------|-------------|
-| [docs/API.md](docs/API.md) | REST API reference — endpoints, schemas, and examples |
-| [docs/REACT_ARCHITECTURE.md](docs/REACT_ARCHITECTURE.md) | Frontend architecture — components, hooks, contexts, build pipeline |
-| [docs/AUTH_USERS_MULTITENANT_PLAN.md](docs/AUTH_USERS_MULTITENANT_PLAN.md) | JWT auth design and multi-tenant isolation plan |
-| [docs/DATABASE_SAVE_LOAD.md](docs/DATABASE_SAVE_LOAD.md) | PostgreSQL backups, JSON export/import, disaster recovery |
-| [docs/rate_limiting.md](docs/rate_limiting.md) | Per-endpoint rate limits via slowapi |
-| [docs/GIT_HOOKS.md](docs/GIT_HOOKS.md) | Pre-commit and pre-push hook setup |
-| [docs/frontend-backend-asset-coupling-audit.md](docs/frontend-backend-asset-coupling-audit.md) | Asset pipeline audit and remediation plan |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow and code quality standards |
-| [LOCAL_TESTING.md](LOCAL_TESTING.md) | Local test environment setup with fixtures and sample data |
-| [TECH_DEBT.md](TECH_DEBT.md) | Technical debt tracker — active items and resolution history |
-| [SECURITY.md](SECURITY.md) | Docker security, SSL/TLS, secrets, container hardening |
-| [ROLLBACK.md](ROLLBACK.md) | Database, Docker, and git rollback procedures |
-| [prd.md](prd.md) | Product Requirements Document (design source of truth) |
-
-Interactive API docs are also available at `/docs` (Swagger UI) and `/redoc` when the server is running.
-
-## Contributing
-
-1. Fork the repository
-2. Create a phase branch: `git checkout main && git checkout -b phase/2-database-models`
-3. Make your changes
-4. Run tests: `pytest`
-5. Run linting: `make lint`
-6. Commit with conventional commits
-7. Push and create a pull request
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+The project uses pytest, Ruff, and `ty`. Run `make verify` before treating a change as complete. Coverage and additional repository-specific requirements are defined by the checked-in project configuration and [AGENTS.md](AGENTS.md), which take precedence over duplicated prose here.
 
 ## License
 
-MIT License - see LICENSE file for details
-
-## Credits
-
-Created by Josh Wren
+MIT. See [LICENSE](LICENSE).
