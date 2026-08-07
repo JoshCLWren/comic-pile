@@ -51,12 +51,8 @@ jobs:
       - name: Validate Markdown ownership and links
         run: uv run python scripts/check_markdown_docs.py
 
-      - name: Run Markdown regression tests
-        run: >-
-          uv run python -m pytest
-          tests/test_markdown_docs.py
-          tests/test_generate_markdown_inventory.py
-          -q
+      - name: Run repository tests
+        run: uv run python -m pytest -q
 
       - name: Render Markdown inventory
         run: uv run python scripts/generate_markdown_inventory.py --output docs/MARKDOWN_INVENTORY.md
