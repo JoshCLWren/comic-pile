@@ -1,6 +1,5 @@
 """Rate API endpoint."""
 
-import asyncio
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -8,10 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.session import _invalidate_session_caches
 from app.api.thread import thread_to_response
 from app.auth import get_current_user
-from app.cache import invalidate_cache
+from app.cache_generation import invalidate_user_cache
 from app.config import get_rating_settings
 from app.database import get_db
 from app.middleware import limiter
@@ -492,13 +490,7 @@ async def rate_thread(
     )
     await db.commit()
 
-    await asyncio.gather(
-        _invalidate_session_caches(user_id),
-        invalidate_cache(f"cache:list_threads:User:{user_id}:*"),
-        invalidate_cache(f"cache:get_thread:{thread_id}:User:{user_id}:"),
-        invalidate_cache(f"cache:list_issues:{thread_id}:*"),
-        invalidate_cache(f"cache:get_blocked_thread_ids:{user_id}:"),
-    )
+    await invalidate_user_cache(user_id)
 
     result = await db.execute(
         select(Thread).where(Thread.id == thread_id).where(Thread.user_id == user_id)
