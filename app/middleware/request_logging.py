@@ -2,8 +2,8 @@
 
 Provides helpers for safely reading and redacting request bodies before they
 are written to logs. The HTTP middleware also emits request IDs, Server-Timing
-metrics, cache outcomes, database query counts, slow-request logs, and the
-existing error logs.
+metrics, cache outcomes, database query counts, slow-request logs, startup
+phase timing, and cold/warm request classification.
 """
 
 import json
@@ -22,6 +22,7 @@ from app.performance_diagnostics import (
     get_request_diagnostics,
     install_cache_instrumentation,
 )
+from app.startup_diagnostics import mark_startup_complete, next_request_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -183,11 +184,34 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
     """
     install_cache_instrumentation(cache)
 
+    @app.on_event("startup")
+    async def record_startup_completion() -> None:
+        """Emit one process-scoped startup timing event after lifespan startup."""
+        startup_duration_ms = mark_startup_complete()
+        snapshot = next_request_snapshot()
+        # The startup event must not consume the first HTTP invocation number.
+        from app.startup_diagnostics import reset_request_counter_for_startup_event
+
+        reset_request_counter_for_startup_event()
+        logger.warning(
+            "Application startup completed in %.2f ms",
+            startup_duration_ms,
+            extra={
+                "event": "application_startup",
+                "startup_duration_ms": round(startup_duration_ms, 2),
+                "process_age_ms": round(snapshot.process_age_ms, 2),
+                "deployment_id": snapshot.deployment_id,
+                "process_started_at_ns": snapshot.process_started_at_ns,
+                "level": "WARNING",
+            },
+        )
+
     @app.middleware("http")
     async def log_errors_middleware(request: Request, call_next):
         """Add diagnostics headers and log slow or failed requests."""
         started_at = time.perf_counter()
         request_id = uuid.uuid4().hex
+        startup = next_request_snapshot()
         diagnostics_token = begin_request_diagnostics()
         request.state.request_id = request_id
 
@@ -205,6 +229,7 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
             response.headers["X-Request-ID"] = request_id
             response.headers["X-App-Cache"] = diagnostics.cache_status
             response.headers["X-App-DB-Queries"] = str(diagnostics.database_queries)
+            response.headers["X-App-Cold-Request"] = "1" if startup.cold else "0"
             response.headers["Server-Timing"] = _server_timing_header(process_time_ms)
 
             log_data = {
@@ -220,6 +245,17 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                 "cache_status": diagnostics.cache_status,
                 "cache_calls": diagnostics.cache_calls,
                 "cache_time_ms": round(diagnostics.cache_time_ms, 2),
+                "cold_request": startup.cold,
+                "process_request_number": startup.invocation,
+                "process_age_ms": round(startup.process_age_ms, 2),
+                "startup_complete": startup.startup_complete,
+                "startup_duration_ms": (
+                    round(startup.startup_duration_ms, 2)
+                    if startup.startup_duration_ms is not None
+                    else None
+                ),
+                "deployment_id": startup.deployment_id,
+                "process_started_at_ns": startup.process_started_at_ns,
                 "client_host": request.client.host if request.client else None,
                 "user_agent": request.headers.get("user-agent"),
                 "headers": redact_headers(dict(request.headers)),
@@ -244,12 +280,13 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                     f"Client Error: {request.method} {request.url.path} - {status_code}",
                     extra={**log_data, "level": "WARNING"},
                 )
-            elif process_time_ms >= _slow_request_threshold_ms():
+            elif startup.cold or process_time_ms >= _slow_request_threshold_ms():
                 logger.warning(
-                    "Slow HTTP request: %s %s completed in %.2f ms",
+                    "HTTP request: %s %s completed in %.2f ms (%s)",
                     request.method,
                     request.url.path,
                     process_time_ms,
+                    "cold" if startup.cold else "warm",
                     extra={**log_data, "level": "WARNING"},
                 )
 
