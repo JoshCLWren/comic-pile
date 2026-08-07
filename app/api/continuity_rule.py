@@ -1,6 +1,7 @@
 """Generalized continuity-rule CRUD endpoints."""
 
 import asyncio
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -17,18 +18,23 @@ from app.models.continuity_rule import ContinuityRule, ContinuityRuleSelectedMem
 from app.models.user import User
 from app.schemas.continuity_rule import ContinuityRuleCreate, ContinuityRuleResponse
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["continuity"])
 
 
 async def _invalidate_continuity_caches(user_id: int) -> None:
     """Invalidate continuity and legacy blocked-state caches after a mutation."""
-    await asyncio.gather(
+    results = await asyncio.gather(
         invalidate_cache(f"cache:continuity:*:User:{user_id}:*"),
         invalidate_cache(f"cache:get_blocked_thread_ids:{user_id}:"),
         invalidate_cache(f"cache:list_threads:User:{user_id}:*"),
         invalidate_cache(f"cache:get_thread_blocking_info:*:User:{user_id}:"),
         invalidate_cache(f"cache:get_threads_blocking_info:*:User:{user_id}:"),
+        return_exceptions=True,
     )
+    for result in results:
+        if isinstance(result, BaseException):
+            logger.warning("Continuity cache invalidation failed", exc_info=result)
 
 
 def _to_response(rule: ContinuityRule) -> ContinuityRuleResponse:
@@ -58,7 +64,10 @@ async def _get_owned_rule(db: AsyncSession, user_id: int, rule_id: int) -> Conti
     )
     rule = result.scalar_one_or_none()
     if rule is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Continuity rule {rule_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Continuity rule {rule_id} not found",
+        )
     return rule
 
 
@@ -83,11 +92,12 @@ async def _would_create_cycle(
         ).where(ContinuityRule.user_id == user_id)
     )
     adjacency: dict[tuple[str, int], set[tuple[str, int]]] = {}
-    for rule_id, existing_source_type, existing_source_id, existing_target_type, existing_target_id in result:
+    for row in result:
+        rule_id, source_kind, source_id_value, target_kind, target_id_value = row
         if exclude_rule_id is not None and rule_id == exclude_rule_id:
             continue
-        adjacency.setdefault((existing_source_type, existing_source_id), set()).add(
-            (existing_target_type, existing_target_id)
+        adjacency.setdefault((source_kind, source_id_value), set()).add(
+            (target_kind, target_id_value),
         )
 
     source = (source_type, source_id)
