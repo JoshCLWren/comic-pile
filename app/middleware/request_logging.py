@@ -179,6 +179,11 @@ def _server_timing_header(total_ms: float) -> str:
     return ", ".join(metrics)
 
 
+def _rounded_optional(value: float | None) -> float | None:
+    """Round an optional timing value for structured log output."""
+    return round(value, 2) if value is not None else None
+
+
 def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
     """Register request diagnostics and error logging middleware.
 
@@ -191,14 +196,17 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
     @app.on_event("startup")
     async def record_startup_completion() -> None:
         """Emit one process-scoped startup timing event after lifespan startup."""
-        startup_duration_ms = mark_startup_complete()
+        mark_startup_complete()
         snapshot = startup_event_snapshot()
         logger.warning(
             "Application startup completed in %.2f ms",
-            startup_duration_ms,
+            snapshot.startup_duration_ms or 0.0,
             extra={
                 "event": "application_startup",
-                "startup_duration_ms": round(startup_duration_ms, 2),
+                "startup_duration_ms": _rounded_optional(snapshot.startup_duration_ms),
+                "application_import_ms": _rounded_optional(snapshot.application_import_ms),
+                "application_creation_ms": _rounded_optional(snapshot.application_creation_ms),
+                "lifespan_ms": _rounded_optional(snapshot.lifespan_ms),
                 "process_age_ms": round(snapshot.process_age_ms, 2),
                 "deployment_id": snapshot.deployment_id,
                 "process_started_at_ns": snapshot.process_started_at_ns,
@@ -249,11 +257,10 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                 "process_request_number": startup.invocation,
                 "process_age_ms": round(startup.process_age_ms, 2),
                 "startup_complete": startup.startup_complete,
-                "startup_duration_ms": (
-                    round(startup.startup_duration_ms, 2)
-                    if startup.startup_duration_ms is not None
-                    else None
-                ),
+                "startup_duration_ms": _rounded_optional(startup.startup_duration_ms),
+                "application_import_ms": _rounded_optional(startup.application_import_ms),
+                "application_creation_ms": _rounded_optional(startup.application_creation_ms),
+                "lifespan_ms": _rounded_optional(startup.lifespan_ms),
                 "deployment_id": startup.deployment_id,
                 "process_started_at_ns": startup.process_started_at_ns,
                 "client_host": request.client.host if request.client else None,
@@ -280,13 +287,20 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                     f"Client Error: {request.method} {request.url.path} - {status_code}",
                     extra={**log_data, "level": "WARNING"},
                 )
-            elif startup.cold or process_time_ms >= _slow_request_threshold_ms():
+            elif process_time_ms >= _slow_request_threshold_ms():
                 logger.warning(
-                    "HTTP request: %s %s completed in %.2f ms (%s)",
+                    "Slow HTTP request: %s %s completed in %.2f ms",
                     request.method,
                     request.url.path,
                     process_time_ms,
-                    "cold" if startup.cold else "warm",
+                    extra={**log_data, "level": "WARNING"},
+                )
+            elif startup.cold:
+                logger.warning(
+                    "Cold HTTP request: %s %s completed in %.2f ms",
+                    request.method,
+                    request.url.path,
+                    process_time_ms,
                     extra={**log_data, "level": "WARNING"},
                 )
 
