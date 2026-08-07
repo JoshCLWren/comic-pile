@@ -281,7 +281,7 @@ class UpstashCache:
             return value
 
         if isinstance(value, set):
-            return {"__type__": "set", "values": [UpstashCache._prepare_value(v) for v in value["values"]]} if "values" in value else {"__type__": "set", "values": [UpstashCache._prepare_value(v) for v in value]}
+            return {"__type__": "set", "values": [UpstashCache._prepare_value(v) for v in value]}
 
         if isinstance(value, dict):
             return {k: UpstashCache._prepare_value(v) for k, v in value.items()}
