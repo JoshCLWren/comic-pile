@@ -1,7 +1,7 @@
 """Add generalized continuity rules.
 
 Revision ID: c84200000001
-Revises: a613b7c9d201
+Revises: 7f41d0a9c2e1
 Create Date: 2026-08-06 04:58:00.000000
 """
 
@@ -11,7 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision: str = "c84200000001"
-down_revision: str | Sequence[str] | None = "a613b7c9d201"
+down_revision: str | Sequence[str] | None = "7f41d0a9c2e1"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
