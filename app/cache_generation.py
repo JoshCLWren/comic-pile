@@ -11,7 +11,7 @@ import functools
 import inspect
 import logging
 from collections import Counter
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Any, Protocol, TypeVar, cast
 
@@ -191,6 +191,36 @@ async def invalidate_user_cache(user_id: int) -> bool:
         logger.warning("Cache generation invalidation failed: %s", exc)
         return False
     return True
+
+
+async def invalidate_user_caches(user_ids: Iterable[int]) -> int:
+    """Invalidate each distinct user namespace at most once.
+
+    Mutation helpers can overlap in the logical cache families they invalidate.
+    Collapsing user IDs before issuing generation bumps prevents nested helpers from
+    multiplying remote commands while preserving cross-user correctness.
+
+    Args:
+        user_ids: User identifiers whose cached views became stale.
+
+    Returns:
+        Number of user namespaces successfully invalidated.
+    """
+    distinct_user_ids = sorted(set(user_ids))
+    if not distinct_user_ids or not cache.is_initialized or cache._client is None:
+        return 0
+
+    invalidated = 0
+    for user_id in distinct_user_ids:
+        if user_id <= 0:
+            raise ValueError("user_id must be positive")
+        try:
+            await bump_user_generation(cache._client, user_id)
+        except Exception as exc:
+            logger.warning("Cache generation invalidation failed: %s", exc)
+            continue
+        invalidated += 1
+    return invalidated
 
 
 def user_id_from_arguments(arguments: dict[str, Any]) -> int | None:
