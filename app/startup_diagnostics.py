@@ -28,7 +28,7 @@ class StartupSnapshot:
     """Immutable process-startup state attached to one request.
 
     Attributes:
-        invocation: One-based request number handled by this process.
+        invocation: One-based request number handled by this process, or zero for startup events.
         cold: Whether this is the first request handled by this process.
         process_age_ms: Time since this module began loading.
         startup_complete: Whether the application startup hook completed.
@@ -61,6 +61,29 @@ def mark_startup_complete() -> float:
         return _startup_duration_ms or 0.0
 
 
+def _snapshot(*, invocation: int, cold: bool) -> StartupSnapshot:
+    """Build a snapshot without mutating request state."""
+    now = time.perf_counter()
+    with _lock:
+        startup_complete_at = _startup_complete_at
+        startup_duration_ms = _startup_duration_ms
+
+    return StartupSnapshot(
+        invocation=invocation,
+        cold=cold,
+        process_age_ms=(now - _PROCESS_STARTED_AT) * 1000,
+        startup_complete=startup_complete_at is not None,
+        startup_duration_ms=startup_duration_ms,
+        deployment_id=_DEPLOYMENT_ID,
+        process_started_at_ns=_PROCESS_STARTED_AT_NS,
+    )
+
+
+def startup_event_snapshot() -> StartupSnapshot:
+    """Return process metadata for the startup event without consuming a request number."""
+    return _snapshot(invocation=0, cold=False)
+
+
 def next_request_snapshot() -> StartupSnapshot:
     """Advance the process request counter and return cold-start context.
 
@@ -69,22 +92,11 @@ def next_request_snapshot() -> StartupSnapshot:
     """
     global _request_count
 
-    now = time.perf_counter()
     with _lock:
         _request_count += 1
         invocation = _request_count
-        startup_complete_at = _startup_complete_at
-        startup_duration_ms = _startup_duration_ms
 
-    return StartupSnapshot(
-        invocation=invocation,
-        cold=invocation == 1,
-        process_age_ms=(now - _PROCESS_STARTED_AT) * 1000,
-        startup_complete=startup_complete_at is not None,
-        startup_duration_ms=startup_duration_ms,
-        deployment_id=_DEPLOYMENT_ID,
-        process_started_at_ns=_PROCESS_STARTED_AT_NS,
-    )
+    return _snapshot(invocation=invocation, cold=invocation == 1)
 
 
 def reset_startup_diagnostics_for_test() -> None:
