@@ -70,13 +70,16 @@ describe('CrossoversPage membership editing', () => {
     expect(screen.getByRole('button', { name: 'Add thread' })).toBeEnabled()
   })
 
-  it('rejects an invalid whole-thread ID before calling the API', async () => {
+  it('rejects invalid whole-thread IDs before calling the API', async () => {
     render(<CrossoversPage />)
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
 
     fireEvent.change(screen.getByLabelText('Whole thread ID'), { target: { value: '0' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add thread' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter a valid thread ID.')
 
+    fireEvent.change(screen.getByLabelText('Whole thread ID'), { target: { value: '1.5' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add thread' }))
     expect(screen.getByRole('alert')).toHaveTextContent('Enter a valid thread ID.')
     expect(api.addMember).not.toHaveBeenCalled()
   })
@@ -92,6 +95,23 @@ describe('CrossoversPage membership editing', () => {
     expect(api.removeMember).toHaveBeenCalledWith(7, 1)
     expect(screen.getByText('Annihilation')).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent('Comic removed from crossover.')
+  })
+
+  it('ignores another membership removal while one is pending', async () => {
+    let resolveRemoval: (() => void) | undefined
+    api.removeMember.mockImplementation(() => new Promise<void>((resolve) => {
+      resolveRemoval = resolve
+    }))
+    render(<CrossoversPage />)
+    fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove issue 31 from Annihilation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove thread 22 from Annihilation' }))
+
+    expect(api.removeMember).toHaveBeenCalledTimes(1)
+    resolveRemoval?.()
+    await waitFor(() => expect(screen.queryByText('Issue 31')).not.toBeInTheDocument())
+    expect(screen.getByText('Thread 22')).toBeInTheDocument()
   })
 
   it('keeps membership visible when removal fails', async () => {
