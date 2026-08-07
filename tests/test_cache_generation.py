@@ -6,10 +6,33 @@ import pytest
 
 from app.cache_generation import (
     CacheCommandBudget,
+    bump_user_generation,
+    command_budget,
     generation_key,
+    get_user_generation,
     namespaced_cache_key,
     user_id_from_arguments,
 )
+
+
+class FakeGenerationClient:
+    """Minimal in-memory generation client for command-bound tests."""
+
+    def __init__(self) -> None:
+        self.values: dict[str, int] = {}
+        self.get_calls = 0
+        self.incr_calls = 0
+
+    async def get(self, key: str) -> int | None:
+        """Return a stored generation and record one GET."""
+        self.get_calls += 1
+        return self.values.get(key)
+
+    async def incr(self, key: str) -> int:
+        """Increment a generation and record one INCR."""
+        self.incr_calls += 1
+        self.values[key] = self.values.get(key, 0) + 1
+        return self.values[key]
 
 
 def test_generation_key_is_user_scoped() -> None:
@@ -74,3 +97,47 @@ def test_command_budget_rejects_negative_counts() -> None:
 
     with pytest.raises(ValueError, match="cannot be negative"):
         budget.record("value_get", -1)
+
+
+@pytest.mark.asyncio
+async def test_generation_read_defaults_to_zero_with_one_command() -> None:
+    """A first cache read needs one GET and no initialization write."""
+    client = FakeGenerationClient()
+    command_budget.counts.clear()
+
+    generation = await get_user_generation(client, 7)
+
+    assert generation == 0
+    assert client.get_calls == 1
+    assert client.incr_calls == 0
+    assert command_budget.counts == {"generation_get": 1}
+
+
+@pytest.mark.asyncio
+async def test_generation_bump_invalidates_user_with_one_command() -> None:
+    """Each mutation can invalidate every user-scoped value with one INCR."""
+    client = FakeGenerationClient()
+    command_budget.counts.clear()
+
+    first = await bump_user_generation(client, 7)
+    second = await bump_user_generation(client, 7)
+
+    assert first == 1
+    assert second == 2
+    assert client.get_calls == 0
+    assert client.incr_calls == 2
+    assert command_budget.counts == {"generation_incr": 2}
+
+
+@pytest.mark.asyncio
+async def test_generation_commands_remain_isolated_between_users() -> None:
+    """Invalidating one user must not alter another user's cache generation."""
+    client = FakeGenerationClient()
+    command_budget.counts.clear()
+
+    await bump_user_generation(client, 7)
+
+    assert await get_user_generation(client, 7) == 1
+    assert await get_user_generation(client, 8) == 0
+    assert client.values == {generation_key(7): 1}
+    assert command_budget.total == 3
