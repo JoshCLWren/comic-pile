@@ -42,7 +42,9 @@ describe('renderChangelog', () => {
 
     const rendered = renderChangelog(paths)
 
-    expect(rendered).toContain(readFileSync(paths.archivePath, 'utf-8').replace('# Changelog\n\n', '').trim())
+    expect(rendered).toContain(
+      readFileSync(paths.archivePath, 'utf-8').replace('# Changelog\n\n', '').trim(),
+    )
     expect(rendered.indexOf('Newer change')).toBeLessThan(rendered.indexOf('Earlier change'))
     expect(rendered.indexOf('Earlier change')).toBeLessThan(rendered.indexOf('Added fragments'))
     expect(rendered.indexOf('Added fragments')).toBeLessThan(rendered.indexOf('Older change'))
@@ -55,6 +57,17 @@ describe('renderChangelog', () => {
     })
 
     expect(() => renderChangelog(paths)).toThrow('expected YYYY-MM-DD-<pr>.md')
+  })
+
+  it('rejects impossible calendar dates', () => {
+    const paths = createFixture({
+      '2026-02-30-882.md':
+        '## 2026-02-30\n\n**Factory reliability**\n\n- Impossible date ([#882](https://github.com/JoshCLWren/comic-pile/pull/882)).\n',
+    })
+
+    expect(() => renderChangelog(paths)).toThrow(
+      'Invalid changelog fragment date 2026-02-30',
+    )
   })
 
   it('rejects duplicate PR fragments even across dates', () => {
@@ -128,7 +141,10 @@ describe('changelogAsset', () => {
     middleware?.({}, response)
 
     expect(response.statusCode).toBe(200)
-    expect(response.setHeader).toHaveBeenCalledWith('Content-Type', 'text/markdown; charset=utf-8')
+    expect(response.setHeader).toHaveBeenCalledWith(
+      'Content-Type',
+      'text/markdown; charset=utf-8',
+    )
     expect(response.end).toHaveBeenCalledWith(renderChangelog(paths))
   })
 })
