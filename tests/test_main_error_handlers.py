@@ -1,11 +1,21 @@
 """Tests for error handlers in app/main.py."""
 
 import os
+from collections.abc import AsyncIterator
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from app.database import get_db
+
+
+async def _validation_only_db() -> AsyncIterator[AsyncSession]:
+    """Avoid opening a real database connection for request-validation tests."""
+    yield MagicMock(spec=AsyncSession)
 
 
 @pytest.mark.asyncio
@@ -23,6 +33,7 @@ async def test_validation_exception_handler_production_sanitization() -> None:
         clear_settings_cache()
 
         test_app = create_app(serve_frontend=False)
+        test_app.dependency_overrides[get_db] = _validation_only_db
 
         transport = ASGITransport(app=test_app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -61,6 +72,7 @@ async def test_validation_exception_handler_development_detailed() -> None:
         clear_settings_cache()
 
         test_app = create_app(serve_frontend=False)
+        test_app.dependency_overrides[get_db] = _validation_only_db
 
         transport = ASGITransport(app=test_app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -96,6 +108,7 @@ async def test_validation_exception_handler_test_detailed() -> None:
         clear_settings_cache()
 
         test_app = create_app(serve_frontend=False)
+        test_app.dependency_overrides[get_db] = _validation_only_db
 
         transport = ASGITransport(app=test_app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
