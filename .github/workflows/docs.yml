@@ -1,0 +1,40 @@
+name: Documentation
+
+on:
+  pull_request:
+    paths:
+      - "**/*.md"
+      - "scripts/check_markdown_docs.py"
+      - "tests/test_markdown_docs.py"
+      - ".github/workflows/docs.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "**/*.md"
+      - "scripts/check_markdown_docs.py"
+      - "tests/test_markdown_docs.py"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  markdown:
+    name: Markdown docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Validate Markdown ownership and links
+        run: python scripts/check_markdown_docs.py
+
+      - name: Run Markdown regression tests
+        run: python -m pytest tests/test_markdown_docs.py -q
