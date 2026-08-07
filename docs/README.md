@@ -26,6 +26,7 @@ Remote Redis caching is governed by the active cache implementation. Documentati
 - [React architecture](REACT_ARCHITECTURE.md): frontend architecture and build structure.
 - [Database save/load](DATABASE_SAVE_LOAD.md): backup, import/export, and recovery procedures.
 - [Git hooks](GIT_HOOKS.md): repository quality hooks.
+- [GitHub Wiki handoff](WIKI_HANDOFF.md): the exact owner-only steps and required Wiki navigation for completing #879 when the Wiki remote cannot be managed by the factory connector.
 
 ## Documentation maintenance
 
