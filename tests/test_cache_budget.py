@@ -23,7 +23,11 @@ def test_representative_flow_command_ceilings_are_bounded() -> None:
         "dependency_and_crossover_mutation": 1,
     }
 
-    assert {name: budget.max_commands for name, budget in REPRESENTATIVE_FLOW_BUDGETS.items()} == expected
+    actual = {
+        name: budget.max_commands
+        for name, budget in REPRESENTATIVE_FLOW_BUDGETS.items()
+    }
+    assert actual == expected
 
 
 def test_projection_uses_worst_case_flow_ceilings() -> None:
@@ -58,6 +62,8 @@ def test_cycle_budget_flags_projection_over_safe_limit() -> None:
         {"rate": -1},
     ],
 )
-def test_projection_rejects_unbudgeted_or_invalid_traffic(flow_counts: dict[str, int]) -> None:
+def test_projection_rejects_unbudgeted_or_invalid_traffic(
+    flow_counts: dict[str, int],
+) -> None:
     with pytest.raises(ValueError):
         projected_cycle_commands(flow_counts)
