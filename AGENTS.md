@@ -261,7 +261,7 @@ File: `docker-compose.test.yml` - PostgreSQL 16 on port 5437.
 
 ```bash
 make docker-test-up     # Start test environment
-make docker-test-health # Check test environment
+make docker-test-health # Check health
 make docker-test-logs   # View logs
 make docker-test-down   # Stop test environment
 ```
