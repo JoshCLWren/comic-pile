@@ -11,8 +11,15 @@ from app.config import RedisSettings
 
 
 def redis_settings(**values: bool | str | None) -> RedisSettings:
-    """Build isolated Redis settings without reading local environment files."""
-    return RedisSettings.model_validate(values)
+    """Build isolated Redis settings without reading ambient Redis credentials."""
+    isolated_values: dict[str, bool | str | None] = {
+        "cache_enabled": False,
+        "upstash_redis_rest_url": None,
+        "upstash_redis_rest_token": None,
+        "redis_url": None,
+    }
+    isolated_values.update(values)
+    return RedisSettings.model_validate(isolated_values)
 
 
 def test_cache_defaults_to_disabled_with_remote_credentials_present() -> None:
