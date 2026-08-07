@@ -6,6 +6,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import app.continuity_readiness as readiness
 from app.models.continuity_rule import ContinuityRule, ContinuityRuleSelectedMember
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
 from app.models.issue import Issue
@@ -98,7 +99,15 @@ async def test_issue_and_thread_readiness_follow_item_read_rule(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """An unread prerequisite blocks both issue and next-unread thread readiness."""
+    """An unread prerequisite blocks both issue and next-unread thread readiness.
+
+    Args:
+        auth_client: Authenticated API client fixture.
+        async_db: Async database session fixture.
+
+    Returns:
+        None.
+    """
     user = await get_or_create_user_async(async_db)
     _source_thread, source_issues = await _make_thread_with_issues(
         async_db, user_id=user.id, suffix="source", issue_count=1
@@ -152,7 +161,15 @@ async def test_checkpoint_and_selected_member_policies_report_only_unsatisfied_i
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """Checkpoint and selected-member policies expose structured causing issue IDs."""
+    """Checkpoint and selected-member policies expose structured causing issue IDs.
+
+    Args:
+        auth_client: Authenticated API client fixture.
+        async_db: Async database session fixture.
+
+    Returns:
+        None.
+    """
     user = await get_or_create_user_async(async_db)
     _source_thread, source_issues = await _make_thread_with_issues(
         async_db, user_id=user.id, suffix="policies-source", issue_count=3
@@ -213,7 +230,15 @@ async def test_crossover_readiness_propagates_member_blockers_across_multiple_me
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """One blocked unread issue makes every crossover containing it unreadable."""
+    """One blocked unread issue makes every crossover containing it unreadable.
+
+    Args:
+        auth_client: Authenticated API client fixture.
+        async_db: Async database session fixture.
+
+    Returns:
+        None.
+    """
     user = await get_or_create_user_async(async_db)
     _source_thread, source_issues = await _make_thread_with_issues(
         async_db, user_id=user.id, suffix="multi-source", issue_count=1
@@ -260,7 +285,15 @@ async def test_parallel_unruled_nodes_are_readable_and_foreign_nodes_are_hidden(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """Independent branches stay readable and ownership failures use a 404 boundary."""
+    """Independent branches stay readable and ownership failures use a 404 boundary.
+
+    Args:
+        auth_client: Authenticated API client fixture.
+        async_db: Async database session fixture.
+
+    Returns:
+        None.
+    """
     user = await get_or_create_user_async(async_db)
     _owned_thread, owned_issues = await _make_thread_with_issues(
         async_db, user_id=user.id, suffix="parallel", issue_count=2
@@ -287,3 +320,100 @@ async def test_parallel_unruled_nodes_are_readable_and_foreign_nodes_are_hidden(
         json={"node_type": "issue", "node_id": foreign_issues[0].id},
     )
     assert foreign_response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_membership_collection_is_bounded(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A crossover-membership collection beyond its cap fails before evaluation.
+
+    Args:
+        auth_client: Authenticated API client fixture.
+        async_db: Async database session fixture.
+        monkeypatch: Pytest fixture used to reduce the production cap for this regression.
+
+    Returns:
+        None.
+    """
+    user = await get_or_create_user_async(async_db)
+    _thread, issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="membership-limit", issue_count=2
+    )
+    group = await _make_group(
+        async_db,
+        user_id=user.id,
+        suffix="membership-limit",
+        issue_ids=[issue.id for issue in issues],
+    )
+    await async_db.commit()
+    monkeypatch.setattr(readiness, "MAX_GRAPH_MEMBERSHIPS", 1)
+
+    response = await auth_client.post(
+        "/api/v1/continuity/readiness",
+        json={"node_type": "crossover", "node_id": group.id},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == {
+        "code": "continuity_graph_too_large",
+        "limit": 1,
+    }
+
+
+@pytest.mark.asyncio
+async def test_selected_member_collection_is_bounded(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Selected-member rows beyond their cap fail before rule evaluation.
+
+    Args:
+        auth_client: Authenticated API client fixture.
+        async_db: Async database session fixture.
+        monkeypatch: Pytest fixture used to reduce the production cap for this regression.
+
+    Returns:
+        None.
+    """
+    user = await get_or_create_user_async(async_db)
+    _source_thread, source_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="selected-limit-source", issue_count=2
+    )
+    _target_thread, target_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="selected-limit-target", issue_count=1
+    )
+    source_group = await _make_group(
+        async_db,
+        user_id=user.id,
+        suffix="selected-limit",
+        issue_ids=[issue.id for issue in source_issues],
+    )
+    rule = _rule(
+        user_id=user.id,
+        source_type="crossover",
+        source_id=source_group.id,
+        target_type="issue",
+        target_id=target_issues[0].id,
+        satisfaction_type="selected_members_read",
+    )
+    rule.selected_members = [
+        ContinuityRuleSelectedMember(issue_id=issue.id) for issue in source_issues
+    ]
+    async_db.add(rule)
+    await async_db.commit()
+    monkeypatch.setattr(readiness, "MAX_GRAPH_SELECTED_MEMBERS", 1)
+
+    response = await auth_client.post(
+        "/api/v1/continuity/readiness",
+        json={"node_type": "issue", "node_id": target_issues[0].id},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == {
+        "code": "continuity_graph_too_large",
+        "limit": 1,
+    }
