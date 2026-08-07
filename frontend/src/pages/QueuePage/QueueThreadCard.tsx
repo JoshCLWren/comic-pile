@@ -2,6 +2,8 @@ import Tooltip from '../../components/Tooltip'
 import { MarqueeTitle } from '../../components/MarqueeTitle'
 import PositionMenu from '../../components/PositionMenu'
 import Swipeable from '../../components/Swipeable'
+import { CrossoverTags } from '../../components/CrossoverTags'
+import type { DependencyGroupSummary } from '../../services/api-dependency-groups'
 import type { Thread } from '../../types'
 
 interface QueueThreadCardProps {
@@ -9,6 +11,9 @@ interface QueueThreadCardProps {
   index: number
   isBlocked: boolean
   blockingReasons: string[]
+  crossoverGroups?: DependencyGroupSummary[]
+  crossoverGroupsLoading?: boolean
+  crossoverGroupsError?: boolean
   isDragOver: boolean
   snoozeIcon: string
   snoozeLabel: string
@@ -34,6 +39,9 @@ export default function QueueThreadCard({
   index,
   isBlocked,
   blockingReasons,
+  crossoverGroups = [],
+  crossoverGroupsLoading = false,
+  crossoverGroupsError = false,
   isDragOver,
   snoozeIcon,
   snoozeLabel,
@@ -145,6 +153,15 @@ export default function QueueThreadCard({
               }
             </p>
           )}
+          <div className="mt-2" onClick={(event) => event.stopPropagation()}>
+            {crossoverGroupsLoading ? (
+              <p className="text-xs text-stone-500">Loading crossovers…</p>
+            ) : crossoverGroupsError ? (
+              <p className="text-xs text-red-300/80">Crossovers unavailable</p>
+            ) : (
+              <CrossoverTags groups={crossoverGroups} label={`Crossovers for ${thread.title}`} />
+            )}
+          </div>
           {isBlocked && blockingReasons.length > 0 && (
             <button
               type="button"
