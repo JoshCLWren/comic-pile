@@ -44,7 +44,7 @@ def last_meaningful_update(path: str) -> str:
 
 
 def default_disposition(path: str) -> tuple[str, str, str, str]:
-    """Classify a Markdown path into a conservative default audit disposition."""
+    """Classify a Markdown path into an explicit audit disposition."""
     file_path = Path(path)
     name = file_path.name
 
@@ -62,6 +62,27 @@ def default_disposition(path: str) -> tuple[str, str, str, str]:
             "keep",
             "—",
         )
+    if path in {"CONTRIBUTING.md", "SECURITY.md"}:
+        return (
+            "Repository contribution or security contract.",
+            "GitHub-facing project policy that belongs beside the code.",
+            "keep",
+            "—",
+        )
+    if path == "TECH_DEBT.md":
+        return (
+            "Legacy repository-local technical debt list.",
+            "GitHub Issues are the current backlog source of truth.",
+            "delete",
+            "GitHub Issues",
+        )
+    if path == "ROLLBACK.md":
+        return (
+            "Legacy rollback and recovery guidance.",
+            "Operational recovery guidance belongs in the maintained docs hub or Wiki, not a root-level silo.",
+            "merge",
+            "docs/README.md and ComicPile Wiki troubleshooting",
+        )
     if path == "docs/README.md":
         return (
             "Authoritative index and ownership map for repository documentation.",
@@ -76,10 +97,10 @@ def default_disposition(path: str) -> tuple[str, str, str, str]:
             "keep",
             "—",
         )
-    if path.startswith(".github/"):
+    if path.startswith((".github/", ".agents/", ".claude/")):
         return (
-            "GitHub contribution, issue, pull-request, or automation guidance.",
-            "Repository workflow contract tied directly to GitHub behavior.",
+            "Repository automation, contribution, or agent execution guidance.",
+            "Code-coupled workflow contract that must change atomically with repository behavior.",
             "keep",
             "—",
         )
@@ -90,32 +111,39 @@ def default_disposition(path: str) -> tuple[str, str, str, str]:
             "keep",
             "—",
         )
+    if path.startswith("archive/"):
+        return (
+            "Historical or exploratory documentation retained for reference.",
+            "Not active guidance; archive location already communicates historical ownership.",
+            "archive",
+            "Git history or ComicPile Wiki historical decisions",
+        )
     if path.startswith("docs/issue-plans/"):
         return (
             "Implementation plan retained for a specific GitHub issue.",
-            "Potentially historical after the issue closes; review against the linked issue.",
+            "Potentially historical after the issue closes; preserve as implementation history rather than active guidance.",
             "archive",
-            "Git history or Wiki historical decisions",
+            "Git history or ComicPile Wiki historical decisions",
         )
     if path.startswith("docs/"):
         return (
             f"Repository documentation for {file_path.stem.replace('_', ' ').replace('-', ' ')}.",
-            "Review for duplication against docs/README.md and current code before final disposition.",
-            "review",
-            "docs/README.md or ComicPile Wiki",
+            "Human-facing narrative should move out of the active code-coupled documentation set unless linked by the docs hub.",
+            "move to Wiki",
+            "ComicPile Wiki",
         )
     if name.lower() == "readme.md":
         return (
             f"Package- or directory-local documentation for {file_path.parent}.",
-            "Keep only when the instructions are coupled to the adjacent code or package.",
-            "review",
-            "Nearest code-coupled documentation or docs/README.md",
+            "Adjacent package guidance is discoverable where the code lives and can change atomically with it.",
+            "keep",
+            "—",
         )
     return (
         "Tracked Markdown documentation outside the canonical docs hub.",
-        "Review for consolidation, Wiki migration, or deletion.",
-        "review",
-        "docs/README.md or ComicPile Wiki",
+        "Standalone narrative documentation should not create another competing repository source of truth.",
+        "move to Wiki",
+        "ComicPile Wiki",
     )
 
 
