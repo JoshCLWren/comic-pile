@@ -1,6 +1,5 @@
 """Tests for generation-aware cached reads and command ceilings."""
 
-from collections.abc import Awaitable
 from typing import Any
 
 import pytest
@@ -26,7 +25,7 @@ class FakeGenerationClient:
 
 
 @pytest.fixture
-async def configured_cache(monkeypatch: pytest.MonkeyPatch) -> FakeGenerationClient:
+def configured_cache(monkeypatch: pytest.MonkeyPatch) -> FakeGenerationClient:
     """Configure the singleton cache with a fake generation client."""
     from app.cache_generation import cache
 
