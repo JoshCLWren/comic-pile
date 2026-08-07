@@ -38,6 +38,7 @@ from app.security import (
 router = APIRouter(tags=["auth"])
 
 REFRESH_COOKIE_NAME = "refresh_token"
+REFRESH_COOKIE_PATH = "/api"
 
 
 def _set_refresh_cookie(response: Response, request: Request, refresh_token: str) -> None:
@@ -48,7 +49,7 @@ def _set_refresh_cookie(response: Response, request: Request, refresh_token: str
         httponly=True,
         secure=is_secure_request(request),
         samesite="lax",
-        path="/api/auth",
+        path=REFRESH_COOKIE_PATH,
         max_age=60 * 60 * 24 * 30,
     )
 
@@ -315,7 +316,7 @@ async def logout_user(
 
     response.delete_cookie(
         key=REFRESH_COOKIE_NAME,
-        path="/api/auth",
+        path=REFRESH_COOKIE_PATH,
         httponly=True,
         secure=is_secure_request(request),
         samesite="lax",
