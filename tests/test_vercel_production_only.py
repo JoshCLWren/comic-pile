@@ -1,7 +1,7 @@
 """Regression coverage for ComicPile's production-only Vercel deployment policy."""
 
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -33,6 +33,18 @@ def test_vercel_gate_covers_slash_containing_factory_branches() -> None:
     assert deployment_rules["*"] is False
     assert deployment_rules["**/*"] is False
     assert deployment_rules["main"] is True
+
+    def deployment_enabled(branch: str) -> bool:
+        matching_rules = (
+            enabled
+            for pattern, enabled in deployment_rules.items()
+            if PurePosixPath(branch).full_match(pattern)
+        )
+        return any(matching_rules)
+
+    assert deployment_enabled("main") is True
+    assert deployment_enabled("feature") is False
+    assert deployment_enabled("factory/example") is False
 
 
 def test_vercel_keeps_production_static_and_api_routes_intact() -> None:
