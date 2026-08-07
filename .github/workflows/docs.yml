@@ -47,7 +47,7 @@ jobs:
 
       - name: Run Markdown regression tests
         run: >-
-          python -m pytest -o addopts=''
+          python -m pytest --noconftest -o addopts=''
           tests/test_markdown_docs.py
           tests/test_generate_markdown_inventory.py
           -q
