@@ -11,6 +11,7 @@ from app.cache_generation import (
     generation_key,
     get_user_generation,
     invalidate_user_cache,
+    invalidate_user_caches,
     namespaced_cache_key,
     user_id_from_arguments,
 )
@@ -172,3 +173,35 @@ async def test_invalidate_user_cache_uses_exactly_one_remote_command(monkeypatch
     assert client.get_calls == 0
     assert client.incr_calls == 1
     assert command_budget.counts == {"generation_incr": 1}
+
+
+@pytest.mark.asyncio
+async def test_batch_invalidation_deduplicates_nested_user_ids(monkeypatch) -> None:
+    """Repeated logical invalidations for one user must collapse to one command."""
+    from app.cache_generation import cache
+
+    client = FakeGenerationClient()
+    monkeypatch.setattr(cache, "_initialized", True)
+    monkeypatch.setattr(cache, "_client", client)
+    command_budget.counts.clear()
+
+    invalidated = await invalidate_user_caches([7, 7, 7, 8, 8])
+
+    assert invalidated == 2
+    assert client.values == {generation_key(7): 1, generation_key(8): 1}
+    assert client.get_calls == 0
+    assert client.incr_calls == 2
+    assert command_budget.counts == {"generation_incr": 2}
+
+
+@pytest.mark.asyncio
+async def test_batch_invalidation_is_free_while_remote_cache_is_disabled(monkeypatch) -> None:
+    """Batch invalidation must preserve the zero-command disabled-cache path."""
+    from app.cache_generation import cache
+
+    monkeypatch.setattr(cache, "_initialized", False)
+    monkeypatch.setattr(cache, "_client", None)
+    command_budget.counts.clear()
+
+    assert await invalidate_user_caches([7, 7, 8]) == 0
+    assert command_budget.total == 0
