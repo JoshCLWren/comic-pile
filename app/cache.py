@@ -14,7 +14,8 @@ Usage:
         # Expensive DB query
         ...
 
-    # Initialize at startup
+    # Configure at startup without opening a network connection. The first
+    # real cache command performs the connection lazily.
     from app.config import get_redis_settings
     settings = get_redis_settings()
     if settings.is_configured:
@@ -25,7 +26,6 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import enum
 import functools
 import hashlib
@@ -189,7 +189,11 @@ class UpstashCache:
         token: str | None = None,
         local_url: str | None = None,
     ) -> None:
-        """Initialize Redis connection.
+        """Configure a Redis client without opening a network connection.
+
+        Startup must remain independent from optional cache availability. Client
+        construction is local; the first real cache command performs the network
+        connection and is protected by the command-level failure handling.
 
         Supports two modes:
         - Upstash cloud: provide url (REST URL) and token
@@ -200,47 +204,25 @@ class UpstashCache:
             return
 
         if local_url:
-            client = aioredis.Redis.from_url(
+            self._client = aioredis.Redis.from_url(
                 local_url,
                 decode_responses=True,
                 socket_connect_timeout=_CONNECT_TIMEOUT_SECONDS,
                 socket_timeout=_CONNECT_TIMEOUT_SECONDS,
             )
-            try:
-                async with asyncio.timeout(_CONNECT_TIMEOUT_SECONDS):
-                    await client.ping()
-                self._client = client
-                self._circuit_breaker.reset()
-                self._initialized = True
-                self._is_upstash = False
-                logger.info("Local Redis cache initialized: %s", local_url)
-                return
-            except Exception as e:
-                logger.error("Failed to initialize local Redis: %s", e)
-                try:
-                    await client.aclose()
-                except Exception:
-                    logger.debug("Failed to close unsuccessful Redis client", exc_info=True)
-                self._client = None
-                self._initialized = False
-                return
+            self._circuit_breaker.reset()
+            self._initialized = True
+            self._is_upstash = False
+            logger.info("Local Redis cache configured for lazy connection")
+            return
 
         if url and token:
-            client = UpstashRedis(url=url, token=token)
-            try:
-                async with asyncio.timeout(_CONNECT_TIMEOUT_SECONDS):
-                    await client.ping()
-                self._client = client
-                self._circuit_breaker.reset()
-                self._initialized = True
-                self._is_upstash = True
-                logger.info("Upstash Redis cache initialized")
-                return
-            except Exception as e:
-                logger.error("Failed to initialize Upstash Redis: %s", e)
-                self._client = None
-                self._initialized = False
-                return
+            self._client = UpstashRedis(url=url, token=token)
+            self._circuit_breaker.reset()
+            self._initialized = True
+            self._is_upstash = True
+            logger.info("Upstash Redis cache configured for lazy connection")
+            return
 
         logger.warning("No Redis configuration provided - caching disabled")
 
@@ -299,7 +281,7 @@ class UpstashCache:
             return value
 
         if isinstance(value, set):
-            return {"__type__": "set", "values": [UpstashCache._prepare_value(v) for v in value]}
+            return {"__type__": "set", "values": [UpstashCache._prepare_value(v) for v in value["values"]]} if "values" in value else {"__type__": "set", "values": [UpstashCache._prepare_value(v) for v in value]}
 
         if isinstance(value, dict):
             return {k: UpstashCache._prepare_value(v) for k, v in value.items()}
