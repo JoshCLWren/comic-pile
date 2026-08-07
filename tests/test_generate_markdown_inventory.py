@@ -20,6 +20,26 @@ def test_default_disposition_preserves_code_coupled_docs() -> None:
     assert skill_action == "keep"
 
 
+def test_docs_hub_contracts_are_kept_with_code() -> None:
+    """Docs named by the authoritative hub must not be moved to the Wiki."""
+    paths = (
+        "docs/API.md",
+        "docs/AUTONOMOUS_FACTORY_POLICY.md",
+        "docs/DATABASE_SAVE_LOAD.md",
+        "docs/FACTORY_GITHUB_VISIBILITY.md",
+        "docs/GIT_HOOKS.md",
+        "docs/ISSUE_EXECUTION_PROTOCOL.md",
+        "docs/REACT_ARCHITECTURE.md",
+        "docs/prod-clone-workflow.md",
+    )
+
+    for path in paths:
+        _, overlap, action, replacement = default_disposition(path)
+        assert action == "keep", path
+        assert "must change atomically" in overlap
+        assert replacement == "—"
+
+
 def test_issue_plans_are_marked_for_archive() -> None:
     """Completed issue plans should not silently remain active documentation."""
     _, overlap, action, replacement = default_disposition("docs/issue-plans/123.md")
