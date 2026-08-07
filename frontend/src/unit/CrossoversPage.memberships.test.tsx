@@ -80,6 +80,27 @@ describe('CrossoversPage membership editing', () => {
     expect(screen.getByRole('button', { name: /Secret Invasion.*1 member/ })).toBeInTheDocument()
   })
 
+  it('keeps a successful range add committed when the membership refresh fails', async () => {
+    api.addIssueRange.mockResolvedValue({ added_issue_ids: [31], already_present_issue_ids: [] })
+    api.get.mockRejectedValue(new Error('Refresh unavailable'))
+    render(<CrossoversPage />)
+    fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
+
+    fireEvent.change(screen.getByLabelText('Thread ID'), { target: { value: '22' } })
+    fireEvent.change(screen.getByLabelText('Start position'), { target: { value: '3' } })
+    fireEvent.change(screen.getByLabelText('End position'), { target: { value: '5' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add range' }))
+
+    const status = await screen.findByRole('status')
+    expect(status).toHaveTextContent('1 added, 0 already present.')
+    expect(status).toHaveTextContent('latest memberships could not be refreshed: Refresh unavailable')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Thread ID')).toHaveValue('')
+    expect(screen.getByLabelText('Start position')).toHaveValue('')
+    expect(screen.getByLabelText('End position')).toHaveValue('')
+    expect(api.addIssueRange).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps the whole-thread form usable when adding a membership fails', async () => {
     api.addMember.mockRejectedValue(new Error('Thread lookup unavailable'))
     render(<CrossoversPage />)
