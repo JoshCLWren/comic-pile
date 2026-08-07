@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable
 from typing import cast
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -122,7 +122,7 @@ async def test_local_redis_initialization_does_not_ping_service(monkeypatch) -> 
     from app import cache as cache_module
 
     local_client = AsyncMock()
-    from_url = AsyncMock(return_value=local_client)
+    from_url = Mock(return_value=local_client)
     monkeypatch.setattr(cache_module.cache, "_initialized", False)
     monkeypatch.setattr(cache_module.cache, "_client", None)
     monkeypatch.setattr(cache_module.aioredis.Redis, "from_url", from_url)
@@ -130,7 +130,12 @@ async def test_local_redis_initialization_does_not_ping_service(monkeypatch) -> 
     await cache_module.cache.initialize(local_url="redis://localhost:6379/0")
 
     assert cache_module.cache.is_initialized is True
-    from_url.assert_called_once()
+    from_url.assert_called_once_with(
+        "redis://localhost:6379/0",
+        decode_responses=True,
+        socket_connect_timeout=5.0,
+        socket_timeout=5.0,
+    )
     local_client.ping.assert_not_awaited()
 
 
