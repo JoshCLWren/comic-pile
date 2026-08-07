@@ -1,5 +1,6 @@
 """Bounded direct readiness evaluation for generalized continuity rules."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from fastapi import HTTPException, status
@@ -44,7 +45,7 @@ def _too_large(limit: int) -> HTTPException:
     )
 
 
-def _group_rows[T](rows: list[T], key: callable) -> dict[int, tuple[T, ...]]:
+def _group_rows[T](rows: list[T], key: Callable[[T], int]) -> dict[int, tuple[T, ...]]:
     """Group bounded child rows by their parent identifier."""
     grouped: dict[int, list[T]] = {}
     for row in rows:
