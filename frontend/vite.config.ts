@@ -1,26 +1,112 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import sri from 'vite-plugin-sri'
-import path from 'path'
-import { fileURLToPath } from 'url'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const changelogPath = path.resolve(__dirname, '../docs/changelog.md')
+const defaultArchivePath = path.resolve(__dirname, '../docs/changelog.md')
+const defaultFragmentsDir = path.resolve(__dirname, '../docs/changelog.d')
+const fragmentPattern = /^(\d{4}-\d{2}-\d{2})-(\d+)\.md$/
 
-export function changelogAsset(): Plugin {
+interface ChangelogAssetOptions {
+  archivePath?: string
+  fragmentsDir?: string
+}
+
+interface ChangelogFragment {
+  date: string
+  prNumber: number
+  content: string
+  fileName: string
+}
+
+function isValidCalendarDate(date: string): boolean {
+  const timestamp = Date.parse(`${date}T00:00:00Z`)
+  return !Number.isNaN(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === date
+}
+
+function readFragments(fragmentsDir: string): ChangelogFragment[] {
+  const fragments: ChangelogFragment[] = []
+  const seenPrNumbers = new Set<number>()
+
+  for (const entry of readdirSync(fragmentsDir, { withFileTypes: true })) {
+    if (!entry.isFile() || entry.name === 'README.md') continue
+
+    const match = fragmentPattern.exec(entry.name)
+    if (!match) {
+      throw new Error(
+        `Invalid changelog fragment filename ${entry.name}; expected YYYY-MM-DD-<pr>.md`,
+      )
+    }
+
+    const [, date, rawPrNumber] = match
+    if (!isValidCalendarDate(date)) {
+      throw new Error(`Invalid changelog fragment date ${date} in ${entry.name}`)
+    }
+
+    const prNumber = Number(rawPrNumber)
+    if (seenPrNumbers.has(prNumber)) {
+      throw new Error(`Duplicate changelog fragment for PR #${prNumber}`)
+    }
+    seenPrNumbers.add(prNumber)
+
+    const content = readFileSync(path.join(fragmentsDir, entry.name), 'utf-8').trim()
+    const expectedHeading = `## ${date}`
+    const expectedLink = `[#${prNumber}](https://github.com/JoshCLWren/comic-pile/pull/${prNumber})`
+
+    if (!content.startsWith(`${expectedHeading}\n`)) {
+      throw new Error(`${entry.name} must start with ${expectedHeading}`)
+    }
+    if (!content.includes(expectedLink)) {
+      throw new Error(`${entry.name} must link ${expectedLink}`)
+    }
+
+    fragments.push({ date, prNumber, content, fileName: entry.name })
+  }
+
+  return fragments.sort(
+    (left, right) =>
+      right.date.localeCompare(left.date) ||
+      right.prNumber - left.prNumber ||
+      right.fileName.localeCompare(left.fileName),
+  )
+}
+
+export function renderChangelog(options: ChangelogAssetOptions = {}): string {
+  const archivePath = options.archivePath ?? defaultArchivePath
+  const fragmentsDir = options.fragmentsDir ?? defaultFragmentsDir
+  const archive = readFileSync(archivePath, 'utf-8').trim()
+
+  if (!archive.startsWith('# Changelog')) {
+    throw new Error(`${archivePath} must start with # Changelog`)
+  }
+
+  const archiveBody = archive.replace(/^# Changelog\s*/, '').trim()
+  const fragmentBodies = readFragments(fragmentsDir).map(fragment => fragment.content)
+  const sections = ['# Changelog', ...fragmentBodies]
+  if (archiveBody) sections.push(archiveBody)
+
+  return `${sections.join('\n\n')}\n`
+}
+
+export function changelogAsset(options: ChangelogAssetOptions = {}): Plugin {
   return {
     name: 'comic-pile-changelog-asset',
     configureServer(server) {
       server.middlewares.use('/changelog.md', (_request, response) => {
         response.statusCode = 200
         response.setHeader('Content-Type', 'text/markdown; charset=utf-8')
-        response.end(readFileSync(changelogPath, 'utf-8'))
+        response.end(renderChangelog(options))
       })
     },
     generateBundle() {
-      const source = readFileSync(changelogPath, 'utf-8')
-      this.emitFile({ type: 'asset', fileName: 'changelog.md', source })
+      this.emitFile({
+        type: 'asset',
+        fileName: 'changelog.md',
+        source: renderChangelog(options),
+      })
     },
   }
 }

@@ -194,11 +194,13 @@ def test_emitted_logs_exclude_connection_and_exception_secrets(
     assert database_password not in rendered_records
     assert redis_token not in rendered_records
     assert "comic_user" not in rendered_records
-    assert caplog.records[0].database == {
+    assert caplog.records[0].__dict__.get("database") == {
         "scheme": "postgresql+asyncpg",
         "host": "ep-example.neon.tech",
         "port": None,
         "database": "comic_pile",
         "ssl_required": True,
     }
-    assert caplog.records[1].database_error == {"error_type": "RuntimeError"}
+    assert caplog.records[1].__dict__.get("database_error") == {
+        "error_type": "RuntimeError"
+    }

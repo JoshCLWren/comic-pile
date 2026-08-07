@@ -9,7 +9,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 
 from app.cache import UpstashCache
-from app.database import AsyncSessionLocal
+from app.database import AsyncSessionLocal, async_engine
 from app.middleware.request_logging import add_request_logging_middleware
 from app.performance_diagnostics import (
     begin_request_diagnostics,
@@ -51,12 +51,14 @@ async def test_request_middleware_emits_performance_headers() -> None:
 @pytest.mark.asyncio
 async def test_database_events_record_a_real_async_query() -> None:
     """SQLAlchemy execution events should update the active request context."""
+    async_engine.sync_engine.dispose(close=False)
     token = begin_request_diagnostics()
     try:
         async with AsyncSessionLocal() as session:
             await session.execute(text("SELECT 1"))
         diagnostics = get_request_diagnostics()
     finally:
+        await async_engine.dispose()
         end_request_diagnostics(token)
 
     assert diagnostics.database_queries >= 1

@@ -1,5 +1,7 @@
 """Regression tests for the explicit Redis cache feature gate."""
 
+from collections.abc import Awaitable, Callable
+from typing import cast
 from unittest.mock import AsyncMock
 
 import pytest
@@ -8,10 +10,21 @@ from app.cache import UpstashCache, cached
 from app.config import RedisSettings
 
 
+def redis_settings(**values: bool | str | None) -> RedisSettings:
+    """Build isolated Redis settings without reading ambient Redis credentials."""
+    isolated_values: dict[str, bool | str | None] = {
+        "cache_enabled": False,
+        "upstash_redis_rest_url": None,
+        "upstash_redis_rest_token": None,
+        "redis_url": None,
+    }
+    isolated_values.update(values)
+    return RedisSettings.model_validate(isolated_values)
+
+
 def test_cache_defaults_to_disabled_with_remote_credentials_present() -> None:
     """Credentials alone must not make deployed caching active."""
-    settings = RedisSettings(
-        _env_file=None,
+    settings = redis_settings(
         upstash_redis_rest_url="https://example.upstash.io",
         upstash_redis_rest_token="test-token",
     )
@@ -22,8 +35,7 @@ def test_cache_defaults_to_disabled_with_remote_credentials_present() -> None:
 
 def test_remote_redis_url_defaults_to_disabled() -> None:
     """A remote Redis URL cannot activate caching without explicit opt-in."""
-    settings = RedisSettings(
-        _env_file=None,
+    settings = redis_settings(
         redis_url="rediss://default:test-token@example.upstash.io:6379/0",
     )
 
@@ -32,8 +44,7 @@ def test_remote_redis_url_defaults_to_disabled() -> None:
 
 def test_local_cache_configuration_requires_explicit_enablement() -> None:
     """Disposable local Redis remains available when tests opt in."""
-    settings = RedisSettings(
-        _env_file=None,
+    settings = redis_settings(
         cache_enabled=True,
         redis_url="redis://localhost:6379/0",
     )
@@ -43,8 +54,7 @@ def test_local_cache_configuration_requires_explicit_enablement() -> None:
 
 def test_incomplete_upstash_configuration_stays_disabled() -> None:
     """The feature gate cannot activate a partially configured remote cache."""
-    settings = RedisSettings(
-        _env_file=None,
+    settings = redis_settings(
         cache_enabled=True,
         upstash_redis_rest_url="https://example.upstash.io",
     )
@@ -91,8 +101,7 @@ async def test_startup_skips_redis_with_credentials_when_gate_is_disabled(monkey
     """Cold startup never initializes or pings Redis when the gate is off."""
     from app import main
 
-    disabled_settings = RedisSettings(
-        _env_file=None,
+    disabled_settings = redis_settings(
         upstash_redis_rest_url="https://example.upstash.io",
         upstash_redis_rest_token="test-token",
     )
@@ -102,8 +111,13 @@ async def test_startup_skips_redis_with_credentials_when_gate_is_disabled(monkey
     monkeypatch.setattr(main, "init_database", AsyncMock())
 
     application = main.create_app(serve_frontend=False)
-    startup_handler = next(
-        handler for handler in application.router.on_startup if handler.__name__ == "startup_event"
+    startup_handler = cast(
+        Callable[[], Awaitable[None]],
+        next(
+            handler
+            for handler in application.router.on_startup
+            if getattr(handler, "__name__", None) == "startup_event"
+        ),
     )
     await startup_handler()
 

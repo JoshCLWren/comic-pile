@@ -1,6 +1,6 @@
 """Regression coverage for application database startup behavior."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -21,9 +21,10 @@ async def test_production_startup_does_not_acquire_database_connection() -> None
 @pytest.mark.asyncio
 async def test_production_startup_does_not_run_schema_setup() -> None:
     """Deployment migrations, not a cold request, own production schema setup."""
-    engine_begin = AsyncMock(side_effect=AssertionError("engine connection opened"))
+    engine = MagicMock()
+    engine.begin = AsyncMock(side_effect=AssertionError("engine connection opened"))
 
-    with patch("app.lifecycle.async_engine.begin", engine_begin):
+    with patch("app.lifecycle.async_engine", engine):
         await init_database("production")
 
-    engine_begin.assert_not_called()
+    engine.begin.assert_not_called()

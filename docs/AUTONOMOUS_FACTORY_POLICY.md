@@ -76,20 +76,13 @@ After work becomes blocked, merge-gated, or dependent on a human-only decision, 
 
 ## User-facing changelog gate
 
-Every product, behavior, deployment, operational, or factory-tooling PR must update
-`docs/changelog.md` before it can receive a pass verdict, ready marker, merge-gated marker, or
-merge. Add the entry under the current date, group it by user-recognizable feature area, link the
-PR number, and describe what changed and why it matters rather than narrating implementation
-steps.
+Every product, behavior, deployment, operational, or factory-tooling PR must update the generated user-facing changelog before it can receive a pass verdict, ready marker, merge-gated marker, or merge. Do that by adding exactly one isolated Markdown fragment at `docs/changelog.d/YYYY-MM-DD-<pr-number>.md`. The filename date must match the fragment's first `## YYYY-MM-DD` heading, the fragment must link the actual PR, and the text must describe what changed and why it matters under a user-recognizable feature area.
 
-A documentation-only, test-only, generated-artifact-only, or strictly internal refactor PR may
-omit a changelog entry only when its PR body explicitly states `Changelog: not user-facing` and
-the worker verifies that the change has no user, operator, deployment, or factory behavior impact.
-A missing required changelog entry is an actionable review defect and blocks readiness and merge.
+`docs/changelog.md` is the frozen historical archive. Ordinary new work must not rewrite, prepend, or backfill that shared file. The Vite build validates all fragments, rejects malformed filenames and duplicate PR entries, sorts them deterministically newest-first, and assembles them before the archive into the static `/changelog.md` asset used by What’s New.
 
-Before merging, compare all merged PRs newer than the newest dated changelog section. If older
-factory work is missing, repair the backlog in the current PR rather than recording only the
-worker's own change.
+A documentation-only, test-only, generated-artifact-only, or strictly internal refactor PR may omit a fragment only when its PR body explicitly states `Changelog: not user-facing` and the worker verifies that the change has no user, operator, deployment, or factory behavior impact. A missing required changelog entry is an actionable review defect and blocks readiness and merge.
+
+Each worker owns only its PR's fragment. Never make one PR repair release-note fragments for unrelated merged work merely to satisfy its own merge gate. Missing historical release notes should become focused follow-up work rather than reintroducing a shared-file collision.
 
 ## Review-feedback gate
 

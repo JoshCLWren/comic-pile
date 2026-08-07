@@ -54,6 +54,8 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
     for needle in (
         "Version: 17",
         "Every product, behavior, deployment, operational, or factory-tooling PR must update",
+        "exactly one isolated Markdown fragment",
+        "`docs/changelog.md` is the frozen historical archive",
         "Changelog: not user-facing",
         "A missing required changelog entry is an actionable review defect",
         "Drive the open issue backlog to zero",
@@ -105,6 +107,7 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "Never merge or enable auto-merge without Josh explicitly authorizing that merge.",
         "full configured end-to-end test coverage",
         "full configured E2E matrix",
+        "repair the backlog in the current PR rather than recording only the worker's own change",
     ):
         forbid(policy, obsolete, POLICY)
 
@@ -132,7 +135,8 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
     for needle in (
         "docs/AUTONOMOUS_FACTORY_POLICY.md",
         "Drive the open issue backlog to zero",
-        "Treat docs/changelog.md as part of the completion contract",
+        "Treat the generated changelog as part of the completion contract",
+        "docs/changelog.d/YYYY-MM-DD-<pr-number>.md",
         "Changelog: not user-facing",
         "newest unclaimed open issue labeled both `user-reported` and `bug`",
         "reproducible E2E-discovered",
@@ -167,6 +171,7 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "ignore unresolved review threads",
         "full configured E2E matrix",
         "Firefox + WebKit + Chromium",
+        "Treat docs/changelog.md as part of the completion contract",
     ):
         forbid(entrypoint, obsolete, ENTRYPOINT)
 

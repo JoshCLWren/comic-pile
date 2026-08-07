@@ -39,6 +39,8 @@ docs/
 !docs/
 docs/*
 !docs/changelog.md
+!docs/changelog.d/
+!docs/changelog.d/*.md
 
 # Tests
 tests/
