@@ -221,6 +221,9 @@ export default function ThreadDetailView() {
           <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
             {thread.format}
           </p>
+          <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mt-0.5">
+            Thread ID: {thread.id}
+          </p>
         </div>
         <button
           type="button"

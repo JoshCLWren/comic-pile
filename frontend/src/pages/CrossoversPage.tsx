@@ -160,7 +160,7 @@ export default function CrossoversPage() {
       <header>
         <p className="text-xs font-bold uppercase tracking-[0.25em] text-amber-500">Continuity</p>
         <h1 id="crossovers-heading" className="mt-1 text-3xl font-black text-stone-100">Crossovers</h1>
-        <p className="mt-2 max-w-2xl text-sm text-stone-400">Name connected comics so their continuity is easy to recognize across ComicPile. Membership does not create a reading block by itself.</p>
+        <p className="mt-2 max-w-2xl text-sm text-stone-400">Name connected comics so their continuity is easy to recognize across ComicPile. Membership does not create a reading block by itself. To find a thread ID, open the thread from <a href="/queue" className="text-amber-400 hover:text-amber-300 underline underline-offset-2">the Queue</a> and check the thread detail page — the ID is shown there.</p>
       </header>
 
       <form onSubmit={createGroup} className="rounded-2xl border border-stone-700 bg-stone-900/70 p-4" aria-label="Create crossover">
@@ -179,7 +179,7 @@ export default function CrossoversPage() {
       ) : loadError ? (
         <div role="alert" className="rounded-2xl border border-red-800 bg-red-950/40 p-4 text-red-300"><p>{loadError}</p><button type="button" onClick={() => void loadGroups()} className="mt-3 rounded-lg border border-red-500 px-3 py-2 text-sm font-bold">Try again</button></div>
       ) : groups.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-stone-700 p-8 text-center"><p className="text-lg font-bold text-stone-200">No crossovers yet</p><p className="mt-1 text-sm text-stone-500">Create one above, then add comics from dependency management.</p></div>
+        <div className="rounded-2xl border border-dashed border-stone-700 p-8 text-center"><p className="text-lg font-bold text-stone-200">No crossovers yet</p><p className="mt-1 text-sm text-stone-500">Create one above, then add comics from <a href="/queue" className="text-amber-400 hover:text-amber-300 underline underline-offset-2">the Queue</a> via dependency management.</p></div>
       ) : (
         <ul className="grid gap-3" aria-label="Your crossovers">
           {groups.map((group) => {
@@ -205,9 +205,10 @@ export default function CrossoversPage() {
                   <div className="mt-4 space-y-4 border-t border-stone-800 pt-4 text-sm text-stone-400">
                     {group.memberships.length === 0 ? <p>This crossover has no comics yet.</p> : <p>{group.memberships.filter((member) => member.issue_id !== null).length} issue memberships and {group.memberships.filter((member) => member.thread_id !== null).length} thread memberships.</p>}
                     <form onSubmit={(event) => void addRange(event, group.id)} aria-label={`Add issue range to ${group.name}`} className="grid gap-2 rounded-xl border border-stone-800 bg-stone-950/50 p-3 sm:grid-cols-4">
-                      <label className="grid gap-1"><span className="font-bold text-stone-300">Thread ID</span><input inputMode="numeric" value={rangeThreadId} onChange={(event) => setRangeThreadId(event.target.value)} disabled={hasPendingMutation} className="rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-stone-100" /></label>
-                      <label className="grid gap-1"><span className="font-bold text-stone-300">Start position</span><input inputMode="numeric" value={rangeStart} onChange={(event) => setRangeStart(event.target.value)} disabled={hasPendingMutation} className="rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-stone-100" /></label>
-                      <label className="grid gap-1"><span className="font-bold text-stone-300">End position</span><input inputMode="numeric" value={rangeEnd} onChange={(event) => setRangeEnd(event.target.value)} disabled={hasPendingMutation} className="rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-stone-100" /></label>
+                      <p className="col-span-full text-xs text-stone-500 mb-0.5">Add an inclusive issue-position range from a single thread. Find the thread ID on the <a href="/queue" className="text-amber-400 hover:text-amber-300 underline underline-offset-2">Queue</a> detail page.</p>
+                      <label className="grid gap-1"><span className="font-bold text-stone-300">Thread ID (from detail page)</span><input inputMode="numeric" value={rangeThreadId} onChange={(event) => setRangeThreadId(event.target.value)} disabled={hasPendingMutation} className="rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-stone-100" placeholder="e.g. 42" /></label>
+                      <label className="grid gap-1"><span className="font-bold text-stone-300">Start position (first issue)</span><input inputMode="numeric" value={rangeStart} onChange={(event) => setRangeStart(event.target.value)} disabled={hasPendingMutation} className="rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-stone-100" placeholder="1" /></label>
+                      <label className="grid gap-1"><span className="font-bold text-stone-300">End position (last issue)</span><input inputMode="numeric" value={rangeEnd} onChange={(event) => setRangeEnd(event.target.value)} disabled={hasPendingMutation} className="rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-stone-100" placeholder="10" /></label>
                       <button type="submit" disabled={hasPendingMutation} className="self-end rounded-lg bg-amber-500 px-3 py-2 font-bold text-stone-950 disabled:opacity-50">{isBusy ? 'Adding…' : 'Add range'}</button>
                     </form>
                     {rangeMessage && <p role="status" className="text-emerald-400">{rangeMessage}</p>}
