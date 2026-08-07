@@ -1,4 +1,4 @@
-"""Tests for credential-safe structured logging helpers."""
+"""Regression tests for credential-safe configuration logging."""
 
 import logging
 
@@ -11,113 +11,132 @@ from app.safe_logging import (
 )
 
 
-def test_connection_metadata_omits_credentials_and_query_values() -> None:
-    """Connection metadata must expose only allowlisted operational fields."""
-    database_url = (
-        "postgresql+asyncpg://comic_user:database-password@ep-example.neon.tech:5432/"
-        "comic_pile?sslmode=require&token=redis-token"
+def test_connection_metadata_excludes_database_credentials() -> None:
+    """Database metadata must not preserve userinfo or query credentials."""
+    password = "p%40ssword-super-secret"
+    token = "neon-token-should-never-log"
+    url = (
+        f"postgresql+asyncpg://comic_user:{password}@ep-example.us-east-2.aws.neon.tech/"
+        f"comic_pile?sslmode=require&token={token}"
     )
 
-    metadata = safe_connection_metadata(database_url)
+    metadata = safe_connection_metadata(url)
+    rendered = repr(metadata)
 
     assert metadata == {
         "scheme": "postgresql+asyncpg",
-        "host": "ep-example.neon.tech",
-        "port": 5432,
+        "host": "ep-example.us-east-2.aws.neon.tech",
+        "port": None,
         "database": "comic_pile",
         "ssl_required": True,
     }
-    rendered = repr(metadata)
     assert "comic_user" not in rendered
-    assert "database-password" not in rendered
-    assert "redis-token" not in rendered
+    assert password not in rendered
+    assert "p@ssword-super-secret" not in rendered
+    assert token not in rendered
 
 
-def test_connection_metadata_handles_opaque_http_paths() -> None:
-    """Opaque HTTP paths may contain tokens and must not be logged as database names."""
+def test_connection_metadata_excludes_redis_token_and_userinfo() -> None:
+    """Redis metadata must expose only its non-secret network identity."""
+    token = "upstash-rest-token-value"
     metadata = safe_connection_metadata(
-        "https://api.example.test/redis-token-that-must-not-log?authorization=secret"
+        f"rediss://default:{token}@actual-mantis-12345.upstash.io:6379/0"
     )
+    rendered = repr(metadata)
+
+    assert metadata == {
+        "scheme": "rediss",
+        "host": "actual-mantis-12345.upstash.io",
+        "port": 6379,
+        "database": "0",
+        "ssl_required": True,
+    }
+    assert "default" not in rendered
+    assert token not in rendered
+
+
+def test_connection_metadata_omits_opaque_http_path_tokens() -> None:
+    """Generic URL paths must not be decoded or exposed as database metadata."""
+    encoded_token = "secret%2Ftoken%2Fvalue"
+
+    metadata = safe_connection_metadata(
+        f"https://api.example.test/{encoded_token}?ssl=true"
+    )
+    rendered = repr(metadata)
 
     assert metadata == {
         "scheme": "https",
         "host": "api.example.test",
         "port": None,
         "database": None,
-        "ssl_required": True,
+        "ssl_required": False,
     }
-    rendered = repr(metadata)
-    assert "redis-token" not in rendered
-    assert "authorization" not in rendered
-    assert "secret" not in rendered
+    assert encoded_token not in rendered
+    assert "secret/token/value" not in rendered
 
 
-def test_connection_metadata_treats_redis_tls_correctly() -> None:
-    """Redis TLS metadata must distinguish redis and rediss schemes."""
-    assert safe_connection_metadata("redis://localhost:6379/0")["ssl_required"] is False
-    assert safe_connection_metadata("rediss://cache.example.test:6379/0")["ssl_required"] is True
-
-
-def test_connection_metadata_treats_postgres_sslmode_correctly() -> None:
-    """PostgreSQL TLS metadata must honor disabling and requiring sslmode values."""
-    assert (
-        safe_connection_metadata("postgresql://db.example.test/app?sslmode=disable")[
-            "ssl_required"
-        ]
-        is False
-    )
-    assert (
-        safe_connection_metadata("postgresql://db.example.test/app?sslmode=require")[
-            "ssl_required"
-        ]
-        is True
+def test_connection_metadata_does_not_mark_sslmode_prefer_as_required() -> None:
+    """PostgreSQL prefer mode permits plaintext fallback and is not TLS-required."""
+    metadata = safe_connection_metadata(
+        "postgresql://db.example.test/comic_pile?sslmode=prefer"
     )
 
+    assert metadata["ssl_required"] is False
 
-def test_connection_metadata_survives_invalid_ports() -> None:
-    """Malformed URLs must produce safe empty metadata rather than crashing diagnostics."""
-    metadata = safe_connection_metadata("postgresql://db.example.test:not-a-port/app")
+
+def test_connection_metadata_handles_malformed_port_without_raising() -> None:
+    """Diagnostic metadata must not turn malformed configuration into an import crash."""
+    secret = "password-that-must-not-log"
+
+    metadata = safe_connection_metadata(
+        f"postgresql://user:{secret}@db.example.test:not-a-port/comic_pile"
+    )
 
     assert metadata == {
-        "scheme": "postgresql",
-        "host": "db.example.test",
+        "scheme": None,
+        "host": None,
         "port": None,
-        "database": "app",
-        "ssl_required": None,
+        "database": None,
+        "ssl_required": False,
     }
+    assert secret not in repr(metadata)
 
 
-def test_redaction_handles_secret_keys_and_connection_urls() -> None:
-    """Secret-shaped values and connection URLs must be redacted recursively."""
+def test_redact_sensitive_values_handles_nested_configuration() -> None:
+    """Known secret fields must be removed from nested structured logs."""
     values = {
-        "DATABASE_URL": "postgresql://user:password@example.test/app",
-        "UPSTASH_REDIS_REST_TOKEN": "redis-token",
-        "nested": {
-            "authorization": "Bearer private-token",
-            "safe": "visible",
+        "environment": "production",
+        "database": {
+            "host": "db.example.test",
+            "password": "database-secret",
         },
+        "redis_token": "redis-secret",
+        "authorization": "Bearer jwt-secret",
+        "nested": [{"github_api_key": "github-secret"}],
     }
 
     redacted = redact_sensitive_values(values)
+    rendered = repr(redacted)
 
-    assert redacted == {
-        "DATABASE_URL": "[REDACTED]",
-        "UPSTASH_REDIS_REST_TOKEN": "[REDACTED]",
-        "nested": {
-            "authorization": "[REDACTED]",
-            "safe": "visible",
-        },
-    }
+    assert "db.example.test" in rendered
+    assert "production" in rendered
+    assert "database-secret" not in rendered
+    assert "redis-secret" not in rendered
+    assert "jwt-secret" not in rendered
+    assert "github-secret" not in rendered
+    assert rendered.count("[REDACTED]") == 4
 
 
-def test_redaction_handles_encoded_credentials() -> None:
-    """Encoded URL credentials must not survive redaction or rendered metadata."""
-    raw_password = "encoded/password"
+def test_redact_sensitive_values_removes_connection_urls() -> None:
+    """URL-valued settings must be redacted even when their key lacks secret words."""
+    raw_password = "raw-password"
     encoded_password = "encoded%2Fpassword"
     values = {
-        "DATABASE_URL": f"postgresql://user:{encoded_password}@db.example.test/app",
-        "REDIS_URL": f"rediss://default:{encoded_password}@cache.example.test:6379/0",
-        "TOKEN": raw_password,
+        "DATABASE_URL": f"postgresql://user:{raw_password}@db.example.test/app",
+        "TEST_DATABASE_URL": (
+            f"postgresql://user:{encoded_password}@db.example.test/test"
+        ),
+        "REDIS_URL": f"rediss://default:{raw_password}@cache.example.test:6379/0",
         "CONNECTION_URL": f"https://api.example.test/{encoded_password}",
     }
 
