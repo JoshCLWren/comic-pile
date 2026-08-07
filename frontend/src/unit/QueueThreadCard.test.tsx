@@ -112,6 +112,18 @@ describe('QueueThreadCard', () => {
     expect(onCardClick).not.toHaveBeenCalled()
   })
 
+  it('does not treat nested control keyboard activation as card activation', () => {
+    const onCardClick = vi.fn()
+    const onDependencies = vi.fn()
+    renderCard(createMockThread(), { onCardClick, onDependencies })
+
+    const mobileButton = screen.getByTestId('mobile-dependency-action')
+    fireEvent.keyDown(mobileButton, { key: 'Enter' })
+    fireEvent.keyDown(mobileButton, { key: ' ' })
+
+    expect(onCardClick).not.toHaveBeenCalled()
+  })
+
   it('renders blocked thread explanation button when thread is blocked', () => {
     const thread = createMockThread()
     renderCard(thread, {
