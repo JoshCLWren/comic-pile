@@ -7,13 +7,19 @@ mutation invalidates every prior value for that user with one ``INCR`` command.
 
 from __future__ import annotations
 
+import functools
+import inspect
 import logging
 from collections import Counter
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any, Protocol, TypeVar, cast
+
+from app.cache import TTL, _generate_cache_key, _get_ttl_value, cache
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
 
 _GENERATION_PREFIX = "cache:generation:user"
 _VALUE_PREFIX = "cache:user"
@@ -185,3 +191,70 @@ def user_id_from_arguments(arguments: dict[str, Any]) -> int | None:
         if isinstance(candidate, int) and candidate > 0:
             return candidate
     return None
+
+
+def generation_cached(
+    ttl: int | TTL = TTL.MEDIUM,
+    *,
+    falsy_ttl: int | None = None,
+) -> Callable[[Callable[..., Awaitable[T]]], Callable[..., Awaitable[T]]]:
+    """Cache a user-scoped async function behind one generation lookup.
+
+    The decorator deliberately bypasses caching when it cannot resolve a positive
+    user identifier. That keeps ownership explicit and prevents a supposedly
+    user-scoped cache entry from falling back to a shared key.
+
+    A cache hit costs at most two remote commands: one generation ``GET`` and one
+    value ``GET``. A cache miss that is stored costs at most three: generation
+    ``GET``, value ``GET``, and value ``SET``.
+
+    Args:
+        ttl: Time-to-live in seconds or a configured TTL tier.
+        falsy_ttl: Optional alternate TTL for falsy results.
+
+    Returns:
+        Decorator for an async cached function.
+    """
+
+    def decorator(func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
+        actual_ttl = _get_ttl_value(ttl) if isinstance(ttl, TTL) else ttl
+        signature = inspect.signature(func)
+
+        @functools.wraps(func)
+        async def wrapper(*args: Any, **kwargs: Any) -> T:
+            if not cache.is_initialized:
+                return await func(*args, **kwargs)
+
+            try:
+                bound = signature.bind_partial(*args, **kwargs)
+            except TypeError:
+                return await func(*args, **kwargs)
+
+            user_id = user_id_from_arguments(dict(bound.arguments))
+            if user_id is None:
+                return await func(*args, **kwargs)
+
+            client = cache._client
+            if client is None:
+                return await func(*args, **kwargs)
+
+            generation = await get_user_generation(client, user_id)
+            func_name = getattr(func, "__name__", func.__class__.__name__)
+            logical_key = _generate_cache_key(func_name, func, args, kwargs)
+            cache_key = namespaced_cache_key(user_id, generation, logical_key)
+
+            command_budget.record("value_get")
+            cached_value = await cache.get(cache_key)
+            if cached_value is not None:
+                return cast(T, cached_value)
+
+            result = await func(*args, **kwargs)
+            effective_ttl = falsy_ttl if falsy_ttl is not None and not result else actual_ttl
+            if result or falsy_ttl is not None:
+                command_budget.record("value_set")
+                await cache.set(cache_key, result, ttl=effective_ttl)
+            return result
+
+        return cast(Callable[..., Awaitable[T]], wrapper)
+
+    return decorator
