@@ -20,8 +20,9 @@ _DEPLOYMENT_ID: Final[str | None] = os.getenv("VERCEL_DEPLOYMENT_ID") or os.gete
 )
 _lock = threading.Lock()
 _request_count = 0
+_application_import_complete_at: float | None = None
+_application_created_at: float | None = None
 _startup_complete_at: float | None = None
-_startup_duration_ms: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,34 +34,65 @@ class StartupSnapshot:
     process_age_ms: float
     startup_complete: bool
     startup_duration_ms: float | None
+    application_import_ms: float | None
+    application_creation_ms: float | None
+    lifespan_ms: float | None
     deployment_id: str | None
     process_started_at_ns: int
 
 
+def mark_application_import_complete() -> None:
+    """Mark completion of imports needed to reach the application factory."""
+    global _application_import_complete_at
+
+    with _lock:
+        if _application_import_complete_at is None:
+            _application_import_complete_at = time.perf_counter()
+
+
+def mark_application_created() -> None:
+    """Mark completion of FastAPI application creation."""
+    global _application_created_at
+
+    with _lock:
+        if _application_created_at is None:
+            _application_created_at = time.perf_counter()
+
+
 def mark_startup_complete() -> float:
-    """Record application startup completion once and return its duration."""
-    global _startup_complete_at, _startup_duration_ms
+    """Record lifespan startup completion once and return total user-code startup time."""
+    global _startup_complete_at
 
     with _lock:
         if _startup_complete_at is None:
             _startup_complete_at = time.perf_counter()
-            _startup_duration_ms = (_startup_complete_at - _PROCESS_STARTED_AT) * 1000
-        return _startup_duration_ms or 0.0
+        return (_startup_complete_at - _PROCESS_STARTED_AT) * 1000
+
+
+def _duration_ms(start: float | None, end: float | None) -> float | None:
+    """Return a duration in milliseconds when both phase boundaries are known."""
+    if start is None or end is None:
+        return None
+    return (end - start) * 1000
 
 
 def _snapshot(*, invocation: int, cold: bool) -> StartupSnapshot:
     """Build a snapshot without mutating request state."""
     now = time.perf_counter()
     with _lock:
+        import_complete_at = _application_import_complete_at
+        application_created_at = _application_created_at
         startup_complete_at = _startup_complete_at
-        startup_duration_ms = _startup_duration_ms
 
     return StartupSnapshot(
         invocation=invocation,
         cold=cold,
         process_age_ms=(now - _PROCESS_STARTED_AT) * 1000,
         startup_complete=startup_complete_at is not None,
-        startup_duration_ms=startup_duration_ms,
+        startup_duration_ms=_duration_ms(_PROCESS_STARTED_AT, startup_complete_at),
+        application_import_ms=_duration_ms(_PROCESS_STARTED_AT, import_complete_at),
+        application_creation_ms=_duration_ms(import_complete_at, application_created_at),
+        lifespan_ms=_duration_ms(application_created_at, startup_complete_at),
         deployment_id=_DEPLOYMENT_ID,
         process_started_at_ns=_PROCESS_STARTED_AT_NS,
     )
@@ -84,9 +116,11 @@ def next_request_snapshot() -> StartupSnapshot:
 
 def reset_startup_diagnostics_for_test() -> None:
     """Reset mutable process diagnostics for isolated unit tests."""
-    global _request_count, _startup_complete_at, _startup_duration_ms
+    global _request_count, _application_import_complete_at, _application_created_at
+    global _startup_complete_at
 
     with _lock:
         _request_count = 0
+        _application_import_complete_at = None
+        _application_created_at = None
         _startup_complete_at = None
-        _startup_duration_ms = None
