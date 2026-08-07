@@ -5,10 +5,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import continuity_rule as continuity_rule_api
-from app.models.continuity_rule import ContinuityRule
+from app.models.continuity_rule import ContinuityRule, ContinuityRuleSelectedMember
 from app.models.dependency_group import DependencyGroup
 from app.models.issue import Issue
 from app.models.thread import Thread
@@ -45,7 +46,12 @@ async def _make_group(async_db: AsyncSession, *, user_id: int, suffix: str) -> D
     return group
 
 
-def _payload(source_type: str, source_id: int, target_type: str, target_id: int) -> dict[str, object]:
+def _payload(
+    source_type: str,
+    source_id: int,
+    target_type: str,
+    target_id: int,
+) -> dict[str, object]:
     """Build the common item-read rule payload."""
     return {
         "source_type": source_type,
@@ -62,8 +68,14 @@ async def test_crud_supports_all_node_pairings_and_delete(
 ) -> None:
     """All issue/crossover pairings can be created, read, updated, listed, and deleted."""
     user = await get_or_create_user_async(async_db)
-    issues = [await _make_issue(async_db, user_id=user.id, suffix=f"issue-{index}") for index in range(4)]
-    groups = [await _make_group(async_db, user_id=user.id, suffix=f"group-{index}") for index in range(4)]
+    issues = [
+        await _make_issue(async_db, user_id=user.id, suffix=f"issue-{index}")
+        for index in range(4)
+    ]
+    groups = [
+        await _make_group(async_db, user_id=user.id, suffix=f"group-{index}")
+        for index in range(4)
+    ]
     await async_db.commit()
 
     payloads = [
@@ -101,6 +113,43 @@ async def test_crud_supports_all_node_pairings_and_delete(
     assert deleted.status_code == 204
     missing = await auth_client.get(f"/api/v1/continuity-rules/{rule_id}")
     assert missing.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_selected_members_are_replaced_without_orphans(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Updating selected-member rules replaces child rows instead of accumulating them."""
+    user = await get_or_create_user_async(async_db)
+    source = await _make_group(async_db, user_id=user.id, suffix="selected-source")
+    target = await _make_group(async_db, user_id=user.id, suffix="selected-target")
+    first_member = await _make_issue(async_db, user_id=user.id, suffix="selected-first")
+    second_member = await _make_issue(async_db, user_id=user.id, suffix="selected-second")
+    await async_db.commit()
+
+    payload = {
+        "source_type": "crossover",
+        "source_id": source.id,
+        "target_type": "crossover",
+        "target_id": target.id,
+        "satisfaction_type": "selected_members_read",
+        "selected_member_issue_ids": [first_member.id],
+    }
+    created = await auth_client.post("/api/v1/continuity-rules/", json=payload)
+    assert created.status_code == 201, created.text
+    rule_id = created.json()["id"]
+
+    payload["selected_member_issue_ids"] = [second_member.id]
+    updated = await auth_client.put(f"/api/v1/continuity-rules/{rule_id}", json=payload)
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["selected_member_issue_ids"] == [second_member.id]
+
+    rows = await async_db.execute(
+        select(ContinuityRuleSelectedMember.issue_id).where(
+            ContinuityRuleSelectedMember.rule_id == rule_id,
+        )
+    )
+    assert rows.scalars().all() == [second_member.id]
 
 
 @pytest.mark.asyncio
