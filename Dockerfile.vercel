@@ -99,7 +99,6 @@ RUN chown -R ${USER_ID}:${GROUP_ID} /app
 
 USER ${USER_ID}
 
-# Railway injects PORT
 EXPOSE 8000
 
 # IMPORTANT:
