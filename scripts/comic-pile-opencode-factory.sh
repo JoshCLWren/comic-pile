@@ -31,6 +31,12 @@ ALLOWED_PROVIDERS="${COMIC_PILE_FACTORY_ALLOWED_PROVIDERS:-opencode nvidia fcm-n
 # Only these Google models are verified free on the free tier; probing the whole
 # google/ prefix would otherwise probe paid pro models.
 GOOGLE_FREE_MODELS="${COMIC_PILE_GOOGLE_FREE_MODELS:-google/gemini-3.1-flash-lite google/gemini-2.5-flash-lite}"
+# OpenCode's Google provider reads GOOGLE_GENERATIVE_AI_API_KEY, but the
+# credentials file exports GOOGLE_API_KEY. Alias it so free-tier Gemini models
+# can be probed and confirmed.
+if [[ -z "${GOOGLE_GENERATIVE_AI_API_KEY:-}" && -n "${GOOGLE_API_KEY:-}" ]]; then
+  export GOOGLE_GENERATIVE_AI_API_KEY="$GOOGLE_API_KEY"
+fi
 FAILURE_THRESHOLD="${FACTORY_FAILURE_THRESHOLD:-2}"
 
 usage() {
