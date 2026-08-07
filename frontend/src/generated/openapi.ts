@@ -1611,6 +1611,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/continuity-rules/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Continuity Rules
+         * @description List the authenticated user's continuity rules.
+         */
+        get: operations["list_continuity_rules_api_v1_continuity_rules__get"];
+        put?: never;
+        /**
+         * Create Continuity Rule
+         * @description Create an owned continuity rule after validating references and cycles.
+         */
+        post: operations["create_continuity_rule_api_v1_continuity_rules__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/continuity-rules/{rule_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Continuity Rule
+         * @description Return one owned continuity rule.
+         */
+        get: operations["get_continuity_rule_api_v1_continuity_rules__rule_id__get"];
+        /**
+         * Update Continuity Rule
+         * @description Replace an owned continuity rule.
+         */
+        put: operations["update_continuity_rule_api_v1_continuity_rules__rule_id__put"];
+        post?: never;
+        /**
+         * Delete Continuity Rule
+         * @description Delete one owned continuity rule.
+         */
+        delete: operations["delete_continuity_rule_api_v1_continuity_rules__rule_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dependencies/": {
         parameters: {
             query?: never;
@@ -2678,6 +2730,82 @@ export interface components {
             thread_id: number;
             /** Title */
             title: string;
+        };
+        /**
+         * ContinuityRuleCreate
+         * @description Schema for creating a generalized continuity rule.
+         */
+        ContinuityRuleCreate: {
+            /** Checkpoint Issue Id */
+            checkpoint_issue_id?: number | null;
+            /** Note */
+            note?: string | null;
+            /**
+             * Satisfaction Type
+             * @enum {string}
+             */
+            satisfaction_type: "item_read" | "all_members_read" | "checkpoint" | "selected_members_read";
+            /** Selected Member Issue Ids */
+            selected_member_issue_ids?: number[];
+            /** Source Id */
+            source_id: number;
+            /**
+             * Source Type
+             * @enum {string}
+             */
+            source_type: "issue" | "crossover";
+            /** Target Id */
+            target_id: number;
+            /**
+             * Target Type
+             * @enum {string}
+             */
+            target_type: "issue" | "crossover";
+        };
+        /**
+         * ContinuityRuleResponse
+         * @description Schema for a persisted generalized continuity rule.
+         */
+        ContinuityRuleResponse: {
+            /** Checkpoint Issue Id */
+            checkpoint_issue_id: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Note */
+            note: string | null;
+            /**
+             * Satisfaction Type
+             * @enum {string}
+             */
+            satisfaction_type: "item_read" | "all_members_read" | "checkpoint" | "selected_members_read";
+            /** Selected Member Issue Ids */
+            selected_member_issue_ids: number[];
+            /** Source Id */
+            source_id: number;
+            /**
+             * Source Type
+             * @enum {string}
+             */
+            source_type: "issue" | "crossover";
+            /** Target Id */
+            target_id: number;
+            /**
+             * Target Type
+             * @enum {string}
+             */
+            target_type: "issue" | "crossover";
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** User Id */
+            user_id: number;
         };
         /**
          * DependencyCreate
@@ -5258,6 +5386,154 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TokenResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_continuity_rules_api_v1_continuity_rules__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityRuleResponse"][];
+                };
+            };
+        };
+    };
+    create_continuity_rule_api_v1_continuity_rules__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContinuityRuleCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityRuleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_continuity_rule_api_v1_continuity_rules__rule_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityRuleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_continuity_rule_api_v1_continuity_rules__rule_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContinuityRuleCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityRuleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_continuity_rule_api_v1_continuity_rules__rule_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
