@@ -185,16 +185,20 @@ export default function CrossoversPage() {
     setBusyId(groupId)
     try {
       const result = await dependencyGroupsApi.addIssueRange(groupId, threadId, start, end)
-      const refreshed = await dependencyGroupsApi.get(groupId)
-      setGroups((current) =>
-        current.map((group) => (group.id === groupId ? refreshed : group)),
-      )
-      setMembershipMessage(
-        `${result.added_issue_ids.length} added, ${result.already_present_issue_ids.length} already present.`,
-      )
+      const successMessage = `${result.added_issue_ids.length} added, ${result.already_present_issue_ids.length} already present.`
+      setMembershipMessage(successMessage)
       setRangeThreadId('')
       setRangeStart('')
       setRangeEnd('')
+      try {
+        const refreshed = await dependencyGroupsApi.get(groupId)
+        setGroups((current) =>
+          current.map((group) => (group.id === groupId ? refreshed : group)),
+        )
+      } catch (error) {
+        const refreshError = errorMessage(error, 'Unable to refresh crossover memberships.')
+        setMembershipMessage(`${successMessage} Saved, but the latest memberships could not be refreshed: ${refreshError}`)
+      }
     } catch (error) {
       setMutationError(errorMessage(error, 'Unable to add issue range.'))
     } finally {
