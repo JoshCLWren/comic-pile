@@ -97,6 +97,44 @@ async def test_uninitialized_cache_invalidation_makes_no_remote_calls() -> None:
 
 
 @pytest.mark.asyncio
+async def test_upstash_initialization_does_not_ping_remote_service(monkeypatch) -> None:
+    """Configuring Upstash at startup must perform no network command."""
+    from app import cache as cache_module
+
+    remote_client = AsyncMock()
+    monkeypatch.setattr(cache_module.cache, "_initialized", False)
+    monkeypatch.setattr(cache_module.cache, "_client", None)
+    monkeypatch.setattr(cache_module, "UpstashRedis", lambda **_: remote_client)
+
+    await cache_module.cache.initialize(
+        url="https://example.upstash.io",
+        token="test-token",
+    )
+
+    assert cache_module.cache.is_initialized is True
+    remote_client.ping.assert_not_awaited()
+    remote_client.get.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_local_redis_initialization_does_not_ping_service(monkeypatch) -> None:
+    """Configuring local Redis must defer connectivity until a cache command."""
+    from app import cache as cache_module
+
+    local_client = AsyncMock()
+    from_url = AsyncMock(return_value=local_client)
+    monkeypatch.setattr(cache_module.cache, "_initialized", False)
+    monkeypatch.setattr(cache_module.cache, "_client", None)
+    monkeypatch.setattr(cache_module.aioredis.Redis, "from_url", from_url)
+
+    await cache_module.cache.initialize(local_url="redis://localhost:6379/0")
+
+    assert cache_module.cache.is_initialized is True
+    from_url.assert_called_once()
+    local_client.ping.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_startup_skips_redis_with_credentials_when_gate_is_disabled(monkeypatch) -> None:
     """Cold startup never initializes or pings Redis when the gate is off."""
     from app import main
