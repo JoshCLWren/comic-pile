@@ -16,7 +16,7 @@ The local database URL can be supplied with `--local-db-url`, or the script can 
 
 ## Export production data
 
-Always pass the production Neon database URL explicitly. The script still contains a legacy Railway fallback while older tooling is being retired, but that path is not a supported production workflow and should not be used.
+Always pass the production Neon database URL explicitly with `CLONE_PROD_DB_URL` or `--db-url`. Railway is retired and is not a supported production source.
 
 ```bash
 CLONE_PROD_DB_URL='postgresql+asyncpg://USER:PASSWORD@HOST:5432/DB' \
@@ -40,11 +40,11 @@ python -m scripts.clone_prod_to_local import \
   --local-db-url 'postgresql+asyncpg://USER:PASSWORD@localhost:5435/comic_pile'
 ```
 
-Dry-run validates the schema and all exported foreign-key references, prints the records that would be imported, and performs no database writes.
+Dry-run validates the schema and all exported foreign-key references, reports the per-table record counts that would be imported, and performs no database writes.
 
 ## Import into local development
 
-The normal import creates a backup of the destination user's current data, then replaces that user's clone data in one transaction. A failed import is rolled back. Use an explicit backup path when you need a predictable location:
+A normal import replaces that user's clone data in one transaction, and a failed import is rolled back. The CLI currently creates a timestamped destination backup by default; use `--backup` when you need a predictable path:
 
 ```bash
 python -m scripts.clone_prod_to_local import \
@@ -53,7 +53,7 @@ python -m scripts.clone_prod_to_local import \
   --local-db-url 'postgresql+asyncpg://USER:PASSWORD@localhost:5435/comic_pile'
 ```
 
-Type `yes` at the confirmation prompt after checking the destination. For non-interactive automation, add `--yes` only after validating the file.
+Type `yes` at the confirmation prompt after checking the destination. For non-interactive automation, add `--yes` only after validating the file and confirming that the resolved destination is a local development database.
 
 After a successful import, sign in with the imported username. The imported user has no production password hash, so set a local password through the normal registration or administrative workflow rather than expecting the production password to work.
 
@@ -62,7 +62,8 @@ After a successful import, sign in with the imported username. The imported user
 1. Confirm the explicit Neon export target is production and the username is correct.
 2. Keep export and pre-import backup files private; do not commit them.
 3. Run `--dry-run` against the intended local database.
-4. Keep the pre-import backup until the clone has been verified.
-5. Confirm thread counts, reading orders, and sessions in the local UI.
+4. Confirm the resolved import target is a local development database before allowing writes.
+5. Keep the pre-import backup until the clone has been verified.
+6. Confirm thread counts, reading orders, and sessions in the local UI.
 
-The command never mutates production. It only reads production during export; the import connects to the local database URL supplied by configuration or `--local-db-url`.
+The command must never mutate production. Export is the only operation that should connect to production, and import must target a local development database supplied by configuration or `--local-db-url`.
