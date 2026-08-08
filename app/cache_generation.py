@@ -9,31 +9,52 @@ from __future__ import annotations
 
 import functools
 import inspect
+import json
 import logging
 from collections import Counter
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Protocol, TypeVar, cast
+from typing import ParamSpec, Protocol, TypeVar, cast
 
-from app.cache import TTL, _generate_cache_key, _get_ttl_value, cache
+from app.cache import TTL, UpstashCache, _generate_cache_key, _get_ttl_value, cache
 
 logger = logging.getLogger(__name__)
 
+P = ParamSpec("P")
 T = TypeVar("T")
 
 _GENERATION_PREFIX = "cache:generation:user"
 _VALUE_PREFIX = "cache:user"
+_ATOMIC_GENERATION_READ_SCRIPT = """
+local generation = redis.call('GET', KEYS[1]) or '0'
+local value_key = ARGV[1] .. generation .. ':' .. ARGV[2]
+return {generation, redis.call('GET', value_key)}
+""".strip()
 
 
 class GenerationCacheClient(Protocol):
     """Minimal async Redis contract used by generation operations."""
 
     def get(self, key: str) -> Awaitable[str | int | None]:
-        """Return a generation counter value."""
+        """Return a generation counter value.
+
+        Args:
+            key: Redis generation-counter key.
+
+        Returns:
+            Stored generation value, or ``None`` when the key does not exist.
+        """
         ...
 
     def incr(self, key: str) -> Awaitable[int]:
-        """Increment and return a generation counter value."""
+        """Increment and return a generation counter value.
+
+        Args:
+            key: Redis generation-counter key.
+
+        Returns:
+            Newly incremented generation value.
+        """
         ...
 
 
@@ -50,6 +71,9 @@ class CacheCommandBudget:
             command: Logical cache command name such as ``get`` or ``invalidate``.
             count: Number of commands represented by this operation.
 
+        Returns:
+            ``None``.
+
         Raises:
             ValueError: If ``count`` is negative.
         """
@@ -60,7 +84,11 @@ class CacheCommandBudget:
 
     @property
     def total(self) -> int:
-        """Return the total recorded command count."""
+        """Return the total recorded command count.
+
+        Returns:
+            Sum of all recorded remote cache commands.
+        """
         return sum(self.counts.values())
 
 
@@ -125,8 +153,9 @@ async def get_user_generation(client: GenerationCacheClient, user_id: int) -> in
     Raises:
         ValueError: If Redis returns an invalid generation value.
     """
+    key = generation_key(user_id)
     command_budget.record("generation_get")
-    raw_generation = await client.get(generation_key(user_id))
+    raw_generation = await client.get(key)
     if raw_generation is None:
         return 0
 
@@ -156,8 +185,9 @@ async def bump_user_generation(client: GenerationCacheClient, user_id: int) -> i
     Raises:
         ValueError: If Redis returns an invalid generation value.
     """
+    key = generation_key(user_id)
     command_budget.record("generation_incr")
-    raw_generation = await client.incr(generation_key(user_id))
+    raw_generation = await client.incr(key)
     try:
         generation = int(raw_generation)
     except (TypeError, ValueError) as exc:
@@ -223,7 +253,7 @@ async def invalidate_user_caches(user_ids: Iterable[int]) -> int:
     return invalidated
 
 
-def user_id_from_arguments(arguments: dict[str, Any]) -> int | None:
+def user_id_from_arguments(arguments: Mapping[str, object]) -> int | None:
     """Extract a user identifier from bound cached-function arguments.
 
     Cached functions currently receive ownership either as an explicit ``user_id``
@@ -249,24 +279,91 @@ def user_id_from_arguments(arguments: dict[str, Any]) -> int | None:
     return None
 
 
+def _decode_generation(raw_generation: object) -> int:
+    """Validate a generation returned from an atomic cache read."""
+    try:
+        generation = int(cast(str | int, raw_generation))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Cache generation must be an integer") from exc
+    if generation < 0:
+        raise ValueError("Cache generation cannot be negative")
+    return generation
+
+
+async def _atomic_generation_value_get(
+    user_id: int,
+    logical_key: str,
+) -> tuple[int, object | None]:
+    """Read the active generation and matching cached value atomically.
+
+    Args:
+        user_id: Authenticated user identifier.
+        logical_key: Existing logical cache key.
+
+    Returns:
+        Active generation and reconstructed cached value, if present.
+
+    Raises:
+        RuntimeError: If no cache client is configured.
+        ValueError: If Redis returns an invalid generation value.
+    """
+    client = cache._client
+    if client is None:
+        raise RuntimeError("Cache client is unavailable")
+
+    key = generation_key(user_id)
+    normalized = logical_key.removeprefix("cache:")
+    value_prefix = f"{_VALUE_PREFIX}:{user_id}:g"
+    if cache._is_upstash:
+        raw = await client.eval(
+            _ATOMIC_GENERATION_READ_SCRIPT,
+            keys=[key],
+            args=[value_prefix, normalized],
+        )
+    else:
+        raw = await client.eval(
+            _ATOMIC_GENERATION_READ_SCRIPT,
+            1,
+            key,
+            value_prefix,
+            normalized,
+        )
+
+    command_budget.record("generation_value_get")
+    if not isinstance(raw, (list, tuple)) or len(raw) != 2:
+        raise ValueError("Atomic cache read returned an invalid response")
+
+    generation = _decode_generation(raw[0])
+    raw_value = raw[1]
+    if raw_value is None:
+        return generation, None
+
+    if isinstance(raw_value, bytes):
+        serialized = raw_value.decode()
+    elif isinstance(raw_value, str):
+        serialized = raw_value
+    else:
+        raise ValueError("Cached value must be JSON text")
+
+    return generation, UpstashCache._reconstruct_value(json.loads(serialized))
+
+
 def generation_cached(
     ttl: int | TTL = TTL.MEDIUM,
     *,
     falsy_ttl: int | None = None,
-) -> Callable[[Callable[..., Awaitable[T]]], Callable[..., Awaitable[T]]]:
-    """Cache a user-scoped async function behind one generation lookup.
+) -> Callable[[Callable[P, Awaitable[T]]], Callable[P, Awaitable[T]]]:
+    """Cache a user-scoped async function behind one atomic generation lookup.
 
     The decorator deliberately bypasses caching when it cannot resolve a positive
     user identifier. That keeps ownership explicit and prevents a supposedly
     user-scoped cache entry from falling back to a shared key.
 
-    A cache hit costs at most two remote commands: one generation ``GET`` and one
-    value ``GET``. A cache miss that is stored costs at most three: generation
-    ``GET``, value ``GET``, and value ``SET``.
+    A cache hit costs one remote command. A cache miss that is stored costs at most
+    two: one atomic generation/value read and one value ``SET``.
 
-    Cache failures are fail-open: if the generation lookup fails, the wrapped
-    database read still executes instead of turning optional Redis into a request
-    dependency.
+    Cache failures are fail-open: if the atomic lookup fails, the wrapped database
+    read still executes instead of turning optional Redis into a request dependency.
 
     Args:
         ttl: Time-to-live in seconds or a configured TTL tier.
@@ -276,12 +373,12 @@ def generation_cached(
         Decorator for an async cached function.
     """
 
-    def decorator(func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
+    def decorator(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitable[T]]:
         actual_ttl = _get_ttl_value(ttl) if isinstance(ttl, TTL) else ttl
         signature = inspect.signature(func)
 
         @functools.wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> T:
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
             if not cache.is_initialized:
                 return await func(*args, **kwargs)
 
@@ -290,36 +387,33 @@ def generation_cached(
             except TypeError:
                 return await func(*args, **kwargs)
 
-            user_id = user_id_from_arguments(dict(bound.arguments))
-            if user_id is None:
-                return await func(*args, **kwargs)
-
-            client = cache._client
-            if client is None:
-                return await func(*args, **kwargs)
-
-            try:
-                generation = await get_user_generation(client, user_id)
-            except Exception as exc:
-                logger.warning("Cache generation read failed: %s", exc)
+            user_id = user_id_from_arguments(bound.arguments)
+            if user_id is None or cache._client is None:
                 return await func(*args, **kwargs)
 
             func_name = getattr(func, "__name__", func.__class__.__name__)
             logical_key = _generate_cache_key(func_name, func, args, kwargs)
-            cache_key = namespaced_cache_key(user_id, generation, logical_key)
 
-            command_budget.record("value_get")
-            cached_value = await cache.get(cache_key)
+            try:
+                generation, cached_value = await _atomic_generation_value_get(
+                    user_id,
+                    logical_key,
+                )
+            except Exception as exc:
+                logger.warning("Atomic cache read failed: %s", exc)
+                return await func(*args, **kwargs)
+
             if cached_value is not None:
                 return cast(T, cached_value)
 
             result = await func(*args, **kwargs)
             effective_ttl = falsy_ttl if falsy_ttl is not None and not result else actual_ttl
             if result or falsy_ttl is not None:
+                cache_key = namespaced_cache_key(user_id, generation, logical_key)
                 command_budget.record("value_set")
                 await cache.set(cache_key, result, ttl=effective_ttl)
             return result
 
-        return cast(Callable[..., Awaitable[T]], wrapper)
+        return wrapper
 
     return decorator
