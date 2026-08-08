@@ -87,7 +87,9 @@ def test_startup_snapshot_decomposes_measurable_phases() -> None:
     assert snapshot.application_import_ms >= 0
     assert snapshot.application_creation_ms >= 0
     assert snapshot.lifespan_ms >= 0
-    assert snapshot.startup_duration_ms <= snapshot.process_age_ms
+    startup_duration_ms = snapshot.startup_duration_ms
+    assert startup_duration_ms is not None
+    assert startup_duration_ms <= snapshot.process_age_ms
 
 
 def test_request_before_startup_completion_reports_unknown_phases() -> None:
