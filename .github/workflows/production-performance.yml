@@ -51,19 +51,6 @@ jobs:
           restore-keys: |
             production-performance-
 
-      - name: Prepare authenticated storage state
-        env:
-          STORAGE_STATE_JSON: ${{ secrets.PROD_E2E_STORAGE_STATE_JSON }}
-        run: |
-          if [ -z "$STORAGE_STATE_JSON" ]; then
-            echo 'Missing PROD_E2E_STORAGE_STATE_JSON repository secret.' >&2
-            exit 1
-          fi
-          storage_state_path="$RUNNER_TEMP/production-storage-state.json"
-          printf '%s' "$STORAGE_STATE_JSON" > "$storage_state_path"
-          chmod 600 "$storage_state_path"
-          echo "PROD_PROFILE_STORAGE_STATE=$storage_state_path" >> "$GITHUB_ENV"
-
       - name: Install backend dependencies
         run: uv sync --frozen
 
@@ -91,6 +78,21 @@ jobs:
       - name: Install Chromium
         working-directory: frontend
         run: pnpm exec playwright install --with-deps chromium
+
+      - name: Authenticate dedicated production E2E account
+        working-directory: frontend
+        env:
+          PROD_E2E_ACCOUNT_USERNAME: ${{ secrets.PROD_E2E_ACCOUNT_USERNAME }}
+          PROD_E2E_ACCOUNT_PASSWORD: ${{ secrets.PROD_E2E_ACCOUNT_PASSWORD }}
+          PROD_PROFILE_STORAGE_STATE: ${{ runner.temp }}/production-storage-state.json
+        run: |
+          if [ -z "$PROD_E2E_ACCOUNT_USERNAME" ] || [ -z "$PROD_E2E_ACCOUNT_PASSWORD" ]; then
+            echo 'Missing dedicated production E2E account credentials.' >&2
+            exit 1
+          fi
+          node scripts/create-production-e2e-storage-state.mjs
+          chmod 600 "$PROD_PROFILE_STORAGE_STATE"
+          echo "PROD_PROFILE_STORAGE_STATE=$PROD_PROFILE_STORAGE_STATE" >> "$GITHUB_ENV"
 
       - name: Measure production milestones
         working-directory: frontend
