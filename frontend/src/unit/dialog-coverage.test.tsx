@@ -31,8 +31,9 @@ describe('bug report and issue correction dialogs', () => {
     await user.type(description, ' Use the keyboard action ')
     expect(description).toHaveAttribute('enterkeyhint', 'send')
 
-    fireEvent.keyDown(description, { key: 'Enter', shiftKey: true })
+    await user.keyboard('{Shift>}{Enter}{/Shift}')
     expect(onSubmit).not.toHaveBeenCalled()
+    expect(description).toHaveValue(' Use the keyboard action \n')
 
     fireEvent.keyDown(description, { key: 'Enter' })
     await waitFor(() => expect(onSubmit).toHaveBeenCalledWith('bug', 'Mobile submit', 'Use the keyboard action'))
