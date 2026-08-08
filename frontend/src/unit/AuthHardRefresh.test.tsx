@@ -67,6 +67,7 @@ describe('hard refresh session bootstrap', () => {
 
   test('preserves the authenticated screen when resume validation is temporarily unavailable', async () => {
     window.history.replaceState({}, '', '/queue')
+    mockGetAccessToken.mockReturnValue('preserved-access-token')
     mockApiGet.mockResolvedValueOnce({ username: 'testuser', email: 'test@example.com' })
 
     render(
@@ -78,6 +79,7 @@ describe('hard refresh session bootstrap', () => {
     await waitFor(() => {
       expect(authState?.isAuthenticated).toBe(true)
     })
+    const accessTokenBeforeRevalidation = mockGetAccessToken()
 
     mockApiGet.mockRejectedValueOnce(new Error('cold server timeout'))
 
@@ -89,6 +91,8 @@ describe('hard refresh session bootstrap', () => {
 
     expect(authState?.isAuthenticated).toBe(true)
     expect(authState?.user?.username).toBe('testuser')
+    expect(mockGetAccessToken()).toBe(accessTokenBeforeRevalidation)
+    expect(window.location.pathname).toBe('/queue')
     expect(mockClearAccessToken).not.toHaveBeenCalled()
   })
 
