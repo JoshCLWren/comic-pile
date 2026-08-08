@@ -16,7 +16,7 @@ from typing import Final
 _PROCESS_STARTED_AT: Final[float] = time.perf_counter()
 _PROCESS_STARTED_AT_NS: Final[int] = time.time_ns()
 _DEPLOYMENT_ID: Final[str | None] = os.getenv("VERCEL_DEPLOYMENT_ID") or os.getenv(
-    "VERCEL_GIT_COMMIT_SHA"
+    "VERCEL_GIT_COMMIT_SHA",
 )
 _lock = threading.Lock()
 _request_count = 0
@@ -60,7 +60,11 @@ def mark_application_created() -> None:
 
 
 def mark_startup_complete() -> float:
-    """Record lifespan startup completion once and return total user-code startup time."""
+    """Record lifespan startup completion once.
+
+    Returns:
+        Total measured startup duration in milliseconds.
+    """
     global _startup_complete_at
 
     with _lock:
@@ -78,8 +82,8 @@ def _duration_ms(start: float | None, end: float | None) -> float | None:
 
 def _snapshot(*, invocation: int, cold: bool) -> StartupSnapshot:
     """Build a snapshot without mutating request state."""
-    now = time.perf_counter()
     with _lock:
+        now = time.perf_counter()
         import_complete_at = _application_import_complete_at
         application_created_at = _application_created_at
         startup_complete_at = _startup_complete_at
@@ -99,12 +103,20 @@ def _snapshot(*, invocation: int, cold: bool) -> StartupSnapshot:
 
 
 def startup_event_snapshot() -> StartupSnapshot:
-    """Return process metadata for startup logging without consuming a request number."""
+    """Return process metadata for startup logging without consuming a request number.
+
+    Returns:
+        StartupSnapshot for the current process startup state.
+    """
     return _snapshot(invocation=0, cold=False)
 
 
 def next_request_snapshot() -> StartupSnapshot:
-    """Advance the process request counter and return cold-start context."""
+    """Advance the process request counter and return cold-start context.
+
+    Returns:
+        StartupSnapshot after incrementing the process invocation count.
+    """
     global _request_count
 
     with _lock:
