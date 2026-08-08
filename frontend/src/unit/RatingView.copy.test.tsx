@@ -55,27 +55,22 @@ afterEach(() => {
 
 describe('RatingView copy comic reference', () => {
   it('copies the series title and active issue number without a hash', async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined)
-    Object.defineProperty(navigator, 'clipboard', {
-      configurable: true,
-      value: { writeText },
-    })
+    const user = userEvent.setup()
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
 
     renderRatingView()
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Copy Ultimate X-Men 12' }))
+    await user.click(screen.getByRole('button', { name: 'Copy Ultimate X-Men 12' }))
 
     expect(writeText).toHaveBeenCalledWith('Ultimate X-Men 12')
     expect(screen.getByText('Copied')).toBeInTheDocument()
   })
 
   it('shows a failure state when clipboard writing fails', async () => {
-    Object.defineProperty(navigator, 'clipboard', {
-      configurable: true,
-      value: { writeText: vi.fn().mockRejectedValue(new Error('clipboard denied')) },
-    })
+    const user = userEvent.setup()
+    vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('clipboard denied'))
 
     renderRatingView()
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Copy Ultimate X-Men 12' }))
+    await user.click(screen.getByRole('button', { name: 'Copy Ultimate X-Men 12' }))
 
     expect(screen.getByText('Copy failed')).toBeInTheDocument()
   })
