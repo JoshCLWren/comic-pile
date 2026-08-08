@@ -21,6 +21,7 @@ from app.schemas.continuity_rule import (
     ContinuityRuleCreate,
     ContinuityRuleResponse,
 )
+from comic_pile.dependencies import refresh_user_blocked_status
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["continuity"])
@@ -40,6 +41,13 @@ async def _invalidate_continuity_caches(user_id: int) -> None:
     for result in results:
         if isinstance(result, BaseException):
             logger.warning("Continuity cache invalidation failed", exc_info=result)
+
+
+async def _refresh_blocked_state(user_id: int, db: AsyncSession) -> None:
+    """Persist the unified Queue/Roll blocked projection after graph mutations."""
+    await refresh_user_blocked_status(user_id, db)
+    await db.commit()
+    await _invalidate_continuity_caches(user_id)
 
 
 def _to_response(rule: ContinuityRule) -> ContinuityRuleResponse:
@@ -167,15 +175,7 @@ async def list_continuity_rules(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[ContinuityRuleResponse]:
-    """List the authenticated user's continuity rules.
-
-    Args:
-        current_user: Authenticated user.
-        db: Asynchronous database session.
-
-    Returns:
-        Every continuity rule owned by the user, ordered by identifier.
-    """
+    """List the authenticated user's continuity rules."""
     result = await db.execute(
         select(ContinuityRule)
         .options(selectinload(ContinuityRule.selected_members))
@@ -195,16 +195,7 @@ async def get_continuity_rule(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ContinuityRuleResponse:
-    """Return one owned continuity rule.
-
-    Args:
-        rule_id: Continuity rule identifier.
-        current_user: Authenticated user.
-        db: Asynchronous database session.
-
-    Returns:
-        The requested owned continuity rule.
-    """
+    """Return one owned continuity rule."""
     return _to_response(await _get_owned_rule(db, current_user.id, rule_id))
 
 
@@ -219,19 +210,7 @@ async def create_continuity_rule(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ContinuityRuleResponse:
-    """Create an owned continuity rule after validating references and cycles.
-
-    Args:
-        payload: Validated continuity rule request.
-        current_user: Authenticated user.
-        db: Asynchronous database session.
-
-    Returns:
-        The newly created continuity rule.
-
-    Raises:
-        HTTPException: If references are invalid, a cycle exists, or the edge is duplicated.
-    """
+    """Create an owned continuity rule after validating references and cycles."""
     await _lock_continuity_graph(db, current_user.id)
     await ensure_owned_continuity_rule_references(db, user_id=current_user.id, payload=payload)
     if await _would_create_cycle(
@@ -253,22 +232,16 @@ async def create_continuity_rule(
         satisfaction_type=payload.satisfaction_type,
         checkpoint_issue_id=payload.checkpoint_issue_id,
         note=payload.note,
-        selected_members=[
-            ContinuityRuleSelectedMember(issue_id=issue_id)
-            for issue_id in payload.selected_member_issue_ids
-        ],
+        selected_members=[ContinuityRuleSelectedMember(issue_id=issue_id) for issue_id in payload.selected_member_issue_ids],
     )
     db.add(rule)
     try:
         await db.commit()
     except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"code": "continuity_rule_exists"},
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"code": "continuity_rule_exists"}) from exc
     await db.refresh(rule)
-    await _invalidate_continuity_caches(current_user.id)
+    await _refresh_blocked_state(current_user.id, db)
     return _to_response(await _get_owned_rule(db, current_user.id, rule.id))
 
 
@@ -283,20 +256,7 @@ async def update_continuity_rule(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ContinuityRuleResponse:
-    """Replace an owned continuity rule.
-
-    Args:
-        rule_id: Continuity rule identifier.
-        payload: Replacement continuity rule request.
-        current_user: Authenticated user.
-        db: Asynchronous database session.
-
-    Returns:
-        The updated continuity rule.
-
-    Raises:
-        HTTPException: If references are invalid, a cycle exists, or the edge is duplicated.
-    """
+    """Replace an owned continuity rule."""
     await _lock_continuity_graph(db, current_user.id)
     rule = await _get_owned_rule(db, current_user.id, rule_id)
     await ensure_owned_continuity_rule_references(db, user_id=current_user.id, payload=payload)
@@ -318,19 +278,13 @@ async def update_continuity_rule(
     rule.satisfaction_type = payload.satisfaction_type
     rule.checkpoint_issue_id = payload.checkpoint_issue_id
     rule.note = payload.note
-    rule.selected_members = [
-        ContinuityRuleSelectedMember(issue_id=issue_id)
-        for issue_id in payload.selected_member_issue_ids
-    ]
+    rule.selected_members = [ContinuityRuleSelectedMember(issue_id=issue_id) for issue_id in payload.selected_member_issue_ids]
     try:
         await db.commit()
     except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"code": "continuity_rule_exists"},
-        ) from exc
-    await _invalidate_continuity_caches(current_user.id)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"code": "continuity_rule_exists"}) from exc
+    await _refresh_blocked_state(current_user.id, db)
     return _to_response(await _get_owned_rule(db, current_user.id, rule_id))
 
 
@@ -344,23 +298,11 @@ async def delete_continuity_rule(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Response:
-    """Delete one owned continuity rule.
-
-    Args:
-        rule_id: Continuity rule identifier.
-        current_user: Authenticated user.
-        db: Asynchronous database session.
-
-    Returns:
-        An empty 204 response.
-
-    Raises:
-        HTTPException: If the continuity rule is not owned by the user.
-    """
+    """Delete one owned continuity rule."""
     user_id = current_user.id
     await _lock_continuity_graph(db, user_id)
     rule = await _get_owned_rule(db, user_id, rule_id)
     await db.delete(rule)
     await db.commit()
-    await _invalidate_continuity_caches(user_id)
+    await _refresh_blocked_state(user_id, db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
