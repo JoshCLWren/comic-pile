@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
 import BugReportButton from './BugReportButton'
 import type { ReportType } from './BugReportModal'
@@ -27,10 +27,26 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [hasError, setHasError] = useState(false)
   const [isMoreOpen, setIsMoreOpen] = useState(false)
+  const moreButtonRef = useRef<HTMLButtonElement>(null)
+  const moreMenuRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     setIsMoreOpen(false)
   }, [location.pathname])
+
+  useEffect(() => {
+    if (!isMoreOpen) return
+
+    const dismissMoreMenu = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (moreButtonRef.current?.contains(target) || moreMenuRef.current?.contains(target)) return
+      setIsMoreOpen(false)
+    }
+
+    document.addEventListener('pointerdown', dismissMoreMenu)
+    return () => document.removeEventListener('pointerdown', dismissMoreMenu)
+  }, [isMoreOpen])
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -75,12 +91,12 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
           <Link to="/queue" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/queue') ? 'active' : 'hover:bg-white/5'}`} aria-label="Queue page"><span className="text-2xl" aria-hidden="true">📚</span><span className="hidden md:block text-[10px] uppercase tracking-widest font-bold nav-label">Queue</span></Link>
           <Link to="/history" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/history') ? 'active' : 'hover:bg-white/5'}`} aria-label="History page"><span className="text-2xl" aria-hidden="true">📜</span><span className="hidden md:block text-[10px] uppercase tracking-widest font-bold nav-label">History</span></Link>
           <Link to="/crossovers" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/crossovers') ? 'active' : 'hover:bg-white/5'}`} aria-label="Crossovers page"><span className="text-2xl" aria-hidden="true">🔀</span><span className="hidden md:block text-[10px] uppercase tracking-widest font-bold nav-label">Crossovers</span></Link>
-          <button type="button" onClick={() => setIsMoreOpen(value => !value)} aria-expanded={isMoreOpen} aria-controls="secondary-navigation" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isMoreOpen || isActive('/help') || isActive('/whats-new') ? 'active' : 'hover:bg-white/5'}`} aria-label="More pages"><span className="text-2xl" aria-hidden="true">•••</span><span className="hidden md:block text-[10px] uppercase tracking-widest font-bold nav-label">More</span></button>
+          <button ref={moreButtonRef} type="button" onClick={() => setIsMoreOpen(value => !value)} aria-expanded={isMoreOpen} aria-controls="secondary-navigation" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isMoreOpen || isActive('/help') || isActive('/whats-new') ? 'active' : 'hover:bg-white/5'}`} aria-label="More pages"><span className="text-2xl" aria-hidden="true">•••</span><span className="hidden md:block text-[10px] uppercase tracking-widest font-bold nav-label">More</span></button>
         </div>
       </nav>
 
       {isMoreOpen && (
-        <nav id="secondary-navigation" aria-label="More pages" className="fixed bottom-16 right-3 z-50 w-56 rounded-2xl border border-stone-700 bg-stone-950 p-2 shadow-2xl md:bottom-24 md:right-6">
+        <nav ref={moreMenuRef} id="secondary-navigation" aria-label="More pages" className="fixed bottom-16 right-3 z-50 w-56 rounded-2xl border border-stone-700 bg-stone-950 p-2 shadow-2xl md:bottom-24 md:right-6">
           <Link to="/whats-new" className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-stone-100 hover:bg-stone-800"><span aria-hidden="true">✨</span><span>What’s New</span></Link>
           <Link to="/help" className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-stone-100 hover:bg-stone-800"><span aria-hidden="true">❓</span><span>Help</span></Link>
           <div className="border-t border-stone-800 pt-2 md:hidden"><BugReportButton onSubmit={onBugReportSubmit} variant="nav" /></div>
