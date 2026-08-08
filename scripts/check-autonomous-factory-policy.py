@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 POLICY = ROOT / "docs/AUTONOMOUS_FACTORY_POLICY.md"
 PROTOCOL = ROOT / "docs/ISSUE_EXECUTION_PROTOCOL.md"
+SCHEDULED_PROMPT = ROOT / "docs/CHATGPT_FACTORY_PROMPT.md"
 ENTRYPOINT = ROOT / "scripts/comic-pile-opencode-factory.sh"
 HEARTBEAT_ENTRYPOINT = ROOT / "scripts/comic-pile-opencode-factory-heartbeat.sh"
 
@@ -46,19 +47,23 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
     Args:
         policy: Canonical autonomous factory policy text.
         protocol: GitHub issue execution protocol text.
-        entrypoint: Combined local factory wrapper and heartbeat prompt text.
+        entrypoint: Combined local factory wrappers and scheduled prompt text.
 
     Returns:
         None.
     """
     for needle in (
-        "Version: 17",
+        "Version: 18",
         "Every product, behavior, deployment, operational, or factory-tooling PR must update",
         "exactly one isolated Markdown fragment",
         "`docs/changelog.md` is the frozen historical archive",
         "Changelog: not user-facing",
         "A missing required changelog entry is an actionable review defect",
         "Drive the open issue backlog to zero",
+        "An empty or blocked ordinary backlog is never an idle condition",
+        "If no ordinary executable issue can be selected, do not declare the factory idle.",
+        "Blocked work never authorizes a worker to pause or disable itself.",
+        "Never pause, disable, suspend, or stop a scheduled factory because the ordinary backlog is blocked or empty.",
         "The newest unclaimed open issue labeled both `user-reported` and `bug`.",
         "The highest-priority unclaimed reproducible E2E-discovered `bug` issue.",
         "When fewer than four substantive implementation PRs are open",
@@ -151,6 +156,8 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "Create one GitHub issue per independent reproducible Chromium product defect",
         "Firefox and WebKit are optional diagnostics",
         "Never create or convert a draft PR unless Josh explicitly",
+        "Never treat an empty or blocked backlog as a reason to idle, pause, disable yourself, or stop checking.",
+        "Only Josh may pause or disable this factory.",
         "comic-pile-factory-review-claim-v2",
         "comic-pile-factory-fix-claim-v3",
         "comic-pile-factory-ready-v2",
@@ -177,15 +184,16 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
 
 
 def read_entrypoint_text() -> str:
-    """Read the orchestration wrapper and single-heartbeat policy prompt.
+    """Read local orchestration prompts and the scheduled ChatGPT prompt template.
 
     Returns:
-        The combined wrapper and heartbeat source text.
+        The combined wrapper, heartbeat, and scheduled prompt source text.
     """
     return "\n".join(
         (
             ENTRYPOINT.read_text(encoding="utf-8"),
             HEARTBEAT_ENTRYPOINT.read_text(encoding="utf-8"),
+            SCHEDULED_PROMPT.read_text(encoding="utf-8"),
         )
     )
 
