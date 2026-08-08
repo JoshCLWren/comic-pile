@@ -59,7 +59,7 @@
 | docs/PRODUCTION_E2E_DATA.md | Repository documentation for PRODUCTION E2E DATA. | 2026-08-08 | Human-facing narrative should move out of the active code-coupled documentation set unless linked by the docs hub. | move to Wiki | ComicPile Wiki |
 | docs/PRODUCTION_PROFILE.md | Repository documentation for PRODUCTION PROFILE. | 2026-08-06 | Human-facing narrative should move out of the active code-coupled documentation set unless linked by the docs hub. | move to Wiki | ComicPile Wiki |
 | docs/PRODUCTION_STARTUP_DIAGNOSTICS.md | Code-coupled repository contract for PRODUCTION STARTUP DIAGNOSTICS. | 2026-08-07 | Linked from the authoritative docs hub and must change atomically with repository or operational behavior. | keep | — |
-| docs/REACT_ARCHITECTURE.md | Code-coupled repository contract for REACT ARCHITECTURE. | 2026-08-03 | Linked from the authoritative docs hub and must change atomically with repository or operational behavior. | keep | — |
+| docs/REACT_ARCHITECTURE.md | Code-coupled repository contract for REACT ARCHITECTURE. | 2026-08-08 | Linked from the authoritative docs hub and must change atomically with repository or operational behavior. | keep | — |
 | docs/README.md | Authoritative index and ownership map for repository documentation. | 2026-08-08 | Canonical repository documentation hub. | keep | — |
 | docs/TYPESCRIPT_STRICTNESS_ROADMAP.md | Repository documentation for TYPESCRIPT STRICTNESS ROADMAP. | 2026-07-11 | Human-facing narrative should move out of the active code-coupled documentation set unless linked by the docs hub. | move to Wiki | ComicPile Wiki |
 | docs/VERCEL_ARCHITECTURE.md | Repository documentation for VERCEL ARCHITECTURE. | 2026-08-06 | Human-facing narrative should move out of the active code-coupled documentation set unless linked by the docs hub. | move to Wiki | ComicPile Wiki |
@@ -97,6 +97,7 @@
 | docs/changelog.d/2026-08-08-919.md | Product changelog history or generated changelog fragment. | 2026-08-08 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
 | docs/changelog.d/2026-08-08-941.md | Product changelog history or generated changelog fragment. | 2026-08-08 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
 | docs/changelog.d/2026-08-08-945.md | Product changelog history or generated changelog fragment. | 2026-08-08 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
+| docs/changelog.d/2026-08-08-962.md | Product changelog history or generated changelog fragment. | 2026-08-08 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
 | docs/changelog.d/README.md | Product changelog history or generated changelog fragment. | 2026-08-06 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
 | docs/changelog.md | Product changelog history or generated changelog fragment. | 2026-08-06 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
 | docs/frontend-backend-asset-coupling-audit.md | Repository documentation for frontend backend asset coupling audit. | 2026-07-11 | Human-facing narrative should move out of the active code-coupled documentation set unless linked by the docs hub. | move to Wiki | ComicPile Wiki |
