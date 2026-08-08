@@ -356,3 +356,22 @@ Agents with the `github-issue-kanban` skill should follow that skill. Other
 agents must read `docs/ISSUE_EXECUTION_PROTOCOL.md`, update the selected
 issue's `ralph-status:*` label before editing, and add a verification comment
 before closing the issue.
+
+### Factory labels are mandatory agent work
+
+All local agents and scheduled factories must apply the canonical issue and PR label state
+machine in `docs/AUTONOMOUS_FACTORY_POLICY.md` automatically. Label reconciliation is part of
+claiming, implementation, review, CI, handoff, blocking, readiness, merge, and closure—not a task
+for Josh.
+
+Before ending a turn involving an issue or PR:
+
+- ensure the issue and PR each have the truthful factory workflow state;
+- ensure exactly one next-action owner (`factory:unowned`, `factory:local`, or `factory:1` through
+  `factory:5`) is present where factory work is involved;
+- remove stale or mutually exclusive state and owner labels;
+- release expired ownership while preserving `factory:review` or `factory:changes-requested` when
+  that remains the truthful next action;
+- use the REST issue-label endpoint when `gh pr edit` fails on Projects Classic GraphQL metadata.
+
+Never wait for the user to request these routine label corrections.
