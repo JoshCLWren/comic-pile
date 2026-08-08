@@ -11,12 +11,26 @@ from app.startup_diagnostics import (
 
 
 def setup_function() -> None:
-    """Reset process counters before each test."""
+    """Reset process counters before each test.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
     reset_startup_diagnostics_for_test()
 
 
 def test_first_request_is_cold_and_later_requests_are_warm() -> None:
-    """Only the first request handled by a process is classified as cold."""
+    """Only the first request handled by a process is classified as cold.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
     first = next_request_snapshot()
     second = next_request_snapshot()
 
@@ -29,7 +43,14 @@ def test_first_request_is_cold_and_later_requests_are_warm() -> None:
 
 
 def test_startup_event_does_not_consume_first_request() -> None:
-    """Startup logging must not turn the first HTTP request into a warm request."""
+    """Startup logging must not turn the first HTTP request into a warm request.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
     mark_application_import_complete()
     mark_application_created()
     mark_startup_complete()
@@ -44,7 +65,14 @@ def test_startup_event_does_not_consume_first_request() -> None:
 
 
 def test_startup_snapshot_decomposes_measurable_phases() -> None:
-    """Import, app creation, and lifespan phases are exposed when their markers exist."""
+    """Import, app creation, and lifespan phases are exposed when their markers exist.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
     mark_application_import_complete()
     mark_application_created()
     total = mark_startup_complete()
@@ -59,10 +87,18 @@ def test_startup_snapshot_decomposes_measurable_phases() -> None:
     assert snapshot.application_import_ms >= 0
     assert snapshot.application_creation_ms >= 0
     assert snapshot.lifespan_ms >= 0
+    assert snapshot.startup_duration_ms <= snapshot.process_age_ms
 
 
 def test_request_before_startup_completion_reports_unknown_phases() -> None:
-    """Missing phase markers remain explicit instead of inventing proxy timings."""
+    """Missing phase markers remain explicit instead of inventing proxy timings.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
     snapshot = next_request_snapshot()
 
     assert snapshot.startup_complete is False
