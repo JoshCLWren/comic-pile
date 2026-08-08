@@ -42,7 +42,14 @@ class StartupSnapshot:
 
 
 def mark_application_import_complete() -> None:
-    """Mark completion of imports needed to reach the application factory."""
+    """Mark completion of imports needed to reach the application factory.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
     global _application_import_complete_at
 
     with _lock:
@@ -51,7 +58,14 @@ def mark_application_import_complete() -> None:
 
 
 def mark_application_created() -> None:
-    """Mark completion of FastAPI application creation."""
+    """Mark completion of FastAPI application creation.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
     global _application_created_at
 
     with _lock:
@@ -61,6 +75,9 @@ def mark_application_created() -> None:
 
 def mark_startup_complete() -> float:
     """Record lifespan startup completion once.
+
+    Args:
+        None.
 
     Returns:
         Total measured startup duration in milliseconds.
@@ -105,6 +122,9 @@ def _snapshot(*, invocation: int, cold: bool) -> StartupSnapshot:
 def startup_event_snapshot() -> StartupSnapshot:
     """Return process metadata for startup logging without consuming a request number.
 
+    Args:
+        None.
+
     Returns:
         StartupSnapshot for the current process startup state.
     """
@@ -113,6 +133,9 @@ def startup_event_snapshot() -> StartupSnapshot:
 
 def next_request_snapshot() -> StartupSnapshot:
     """Advance the process request counter and return cold-start context.
+
+    Args:
+        None.
 
     Returns:
         StartupSnapshot after incrementing the process invocation count.
@@ -127,7 +150,14 @@ def next_request_snapshot() -> StartupSnapshot:
 
 
 def reset_startup_diagnostics_for_test() -> None:
-    """Reset mutable process diagnostics for isolated unit tests."""
+    """Reset mutable process diagnostics for isolated unit tests.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
     global _request_count, _application_import_complete_at, _application_created_at
     global _startup_complete_at
 

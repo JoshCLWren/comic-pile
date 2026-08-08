@@ -1,0 +1,85 @@
+name: Documentation
+
+on:
+  pull_request:
+    paths:
+      - "**/*.md"
+      - "scripts/check_markdown_docs.py"
+      - "scripts/generate_markdown_inventory.py"
+      - "tests/test_markdown_docs.py"
+      - "tests/test_generate_markdown_inventory.py"
+      - ".github/workflows/docs.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "**/*.md"
+      - "scripts/check_markdown_docs.py"
+      - "scripts/generate_markdown_inventory.py"
+      - "tests/test_markdown_docs.py"
+      - "tests/test_generate_markdown_inventory.py"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  markdown:
+    name: Markdown docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install locked dependencies
+        run: uv sync --frozen
+
+      - name: Validate Markdown ownership and links
+        run: uv run python scripts/check_markdown_docs.py
+
+      - name: Run documentation regression tests
+        run: |
+          uv run python -m pytest -q --no-cov \
+            tests/test_markdown_docs.py \
+            tests/test_generate_markdown_inventory.py
+
+      - name: Render Markdown inventory
+        run: uv run python scripts/generate_markdown_inventory.py --output docs/MARKDOWN_INVENTORY.md
+
+      - name: Preserve rendered inventory
+        uses: actions/upload-artifact@v7
+        with:
+          name: markdown-inventory
+          path: docs/MARKDOWN_INVENTORY.md
+          if-no-files-found: error
+
+      - name: Sync generated inventory on factory pull requests
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.event.pull_request.head.ref, 'factory/')
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if test -z "$(git status --porcelain -- docs/MARKDOWN_INVENTORY.md)"; then
+            exit 0
+          fi
+          git config user.name "comic-pile-factory"
+          git config user.email "actions@users.noreply.github.com"
+          git add docs/MARKDOWN_INVENTORY.md
+          git commit -m "Refresh Markdown inventory"
+          git push origin "HEAD:${HEAD_REF}"
+
+      - name: Verify committed inventory is current
+        run: test -z "$(git status --porcelain -- docs/MARKDOWN_INVENTORY.md)"
