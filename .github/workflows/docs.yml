@@ -53,7 +53,7 @@ jobs:
 
       - name: Run documentation regression tests
         run: |
-          uv run python -m pytest -q --no-cov \
+          uv run python -m pytest -q \
             tests/test_markdown_docs.py \
             tests/test_generate_markdown_inventory.py
 
@@ -68,7 +68,9 @@ jobs:
           if-no-files-found: error
 
       - name: Sync generated inventory on factory pull requests
-        if: github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'factory/')
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.event.pull_request.head.ref, 'factory/')
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           if test -z "$(git status --porcelain -- docs/MARKDOWN_INVENTORY.md)"; then
             exit 0
@@ -77,7 +79,7 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git add docs/MARKDOWN_INVENTORY.md
           git commit -m "Refresh Markdown inventory"
-          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
+          git push origin "HEAD:${HEAD_REF}"
 
       - name: Verify committed inventory is current
         run: test -z "$(git status --porcelain -- docs/MARKDOWN_INVENTORY.md)"
