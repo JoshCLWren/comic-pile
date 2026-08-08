@@ -251,8 +251,7 @@ rawApi.interceptors.response.use(
         isRefreshing = false
         if (
           !originalRequest.skipAuthRedirect &&
-          axios.isAxiosError(refreshError) &&
-          isAuthenticationFailure(refreshError)
+          isAuthenticationFailure(refreshError as AxiosError)
         ) {
           redirectToLogin()
         }
