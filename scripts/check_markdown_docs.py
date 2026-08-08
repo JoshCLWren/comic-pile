@@ -8,7 +8,8 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 INLINE_LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
-REFERENCE_LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\[([^\]]+)\]")
+REFERENCE_LINK_RE = re.compile(r"(?<!!)\[([^\]]+)\]\[([^\]]*)\]")
+SHORTCUT_REFERENCE_RE = re.compile(r"(?<!!)\[([^\]\n]+)\](?![\[(])")
 REFERENCE_DEFINITION_RE = re.compile(r"^\s*\[([^\]]+)\]:\s*(\S+)", re.MULTILINE)
 ALLOWED_ROOT_MARKDOWN = {
     "AGENTS.md",
@@ -44,25 +45,55 @@ def iter_markdown_files(root: Path) -> list[Path]:
     )
 
 
-def _reference_targets(text: str) -> list[str]:
+def _normalized_reference_label(label: str) -> str:
+    """Normalize a Markdown reference label for case-insensitive lookup.
+
+    Args:
+        label: Reference label as written in Markdown.
+
+    Returns:
+        A normalized reference label.
+    """
+    return " ".join(label.split()).casefold()
+
+
+def _reference_targets(text: str) -> tuple[list[str], list[str]]:
     """Resolve destinations used by reference-style Markdown links.
+
+    Explicit full and collapsed references are reported when their definition is missing.
+    Shortcut references are only links when a matching definition exists, per Markdown syntax;
+    otherwise the bracketed text is ordinary prose and must not be treated as a broken link.
 
     Args:
         text: Markdown document content.
 
     Returns:
-        Destinations for referenced definitions present in the document.
+        A pair containing resolved destinations and undefined explicit reference labels.
     """
     definitions = {
-        label.strip().lower(): target
+        _normalized_reference_label(label): target
         for label, target in REFERENCE_DEFINITION_RE.findall(text)
     }
+    text_without_definitions = REFERENCE_DEFINITION_RE.sub("", text)
     targets: list[str] = []
-    for label in REFERENCE_LINK_RE.findall(text):
-        target = definitions.get(label.strip().lower())
+    undefined: list[str] = []
+
+    for visible_text, label in REFERENCE_LINK_RE.findall(text_without_definitions):
+        resolved_label = label if label else visible_text
+        normalized = _normalized_reference_label(resolved_label)
+        target = definitions.get(normalized)
+        if target is None:
+            undefined.append(resolved_label)
+        else:
+            targets.append(target)
+
+    for visible_text in SHORTCUT_REFERENCE_RE.findall(text_without_definitions):
+        normalized = _normalized_reference_label(visible_text)
+        target = definitions.get(normalized)
         if target is not None:
             targets.append(target)
-    return targets
+
+    return targets, undefined
 
 
 def _validate_target(root: Path, markdown_file: Path, raw_target: str) -> str | None:
@@ -104,12 +135,17 @@ def find_broken_local_links(root: Path, markdown_files: list[Path]) -> list[str]
         markdown_files: Markdown files to inspect.
 
     Returns:
-        Validation errors for missing or repository-escaping local targets.
+        Validation errors for missing references, missing targets, or repository escapes.
     """
     broken: list[str] = []
     for markdown_file in markdown_files:
         text = markdown_file.read_text(encoding="utf-8")
-        targets = [*INLINE_LINK_RE.findall(text), *_reference_targets(text)]
+        reference_targets, undefined_references = _reference_targets(text)
+        for label in undefined_references:
+            broken.append(
+                f"{markdown_file.relative_to(root)}: undefined reference: {label}",
+            )
+        targets = [*INLINE_LINK_RE.findall(text), *reference_targets]
         for raw_target in targets:
             error = _validate_target(root, markdown_file, raw_target)
             if error is not None:
