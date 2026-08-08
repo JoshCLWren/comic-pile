@@ -227,14 +227,15 @@ async def get_current_die(session_id: int, db: AsyncSession) -> int:
         return session.manual_die
 
     result = await db.execute(
-        select(Event)
+        select(Event.die_after)
         .where(Event.session_id == session_id)
         .where(Event.type.in_(("rate", "snooze", "undo")))
         .where(Event.die_after.is_not(None))
         .order_by(Event.timestamp.desc(), Event.id.desc())
+        .limit(1)
     )
-    last_die_event = result.scalars().first()
-    if last_die_event and last_die_event.die_after is not None:
-        return last_die_event.die_after
+    last_die = result.scalar_one_or_none()
+    if last_die is not None:
+        return last_die
 
     return session.start_die if session else start_die
