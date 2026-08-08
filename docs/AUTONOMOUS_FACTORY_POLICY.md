@@ -1,6 +1,6 @@
 # ComicPile Autonomous Factory Policy
 
-Version: 17
+Version: 18
 
 This is the canonical policy for every scheduled ChatGPT worker, the local OpenCode factory, and interactive factory repair sessions.
 
@@ -15,10 +15,13 @@ Success is measured by issues truthfully closed and production defects removed. 
 The factory follows this permanent cycle:
 
 1. drain every executable open issue except the deferred backlog-zero checkpoint #679;
-2. when #679 is the only remaining executable checkpoint, restore and run the complete maintained Chromium Playwright E2E suite;
-3. create one GitHub issue for every independent reproducible product defect surfaced by Chromium E2E, with evidence and a `bug` label;
-4. return immediately to backlog draining;
-5. repeat whenever the ordinary executable backlog reaches zero again.
+2. when no other executable delivery work exists, #679 immediately becomes required work, including when the remaining ordinary backlog is owned, blocked, or dependency-gated;
+3. restore and run the complete maintained Chromium Playwright E2E suite;
+4. create one GitHub issue for every independent reproducible product defect surfaced by Chromium E2E, with evidence and a `bug` label;
+5. return immediately to backlog draining as those new bugs become executable;
+6. repeat whenever the ordinary executable backlog reaches zero again.
+
+An empty or blocked ordinary backlog is never an idle condition and never a reason to stop the factory. A worker must not pause, disable, suspend, or otherwise mutate its own schedule because work is blocked or exhausted. Only Josh, or an interactive session acting on Josh's direct instruction, may pause or disable a factory. Scheduled workers remain enabled and continue checking on schedule.
 
 User-reported bugs remain first within the bug queue. Reproducible E2E-discovered bugs come next, then ordinary executable issues. Preserve `user-reported` only for defects actually reported by a user.
 
@@ -74,6 +77,8 @@ Repeat until the selected issue reaches closure or a valid blocker:
 
 After work becomes blocked, merge-gated, or dependent on a human-only decision, preserve durable context and return to selection rather than polishing indefinitely.
 
+If no ordinary executable issue can be selected, do not declare the factory idle. Enter the backlog-zero Chromium phase and work #679 instead.
+
 ## User-facing changelog gate
 
 Every product, behavior, deployment, operational, or factory-tooling PR must update the generated user-facing changelog before it can receive a pass verdict, ready marker, merge-gated marker, or merge. Do that by adding exactly one isolated Markdown fragment at `docs/changelog.d/YYYY-MM-DD-<pr-number>.md`. The filename date must match the fragment's first `## YYYY-MM-DD` heading, the fragment must link the actual PR, and the text must describe what changed and why it matters under a user-recognizable feature area.
@@ -128,11 +133,13 @@ A normal heartbeat must accomplish at least one of these while executable issues
 
 Comments, labels, claims, reviews, PR-body edits, ready markers, help text, speculative plans, and optional test additions alone are not sufficient.
 
+When ordinary executable work is exhausted, entering #679 and the Chromium E2E bug-harvesting cycle is the required heartbeat outcome. `idle`, self-pausing, and self-disabling are invalid substitutes.
+
 ## Backlog-zero Chromium phase
 
 Issue #679 is excluded from ordinary executable-backlog selection while any other executable issue remains open, unless disabled Chromium coverage itself blocks safe delivery.
 
-When every other executable issue is closed:
+When no other executable delivery work remains, including when all remaining ordinary work is owned, blocked, or dependency-gated:
 
 1. prioritize #679 and restore the maintained Chromium Playwright CI suite;
 2. merge that restoration only after the normal exact-head gates pass;
@@ -154,7 +161,10 @@ When owned work cannot safely advance now:
 1. preserve concise durable blocker context;
 2. release active execution when appropriate;
 3. immediately select the highest-value free executable issue;
-4. return when the blocker changes.
+4. if none exists, enter #679 and the Chromium E2E cycle;
+5. return when the blocker changes.
+
+Blocked work never authorizes a worker to pause or disable itself.
 
 ## Repository safety
 
@@ -165,6 +175,7 @@ When owned work cannot safely advance now:
 - Never weaken checks, skip tests, remove meaningful coverage, bypass hooks, or add suppressions merely to make CI green.
 - Never manufacture evidence or claim commands ran when they did not.
 - Never mutate factory schedules or topology. Only Josh or an interactive session acting on Josh's direct instruction may do so.
+- Never pause, disable, suspend, or stop a scheduled factory because the ordinary backlog is blocked or empty. Keep the schedule enabled and switch to #679/E2E work.
 
 ## Closure truth
 
