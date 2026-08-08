@@ -20,14 +20,13 @@ export type AuthUser = components['schemas']['UserResponse']
  */
 export type AuthTokens = components['schemas']['TokenResponse']
 
-/** Core API contracts generated from FastAPI's OpenAPI document. */
-export type ThreadCreatePayload = components['schemas']['ThreadCreate']
+/**
+ * Core contracts whose generated OpenAPI shapes already match the existing
+ * frontend call sites. Keep incompatible ergonomic types handwritten until the
+ * backend schema and frontend contract can be migrated together deliberately.
+ */
 export type ThreadUpdatePayload = components['schemas']['ThreadUpdate']
 export type ReactivateThreadPayload = components['schemas']['ReactivateRequest']
-export type RatePayload = components['schemas']['RateRequest']
 export type OverrideRollPayload = components['schemas']['OverrideRequest']
-export type Issue = components['schemas']['IssueResponse']
-export type IssueListResponse = components['schemas']['IssueListResponse']
 export type Dependency = components['schemas']['DependencyResponse']
 export type ThreadDependenciesResponse = components['schemas']['ThreadDependenciesResponse']
-export type RollResponse = components['schemas']['RollResponse']
