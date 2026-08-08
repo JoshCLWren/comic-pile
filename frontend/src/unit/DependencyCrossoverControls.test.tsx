@@ -117,4 +117,74 @@ describe('DependencyCrossoverControls', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
     expect(onMembershipChanged).toHaveBeenCalledTimes(1)
   })
+
+  it('surfaces crossover loading failures and clears the loading state', async () => {
+    listGroups.mockRejectedValueOnce(new Error('crossovers unavailable'))
+
+    render(<DependencyCrossoverControls sourceIssueId={101} targetIssueId={202} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Add to existing' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('crossovers unavailable')
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: 'Select a crossover' })).toBeInTheDocument(),
+    )
+  })
+
+  it('requires a name for a new crossover before saving', async () => {
+    render(<DependencyCrossoverControls sourceIssueId={101} targetIssueId={202} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Create crossover' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save crossover membership' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Enter a crossover name')
+    expect(createGroup).not.toHaveBeenCalled()
+    expect(addMember).not.toHaveBeenCalled()
+  })
+
+  it('reports when a newly created crossover cannot add its first membership', async () => {
+    const onMembershipChanged = vi.fn()
+    addMember.mockRejectedValueOnce(new Error('membership unavailable'))
+
+    render(
+      <DependencyCrossoverControls
+        sourceIssueId={101}
+        targetIssueId={202}
+        onMembershipChanged={onMembershipChanged}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Create crossover' }))
+    fireEvent.change(screen.getByLabelText('Crossover name'), { target: { value: 'Inferno' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save crossover membership' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Created Inferno, but no issue membership was added: membership unavailable',
+    )
+    expect(onMembershipChanged).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not add the same issue twice when both sides resolve to one issue', async () => {
+    render(<DependencyCrossoverControls sourceIssueId={101} targetIssueId={101} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Create crossover' }))
+    fireEvent.change(screen.getByLabelText('Crossover name'), { target: { value: 'Inferno' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save crossover membership' }))
+
+    await waitFor(() => expect(addMember).toHaveBeenCalledTimes(1))
+    expect(addMember).toHaveBeenCalledWith(8, { issue_id: 101 })
+    expect(await screen.findByRole('status')).toHaveTextContent('prerequisite issue added to Inferno')
+  })
+
+  it('filters existing crossovers and rejects a cleared selection', async () => {
+    render(<DependencyCrossoverControls sourceIssueId={101} targetIssueId={202} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Add to existing' }))
+    await screen.findByRole('option', { name: 'Mutant Massacre' })
+
+    fireEvent.change(screen.getByLabelText('Search crossovers'), { target: { value: 'inferno' } })
+    expect(screen.queryByRole('option', { name: 'Mutant Massacre' })).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Search crossovers'), { target: { value: '' } })
+    fireEvent.change(screen.getByLabelText('Existing crossover'), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save crossover membership' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Select an existing crossover')
+    expect(addMember).not.toHaveBeenCalled()
+  })
 })
