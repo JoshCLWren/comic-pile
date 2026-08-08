@@ -160,8 +160,9 @@ async def get_or_create(db: AsyncSession, user_id: int) -> Session:
                 .where(Session.ended_at.is_(None))
                 .where(Session.started_at >= cutoff_time)
                 .order_by(Session.started_at.desc(), Session.id.desc())
+                .limit(1)
             )
-            active_session = result.scalars().first()
+            active_session = result.scalar_one_or_none()
             if active_session:
                 return active_session
 
@@ -181,8 +182,9 @@ async def get_or_create(db: AsyncSession, user_id: int) -> Session:
                     .where(Session.ended_at.is_(None))
                     .where(Session.started_at >= cutoff_time)
                     .order_by(Session.started_at.desc(), Session.id.desc())
+                    .limit(1)
                 )
-                active_session = result.scalars().first()
+                active_session = result.scalar_one_or_none()
                 if active_session:
                     return active_session
 
