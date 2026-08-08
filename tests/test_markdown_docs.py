@@ -121,7 +121,14 @@ def test_find_unapproved_root_markdown_flags_documentation_sprawl(tmp_path: Path
 
 
 def test_documentation_workflow_cannot_rewrite_pull_request_heads() -> None:
-    """Keep documentation CI read-only so it cannot replace factory PR heads."""
+    """Keep documentation CI read-only so it cannot replace factory PR heads.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
     workflow = (Path(__file__).parents[1] / ".github/workflows/docs.yml").read_text(
         encoding="utf-8"
     )
