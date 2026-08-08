@@ -27,7 +27,18 @@ if [[ -z "$VERCEL_VERSION" ]]; then
   exit 1
 fi
 
-if ! printf '%s\n%s\n' '48.9.0' "$VERCEL_VERSION" | sort -V -C; then
+if ! awk -v version="$VERCEL_VERSION" '
+BEGIN {
+  split(version, part, ".")
+  if (
+    part[1] > 48 ||
+    (part[1] == 48 && part[2] > 9) ||
+    (part[1] == 48 && part[2] == 9 && part[3] >= 0)
+  ) {
+    exit 0
+  }
+  exit 1
+}'; then
   printf 'Vercel CLI 48.9.0 or newer is required; found %s. Please upgrade and retry.\n' "$VERCEL_VERSION" >&2
   exit 1
 fi
