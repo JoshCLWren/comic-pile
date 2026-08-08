@@ -50,10 +50,10 @@ async def test_development_logs_include_request_body_and_session_id(
 
 
 @pytest.mark.asyncio
-async def test_production_logs_drop_request_body_query_params_and_session_id(
+async def test_production_logs_drop_private_request_context(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """In production, request logging should avoid leaking request context."""
+    """In production, request logging should avoid leaking private request context."""
     os.environ["ENVIRONMENT"] = "production"
     os.environ["CORS_ORIGINS"] = "https://example.com"
 
@@ -83,14 +83,14 @@ async def test_production_logs_drop_request_body_query_params_and_session_id(
     assert "request_body" not in record.__dict__
     assert "query_params" not in record.__dict__
     assert "session_id" not in record.__dict__
-    assert record.__dict__["user_id"] == 42
+    assert "user_id" not in record.__dict__
 
 
 @pytest.mark.asyncio
-async def test_staging_logs_drop_request_body_query_params_and_session_id(
+async def test_staging_logs_drop_private_request_context(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """In staging, request logging should avoid leaking request context (same as production)."""
+    """In staging, request logging should avoid leaking private request context."""
     os.environ["ENVIRONMENT"] = "staging"
     os.environ["CORS_ORIGINS"] = "https://example.com"
 
@@ -120,4 +120,4 @@ async def test_staging_logs_drop_request_body_query_params_and_session_id(
     assert "request_body" not in record.__dict__
     assert "query_params" not in record.__dict__
     assert "session_id" not in record.__dict__
-    assert record.__dict__["user_id"] == 42
+    assert "user_id" not in record.__dict__

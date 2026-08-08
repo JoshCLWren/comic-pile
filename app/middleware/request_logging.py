@@ -2,8 +2,8 @@
 
 Provides helpers for safely reading and redacting request bodies before they
 are written to logs. The HTTP middleware also emits request IDs, Server-Timing
-metrics, cache outcomes, database query counts, slow-request logs, and the
-existing error logs.
+metrics, cache outcomes, database query counts, slow-request logs, startup
+phase timing, and cold/warm request classification.
 """
 
 import json
@@ -21,6 +21,11 @@ from app.performance_diagnostics import (
     end_request_diagnostics,
     get_request_diagnostics,
     install_cache_instrumentation,
+)
+from app.startup_diagnostics import (
+    mark_startup_complete,
+    next_request_snapshot,
+    startup_event_snapshot,
 )
 
 logger = logging.getLogger(__name__)
@@ -127,7 +132,7 @@ def redact_headers(headers: dict) -> dict:
 def sanitize_for_logging(log_data: dict[str, object], environment: str) -> dict[str, object]:
     """Trim request context from logs in production and staging.
 
-    In production and staging, avoid logging request bodies, query params, and session identifiers.
+    In production and staging, avoid logging request bodies, query params, and user/session identifiers.
 
     Args:
         log_data: Log payload.
@@ -140,9 +145,14 @@ def sanitize_for_logging(log_data: dict[str, object], environment: str) -> dict[
         return log_data
 
     trimmed = dict(log_data)
-    for key in ("request_body", "query_params", "session_id", "body"):
+    for key in ("request_body", "query_params", "session_id", "user_id", "body"):
         trimmed.pop(key, None)
     return trimmed
+
+
+def _sanitize_log_path(path: str) -> str:
+    """Neutralize control characters that could forge or split log records."""
+    return path.replace("\r", "\\r").replace("\n", "\\n")
 
 
 def _slow_request_threshold_ms() -> float:
@@ -174,6 +184,11 @@ def _server_timing_header(total_ms: float) -> str:
     return ", ".join(metrics)
 
 
+def _rounded_optional(value: float | None) -> float | None:
+    """Round an optional timing value for structured log output."""
+    return round(value, 2) if value is not None else None
+
+
 def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
     """Register request diagnostics and error logging middleware.
 
@@ -183,11 +198,33 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
     """
     install_cache_instrumentation(cache)
 
+    @app.on_event("startup")
+    async def record_startup_completion() -> None:
+        """Emit one process-scoped startup timing event after lifespan startup."""
+        mark_startup_complete()
+        snapshot = startup_event_snapshot()
+        logger.warning(
+            "Application startup completed in %.2f ms",
+            snapshot.startup_duration_ms or 0.0,
+            extra={
+                "event": "application_startup",
+                "startup_duration_ms": _rounded_optional(snapshot.startup_duration_ms),
+                "application_import_ms": _rounded_optional(snapshot.application_import_ms),
+                "application_creation_ms": _rounded_optional(snapshot.application_creation_ms),
+                "lifespan_ms": _rounded_optional(snapshot.lifespan_ms),
+                "process_age_ms": round(snapshot.process_age_ms, 2),
+                "deployment_id": snapshot.deployment_id,
+                "process_started_at_ns": snapshot.process_started_at_ns,
+                "level": "WARNING",
+            },
+        )
+
     @app.middleware("http")
     async def log_errors_middleware(request: Request, call_next):
         """Add diagnostics headers and log slow or failed requests."""
         started_at = time.perf_counter()
         request_id = uuid.uuid4().hex
+        startup = next_request_snapshot()
         diagnostics_token = begin_request_diagnostics()
         request.state.request_id = request_id
 
@@ -201,17 +238,19 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
             process_time_ms = (time.perf_counter() - started_at) * 1000
             status_code = response.status_code
             diagnostics = get_request_diagnostics()
+            log_path = _sanitize_log_path(request.url.path)
 
             response.headers["X-Request-ID"] = request_id
             response.headers["X-App-Cache"] = diagnostics.cache_status
             response.headers["X-App-DB-Queries"] = str(diagnostics.database_queries)
+            response.headers["X-App-Cold-Request"] = "1" if startup.cold else "0"
             response.headers["Server-Timing"] = _server_timing_header(process_time_ms)
 
             log_data = {
                 "timestamp": datetime.now(UTC).isoformat(),
                 "request_id": request_id,
                 "method": request.method,
-                "path": request.url.path,
+                "path": log_path,
                 "query_params": str(request.url.query) if request.url.query else None,
                 "status_code": status_code,
                 "process_time_ms": round(process_time_ms, 2),
@@ -220,6 +259,16 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                 "cache_status": diagnostics.cache_status,
                 "cache_calls": diagnostics.cache_calls,
                 "cache_time_ms": round(diagnostics.cache_time_ms, 2),
+                "cold_request": startup.cold,
+                "process_request_number": startup.invocation,
+                "process_age_ms": round(startup.process_age_ms, 2),
+                "startup_complete": startup.startup_complete,
+                "startup_duration_ms": _rounded_optional(startup.startup_duration_ms),
+                "application_import_ms": _rounded_optional(startup.application_import_ms),
+                "application_creation_ms": _rounded_optional(startup.application_creation_ms),
+                "lifespan_ms": _rounded_optional(startup.lifespan_ms),
+                "deployment_id": startup.deployment_id,
+                "process_started_at_ns": startup.process_started_at_ns,
                 "client_host": request.client.host if request.client else None,
                 "user_agent": request.headers.get("user-agent"),
                 "headers": redact_headers(dict(request.headers)),
@@ -236,19 +285,33 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
 
             if status_code >= 500:
                 logger.error(
-                    f"API Error: {request.method} {request.url.path} - {status_code}",
+                    "API Error: %s %s - %s",
+                    request.method,
+                    log_path,
+                    status_code,
                     extra={**log_data, "level": "ERROR"},
                 )
             elif status_code >= 400:
                 logger.warning(
-                    f"Client Error: {request.method} {request.url.path} - {status_code}",
+                    "Client Error: %s %s - %s",
+                    request.method,
+                    log_path,
+                    status_code,
                     extra={**log_data, "level": "WARNING"},
                 )
             elif process_time_ms >= _slow_request_threshold_ms():
                 logger.warning(
                     "Slow HTTP request: %s %s completed in %.2f ms",
                     request.method,
-                    request.url.path,
+                    log_path,
+                    process_time_ms,
+                    extra={**log_data, "level": "WARNING"},
+                )
+            elif startup.cold:
+                logger.warning(
+                    "Cold HTTP request: %s %s completed in %.2f ms",
+                    request.method,
+                    log_path,
                     process_time_ms,
                     extra={**log_data, "level": "WARNING"},
                 )
