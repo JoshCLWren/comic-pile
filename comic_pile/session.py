@@ -43,12 +43,14 @@ async def should_start_new(db: AsyncSession, user_id: int) -> bool:
     """Check whether no active session exists in the configured gap."""
     cutoff_time = datetime.now(UTC) - timedelta(hours=_session_gap_hours())
     result = await db.execute(
-        select(Session)
+        select(Session.id)
         .where(Session.user_id == user_id)
         .where(Session.started_at >= cutoff_time)
         .where(Session.ended_at.is_(None))
+        .order_by(Session.started_at.desc(), Session.id.desc())
+        .limit(1)
     )
-    return len(result.scalars().all()) == 0
+    return result.scalar_one_or_none() is None
 
 
 async def create_session_start_snapshot(db: AsyncSession, session: Session) -> None:
