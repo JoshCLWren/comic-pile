@@ -46,7 +46,7 @@ describe('WhatsNewPage', () => {
     expect(screen.getByText('Plain introduction.')).toBeInTheDocument()
     expect(screen.getByText('Queue', { selector: 'code' })).toBeInTheDocument()
 
-    expect(screen.getByText('#866')).toBeInTheDocument()
+    expect(screen.getByRole('listitem')).toHaveTextContent('#866')
     expect(screen.queryByRole('link', { name: /#866/ })).not.toBeInTheDocument()
 
     const link = screen.getByRole('link', { name: /ComicPile/ })
