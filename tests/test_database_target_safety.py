@@ -1,7 +1,10 @@
 """Tests for fail-closed database target validation."""
 
+from typing import cast
+
 import pytest
 
+from scripts.clone_prod_to_local import ExportDocument, _import_document
 from scripts.database_target_safety import require_local_database_url
 
 
@@ -48,3 +51,21 @@ def test_require_local_database_url_rejects_unproven_targets(db_url: str) -> Non
     """
     with pytest.raises(ValueError, match="refusing to write"):
         require_local_database_url(db_url)
+
+
+@pytest.mark.asyncio
+async def test_import_document_rejects_remote_target_before_connecting() -> None:
+    """Reject a production-like importer target before opening a connection.
+
+    Returns:
+        None.
+    """
+    export = cast(ExportDocument, {})
+
+    with pytest.raises(ValueError, match="not loopback/local"):
+        await _import_document(
+            "postgresql+asyncpg://user:pass@ep-example.us-east-2.aws.neon.tech/comic_pile",
+            export,
+            None,
+            dry_run=False,
+        )
