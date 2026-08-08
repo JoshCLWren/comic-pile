@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { render, waitFor } from '@testing-library/react'
+import { act, render, waitFor } from '@testing-library/react'
 import { useEffect } from 'react'
 import type { AuthContextValue } from '../App'
 
@@ -62,6 +62,33 @@ describe('hard refresh session bootstrap', () => {
       expect(authState?.isAuthenticated).toBe(true)
     })
     expect(mockApiGet).toHaveBeenCalledWith('/auth/me')
+    expect(mockClearAccessToken).not.toHaveBeenCalled()
+  })
+
+  test('preserves the authenticated screen when resume validation is temporarily unavailable', async () => {
+    window.history.replaceState({}, '', '/queue')
+    mockApiGet.mockResolvedValueOnce({ username: 'testuser', email: 'test@example.com' })
+
+    render(
+      <AuthProvider>
+        <AuthStateProbe />
+      </AuthProvider>,
+    )
+
+    await waitFor(() => {
+      expect(authState?.isAuthenticated).toBe(true)
+    })
+
+    mockApiGet.mockRejectedValueOnce(new Error('cold server timeout'))
+
+    await expect(
+      act(async () => {
+        await authState?.revalidateSession(8000)
+      }),
+    ).rejects.toThrow('cold server timeout')
+
+    expect(authState?.isAuthenticated).toBe(true)
+    expect(authState?.user?.username).toBe('testuser')
     expect(mockClearAccessToken).not.toHaveBeenCalled()
   })
 
