@@ -12,7 +12,8 @@ Usage:
     python -m scripts.clone_prod_to_local export --username Josh --db-url postgresql+asyncpg://...
 
     # Or provide the source through CLONE_PROD_DB_URL:
-    CLONE_PROD_DB_URL=postgresql+asyncpg://... python -m scripts.clone_prod_to_local export --username Josh
+    CLONE_PROD_DB_URL=postgresql+asyncpg://... \
+        python -m scripts.clone_prod_to_local export --username Josh
 
     # Restore into local dev:
     python -m scripts.clone_prod_to_local import --file prod_export.json
@@ -140,7 +141,7 @@ class ExportReadingOrderRecord(TypedDict, total=False):
 
 
 class ExportReadingOrderItemRecord(TypedDict, total=False):
-    """Serialized reading order item for export."""
+    """Serialized reading order item record for export."""
 
     id: int
     reading_order_id: int
