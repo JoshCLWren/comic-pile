@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import Modal from './Modal'
 import DependencyFlowchart from './DependencyFlowchart'
 import ReadingOrderTimeline from './ReadingOrderTimeline'
+import DependencyCrossoverControls from './DependencyCrossoverControls'
 import { dependenciesApi, threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 import type { Dependency, FlowchartDependency, FlowchartNode, Issue, Thread, ThreadDependenciesResponse } from '../types'
@@ -844,6 +845,16 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                )}
              </div>
            )}
+
+           {selectedThread && !selectedThreadNeedsMigration && (
+             <DependencyCrossoverControls
+               sourceIssueId={sourceIssueId}
+               targetIssueId={targetIssueId}
+               disabled={isLoadingSourceIssues || isLoadingTargetIssues}
+               onMembershipChanged={onChanged}
+             />
+           )}
+
             <button
               type="button"
               onClick={handleCreateDependency}
