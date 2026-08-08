@@ -2,7 +2,7 @@
 | --- | --- | --- | --- | --- | --- |
 | .agents/skills/github-issue-kanban/SKILL.md | Repository automation, contribution, or agent execution guidance. | 2026-07-20 | Code-coupled workflow contract that must change atomically with repository behavior. | keep | — |
 | .agents/skills/model-recommendation/SKILL.md | Repository automation, contribution, or agent execution guidance. | 2026-03-27 | Code-coupled workflow contract that must change atomically with repository behavior. | keep | — |
-| .agents/skills/plan-task-handoff/SKILL.md | Repository automation, contribution, or agent execution guidance. | 2026-08-01 | Code-coupled workflow contract that must change atomically with repository behavior. | keep | — |
+| .agents/skills/plan-task-handoff/SKILL.md | Repository automation, contribution, or agent execution guidance. | 2026-08-01 | Code-coupled workflow contract that must change atomically with factory behavior. | keep | — |
 | .claude/skills/handoff/SKILL.md | Repository automation, contribution, or agent execution guidance. | 2026-03-26 | Code-coupled workflow contract that must change atomically with repository behavior. | keep | — |
 | .claude/skills/orchestrator/SKILL.md | Repository automation, contribution, or agent execution guidance. | 2026-04-15 | Code-coupled workflow contract that must change atomically with repository behavior. | keep | — |
 | AGENTS.md | Mandatory engineering rules for coding agents. | 2026-08-07 | Code-coupled contract; must not be duplicated in the Wiki. | keep | — |
@@ -97,6 +97,7 @@
 | docs/changelog.d/2026-08-08-919.md | Product changelog history or generated changelog fragment. | 2026-08-08 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
 | docs/changelog.d/2026-08-08-941.md | Product changelog history or generated changelog fragment. | 2026-08-08 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
 | docs/changelog.d/2026-08-08-945.md | Product changelog history or generated changelog fragment. | 2026-08-08 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
+| docs/changelog.d/2026-08-08-948.md | Product changelog history or generated changelog fragment. | 2026-08-08 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
 | docs/changelog.d/README.md | Product changelog history or generated changelog fragment. | 2026-08-06 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
 | docs/changelog.md | Product changelog history or generated changelog fragment. | 2026-08-06 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
 | docs/frontend-backend-asset-coupling-audit.md | Repository documentation for frontend backend asset coupling audit. | 2026-07-11 | Human-facing narrative should move out of the active code-coupled documentation set unless linked by the docs hub. | move to Wiki | ComicPile Wiki |
