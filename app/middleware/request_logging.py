@@ -132,7 +132,7 @@ def redact_headers(headers: dict) -> dict:
 def sanitize_for_logging(log_data: dict[str, object], environment: str) -> dict[str, object]:
     """Trim request context from logs in production and staging.
 
-    In production and staging, avoid logging request bodies, query params, and session identifiers.
+    In production and staging, avoid logging request bodies, query params, and user/session identifiers.
 
     Args:
         log_data: Log payload.
@@ -145,9 +145,14 @@ def sanitize_for_logging(log_data: dict[str, object], environment: str) -> dict[
         return log_data
 
     trimmed = dict(log_data)
-    for key in ("request_body", "query_params", "session_id", "body"):
+    for key in ("request_body", "query_params", "session_id", "user_id", "body"):
         trimmed.pop(key, None)
     return trimmed
+
+
+def _sanitize_log_path(path: str) -> str:
+    """Neutralize control characters that could forge or split log records."""
+    return path.replace("\r", "\\r").replace("\n", "\\n")
 
 
 def _slow_request_threshold_ms() -> float:
@@ -233,6 +238,7 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
             process_time_ms = (time.perf_counter() - started_at) * 1000
             status_code = response.status_code
             diagnostics = get_request_diagnostics()
+            log_path = _sanitize_log_path(request.url.path)
 
             response.headers["X-Request-ID"] = request_id
             response.headers["X-App-Cache"] = diagnostics.cache_status
@@ -244,7 +250,7 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                 "timestamp": datetime.now(UTC).isoformat(),
                 "request_id": request_id,
                 "method": request.method,
-                "path": request.url.path,
+                "path": log_path,
                 "query_params": str(request.url.query) if request.url.query else None,
                 "status_code": status_code,
                 "process_time_ms": round(process_time_ms, 2),
@@ -279,19 +285,25 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
 
             if status_code >= 500:
                 logger.error(
-                    f"API Error: {request.method} {request.url.path} - {status_code}",
+                    "API Error: %s %s - %s",
+                    request.method,
+                    log_path,
+                    status_code,
                     extra={**log_data, "level": "ERROR"},
                 )
             elif status_code >= 400:
                 logger.warning(
-                    f"Client Error: {request.method} {request.url.path} - {status_code}",
+                    "Client Error: %s %s - %s",
+                    request.method,
+                    log_path,
+                    status_code,
                     extra={**log_data, "level": "WARNING"},
                 )
             elif process_time_ms >= _slow_request_threshold_ms():
                 logger.warning(
                     "Slow HTTP request: %s %s completed in %.2f ms",
                     request.method,
-                    request.url.path,
+                    log_path,
                     process_time_ms,
                     extra={**log_data, "level": "WARNING"},
                 )
@@ -299,7 +311,7 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                 logger.warning(
                     "Cold HTTP request: %s %s completed in %.2f ms",
                     request.method,
-                    request.url.path,
+                    log_path,
                     process_time_ms,
                     extra={**log_data, "level": "WARNING"},
                 )
