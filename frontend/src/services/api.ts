@@ -249,7 +249,11 @@ rawApi.interceptors.response.use(
       } catch (refreshError) {
         processQueue(refreshError, null)
         isRefreshing = false
-        if (!originalRequest.skipAuthRedirect) {
+        if (
+          !originalRequest.skipAuthRedirect &&
+          axios.isAxiosError(refreshError) &&
+          isAuthenticationFailure(refreshError)
+        ) {
           redirectToLogin()
         }
         return Promise.reject(refreshError)
