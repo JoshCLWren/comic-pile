@@ -93,6 +93,19 @@ describe('DependencyCrossoverControls', () => {
     expect(addMember).toHaveBeenCalledWith(8, { issue_id: 101 })
   })
 
+  it('supports target-only membership when the prerequisite issue is unavailable', async () => {
+    render(<DependencyCrossoverControls sourceIssueId={null} targetIssueId={202} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create crossover' }))
+    expect(screen.getByLabelText('Prerequisite issue')).toBeDisabled()
+    fireEvent.change(screen.getByLabelText('Crossover name'), { target: { value: 'Inferno' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save crossover membership' }))
+
+    await waitFor(() => expect(addMember).toHaveBeenCalledTimes(1))
+    expect(addMember).toHaveBeenCalledWith(8, { issue_id: 202 })
+    expect(await screen.findByRole('status')).toHaveTextContent('blocked issue added to Inferno')
+  })
+
   it('reports partial failure without claiming both memberships succeeded', async () => {
     const onMembershipChanged = vi.fn()
     addMember
