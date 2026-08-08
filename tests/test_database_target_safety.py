@@ -29,6 +29,35 @@ def test_require_local_database_url_accepts_loopback(db_url: str) -> None:
     require_local_database_url(db_url)
 
 
+def test_require_local_database_url_accepts_ci_postgres_service(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Allow the repository's Docker PostgreSQL service only inside CI.
+
+    Args:
+        monkeypatch: Pytest environment mutation helper.
+
+    Returns:
+        None.
+    """
+    monkeypatch.setenv("CI", "true")
+    require_local_database_url("postgresql://user:pass@postgres:5432/comic_pile_test")
+
+
+def test_require_local_database_url_rejects_postgres_service_outside_ci(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep the Docker service-name exception closed outside CI.
+
+    Args:
+        monkeypatch: Pytest environment mutation helper.
+
+    Returns:
+        None.
+    """
+    monkeypatch.delenv("CI", raising=False)
+    with pytest.raises(ValueError, match="not loopback/local"):
+        require_local_database_url("postgresql://user:pass@postgres:5432/comic_pile")
+
+
 @pytest.mark.parametrize(
     "db_url",
     [
