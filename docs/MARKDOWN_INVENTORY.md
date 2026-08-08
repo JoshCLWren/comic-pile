@@ -2,7 +2,7 @@
 | --- | --- | --- | --- | --- | --- |
 | .agents/skills/github-issue-kanban/SKILL.md | Repository automation, contribution, or agent execution guidance. | 2026-07-20 | Code-coupled workflow contract that must change atomically with repository behavior. | keep | — |
 | .agents/skills/model-recommendation/SKILL.md | Repository automation, contribution, or agent execution guidance. | 2026-03-27 | Code-coupled workflow contract that must change atomically with repository behavior. | keep | — |
-| .agents/skills/plan-task-handoff/SKILL.md | Repository automation, contribution, or agent execution guidance. | 2026-08-01 | Code-coupled workflow contract that must change atomically with factory behavior. | keep | — |
+| .agents/skills/plan-task-handoff/SKILL.md | Repository automation, contribution, or agent execution guidance. | 2026-08-01 | Code-coupled workflow contract that must change atomically with repository behavior. | keep | — |
 | .claude/skills/handoff/SKILL.md | Repository automation, contribution, or agent execution guidance. | 2026-03-26 | Code-coupled workflow contract that must change atomically with repository behavior. | keep | — |
 | .claude/skills/orchestrator/SKILL.md | Repository automation, contribution, or agent execution guidance. | 2026-04-15 | Code-coupled workflow contract that must change atomically with repository behavior. | keep | — |
 | AGENTS.md | Mandatory engineering rules for coding agents. | 2026-08-07 | Code-coupled contract; must not be duplicated in the Wiki. | keep | — |
