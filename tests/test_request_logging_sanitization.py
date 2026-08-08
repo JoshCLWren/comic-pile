@@ -84,6 +84,7 @@ async def test_production_logs_drop_private_request_context(
     assert "query_params" not in record.__dict__
     assert "session_id" not in record.__dict__
     assert "user_id" not in record.__dict__
+    assert "client_host" not in record.__dict__
 
 
 @pytest.mark.asyncio
@@ -121,3 +122,4 @@ async def test_staging_logs_drop_private_request_context(
     assert "query_params" not in record.__dict__
     assert "session_id" not in record.__dict__
     assert "user_id" not in record.__dict__
+    assert "client_host" not in record.__dict__
