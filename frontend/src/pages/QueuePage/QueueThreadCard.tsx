@@ -2,6 +2,9 @@ import Tooltip from '../../components/Tooltip'
 import { MarqueeTitle } from '../../components/MarqueeTitle'
 import PositionMenu from '../../components/PositionMenu'
 import Swipeable from '../../components/Swipeable'
+import { CrossoverTags } from '../../components/CrossoverTags'
+import { useCrossoverGroups } from '../../hooks/useCrossoverGroups'
+import type { DependencyGroupSummary } from '../../services/api-dependency-groups'
 import type { Thread } from '../../types'
 
 interface QueueThreadCardProps {
@@ -9,6 +12,9 @@ interface QueueThreadCardProps {
   index: number
   isBlocked: boolean
   blockingReasons: string[]
+  crossoverGroups?: DependencyGroupSummary[]
+  crossoverGroupsLoading?: boolean
+  crossoverGroupsError?: boolean
   isDragOver: boolean
   snoozeIcon: string
   snoozeLabel: string
@@ -34,6 +40,9 @@ export default function QueueThreadCard({
   index,
   isBlocked,
   blockingReasons,
+  crossoverGroups,
+  crossoverGroupsLoading,
+  crossoverGroupsError,
   isDragOver,
   snoozeIcon,
   snoozeLabel,
@@ -54,6 +63,10 @@ export default function QueueThreadCard({
   onDelete,
 }: QueueThreadCardProps) {
   const isMigrated = thread.total_issues !== null
+  const fallbackCrossoverGroups = useCrossoverGroups([thread.id])
+  const resolvedCrossoverGroups = crossoverGroups ?? fallbackCrossoverGroups.groupsByThreadId[thread.id] ?? []
+  const resolvedCrossoverGroupsLoading = crossoverGroupsLoading ?? fallbackCrossoverGroups.isPending
+  const resolvedCrossoverGroupsError = crossoverGroupsError ?? Boolean(fallbackCrossoverGroups.error)
 
   return (
     <Swipeable
@@ -131,6 +144,15 @@ export default function QueueThreadCard({
               }
             </p>
           )}
+          <div className="mt-2" onClick={(event) => event.stopPropagation()}>
+            {resolvedCrossoverGroupsLoading ? (
+              <p className="text-xs text-stone-500">Loading crossovers…</p>
+            ) : resolvedCrossoverGroupsError ? (
+              <p className="text-xs text-red-300/80">Crossovers unavailable</p>
+            ) : (
+              <CrossoverTags groups={resolvedCrossoverGroups} label={`Crossovers for ${thread.title}`} />
+            )}
+          </div>
           {isBlocked && blockingReasons.length > 0 && (
             <button
               type="button"
