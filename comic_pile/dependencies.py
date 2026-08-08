@@ -6,13 +6,14 @@ from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache import TTL, cached
+from app.continuity_blocking import get_continuity_blocked_thread_ids
 from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.thread import Thread
 
 
 async def _get_blocked_thread_ids_uncached(user_id: int, db: AsyncSession) -> set[int]:
-    """Read blocked thread IDs directly from the current database transaction."""
+    """Read unified blocked thread IDs directly from the current transaction."""
     source_issue = Issue.__table__.alias("source_issue")
     next_unread_issue = Issue.__table__.alias("next_unread_issue")
     target_thread = Thread.__table__.alias("target_thread")
@@ -33,7 +34,9 @@ async def _get_blocked_thread_ids_uncached(user_id: int, db: AsyncSession) -> se
         .where(target_thread.c.next_unread_issue_id.isnot(None))
         .distinct()
     )
-    return {row[0] for row in issue_result.all()}
+    legacy_blocked_ids = {row[0] for row in issue_result.all()}
+    continuity_blocked_ids = await get_continuity_blocked_thread_ids(user_id, db)
+    return legacy_blocked_ids | continuity_blocked_ids
 
 
 @cached(ttl=TTL.SHORT)
@@ -265,7 +268,7 @@ async def get_dependency_order_conflicts(
 
 
 async def update_thread_blocked_status(thread_id: int, user_id: int, db: AsyncSession) -> None:
-    """Recalculate one thread's denormalized blocked flag."""
+    """Recalculate one thread's denormalized blocked flag from the unified evaluator."""
     blocked_ids = await _get_blocked_thread_ids_uncached(user_id, db)
     await db.execute(
         update(Thread)
@@ -279,7 +282,7 @@ async def refresh_user_blocked_status(
     user_id: int,
     db: AsyncSession,
 ) -> dict[int, bool]:
-    """Recalculate blocked flags and return prior values that changed.
+    """Recalculate unified blocked flags and return prior values that changed.
 
     Args:
         user_id: Thread owner.
