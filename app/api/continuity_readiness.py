@@ -20,17 +20,14 @@ router = APIRouter(tags=["continuity"])
 @router.post(
     "/continuity/readiness",
     response_model=ContinuityReadinessResponse,
-    description=(
-        "Evaluate continuity readiness and resolve blocked prerequisite chains to readable leaves "
-        "for one owned issue, thread, or crossover."
-    ),
+    description="Evaluate direct continuity readiness for one owned issue, thread, or crossover.",
 )
 async def get_continuity_readiness(
     request: ContinuityReadinessRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ContinuityReadinessResponse:
-    """Return structured direct blockers and transitive prerequisite guidance.
+    """Return a structured direct-readiness result for the requested owned node.
 
     Args:
         request: Node type and identifier requested by the authenticated client.
@@ -38,7 +35,7 @@ async def get_continuity_readiness(
         db: Database session supplied by the API dependency.
 
     Returns:
-        Structured readiness, complete prerequisite chains, readable leaves, and diagnostics.
+        Structured readiness state and any unsatisfied blockers for the owned node.
     """
     return await evaluate_continuity_readiness(
         db,
