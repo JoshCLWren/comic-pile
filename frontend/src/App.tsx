@@ -64,16 +64,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
 
   const revalidateSession = useCallback(async (timeout?: number) => {
-    try {
-      const response = await api.get<AuthUser>('/v1/auth/me', { timeout, skipAuthRedirect: false })
-      setUser(response)
-      setIsAuthenticated(true)
-    } catch (error) {
-      clearAccessToken()
-      setIsAuthenticated(false)
-      setUser(null)
-      throw error
-    }
+    const response = await api.get<AuthUser>('/v1/auth/me', { timeout, skipAuthRedirect: false })
+    setUser(response)
+    setIsAuthenticated(true)
   }, [])
 
   useEffect(() => {
