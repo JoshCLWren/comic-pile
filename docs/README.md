@@ -29,6 +29,21 @@ Remote Redis caching is governed by the active cache implementation. Documentati
 - [Git hooks](GIT_HOOKS.md): repository quality hooks.
 - [GitHub Wiki handoff](WIKI_HANDOFF.md): the exact owner-only steps and required Wiki navigation for completing #879 when the Wiki remote cannot be managed by the factory connector.
 
+## Before and after
+
+The migration replaces several competing or obsolete entry points with one repository hub and one future Wiki surface:
+
+| Before | After | Ownership |
+| --- | --- | --- |
+| Large root `README.md` mixed project setup with long-form guidance | Concise `README.md` links into this hub | Repository |
+| `docs/INDEX.md` duplicated documentation navigation | `docs/README.md` is the single repository documentation index | Repository |
+| `ROLLBACK.md` and `TECH_DEBT.md` presented stale historical guidance as active documentation | Useful history remains in Git history; current procedures live in canonical runbooks or the Wiki | Git history / Wiki |
+| `docs/railway-load-testing.md` and `docs/performance-experiment-reconnaissance.md` described retired deployment experiments | Current production truth is Vercel + Neon; historical context belongs in the Wiki | Repository contracts / Wiki |
+| Markdown files had no exhaustive ownership record | `docs/MARKDOWN_INVENTORY.md` assigns every tracked Markdown file a disposition and replacement | Repository |
+| Human-facing architecture and troubleshooting material competed with code-coupled contracts | `docs/WIKI_HANDOFF.md` defines the structured Wiki and links code-coupled topics back here | Wiki / Repository |
+
+The inventory is the exhaustive file-by-file map. This table summarizes the ownership change so future contributors can tell where new or migrated documentation belongs without reconstructing the #879 cleanup.
+
 ## Documentation maintenance
 
 `scripts/check_markdown_docs.py` is the repository-side guard for local Markdown links and undocumented root-level Markdown sprawl. The #879 migration uses this hub as the destination for the final file inventory and retires duplicate indexes once every tracked Markdown file has an explicit disposition.
