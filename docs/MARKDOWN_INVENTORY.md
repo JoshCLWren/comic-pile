@@ -117,4 +117,4 @@
 | prompts/issue-413-dependency-range-fix.md | Versioned agent or factory execution prompt. | 2026-04-26 | Automation-critical contract that must change atomically with factory behavior. | keep | — |
 | prompts/issue_gantt.md | Versioned agent or factory execution prompt. | 2026-04-17 | Automation-critical contract that must change atomically with factory behavior. | keep | — |
 | scripts/README_thread_management.md | Tracked Markdown documentation outside the canonical docs hub. | 2026-01-25 | Standalone narrative documentation should not create another competing repository source of truth. | move to Wiki | ComicPile Wiki |
-| tests_e2e/README.md | Package- or directory-local documentation for frontend/src/test. | 2026-07-11 | Adjacent package guidance is discoverable where the code lives and can change atomically with it. | keep | — |
+| tests_e2e/README.md | Package- or directory-local documentation for tests_e2e. | 2026-07-11 | Adjacent package guidance is discoverable where the code lives and can change atomically with it. | keep | — |
