@@ -129,14 +129,13 @@ export function useThreads() {
     try {
       const result = await api.getThreads()
       if (isMounted.current) {
-        return result
+        setData(result)
       }
     } catch (err) {
       if (isMounted.current) {
         setIsError(true)
         setError(err)
       }
-      throw err
     } finally {
       if (isMounted.current) {
         setIsPending(false)
@@ -222,7 +221,7 @@ React Router preserves existing URL patterns for bookmarks:
 | `/` | RollPage | Default home page with dice roll |
 | `/rate` | RatePage | Rating form for selected comic |
 | `/queue` | QueuePage | Thread list and reordering |
-| `/history` | HistoryPage | Event log and undo |
+| `/history` | HistoryPage | Event log with undo functionality |
 | `/sessions/:id` | SessionPage | Session details and snapshots |
 
 ## Build Pipeline
