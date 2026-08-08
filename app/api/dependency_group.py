@@ -1,5 +1,7 @@
 """Authenticated API for user-owned named dependency groups."""
 
+import asyncio
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -10,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth import get_current_user
+from app.cache import invalidate_cache
 from app.database import get_db
 from app.models import DependencyGroup, DependencyGroupMembership, Issue, Thread
 from app.models.user import User
@@ -23,7 +26,9 @@ from app.schemas.dependency_group import (
     DependencyGroupSummary,
     DependencyGroupUpdate,
 )
+from comic_pile.dependencies import refresh_user_blocked_status
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/reading-order-groups", tags=["reading-order-groups"])
 MAX_RANGE_SIZE = 250
 
@@ -33,6 +38,23 @@ def _normalize_name(name: str) -> str:
     if not normalized:
         raise HTTPException(status_code=422, detail="Group name must not be blank")
     return normalized
+
+
+async def _refresh_crossover_blocked_state(user_id: int, db: AsyncSession) -> None:
+    """Persist blocked-state changes and invalidate dependent read caches."""
+    await refresh_user_blocked_status(user_id, db)
+    await db.commit()
+    results = await asyncio.gather(
+        invalidate_cache(f"cache:continuity:*:User:{user_id}:*"),
+        invalidate_cache(f"cache:get_blocked_thread_ids:{user_id}:"),
+        invalidate_cache(f"cache:list_threads:User:{user_id}:*"),
+        invalidate_cache(f"cache:get_thread_blocking_info:*:User:{user_id}:"),
+        invalidate_cache(f"cache:get_threads_blocking_info:*:User:{user_id}:"),
+        return_exceptions=True,
+    )
+    for result in results:
+        if isinstance(result, BaseException):
+            logger.warning("Crossover cache invalidation failed", exc_info=result)
 
 
 async def _owned_group(db: AsyncSession, group_id: int, user_id: int) -> DependencyGroup:
@@ -223,6 +245,7 @@ async def delete_group(
     group = await _owned_group(db, group_id, current_user.id)
     await db.delete(group)
     await db.commit()
+    await _refresh_crossover_blocked_state(current_user.id, db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -289,6 +312,7 @@ async def add_issue_range(
     )
     added_ids = list((await db.execute(statement)).scalars())
     await db.commit()
+    await _refresh_crossover_blocked_state(current_user.id, db)
     added_id_set = set(added_ids)
 
     return DependencyGroupIssueRangeResponse(
@@ -345,6 +369,7 @@ async def add_member(
         await db.rollback()
         raise HTTPException(status_code=409, detail="This member is already in the group") from exc
     await db.refresh(member)
+    await _refresh_crossover_blocked_state(current_user.id, db)
     return member
 
 
@@ -376,4 +401,5 @@ async def remove_member(
         raise HTTPException(status_code=404, detail=f"Member {member_id} not found")
     await db.delete(member)
     await db.commit()
+    await _refresh_crossover_blocked_state(current_user.id, db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

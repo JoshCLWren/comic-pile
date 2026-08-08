@@ -21,6 +21,7 @@ from app.schemas.continuity_rule import (
     ContinuityRuleCreate,
     ContinuityRuleResponse,
 )
+from comic_pile.dependencies import refresh_user_blocked_status
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["continuity"])
@@ -40,6 +41,13 @@ async def _invalidate_continuity_caches(user_id: int) -> None:
     for result in results:
         if isinstance(result, BaseException):
             logger.warning("Continuity cache invalidation failed", exc_info=result)
+
+
+async def _refresh_blocked_state(user_id: int, db: AsyncSession) -> None:
+    """Persist the unified Queue/Roll blocked projection after graph mutations."""
+    await refresh_user_blocked_status(user_id, db)
+    await db.commit()
+    await _invalidate_continuity_caches(user_id)
 
 
 def _to_response(rule: ContinuityRule) -> ContinuityRuleResponse:
@@ -268,7 +276,7 @@ async def create_continuity_rule(
             detail={"code": "continuity_rule_exists"},
         ) from exc
     await db.refresh(rule)
-    await _invalidate_continuity_caches(current_user.id)
+    await _refresh_blocked_state(current_user.id, db)
     return _to_response(await _get_owned_rule(db, current_user.id, rule.id))
 
 
@@ -330,7 +338,7 @@ async def update_continuity_rule(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "continuity_rule_exists"},
         ) from exc
-    await _invalidate_continuity_caches(current_user.id)
+    await _refresh_blocked_state(current_user.id, db)
     return _to_response(await _get_owned_rule(db, current_user.id, rule_id))
 
 
@@ -362,5 +370,5 @@ async def delete_continuity_rule(
     rule = await _get_owned_rule(db, user_id, rule_id)
     await db.delete(rule)
     await db.commit()
-    await _invalidate_continuity_caches(user_id)
+    await _refresh_blocked_state(user_id, db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
