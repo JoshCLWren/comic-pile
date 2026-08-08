@@ -293,7 +293,7 @@ def _decode_generation(raw_generation: object) -> int:
 async def _atomic_generation_value_get(
     user_id: int,
     logical_key: str,
-) -> tuple[int, object | None]:
+) -> tuple[int, bool, object | None]:
     """Read the active generation and matching cached value atomically.
 
     Args:
@@ -301,7 +301,7 @@ async def _atomic_generation_value_get(
         logical_key: Existing logical cache key.
 
     Returns:
-        Active generation and reconstructed cached value, if present.
+        Active generation, whether a cache entry exists, and its reconstructed value.
 
     Raises:
         RuntimeError: If no cache client is configured.
@@ -336,7 +336,7 @@ async def _atomic_generation_value_get(
     generation = _decode_generation(raw[0])
     raw_value = raw[1]
     if raw_value is None:
-        return generation, None
+        return generation, False, None
 
     if isinstance(raw_value, bytes):
         serialized = raw_value.decode()
@@ -345,7 +345,7 @@ async def _atomic_generation_value_get(
     else:
         raise ValueError("Cached value must be JSON text")
 
-    return generation, UpstashCache._reconstruct_value(json.loads(serialized))
+    return generation, True, UpstashCache._reconstruct_value(json.loads(serialized))
 
 
 def generation_cached(
@@ -395,7 +395,7 @@ def generation_cached(
             logical_key = _generate_cache_key(func_name, func, args, kwargs)
 
             try:
-                generation, cached_value = await _atomic_generation_value_get(
+                generation, cache_hit, cached_value = await _atomic_generation_value_get(
                     user_id,
                     logical_key,
                 )
@@ -403,7 +403,7 @@ def generation_cached(
                 logger.warning("Atomic cache read failed: %s", exc)
                 return await func(*args, **kwargs)
 
-            if cached_value is not None:
+            if cache_hit:
                 return cast(T, cached_value)
 
             result = await func(*args, **kwargs)
