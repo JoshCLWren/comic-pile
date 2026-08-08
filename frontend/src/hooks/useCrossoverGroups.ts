@@ -11,6 +11,15 @@ interface CrossoverGroupsState {
 }
 
 const EMPTY_GROUPS: Record<number, DependencyGroupSummary[]> = {}
+const MAX_THREAD_IDS_PER_REQUEST = 200
+
+function chunkThreadIds(threadIds: number[]): number[][] {
+  const chunks: number[][] = []
+  for (let index = 0; index < threadIds.length; index += MAX_THREAD_IDS_PER_REQUEST) {
+    chunks.push(threadIds.slice(index, index + MAX_THREAD_IDS_PER_REQUEST))
+  }
+  return chunks
+}
 
 export function useCrossoverGroups(threadIds: number[]): CrossoverGroupsState {
   const requestKey = useMemo(
@@ -38,9 +47,14 @@ export function useCrossoverGroups(threadIds: number[]): CrossoverGroupsState {
 
     setState((current) => ({ ...current, isPending: true, error: null }))
 
-    dependencyGroupsApi.listForThreads(requestedThreadIds)
-      .then((groupsByThreadId) => {
+    Promise.all(
+      chunkThreadIds(requestedThreadIds).map((threadIdChunk) =>
+        dependencyGroupsApi.listForThreads(threadIdChunk),
+      ),
+    )
+      .then((responses) => {
         if (cancelled) return
+        const groupsByThreadId = Object.assign({}, ...responses)
         setState({ groupsByThreadId, isPending: false, error: null })
       })
       .catch((error: unknown) => {
