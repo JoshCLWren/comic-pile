@@ -6,14 +6,15 @@ import json
 
 import pytest
 
+from app.cache import cache
 from app.cache_generation import (
     _atomic_generation_value_get,
     bump_user_generation,
     command_budget,
+    generation_cached,
     generation_key,
     get_user_generation,
 )
-from app.cache import cache
 
 
 class GenerationClient:
@@ -83,6 +84,35 @@ class AtomicReadClient:
         return [str(generation), value]
 
 
+class NullValueClient:
+    """Fake Upstash client that can store and return a JSON null cache entry."""
+
+    def __init__(self) -> None:
+        """Initialize an empty generation-zero cache."""
+        self.value: str | None = None
+        self.eval_calls = 0
+        self.set_calls = 0
+
+    async def eval(
+        self,
+        script: str,
+        keys: list[str],
+        args: list[str],
+    ) -> list[object | None]:
+        """Return the current generation and stored serialized value."""
+        assert "redis.call('GET', KEYS[1])" in script
+        assert keys == [generation_key(7)]
+        self.eval_calls += 1
+        return ["0", self.value]
+
+    async def set(self, key: str, value: str, ex: int | None = None) -> None:
+        """Store serialized cache data exactly as the cache wrapper supplies it."""
+        assert key.startswith("cache:user:7:g0:")
+        assert ex == 30
+        self.set_calls += 1
+        self.value = value
+
+
 @pytest.fixture(autouse=True)
 def reset_command_budget() -> None:
     """Reset command instrumentation before each test.
@@ -114,10 +144,36 @@ async def test_atomic_read_keeps_generation_and_value_in_one_snapshot(monkeypatc
     monkeypatch.setattr(cache, "_initialized", True)
     monkeypatch.setattr(cache, "_is_upstash", True)
 
-    generation, value = await _atomic_generation_value_get(7, "cache:load:7:")
+    generation, cache_hit, value = await _atomic_generation_value_get(7, "cache:load:7:")
 
     assert generation == 0
+    assert cache_hit is True
     assert value == {"title": "old"}
     assert client.generation == 1
     assert client.eval_calls == 1
     assert command_budget.counts == {"generation_value_get": 1}
+
+
+@pytest.mark.asyncio
+async def test_generation_cached_preserves_cached_none(monkeypatch) -> None:
+    """Treat a stored JSON null as a cache hit when falsy caching is enabled."""
+    client = NullValueClient()
+    monkeypatch.setattr(cache, "_client", client)
+    monkeypatch.setattr(cache, "_initialized", True)
+    monkeypatch.setattr(cache, "_is_upstash", True)
+
+    executions = 0
+
+    @generation_cached(ttl=300, falsy_ttl=30)
+    async def load_optional(user_id: int) -> None:
+        nonlocal executions
+        executions += 1
+        return None
+
+    assert await load_optional(7) is None
+    assert await load_optional(7) is None
+
+    assert executions == 1
+    assert client.eval_calls == 2
+    assert client.set_calls == 1
+    assert client.value == "null"
