@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { expect, test, beforeEach, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
@@ -68,6 +68,28 @@ test('renders retained navigation links when authenticated', async () => {
   expect(screen.getByRole('link', { name: /queue page/i })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /history page/i })).toBeInTheDocument()
   expect(screen.queryByRole('link', { name: /analytics page/i })).not.toBeInTheDocument()
+})
+
+test('dismisses the More tray only when tapping outside it', async () => {
+  renderWithAuth()
+  const user = userEvent.setup()
+  const moreButton = await screen.findByRole('button', { name: /more pages/i })
+
+  await user.click(moreButton)
+  const moreNavigation = screen.getByRole('navigation', { name: /more pages/i })
+  expect(moreButton).toHaveAttribute('aria-expanded', 'true')
+
+  fireEvent.pointerDown(screen.getByRole('link', { name: /help/i }))
+  expect(moreNavigation).toBeInTheDocument()
+  expect(moreButton).toHaveAttribute('aria-expanded', 'true')
+
+  fireEvent.pointerDown(moreButton)
+  expect(moreNavigation).toBeInTheDocument()
+  expect(moreButton).toHaveAttribute('aria-expanded', 'true')
+
+  fireEvent.pointerDown(document.body)
+  await waitFor(() => expect(moreButton).toHaveAttribute('aria-expanded', 'false'))
+  expect(screen.queryByRole('navigation', { name: /more pages/i })).not.toBeInTheDocument()
 })
 
 test('does not render when not authenticated', async () => {
