@@ -135,6 +135,7 @@ def default_disposition(path: str) -> tuple[str, str, str, str]:
         "docs/FACTORY_GITHUB_VISIBILITY.md",
         "docs/GIT_HOOKS.md",
         "docs/ISSUE_EXECUTION_PROTOCOL.md",
+        "docs/PRODUCTION_STARTUP_DIAGNOSTICS.md",
         "docs/REACT_ARCHITECTURE.md",
         "docs/WIKI_HANDOFF.md",
         "docs/prod-clone-workflow.md",
