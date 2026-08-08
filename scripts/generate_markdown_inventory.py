@@ -9,6 +9,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+GENERATED_INVENTORY_PATH = "docs/MARKDOWN_INVENTORY.md"
+
+
 @dataclass(frozen=True)
 class InventoryRow:
     """One tracked Markdown file and its default documentation disposition."""
@@ -33,13 +36,20 @@ def _git(*args: str) -> str:
 
 
 def tracked_markdown_files() -> list[str]:
-    """Return every tracked Markdown path in deterministic order.
+    """Return every tracked Markdown source path in deterministic order.
+
+    The generated inventory is intentionally excluded so regenerating it is idempotent rather
+    than making the output describe itself and immediately become stale after its first commit.
 
     Returns:
-        Sorted repository-relative Markdown paths tracked by Git.
+        Sorted repository-relative Markdown source paths tracked by Git.
     """
     output = _git("ls-files", "*.md")
-    return sorted(line for line in output.splitlines() if line)
+    return sorted(
+        line
+        for line in output.splitlines()
+        if line and line != GENERATED_INVENTORY_PATH
+    )
 
 
 def last_meaningful_update(path: str) -> str:
@@ -205,10 +215,10 @@ def default_disposition(path: str) -> tuple[str, str, str, str]:
 
 
 def build_inventory() -> list[InventoryRow]:
-    """Build inventory rows covering every tracked Markdown file.
+    """Build inventory rows covering every tracked Markdown source file.
 
     Returns:
-        One inventory row for each tracked Markdown path.
+        One inventory row for each tracked Markdown source path.
     """
     rows: list[InventoryRow] = []
     for path in tracked_markdown_files():
