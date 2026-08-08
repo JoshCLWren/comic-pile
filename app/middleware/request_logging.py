@@ -132,7 +132,8 @@ def redact_headers(headers: dict) -> dict:
 def sanitize_for_logging(log_data: dict[str, object], environment: str) -> dict[str, object]:
     """Trim request context from logs in production and staging.
 
-    In production and staging, avoid logging request bodies, query params, and user/session identifiers.
+    In production and staging, avoid logging request bodies, query params, client addresses,
+    and user/session identifiers.
 
     Args:
         log_data: Log payload.
@@ -145,7 +146,14 @@ def sanitize_for_logging(log_data: dict[str, object], environment: str) -> dict[
         return log_data
 
     trimmed = dict(log_data)
-    for key in ("request_body", "query_params", "session_id", "user_id", "body"):
+    for key in (
+        "request_body",
+        "query_params",
+        "session_id",
+        "user_id",
+        "client_host",
+        "body",
+    ):
         trimmed.pop(key, None)
     return trimmed
 
