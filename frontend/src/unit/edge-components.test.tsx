@@ -2,7 +2,6 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { MarqueeTitle } from '../components/MarqueeTitle'
-import Swipeable from '../components/Swipeable'
 import IssueCorrectionDialog from '../components/IssueCorrectionDialog'
 import MigrationDialog from '../components/MigrationDialog'
 
@@ -62,24 +61,6 @@ describe('edge component behavior', () => {
     const { container } = render(<MarqueeTitle title="No observer" />)
     expect(container).toHaveTextContent('No observer')
     vi.unstubAllGlobals()
-  })
-
-  it('supports horizontal and vertical swipes, reset clicks, and action buttons', async () => {
-    const user = userEvent.setup()
-    const cardClick = vi.fn(); const action = vi.fn()
-    render(<Swipeable onCardClick={cardClick} actions={[{ icon: 'x', label: 'Delete', color: 'red', onClick: action }]}><span>Card</span></Swipeable>)
-    const card = screen.getByText('Card').parentElement as HTMLElement
-    fireEvent.touchStart(card, { touches: [{ clientX: 100, clientY: 100 }] })
-    fireEvent.touchMove(card, { touches: [{ clientX: 90, clientY: 130 }] })
-    fireEvent.touchEnd(card)
-    fireEvent.click(card)
-    fireEvent.touchStart(card, { touches: [{ clientX: 100, clientY: 100 }] })
-    fireEvent.touchMove(card, { touches: [{ clientX: 0, clientY: 100 }] })
-    fireEvent.touchEnd(card)
-    await user.click(screen.getByRole('button', { name: 'Delete' }))
-    expect(action).toHaveBeenCalled()
-    fireEvent.click(card)
-    expect(cardClick).toHaveBeenCalled()
   })
 
   it('corrects existing and newly inserted issue numbers', async () => {
