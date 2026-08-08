@@ -1,10 +1,22 @@
 """Tests for the tracked Markdown inventory generator."""
 
+from unittest.mock import patch
+
 from scripts.generate_markdown_inventory import (
     InventoryRow,
     default_disposition,
     render_markdown,
+    tracked_markdown_files,
 )
+
+
+def test_tracked_markdown_files_excludes_generated_inventory() -> None:
+    """The generated inventory must not recursively inventory itself."""
+    with patch(
+        "scripts.generate_markdown_inventory._git",
+        return_value="docs/MARKDOWN_INVENTORY.md\nREADME.md\ndocs/API.md",
+    ):
+        assert tracked_markdown_files() == ["README.md", "docs/API.md"]
 
 
 def test_default_disposition_preserves_code_coupled_docs() -> None:
