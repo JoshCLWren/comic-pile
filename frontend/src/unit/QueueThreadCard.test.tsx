@@ -57,10 +57,10 @@ function renderCard(thread: Thread, overrides: Partial<Parameters<typeof QueueTh
     onDragEnd: vi.fn(),
     onDragOver: vi.fn(),
     onDrop: vi.fn(),
-    onSwipeRead: vi.fn(),
-    onSwipeEdit: vi.fn(),
-    onSwipeSnooze: vi.fn(),
-    onSwipeDelete: vi.fn(),
+    onRead: vi.fn(),
+    onOpenThread: vi.fn(),
+    onSnooze: vi.fn(),
+    onActionDelete: vi.fn(),
     onMoveToFront: vi.fn(),
     onMoveToBack: vi.fn(),
     onReposition: vi.fn(),
@@ -89,16 +89,16 @@ describe('QueueThreadCard', () => {
   it('invokes visible controls without activating the card', async () => {
     const user = userEvent.setup()
     const onCardClick = vi.fn()
-    const onSwipeRead = vi.fn()
-    const onSwipeEdit = vi.fn()
-    const onSwipeSnooze = vi.fn()
-    const onSwipeDelete = vi.fn()
+    const onRead = vi.fn()
+    const onOpenThread = vi.fn()
+    const onSnooze = vi.fn()
+    const onActionDelete = vi.fn()
     renderCard(createMockThread(), {
       onCardClick,
-      onSwipeRead,
-      onSwipeEdit,
-      onSwipeSnooze,
-      onSwipeDelete,
+      onRead,
+      onOpenThread,
+      onSnooze,
+      onActionDelete,
     })
 
     await user.click(screen.getByRole('button', { name: 'Read' }))
@@ -106,10 +106,10 @@ describe('QueueThreadCard', () => {
     await user.click(screen.getByRole('button', { name: 'Snooze' }))
     await user.click(screen.getByRole('button', { name: 'Delete' }))
 
-    expect(onSwipeRead).toHaveBeenCalledTimes(1)
-    expect(onSwipeEdit).toHaveBeenCalledTimes(1)
-    expect(onSwipeSnooze).toHaveBeenCalledTimes(1)
-    expect(onSwipeDelete).toHaveBeenCalledTimes(1)
+    expect(onRead).toHaveBeenCalledTimes(1)
+    expect(onOpenThread).toHaveBeenCalledTimes(1)
+    expect(onSnooze).toHaveBeenCalledTimes(1)
+    expect(onActionDelete).toHaveBeenCalledTimes(1)
     expect(onCardClick).not.toHaveBeenCalled()
   })
 
