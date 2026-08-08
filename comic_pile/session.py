@@ -220,11 +220,13 @@ async def end_session(session_id: int, db: AsyncSession) -> None:
 async def get_current_die(session_id: int, db: AsyncSession) -> int:
     """Get the die from manual selection or the latest die-changing event."""
     start_die = _start_die()
-    session_result = await db.execute(select(Session).where(Session.id == session_id))
-    session = session_result.scalar_one_or_none()
+    session_result = await db.execute(
+        select(Session.manual_die, Session.start_die).where(Session.id == session_id)
+    )
+    session_values = session_result.one_or_none()
 
-    if session and session.manual_die:
-        return session.manual_die
+    if session_values and session_values.manual_die:
+        return session_values.manual_die
 
     result = await db.execute(
         select(Event.die_after)
@@ -238,4 +240,4 @@ async def get_current_die(session_id: int, db: AsyncSession) -> int:
     if last_die is not None:
         return last_die
 
-    return session.start_die if session else start_die
+    return session_values.start_die if session_values else start_die
