@@ -34,6 +34,8 @@ class _GraphSnapshot:
     groups: dict[int, DependencyGroup]
     group_memberships: dict[int, tuple[DependencyGroupMembership, ...]]
     rules: tuple[ContinuityRule, ...]
+    rules_by_target: dict[tuple[str, int], tuple[ContinuityRule, ...]]
+    thread_issue_ids: dict[int, tuple[int, ...]]
     selected_member_issue_ids: dict[int, tuple[int, ...]]
 
 
@@ -77,6 +79,10 @@ async def _load_snapshot(db: AsyncSession, user_id: int) -> _GraphSnapshot:
     if len(issue_rows) > MAX_GRAPH_ISSUES:
         raise _too_large(MAX_GRAPH_ISSUES)
     issues = {issue.id: issue for issue in issue_rows}
+    thread_issue_ids = {
+        thread_id: tuple(issue.id for issue in thread_issues)
+        for thread_id, thread_issues in _group_rows(issue_rows, lambda issue: issue.thread_id).items()
+    }
 
     group_result = await db.execute(
         select(DependencyGroup)
@@ -111,6 +117,12 @@ async def _load_snapshot(db: AsyncSession, user_id: int) -> _GraphSnapshot:
     if len(rule_rows) > MAX_GRAPH_RULES:
         raise _too_large(MAX_GRAPH_RULES)
     rules = tuple(rule_rows)
+    grouped_rules: dict[tuple[str, int], list[ContinuityRule]] = {}
+    for rule in rule_rows:
+        grouped_rules.setdefault((rule.target_type, rule.target_id), []).append(rule)
+    rules_by_target = {
+        target: tuple(target_rules) for target, target_rules in grouped_rules.items()
+    }
 
     selected_member_result = await db.execute(
         select(ContinuityRuleSelectedMember)
@@ -135,6 +147,8 @@ async def _load_snapshot(db: AsyncSession, user_id: int) -> _GraphSnapshot:
         groups=groups,
         group_memberships=group_memberships,
         rules=rules,
+        rules_by_target=rules_by_target,
+        thread_issue_ids=thread_issue_ids,
         selected_member_issue_ids=selected_member_issue_ids,
     )
 
@@ -144,9 +158,8 @@ def _group_issue_ids(group_id: int, snapshot: _GraphSnapshot) -> list[int]:
     memberships = snapshot.group_memberships.get(group_id, ())
     issue_ids = {membership.issue_id for membership in memberships if membership.issue_id}
     thread_ids = {membership.thread_id for membership in memberships if membership.thread_id}
-    issue_ids.update(
-        issue.id for issue in snapshot.issues.values() if issue.thread_id in thread_ids
-    )
+    for thread_id in thread_ids:
+        issue_ids.update(snapshot.thread_issue_ids.get(thread_id, ()))
     return sorted(issue_ids)
 
 
@@ -222,9 +235,7 @@ def _direct_blockers(
 ) -> list[ContinuityBlocker]:
     """Evaluate rules directly targeting one issue or crossover node."""
     blockers: list[ContinuityBlocker] = []
-    for rule in snapshot.rules:
-        if rule.target_type != node_type or rule.target_id != node_id:
-            continue
+    for rule in snapshot.rules_by_target.get((node_type, node_id), ()):
         blocker = _evaluate_rule(rule, snapshot)
         if blocker is not None:
             blockers.append(blocker)
