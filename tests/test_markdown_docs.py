@@ -20,8 +20,11 @@ def test_find_broken_local_links_accepts_valid_local_and_external_links(tmp_path
     (docs / "target.md").write_text("# Target\n", encoding="utf-8")
     source = docs / "README.md"
     source.write_text(
-        "[local](target.md) [reference][target] [anchor](#section) "
-        "[web](https://example.com)\n\n[target]: target.md\n",
+        "[local](target.md) [reference][target] [collapsed][] [shortcut] "
+        "[anchor](#section) [web](https://example.com)\n\n"
+        "[target]: target.md\n"
+        "[collapsed]: target.md\n"
+        "[shortcut]: target.md\n",
         encoding="utf-8",
     )
 
@@ -68,6 +71,27 @@ def test_find_broken_local_links_reports_invalid_reference_targets(tmp_path: Pat
 
     assert "docs/README.md: missing target: missing.md" in errors
     assert "docs/README.md: link escapes repository: ../../outside.md" in errors
+
+
+def test_find_broken_local_links_reports_undefined_explicit_references(tmp_path: Path) -> None:
+    """Report undefined full and collapsed references without flagging ordinary bracketed prose.
+
+    Args:
+        tmp_path: Temporary repository root supplied by pytest.
+    """
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    source = docs / "README.md"
+    source.write_text(
+        "[full][missing-ref] [collapsed][] [ordinary prose]\n",
+        encoding="utf-8",
+    )
+
+    errors = find_broken_local_links(tmp_path, [source])
+
+    assert "docs/README.md: undefined reference: missing-ref" in errors
+    assert "docs/README.md: undefined reference: collapsed" in errors
+    assert all("ordinary prose" not in error for error in errors)
 
 
 def test_iter_markdown_files_ignores_dependency_directories(tmp_path: Path) -> None:
