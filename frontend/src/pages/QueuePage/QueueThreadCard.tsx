@@ -17,10 +17,10 @@ interface QueueThreadCardProps {
   onDragEnd: React.DragEventHandler<HTMLElement>
   onDragOver: React.DragEventHandler<HTMLElement>
   onDrop: React.DragEventHandler<HTMLElement>
-  onSwipeRead: () => void
-  onSwipeEdit: () => void
-  onSwipeSnooze: () => void
-  onSwipeDelete: () => void
+  onRead: () => void
+  onOpenThread: () => void
+  onSnooze: () => void
+  onActionDelete: () => void
   onMoveToFront: () => void
   onMoveToBack: () => void
   onReposition: () => void
@@ -42,10 +42,10 @@ export default function QueueThreadCard({
   onDragEnd,
   onDragOver,
   onDrop,
-  onSwipeRead,
-  onSwipeEdit,
-  onSwipeSnooze,
-  onSwipeDelete,
+  onRead,
+  onOpenThread,
+  onSnooze,
+  onActionDelete,
   onMoveToFront,
   onMoveToBack,
   onReposition,
@@ -140,10 +140,10 @@ export default function QueueThreadCard({
         title={thread.title}
         snoozeIcon={snoozeIcon}
         snoozeLabel={snoozeLabel}
-        onRead={onSwipeRead}
-        onEdit={onSwipeEdit}
-        onSnooze={onSwipeSnooze}
-        onDelete={onSwipeDelete}
+        onRead={onRead}
+        onEdit={onOpenThread}
+        onSnooze={onSnooze}
+        onDelete={onActionDelete}
       />
     </div>
   )
