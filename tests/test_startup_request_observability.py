@@ -101,6 +101,7 @@ def test_production_sanitization_removes_user_request_context() -> None:
             "query_params": "token=secret",
             "session_id": "private-session",
             "user_id": 42,
+            "client_host": "203.0.113.9",
         },
         "production",
     )
