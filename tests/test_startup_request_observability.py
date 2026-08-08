@@ -27,14 +27,11 @@ async def test_first_request_is_correlated_with_startup_event(
         return {"status": "ok"}
 
     caplog.set_level(logging.WARNING, logger="app.middleware.request_logging")
-    await app.router.startup()
-    try:
+    async with app.router.lifespan_context(app):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             first = await client.get("/fast")
             second = await client.get("/fast")
-    finally:
-        await app.router.shutdown()
 
     assert first.headers["X-App-Cold-Request"] == "1"
     assert second.headers["X-App-Cold-Request"] == "0"
