@@ -129,13 +129,14 @@ export function useThreads() {
     try {
       const result = await api.getThreads()
       if (isMounted.current) {
-        setData(result)
+        return result
       }
     } catch (err) {
       if (isMounted.current) {
         setIsError(true)
         setError(err)
       }
+      throw err
     } finally {
       if (isMounted.current) {
         setIsPending(false)
@@ -221,7 +222,7 @@ React Router preserves existing URL patterns for bookmarks:
 | `/` | RollPage | Default home page with dice roll |
 | `/rate` | RatePage | Rating form for selected comic |
 | `/queue` | QueuePage | Thread list and reordering |
-| `/history` | HistoryPage | Event log with undo functionality |
+| `/history` | HistoryPage | Event log and undo |
 | `/sessions/:id` | SessionPage | Session details and snapshots |
 
 ## Build Pipeline
@@ -388,7 +389,7 @@ All interactive elements maintain minimum 44px touch targets:
 - Desktop layouts: `lg:` prefix (1024px+)
 
 ### Touch Gestures
-- Swipe gestures avoided to prevent conflicts with browser navigation
+- Custom swipe and gesture interactions are prohibited for application actions; use visible, labeled controls that work with touch, mouse, keyboard, and assistive technology instead.
 - Pull-to-refresh not implemented (use manual refresh)
 - Long-press actions avoided for better accessibility
 
