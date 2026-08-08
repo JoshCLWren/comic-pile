@@ -53,7 +53,7 @@ jobs:
 
       - name: Run documentation regression tests
         run: |
-          uv run python -m pytest -q \
+          uv run python -m pytest -q --no-cov \
             tests/test_markdown_docs.py \
             tests/test_generate_markdown_inventory.py
 
