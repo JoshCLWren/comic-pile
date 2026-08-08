@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { RollBootstrapThread } from '../../../types/rollBootstrap'
 
@@ -47,6 +48,17 @@ export function ThreadPool({
   shuffleIsPending,
 }: ThreadPoolProps) {
   const navigate = useNavigate()
+  const wasRatingView = useRef(isRatingView)
+
+  useEffect(() => {
+    const returnedToRoll = wasRatingView.current && !isRatingView
+    wasRatingView.current = isRatingView
+
+    if (returnedToRoll) {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    }
+  }, [isRatingView])
+
   return (
     <div className={`px-3 md:px-4 pb-20 md:pb-28 flex flex-col ${!isRatingView ? 'flex-1 min-h-[300px]' : 'border-t border-white/5 pt-4 md:pt-8'}`}>
       {!isRolling && rolledResult === null && !isRatingView && pool.length > 0 && (
