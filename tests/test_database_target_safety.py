@@ -1,0 +1,100 @@
+"""Tests for fail-closed database target validation."""
+
+from typing import cast
+
+import pytest
+
+from scripts.clone_prod_to_local import ExportDocument, _import_document
+from scripts.database_target_safety import require_local_database_url
+
+
+@pytest.mark.parametrize(
+    "db_url",
+    [
+        "postgresql://user:pass@localhost:5432/comic_pile",
+        "postgresql+asyncpg://user:pass@127.0.0.1:5432/comic_pile",
+        "postgres://user:pass@[::1]:5432/comic_pile",
+        "postgresql://user:pass@127.42.1.9:5432/comic_pile",
+    ],
+)
+def test_require_local_database_url_accepts_loopback(db_url: str) -> None:
+    """Allow hostnames and addresses that are provably loopback.
+
+    Args:
+        db_url: Local PostgreSQL URL under test.
+
+    Returns:
+        None.
+    """
+    require_local_database_url(db_url)
+
+
+def test_require_local_database_url_accepts_ci_postgres_service(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Allow the repository's Docker PostgreSQL service only inside CI.
+
+    Args:
+        monkeypatch: Pytest environment mutation helper.
+
+    Returns:
+        None.
+    """
+    monkeypatch.setenv("CI", "true")
+    require_local_database_url("postgresql://user:pass@postgres:5432/comic_pile_test")
+
+
+def test_require_local_database_url_rejects_postgres_service_outside_ci(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep the Docker service-name exception closed outside CI.
+
+    Args:
+        monkeypatch: Pytest environment mutation helper.
+
+    Returns:
+        None.
+    """
+    monkeypatch.delenv("CI", raising=False)
+    with pytest.raises(ValueError, match="not loopback/local"):
+        require_local_database_url("postgresql://user:pass@postgres:5432/comic_pile")
+
+
+@pytest.mark.parametrize(
+    "db_url",
+    [
+        "postgresql://user:pass@ep-example.us-east-2.aws.neon.tech/comic_pile",
+        "postgresql://user:pass@10.0.0.8/comic_pile",
+        "postgresql://user:pass@192.168.1.20/comic_pile",
+        "postgresql://user:pass@8.8.8.8/comic_pile",
+        "postgresql:///comic_pile",
+        "not-a-database-url",
+    ],
+)
+def test_require_local_database_url_rejects_unproven_targets(db_url: str) -> None:
+    """Fail closed for remote, LAN, and malformed database targets.
+
+    Args:
+        db_url: Unsafe or unprovable PostgreSQL URL under test.
+
+    Returns:
+        None.
+    """
+    with pytest.raises(ValueError, match="refusing to write"):
+        require_local_database_url(db_url)
+
+
+@pytest.mark.asyncio
+async def test_import_document_rejects_remote_target_before_connecting() -> None:
+    """Reject a production-like importer target before opening a connection.
+
+    Returns:
+        None.
+    """
+    export = cast(ExportDocument, {})
+
+    with pytest.raises(ValueError, match="not loopback/local"):
+        await _import_document(
+            "postgresql+asyncpg://user:pass@ep-example.us-east-2.aws.neon.tech/comic_pile",
+            export,
+            None,
+            dry_run=False,
+        )

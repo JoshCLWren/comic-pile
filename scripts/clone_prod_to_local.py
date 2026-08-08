@@ -8,11 +8,11 @@ restores it into the local development database with ID remapping.
 Never mutates production data. Never exports password hashes or auth tokens.
 
 Usage:
-    # Default: auto-fetches from Railway:
-    python -m scripts.clone_prod_to_local export --username Josh
+    # Export from an explicit production Neon URL:
+    python -m scripts.clone_prod_to_local export --username Josh --db-url postgresql+asyncpg://...
 
-    # Override with a direct DB URL:
-    python -m scripts.clone_prod_to_local export --db-url postgresql+asyncpg://...
+    # Or provide the source through CLONE_PROD_DB_URL:
+    CLONE_PROD_DB_URL=postgresql+asyncpg://... python -m scripts.clone_prod_to_local export --username Josh
 
     # Restore into local dev:
     python -m scripts.clone_prod_to_local import --file prod_export.json
@@ -29,7 +29,6 @@ import asyncio
 import json
 import os
 import stat
-import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -50,6 +49,7 @@ from app.models import (
     Thread,
     User,
 )
+from scripts.database_target_safety import require_local_database_url
 
 
 SCHEMA_VERSION = "1.0"
@@ -75,7 +75,6 @@ def _async_database_url(db_url: str) -> str:
         if db_url.startswith(source):
             return db_url.replace(source, "postgresql+asyncpg://", 1)
     return db_url
-
 
 
 class ExportUserRecord(TypedDict, total=False):
@@ -141,7 +140,7 @@ class ExportReadingOrderRecord(TypedDict, total=False):
 
 
 class ExportReadingOrderItemRecord(TypedDict, total=False):
-    """Serialized reading order item record for export."""
+    """Serialized reading order item for export."""
 
     id: int
     reading_order_id: int
@@ -248,52 +247,10 @@ def _redact_db_url(db_url: str) -> str:
         return "(unable to parse database URL)"
 
 
-def _fetch_railway_db_url() -> str:
-    """Get the production database public URL from Railway CLI.
-
-    Uses --service Postgres --environment production to get the
-    DATABASE_PUBLIC_URL, which is reachable from outside Railway.
-
-    Returns:
-        The DATABASE_PUBLIC_URL from the Postgres service.
-
-    Raises:
-        SystemExit: If Railway CLI is not found, the command fails,
-            or the variable is missing.
-    """
-    try:
-        result = subprocess.run(
-            [
-                "railway", "variables",
-                "--service", "Postgres",
-                "--environment", "production",
-                "--json",
-            ],
-            capture_output=True, text=True, check=True,
-        )
-        vars_data = json.loads(result.stdout)
-        db_url = vars_data.get("DATABASE_PUBLIC_URL") or vars_data.get("DATABASE_URL")
-        if not db_url:
-            print("Error: DATABASE_PUBLIC_URL not found in Railway Postgres variables.", file=sys.stderr)
-            sys.exit(1)
-        return db_url
-    except FileNotFoundError:
-        print("Error: railway CLI not found in PATH.", file=sys.stderr)
-        print("Install it from https://docs.railway.app/develop/cli", file=sys.stderr)
-        sys.exit(1)
-    except subprocess.CalledProcessError as e:
-        print(f"Error: railway variables failed: {e.stderr}", file=sys.stderr)
-        sys.exit(1)
-    except json.JSONDecodeError as e:
-        print(f"Error: failed to parse Railway output: {e}", file=sys.stderr)
-        sys.exit(1)
-
-
 def _datetime_to_iso(obj: object) -> str | None:
     if isinstance(obj, datetime):
         return obj.isoformat()
     return None
-
 
 
 def _export_user(user: User) -> ExportUserRecord:
@@ -440,7 +397,6 @@ def _records_for_table(export: ExportDocument, table: str) -> list[ExportRecord]
     return cast(list[ExportRecord], records)
 
 
-
 async def _export_via_db(db_url: str, username: str) -> ExportDocument:
     engine = create_async_engine(
         db_url,
@@ -457,7 +413,6 @@ async def _export_via_db(db_url: str, username: str) -> ExportDocument:
     )
 
     async with async_session_factory() as db:
-
         result = await db.execute(select(User).where(User.username == username))
         users = list(result.scalars().all())
 
@@ -688,6 +643,7 @@ async def _import_document(
     dry_run: bool,
 ) -> dict[str, int]:
     """Validate and import an export document, returning post-import counts."""
+    require_local_database_url(db_url)
     _validate_export(export)
     engine = create_async_engine(_async_database_url(db_url), pool_pre_ping=True)
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -854,7 +810,6 @@ def _write_json(path: Path, document: ExportDocument) -> None:
     os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
 
 
-
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Backup production user data and restore it into local dev.",
@@ -868,7 +823,7 @@ def _build_parser() -> argparse.ArgumentParser:
     ep.add_argument(
         "--db-url",
         default=os.environ.get("CLONE_PROD_DB_URL", ""),
-        help="Database URL override (default: auto-fetch from Railway)",
+        help="Production Neon database URL (required, or set CLONE_PROD_DB_URL)",
     )
     ep.add_argument(
         "--username",
@@ -937,20 +892,21 @@ async def _handle_export(args: argparse.Namespace) -> int:
     db_url = args.db_url
 
     if not db_url:
-        db_url = _fetch_railway_db_url()
+        print(
+            "Error: --db-url or CLONE_PROD_DB_URL is required; Railway fallback is unsupported.",
+            file=sys.stderr,
+        )
+        return 1
 
-    # Convert scheme for async SQLAlchemy
-    if db_url.startswith("postgresql://"):
-        db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    elif db_url.startswith("postgres://"):
-        db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
-    elif db_url.startswith("postgresql+psycopg://"):
-        db_url = db_url.replace("postgresql+psycopg://", "postgresql+asyncpg://", 1)
+    db_url = _async_database_url(db_url)
 
     username = args.username
     if not username:
         print("Error: --username is required.", file=sys.stderr)
-        print("  Usage: python -m scripts.clone_prod_to_local export --username Josh", file=sys.stderr)
+        print(
+            "  Usage: python -m scripts.clone_prod_to_local export --username Josh --db-url <neon-url>",
+            file=sys.stderr,
+        )
         return 1
 
     target = _redact_db_url(db_url)
@@ -996,9 +952,10 @@ async def _handle_import(args: argparse.Namespace) -> int:
         db_url = get_database_settings().async_url
     db_url = _async_database_url(db_url)
     try:
+        require_local_database_url(db_url)
         _validate_export(export)
     except ValueError as error:
-        print(f"Error: invalid export: {error}", file=sys.stderr)
+        print(f"Error: {error}", file=sys.stderr)
         return 1
 
     _print_summary(export)
