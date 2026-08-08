@@ -29,7 +29,9 @@ def test_require_local_database_url_accepts_loopback(db_url: str) -> None:
     require_local_database_url(db_url)
 
 
-def test_require_local_database_url_accepts_ci_postgres_service(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_require_local_database_url_accepts_ci_postgres_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Allow the repository's Docker PostgreSQL service only inside CI.
 
     Args:
