@@ -2,6 +2,7 @@ import Tooltip from '../../components/Tooltip'
 import { MarqueeTitle } from '../../components/MarqueeTitle'
 import PositionMenu from '../../components/PositionMenu'
 import type { Thread } from '../../types'
+import QueueThreadActions from './QueueThreadActions'
 
 interface QueueThreadCardProps {
   thread: Thread
@@ -53,11 +54,6 @@ export default function QueueThreadCard({
   onDelete,
 }: QueueThreadCardProps) {
   const isMigrated = thread.total_issues !== null
-
-  const stopCardClick = (action: () => void) => (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation()
-    action()
-  }
 
   return (
     <div
@@ -145,40 +141,15 @@ export default function QueueThreadCard({
         )}
       </div>
 
-      <div
-        className="pl-8 md:pl-[2.75rem] flex flex-wrap gap-2"
-        role="group"
-        aria-label={`Actions for ${thread.title}`}
-      >
-        <button
-          type="button"
-          onClick={stopCardClick(onSwipeRead)}
-          className="px-3 py-2 rounded-lg bg-amber-600/20 text-amber-300 text-xs font-bold hover:bg-amber-600/30"
-        >
-          📖 Read
-        </button>
-        <button
-          type="button"
-          onClick={stopCardClick(onSwipeEdit)}
-          className="px-3 py-2 rounded-lg bg-white/5 text-stone-300 text-xs font-bold hover:bg-white/10"
-        >
-          ✏️ Edit
-        </button>
-        <button
-          type="button"
-          onClick={stopCardClick(onSwipeSnooze)}
-          className="px-3 py-2 rounded-lg bg-teal-600/15 text-teal-300 text-xs font-bold hover:bg-teal-600/25"
-        >
-          {snoozeIcon} {snoozeLabel}
-        </button>
-        <button
-          type="button"
-          onClick={stopCardClick(onSwipeDelete)}
-          className="px-3 py-2 rounded-lg bg-red-600/15 text-red-300 text-xs font-bold hover:bg-red-600/25"
-        >
-          🗑 Delete
-        </button>
-      </div>
+      <QueueThreadActions
+        title={thread.title}
+        snoozeIcon={snoozeIcon}
+        snoozeLabel={snoozeLabel}
+        onRead={onSwipeRead}
+        onEdit={onSwipeEdit}
+        onSnooze={onSwipeSnooze}
+        onDelete={onSwipeDelete}
+      />
     </div>
   )
 }
