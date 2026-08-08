@@ -1,0 +1,184 @@
+name: Chromium E2E discovery
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: chromium-e2e-discovery-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/${{ github.event.repository.name }}
+
+jobs:
+  build:
+    name: Build discovery image
+    runs-on: ubuntu-latest
+    outputs:
+      image-ref: ${{ steps.set-outputs.outputs.image-ref }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set lowercase image name
+        id: lowercase
+        shell: bash
+        run: echo "image-name=${IMAGE_NAME,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push discovery image
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile.ci
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ steps.lowercase.outputs.image-name }}:chromium-discovery-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Publish immutable image reference
+        id: set-outputs
+        shell: bash
+        run: echo "image-ref=${{ env.REGISTRY }}/${{ steps.lowercase.outputs.image-name }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
+
+  chromium:
+    name: Chromium discovery shard ${{ matrix.shard }}/6
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    container:
+      image: ${{ needs.build.outputs.image-ref }}
+      options: >-
+        --shm-size=2gb
+        --memory=8gb
+        --cpus=4
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
+    env:
+      CI: true
+      HOME: /root
+      TEST_ENVIRONMENT: "true"
+      SECRET_KEY: test-secret-key-for-testing-only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+      TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+      REDIS_URL: redis://redis:6379/0
+      PGUSER: postgres
+      PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: comic_pile_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Remove local environment overrides
+        run: rm -f .env .env.test .env.backup .envrc .env.local .env.production
+
+      - name: Wait for PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if pg_isready -h postgres -p 5432 -U postgres; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::PostgreSQL did not become ready"
+          exit 1
+
+      - name: Restore frontend build and toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p static
+          rm -rf frontend/node_modules static/react
+          cp -a /opt/ci-assets/static/react static/react
+          pnpm install --frozen-lockfile
+
+      - name: Start backend server
+        shell: bash
+        run: |
+          set -euo pipefail
+          export AUTO_BACKUP_ENABLED=false
+          python -m uvicorn app.main:app --host 0.0.0.0 --port 9000 --workers 1 --log-level warning > /tmp/backend.log 2>&1 &
+          echo $! > /tmp/backend.pid
+
+      - name: Wait for backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://localhost:9000/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Backend did not become ready"
+          cat /tmp/backend.log || true
+          exit 1
+
+      - name: Run complete maintained Chromium shard
+        shell: bash
+        run: |
+          set -o pipefail
+          cd frontend
+          REUSE_EXISTING_SERVER=true BASE_URL=http://localhost:9000 \
+            pnpm exec playwright test --project=chromium --shard=${{ matrix.shard }}/6
+
+      - name: Capture backend log
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p discovery-artifacts
+          cp /tmp/backend.log discovery-artifacts/backend.log 2>/dev/null || true
+
+      - name: Upload Chromium discovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chromium-discovery-shard-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            playwright-report/
+            test-results/
+            frontend/test-results/
+            discovery-artifacts/backend.log
+          if-no-files-found: warn
+          retention-days: 14
