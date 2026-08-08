@@ -96,6 +96,7 @@
 | docs/changelog.d/2026-08-08-918.md | Product changelog history or generated changelog fragment. | 2026-08-08 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
 | docs/changelog.d/2026-08-08-919.md | Product changelog history or generated changelog fragment. | 2026-08-08 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
 | docs/changelog.d/2026-08-08-941.md | Product changelog history or generated changelog fragment. | 2026-08-08 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
+| docs/changelog.d/2026-08-08-946.md | Product changelog history or generated changelog fragment. | 2026-08-08 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
 | docs/changelog.d/README.md | Product changelog history or generated changelog fragment. | 2026-08-06 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
 | docs/changelog.md | Product changelog history or generated changelog fragment. | 2026-08-06 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
 | docs/frontend-backend-asset-coupling-audit.md | Repository documentation for frontend backend asset coupling audit. | 2026-07-11 | Human-facing narrative should move out of the active code-coupled documentation set unless linked by the docs hub. | move to Wiki | ComicPile Wiki |
