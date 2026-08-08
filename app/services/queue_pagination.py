@@ -43,7 +43,7 @@ def encode_queue_cursor(cursor: QueueCursor) -> str:
     """
     payload = {
         "sort": cursor.sort,
-        "search": cursor.search,
+        "search": normalize_queue_search(cursor.search),
         "values": list(cursor.values),
     }
     raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
@@ -76,7 +76,14 @@ def decode_queue_cursor(
         cursor_sort = payload["sort"]
         cursor_search = payload["search"]
         raw_values = payload["values"]
-    except (binascii.Error, KeyError, TypeError, UnicodeDecodeError, ValueError, json.JSONDecodeError) as exc:
+    except (
+        binascii.Error,
+        KeyError,
+        TypeError,
+        UnicodeDecodeError,
+        ValueError,
+        json.JSONDecodeError,
+    ) as exc:
         raise ValueError("Invalid Queue page token") from exc
 
     if not isinstance(cursor_sort, str) or cursor_sort not in {
