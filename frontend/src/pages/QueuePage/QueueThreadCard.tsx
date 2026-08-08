@@ -87,6 +87,7 @@ export default function QueueThreadCard({
         role="button"
         tabIndex={0}
         onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault()
             onCardClick()
@@ -120,7 +121,7 @@ export default function QueueThreadCard({
               )}
             </div>
           </div>
-          <div className="hidden md:flex items-center gap-1">
+          <div className="flex items-center gap-1">
             <PositionMenu
               thread={thread}
               onMoveToFront={() => onMoveToFront()}
@@ -130,21 +131,6 @@ export default function QueueThreadCard({
               onDependencies={() => onDependencies()}
               onDelete={() => onDelete()}
             />
-          </div>
-          <div className="md:hidden flex items-center gap-1">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                onDependencies()
-              }}
-              className="flex items-center justify-center w-11 h-11 text-amber-400/70 hover:text-amber-300 transition-colors text-lg rounded-lg hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
-              aria-label="Manage dependencies"
-              aria-haspopup="dialog"
-              data-testid="mobile-dependency-action"
-            >
-              &#x26D3;
-            </button>
           </div>
         </div>
         <div className="pl-8 md:pl-[2.75rem]">
