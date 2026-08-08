@@ -13,13 +13,24 @@ from app.services.queue_pagination import (
 )
 
 
+def _encode_payload(payload: object) -> str:
+    """Encode an arbitrary payload as a Queue cursor token for validation tests."""
+    raw = json.dumps(payload, separators=(",", ":")).encode()
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+
 def test_queue_cursor_round_trips_for_same_query() -> None:
     """Round-trip a cursor when sort and normalized search are unchanged."""
-    cursor = QueueCursor(sort="position", search="batman", values=("10", "42"))
+    cursor = QueueCursor(sort="position", search=" Batman ", values=("10", "42"))
 
     token = encode_queue_cursor(cursor)
 
-    assert decode_queue_cursor(token, sort="position", search=" Batman ") == cursor
+    assert encode_queue_cursor(cursor) == token
+    assert decode_queue_cursor(token, sort="position", search=" BATMAN ") == QueueCursor(
+        sort="position",
+        search="batman",
+        values=("10", "42"),
+    )
 
 
 def test_queue_cursor_rejects_sort_change() -> None:
@@ -58,15 +69,21 @@ def test_queue_cursor_rejects_appended_invalid_base64_bytes() -> None:
         decode_queue_cursor(f"{token}!", sort="title", search=None)
 
 
-def test_queue_cursor_rejects_non_string_sort() -> None:
-    """Reject malformed cursor payloads whose sort field is not a string."""
-    payload = json.dumps(
-        {"sort": [], "search": "", "values": ["x-men", "42"]},
-        separators=(",", ":"),
-    ).encode()
-    token = base64.urlsafe_b64encode(payload).decode().rstrip("=")
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        ({"sort": [], "search": "", "values": ["x-men", "42"]}, "token sort"),
+        ({"sort": "bogus", "search": "", "values": ["x-men", "42"]}, "token sort"),
+        ({"sort": "title", "search": [], "values": ["x-men", "42"]}, "token payload"),
+        ({"sort": "title", "search": "", "values": "x-men"}, "token payload"),
+        ({"sort": "title", "search": "", "values": ["x-men", 42]}, "token values"),
+    ],
+)
+def test_queue_cursor_rejects_invalid_payload_shapes(payload: object, message: str) -> None:
+    """Reject malformed payload field types and unsupported sort values."""
+    token = _encode_payload(payload)
 
-    with pytest.raises(ValueError, match="Invalid Queue page token sort"):
+    with pytest.raises(ValueError, match=message):
         decode_queue_cursor(token, sort="title", search=None)
 
 
