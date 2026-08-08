@@ -52,12 +52,24 @@ export function RatingView({
   onRefreshThread,
 }: RatingViewProps) {
   const [isCorrectionDialogOpen, setIsCorrectionDialogOpen] = useState(false)
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
   const previewDie = isDiceSide(currentDie) ? currentDie : 6
   const threadTitle = activeRatingThread?.title ?? 'Loading...'
   const issueNumber = activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number ?? null
   const totalIssues = activeRatingThread?.total_issues ?? null
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
   const readingProgress = activeRatingThread?.reading_progress ?? null
+
+  async function handleCopyComicReference() {
+    if (!activeRatingThread?.title || issueNumber == null) return
+
+    try {
+      await navigator.clipboard.writeText(`${activeRatingThread.title} ${issueNumber}`)
+      setCopyStatus('copied')
+    } catch {
+      setCopyStatus('failed')
+    }
+  }
 
   return (
     <div className="p-3 md:p-4 space-y-5 md:space-y-8 relative z-10">
@@ -72,18 +84,36 @@ export function RatingView({
         </h2>
         <div className="flex items-center justify-center gap-3 flex-wrap">
           {issueNumber != null && (
-            <button
-              type="button"
-              onClick={() => setIsCorrectionDialogOpen(true)}
-              disabled={!activeRatingThread?.id}
-              className="w-11 h-11 min-w-[44px] flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-stone-400 hover:text-stone-300 transition-all disabled:opacity-30 disabled:cursor-not-allowed focus:ring-2 focus:ring-amber-500"
-              aria-label="Correct issue number"
-              title="Correct issue number"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                <path d="M2.695 14.763l-1.262 3.154a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
-              </svg>
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={handleCopyComicReference}
+                disabled={!activeRatingThread?.title}
+                className="min-h-11 px-3 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-stone-400 hover:text-stone-300 transition-all disabled:opacity-30 disabled:cursor-not-allowed focus:ring-2 focus:ring-amber-500"
+                aria-label={`Copy ${threadTitle} ${issueNumber}`}
+                title="Copy comic reference"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden="true">
+                  <path d="M6 2a2 2 0 00-2 2v8a2 2 0 002 2h1v-2H6V4h8v1h2V4a2 2 0 00-2-2H6z" />
+                  <path d="M9 6a2 2 0 00-2 2v8a2 2 0 002 2h7a2 2 0 002-2V8a2 2 0 00-2-2H9zm0 2h7v8H9V8z" />
+                </svg>
+                <span className="text-[10px] font-black uppercase tracking-wider">
+                  {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Copy failed' : 'Copy'}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsCorrectionDialogOpen(true)}
+                disabled={!activeRatingThread?.id}
+                className="w-11 h-11 min-w-[44px] flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-stone-400 hover:text-stone-300 transition-all disabled:opacity-30 disabled:cursor-not-allowed focus:ring-2 focus:ring-amber-500"
+                aria-label="Correct issue number"
+                title="Correct issue number"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                  <path d="M2.695 14.763l-1.262 3.154a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
+                </svg>
+              </button>
+            </>
           )}
           {totalIssues && issueNumber != null && (
             <span className="text-stone-400 text-xs font-bold">
