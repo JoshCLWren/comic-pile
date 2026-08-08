@@ -22,10 +22,6 @@ vi.mock('../components/PositionMenu', () => ({
   ),
 }))
 
-vi.mock('../components/Swipeable', () => ({
-  default: ({ children }: { children: React.ReactNode }) => <div data-testid="mock-swipeable">{children}</div>,
-}))
-
 function createMockThread(overrides: Partial<Thread> = {}): Thread {
   return {
     id: 1,
@@ -54,8 +50,8 @@ function renderCard(thread: Thread, overrides: Partial<Parameters<typeof QueueTh
     isBlocked: false,
     blockingReasons: [] as string[],
     isDragOver: false,
-    snoozeIcon: '',
-    snoozeLabel: '',
+    snoozeIcon: '⏰',
+    snoozeLabel: 'Snooze',
     onCardClick: vi.fn(),
     onDragStart: vi.fn(),
     onDragEnd: vi.fn(),
@@ -79,6 +75,42 @@ function renderCard(thread: Thread, overrides: Partial<Parameters<typeof QueueTh
 describe('QueueThreadCard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  it('renders visible labeled controls for every former gesture action', () => {
+    renderCard(createMockThread())
+
+    expect(screen.getByRole('button', { name: 'Read' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Snooze' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeVisible()
+  })
+
+  it('invokes visible controls without activating the card', async () => {
+    const user = userEvent.setup()
+    const onCardClick = vi.fn()
+    const onSwipeRead = vi.fn()
+    const onSwipeEdit = vi.fn()
+    const onSwipeSnooze = vi.fn()
+    const onSwipeDelete = vi.fn()
+    renderCard(createMockThread(), {
+      onCardClick,
+      onSwipeRead,
+      onSwipeEdit,
+      onSwipeSnooze,
+      onSwipeDelete,
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Read' }))
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+    await user.click(screen.getByRole('button', { name: 'Snooze' }))
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+
+    expect(onSwipeRead).toHaveBeenCalledTimes(1)
+    expect(onSwipeEdit).toHaveBeenCalledTimes(1)
+    expect(onSwipeSnooze).toHaveBeenCalledTimes(1)
+    expect(onSwipeDelete).toHaveBeenCalledTimes(1)
+    expect(onCardClick).not.toHaveBeenCalled()
   })
 
   it('renders the shared thread action menu as the discoverable card action', () => {
