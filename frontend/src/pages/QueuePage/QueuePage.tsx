@@ -212,24 +212,18 @@ export default function QueuePage() {
 
       if (hasIssueRange && result?.id) {
         try {
-          // Check if the range is a simple contiguous integer sequence starting from 1 (e.g., "1-25")
           const rangeMatch = createForm.issues.trim().match(/^(\d+)-(\d+)$/)
           const isSimpleRange = !!rangeMatch && Number(rangeMatch[1]) === 1
           
           if (isSimpleRange) {
-            // Use migrateThread for simple ranges starting from 1 (creates sequential issues 1..N)
             const requestedLastRead = Number(createForm.lastIssueRead) || 0
             const lastRead = Math.max(0, Math.min(requestedLastRead, issuesRemaining))
             await issuesApi.migrateThread(result.id, lastRead, issuesRemaining)
           } else {
-            // Use issuesApi.create for complex ranges (preserves non-contiguous/non-integer identifiers)
             const issueListResponse = await issuesApi.create(result.id, createForm.issues.trim())
-            
-            // Mark issues as read if lastIssueRead is specified
             const requestedLastRead = Number(createForm.lastIssueRead) || 0
             const lastRead = Math.max(0, Math.min(requestedLastRead, issueListResponse.issues.length))
             if (lastRead > 0 && issueListResponse.issues.length > 0) {
-              // Mark the first N issues as read
               const issuesToMark = issueListResponse.issues.slice(0, lastRead)
               await Promise.all(issuesToMark.map(issue => issuesApi.markRead(issue.id)))
             }
@@ -260,7 +254,6 @@ export default function QueuePage() {
         notes: editForm.notes || null,
       }
 
-      // Include issues_remaining for unmigrated threads
       if (editingThread.total_issues === null) {
         updateData.issues_remaining = Number(editForm.issuesRemaining)
       }
@@ -448,9 +441,6 @@ export default function QueuePage() {
     }
   }
 
-  // Shared render callback used by both the virtualized list (>50 threads) and the
-  // responsive grid (≤50 threads). Keeps the two rendering paths in lockstep so any
-  // future handler change only needs one edit.
   function renderThreadCard(thread: Thread, index: number) {
     const isDragOver = dragOverThreadId === thread.id
     const isBlocked = thread.is_blocked
@@ -474,9 +464,9 @@ export default function QueuePage() {
         onDragEnd={handleDragEnd}
         onDragOver={handleDragOver(thread.id)}
         onDrop={handleDrop(thread.id)}
-        onSwipeRead={() => handleActionForThread(thread)}
-        onSwipeEdit={() => navigate(`/thread/${thread.id}`)}
-        onSwipeSnooze={async () => {
+        onRead={() => handleActionForThread(thread)}
+        onOpenThread={() => navigate(`/thread/${thread.id}`)}
+        onSnooze={async () => {
           try {
             if (isSnoozed) {
               await unsnoozeMutation.mutate(thread.id)
@@ -485,11 +475,11 @@ export default function QueuePage() {
             }
             await refetchSession()
           } catch (error: unknown) {
-            console.error('Swipe snooze failed:', error)
+            console.error('Snooze action failed:', error)
             alert(`Failed to ${isSnoozed ? 'unsnooze' : 'snooze'} thread: ${getApiErrorDetail(error)}`)
           }
         }}
-        onSwipeDelete={() => handleDelete(thread.id)}
+        onActionDelete={() => handleDelete(thread.id)}
         onMoveToFront={() => handleMoveToFront(thread.id)}
         onMoveToBack={() => handleMoveToBack(thread.id)}
         onReposition={() => openRepositionModal(thread)}
@@ -561,7 +551,6 @@ export default function QueuePage() {
         </div>
       </header>
 
-      {/* Mobile FAB for Add Thread */}
       {!isAnyModalOpen && (
       <button
         type="button"
@@ -608,83 +597,77 @@ export default function QueuePage() {
         onReactivate={openReactivateModal}
       />
 
-  {/* Create Thread Modal */}
-  <Modal isOpen={isCreateOpen} title="Create Thread" onClose={closeCreateModal}>
-  <form className="space-y-4" onSubmit={handleCreateSubmit}>
-  <div className="space-y-2">
-  <label htmlFor="create-thread-title" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Title</label>
-  <input
-  id="create-thread-title"
-  value={createForm.title}
-  onChange={(event) => setCreateForm({ ...createForm, title: event.target.value })}
-  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
-  required
-  />
-  </div>
-  <div className="space-y-2">
-  <label htmlFor="create-thread-format" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Format</label>
-  <FormatSelect
-  id="create-thread-format"
-  value={createForm.format}
-  onChange={(value) => setCreateForm({ ...createForm, format: value })}
-  required
-  />
-  </div>
-
-  <div className="space-y-2">
-  <label htmlFor="create-thread-issues" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</label>
-  <input
-  id="create-thread-issues"
-  type="text"
-  value={createForm.issues}
-  onChange={(event) => setCreateForm({ ...createForm, issues: event.target.value })}
-  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
-  placeholder="0-25 or 0, ½, Annual 1, 5-7"
-  required
-  />
-  {issuePreview !== null && (
-  <p className="text-xs text-stone-400">
-  Will create {issuePreview} issue{issuePreview !== 1 ? 's' : ''}
-  </p>
-  )}
-  {issueParseError && (
-  <p className="text-xs text-red-400">{issueParseError}</p>
-  )}
-  </div>
-  <div className="space-y-2">
-  <label htmlFor="create-thread-last-read" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Last issue read (optional)</label>
-  <input
-  id="create-thread-last-read"
-  type="number"
-  min="0"
-  max={issuePreview ?? undefined}
-  value={createForm.lastIssueRead}
-  onChange={(event: ChangeEvent<HTMLInputElement>) => {
-  const value = Number.parseInt(event.target.value, 10) || 0
-  const clampedValue = issuePreview !== null ? Math.min(value, issuePreview) : value
-  setCreateForm({
-  ...createForm,
-  lastIssueRead: clampedValue,
-  })
-  }}
-  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
-  />
+      <Modal isOpen={isCreateOpen} title="Create Thread" onClose={closeCreateModal}>
+        <form className="space-y-4" onSubmit={handleCreateSubmit}>
+          <div className="space-y-2">
+            <label htmlFor="create-thread-title" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Title</label>
+            <input
+              id="create-thread-title"
+              value={createForm.title}
+              onChange={(event) => setCreateForm({ ...createForm, title: event.target.value })}
+              className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="create-thread-format" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Format</label>
+            <FormatSelect
+              id="create-thread-format"
+              value={createForm.format}
+              onChange={(value) => setCreateForm({ ...createForm, format: value })}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="create-thread-issues" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</label>
+            <input
+              id="create-thread-issues"
+              type="text"
+              value={createForm.issues}
+              onChange={(event) => setCreateForm({ ...createForm, issues: event.target.value })}
+              className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+              placeholder="0-25 or 0, ½, Annual 1, 5-7"
+              required
+            />
+            {issuePreview !== null && (
+              <p className="text-xs text-stone-400">
+                Will create {issuePreview} issue{issuePreview !== 1 ? 's' : ''}
+              </p>
+            )}
+            {issueParseError && (
+              <p className="text-xs text-red-400">{issueParseError}</p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="create-thread-last-read" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Last issue read (optional)</label>
+            <input
+              id="create-thread-last-read"
+              type="number"
+              min="0"
+              max={issuePreview ?? undefined}
+              value={createForm.lastIssueRead}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                const value = Number.parseInt(event.target.value, 10) || 0
+                const clampedValue = issuePreview !== null ? Math.min(value, issuePreview) : value
+                setCreateForm({ ...createForm, lastIssueRead: clampedValue })
+              }}
+              className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+            />
             {createForm.lastIssueRead > 0 && issuePreview !== null && (
               <p className="text-xs text-stone-400">
                 First {Math.min(createForm.lastIssueRead, issuePreview)} issues (in creation order) of {issuePreview} will be marked as read
               </p>
             )}
           </div>
-
-  <div className="space-y-2">
-  <label htmlFor="create-thread-notes" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Notes</label>
-  <textarea
-  id="create-thread-notes"
-  value={createForm.notes}
-  onChange={(event) => setCreateForm({ ...createForm, notes: event.target.value })}
-  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors min-h-[80px]"
-  ></textarea>
-  </div>
+          <div className="space-y-2">
+            <label htmlFor="create-thread-notes" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Notes</label>
+            <textarea
+              id="create-thread-notes"
+              value={createForm.notes}
+              onChange={(event) => setCreateForm({ ...createForm, notes: event.target.value })}
+              className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors min-h-[80px]"
+            ></textarea>
+          </div>
           <button
             type="submit"
             disabled={createMutation.isPending}
@@ -695,61 +678,52 @@ export default function QueuePage() {
         </form>
       </Modal>
 
-  {/* Edit Thread Modal */}
-  <Modal isOpen={isEditOpen} title="Edit Thread" onClose={closeEditModal} overlayClassName="edit-modal__overlay">
-  <div className="space-y-4">
-  <form id="edit-thread-form" className="space-y-4" onSubmit={handleEditSubmit}>
-  <div className="space-y-2">
-  <label htmlFor="edit-thread-title" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Title</label>
-  <input
-  id="edit-thread-title"
-  value={editForm.title}
-  onChange={(event) => setEditForm({ ...editForm, title: event.target.value })}
-  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
-  required
-  />
-  </div>
-
-  <div className="space-y-2">
-  <label htmlFor="edit-thread-format" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Format</label>
-  <FormatSelect
-  id="edit-thread-format"
-  value={editForm.format}
-  onChange={(value) => setEditForm({ ...editForm, format: value })}
-  required
-  />
-  </div>
-
-  {/* Issues remaining for unmigrated threads */}
-  {editingThread?.total_issues === null && (
-  <div className="space-y-2">
-  <label htmlFor="edit-thread-issues-remaining" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues Remaining</label>
-  <input
-  id="edit-thread-issues-remaining"
-  type="number"
-  min="0"
-  value={editForm.issuesRemaining}
-  onChange={(event: ChangeEvent<HTMLInputElement>) =>
-  setEditForm({
-  ...editForm,
-  issuesRemaining: Number.parseInt(event.target.value, 10) || 0,
-  })
-  }
-  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
-  />
-  </div>
-  )}
-
-  <div className="space-y-2">
-  <label htmlFor="edit-thread-notes" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Notes</label>
-  <textarea
-  id="edit-thread-notes"
-  value={editForm.notes}
-  onChange={(event) => setEditForm({ ...editForm, notes: event.target.value })}
-  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors min-h-[80px]"
-  ></textarea>
-  </div>
-
+      <Modal isOpen={isEditOpen} title="Edit Thread" onClose={closeEditModal} overlayClassName="edit-modal__overlay">
+        <div className="space-y-4">
+          <form id="edit-thread-form" className="space-y-4" onSubmit={handleEditSubmit}>
+            <div className="space-y-2">
+              <label htmlFor="edit-thread-title" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Title</label>
+              <input
+                id="edit-thread-title"
+                value={editForm.title}
+                onChange={(event) => setEditForm({ ...editForm, title: event.target.value })}
+                className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="edit-thread-format" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Format</label>
+              <FormatSelect
+                id="edit-thread-format"
+                value={editForm.format}
+                onChange={(value) => setEditForm({ ...editForm, format: value })}
+                required
+              />
+            </div>
+            {editingThread?.total_issues === null && (
+              <div className="space-y-2">
+                <label htmlFor="edit-thread-issues-remaining" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues Remaining</label>
+                <input
+                  id="edit-thread-issues-remaining"
+                  type="number"
+                  min="0"
+                  value={editForm.issuesRemaining}
+                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                    setEditForm({ ...editForm, issuesRemaining: Number.parseInt(event.target.value, 10) || 0 })
+                  }
+                  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+                />
+              </div>
+            )}
+            <div className="space-y-2">
+              <label htmlFor="edit-thread-notes" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Notes</label>
+              <textarea
+                id="edit-thread-notes"
+                value={editForm.notes}
+                onChange={(event) => setEditForm({ ...editForm, notes: event.target.value })}
+                className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors min-h-[80px]"
+              ></textarea>
+            </div>
             {editingThread?.total_issues === null && (
               <div className="space-y-2 pt-2 border-t border-white/10">
                 <button
@@ -769,12 +743,9 @@ export default function QueuePage() {
               </div>
             )}
           </form>
-
-          {/* Issue list for migrated threads lives outside the edit form so Enter only adds issues. */}
           {editingThread && editingThread.total_issues !== null && (
             <IssueToggleList threadId={editingThread.id} />
           )}
-
           <button
             type="submit"
             form="edit-thread-form"
@@ -798,7 +769,7 @@ export default function QueuePage() {
             >
               <option value="">Select a thread...</option>
               {completedThreads.map((thread) => (
-                  <option key={thread.id} value={String(thread.id)}>
+                <option key={thread.id} value={String(thread.id)}>
                   {thread.title} ({thread.format})
                 </option>
               ))}
@@ -860,8 +831,8 @@ export default function QueuePage() {
           onSkip={handleMigrationSkip}
           onClose={handleMigrationClose}
         />
-       )}
-     </div>
-     </PositionMenuProvider>
-   )
- }
+      )}
+    </div>
+    </PositionMenuProvider>
+  )
+}
