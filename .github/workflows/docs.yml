@@ -22,7 +22,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   markdown:
@@ -32,8 +32,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
-          persist-credentials: true
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -66,20 +67,6 @@ jobs:
           name: markdown-inventory
           path: docs/MARKDOWN_INVENTORY.md
           if-no-files-found: error
-
-      - name: Sync generated inventory on factory pull requests
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.event.pull_request.head.ref, 'factory/')
-        env:
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
-        run: |
-          if test -z "$(git status --porcelain -- docs/MARKDOWN_INVENTORY.md)"; then
-            exit 0
-          fi
-          git config user.name "comic-pile-factory"
-          git config user.email "actions@users.noreply.github.com"
-          git add docs/MARKDOWN_INVENTORY.md
-          git commit -m "Refresh Markdown inventory"
-          git push origin "HEAD:${HEAD_REF}"
 
       - name: Verify committed inventory is current
         run: test -z "$(git status --porcelain -- docs/MARKDOWN_INVENTORY.md)"
