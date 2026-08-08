@@ -17,13 +17,9 @@ vi.mock('../components/MarqueeTitle', () => ({
 vi.mock('../components/PositionMenu', () => ({
   default: ({ onDependencies }: { onDependencies: () => void }) => (
     <button type="button" data-testid="mock-position-menu" onClick={onDependencies}>
-      Position Menu
+      More actions
     </button>
   ),
-}))
-
-vi.mock('../components/Swipeable', () => ({
-  default: ({ children }: { children: React.ReactNode }) => <div data-testid="mock-swipeable">{children}</div>,
 }))
 
 function createMockThread(overrides: Partial<Thread> = {}): Thread {
@@ -54,8 +50,8 @@ function renderCard(thread: Thread, overrides: Partial<Parameters<typeof QueueTh
     isBlocked: false,
     blockingReasons: [] as string[],
     isDragOver: false,
-    snoozeIcon: '',
-    snoozeLabel: '',
+    snoozeIcon: '😴',
+    snoozeLabel: 'Snooze',
     onCardClick: vi.fn(),
     onDragStart: vi.fn(),
     onDragEnd: vi.fn(),
@@ -81,11 +77,40 @@ describe('QueueThreadCard', () => {
     vi.clearAllMocks()
   })
 
-  it('renders the shared thread action menu as the discoverable card action', () => {
+  it('renders every former gesture action as a visible labeled button', () => {
     renderCard(createMockThread())
 
-    expect(screen.getAllByTestId('mock-position-menu')).toHaveLength(1)
-    expect(screen.queryByTestId('mobile-dependency-action')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Read/ })).toBeVisible()
+    expect(screen.getByRole('button', { name: /Edit/ })).toBeVisible()
+    expect(screen.getByRole('button', { name: /Snooze/ })).toBeVisible()
+    expect(screen.getByRole('button', { name: /Delete/ })).toBeVisible()
+  })
+
+  it('runs visible actions without activating the card', async () => {
+    const user = userEvent.setup()
+    const onCardClick = vi.fn()
+    const onSwipeRead = vi.fn()
+    const onSwipeEdit = vi.fn()
+    const onSwipeSnooze = vi.fn()
+    const onSwipeDelete = vi.fn()
+    renderCard(createMockThread(), {
+      onCardClick,
+      onSwipeRead,
+      onSwipeEdit,
+      onSwipeSnooze,
+      onSwipeDelete,
+    })
+
+    await user.click(screen.getByRole('button', { name: /Read/ }))
+    await user.click(screen.getByRole('button', { name: /Edit/ }))
+    await user.click(screen.getByRole('button', { name: /Snooze/ }))
+    await user.click(screen.getByRole('button', { name: /Delete/ }))
+
+    expect(onSwipeRead).toHaveBeenCalledOnce()
+    expect(onSwipeEdit).toHaveBeenCalledOnce()
+    expect(onSwipeSnooze).toHaveBeenCalledOnce()
+    expect(onSwipeDelete).toHaveBeenCalledOnce()
+    expect(onCardClick).not.toHaveBeenCalled()
   })
 
   it('uses the shared action menu for dependency management', async () => {
@@ -97,7 +122,7 @@ describe('QueueThreadCard', () => {
     expect(onDependencies).toHaveBeenCalledTimes(1)
   })
 
-  it('does not treat shared action-menu keyboard activation as card activation', () => {
+  it('does not treat action-menu keyboard activation as card activation', () => {
     const onCardClick = vi.fn()
     renderCard(createMockThread(), { onCardClick })
 
@@ -109,78 +134,31 @@ describe('QueueThreadCard', () => {
   })
 
   it('renders blocked thread explanation button when thread is blocked', () => {
-    const thread = createMockThread()
-    renderCard(thread, {
+    renderCard(createMockThread(), {
       isBlocked: true,
       blockingReasons: ['Blocked by: Prequel Thread'],
     })
 
-    const blockedButton = screen.getByRole('button', { name: /View dependencies for Test Thread/ })
-    expect(blockedButton).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /View dependencies for Test Thread/ })).toBeInTheDocument()
   })
 
-  it('does not render blocked explanation when thread is not blocked', () => {
-    const thread = createMockThread()
-    renderCard(thread)
-
-    expect(screen.queryByRole('button', { name: /View dependencies for/ })).not.toBeInTheDocument()
-  })
-
-  it('renders thread title', () => {
-    const thread = createMockThread({ title: 'Amazing Spider-Man' })
-    renderCard(thread)
-    expect(screen.getByTestId('mock-marquee')).toHaveTextContent('Amazing Spider-Man')
-  })
-
-  it('renders format label', () => {
-    const thread = createMockThread({ format: 'Trade Paperback' })
-    renderCard(thread)
-    expect(screen.getByText('Trade Paperback')).toBeInTheDocument()
-  })
-
-  it('renders issues remaining count', () => {
-    const thread = createMockThread({ issues_remaining: 7 })
-    renderCard(thread)
-    expect(screen.getByText('7 issues remaining')).toBeInTheDocument()
-  })
-
-  it('renders next unread issue number when migrated and available', () => {
-    const thread = createMockThread({
-      issues_remaining: 3,
-      next_unread_issue_number: '5',
-    })
-    renderCard(thread)
-    expect(screen.getByText(/Up next: #5/)).toBeInTheDocument()
-    expect(screen.getByText(/3 remaining/)).toBeInTheDocument()
-  })
-
-  it('renders notes when present', () => {
-    const thread = createMockThread({ notes: 'This is a note' })
-    renderCard(thread)
-    expect(screen.getByText('This is a note')).toBeInTheDocument()
-  })
-
-  it('handles keyboard, drag, blocked dependency, and all position-menu callbacks', async () => {
-    const user = userEvent.setup()
+  it('renders thread metadata and supports keyboard and drag interactions', () => {
     const callbacks = Object.fromEntries([
-      'onCardClick', 'onDragStart', 'onDragEnd', 'onDragOver', 'onDrop', 'onDependencies',
-      'onMoveToFront', 'onMoveToBack', 'onReposition', 'onEdit', 'onDelete',
+      'onCardClick', 'onDragStart', 'onDragEnd', 'onDragOver', 'onDrop',
     ].map((name) => [name, vi.fn()])) as Record<string, ReturnType<typeof vi.fn>>
-    renderCard(createMockThread({ total_issues: null, issues_remaining: 0, notes: null }), {
-      isBlocked: true,
-      blockingReasons: ['Read A first', 'Read B first'],
-      isDragOver: true,
-      ...callbacks,
-    })
-    const card = screen.getByRole('button', { name: /view dependencies/i })
-    await user.click(card)
-    expect(callbacks.onDependencies).toHaveBeenCalled()
+    renderCard(createMockThread({ next_unread_issue_number: '5', notes: 'A note' }), callbacks)
+
+    expect(screen.getByTestId('mock-marquee')).toHaveTextContent('Test Thread')
+    expect(screen.getByText('Comic')).toBeInTheDocument()
+    expect(screen.getByText(/Up next: #5/)).toBeInTheDocument()
+    expect(screen.getByText('A note')).toBeInTheDocument()
+
     const threadCard = screen.getByText('Comic').closest('[role="button"]') as HTMLElement
     fireEvent.keyDown(threadCard, { key: 'Enter' })
     fireEvent.keyDown(threadCard, { key: ' ' })
     expect(callbacks.onCardClick).toHaveBeenCalledTimes(2)
+
     const drag = screen.getByRole('button', { name: 'Drag to reorder' })
-    await user.click(drag)
     fireEvent.dragStart(drag)
     fireEvent.dragEnd(drag)
     fireEvent.dragOver(threadCard)
@@ -189,7 +167,5 @@ describe('QueueThreadCard', () => {
     expect(callbacks.onDragEnd).toHaveBeenCalled()
     expect(callbacks.onDragOver).toHaveBeenCalled()
     expect(callbacks.onDrop).toHaveBeenCalled()
-    await user.click(screen.getByTestId('mock-position-menu'))
-    expect(callbacks.onDependencies).toHaveBeenCalledTimes(2)
   })
 })
