@@ -95,7 +95,7 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
             self.validate(entrypoint=f"{self.entrypoint}\n{rule}\n")
 
     def test_current_sources_are_aligned(self) -> None:
-        """Accept the current V17 policy, protocol, and runtime prompt.
+        """Accept the current V18 policy, protocol, and runtime prompts.
 
         Returns:
             None.
@@ -103,16 +103,42 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
         self.validate()
 
     def test_version_and_backlog_goal_are_required(self) -> None:
-        """Require V17 and issue-backlog closure as the prime directive.
+        """Require V18 and issue-backlog closure as the prime directive.
 
         Returns:
             None.
         """
-        self.assert_policy_change_fails("Version: 17", "Version: 16")
+        self.assert_policy_change_fails("Version: 18", "Version: 17")
         self.assert_policy_change_fails(
             "Drive the open issue backlog to zero",
             "Keep existing pull requests busy",
         )
+
+    def test_no_self_pause_and_e2e_fallback_are_required(self) -> None:
+        """Require blocked workers to stay enabled and enter the Chromium cycle.
+
+        Returns:
+            None.
+        """
+        self.assert_policy_change_fails(
+            "An empty or blocked ordinary backlog is never an idle condition",
+            "A blocked backlog may be treated as idle",
+        )
+        self.assert_policy_change_fails(
+            "If no ordinary executable issue can be selected, do not declare the factory idle.",
+            "If no ordinary executable issue can be selected, stop the factory.",
+        )
+        self.assert_policy_change_fails(
+            "Blocked work never authorizes a worker to pause or disable itself.",
+            "Blocked work may pause the worker.",
+        )
+        mutated = self.entrypoint.replace(
+            "Never treat an empty or blocked backlog as a reason to idle, pause, disable yourself, or stop checking.",
+            "A blocked backlog may stop the worker.",
+        )
+        self.assertNotEqual(mutated, self.entrypoint)
+        with self.assertRaisesRegex(SystemExit, "missing required policy text"):
+            self.validate(entrypoint=mutated)
 
     def test_user_reported_bug_priority_is_required(self) -> None:
         """Require user-reported bugs to outrank PR orbiting.
