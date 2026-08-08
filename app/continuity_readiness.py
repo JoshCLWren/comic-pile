@@ -1,4 +1,4 @@
-"""Bounded direct readiness evaluation for generalized continuity rules."""
+"""Bounded readiness and transitive traversal for generalized continuity rules."""
 
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -13,6 +13,9 @@ from app.models.issue import Issue
 from app.models.thread import Thread
 from app.schemas.continuity_readiness import (
     ContinuityBlocker,
+    ContinuityChain,
+    ContinuityChainNode,
+    ContinuityDiagnostic,
     ContinuityReadinessNodeType,
     ContinuityReadinessResponse,
 )
@@ -23,6 +26,8 @@ MAX_GRAPH_GROUPS = 5_000
 MAX_GRAPH_MEMBERSHIPS = 10_000
 MAX_GRAPH_RULES = 5_000
 MAX_GRAPH_SELECTED_MEMBERS = 10_000
+MAX_TRAVERSAL_DEPTH = 32
+MAX_TRAVERSAL_NODES = 500
 
 
 @dataclass(frozen=True)
@@ -37,6 +42,18 @@ class _GraphSnapshot:
     rules_by_target: dict[tuple[str, int], tuple[ContinuityRule, ...]]
     thread_issue_ids: dict[int, tuple[int, ...]]
     selected_member_issue_ids: dict[int, tuple[int, ...]]
+
+
+@dataclass
+class _TraversalState:
+    """Mutable bounds and diagnostics shared by one readiness traversal."""
+
+    visited_nodes: int = 0
+    diagnostics: list[ContinuityDiagnostic] | None = None
+
+    def __post_init__(self) -> None:
+        if self.diagnostics is None:
+            self.diagnostics = []
 
 
 def _too_large(limit: int) -> HTTPException:
@@ -163,18 +180,28 @@ def _group_issue_ids(group_id: int, snapshot: _GraphSnapshot) -> list[int]:
     return sorted(issue_ids)
 
 
-def _source_label(rule: ContinuityRule, snapshot: _GraphSnapshot) -> str:
-    """Return a stable human label while keeping blocker identity structured."""
-    if rule.source_type == "crossover":
-        group = snapshot.groups.get(rule.source_id)
-        return group.name if group is not None else f"Crossover {rule.source_id}"
-    issue = snapshot.issues.get(rule.source_id)
+def _issue_label(issue_id: int, snapshot: _GraphSnapshot) -> str:
+    """Return a stable owned issue label."""
+    issue = snapshot.issues.get(issue_id)
     if issue is None:
-        return f"Issue {rule.source_id}"
+        return f"Issue {issue_id}"
     thread = snapshot.threads.get(issue.thread_id)
     if thread is None:
         return f"Issue {issue.issue_number}"
     return f"{thread.title} #{issue.issue_number}"
+
+
+def _node_label(node_type: str, node_id: int, snapshot: _GraphSnapshot) -> str:
+    """Return a stable label for a traversable continuity node."""
+    if node_type == "crossover":
+        group = snapshot.groups.get(node_id)
+        return group.name if group is not None else f"Crossover {node_id}"
+    return _issue_label(node_id, snapshot)
+
+
+def _source_label(rule: ContinuityRule, snapshot: _GraphSnapshot) -> str:
+    """Return a stable human label while keeping blocker identity structured."""
+    return _node_label(rule.source_type, rule.source_id, snapshot)
 
 
 def _is_read(issue_id: int, snapshot: _GraphSnapshot) -> bool:
@@ -262,6 +289,180 @@ def _crossover_readiness(group_id: int, snapshot: _GraphSnapshot) -> list[Contin
     return blockers
 
 
+def _node_blockers(node_type: str, node_id: int, snapshot: _GraphSnapshot) -> list[ContinuityBlocker]:
+    """Return blockers for one traversable issue or crossover node."""
+    if node_type == "crossover":
+        return _crossover_readiness(node_id, snapshot)
+    return _issue_readiness(node_id, snapshot)
+
+
+def _blocker_source_nodes(
+    blocker: ContinuityBlocker,
+    snapshot: _GraphSnapshot,
+) -> list[tuple[str, int]]:
+    """Map one unsatisfied rule to the concrete prerequisite nodes worth traversing."""
+    if blocker.source_type == "issue":
+        issue_ids = blocker.causing_issue_ids or [blocker.source_id]
+        return [("issue", issue_id) for issue_id in sorted(set(issue_ids))]
+
+    causing_members = sorted(set(blocker.causing_member_issue_ids))
+    if causing_members:
+        return [("issue", issue_id) for issue_id in causing_members]
+    if blocker.source_id in snapshot.groups:
+        return [("crossover", blocker.source_id)]
+    return []
+
+
+def _make_chain_node(
+    node_type: str,
+    node_id: int,
+    snapshot: _GraphSnapshot,
+    *,
+    is_readable: bool,
+) -> ContinuityChainNode:
+    """Build one response node for a traversed prerequisite."""
+    return ContinuityChainNode(
+        node_type=node_type,
+        node_id=node_id,
+        label=_node_label(node_type, node_id, snapshot),
+        is_readable=is_readable,
+    )
+
+
+def _append_diagnostic(
+    state: _TraversalState,
+    *,
+    code: str,
+    node_type: str,
+    node_id: int,
+    limit: int | None = None,
+) -> None:
+    """Append a diagnostic once for a node/code pair."""
+    assert state.diagnostics is not None
+    if any(
+        diagnostic.code == code
+        and diagnostic.node_type == node_type
+        and diagnostic.node_id == node_id
+        for diagnostic in state.diagnostics
+    ):
+        return
+    state.diagnostics.append(
+        ContinuityDiagnostic(
+            code=code,
+            node_type=node_type,
+            node_id=node_id,
+            limit=limit,
+        )
+    )
+
+
+def _traverse_node(
+    node_type: str,
+    node_id: int,
+    snapshot: _GraphSnapshot,
+    state: _TraversalState,
+    *,
+    path: tuple[tuple[str, int], ...],
+    depth: int,
+) -> list[list[ContinuityChainNode]]:
+    """Return every bounded path from one prerequisite node to readable leaves."""
+    key = (node_type, node_id)
+    if key in path:
+        _append_diagnostic(
+            state,
+            code="cycle_detected",
+            node_type=node_type,
+            node_id=node_id,
+        )
+        return []
+    if depth > MAX_TRAVERSAL_DEPTH:
+        _append_diagnostic(
+            state,
+            code="depth_limit_exceeded",
+            node_type=node_type,
+            node_id=node_id,
+            limit=MAX_TRAVERSAL_DEPTH,
+        )
+        return []
+    if state.visited_nodes >= MAX_TRAVERSAL_NODES:
+        _append_diagnostic(
+            state,
+            code="node_limit_exceeded",
+            node_type=node_type,
+            node_id=node_id,
+            limit=MAX_TRAVERSAL_NODES,
+        )
+        return []
+
+    state.visited_nodes += 1
+    blockers = _node_blockers(node_type, node_id, snapshot)
+    current = _make_chain_node(
+        node_type,
+        node_id,
+        snapshot,
+        is_readable=not blockers,
+    )
+    if not blockers:
+        return [[current]]
+
+    paths: list[list[ContinuityChainNode]] = []
+    child_keys: list[tuple[str, int]] = []
+    for blocker in blockers:
+        child_keys.extend(_blocker_source_nodes(blocker, snapshot))
+    for child_type, child_id in sorted(set(child_keys), key=lambda item: (item[0], item[1])):
+        for child_path in _traverse_node(
+            child_type,
+            child_id,
+            snapshot,
+            state,
+            path=(*path, key),
+            depth=depth + 1,
+        ):
+            paths.append([current, *child_path])
+    return paths
+
+
+def _build_transitive_guidance(
+    blockers: list[ContinuityBlocker],
+    snapshot: _GraphSnapshot,
+) -> tuple[list[ContinuityChain], list[ContinuityChainNode], list[ContinuityDiagnostic]]:
+    """Build deterministic chains, unique readable leaves, and traversal diagnostics."""
+    state = _TraversalState()
+    raw_paths: list[list[ContinuityChainNode]] = []
+    roots: list[tuple[str, int]] = []
+    for blocker in blockers:
+        roots.extend(_blocker_source_nodes(blocker, snapshot))
+
+    for node_type, node_id in sorted(set(roots), key=lambda item: (item[0], item[1])):
+        raw_paths.extend(
+            _traverse_node(
+                node_type,
+                node_id,
+                snapshot,
+                state,
+                path=(),
+                depth=0,
+            )
+        )
+
+    chains = [ContinuityChain(nodes=path) for path in raw_paths]
+    leaves: dict[tuple[str, int], ContinuityChainNode] = {}
+    for path in raw_paths:
+        if not path:
+            continue
+        leaf = path[-1]
+        if leaf.is_readable:
+            leaves[(leaf.node_type, leaf.node_id)] = leaf
+    readable_prerequisites = [
+        leaves[key] for key in sorted(leaves, key=lambda item: (item[0], item[1]))
+    ]
+    diagnostics = sorted(
+        state.diagnostics or [],
+        key=lambda diagnostic: (diagnostic.code, diagnostic.node_type, diagnostic.node_id),
+    )
+    return chains, readable_prerequisites, diagnostics
+
+
 async def evaluate_continuity_readiness(
     db: AsyncSession,
     *,
@@ -269,7 +470,7 @@ async def evaluate_continuity_readiness(
     node_type: ContinuityReadinessNodeType,
     node_id: int,
 ) -> ContinuityReadinessResponse:
-    """Evaluate direct readiness for an owned issue, thread, or crossover.
+    """Evaluate direct and transitive readiness for an owned continuity node.
 
     Args:
         db: Database session used to load the authenticated user's continuity graph.
@@ -278,7 +479,7 @@ async def evaluate_continuity_readiness(
         node_id: Identifier of the owned node to evaluate.
 
     Returns:
-        Structured readiness state and any unsatisfied direct blockers.
+        Structured readiness, direct blockers, transitive chains, and readable leaves.
     """
     snapshot = await _load_snapshot(db, user_id)
     evaluated_issue_id: int | None = None
@@ -303,10 +504,14 @@ async def evaluate_continuity_readiness(
             raise HTTPException(status_code=404, detail=f"Crossover {node_id} not found")
         blockers = _crossover_readiness(node_id, snapshot)
 
+    chains, readable_prerequisites, diagnostics = _build_transitive_guidance(blockers, snapshot)
     return ContinuityReadinessResponse(
         node_type=node_type,
         node_id=node_id,
         is_readable=not blockers,
         evaluated_issue_id=evaluated_issue_id,
         blockers=blockers,
+        chains=chains,
+        readable_prerequisites=readable_prerequisites,
+        diagnostics=diagnostics,
     )
