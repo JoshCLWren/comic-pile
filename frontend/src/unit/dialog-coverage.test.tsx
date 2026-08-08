@@ -22,6 +22,22 @@ describe('bug report and issue correction dialogs', () => {
     expect(onClose).toHaveBeenCalled()
   })
 
+  it('submits from the description action key while preserving Shift+Enter for newlines', async () => {
+    const user = userEvent.setup(); const onSubmit = vi.fn().mockResolvedValue(undefined)
+    render(<BugReportModal isOpen onClose={vi.fn()} onSubmit={onSubmit} diagnosticData={null} />)
+
+    await user.type(screen.getByLabelText('Title'), ' Mobile submit ')
+    const description = screen.getByLabelText('Description')
+    await user.type(description, ' Use the keyboard action ')
+    expect(description).toHaveAttribute('enterkeyhint', 'send')
+
+    fireEvent.keyDown(description, { key: 'Enter', shiftKey: true })
+    expect(onSubmit).not.toHaveBeenCalled()
+
+    fireEvent.keyDown(description, { key: 'Enter' })
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith('bug', 'Mobile submit', 'Use the keyboard action'))
+  })
+
   it('switches to feature request copy and submits the selected type', async () => {
     const user = userEvent.setup(); const onSubmit = vi.fn().mockResolvedValue(undefined)
     render(<BugReportModal isOpen onClose={vi.fn()} onSubmit={onSubmit} diagnosticData={null} />)

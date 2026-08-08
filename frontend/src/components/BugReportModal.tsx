@@ -53,6 +53,22 @@ export default function BugReportModal({
     }
   }
 
+  const handleDescriptionKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (
+      event.key !== 'Enter' ||
+      event.shiftKey ||
+      event.nativeEvent.isComposing ||
+      isSubmitting ||
+      !title.trim() ||
+      !description.trim()
+    ) {
+      return
+    }
+
+    event.preventDefault()
+    event.currentTarget.form?.requestSubmit()
+  }
+
   const isFeature = reportType === 'feature'
 
   return (
@@ -123,6 +139,8 @@ export default function BugReportModal({
             id="report-description"
             value={description}
             onChange={(event) => setDescription(event.target.value)}
+            onKeyDown={handleDescriptionKeyDown}
+            enterKeyHint="send"
             placeholder={isFeature ? 'What would you like ComicPile to do, and how would it help?' : 'What were you doing, what happened, and what did you expect?'}
             className="w-full bg-white/5 border border-stone-700 rounded-xl px-3 py-2 text-sm text-stone-200 min-h-[120px] resize-y focus:outline-none focus:ring-2 focus:ring-amber-500/50"
             rows={4}
