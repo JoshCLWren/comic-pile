@@ -1,5 +1,7 @@
 """Authenticated API for user-owned named dependency groups."""
 
+import asyncio
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -10,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth import get_current_user
+from app.cache import invalidate_cache
 from app.database import get_db
 from app.models import DependencyGroup, DependencyGroupMembership, Issue, Thread
 from app.models.user import User
@@ -23,7 +26,9 @@ from app.schemas.dependency_group import (
     DependencyGroupSummary,
     DependencyGroupUpdate,
 )
+from comic_pile.dependencies import refresh_user_blocked_status
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/reading-order-groups", tags=["reading-order-groups"])
 MAX_RANGE_SIZE = 250
 
@@ -33,6 +38,23 @@ def _normalize_name(name: str) -> str:
     if not normalized:
         raise HTTPException(status_code=422, detail="Group name must not be blank")
     return normalized
+
+
+async def _refresh_crossover_blocked_state(user_id: int, db: AsyncSession) -> None:
+    """Persist blocked-state changes and invalidate dependent read caches."""
+    await refresh_user_blocked_status(user_id, db)
+    await db.commit()
+    results = await asyncio.gather(
+        invalidate_cache(f"cache:continuity:*:User:{user_id}:*"),
+        invalidate_cache(f"cache:get_blocked_thread_ids:{user_id}:"),
+        invalidate_cache(f"cache:list_threads:User:{user_id}:*"),
+        invalidate_cache(f"cache:get_thread_blocking_info:*:User:{user_id}:"),
+        invalidate_cache(f"cache:get_threads_blocking_info:*:User:{user_id}:"),
+        return_exceptions=True,
+    )
+    for result in results:
+        if isinstance(result, BaseException):
+            logger.warning("Crossover cache invalidation failed", exc_info=result)
 
 
 async def _owned_group(db: AsyncSession, group_id: int, user_id: int) -> DependencyGroup:
@@ -56,15 +78,6 @@ async def list_groups(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> list[DependencyGroup]:
-    """List the current user's groups and memberships.
-
-    Args:
-        current_user: The authenticated owner of the requested groups.
-        db: The asynchronous database session.
-
-    Returns:
-        The user's groups with memberships eagerly loaded.
-    """
     result = await db.execute(
         select(DependencyGroup)
         .options(selectinload(DependencyGroup.memberships))
@@ -85,16 +98,6 @@ async def create_group(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> DependencyGroup:
-    """Create a user-owned named group.
-
-    Args:
-        payload: The validated group creation request.
-        current_user: The authenticated group owner.
-        db: The asynchronous database session.
-
-    Returns:
-        The newly created group with memberships loaded.
-    """
     group = DependencyGroup(user_id=current_user.id, name=_normalize_name(payload.name))
     db.add(group)
     try:
@@ -115,16 +118,6 @@ async def list_thread_groups(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> list[DependencyGroupSummary]:
-    """List groups containing an owned thread or any of its owned issues.
-
-    Args:
-        thread_id: The owned thread identifier used for the lookup.
-        current_user: The authenticated thread and group owner.
-        db: The asynchronous database session.
-
-    Returns:
-        Distinct group summaries ordered by name and identifier.
-    """
     thread = await db.get(Thread, thread_id)
     if thread is None or thread.user_id != current_user.id:
         raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
@@ -155,16 +148,6 @@ async def get_group(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> DependencyGroup:
-    """Return one owned group.
-
-    Args:
-        group_id: The dependency group identifier.
-        current_user: The authenticated group owner.
-        db: The asynchronous database session.
-
-    Returns:
-        The requested owned group with memberships loaded.
-    """
     return await _owned_group(db, group_id, current_user.id)
 
 
@@ -179,17 +162,6 @@ async def update_group(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> DependencyGroup:
-    """Rename one owned group.
-
-    Args:
-        group_id: The dependency group identifier.
-        payload: The validated group rename request.
-        current_user: The authenticated group owner.
-        db: The asynchronous database session.
-
-    Returns:
-        The renamed group with memberships loaded.
-    """
     group = await _owned_group(db, group_id, current_user.id)
     group.name = _normalize_name(payload.name)
     try:
@@ -210,19 +182,10 @@ async def delete_group(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> Response:
-    """Delete one owned group and its memberships.
-
-    Args:
-        group_id: The dependency group identifier.
-        current_user: The authenticated group owner.
-        db: The asynchronous database session.
-
-    Returns:
-        An empty HTTP 204 response.
-    """
     group = await _owned_group(db, group_id, current_user.id)
     await db.delete(group)
     await db.commit()
+    await _refresh_crossover_blocked_state(current_user.id, db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -238,17 +201,6 @@ async def add_issue_range(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> DependencyGroupIssueRangeResponse:
-    """Add one inclusive issue-position range from an owned thread to a group.
-
-    Args:
-        group_id: The dependency group identifier.
-        payload: The validated issue-position range request.
-        current_user: The authenticated group and thread owner.
-        db: The asynchronous database session.
-
-    Returns:
-        The idempotent range result with inserted and already-present issue IDs.
-    """
     await _owned_group(db, group_id, current_user.id)
     thread = await db.get(Thread, payload.thread_id)
     if thread is None or thread.user_id != current_user.id:
@@ -289,6 +241,7 @@ async def add_issue_range(
     )
     added_ids = list((await db.execute(statement)).scalars())
     await db.commit()
+    await _refresh_crossover_blocked_state(current_user.id, db)
     added_id_set = set(added_ids)
 
     return DependencyGroupIssueRangeResponse(
@@ -312,17 +265,6 @@ async def add_member(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> DependencyGroupMembership:
-    """Add one owned thread or issue to an owned group.
-
-    Args:
-        group_id: The dependency group identifier.
-        payload: The validated thread or issue membership request.
-        current_user: The authenticated owner of the group and target.
-        db: The asynchronous database session.
-
-    Returns:
-        The newly persisted group membership.
-    """
     await _owned_group(db, group_id, current_user.id)
     if payload.thread_id is not None:
         target = await db.get(Thread, payload.thread_id)
@@ -345,6 +287,7 @@ async def add_member(
         await db.rollback()
         raise HTTPException(status_code=409, detail="This member is already in the group") from exc
     await db.refresh(member)
+    await _refresh_crossover_blocked_state(current_user.id, db)
     return member
 
 
@@ -359,21 +302,11 @@ async def remove_member(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> Response:
-    """Remove one membership from an owned group.
-
-    Args:
-        group_id: The dependency group identifier.
-        member_id: The membership identifier to remove.
-        current_user: The authenticated group owner.
-        db: The asynchronous database session.
-
-    Returns:
-        An empty HTTP 204 response.
-    """
     await _owned_group(db, group_id, current_user.id)
     member = await db.get(DependencyGroupMembership, member_id)
     if member is None or member.group_id != group_id:
         raise HTTPException(status_code=404, detail=f"Member {member_id} not found")
     await db.delete(member)
     await db.commit()
+    await _refresh_crossover_blocked_state(current_user.id, db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
