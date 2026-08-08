@@ -7,6 +7,14 @@ type Block =
 
 const CHANGELOG_ASSET = '/changelog.md'
 
+export function isPublicChangelogLink(url: string) {
+  try {
+    return new URL(url).hostname !== 'github.com'
+  } catch {
+    return false
+  }
+}
+
 function renderInline(text: string) {
   const pattern = /(`[^`]+`|\[[^\]]+\]\(https?:\/\/[^)]+\))/g
   return text.split(pattern).map((part, index) => {
@@ -14,6 +22,7 @@ function renderInline(text: string) {
     if (code) return <code key={index} className="rounded bg-stone-800 px-1.5 py-0.5 text-amber-200">{code[1]}</code>
     const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)$/)
     if (link) {
+      if (!isPublicChangelogLink(link[2])) return <Fragment key={index}>{link[1]}</Fragment>
       return <a key={index} href={link[2]} target="_blank" rel="noreferrer" className="font-semibold text-amber-300 underline decoration-amber-500/50 underline-offset-4">{link[1]} <span aria-label="opens in a new tab">↗</span></a>
     }
     return <Fragment key={index}>{part}</Fragment>
