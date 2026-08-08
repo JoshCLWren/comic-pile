@@ -26,6 +26,10 @@ vi.mock('../components/Swipeable', () => ({
   default: ({ children }: { children: React.ReactNode }) => <div data-testid="mock-swipeable">{children}</div>,
 }))
 
+vi.mock('../hooks/useCrossoverGroups', () => ({
+  useCrossoverGroups: () => ({ groupsByThreadId: {}, isPending: false, error: null }),
+}))
+
 function createMockThread(overrides: Partial<Thread> = {}): Thread {
   return {
     id: 1,
@@ -158,6 +162,40 @@ describe('QueueThreadCard', () => {
     const thread = createMockThread({ notes: 'This is a note' })
     renderCard(thread)
     expect(screen.getByText('This is a note')).toBeInTheDocument()
+  })
+
+  it('renders multiple crossover memberships supplied by the Queue batch loader', () => {
+    renderCard(createMockThread(), {
+      crossoverGroups: [
+        { id: 11, name: 'Rotworld' },
+        { id: 12, name: 'Night of the Owls' },
+      ],
+    })
+
+    expect(screen.getByRole('link', { name: 'Rotworld' })).toHaveAttribute('href', '/crossovers?group=11')
+    expect(screen.getByRole('link', { name: 'Night of the Owls' })).toHaveAttribute('href', '/crossovers?group=12')
+  })
+
+  it('shows a crossover loading state without inventing empty membership', () => {
+    renderCard(createMockThread(), { crossoverGroups: [], crossoverGroupsLoading: true })
+
+    expect(screen.getByText('Loading crossovers…')).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Crossovers' })).not.toBeInTheDocument()
+  })
+
+  it('shows a non-blocking crossover error state when membership loading fails', () => {
+    renderCard(createMockThread(), { crossoverGroups: [], crossoverGroupsError: true })
+
+    expect(screen.getByText('Crossovers unavailable')).toBeInTheDocument()
+    expect(screen.getByText('Test Thread')).toBeInTheDocument()
+  })
+
+  it('keeps the empty crossover state visually quiet once loading completes', () => {
+    renderCard(createMockThread(), { crossoverGroups: [], crossoverGroupsLoading: false })
+
+    expect(screen.queryByText('Loading crossovers…')).not.toBeInTheDocument()
+    expect(screen.queryByText('Crossovers unavailable')).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Crossovers' })).not.toBeInTheDocument()
   })
 
   it('handles keyboard, drag, blocked dependency, and all position-menu callbacks', async () => {
