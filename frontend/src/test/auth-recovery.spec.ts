@@ -1,9 +1,17 @@
 import { expect, test } from './fixtures'
 
-test('Retry explicitly refreshes auth after automatic resume recovery fails', async ({ authenticatedPage }) => {
+test('Retry explicitly refreshes auth after automatic resume recovery fails', async ({
+  authenticatedPage,
+  allowExpectedBrowserFailures,
+}) => {
   const page = authenticatedPage
   let meAttempts = 0
   let refreshAttempts = 0
+
+  allowExpectedBrowserFailures.allow(
+    { category: 'console', message: '503' },
+    { category: 'console', message: 'ComicPile resume validation failed' },
+  )
 
   await page.goto('/')
   await expect(page.locator('[data-app-shell-ready]')).toBeVisible()
