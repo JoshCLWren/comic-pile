@@ -32,7 +32,7 @@ describe('WhatsNewPage', () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       text: async () =>
-        '# Changelog\n\nPlain introduction.\n\n## Today\n\n### Queue\n\n- Fixed `Queue` in [#866](https://github.com/JoshCLWren/comic-pile/pull/866). See [ComicPile](https://comic-pile.vercel.app/) for more.',
+        '# Changelog\n\nPlain introduction.\n\n## Today\n\n### Queue\n\n- Fixed `Queue` in [#866](https://github.com/JoshCLWren/comic-pile/pull/866). See [ComicPile](https://comic-pile.vercel.app/) for more. [Internal notes](https://github.com/JoshCLWren/comic-pile/issues/981).',
     })
     vi.stubGlobal('fetch', fetchMock)
 
@@ -48,6 +48,8 @@ describe('WhatsNewPage', () => {
     expect(screen.getByRole('listitem')).not.toHaveTextContent('#866')
     expect(screen.getByRole('listitem')).toHaveTextContent(/Fixed Queue\. See ComicPile.*for more\./)
     expect(screen.queryByRole('link', { name: /#866/ })).not.toBeInTheDocument()
+    expect(screen.getByText(/Internal notes/)).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Internal notes/ })).not.toBeInTheDocument()
 
     const link = screen.getByRole('link', { name: /ComicPile/ })
     expect(link).toHaveAttribute('href', 'https://comic-pile.vercel.app/')
