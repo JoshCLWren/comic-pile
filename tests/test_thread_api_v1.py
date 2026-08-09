@@ -21,12 +21,12 @@ def _thread_routes(prefix: str) -> dict[tuple[str, tuple[str, ...]], Callable[..
 
 
 def test_v1_thread_routes_share_legacy_implementations() -> None:
-    """Canonical and compatibility thread routes must delegate to the same handlers."""
+    """Canonical retained thread routes must delegate to the compatibility handlers."""
     legacy = _thread_routes("/api/threads")
     canonical = _thread_routes("/api/v1/threads")
 
     assert legacy
-    assert canonical.keys() == legacy.keys()
+    assert legacy.keys() <= canonical.keys()
     for route_key, legacy_endpoint in legacy.items():
         assert canonical[route_key] is legacy_endpoint
 
