@@ -15,7 +15,12 @@ async def test_recent_pending_roll_keeps_old_open_session_authoritative(
     async_db: AsyncSession,
     default_user: User,
 ) -> None:
-    """A recently pending comic must survive after the session start crosses the gap."""
+    """A recently pending comic must survive after the session start crosses the gap.
+
+    Args:
+        async_db: Async database fixture.
+        default_user: User fixture that owns the reading session.
+    """
     thread = Thread(
         title="Fantastic Four",
         format="Comic",
@@ -63,7 +68,12 @@ async def test_stale_session_without_recent_pending_activity_can_roll_over(
     async_db: AsyncSession,
     default_user: User,
 ) -> None:
-    """The configured session gap still starts a new session after genuinely stale activity."""
+    """The configured session gap still starts a new session after genuinely stale activity.
+
+    Args:
+        async_db: Async database fixture.
+        default_user: User fixture that owns the reading session.
+    """
     thread = Thread(
         title="Old Pending Comic",
         format="Comic",
@@ -93,3 +103,33 @@ async def test_stale_session_without_recent_pending_activity_can_roll_over(
     assert new_session.id != stale_session.id
     assert new_session.pending_thread_id is None
     assert new_session.start_die == 6
+
+
+@pytest.mark.asyncio
+async def test_recent_timestamp_without_pending_thread_does_not_keep_session_active(
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A stale pending timestamp cannot keep a cleared reading session authoritative.
+
+    Args:
+        async_db: Async database fixture.
+        default_user: User fixture that owns the reading session.
+    """
+    stale_session = Session(
+        user_id=default_user.id,
+        started_at=datetime.now(UTC) - timedelta(hours=8),
+        start_die=6,
+        pending_thread_id=None,
+        pending_thread_updated_at=datetime.now(UTC) - timedelta(minutes=5),
+    )
+    async_db.add(stale_session)
+    await async_db.commit()
+
+    assert await should_start_new(async_db, default_user.id) is True
+
+    new_session = await get_or_create(async_db, default_user.id)
+
+    assert new_session.id != stale_session.id
+    assert new_session.pending_thread_id is None
+    assert new_session.pending_thread_updated_at is None
