@@ -4,12 +4,10 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from fastapi import Request
 from httpx import AsyncClient
 from jose import jwt
 
 from app.auth import ALGORITHM, SECRET_KEY
-from app.csrf import log_csrf_rejection
 
 
 def _auth_reasons(caplog: pytest.LogCaptureFixture) -> list[str]:
@@ -26,7 +24,15 @@ async def test_refresh_logs_missing_cookie_without_secrets(
     client: AsyncClient,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """A browser refresh without its HttpOnly cookie has an explicit reason code."""
+    """A browser refresh without its HttpOnly cookie has an explicit reason code.
+
+    Args:
+        client: Async application client backed by the PostgreSQL test database.
+        caplog: Pytest log-capture fixture.
+
+    Returns:
+        None.
+    """
     caplog.set_level(logging.WARNING)
     client.cookies.clear()
 
@@ -42,7 +48,15 @@ async def test_refresh_logs_expired_token_without_secrets(
     client: AsyncClient,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Expired refresh credentials are distinguishable from generic invalid tokens."""
+    """Expired refresh credentials are distinguishable from generic invalid tokens.
+
+    Args:
+        client: Async application client backed by the PostgreSQL test database.
+        caplog: Pytest log-capture fixture.
+
+    Returns:
+        None.
+    """
     caplog.set_level(logging.WARNING)
     expired_token = jwt.encode(
         {
@@ -70,7 +84,15 @@ async def test_refresh_logs_invalid_token_without_secrets(
     client: AsyncClient,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Malformed refresh credentials emit the stable invalid-token reason code."""
+    """Malformed refresh credentials emit the stable invalid-token reason code.
+
+    Args:
+        client: Async application client backed by the PostgreSQL test database.
+        caplog: Pytest log-capture fixture.
+
+    Returns:
+        None.
+    """
     caplog.set_level(logging.WARNING)
     invalid_token = "not-a-valid-jwt"
 
@@ -89,7 +111,15 @@ async def test_refresh_logs_revoked_token_and_success(
     client: AsyncClient,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Successful and independently revoked browser refreshes remain distinguishable."""
+    """Successful and independently revoked browser refreshes remain distinguishable.
+
+    Args:
+        client: Async application client backed by the PostgreSQL test database.
+        caplog: Pytest log-capture fixture.
+
+    Returns:
+        None.
+    """
     caplog.set_level(logging.WARNING)
     register_response = await client.post(
         "/api/v1/auth/register",
@@ -107,9 +137,15 @@ async def test_refresh_logs_revoked_token_and_success(
 
     access_token = refresh_response.json()["access_token"]
     refresh_token = refresh_response.json()["refresh_token"]
+    csrf_response = await client.get("/api/v1/auth/csrf")
+    assert csrf_response.status_code == 200
+    csrf_token = csrf_response.json()["csrf_token"]
     logout_response = await client.post(
         "/api/v1/auth/logout",
-        headers={"Authorization": f"Bearer {access_token}"},
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "X-CSRF-Token": csrf_token,
+        },
     )
     assert logout_response.status_code == 200
 
@@ -122,30 +158,61 @@ async def test_refresh_logs_revoked_token_and_success(
     assert refresh_token not in caplog.text
 
 
-def test_csrf_rejection_logs_reason_without_credentials(
+@pytest.mark.asyncio
+async def test_csrf_middleware_logs_rejection_without_credentials(
+    client: AsyncClient,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """CSRF middleware diagnostics identify the rejection without logging credentials."""
+    """The middleware logs rejected auth mutations before returning 403.
+
+    Args:
+        client: Async application client backed by the PostgreSQL test database.
+        caplog: Pytest log-capture fixture.
+
+    Returns:
+        None.
+    """
     caplog.set_level(logging.WARNING)
-    request = Request(
-        {
-            "type": "http",
-            "method": "POST",
-            "scheme": "https",
-            "path": "/api/v1/auth/logout",
-            "raw_path": b"/api/v1/auth/logout",
-            "query_string": b"",
-            "headers": [(b"authorization", b"Bearer secret-value")],
-            "client": ("127.0.0.1", 1234),
-            "server": ("test", 443),
-        }
+    secret_value = "Bearer secret-value"
+
+    response = await client.post(
+        "/api/v1/auth/logout",
+        headers={"Authorization": secret_value},
     )
-    request.state.request_id = "request-123"
 
-    log_csrf_rejection(request)
-
+    assert response.status_code == 403
     assert "csrf_rejected" in _auth_reasons(caplog)
     assert "secret-value" not in caplog.text
     record = next(record for record in caplog.records if "auth_reason" in record.__dict__)
-    assert record.__dict__["request_id"] == "request-123"
     assert record.__dict__["path"] == "/api/v1/auth/logout"
+    assert record.__dict__["auth_outcome"] == "rejected"
+    assert record.__dict__["event"] == "auth_csrf"
+
+
+@pytest.mark.asyncio
+async def test_csrf_middleware_allows_matching_token(
+    client: AsyncClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A protected auth mutation succeeds when cookie and header CSRF tokens match.
+
+    Args:
+        client: Async application client backed by the PostgreSQL test database.
+        caplog: Pytest log-capture fixture.
+
+    Returns:
+        None.
+    """
+    caplog.set_level(logging.WARNING)
+    csrf_response = await client.get("/api/v1/auth/csrf")
+    assert csrf_response.status_code == 200
+    csrf_token = csrf_response.json()["csrf_token"]
+
+    response = await client.post(
+        "/api/v1/auth/logout",
+        headers={"X-CSRF-Token": csrf_token},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"message": "Successfully logged out"}
+    assert "csrf_rejected" not in _auth_reasons(caplog)
