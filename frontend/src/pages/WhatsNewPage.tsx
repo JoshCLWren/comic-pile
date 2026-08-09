@@ -9,7 +9,7 @@ const CHANGELOG_ASSET = '/changelog.md'
 
 export function isPublicChangelogLink(url: string) {
   try {
-    const hostname = new URL(url).hostname.toLowerCase()
+    const hostname = new URL(url).hostname.toLowerCase().replace(/\.$/, '')
     return hostname !== 'github.com' && !hostname.endsWith('.github.com')
   } catch {
     return false
