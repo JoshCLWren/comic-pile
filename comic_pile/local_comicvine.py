@@ -25,6 +25,7 @@ class LocalComicVineSnapshot:
     """Read a local ComicVine SQLite cache without mutating it."""
 
     def __init__(self, path: str | Path | None = None) -> None:
+        """Configure the optional local snapshot path."""
         configured = path or os.getenv(LOCAL_COMICVINE_DB_ENV)
         self.path = Path(configured).expanduser() if configured else None
 
