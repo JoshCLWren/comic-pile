@@ -9,8 +9,17 @@ from app.main import app
 
 
 @pytest.mark.asyncio
-async def test_two_clients_for_one_user_refresh_independently(client: AsyncClient) -> None:
-    """Independent browser sessions for one user must not invalidate each other."""
+async def test_two_clients_for_one_user_refresh_independently(
+    client: AsyncClient,
+) -> None:
+    """Independent browser sessions for one user must not invalidate each other.
+
+    Args:
+        client: Authenticated HTTP client representing the first browser session.
+
+    Returns:
+        None: Assertions verify independent refresh and logout isolation.
+    """
     credentials = {
         "username": "multi-client-user",
         "email": "multi-client@example.com",
@@ -45,14 +54,18 @@ async def test_two_clients_for_one_user_refresh_independently(client: AsyncClien
 
 
 def test_frontend_does_not_use_legacy_auth_surface() -> None:
-    """Maintained frontend code must use only the canonical /v1/auth family."""
+    """Maintained frontend code must use only the canonical /v1/auth family.
+
+    Returns:
+        None: Assertion fails if legacy /auth/ routes are found in maintained code.
+    """
     frontend_root = Path("frontend/src")
     offenders: list[str] = []
     for path in frontend_root.rglob("*"):
-        if path.suffix not in {".ts", ".tsx"}:
+        if path.suffix not in {".js", ".jsx", ".ts", ".tsx"}:
             continue
         text = path.read_text(encoding="utf-8")
-        if "'/auth/" in text or '"/auth/' in text:
+        if any(f"{quote}/auth/" in text for quote in ("'", '"', "`")):
             offenders.append(str(path))
 
     assert offenders == [], f"Legacy auth routes found in maintained frontend: {offenders}"

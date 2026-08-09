@@ -65,8 +65,18 @@ async def test_safe_methods_do_not_require_csrf_token(auth_client: AsyncClient) 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("prefix", ["/api/auth", "/api/v1/auth"])
-async def test_csrf_bootstrap_endpoint_sets_cookie(client: AsyncClient, prefix: str) -> None:
-    """Both auth aliases bootstrap the same readable CSRF cookie."""
+async def test_csrf_bootstrap_endpoint_sets_cookie(
+    client: AsyncClient, prefix: str
+) -> None:
+    """Both auth aliases bootstrap the same readable CSRF cookie.
+
+    Args:
+        client: Unauthenticated HTTP client for making requests.
+        prefix: Auth route prefix to test ("/api/auth" or "/api/v1/auth").
+
+    Returns:
+        None: Assertions verify CSRF bootstrap behavior.
+    """
     client.headers.pop(CSRF_HEADER_NAME, None)
     client.cookies.delete(CSRF_COOKIE_NAME)
 
@@ -84,7 +94,15 @@ async def test_login_register_and_refresh_are_exempt_from_csrf(
     client: AsyncClient,
     prefix: str,
 ) -> None:
-    """Canonical and legacy first-time auth flows share the same CSRF contract."""
+    """Canonical and legacy first-time auth flows share the same CSRF contract.
+
+    Args:
+        client: Unauthenticated HTTP client for making requests.
+        prefix: Auth route prefix to test ("/api/auth" or "/api/v1/auth").
+
+    Returns:
+        None: Assertions verify login/register/refresh are CSRF-exempt.
+    """
     username = "csrf-user-v1" if "/v1/" in prefix else "csrf-user-legacy"
     email = f"{username}@example.com"
 
@@ -122,8 +140,18 @@ async def test_login_register_and_refresh_are_exempt_from_csrf(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("prefix", ["/api/auth", "/api/v1/auth"])
-async def test_logout_remains_protected_by_csrf(auth_client: AsyncClient, prefix: str) -> None:
-    """Both logout aliases require CSRF because they mutate server-side auth state."""
+async def test_logout_remains_protected_by_csrf(
+    auth_client: AsyncClient, prefix: str
+) -> None:
+    """Both logout aliases require CSRF because they mutate server-side auth state.
+
+    Args:
+        auth_client: Authenticated HTTP client for making requests.
+        prefix: Auth route prefix to test ("/api/auth" or "/api/v1/auth").
+
+    Returns:
+        None: Assertions verify logout requires CSRF token.
+    """
     auth_client.headers.pop(CSRF_HEADER_NAME, None)
     auth_client.cookies.delete(CSRF_COOKIE_NAME)
 
