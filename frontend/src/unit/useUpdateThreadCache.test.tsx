@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { useUpdateThread } from '../hooks/useThread'
 import { applyUpdatedThreadCache } from '../query/cacheEffects'
@@ -56,16 +56,20 @@ it('does not touch targeted cache state when the update request fails', async ()
 
   const { result } = renderHook(() => useUpdateThread())
 
-  await expect(
-    act(async () =>
-      result.current.mutate({
+  let caught: unknown
+  await act(async () => {
+    try {
+      await result.current.mutate({
         id: 7,
         data: { title: 'Never saved' },
-      }),
-    ),
-  ).rejects.toBe(failure)
+      })
+    } catch (error) {
+      caught = error
+    }
+  })
 
+  expect(caught).toBe(failure)
   expect(mockedApplyUpdatedThreadCache).not.toHaveBeenCalled()
-  await waitFor(() => expect(result.current.isError).toBe(true))
+  expect(result.current.isError).toBe(true)
   expect(result.current.isPending).toBe(false)
 })
