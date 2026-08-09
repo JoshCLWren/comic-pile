@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { invalidateCurrentSessionAfterSnooze } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
+import { snoozeApi } from '../services/api'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
 import { getApiErrorDetail } from '../utils/apiError'
 import {
@@ -85,14 +86,14 @@ export function useSnooze() {
           && isAuthenticationMutationFailure(error)
         ) {
           try {
-            const recovered = await recoverProtectedRollMutation(
+            const recovery = await recoverProtectedRollMutation(
               expectedPendingThreadId,
               () => protectedRollMutationApi.snooze(),
             )
-            if (recovered !== undefined) {
+            if (recovery.status === 'retried') {
               await invalidateCurrentSessionAfterSnooze(queryClient)
               await refreshAuthoritativeState()
-              return recovered
+              return recovery.value
             }
           } catch (recoveryError: unknown) {
             console.error(
@@ -148,7 +149,7 @@ export function useUnsnooze() {
     setIsPending(true)
     setIsError(false)
     try {
-      await protectedRollMutationApi.snooze()
+      await snoozeApi.unsnooze(threadId)
       await invalidateCurrentSessionAfterSnooze(queryClient)
     } catch (error: unknown) {
       setIsError(true)
