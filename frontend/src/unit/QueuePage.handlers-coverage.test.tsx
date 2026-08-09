@@ -18,7 +18,7 @@ vi.mock('../services/api', () => ({ threadsApi: { setPending: vi.fn() }, depende
 vi.mock('../services/api-issues', () => ({ issuesApi: { create: vi.fn(), markRead: vi.fn(), migrateThread: vi.fn() } }))
 vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: () => ({ setRestoreAction: vi.fn(), clearRestoreAction: vi.fn() }) }))
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] }) }))
-vi.mock('../pages/QueuePage/QueueThreadCard', () => ({ default: (props: Record<string, unknown>) => <article><button onClick={props.onCardClick as () => void}>card callback</button><button onClick={() => (props.onDragStart as (event: unknown) => void)({ dataTransfer: { effectAllowed: '', setData: vi.fn() } })}>drag start</button><button onClick={() => (props.onDragOver as (event: unknown) => void)({ preventDefault: vi.fn() })}>drag over</button><button onClick={() => (props.onDrop as (event: unknown) => void)({ preventDefault: vi.fn() })}>drop</button><button onClick={props.onDragEnd as () => void}>drag end</button><button onClick={props.onSwipeRead as () => void}>read callback</button><button onClick={props.onSwipeEdit as () => void}>edit callback</button><button onClick={props.onSwipeSnooze as () => void}>snooze callback</button><button onClick={props.onSwipeDelete as () => void}>delete callback</button><button onClick={props.onMoveToFront as () => void}>front callback</button><button onClick={props.onMoveToBack as () => void}>back callback</button><button onClick={props.onReposition as () => void}>reposition callback</button><button onClick={props.onEdit as () => void}>edit modal callback</button><button onClick={props.onDependencies as () => void}>dependencies callback</button></article> }))
+vi.mock('../pages/QueuePage/QueueThreadCard', () => ({ default: (props: Record<string, unknown>) => <article><button onClick={props.onCardClick as () => void}>card callback</button><button onClick={() => (props.onDragStart as (event: unknown) => void)({ dataTransfer: { effectAllowed: '', setData: vi.fn() } })}>drag start</button><button onClick={() => (props.onDragOver as (event: unknown) => void)({ preventDefault: vi.fn() })}>drag over</button><button onClick={() => (props.onDrop as (event: unknown) => void)({ preventDefault: vi.fn() })}>drop</button><button onClick={props.onDragEnd as () => void}>drag end</button><button onClick={props.onRead as () => void}>read callback</button><button onClick={props.onOpenThread as () => void}>edit callback</button><button onClick={props.onSnooze as () => void}>snooze callback</button><button onClick={props.onActionDelete as () => void}>delete callback</button><button onClick={props.onMoveToFront as () => void}>front callback</button><button onClick={props.onMoveToBack as () => void}>back callback</button><button onClick={props.onReposition as () => void}>reposition callback</button><button onClick={props.onEdit as () => void}>edit modal callback</button><button onClick={props.onDependencies as () => void}>dependencies callback</button></article> }))
 vi.mock('../components/Modal', () => ({ default: ({ isOpen, title, children, onClose }: { isOpen: boolean; title: string; children: React.ReactNode; onClose: () => void }) => isOpen ? <section><h2>{title}</h2><button onClick={onClose}>close modal</button>{children}</section> : null }))
 vi.mock('../components/PositionSlider', () => ({ default: ({ onPositionSelect, onCancel }: { onPositionSelect: (n: number) => void; onCancel: () => void }) => <div><button onClick={() => onPositionSelect(0)}>invalid position</button><button onClick={() => onPositionSelect(1)}>confirm position</button><button onClick={onCancel}>cancel position</button></div> }))
 vi.mock('../components/DependencyBuilder', () => ({ default: ({ onClose, onChanged }: { onClose: () => void; onChanged: () => Promise<void> }) => <div><button onClick={onClose}>close dependencies</button><button onClick={() => void onChanged()}>dependency changed</button></div> }))
@@ -80,7 +80,7 @@ describe('QueuePage callback coverage', () => {
     expect(mocks.refetch).toHaveBeenCalled()
   })
 
-  it('covers action errors, rejected swipe actions, and reposition validation', async () => {
+  it('covers action errors, rejected visible actions, and reposition validation', async () => {
     const error = new Error('operation failed')
     mocks.mutate.mockRejectedValue(error)
     const user = userEvent.setup()
@@ -193,7 +193,7 @@ describe('QueuePage callback coverage', () => {
     await user.click(screen.getAllByRole('button', { name: /add thread/i })[0])
     await user.type(screen.getByLabelText('Title'), 'Annuals')
     await user.type(screen.getByLabelText('Issues'), 'Annual 1, 3-4')
-    await user.type(screen.getByLabelText(/Last issue read/i), '1')
+    await user.type(screen.getByLabelText(/Issues already read/i), '1')
     expect(screen.getByText(/Will create/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /create thread/i }))
     await waitFor(() => expect(issuesApi.markRead).toHaveBeenCalledWith(21))
@@ -239,8 +239,8 @@ describe('QueuePage callback coverage', () => {
 
     await user.click(screen.getAllByRole('button', { name: /add thread/i })[0])
     await user.selectOptions(screen.getByLabelText('Format'), 'Graphic Novel')
-    await user.clear(screen.getByLabelText('Last issue read (optional)'))
-    await user.type(screen.getByLabelText('Last issue read (optional)'), '2')
+    await user.clear(screen.getByLabelText('Issues already read (optional)'))
+    await user.type(screen.getByLabelText('Issues already read (optional)'), '2')
     await user.type(screen.getByLabelText('Notes'), 'remember this')
     await user.click(screen.getByRole('button', { name: 'close modal' }))
 

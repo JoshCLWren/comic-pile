@@ -39,13 +39,15 @@ The migration replaces several competing or obsolete entry points with one repos
 | `docs/INDEX.md` duplicated documentation navigation | `docs/README.md` is the single repository documentation index | Repository |
 | `ROLLBACK.md` and `TECH_DEBT.md` presented stale historical guidance as active documentation | Useful history remains in Git history; current procedures live in canonical runbooks or the Wiki | Git history / Wiki |
 | `docs/railway-load-testing.md` and `docs/performance-experiment-reconnaissance.md` described retired deployment experiments | Current production truth is Vercel + Neon; historical context belongs in the Wiki | Repository contracts / Wiki |
-| Markdown files had no exhaustive ownership record | `docs/MARKDOWN_INVENTORY.md` assigns every tracked Markdown file a disposition and replacement | Repository |
+| Markdown files had no exhaustive ownership record | Documentation CI renders the exhaustive Markdown inventory on demand without committing shared generated state | CI artifact |
 | Human-facing architecture and troubleshooting material competed with code-coupled contracts | `docs/WIKI_HANDOFF.md` defines the structured Wiki and links code-coupled topics back here | Wiki / Repository |
 
-The inventory is the exhaustive file-by-file map. This table summarizes the ownership change so future contributors can tell where new or migrated documentation belongs without reconstructing the #879 cleanup.
+The inventory generator remains available for audits through the Documentation workflow's `markdown-inventory` artifact. The rendered inventory is intentionally not committed: changelog fragments and other Markdown files are created concurrently, and a tracked generated inventory would turn unrelated pull requests into conflicts over shared generated state.
 
 ## Documentation maintenance
 
-`scripts/check_markdown_docs.py` is the repository-side guard for local Markdown links and undocumented root-level Markdown sprawl. The #879 migration uses this hub as the destination for the final file inventory and retires duplicate indexes once every tracked Markdown file has an explicit disposition.
+`scripts/check_markdown_docs.py` is the repository-side guard for local Markdown links and undocumented root-level Markdown sprawl. `scripts/generate_markdown_inventory.py` provides the exhaustive file-by-file audit when needed, while CI keeps its output artifact-only so documentation validation cannot create a repository-wide coordination bottleneck.
+
+Do not commit `docs/MARKDOWN_INVENTORY.md`; generate the inventory locally or download the Documentation workflow artifact when an audit requires it.
 
 Historical implementation notes and explorations should live in the Wiki or Git history, not beside current operational instructions.

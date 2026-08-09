@@ -138,7 +138,7 @@ test.describe('Dependencies', () => {
          .locator('[aria-label="Blocked thread"]')
      ).toBeVisible()
 
-      // Set mobile viewport for swipe actions
+      // Verify the visible controls remain available at a mobile viewport.
       await authenticatedPage.setViewportSize({ width: 375, height: 667 })
 
       // Set up dialog handler that auto-accepts and captures the message
@@ -148,12 +148,12 @@ test.describe('Dependencies', () => {
         await dialog.accept()
       })
 
-      // Click the Read swipe action by dispatching click directly via JS
+      // Click the visible Read action through ordinary browser interaction.
       await authenticatedPage
         .locator('[data-testid="queue-thread-item"]')
         .filter({ hasText: 'B Main Story' })
-        .locator('button[aria-label="Read"]')
-        .evaluate((btn) => (btn as HTMLButtonElement).click())
+        .getByRole('button', { name: 'Read' })
+        .click()
 
       await authenticatedPage.waitForTimeout(1000)
 

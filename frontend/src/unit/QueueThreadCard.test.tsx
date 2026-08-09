@@ -50,7 +50,7 @@ function renderCard(thread: Thread, overrides: Partial<Parameters<typeof QueueTh
     isBlocked: false,
     blockingReasons: [] as string[],
     isDragOver: false,
-    snoozeIcon: '⏰',
+    snoozeIcon: '😴',
     snoozeLabel: 'Snooze',
     onCardClick: vi.fn(),
     onDragStart: vi.fn(),
@@ -84,6 +84,12 @@ describe('QueueThreadCard', () => {
     expect(screen.getByRole('button', { name: 'Edit' })).toBeVisible()
     expect(screen.getByRole('button', { name: 'Snooze' })).toBeVisible()
     expect(screen.getByRole('button', { name: 'Delete' })).toBeVisible()
+  })
+
+  it('renders the unsnooze action when the thread is snoozed', () => {
+    renderCard(createMockThread(), { snoozeIcon: '🔔', snoozeLabel: 'Unsnooze' })
+
+    expect(screen.getByRole('button', { name: 'Unsnooze' })).toBeVisible()
   })
 
   it('invokes visible controls without activating the card', async () => {
@@ -207,14 +213,16 @@ describe('QueueThreadCard', () => {
     const card = screen.getByRole('button', { name: /view dependencies/i })
     await user.click(card)
     expect(callbacks.onDependencies).toHaveBeenCalled()
-    const threadCard = screen.getByText('Comic').closest('[role="button"]') as HTMLElement
-    fireEvent.keyDown(threadCard, { key: 'Enter' })
-    fireEvent.keyDown(threadCard, { key: ' ' })
+    const primaryControl = screen.getByRole('button', { name: 'Open Test Thread' })
+    primaryControl.focus()
+    await user.keyboard('{Enter}')
+    await user.keyboard(' ')
     expect(callbacks.onCardClick).toHaveBeenCalledTimes(2)
     const drag = screen.getByRole('button', { name: 'Drag to reorder' })
     await user.click(drag)
     fireEvent.dragStart(drag)
     fireEvent.dragEnd(drag)
+    const threadCard = screen.getByTestId('queue-thread-item')
     fireEvent.dragOver(threadCard)
     fireEvent.drop(threadCard)
     expect(callbacks.onDragStart).toHaveBeenCalled()

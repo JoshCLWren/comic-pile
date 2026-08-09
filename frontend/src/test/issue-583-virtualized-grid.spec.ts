@@ -112,20 +112,20 @@ test.describe('Responsive multi-column virtualized grid (#583-C)', () => {
     expect(Number(scrolledLastIndex)).toBeGreaterThan(Number(initialLastIndex));
   });
 
-  test('swipe action on a virtualized row card navigates to roll page', async ({ authenticatedWithLargeQueuePage }) => {
+  test('visible Read action on a virtualized row card navigates to roll page', async ({ authenticatedWithLargeQueuePage }) => {
     const page = authenticatedWithLargeQueuePage;
 
-    // Use mobile viewport where swipe actions are relevant
+    // Verify the visible control remains usable at a mobile viewport.
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto('/queue', { waitUntil: 'domcontentloaded' });
     await waitForQueueReady(page);
 
-    // Click the Read swipe action button on the first virtualized card
+    // Click the visible Read action on the first virtualized card.
     await page
       .locator('[data-testid="queue-thread-item"]')
       .first()
-      .locator('button[aria-label="Read"]')
-      .evaluate((btn) => (btn as HTMLButtonElement).click());
+      .getByRole('button', { name: 'Read' })
+      .click();
 
     // After clicking Read, the app navigates to the roll page (/). Polling
     // avoids swallowing navigation failures (the previous

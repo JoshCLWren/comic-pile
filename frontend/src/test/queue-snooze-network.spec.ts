@@ -33,10 +33,10 @@ test.describe('Queue snooze request sequence', () => {
     await gotoQueue(authenticatedPage)
     await waitForThreadInQueue(authenticatedPage, title)
 
-    const swipeableCard = authenticatedPage
+    const queueCard = authenticatedPage
       .getByTestId('queue-thread-item')
       .filter({ hasText: title })
-    await expect(swipeableCard).toBeVisible()
+    await expect(queueCard).toBeVisible()
 
     const observedRequests: Array<{ method: string; url: string }> = []
     const captureRequest = (request: { method(): string; url(): string }) => {
@@ -51,15 +51,10 @@ test.describe('Queue snooze request sequence', () => {
         new URL(response.url()).pathname === '/api/snooze/' &&
         response.ok(),
       ),
-      // Swipe actions sit behind the translated card surface, so a Playwright
-      // click would be intercepted by the card and navigate. Dispatch the click
-      // directly on the action button so this network contract does not depend
-      // on touch gesture emulation, which is covered by Swipeable's focused
-      // component tests.
-      swipeableCard.getByLabel('Snooze').evaluate((el) => (el as HTMLButtonElement).click()),
+      queueCard.getByRole('button', { name: 'Snooze' }).click(),
     ])
 
-    await expect(swipeableCard.getByLabel('Unsnooze')).toBeAttached()
+    await expect(queueCard.getByRole('button', { name: 'Unsnooze' })).toBeAttached()
     await expect.poll(() => observedRequests.some(request => isSessionGet(request.method, request.url))).toBe(true)
     expect(observedRequests.some(request => isFullThreadListGet(request.method, request.url))).toBe(false)
 
@@ -70,10 +65,10 @@ test.describe('Queue snooze request sequence', () => {
         new URL(response.url()).pathname === `/api/snooze/${id}/unsnooze` &&
         response.ok(),
       ),
-      swipeableCard.getByLabel('Unsnooze').evaluate((el) => (el as HTMLButtonElement).click()),
+      queueCard.getByRole('button', { name: 'Unsnooze' }).click(),
     ])
 
-    await expect(swipeableCard.getByLabel('Snooze')).toBeAttached()
+    await expect(queueCard.getByRole('button', { name: 'Snooze' })).toBeAttached()
     await expect.poll(() => observedRequests.some(request => isSessionGet(request.method, request.url))).toBe(true)
     expect(observedRequests.some(request => isFullThreadListGet(request.method, request.url))).toBe(false)
 

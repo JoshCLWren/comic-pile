@@ -58,15 +58,12 @@ jobs:
             tests/test_markdown_docs.py \
             tests/test_generate_markdown_inventory.py
 
-      - name: Render Markdown inventory
-        run: uv run python scripts/generate_markdown_inventory.py --output docs/MARKDOWN_INVENTORY.md
+      - name: Render Markdown inventory artifact
+        run: uv run python scripts/generate_markdown_inventory.py --output "${RUNNER_TEMP}/MARKDOWN_INVENTORY.md"
 
       - name: Preserve rendered inventory
         uses: actions/upload-artifact@v7
         with:
           name: markdown-inventory
-          path: docs/MARKDOWN_INVENTORY.md
+          path: ${{ runner.temp }}/MARKDOWN_INVENTORY.md
           if-no-files-found: error
-
-      - name: Verify committed inventory is current
-        run: test -z "$(git status --porcelain -- docs/MARKDOWN_INVENTORY.md)"

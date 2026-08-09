@@ -6,10 +6,16 @@ import { queryClient } from '../query/queryClient'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 
 const snoozeApi = vi.hoisted(() => ({ snooze: vi.fn(), unsnooze: vi.fn() }))
+const protectedRollMutationApi = vi.hoisted(() => ({
+  rate: vi.fn(),
+  snooze: vi.fn(),
+  bootstrap: vi.fn(),
+}))
 const rollBootstrapApi = vi.hoisted(() => ({ get: vi.fn() }))
 const invalidateCurrentSessionAfterSnooze = vi.hoisted(() => vi.fn())
 
 vi.mock('../services/api', () => ({ snoozeApi }))
+vi.mock('../services/protectedRollMutationApi', () => ({ protectedRollMutationApi }))
 vi.mock('../services/rollBootstrapApi', () => ({ rollBootstrapApi }))
 vi.mock('../query/cacheEffects', () => ({ invalidateCurrentSessionAfterSnooze }))
 
@@ -39,7 +45,7 @@ describe('snooze hooks', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     invalidateCurrentSessionAfterSnooze.mockReset()
-    snoozeApi.snooze.mockResolvedValue(undefined)
+    protectedRollMutationApi.snooze.mockResolvedValue(undefined)
     snoozeApi.unsnooze.mockResolvedValue(undefined)
     rollBootstrapApi.get.mockResolvedValue(bootstrapState(null))
   })
@@ -52,7 +58,7 @@ describe('snooze hooks', () => {
       const snooze = renderHook(() => useSnooze())
       await act(async () => await snooze.result.current.mutate(7))
 
-      expect(snoozeApi.snooze).toHaveBeenCalledTimes(1)
+      expect(protectedRollMutationApi.snooze).toHaveBeenCalledTimes(1)
       expect(rollBootstrapApi.get).toHaveBeenCalledTimes(1)
       expect(reconciled).toHaveBeenCalledTimes(1)
       expect(invalidateCurrentSessionAfterSnooze).toHaveBeenCalledWith(queryClient)
@@ -70,7 +76,7 @@ describe('snooze hooks', () => {
 
   it('shares one in-flight snooze request across repeated submissions', async () => {
     let resolveRequest: (() => void) | undefined
-    snoozeApi.snooze.mockReturnValue(new Promise((resolve) => {
+    protectedRollMutationApi.snooze.mockReturnValue(new Promise((resolve) => {
       resolveRequest = () => resolve(undefined)
     }))
 
@@ -83,7 +89,7 @@ describe('snooze hooks', () => {
       secondRequest = snooze.result.current.mutate(7)
     })
 
-    expect(snoozeApi.snooze).toHaveBeenCalledTimes(1)
+    expect(protectedRollMutationApi.snooze).toHaveBeenCalledTimes(1)
     expect(snooze.result.current.isPending).toBe(true)
 
     await act(async () => {
@@ -108,7 +114,7 @@ describe('snooze hooks', () => {
       const snooze = renderHook(() => useSnooze())
       await act(async () => await snooze.result.current.mutate(7))
 
-      expect(snoozeApi.snooze).toHaveBeenCalledTimes(1)
+      expect(protectedRollMutationApi.snooze).toHaveBeenCalledTimes(1)
       expect(rollBootstrapApi.get).toHaveBeenCalledTimes(2)
       expect(reconciled).toHaveBeenCalledTimes(1)
       expect(snooze.result.current.isError).toBe(false)
@@ -125,7 +131,7 @@ describe('snooze hooks', () => {
 
     await act(async () => await snooze.result.current.mutate(7))
 
-    expect(snoozeApi.snooze).toHaveBeenCalledTimes(1)
+    expect(protectedRollMutationApi.snooze).toHaveBeenCalledTimes(1)
     expect(rollBootstrapApi.get).toHaveBeenCalledTimes(2)
     expect(snooze.result.current.isError).toBe(false)
     expect(snooze.result.current.hasRefreshError).toBe(true)
@@ -136,7 +142,7 @@ describe('snooze hooks', () => {
       await expect(snooze.result.current.retryRefresh()).resolves.toBe(true)
     })
 
-    expect(snoozeApi.snooze).toHaveBeenCalledTimes(1)
+    expect(protectedRollMutationApi.snooze).toHaveBeenCalledTimes(1)
     expect(rollBootstrapApi.get).toHaveBeenCalledTimes(3)
     expect(snooze.result.current.hasRefreshError).toBe(false)
     expect(snooze.result.current.isPending).toBe(false)
@@ -161,7 +167,7 @@ describe('snooze hooks', () => {
       duplicateRequest = snooze.result.current.mutate(7)
     })
 
-    expect(snoozeApi.snooze).toHaveBeenCalledTimes(1)
+    expect(protectedRollMutationApi.snooze).toHaveBeenCalledTimes(1)
     expect(snooze.result.current.isPending).toBe(true)
 
     await act(async () => {
@@ -169,7 +175,7 @@ describe('snooze hooks', () => {
       await Promise.all([retryRequest, duplicateRequest])
     })
 
-    expect(snoozeApi.snooze).toHaveBeenCalledTimes(1)
+    expect(protectedRollMutationApi.snooze).toHaveBeenCalledTimes(1)
     expect(snooze.result.current.isPending).toBe(false)
     expect(snooze.result.current.hasRefreshError).toBe(false)
   })
@@ -179,7 +185,7 @@ describe('snooze hooks', () => {
     const timeout = Object.assign(new Error('timeout of 10000ms exceeded'), {
       code: 'ECONNABORTED',
     })
-    snoozeApi.snooze.mockImplementation(() => new Promise((_, reject) => {
+    protectedRollMutationApi.snooze.mockImplementation(() => new Promise((_, reject) => {
       setTimeout(() => reject(timeout), 10_000)
     }))
     rollBootstrapApi.get.mockResolvedValue(bootstrapState(null, 20))
@@ -197,7 +203,7 @@ describe('snooze hooks', () => {
         await request
       })
 
-      expect(snoozeApi.snooze).toHaveBeenCalledTimes(1)
+      expect(protectedRollMutationApi.snooze).toHaveBeenCalledTimes(1)
       expect(rollBootstrapApi.get).toHaveBeenCalledTimes(1)
       expect(snooze.result.current.isError).toBe(false)
       expect(snooze.result.current.isPending).toBe(false)
@@ -211,7 +217,7 @@ describe('snooze hooks', () => {
     const timeout = Object.assign(new Error('timeout of 10000ms exceeded'), {
       code: 'ECONNABORTED',
     })
-    snoozeApi.snooze.mockImplementation(() => new Promise((_, reject) => {
+    protectedRollMutationApi.snooze.mockImplementation(() => new Promise((_, reject) => {
       setTimeout(() => reject(timeout), 10_000)
     }))
     rollBootstrapApi.get.mockResolvedValue(bootstrapState(7, 10))
@@ -239,7 +245,7 @@ describe('snooze hooks', () => {
   })
 
   it('tracks and rethrows ordinary failures', async () => {
-    snoozeApi.snooze.mockRejectedValueOnce(new Error('snooze failed'))
+    protectedRollMutationApi.snooze.mockRejectedValueOnce(new Error('snooze failed'))
     const snooze = renderHook(() => useSnooze())
     await act(async () => await expect(snooze.result.current.mutate(7)).rejects.toThrow('snooze failed'))
     await waitFor(() => expect(snooze.result.current.isError).toBe(true))

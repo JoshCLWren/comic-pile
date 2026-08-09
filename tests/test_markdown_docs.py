@@ -94,8 +94,8 @@ def test_find_broken_local_links_reports_undefined_explicit_references(tmp_path:
     assert all("ordinary prose" not in error for error in errors)
 
 
-def test_iter_markdown_files_ignores_dependency_directories(tmp_path: Path) -> None:
-    """Exclude generated dependency trees from documentation audits.
+def test_iter_markdown_files_ignores_generated_directories(tmp_path: Path) -> None:
+    """Exclude generated dependency and deployment trees from documentation audits.
 
     Args:
         tmp_path: Temporary repository root supplied by pytest.
@@ -104,6 +104,9 @@ def test_iter_markdown_files_ignores_dependency_directories(tmp_path: Path) -> N
     node_modules = tmp_path / "node_modules" / "package"
     node_modules.mkdir(parents=True)
     (node_modules / "README.md").write_text("# Dependency\n", encoding="utf-8")
+    vercel_output = tmp_path / ".vercel" / "output" / "static"
+    vercel_output.mkdir(parents=True)
+    (vercel_output / "README.md").write_text("[stale](missing.md)\n", encoding="utf-8")
 
     assert iter_markdown_files(tmp_path) == [tmp_path / "README.md"]
 

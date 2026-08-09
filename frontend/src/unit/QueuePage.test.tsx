@@ -220,7 +220,7 @@ describe('Action Sheet Snooze/Unsnooze', () => {
     mockedUseUnsnooze.mockReturnValue(mockUnsnoozeMutation)
   })
 
-  it('shows swipe actions for thread cards', () => {
+  it('shows visible actions for thread cards', () => {
     render(
       <BrowserRouter>
         <ToastProvider>
@@ -239,7 +239,7 @@ describe('Action Sheet Snooze/Unsnooze', () => {
     expect(deleteButtons.length).toBeGreaterThan(0)
   })
 
-  it('calls snooze mutation when snooze swipe action is clicked', async () => {
+  it('calls snooze mutation when the visible snooze action is clicked', async () => {
     const user = userEvent.setup()
     render(
       <BrowserRouter>
@@ -256,7 +256,7 @@ describe('Action Sheet Snooze/Unsnooze', () => {
     expect(mockUnsnoozeMutation.mutate).not.toHaveBeenCalled()
   })
 
-  it('calls unsnooze mutation when unsnooze swipe action is clicked', async () => {
+  it('calls unsnooze mutation when the visible unsnooze action is clicked', async () => {
     mockedUseSession.mockReturnValue({
       data: {
         snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }]
@@ -393,7 +393,7 @@ it('creates a simple issue range and marks the requested issues read', async () 
   await user.type(screen.getByLabelText('Title'), 'New Series')
   await user.clear(screen.getByLabelText('Issues'))
   await user.type(screen.getByLabelText('Issues'), '1-5')
-  await user.type(screen.getByLabelText(/Last issue read/i), '2')
+  await user.type(screen.getByLabelText(/Issues already read/i), '2')
   await user.click(screen.getByRole('button', { name: /create thread/i }))
   await waitFor(() => expect(create).toHaveBeenCalled())
 })
@@ -459,7 +459,7 @@ it('supports created-date sorting and drag reorder failure feedback', async () =
   expect(cards[0]).toHaveTextContent('New')
   const dragButtons = screen.getAllByRole('button', { name: 'Drag to reorder' })
   fireEvent.dragStart(dragButtons[0]!, { dataTransfer: { effectAllowed: '', setData: vi.fn() } })
-  const targetCard = cards[1]!.querySelector('.queue-thread-card') as HTMLElement
+  const targetCard = cards[1]!
   fireEvent.dragOver(targetCard)
   fireEvent.drop(targetCard, { dataTransfer: { getData: () => '1' } })
   await waitFor(() => expect(move.mutate).toHaveBeenCalled())
@@ -532,7 +532,7 @@ it('creates a literal issue range and reports create failures', async () => {
   await user.type(screen.getByLabelText('Title'), 'Annuals')
   await user.clear(screen.getByLabelText('Issues'))
   await user.type(screen.getByLabelText('Issues'), 'Annual 1, 5-7')
-  await user.type(screen.getByLabelText(/Last issue read/i), '1')
+  await user.type(screen.getByLabelText(/Issues already read/i), '1')
   await user.click(screen.getByRole('button', { name: /create thread/i }))
   await waitFor(() => expect(create).toHaveBeenCalled())
 
@@ -594,10 +594,37 @@ it('creates complex ranges and marks the requested issues read', async () => {
   await user.click(screen.getAllByRole('button', { name: /add thread/i })[0])
   await user.type(screen.getByLabelText('Title'), 'Complex')
   await user.type(screen.getByLabelText('Issues'), 'Annual 1, 5-7')
-  await user.type(screen.getByLabelText(/Last issue read/i), '2')
+  await user.type(screen.getByLabelText(/Issues already read/i), '2')
   await user.click(screen.getByRole('button', { name: /create thread/i }))
   await waitFor(() => expect(mockedIssuesApi.markRead).toHaveBeenCalledWith(11))
   expect(mockedIssuesApi.markRead).toHaveBeenCalledWith(12)
+})
+
+it('creates a later single issue without requiring earlier issues', async () => {
+  const user = userEvent.setup()
+  const create = vi.fn().mockResolvedValue({ id: 78 })
+  mockedIssuesApi.markRead.mockClear()
+  mockedUseCreateThread.mockReturnValue({ mutate: create, isPending: false })
+  mockedUseThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
+  mockedIssuesApi.create.mockResolvedValue({ issues: [{ id: 71, issue_number: '71' }] })
+
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  await user.click(screen.getAllByRole('button', { name: /add thread/i })[0])
+  await user.type(screen.getByLabelText('Title'), 'Marvel Graphic Novel')
+  await user.type(screen.getByLabelText('Issues'), '71')
+
+  expect(screen.getByText(/You do not need to add earlier issues/i)).toBeInTheDocument()
+  expect(screen.getByText(/not an issue number/i)).toBeInTheDocument()
+  expect(screen.getByLabelText('Issues already read (optional)')).toHaveValue(0)
+
+  await user.click(screen.getByRole('button', { name: /create thread/i }))
+
+  await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({
+    title: 'Marvel Graphic Novel',
+    issues_remaining: 1,
+  })))
+  expect(mockedIssuesApi.create).toHaveBeenCalledWith(78, '71')
+  expect(mockedIssuesApi.markRead).not.toHaveBeenCalled()
 })
 
 it('handles reactivation success and failure from completed threads', async () => {

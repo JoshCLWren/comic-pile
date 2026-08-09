@@ -1,5 +1,6 @@
 """Tests for the tracked Markdown inventory generator."""
 
+from pathlib import Path
 from unittest.mock import patch
 
 from scripts.generate_markdown_inventory import (
@@ -17,6 +18,16 @@ def test_tracked_markdown_files_excludes_generated_inventory() -> None:
         return_value="docs/MARKDOWN_INVENTORY.md\nREADME.md\ndocs/API.md",
     ):
         assert tracked_markdown_files() == ["README.md", "docs/API.md"]
+
+
+def test_docs_workflow_keeps_inventory_artifact_only() -> None:
+    """Documentation CI must not recreate a shared tracked inventory bottleneck."""
+    workflow = Path(".github/workflows/docs.yml").read_text(encoding="utf-8")
+
+    assert '--output "${RUNNER_TEMP}/MARKDOWN_INVENTORY.md"' in workflow
+    assert "path: ${{ runner.temp }}/MARKDOWN_INVENTORY.md" in workflow
+    assert "git status --porcelain -- docs/MARKDOWN_INVENTORY.md" not in workflow
+    assert not Path("docs/MARKDOWN_INVENTORY.md").exists()
 
 
 def test_default_disposition_preserves_code_coupled_docs() -> None:
