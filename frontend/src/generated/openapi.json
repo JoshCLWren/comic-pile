@@ -6462,6 +6462,53 @@
         ]
       }
     },
+    "/api/v1/rate/": {
+      "post": {
+        "description": "Rate current reading and update its thread.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    rate_data: Rating request data.\n    current_user: Authenticated user making the request.\n    db: SQLAlchemy session.\n\nReturns:\n    Updated thread response.\n\nRaises:\n    HTTPException: If no active session, rating, or thread is valid.",
+        "operationId": "rate_thread_api_v1_rate__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rate Thread",
+        "tags": [
+          "rate"
+        ]
+      }
+    },
     "/api/v1/reading-order-groups/": {
       "get": {
         "description": "List the current user's groups and memberships.",
@@ -6914,6 +6961,227 @@
           "dependencies",
           "dependencies",
           "reading-order-groups"
+        ]
+      }
+    },
+    "/api/v1/roll/": {
+      "post": {
+        "description": "Roll dice to select a thread.\n\nArgs:\n    roll_request: The roll request.\n    request: FastAPI request object for rate limiting.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    RollResponse with selected thread and die result.\n\nRaises:\n    HTTPException: If no active threads available.",
+        "operationId": "roll_dice_api_v1_roll__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RollRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Roll Dice",
+        "tags": [
+          "roll",
+          "roll"
+        ]
+      }
+    },
+    "/api/v1/roll/bootstrap": {
+      "get": {
+        "description": "Return bounded bootstrap data for the Roll initial render.\n\nReplaces the need for separate session, full-thread-library, and stale-thread requests\nby returning only the retained data required for the first interactive screen.\n\nArgs:\n    current_user: The authenticated user.\n    db: Async database session.\n\nReturns:\n    RollBootstrapResponse with session state, bounded pool, snoozed/blocked/stale summaries.",
+        "operationId": "roll_bootstrap_api_v1_roll_bootstrap_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollBootstrapResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Roll Bootstrap",
+        "tags": [
+          "roll",
+          "roll"
+        ]
+      }
+    },
+    "/api/v1/roll/clear-manual-die": {
+      "post": {
+        "description": "Clear manual die size and return to automatic dice ladder mode.\n\nArgs:\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    HTML string with the current die size.",
+        "operationId": "clear_manual_die_api_v1_roll_clear_manual_die_post",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Clear Manual Die",
+        "tags": [
+          "roll",
+          "roll"
+        ]
+      }
+    },
+    "/api/v1/roll/dismiss-pending": {
+      "post": {
+        "description": "Clear any pending thread for the current session.\n\nArgs:\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.",
+        "operationId": "dismiss_pending_roll_api_v1_roll_dismiss_pending_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Dismiss Pending Roll",
+        "tags": [
+          "roll",
+          "roll"
+        ]
+      }
+    },
+    "/api/v1/roll/override": {
+      "post": {
+        "description": "Manually select a thread.\n\nArgs:\n    request: Override request containing thread_id.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    RollResponse with selected thread.\n\nRaises:\n    HTTPException: If thread not found.",
+        "operationId": "override_roll_api_v1_roll_override_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OverrideRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Override Roll",
+        "tags": [
+          "roll",
+          "roll"
+        ]
+      }
+    },
+    "/api/v1/roll/set-die": {
+      "post": {
+        "description": "Set manual die size for current session.\n\nArgs:\n    die: The die size to set (must be 4, 6, 8, 10, 12, 20, 30, 50, or 100).\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    HTML string with the die size.\n\nRaises:\n    HTTPException: If die size is invalid.",
+        "operationId": "set_manual_die_api_v1_roll_set_die_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "die",
+            "required": true,
+            "schema": {
+              "title": "Die",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Manual Die",
+        "tags": [
+          "roll",
+          "roll"
         ]
       }
     },
