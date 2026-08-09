@@ -243,6 +243,8 @@ export interface Issue {
   thread_id: number;
   /** Issue number (e.g., '1', '2', 'Annual 1') */
   issue_number: string;
+  /** Canonical one-based reading-order position when supplied by the API */
+  position?: number;
   /** Current reading status */
   status: 'unread' | 'read';
   /** ISO 8601 timestamp when the issue was marked as read (null if unread) */
