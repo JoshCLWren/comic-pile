@@ -1,4 +1,4 @@
-import { lazy, Suspense, createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { lazy, Suspense, createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
@@ -8,7 +8,7 @@ import BugReportButton from './components/BugReportButton'
 import type { ReportType } from './components/BugReportModal'
 import ResumeRecovery from './components/ResumeRecovery'
 import api, { clearAccessToken, setAccessToken, getAccessToken } from './services/api'
-import type { AuthUser } from './types'
+import type { AuthTokens, AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
 import type { DiagnosticData } from './hooks/useDiagnostics'
 import { ToastProvider } from './contexts/ToastProvider'
@@ -47,6 +47,7 @@ export interface AuthContextValue {
   login: (accessToken: string) => Promise<void>
   logout: () => void
   revalidateSession: (timeout?: number) => Promise<void>
+  recoverSession: (timeout?: number) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -62,11 +63,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [user, setUser] = useState<AuthUser | null>(null)
+  const recoveryPromise = useRef<Promise<void> | null>(null)
 
   const revalidateSession = useCallback(async (timeout?: number) => {
     const response = await api.get<AuthUser>('/v1/auth/me', { timeout, skipAuthRedirect: false })
     setUser(response)
     setIsAuthenticated(true)
+  }, [])
+
+  const recoverSession = useCallback((timeout?: number): Promise<void> => {
+    if (!recoveryPromise.current) {
+      recoveryPromise.current = (async () => {
+        const tokens = await api.post<AuthTokens>('/v1/auth/refresh', undefined, {
+          skipAuthRedirect: false,
+        })
+        setAccessToken(tokens.access_token)
+        const response = await api.get<AuthUser>('/v1/auth/me', {
+          timeout,
+          skipAuthRedirect: false,
+        })
+        setUser(response)
+        setIsAuthenticated(true)
+      })().finally(() => {
+        recoveryPromise.current = null
+      })
+    }
+
+    return recoveryPromise.current
   }, [])
 
   useEffect(() => {
@@ -139,7 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  return <AuthContext.Provider value={{ isAuthenticated, isLoading, user, login, logout, revalidateSession }}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ isAuthenticated, isLoading, user, login, logout, revalidateSession, recoverSession }}>{children}</AuthContext.Provider>
 }
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -196,8 +219,12 @@ function AppRoutes() {
 }
 
 function AuthResumeBoundary({ children }: { children: ReactNode }) {
-  const { revalidateSession } = useAuth()
-  return <ResumeRecovery revalidateSession={revalidateSession}>{children}</ResumeRecovery>
+  const { revalidateSession, recoverSession } = useAuth()
+  return (
+    <ResumeRecovery revalidateSession={revalidateSession} recoverSession={recoverSession}>
+      {children}
+    </ResumeRecovery>
+  )
 }
 
 function App() {

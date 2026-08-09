@@ -6,64 +6,87 @@ const RESUME_RETRY_DELAY_MS = 750
 const MAX_RESUME_ATTEMPTS = 2
 
 type RecoveryState = 'idle' | 'reconnecting' | 'failed'
+type RecoveryMode = 'automatic' | 'explicit'
 
 interface ResumeRecoveryProps {
   children: ReactNode
   revalidateSession: (timeout: number) => Promise<void>
+  recoverSession: (timeout: number) => Promise<void>
 }
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds))
 }
 
-export default function ResumeRecovery({ children, revalidateSession }: ResumeRecoveryProps) {
+export default function ResumeRecovery({
+  children,
+  revalidateSession,
+  recoverSession,
+}: ResumeRecoveryProps) {
   const [recoveryState, setRecoveryState] = useState<RecoveryState>('idle')
   const requestSequence = useRef(0)
   const lastValidationAt = useRef(0)
+  const explicitRecoveryActive = useRef(false)
 
-  const revalidate = useCallback(async () => {
-    const now = Date.now()
-    if (now - lastValidationAt.current < 1000) {
-      return
+  const runRecovery = useCallback(async (mode: RecoveryMode) => {
+    if (mode === 'automatic') {
+      if (explicitRecoveryActive.current) {
+        return
+      }
+
+      const now = Date.now()
+      if (now - lastValidationAt.current < 1000) {
+        return
+      }
+      lastValidationAt.current = now
+    } else {
+      explicitRecoveryActive.current = true
     }
-    lastValidationAt.current = now
+
     const sequence = ++requestSequence.current
     setRecoveryState('reconnecting')
+    const recover = mode === 'explicit' ? recoverSession : revalidateSession
 
-    for (let attempt = 1; attempt <= MAX_RESUME_ATTEMPTS; attempt += 1) {
-      try {
-        await revalidateSession(RESUME_REQUEST_TIMEOUT_MS)
-        if (sequence !== requestSequence.current) {
+    try {
+      for (let attempt = 1; attempt <= MAX_RESUME_ATTEMPTS; attempt += 1) {
+        try {
+          await recover(RESUME_REQUEST_TIMEOUT_MS)
+          if (sequence !== requestSequence.current) {
+            return
+          }
+          await queryClient.invalidateQueries()
+          if (sequence !== requestSequence.current) {
+            return
+          }
+          setRecoveryState('idle')
           return
-        }
-        await queryClient.invalidateQueries()
-        if (sequence !== requestSequence.current) {
-          return
-        }
-        setRecoveryState('idle')
-        return
-      } catch (error) {
-        console.error(`ComicPile resume validation failed (attempt ${attempt})`, error)
-        if (attempt < MAX_RESUME_ATTEMPTS) {
-          await delay(RESUME_RETRY_DELAY_MS)
+        } catch (error) {
+          console.error(`ComicPile resume validation failed (attempt ${attempt})`, error)
+          if (attempt < MAX_RESUME_ATTEMPTS) {
+            await delay(RESUME_RETRY_DELAY_MS)
+          }
         }
       }
-    }
 
-    if (sequence === requestSequence.current) {
-      setRecoveryState('failed')
+      if (sequence === requestSequence.current) {
+        setRecoveryState('failed')
+      }
+    } finally {
+      if (mode === 'explicit' && sequence === requestSequence.current) {
+        explicitRecoveryActive.current = false
+      }
     }
-  }, [revalidateSession])
+  }, [recoverSession, revalidateSession])
 
   useEffect(() => {
     const handlePageShow = (event: PageTransitionEvent) => {
       if (event.persisted) {
-        void revalidate()
+        void runRecovery('automatic')
       }
     }
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        void revalidate()
+        void runRecovery('automatic')
       }
     }
 
@@ -71,10 +94,11 @@ export default function ResumeRecovery({ children, revalidateSession }: ResumeRe
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => {
       requestSequence.current += 1
+      explicitRecoveryActive.current = false
       window.removeEventListener('pageshow', handlePageShow)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [revalidate])
+  }, [runRecovery])
 
   return (
     <>
@@ -96,7 +120,7 @@ export default function ResumeRecovery({ children, revalidateSession }: ResumeRe
               <div className="mt-3 flex gap-2">
                 <button
                   className="rounded-lg bg-stone-900 px-3 py-2 text-sm font-medium text-white"
-                  onClick={() => void revalidate()}
+                  onClick={() => void runRecovery('explicit')}
                   type="button"
                 >
                   Retry
