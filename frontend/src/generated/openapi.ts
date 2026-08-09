@@ -2224,6 +2224,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/groups:batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * List Thread Groups Batch
+         * @description List crossover groups for several owned threads in one request.
+         */
+        post: operations["list_thread_groups_batch_api_v1_threads_groups_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/{thread_id}/connected": {
         parameters: {
             query?: never;
@@ -2997,6 +3017,14 @@ export interface components {
             id: number;
             /** Name */
             name: string;
+        };
+        /**
+         * DependencyGroupThreadBatchRequest
+         * @description Request crossover summaries for a bounded set of owned threads.
+         */
+        DependencyGroupThreadBatchRequest: {
+            /** Thread Ids */
+            thread_ids: number[];
         };
         /**
          * DependencyGroupUpdate
@@ -6443,6 +6471,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SnapshotsListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_thread_groups_batch_api_v1_threads_groups_batch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DependencyGroupThreadBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: components["schemas"]["DependencyGroupSummary"][];
+                    };
                 };
             };
             /** @description Validation Error */

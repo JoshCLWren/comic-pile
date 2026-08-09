@@ -901,6 +901,25 @@
         "title": "DependencyGroupSummary",
         "type": "object"
       },
+      "DependencyGroupThreadBatchRequest": {
+        "description": "Request crossover summaries for a bounded set of owned threads.",
+        "properties": {
+          "thread_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Thread Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "thread_ids"
+        ],
+        "title": "DependencyGroupThreadBatchRequest",
+        "type": "object"
+      },
       "DependencyGroupUpdate": {
         "description": "Rename a named dependency group.",
         "properties": {
@@ -7210,6 +7229,61 @@
         "tags": [
           "session",
           "sessions"
+        ]
+      }
+    },
+    "/api/v1/threads/groups:batch": {
+      "post": {
+        "description": "List crossover groups for several owned threads in one request.",
+        "operationId": "list_thread_groups_batch_api_v1_threads_groups_batch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DependencyGroupThreadBatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "items": {
+                      "$ref": "#/components/schemas/DependencyGroupSummary"
+                    },
+                    "type": "array"
+                  },
+                  "title": "Response List Thread Groups Batch Api V1 Threads Groups Batch Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Thread Groups Batch",
+        "tags": [
+          "dependencies",
+          "dependencies"
         ]
       }
     },

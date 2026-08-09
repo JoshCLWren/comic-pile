@@ -1,8 +1,13 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import QueueThreadCard from '../pages/QueuePage/QueueThreadCard'
 import type { Thread } from '../types'
+
+const { useCrossoverGroups } = vi.hoisted(() => ({
+  useCrossoverGroups: vi.fn(() => ({ groupsByThreadId: {}, isPending: false, error: null })),
+}))
 
 vi.mock('../components/Tooltip', () => ({
   default: ({ children, content }: { children: React.ReactNode; content?: string }) => (
@@ -24,6 +29,10 @@ vi.mock('../components/PositionMenu', () => ({
 
 vi.mock('../components/Swipeable', () => ({
   default: ({ children }: { children: React.ReactNode }) => <div data-testid="mock-swipeable">{children}</div>,
+}))
+
+vi.mock('../hooks/useCrossoverGroups', () => ({
+  useCrossoverGroups,
 }))
 
 function createMockThread(overrides: Partial<Thread> = {}): Thread {
@@ -73,7 +82,14 @@ function renderCard(thread: Thread, overrides: Partial<Parameters<typeof QueueTh
     onDelete: vi.fn(),
     ...overrides,
   }
-  return { props: defaults, ...render(<QueueThreadCard {...defaults} />) }
+  return {
+    props: defaults,
+    ...render(
+      <MemoryRouter>
+        <QueueThreadCard {...defaults} />
+      </MemoryRouter>,
+    ),
+  }
 }
 
 describe('QueueThreadCard', () => {
@@ -158,6 +174,47 @@ describe('QueueThreadCard', () => {
     const thread = createMockThread({ notes: 'This is a note' })
     renderCard(thread)
     expect(screen.getByText('This is a note')).toBeInTheDocument()
+  })
+
+  it('renders multiple crossover memberships supplied by the Queue batch loader', () => {
+    renderCard(createMockThread(), {
+      crossoverGroups: [
+        { id: 11, name: 'Rotworld' },
+        { id: 12, name: 'Night of the Owls' },
+      ],
+    })
+
+    expect(screen.getByRole('link', { name: 'Rotworld' })).toHaveAttribute('href', '/crossovers?group=11')
+    expect(screen.getByRole('link', { name: 'Night of the Owls' })).toHaveAttribute('href', '/crossovers?group=12')
+    expect(useCrossoverGroups).toHaveBeenCalledWith([])
+  })
+
+  it('uses the per-thread fallback only when no batch result was supplied', () => {
+    renderCard(createMockThread({ id: 27 }))
+
+    expect(useCrossoverGroups).toHaveBeenCalledWith([27])
+  })
+
+  it('shows a crossover loading state without inventing empty membership', () => {
+    renderCard(createMockThread(), { crossoverGroups: [], crossoverGroupsLoading: true })
+
+    expect(screen.getByText('Loading crossovers…')).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Crossovers' })).not.toBeInTheDocument()
+  })
+
+  it('shows a non-blocking crossover error state when membership loading fails', () => {
+    renderCard(createMockThread(), { crossoverGroups: [], crossoverGroupsError: true })
+
+    expect(screen.getByText('Crossovers unavailable')).toBeInTheDocument()
+    expect(screen.getByText('Test Thread')).toBeInTheDocument()
+  })
+
+  it('keeps the empty crossover state visually quiet once loading completes', () => {
+    renderCard(createMockThread(), { crossoverGroups: [], crossoverGroupsLoading: false })
+
+    expect(screen.queryByText('Loading crossovers…')).not.toBeInTheDocument()
+    expect(screen.queryByText('Crossovers unavailable')).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Crossovers' })).not.toBeInTheDocument()
   })
 
   it('handles keyboard, drag, blocked dependency, and all position-menu callbacks', async () => {

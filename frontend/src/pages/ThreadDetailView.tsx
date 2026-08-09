@@ -2,10 +2,12 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Modal from '../components/Modal'
 import LoadingSpinner from '../components/LoadingSpinner'
+import { CrossoverTags } from '../components/CrossoverTags'
 import { threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 import type { Thread, Issue } from '../types'
 import { FormatSelect } from '../pages/QueuePage/FormatSelect'
+import { useCrossoverGroups } from '../hooks/useCrossoverGroups'
 import { useUpdateThread } from '../hooks/useThread'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { ChangeEvent, FormEvent } from 'react'
@@ -32,6 +34,11 @@ export default function ThreadDetailView() {
   const [issuesLoaded, setIssuesLoaded] = useState(false)
   const [nextPageToken, setNextPageToken] = useState<string | null>(null)
   const [issuesTotal, setIssuesTotal] = useState(0)
+  const {
+    groupsByThreadId: crossoverGroupsByThreadId,
+    isPending: crossoversPending,
+    error: crossoversError,
+  } = useCrossoverGroups(thread ? [thread.id] : [])
 
   useEffect(() => {
     const threadId = id ? Number(id) : null
@@ -203,6 +210,7 @@ export default function ThreadDetailView() {
   const isMigrated = thread.total_issues !== null
   const progressPercentage = getProgressPercentage()
   const issuesReadCount = getIssuesReadCount()
+  const crossoverGroups = crossoverGroupsByThreadId[thread.id] ?? []
 
   return (
     <div className="space-y-6 md:space-y-8 pb-20">
@@ -258,6 +266,22 @@ export default function ThreadDetailView() {
             <p className="text-sm text-stone-300 whitespace-pre-wrap">{thread.notes}</p>
           </div>
         )}
+
+        <div className="glass-card p-3 md:p-4 space-y-2">
+          <span className="text-xs font-black uppercase tracking-widest text-stone-500">
+            Crossovers
+          </span>
+          {crossoversPending && <p className="text-xs text-stone-500">Loading crossovers...</p>}
+          {!crossoversPending && crossoversError && (
+            <p className="text-xs text-red-400">Unable to load crossover memberships.</p>
+          )}
+          {!crossoversPending && !crossoversError && crossoverGroups.length === 0 && (
+            <p className="text-xs text-stone-500">No crossover memberships</p>
+          )}
+          {!crossoversPending && !crossoversError && (
+            <CrossoverTags groups={crossoverGroups} label={`${thread.title} crossovers`} />
+          )}
+        </div>
 
         {isMigrated && (
           <div className="glass-card p-3 md:p-4 space-y-3">
