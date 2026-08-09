@@ -8,9 +8,9 @@ The public `frontend/src/types.ts` barrel aliases generated schemas when the fro
 
 The post-#921 audit found three remaining exact public duplicates and moved them to generated aliases:
 
-- `IssueDependencyEdge` -> `components['schemas']['IssueDependencyEdge']`
-- `IssueDependenciesResponse` -> `components['schemas']['IssueDependenciesResponse']`
-- `BugReportResponse` -> `components['schemas']['BugReportResponse']`
+- `IssueDependencyEdge` uses the generated `IssueDependencyEdge` schema.
+- `IssueDependenciesResponse` uses the generated `IssueDependenciesResponse` schema.
+- `BugReportResponse` uses the generated `BugReportResponse` schema.
 
 Compile-time Vitest contract tests keep these aliases, plus the previously migrated aliases, identical to generated schemas.
 
