@@ -1,25 +1,27 @@
 import type { RatePayload, Thread } from '../types'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
-import api, { rateApi, snoozeApi } from './api'
 import { rollBootstrapApi } from './rollBootstrapApi'
 
 const RECOVERY_CONFIG = { skipAuthRedirect: true }
 
-function hasConfiguredClient(): boolean {
-  return api !== undefined && typeof api.post === 'function' && typeof api.get === 'function'
+async function loadApiModule() {
+  return import('./api')
 }
 
 export const protectedRollMutationApi = {
-  rate: (data: RatePayload): Promise<Thread> => {
-    if (!hasConfiguredClient()) return rateApi.rate(data)
-    return api.post<Thread, RatePayload>('/rate/', data, RECOVERY_CONFIG)
+  rate: async (data: RatePayload): Promise<Thread> => {
+    const apiModule = await loadApiModule()
+    if (!('default' in apiModule)) return apiModule.rateApi.rate(data)
+    return apiModule.default.post<Thread, RatePayload>('/rate/', data, RECOVERY_CONFIG)
   },
-  snooze: (): Promise<void> => {
-    if (!hasConfiguredClient()) return snoozeApi.snooze()
-    return api.post<void>('/snooze/', undefined, RECOVERY_CONFIG)
+  snooze: async (): Promise<void> => {
+    const apiModule = await loadApiModule()
+    if (!('default' in apiModule)) return apiModule.snoozeApi.snooze()
+    return apiModule.default.post<void>('/snooze/', undefined, RECOVERY_CONFIG)
   },
-  bootstrap: (): Promise<RollBootstrapResponse> => {
-    if (!hasConfiguredClient()) return rollBootstrapApi.get()
-    return api.get<RollBootstrapResponse>('/roll/bootstrap', RECOVERY_CONFIG)
+  bootstrap: async (): Promise<RollBootstrapResponse> => {
+    const apiModule = await loadApiModule()
+    if (!('default' in apiModule)) return rollBootstrapApi.get()
+    return apiModule.default.get<RollBootstrapResponse>('/roll/bootstrap', RECOVERY_CONFIG)
   },
 }
