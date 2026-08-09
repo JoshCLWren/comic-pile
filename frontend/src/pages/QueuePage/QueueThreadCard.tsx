@@ -61,16 +61,6 @@ export default function QueueThreadCard({
       className={`queue-thread-card glass-card h-full p-3 md:p-4 space-y-2 md:space-y-3 group transition-all hover:border-white/20 ${isDragOver ? 'border-amber-400/60' : ''} ${isBlocked ? 'border-red-400/30 bg-red-500/5' : ''}`}
       onDragOver={onDragOver}
       onDrop={onDrop}
-      role="button"
-      tabIndex={0}
-      onClick={onCardClick}
-      onKeyDown={(event) => {
-        if (event.target !== event.currentTarget) return
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault()
-          onCardClick()
-        }
-      }}
     >
       <div className="flex justify-between items-start gap-2 md:gap-3">
         <div className="flex items-start gap-2 md:gap-3 min-w-0 flex-1">
@@ -84,12 +74,18 @@ export default function QueueThreadCard({
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
                 aria-label="Drag to reorder"
-                onClick={(event) => event.stopPropagation()}
               >
                 ⠿
               </button>
             </Tooltip>
-            <MarqueeTitle title={thread.title} />
+            <button
+              type="button"
+              className="min-w-0 flex-1 text-left"
+              onClick={onCardClick}
+              aria-label={`Open ${thread.title}`}
+            >
+              <MarqueeTitle title={thread.title} />
+            </button>
             {isBlocked && (
               <Tooltip content={blockingReasons.length > 0 ? blockingReasons.join('\n') : 'Blocked by dependency'}>
                 <span className="text-red-300 text-lg" aria-label="Blocked thread">🔒</span>
@@ -124,10 +120,7 @@ export default function QueueThreadCard({
           <button
             type="button"
             className="mt-2 w-full text-left text-xs text-red-300/80 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 hover:bg-red-500/15 transition-colors"
-            onClick={(event) => {
-              event.stopPropagation()
-              onDependencies()
-            }}
+            onClick={onDependencies}
             aria-label={`View dependencies for ${thread.title}`}
           >
             <span className="font-bold">🔒 {blockingReasons[0]}</span>
