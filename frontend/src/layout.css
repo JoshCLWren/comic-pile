@@ -1,0 +1,14 @@
+/* Keep scrollable page content fully reachable above the fixed bottom navigation. */
+[data-app-shell-ready] > main {
+  padding-bottom: calc(
+    var(--mobile-nav-height) + 1.5rem + env(safe-area-inset-bottom)
+  );
+}
+
+@media (min-width: 768px) {
+  [data-app-shell-ready] > main {
+    padding-bottom: calc(
+      var(--desktop-nav-height) + 2rem + env(safe-area-inset-bottom)
+    );
+  }
+}
