@@ -9,10 +9,6 @@ on:
   pull_request_review_comment:
     types: [created]
 
-concurrency:
-  group: opencode-${{ github.workflow }}-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
-  cancel-in-progress: true
-
 jobs:
   opencode:
     if: |
@@ -36,6 +32,9 @@ jobs:
           startsWith(github.event.comment.body, '/opencode')
         )
       )
+    concurrency:
+      group: opencode-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     permissions:
       id-token: write
