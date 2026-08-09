@@ -51,10 +51,10 @@ test.describe('Queue snooze request sequence', () => {
         new URL(response.url()).pathname === '/api/snooze/' &&
         response.ok(),
       ),
-      queueCard.getByRole('button', { name: 'Snooze' }).click(),
+      queueCard.getByRole('button', { name: 'Snooze', exact: true }).click(),
     ])
 
-    await expect(queueCard.getByRole('button', { name: 'Unsnooze' })).toBeVisible()
+    await expect(queueCard.getByRole('button', { name: 'Unsnooze', exact: true })).toBeVisible()
     await expect.poll(() => observedRequests.some(request => isSessionGet(request.method, request.url))).toBe(true)
     expect(observedRequests.some(request => isFullThreadListGet(request.method, request.url))).toBe(false)
 
@@ -65,10 +65,10 @@ test.describe('Queue snooze request sequence', () => {
         new URL(response.url()).pathname === `/api/snooze/${id}/unsnooze` &&
         response.ok(),
       ),
-      queueCard.getByRole('button', { name: 'Unsnooze' }).click(),
+      queueCard.getByRole('button', { name: 'Unsnooze', exact: true }).click(),
     ])
 
-    await expect(queueCard.getByRole('button', { name: 'Snooze' })).toBeVisible()
+    await expect(queueCard.getByRole('button', { name: 'Snooze', exact: true })).toBeVisible()
     await expect.poll(() => observedRequests.some(request => isSessionGet(request.method, request.url))).toBe(true)
     expect(observedRequests.some(request => isFullThreadListGet(request.method, request.url))).toBe(false)
 
