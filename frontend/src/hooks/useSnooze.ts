@@ -1,15 +1,17 @@
 import { useCallback, useRef, useState } from 'react'
 import { invalidateCurrentSessionAfterSnooze } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
-import { snoozeApi } from '../services/api'
+import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
 import { getApiErrorDetail } from '../utils/apiError'
 import {
   fetchAndPublishRollBootstrap,
   isAmbiguousNetworkFailure,
+  isAuthenticationMutationFailure,
   reconcileAmbiguousRollMutation,
+  recoverProtectedRollMutation,
 } from './rollMutationReconciliation'
 
-type SnoozeResult = Awaited<ReturnType<typeof snoozeApi.snooze>> | undefined
+type SnoozeResult = Awaited<ReturnType<typeof protectedRollMutationApi.snooze>> | undefined
 
 const SNOOZE_REFRESH_ATTEMPTS = 2
 
@@ -73,11 +75,33 @@ export function useSnooze() {
 
     const request: Promise<SnoozeResult> = (async () => {
       try {
-        const result = await snoozeApi.snooze()
+        const result = await protectedRollMutationApi.snooze()
         await invalidateCurrentSessionAfterSnooze(queryClient)
         await refreshAuthoritativeState()
         return result
       } catch (error: unknown) {
+        if (
+          expectedPendingThreadId !== undefined
+          && isAuthenticationMutationFailure(error)
+        ) {
+          try {
+            const recovered = await recoverProtectedRollMutation(
+              expectedPendingThreadId,
+              () => protectedRollMutationApi.snooze(),
+            )
+            if (recovered !== undefined) {
+              await invalidateCurrentSessionAfterSnooze(queryClient)
+              await refreshAuthoritativeState()
+              return recovered
+            }
+          } catch (recoveryError: unknown) {
+            console.error(
+              'Failed to recover snooze after authentication expiry:',
+              getApiErrorDetail(recoveryError),
+            )
+          }
+        }
+
         if (isAmbiguousNetworkFailure(error)) {
           try {
             const committed = await reconcileAmbiguousRollMutation(expectedPendingThreadId)
@@ -124,7 +148,7 @@ export function useUnsnooze() {
     setIsPending(true)
     setIsError(false)
     try {
-      await snoozeApi.unsnooze(threadId)
+      await protectedRollMutationApi.snooze()
       await invalidateCurrentSessionAfterSnooze(queryClient)
     } catch (error: unknown) {
       setIsError(true)
