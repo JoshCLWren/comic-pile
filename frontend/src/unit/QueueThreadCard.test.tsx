@@ -113,6 +113,22 @@ describe('QueueThreadCard', () => {
     expect(onCardClick).not.toHaveBeenCalled()
   })
 
+  it('activates the card through its explicit title control without descendant leakage', async () => {
+    const user = userEvent.setup()
+    const onCardClick = vi.fn()
+    renderCard(createMockThread(), { onCardClick })
+
+    const openButton = screen.getByRole('button', { name: 'Open Test Thread' })
+    openButton.focus()
+    await user.keyboard('{Enter}')
+    expect(onCardClick).toHaveBeenCalledTimes(1)
+
+    const readButton = screen.getByRole('button', { name: 'Read' })
+    readButton.focus()
+    await user.keyboard('{Enter}')
+    expect(onCardClick).toHaveBeenCalledTimes(1)
+  })
+
   it('renders the shared thread action menu as the discoverable card action', () => {
     renderCard(createMockThread())
 
@@ -192,7 +208,7 @@ describe('QueueThreadCard', () => {
     expect(screen.getByText('This is a note')).toBeInTheDocument()
   })
 
-  it('handles keyboard, drag, blocked dependency, and all position-menu callbacks', async () => {
+  it('handles drag, blocked dependency, and all position-menu callbacks', async () => {
     const user = userEvent.setup()
     const callbacks = Object.fromEntries([
       'onCardClick', 'onDragStart', 'onDragEnd', 'onDragOver', 'onDrop', 'onDependencies',
@@ -204,15 +220,11 @@ describe('QueueThreadCard', () => {
       isDragOver: true,
       ...callbacks,
     })
-    const card = screen.getByRole('button', { name: /view dependencies/i })
-    await user.click(card)
+    const dependencyButton = screen.getByRole('button', { name: /view dependencies/i })
+    await user.click(dependencyButton)
     expect(callbacks.onDependencies).toHaveBeenCalled()
-    const threadCard = screen.getByText('Comic').closest('[role="button"]') as HTMLElement
-    fireEvent.keyDown(threadCard, { key: 'Enter' })
-    fireEvent.keyDown(threadCard, { key: ' ' })
-    expect(callbacks.onCardClick).toHaveBeenCalledTimes(2)
+    const threadCard = screen.getByTestId('queue-thread-item')
     const drag = screen.getByRole('button', { name: 'Drag to reorder' })
-    await user.click(drag)
     fireEvent.dragStart(drag)
     fireEvent.dragEnd(drag)
     fireEvent.dragOver(threadCard)
