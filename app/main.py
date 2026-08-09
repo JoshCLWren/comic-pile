@@ -39,7 +39,12 @@ from app.api import (
 )
 from app.cache import cache
 from app.config import get_app_settings, get_database_settings, get_redis_settings
-from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, is_csrf_protected_request
+from app.csrf import (
+    CSRF_COOKIE_NAME,
+    CSRF_HEADER_NAME,
+    is_csrf_protected_request,
+    log_csrf_rejection,
+)
 from app.database import get_db
 from app.exception_handlers import register_exception_handlers
 from app.lifecycle import init_database
@@ -178,6 +183,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             or not csrf_header
             or not secrets.compare_digest(csrf_cookie, csrf_header)
         ):
+            log_csrf_rejection(request)
             return JSONResponse(
                 status_code=status.HTTP_403_FORBIDDEN,
                 content={"detail": "CSRF token missing or invalid"},
