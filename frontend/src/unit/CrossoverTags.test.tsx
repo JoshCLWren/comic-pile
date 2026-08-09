@@ -47,7 +47,8 @@ describe('CrossoverTags', () => {
     )
 
     const link = screen.getByRole('link', { name: 'A Very Long Cosmic Crossover Name' })
-    expect(link).toHaveClass('max-w-full', 'truncate')
+    expect(link).toHaveClass('max-w-full', 'break-words')
+    expect(link).not.toHaveClass('truncate')
     expect(link).toHaveAttribute('title', 'A Very Long Cosmic Crossover Name')
   })
 })
