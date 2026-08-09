@@ -41,6 +41,14 @@ describe('RollRecoveryCard', () => {
     expect(onReadNow).toHaveBeenCalledWith(recovery.readable_prerequisites[0])
   })
 
+  it('shows recommendations without a mutating action before safe replacement exists', () => {
+    render(<RollRecoveryCard recovery={recovery} />)
+
+    expect(screen.getByText('Original Roll')).toBeInTheDocument()
+    expect(screen.getAllByText('Read now')).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: /Deep prerequisite #1/i })).not.toBeInTheDocument()
+  })
+
   it('keeps the blocked roll visible when traversal has no readable leaf', () => {
     render(
       <RollRecoveryCard
