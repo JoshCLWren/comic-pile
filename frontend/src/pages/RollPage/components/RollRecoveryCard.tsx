@@ -2,7 +2,7 @@ import type { RollRecoveryInfo, RollRecoveryPrerequisite } from '../../../types/
 
 interface RollRecoveryCardProps {
   recovery: RollRecoveryInfo
-  onReadNow: (prerequisite: RollRecoveryPrerequisite) => void
+  onReadNow?: (prerequisite: RollRecoveryPrerequisite) => void
   isPending?: boolean
 }
 
@@ -29,27 +29,42 @@ export function RollRecoveryCard({ recovery, onReadNow, isPending = false }: Rol
           <p className="text-[10px] font-black uppercase tracking-widest text-stone-500">
             {recommendations.length === 1 ? 'Read this first' : 'Readable prerequisites'}
           </p>
-          {recommendations.map((prerequisite, index) => (
-            <button
-              key={`${prerequisite.node_type}-${prerequisite.node_id}`}
-              type="button"
-              onClick={() => onReadNow(prerequisite)}
-              disabled={isPending}
-              className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition-colors hover:bg-white/10 disabled:opacity-60"
-            >
-              <span className="min-w-0">
-                <span className="block text-sm font-black text-stone-100">{prerequisite.label}</span>
-                {index === 0 && recommendations.length > 1 && (
-                  <span className="mt-0.5 block text-[10px] font-bold uppercase tracking-wider text-amber-500">
-                    Recommended first
-                  </span>
-                )}
-              </span>
-              <span className="shrink-0 text-xs font-black uppercase tracking-widest text-amber-400">
-                Read now
-              </span>
-            </button>
-          ))}
+          {recommendations.map((prerequisite, index) => {
+            const content = (
+              <>
+                <span className="min-w-0">
+                  <span className="block text-sm font-black text-stone-100">{prerequisite.label}</span>
+                  {index === 0 && recommendations.length > 1 && (
+                    <span className="mt-0.5 block text-[10px] font-bold uppercase tracking-wider text-amber-500">
+                      Recommended first
+                    </span>
+                  )}
+                </span>
+                <span className="shrink-0 text-xs font-black uppercase tracking-widest text-amber-400">
+                  Read now
+                </span>
+              </>
+            )
+
+            return onReadNow ? (
+              <button
+                key={`${prerequisite.node_type}-${prerequisite.node_id}`}
+                type="button"
+                onClick={() => onReadNow(prerequisite)}
+                disabled={isPending}
+                className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition-colors hover:bg-white/10 disabled:opacity-60"
+              >
+                {content}
+              </button>
+            ) : (
+              <div
+                key={`${prerequisite.node_type}-${prerequisite.node_id}`}
+                className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
+              >
+                {content}
+              </div>
+            )
+          })}
         </div>
       ) : (
         <p className="mt-4 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-stone-400">
