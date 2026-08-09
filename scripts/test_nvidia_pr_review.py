@@ -23,6 +23,7 @@ from scripts.select_fcm_nvidia_model import select_models
 
 NVIDIA_CHAT_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 HUNK_PATTERN = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+EXPECT_LINE_PATTERN = re.compile(r"^(\d+)(?:-(\d+))?$")
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,40 @@ class Finding:
     line: int
     body: str
     suggestion: str | None = None
+
+
+@dataclass(frozen=True)
+class ExpectedFinding:
+    """A resilient known-defect expectation used to score review quality."""
+
+    path: str
+    start_line: int | None = None
+    end_line: int | None = None
+    body_pattern: str | None = None
+
+    def matches(self, finding: Finding) -> bool:
+        """Return whether one finding satisfies this expectation."""
+        if finding.path != self.path:
+            return False
+        if self.start_line is not None:
+            end_line = self.end_line if self.end_line is not None else self.start_line
+            if not self.start_line <= finding.line <= end_line:
+                return False
+        if self.body_pattern is not None:
+            searchable = f"{finding.body}\n{finding.suggestion or ''}"
+            return re.search(self.body_pattern, searchable, re.IGNORECASE) is not None
+        return True
+
+    @property
+    def display(self) -> str:
+        """Return a stable human-readable representation."""
+        if self.body_pattern is not None:
+            return f"{self.path}:/{self.body_pattern}/"
+        if self.start_line is None:
+            return self.path
+        if self.end_line is not None and self.end_line != self.start_line:
+            return f"{self.path}:{self.start_line}-{self.end_line}"
+        return f"{self.path}:{self.start_line}"
 
 
 @dataclass(frozen=True)
@@ -129,18 +164,7 @@ def _write_json(target: Path, payload: object) -> None:
 
 
 def _run(command: list[str], *, input_text: str | None = None) -> str:
-    """Run a command and return stdout.
-
-    Args:
-        command: Command and arguments to execute.
-        input_text: Optional standard input.
-
-    Returns:
-        Captured standard output.
-
-    Raises:
-        RuntimeError: When the command fails.
-    """
+    """Run a command and return stdout."""
     result = subprocess.run(
         command,
         check=False,
@@ -155,14 +179,7 @@ def _run(command: list[str], *, input_text: str | None = None) -> str:
 
 
 def _discover_models(limit: int | None) -> list[str]:
-    """Discover ranked NVIDIA chat candidates through FCM.
-
-    Args:
-        limit: Maximum models to return, or ``None`` for every candidate.
-
-    Returns:
-        Provider-qualified model identifiers.
-    """
+    """Discover ranked NVIDIA chat candidates through FCM."""
     raw_output = _run(
         [
             "free-coding-models",
@@ -178,15 +195,18 @@ def _discover_models(limit: int | None) -> list[str]:
     return models if limit is None else models[:limit]
 
 
+def _normalize_models(models: list[str]) -> list[str]:
+    """Normalize explicit model IDs while preserving caller order."""
+    normalized: list[str] = []
+    for model in models:
+        value = model if model.startswith("nvidia/") else f"nvidia/{model}"
+        if value not in normalized:
+            normalized.append(value)
+    return normalized
+
+
 def _changed_lines(patch: str) -> dict[str, set[int]]:
-    """Return added right-side line numbers for every changed file.
-
-    Args:
-        patch: Unified pull-request diff.
-
-    Returns:
-        Mapping from repository paths to commentable added lines.
-    """
+    """Return added right-side line numbers for every changed file."""
     changed: dict[str, set[int]] = {}
     path: str | None = None
     right_line: int | None = None
@@ -212,17 +232,7 @@ def _changed_lines(patch: str) -> dict[str, set[int]]:
 
 
 def _extract_json(content: str) -> object:
-    """Extract one JSON object from a model response.
-
-    Args:
-        content: Raw assistant response.
-
-    Returns:
-        Parsed JSON value.
-
-    Raises:
-        ValueError: When no JSON object is present.
-    """
+    """Extract one JSON object from a model response."""
     start = content.find("{")
     end = content.rfind("}")
     if start < 0 or end < start:
@@ -231,18 +241,7 @@ def _extract_json(content: str) -> object:
 
 
 def _parse_review(content: str, commentable: dict[str, set[int]]) -> tuple[str, tuple[Finding, ...]]:
-    """Parse and validate a structured model review.
-
-    Args:
-        content: Raw model response.
-        commentable: Allowed right-side diff locations.
-
-    Returns:
-        Normalized verdict and validated findings.
-
-    Raises:
-        ValueError: When the response schema or a location is invalid.
-    """
+    """Parse and validate a structured model review."""
     payload = _extract_json(content)
     if not isinstance(payload, dict):
         raise ValueError("review payload was not an object")
@@ -265,7 +264,14 @@ def _parse_review(content: str, commentable: dict[str, set[int]]) -> tuple[str, 
             raise ValueError(f"finding targeted non-added diff location {path}:{line}")
         if suggestion is not None and not isinstance(suggestion, str):
             raise ValueError("finding suggestion was not text")
-        findings.append(Finding(path=path, line=line, body=body.strip(), suggestion=suggestion))
+        findings.append(
+            Finding(
+                path=path,
+                line=line,
+                body=body.strip(),
+                suggestion=suggestion,
+            ),
+        )
 
     normalized = "CHANGES_REQUIRED" if findings else "PASS"
     if verdict != normalized:
@@ -330,7 +336,36 @@ def _assistant_message(payload: dict[str, object]) -> dict[str, object]:
     return message
 
 
-def _tool_arguments(message: dict[str, object], expected_name: str) -> tuple[str, dict[str, object]]:
+def _assistant_text(message: dict[str, object]) -> str | None:
+    """Return only final assistant content, never provider reasoning fields."""
+    content = message.get("content")
+    if not isinstance(content, str) or not content.strip():
+        return None
+    return content
+
+
+def _assistant_replay(message: dict[str, object]) -> dict[str, object]:
+    """Return a provider-safe assistant tool-call message for the next turn."""
+    replay: dict[str, object] = {"role": "assistant", "content": message.get("content")}
+    tool_calls = message.get("tool_calls")
+    if isinstance(tool_calls, list):
+        replay["tool_calls"] = tool_calls
+    return replay
+
+
+def _response_metadata(message: dict[str, object]) -> dict[str, bool]:
+    """Record response-channel presence without promoting reasoning to review output."""
+    return {
+        "content_present": _assistant_text(message) is not None,
+        "reasoning_present": bool(message.get("reasoning")),
+        "reasoning_content_present": bool(message.get("reasoning_content")),
+    }
+
+
+def _tool_arguments(
+    message: dict[str, object],
+    expected_name: str,
+) -> tuple[str, dict[str, object]]:
     """Extract and decode one expected tool call from an assistant message."""
     calls = message.get("tool_calls")
     if not isinstance(calls, list) or not calls or not isinstance(calls[0], dict):
@@ -340,12 +375,18 @@ def _tool_arguments(message: dict[str, object], expected_name: str) -> tuple[str
     function = call.get("function")
     if not isinstance(call_id, str) or not isinstance(function, dict):
         raise ValueError("model returned a malformed tool call")
-    if function.get("name") != expected_name or not isinstance(function.get("arguments"), str):
+    if function.get("name") != expected_name:
         raise ValueError(f"model called the wrong tool instead of {expected_name}")
-    arguments = json.loads(function["arguments"])
+    raw_arguments = function.get("arguments")
+    if isinstance(raw_arguments, str):
+        arguments = json.loads(raw_arguments)
+    elif isinstance(raw_arguments, dict):
+        arguments = raw_arguments
+    else:
+        raise ValueError("model returned malformed tool arguments")
     if not isinstance(arguments, dict):
         raise ValueError("tool arguments were not an object")
-    return call_id, arguments
+    return call_id, {str(key): value for key, value in arguments.items()}
 
 
 def _review_from_arguments(arguments: dict[str, object]) -> dict[str, object]:
@@ -374,6 +415,46 @@ def _classification(error: Exception) -> str:
     return "invalid_review"
 
 
+def _initial_messages(prompt: str) -> list[dict[str, object]]:
+    """Build the first request conversation."""
+    return [
+        {
+            "role": "system",
+            "content": (
+                "You are a precise PR reviewer with file tools. First call "
+                "write_review_file. After its tool result, call edit_review_file."
+            ),
+        },
+        {"role": "user", "content": prompt},
+    ]
+
+
+def _edit_messages(
+    initial_messages: list[dict[str, object]],
+    first_message: dict[str, object],
+    first_call_id: str,
+) -> list[dict[str, object]]:
+    """Build assistant tool-call -> tool result -> assistant continuation context."""
+    return [
+        *initial_messages,
+        _assistant_replay(first_message),
+        {
+            "role": "tool",
+            "tool_call_id": first_call_id,
+            "content": json.dumps(
+                {
+                    "ok": True,
+                    "path": "review.json",
+                    "next_action": (
+                        "Re-check the diff and the review, then call edit_review_file with the "
+                        "final review and a non-empty edit_marker even if findings are unchanged."
+                    ),
+                },
+            ),
+        },
+    ]
+
+
 def _review_model(
     model: str,
     api_key: str,
@@ -382,7 +463,7 @@ def _review_model(
     timeout_seconds: float,
     output_root: Path,
 ) -> ModelResult:
-    """Test one model's two-turn write/edit tool use and validate its review."""
+    """Test one model's review quality and two-turn tool use independently."""
     started = time.monotonic()
     model_dir = output_root / _model_slug(model)
     model_dir.mkdir(parents=True, exist_ok=True)
@@ -393,6 +474,7 @@ def _review_model(
         "model": model,
         "plain_review_valid": False,
         "write_tool_called": False,
+        "initial_structured_review_valid": False,
         "review_file_written": False,
         "edit_tool_called": False,
         "review_file_changed": False,
@@ -402,16 +484,7 @@ def _review_model(
     preliminary_findings: tuple[Finding, ...] = ()
     _append_log(log_file, "started", {"model": model, "timeout_seconds": timeout_seconds})
     try:
-        messages: list[dict[str, object]] = [
-            {
-                "role": "system",
-                "content": (
-                    "You are a precise PR reviewer with file tools. First call "
-                    "write_review_file. After its result, call edit_review_file."
-                ),
-            },
-            {"role": "user", "content": prompt},
-        ]
+        messages = _initial_messages(prompt)
         first_payload = _request_nim(
             model,
             api_key,
@@ -421,8 +494,9 @@ def _review_model(
             log_file,
         )
         first_message = _assistant_message(first_payload)
-        plain_content = first_message.get("content")
-        if isinstance(plain_content, str):
+        capabilities["first_response"] = _response_metadata(first_message)
+        plain_content = _assistant_text(first_message)
+        if plain_content is not None:
             try:
                 preliminary_verdict, preliminary_findings = _parse_review(
                     plain_content,
@@ -431,31 +505,20 @@ def _review_model(
                 capabilities["plain_review_valid"] = True
             except (json.JSONDecodeError, TypeError, ValueError):
                 pass
+
         first_id, first_arguments = _tool_arguments(first_message, "write_review_file")
         capabilities["write_tool_called"] = True
         initial_review = _review_from_arguments(first_arguments)
+        preliminary_verdict, preliminary_findings = _parse_review(
+            json.dumps(initial_review),
+            commentable,
+        )
+        capabilities["initial_structured_review_valid"] = True
         _write_json(review_file, initial_review)
         initial_text = review_file.read_text(encoding="utf-8")
         capabilities["review_file_written"] = True
 
-        messages.extend(
-            [
-                first_message,
-                {
-                    "role": "tool",
-                    "tool_call_id": first_id,
-                    "content": json.dumps({"ok": True, "path": "review.json"}),
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        "Re-check the diff and the review you wrote. Now call edit_review_file "
-                        "with the final review and a non-empty edit_marker, even if the findings "
-                        "remain unchanged."
-                    ),
-                },
-            ],
-        )
+        messages = _edit_messages(messages, first_message, first_id)
         remaining = timeout_seconds - (time.monotonic() - started)
         if remaining <= 0:
             raise httpx.TimeoutException("model exhausted its whole-job timeout before edit turn")
@@ -468,18 +531,19 @@ def _review_model(
             log_file,
         )
         second_message = _assistant_message(second_payload)
+        capabilities["second_response"] = _response_metadata(second_message)
         _second_id, second_arguments = _tool_arguments(second_message, "edit_review_file")
         capabilities["edit_tool_called"] = True
         final_review = _review_from_arguments(second_arguments)
         marker = second_arguments.get("edit_marker")
         if not isinstance(marker, str) or not marker.strip():
             raise ValueError("edit tool did not provide a non-empty edit_marker")
+        verdict, findings = _parse_review(json.dumps(final_review), commentable)
         final_review["_agent_edit_marker"] = marker.strip()
         _write_json(review_file, final_review)
         capabilities["review_file_changed"] = review_file.read_text(encoding="utf-8") != initial_text
         if not capabilities["review_file_changed"]:
             raise ValueError("edit tool did not change review.json")
-        verdict, findings = _parse_review(json.dumps(final_review), commentable)
         capabilities["structured_review_valid"] = True
         capabilities["classification"] = "passed"
         capabilities["elapsed_seconds"] = time.monotonic() - started
@@ -495,7 +559,7 @@ def _review_model(
             output_dir=model_dir,
             classification="passed",
         )
-    except (httpx.HTTPError, json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
+    except (httpx.HTTPError, json.JSONDecodeError, OSError, KeyError, TypeError, ValueError) as error:
         classification = _classification(error)
         capabilities["classification"] = classification
         capabilities["elapsed_seconds"] = time.monotonic() - started
@@ -515,14 +579,7 @@ def _review_model(
 
 
 def _post_findings(repo: str, pr_number: int, head: str, result: ModelResult) -> None:
-    """Post validated findings as inline GitHub comments.
-
-    Args:
-        repo: GitHub ``owner/name`` repository.
-        pr_number: Pull request number.
-        head: Exact reviewed commit.
-        result: Completed model review.
-    """
+    """Post validated findings as inline GitHub comments."""
     for finding in result.findings:
         body = f"[NVIDIA NIM `{result.model}`] {finding.body}"
         if finding.suggestion:
@@ -549,15 +606,17 @@ def _post_findings(repo: str, pr_number: int, head: str, result: ModelResult) ->
 
 
 def _parser() -> argparse.ArgumentParser:
-    """Build the command-line parser.
-
-    Returns:
-        Configured argument parser.
-    """
+    """Build the command-line parser."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("pr", help="Pull request number or URL")
     parser.add_argument("--repo", help="GitHub owner/name; defaults to the current repository")
-    parser.add_argument("--max-models", type=int, help="Limit candidates for a shorter experiment")
+    parser.add_argument("--max-models", type=int, help="Limit discovered candidates")
+    parser.add_argument(
+        "--model",
+        action="append",
+        default=[],
+        help="Exact NVIDIA model ID to test; repeat to run a focused model set",
+    )
     parser.add_argument("--timeout", type=float, default=300, help="Seconds allowed per model")
     parser.add_argument(
         "--concurrency",
@@ -570,8 +629,15 @@ def _parser() -> argparse.ArgumentParser:
         "--expect",
         action="append",
         default=[],
-        metavar="PATH:LINE",
-        help="Known defect location; repeat to measure review recall",
+        metavar="PATH:LINE[-LINE]",
+        help="Known defect location or line range; repeat to measure review recall",
+    )
+    parser.add_argument(
+        "--expect-text",
+        action="append",
+        default=[],
+        metavar="PATH:REGEX",
+        help="Known defect finding-text regex; repeat to tolerate line drift",
     )
     parser.add_argument("--post", action="store_true", help="Post validated inline findings")
     parser.add_argument(
@@ -615,25 +681,54 @@ def _load_completed_result(
         return None
 
 
-def _parse_expected_locations(values: list[str]) -> set[tuple[str, int]]:
-    """Parse repeatable PATH:LINE known-defect locations."""
-    locations: set[tuple[str, int]] = set()
+def _parse_expected_locations(values: list[str]) -> list[ExpectedFinding]:
+    """Parse repeatable PATH:LINE or PATH:START-END expectations."""
+    expectations: list[ExpectedFinding] = []
     for value in values:
-        path, separator, raw_line = value.rpartition(":")
-        if not separator or not path:
-            raise ValueError(f"invalid expected finding {value!r}; use PATH:LINE")
-        locations.add((path, int(raw_line)))
-    return locations
+        path, separator, raw_lines = value.rpartition(":")
+        match = EXPECT_LINE_PATTERN.fullmatch(raw_lines)
+        if not separator or not path or match is None:
+            raise ValueError(f"invalid expected finding {value!r}; use PATH:LINE or PATH:START-END")
+        start_line = int(match.group(1))
+        end_line = int(match.group(2) or start_line)
+        if start_line < 1 or end_line < start_line:
+            raise ValueError(f"invalid expected finding range {value!r}")
+        expectations.append(
+            ExpectedFinding(path=path, start_line=start_line, end_line=end_line),
+        )
+    return expectations
 
 
-def _review_quality(result: ModelResult, expected: set[tuple[str, int]]) -> str:
+def _parse_expected_text(values: list[str]) -> list[ExpectedFinding]:
+    """Parse repeatable PATH:REGEX finding-text expectations."""
+    expectations: list[ExpectedFinding] = []
+    for value in values:
+        path, separator, pattern = value.partition(":")
+        if not separator or not path or not pattern:
+            raise ValueError(f"invalid expected text {value!r}; use PATH:REGEX")
+        try:
+            re.compile(pattern)
+        except re.error as error:
+            raise ValueError(f"invalid expected text regex {pattern!r}: {error}") from error
+        expectations.append(ExpectedFinding(path=path, body_pattern=pattern))
+    return expectations
+
+
+def _matched_expectations(
+    findings: tuple[Finding, ...],
+    expected: list[ExpectedFinding],
+) -> int:
+    """Count known-defect expectations matched by at least one finding."""
+    return sum(any(expectation.matches(finding) for finding in findings) for expectation in expected)
+
+
+def _review_quality(result: ModelResult, expected: list[ExpectedFinding]) -> str:
     """Score review usefulness separately from agent tool compatibility."""
     if result.verdict is None:
         return "no_valid_review"
     if not expected:
         return "valid_unscored"
-    actual = {(finding.path, finding.line) for finding in result.findings}
-    if expected <= actual:
+    if _matched_expectations(result.findings, expected) == len(expected):
         return "known_defects_found"
     return "missed_known_defect"
 
@@ -641,7 +736,7 @@ def _review_quality(result: ModelResult, expected: set[tuple[str, int]]) -> str:
 def _write_summary(
     output_root: Path,
     results: list[ModelResult],
-    expected: set[tuple[str, int]],
+    expected: list[ExpectedFinding],
 ) -> None:
     """Write aggregate machine-readable JSON and CSV result tables."""
     rows = [
@@ -650,6 +745,8 @@ def _write_summary(
             "status": result.status,
             "classification": result.classification,
             "review_quality": _review_quality(result, expected),
+            "expected_findings_matched": _matched_expectations(result.findings, expected),
+            "expected_findings_total": len(expected),
             "verdict": result.verdict,
             "findings": len(result.findings),
             "elapsed_seconds": round(result.elapsed_seconds, 3),
@@ -666,17 +763,16 @@ def _write_summary(
 
 
 def main() -> int:
-    """Run all discovered NVIDIA reviews and print a comparison report.
-
-    Returns:
-        Zero when at least one model completed a valid review, otherwise one.
-    """
+    """Run NVIDIA reviews and print a comparison report."""
     args = _parser().parse_args()
     if args.concurrency < 1 or args.timeout <= 0:
         print("--concurrency and --timeout must be positive", file=sys.stderr)
         return 2
     try:
-        expected = _parse_expected_locations(args.expect)
+        expected = [
+            *_parse_expected_locations(args.expect),
+            *_parse_expected_text(args.expect_text),
+        ]
     except (TypeError, ValueError) as error:
         print(str(error), file=sys.stderr)
         return 2
@@ -703,7 +799,7 @@ def main() -> int:
     )
     patch = _run(["gh", "pr", "diff", str(pr_data["number"]), "--repo", repo, "--patch"])
     commentable = _changed_lines(patch)
-    models = _discover_models(args.max_models)
+    models = _normalize_models(args.model) if args.model else _discover_models(args.max_models)
     output_root = args.output_dir / f"pr-{pr_data['number']}-{str(pr_data['headRefOid'])[:12]}"
     output_root.mkdir(parents=True, exist_ok=True)
     _write_json(
@@ -716,7 +812,7 @@ def main() -> int:
             "models": models,
             "timeout_seconds": args.timeout,
             "concurrency": args.concurrency,
-            "expected_findings": [f"{path}:{line}" for path, line in sorted(expected)],
+            "expected_findings": [item.display for item in expected],
         },
     )
     prompt = (
