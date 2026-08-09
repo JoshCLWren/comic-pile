@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { Issue, Thread } from '../../types'
 
@@ -39,8 +39,12 @@ export function ContinuityThreadSelector({
   error = null,
   disabled = false,
 }: ContinuityThreadSelectorProps) {
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(value?.title ?? '')
   const resultRefs = useRef<Array<HTMLButtonElement | null>>([])
+
+  useEffect(() => {
+    if (value) setQuery(value.title)
+  }, [value])
 
   const results = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase()
@@ -173,13 +177,19 @@ export function ContinuityIssueRangeSelector({
   error = null,
   disabled = false,
 }: ContinuityIssueRangeSelectorProps) {
-  const startIssue = value?.startIssue ?? null
-  const endIssue = value?.endIssue ?? null
-  const startIndex = startIssue ? issues.findIndex((issue) => issue.id === startIssue.id) : -1
-  const endIndex = endIssue ? issues.findIndex((issue) => issue.id === endIssue.id) : -1
+  const [draftStart, setDraftStart] = useState<Issue | null>(value?.startIssue ?? null)
+  const [draftEnd, setDraftEnd] = useState<Issue | null>(value?.endIssue ?? null)
+
+  useEffect(() => {
+    setDraftStart(value?.startIssue ?? null)
+    setDraftEnd(value?.endIssue ?? null)
+  }, [value])
+
+  const startIndex = draftStart ? issues.findIndex((issue) => issue.id === draftStart.id) : -1
+  const endIndex = draftEnd ? issues.findIndex((issue) => issue.id === draftEnd.id) : -1
   const isReversed = startIndex >= 0 && endIndex >= 0 && startIndex > endIndex
 
-  function updateRange(nextStart: Issue | null, nextEnd: Issue | null) {
+  function publishRange(nextStart: Issue | null, nextEnd: Issue | null) {
     if (!nextStart || !nextEnd) {
       onChange(null)
       return
@@ -194,23 +204,29 @@ export function ContinuityIssueRangeSelector({
         <ContinuityIssueSelector
           label="First issue"
           issues={issues}
-          value={startIssue}
-          onChange={(issue) => updateRange(issue, endIssue)}
+          value={draftStart}
+          onChange={(issue) => {
+            setDraftStart(issue)
+            publishRange(issue, draftEnd)
+          }}
           isLoading={isLoading}
           disabled={disabled}
         />
         <ContinuityIssueSelector
           label="Last issue"
           issues={issues}
-          value={endIssue}
-          onChange={(issue) => updateRange(startIssue, issue)}
+          value={draftEnd}
+          onChange={(issue) => {
+            setDraftEnd(issue)
+            publishRange(draftStart, issue)
+          }}
           isLoading={isLoading}
           disabled={disabled}
         />
       </div>
       {isReversed && (
         <p role="alert" className="text-xs text-amber-300">
-          #{startIssue?.issue_number} comes after #{endIssue?.issue_number} in {thread.title}. Choose a later ending issue.
+          #{draftStart?.issue_number} comes after #{draftEnd?.issue_number} in {thread.title}. Choose a later ending issue.
         </p>
       )}
       {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
