@@ -52,6 +52,7 @@ function renderCard(thread: Thread, overrides: Partial<Parameters<typeof QueueTh
     isDragOver: false,
     snoozeIcon: '⏰',
     snoozeLabel: 'Snooze',
+    snoozeDisabled: false,
     onCardClick: vi.fn(),
     onDragStart: vi.fn(),
     onDragEnd: vi.fn(),
@@ -84,6 +85,12 @@ describe('QueueThreadCard', () => {
     expect(screen.getByRole('button', { name: 'Edit' })).toBeVisible()
     expect(screen.getByRole('button', { name: 'Snooze' })).toBeVisible()
     expect(screen.getByRole('button', { name: 'Delete' })).toBeVisible()
+  })
+
+  it('disables snooze when the card is not the pending comic', () => {
+    renderCard(createMockThread(), { snoozeDisabled: true })
+
+    expect(screen.getByRole('button', { name: 'Snooze' })).toBeDisabled()
   })
 
   it('invokes visible controls without activating the card', async () => {
