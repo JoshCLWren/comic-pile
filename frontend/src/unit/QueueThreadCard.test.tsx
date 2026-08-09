@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import QueueThreadCard from '../pages/QueuePage/QueueThreadCard'
 import type { Thread } from '../types'
@@ -77,7 +78,14 @@ function renderCard(thread: Thread, overrides: Partial<Parameters<typeof QueueTh
     onDelete: vi.fn(),
     ...overrides,
   }
-  return { props: defaults, ...render(<QueueThreadCard {...defaults} />) }
+  return {
+    props: defaults,
+    ...render(
+      <MemoryRouter>
+        <QueueThreadCard {...defaults} />
+      </MemoryRouter>,
+    ),
+  }
 }
 
 describe('QueueThreadCard', () => {
