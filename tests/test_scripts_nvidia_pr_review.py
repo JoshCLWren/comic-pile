@@ -203,7 +203,7 @@ def test_initial_tool_review_survives_second_turn_failure(
         ],
     )
 
-    def fake_request(*_args: object, **_kwargs: object) -> dict[str, object]:
+    def fake_request(*_args: object, **_kwargs: object) -> object:
         """Return deterministic provider responses for both turns."""
         return next(responses)
 
