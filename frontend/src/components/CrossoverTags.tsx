@@ -23,7 +23,7 @@ export function CrossoverTags({
           <li key={group.id} className="min-w-0 max-w-full">
             <Link
               to={`/crossovers?group=${group.id}`}
-              className="block max-w-full truncate rounded-lg border border-violet-700/30 bg-violet-900/20 px-3 py-1.5 text-xs font-bold text-violet-300 transition hover:border-violet-500/60 hover:bg-violet-900/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+              className="block max-w-full break-words rounded-lg border border-violet-700/30 bg-violet-900/20 px-3 py-1.5 text-xs font-bold text-violet-300 transition hover:border-violet-500/60 hover:bg-violet-900/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
               title={group.name}
             >
               {group.name}
