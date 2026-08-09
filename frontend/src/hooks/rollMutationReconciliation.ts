@@ -6,6 +6,10 @@ export const ROLL_BOOTSTRAP_RECONCILED_EVENT = 'comic-pile:roll-bootstrap-reconc
 
 const AUTH_RECOVERY_DELAYS_MS = [250, 500, 1000, 2000, 4000]
 
+export type ProtectedRollMutationRecovery<T> =
+  | { status: 'retried'; value: T }
+  | { status: 'stale' }
+
 function normalizePendingThreadId(
   value: number | string | null | undefined,
 ): number | null {
@@ -75,7 +79,7 @@ export async function recoverProtectedRollMutation<T>(
   expectedPendingThreadId: number,
   retryMutation: () => Promise<T>,
   wait: (ms: number) => Promise<void> = delay,
-): Promise<T | undefined> {
+): Promise<ProtectedRollMutationRecovery<T>> {
   for (let attempt = 0; attempt <= AUTH_RECOVERY_DELAYS_MS.length; attempt += 1) {
     if (attempt > 0) {
       await wait(AUTH_RECOVERY_DELAYS_MS[attempt - 1])
@@ -94,11 +98,11 @@ export async function recoverProtectedRollMutation<T>(
     publishRollBootstrap(state)
 
     if (normalizePendingThreadId(state.pending_thread_id) !== expectedPendingThreadId) {
-      return undefined
+      return { status: 'stale' }
     }
 
-    return retryMutation()
+    return { status: 'retried', value: await retryMutation() }
   }
 
-  return undefined
+  return { status: 'stale' }
 }
