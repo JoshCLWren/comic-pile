@@ -49,7 +49,9 @@ test('issue #984: auth recovery keeps the same pending comic and reading session
 
   await expect(page).toHaveURL('/');
   await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 15000 });
-  await expect(page.getByText(initialSession.active_thread!.title!, { exact: true }).first()).toBeVisible();
+  await expect(
+    page.locator('#thread-info h2'),
+  ).toContainText(initialSession.active_thread!.title!);
 
   const tokenAfterRecovery = await page.evaluate(() =>
     localStorage.getItem('auth_token')
