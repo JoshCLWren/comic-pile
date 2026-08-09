@@ -28,11 +28,11 @@ describe('parseChangelog', () => {
 })
 
 describe('WhatsNewPage', () => {
-  it('renders headings, paragraphs, lists, inline code, external links, and plain text', async () => {
+  it('renders GitHub references as text while preserving public external links', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       text: async () =>
-        '# Changelog\n\nPlain introduction.\n\n## Today\n\n### Queue\n\n- Fixed `Queue` in [#866](https://github.com/JoshCLWren/comic-pile/pull/866).',
+        '# Changelog\n\nPlain introduction.\n\n## Today\n\n### Queue\n\n- Fixed `Queue` in [#866](https://github.com/JoshCLWren/comic-pile/pull/866). See [ComicPile](https://comic-pile.vercel.app/) for more.',
     })
     vi.stubGlobal('fetch', fetchMock)
 
@@ -45,12 +45,11 @@ describe('WhatsNewPage', () => {
     expect(screen.getByRole('heading', { name: 'Queue' }).tagName).toBe('H3')
     expect(screen.getByText('Plain introduction.')).toBeInTheDocument()
     expect(screen.getByText('Queue', { selector: 'code' })).toBeInTheDocument()
+    expect(screen.getByRole('listitem')).toHaveTextContent('#866')
+    expect(screen.queryByRole('link', { name: /#866/ })).not.toBeInTheDocument()
 
-    const link = screen.getByRole('link', { name: /#866/ })
-    expect(link).toHaveAttribute(
-      'href',
-      'https://github.com/JoshCLWren/comic-pile/pull/866',
-    )
+    const link = screen.getByRole('link', { name: /ComicPile/ })
+    expect(link).toHaveAttribute('href', 'https://comic-pile.vercel.app/')
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', 'noreferrer')
     expect(screen.getByLabelText('opens in a new tab')).toBeInTheDocument()
@@ -100,9 +99,7 @@ describe('WhatsNewPage', () => {
 
   it('uses the safe fallback for non-Error rejections', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue('offline'))
-
     render(<WhatsNewPage />)
-
     expect(await screen.findByRole('alert')).toHaveTextContent('could not be loaded')
   })
 })
