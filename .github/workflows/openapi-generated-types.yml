@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: openapi-generated-types-${{ github.workflow }}-${{ github.ref }}
@@ -41,11 +42,29 @@ jobs:
           pnpm --version
 
       - name: Regenerate deterministic OpenAPI schema and TypeScript output
+        id: regenerate
         env:
           PYTHONPATH: .
         run: uv run python scripts/generate_openapi_types.py
 
+      - name: Detect generated artifact drift
+        id: drift
+        shell: bash
+        run: |
+          artifacts=(
+            frontend/src/generated/openapi.json
+            frontend/src/generated/openapi.ts
+          )
+
+          if ! git diff --quiet -- "${artifacts[@]}" ||
+            [[ -n "$(git ls-files --others -- "${artifacts[@]}")" ]]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Upload regenerated artifacts
+        id: generated-artifacts
         if: always()
         uses: actions/upload-artifact@v6
         with:
@@ -54,6 +73,126 @@ jobs:
             frontend/src/generated/openapi.json
             frontend/src/generated/openapi.ts
           if-no-files-found: error
+
+      - name: Reconcile post-merge factory handoff
+        if: >-
+          always() && steps.regenerate.outcome == 'success' &&
+          github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/github-script@v7
+        env:
+          ARTIFACT_URL: ${{ steps.generated-artifacts.outputs.artifact-url }}
+          DRIFT_DETECTED: ${{ steps.drift.outputs.changed }}
+        with:
+          script: |
+            const marker = '<!-- comic-pile-openapi-generated-drift -->';
+            const title = 'Regenerate committed OpenAPI client artifacts';
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const expectedLabels = [
+              'enhancement',
+              'ralph-task',
+              'ralph-status:pending',
+              'ralph-priority:high',
+              'factory',
+              'factory:unowned',
+            ];
+            const workflowRunUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+
+            const openIssues = await github.paginate(github.rest.issues.listForRepo, {
+              owner,
+              repo,
+              state: 'open',
+              per_page: 100,
+            });
+            const handoffIssue = openIssues.find(
+              issue => !issue.pull_request && issue.body?.includes(marker),
+            );
+
+            if (process.env.DRIFT_DETECTED === 'true') {
+              const body = `${marker}
+            ## Generated OpenAPI drift
+
+            Merging \`${context.sha}\` into \`main\` changed ComicPile's generated OpenAPI schema or TypeScript client artifacts.
+
+            ## Factory repair
+
+            1. Create a branch from current \`main\`.
+            2. Run \`PYTHONPATH=. uv run python scripts/generate_openapi_types.py\`.
+            3. Commit only \`frontend/src/generated/openapi.json\` and \`frontend/src/generated/openapi.ts\`.
+            4. Run \`PYTHONPATH=. uv run python scripts/generate_openapi_types.py --check\`.
+            5. Push a ready-for-review PR that closes this issue and carry it through the normal exact-head gates.
+
+            ## Evidence
+
+            - Merge SHA: \`${context.sha}\`
+            - [Workflow run](${workflowRunUrl})
+            - [Regenerated artifact](${process.env.ARTIFACT_URL || workflowRunUrl})
+
+            Repeated post-merge drift refreshes this issue instead of creating duplicates.`;
+
+              if (handoffIssue) {
+                await github.rest.issues.update({
+                  owner,
+                  repo,
+                  issue_number: handoffIssue.number,
+                  title,
+                  body,
+                });
+                core.notice(`Refreshed OpenAPI drift issue #${handoffIssue.number}.`);
+              } else {
+                const created = await github.rest.issues.create({
+                  owner,
+                  repo,
+                  title,
+                  body,
+                  labels: expectedLabels,
+                });
+                core.notice(`Created OpenAPI drift issue #${created.data.number}.`);
+              }
+              return;
+            }
+
+            if (!handoffIssue) {
+              core.notice('Generated OpenAPI artifacts are current; no handoff issue is open.');
+              return;
+            }
+
+            const completedLabels = handoffIssue.labels
+              .map(label => typeof label === 'string' ? label : label.name)
+              .filter(Boolean)
+              .filter(label => !label.startsWith('ralph-status:'))
+              .filter(label => ![
+                'factory:building',
+                'factory:review',
+                'factory:changes-requested',
+                'factory:ci',
+                'factory:ready',
+                'factory:blocked',
+                'factory:unowned',
+                'factory:local',
+                'factory:1',
+                'factory:2',
+                'factory:3',
+                'factory:4',
+                'factory:5',
+              ].includes(label));
+            completedLabels.push('ralph-status:done');
+
+            await github.rest.issues.update({
+              owner,
+              repo,
+              issue_number: handoffIssue.number,
+              state: 'closed',
+              state_reason: 'completed',
+              labels: completedLabels,
+            });
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: handoffIssue.number,
+              body: `Generated OpenAPI artifacts are current on \`main\` at \`${context.sha}\`. Closing the factory handoff automatically.`,
+            });
+            core.notice(`Closed resolved OpenAPI drift issue #${handoffIssue.number}.`);
 
       - name: Verify generated artifacts are committed
         shell: bash
