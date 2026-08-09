@@ -474,9 +474,9 @@ export default function QueuePage() {
         onDragEnd={handleDragEnd}
         onDragOver={handleDragOver(thread.id)}
         onDrop={handleDrop(thread.id)}
-        onSwipeRead={() => handleActionForThread(thread)}
-        onSwipeEdit={() => navigate(`/thread/${thread.id}`)}
-        onSwipeSnooze={async () => {
+        onRead={() => handleActionForThread(thread)}
+        onOpenThread={() => navigate(`/thread/${thread.id}`)}
+        onSnooze={async () => {
           try {
             if (isSnoozed) {
               await unsnoozeMutation.mutate(thread.id)
@@ -485,11 +485,11 @@ export default function QueuePage() {
             }
             await refetchSession()
           } catch (error: unknown) {
-            console.error('Swipe snooze failed:', error)
+            console.error('Snooze action failed:', error)
             alert(`Failed to ${isSnoozed ? 'unsnooze' : 'snooze'} thread: ${getApiErrorDetail(error)}`)
           }
         }}
-        onSwipeDelete={() => handleDelete(thread.id)}
+        onActionDelete={() => handleDelete(thread.id)}
         onMoveToFront={() => handleMoveToFront(thread.id)}
         onMoveToBack={() => handleMoveToBack(thread.id)}
         onReposition={() => openRepositionModal(thread)}
