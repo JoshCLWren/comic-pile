@@ -41,6 +41,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
       const target = event.target
       if (!(target instanceof Node)) return
       if (moreButtonRef.current?.contains(target) || moreMenuRef.current?.contains(target)) return
+      if (target instanceof Element && target.closest('[data-overlay-layer="dialog"]')) return
       setIsMoreOpen(false)
     }
 
