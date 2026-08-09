@@ -393,7 +393,7 @@ it('creates a simple issue range and marks the requested issues read', async () 
   await user.type(screen.getByLabelText('Title'), 'New Series')
   await user.clear(screen.getByLabelText('Issues'))
   await user.type(screen.getByLabelText('Issues'), '1-5')
-  await user.type(screen.getByLabelText(/Last issue read/i), '2')
+  await user.type(screen.getByLabelText(/Issues already read/i), '2')
   await user.click(screen.getByRole('button', { name: /create thread/i }))
   await waitFor(() => expect(create).toHaveBeenCalled())
 })
@@ -532,7 +532,7 @@ it('creates a literal issue range and reports create failures', async () => {
   await user.type(screen.getByLabelText('Title'), 'Annuals')
   await user.clear(screen.getByLabelText('Issues'))
   await user.type(screen.getByLabelText('Issues'), 'Annual 1, 5-7')
-  await user.type(screen.getByLabelText(/Last issue read/i), '1')
+  await user.type(screen.getByLabelText(/Issues already read/i), '1')
   await user.click(screen.getByRole('button', { name: /create thread/i }))
   await waitFor(() => expect(create).toHaveBeenCalled())
 
@@ -594,10 +594,37 @@ it('creates complex ranges and marks the requested issues read', async () => {
   await user.click(screen.getAllByRole('button', { name: /add thread/i })[0])
   await user.type(screen.getByLabelText('Title'), 'Complex')
   await user.type(screen.getByLabelText('Issues'), 'Annual 1, 5-7')
-  await user.type(screen.getByLabelText(/Last issue read/i), '2')
+  await user.type(screen.getByLabelText(/Issues already read/i), '2')
   await user.click(screen.getByRole('button', { name: /create thread/i }))
   await waitFor(() => expect(mockedIssuesApi.markRead).toHaveBeenCalledWith(11))
   expect(mockedIssuesApi.markRead).toHaveBeenCalledWith(12)
+})
+
+it('creates a later single issue without requiring earlier issues', async () => {
+  const user = userEvent.setup()
+  const create = vi.fn().mockResolvedValue({ id: 78 })
+  mockedIssuesApi.markRead.mockClear()
+  mockedUseCreateThread.mockReturnValue({ mutate: create, isPending: false })
+  mockedUseThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
+  mockedIssuesApi.create.mockResolvedValue({ issues: [{ id: 71, issue_number: '71' }] })
+
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  await user.click(screen.getAllByRole('button', { name: /add thread/i })[0])
+  await user.type(screen.getByLabelText('Title'), 'Marvel Graphic Novel')
+  await user.type(screen.getByLabelText('Issues'), '71')
+
+  expect(screen.getByText(/You do not need to add earlier issues/i)).toBeInTheDocument()
+  expect(screen.getByText(/not an issue number/i)).toBeInTheDocument()
+  expect(screen.getByLabelText('Issues already read (optional)')).toHaveValue(0)
+
+  await user.click(screen.getByRole('button', { name: /create thread/i }))
+
+  await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({
+    title: 'Marvel Graphic Novel',
+    issues_remaining: 1,
+  })))
+  expect(mockedIssuesApi.create).toHaveBeenCalledWith(78, '71')
+  expect(mockedIssuesApi.markRead).not.toHaveBeenCalled()
 })
 
 it('handles reactivation success and failure from completed threads', async () => {
