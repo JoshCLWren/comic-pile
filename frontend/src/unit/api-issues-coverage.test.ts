@@ -41,6 +41,6 @@ describe('issuesApi', () => {
     expect(api.post).toHaveBeenCalledWith('/v1/issues/2:move', { after_issue_id: null })
     expect(api.post).toHaveBeenCalledWith('/v1/threads/3/issues:reorder', { issue_ids: [1, 2] })
     expect(api.delete).toHaveBeenCalledWith('/v1/issues/4')
-    expect(api.post).toHaveBeenCalledWith('/threads/5:migrateToIssues', { last_issue_read: 2, total_issues: 10 })
+    expect(api.post).toHaveBeenCalledWith('/v1/threads/5:migrateToIssues', { last_issue_read: 2, total_issues: 10 })
   })
 })
