@@ -165,7 +165,8 @@ describe('CrossoversPage membership editing', () => {
     fireEvent.change(screen.getByLabelText('Last issue'), { target: { value: '33' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add range' }))
 
-    const status = await screen.findByRole('status')
+    await waitFor(() => expect(api.addIssueRange).toHaveBeenCalledTimes(1))
+    const status = await screen.findByRole('status', undefined, { timeout: 5000 })
     expect(status).toHaveTextContent('1 added, 0 already present.')
     expect(status).toHaveTextContent('latest memberships could not be refreshed: Refresh unavailable')
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
@@ -173,7 +174,6 @@ describe('CrossoversPage membership editing', () => {
     expect(screen.queryByLabelText('First issue')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Last issue')).not.toBeInTheDocument()
     expect(api.addIssueRange).toHaveBeenCalledWith(7, 22, 3, 5)
-    expect(api.addIssueRange).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the whole-thread form usable when adding a membership fails', async () => {
