@@ -51,6 +51,9 @@ def log_csrf_rejection(request: Request) -> None:
 
     Args:
         request: Request rejected by double-submit CSRF validation.
+
+    Returns:
+        None.
     """
     logger.warning(
         "CSRF request rejected",
