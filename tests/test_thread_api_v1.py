@@ -32,13 +32,11 @@ def test_v1_thread_routes_share_legacy_implementations() -> None:
 
 
 def test_v1_thread_openapi_operation_ids_are_unique() -> None:
-    """Canonical thread operations must not introduce duplicate OpenAPI operation IDs."""
+    """Thread route additions must preserve document-wide OpenAPI operation ID uniqueness."""
     schema = create_app(serve_frontend=False).openapi()
     operation_ids: list[str] = []
 
-    for path, path_item in schema["paths"].items():
-        if not path.startswith("/api/v1/threads"):
-            continue
+    for path_item in schema["paths"].values():
         for operation in path_item.values():
             if isinstance(operation, dict) and "operationId" in operation:
                 operation_ids.append(operation["operationId"])
