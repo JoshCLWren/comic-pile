@@ -372,6 +372,7 @@ Before ending a turn involving an issue or PR:
 - remove stale or mutually exclusive state and owner labels;
 - release expired ownership while preserving `factory:review` or `factory:changes-requested` when
   that remains the truthful next action;
-- use the REST issue-label endpoint when `gh pr edit` fails on Projects Classic GraphQL metadata.
+- when `gh pr edit` fails on Projects Classic GraphQL metadata, use REST to delete every stale
+  workflow and owner label before adding the complete target factory label set.
 
 Never wait for the user to request these routine label corrections.

@@ -179,12 +179,12 @@ transition:
 | State | Issue labels | Pull-request labels |
 |---|---|---|
 | Unclaimed executable work | `ralph-task`, `ralph-status:pending`, one priority, `factory`, `factory:unowned` | Not applicable |
-| Actively implemented | `ralph-status:in-progress`, `factory`, `factory:building`, one `factory:<worker>` | `factory`, one `factory:<worker>` when a PR exists |
+| Actively implemented | `ralph-status:in-progress`, `factory`, `factory:building`, one `factory:<worker>` | `factory`, `factory:building`, one `factory:<worker>` when a PR exists |
 | Exact head needs review | `ralph-status:in-review`, `factory`, `factory:review`, current owner or `factory:unowned` | `factory`, `factory:review`, current owner or `factory:unowned` |
 | Actionable review findings | `ralph-status:in-progress` when owned, otherwise `ralph-status:pending`; `factory`, `factory:changes-requested`, current owner or `factory:unowned` | `factory`, `factory:changes-requested`, current owner or `factory:unowned` |
 | Review passed; exact-head CI pending | `ralph-status:validation`, `factory`, `factory:ci`, current owner or `factory:unowned` | `factory`, `factory:ci`, current owner or `factory:unowned` |
 | Every merge gate satisfied | `ralph-status:in-review`, `factory`, `factory:ready`, current owner or `factory:unowned` | `factory`, `factory:ready`, current owner or `factory:unowned` |
-| Human or external blocker | `ralph-status:blocked`, `factory`, `factory:blocked`, `factory:unowned` | Preserve `factory`; add `factory:blocked` only when the PR itself has the external blocker |
+| Human or external blocker | `ralph-status:blocked`, `factory`, `factory:blocked`, `factory:unowned` | Issue-only blocker: preserve the truthful PR workflow state with `factory:unowned`; PR-level blocker: `factory`, `factory:blocked`, `factory:unowned` |
 | Lease released or stale | Executable status, `factory`, `factory:unowned`; also preserve `factory:review` or `factory:changes-requested` when applicable | `factory`, `factory:unowned`, plus the truthful review state |
 | Merged and complete | `ralph-status:done`, then close after verification; remove transient factory state/owner labels | Merged PR needs no further transition |
 
@@ -200,9 +200,9 @@ Rules:
   `factory:review` unless review findings already require `factory:changes-requested`.
 - Cross-worker takeover and merge are allowed. The new worker replaces the owner label and may
   merge work it did not author after every exact-head gate passes.
-- If `gh pr edit` fails because of deprecated Projects Classic GraphQL fields, update PR labels
-  through the issue-compatible REST endpoint, for example
-  `gh api --method POST repos/OWNER/REPO/issues/PR/labels -f 'labels[]=factory'`.
+- If `gh pr edit` fails because of deprecated Projects Classic GraphQL fields, use the
+  issue-compatible REST endpoints: delete every stale workflow and owner label first, then add the
+  complete target factory label set. A POST alone only adds labels and is not reconciliation.
 - Before ending any turn, compare the issue, PR, review, CI, lease, and merge state and repair any
   metadata contradiction discovered.
 
