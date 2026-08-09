@@ -4,7 +4,7 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 import logging
 
-from sqlalchemy import select, text
+from sqlalchemy import or_, select, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +26,22 @@ def _start_die() -> int:
     return get_session_settings().start_die
 
 
+def _current_session_filter(user_id: int, cutoff_time: datetime):
+    """Build the predicate for a session that should remain authoritative.
+
+    A pending roll is active reading work. Its timestamp, rather than the original session start,
+    keeps the session current while the reader is away from the app reading the selected comic.
+    """
+    return (
+        (Session.user_id == user_id)
+        & Session.ended_at.is_(None)
+        & or_(
+            Session.started_at >= cutoff_time,
+            Session.pending_thread_updated_at >= cutoff_time,
+        )
+    )
+
+
 async def is_active(
     started_at: datetime,
     ended_at: datetime | None,
@@ -40,13 +56,10 @@ async def is_active(
 
 
 async def should_start_new(db: AsyncSession, user_id: int) -> bool:
-    """Check whether no active session exists in the configured gap."""
+    """Check whether no current session exists in the configured gap."""
     cutoff_time = datetime.now(UTC) - timedelta(hours=_session_gap_hours())
     result = await db.execute(
-        select(Session)
-        .where(Session.user_id == user_id)
-        .where(Session.started_at >= cutoff_time)
-        .where(Session.ended_at.is_(None))
+        select(Session).where(_current_session_filter(user_id, cutoff_time))
     )
     return len(result.scalars().all()) == 0
 
@@ -154,9 +167,7 @@ async def get_or_create(db: AsyncSession, user_id: int) -> Session:
             cutoff_time = datetime.now(UTC) - timedelta(hours=session_gap_hours)
             result = await db.execute(
                 select(Session)
-                .where(Session.user_id == user_id)
-                .where(Session.ended_at.is_(None))
-                .where(Session.started_at >= cutoff_time)
+                .where(_current_session_filter(user_id, cutoff_time))
                 .order_by(Session.started_at.desc(), Session.id.desc())
             )
             active_session = result.scalars().first()
@@ -175,9 +186,7 @@ async def get_or_create(db: AsyncSession, user_id: int) -> Session:
 
                 result = await db.execute(
                     select(Session)
-                    .where(Session.user_id == user_id)
-                    .where(Session.ended_at.is_(None))
-                    .where(Session.started_at >= cutoff_time)
+                    .where(_current_session_filter(user_id, cutoff_time))
                     .order_by(Session.started_at.desc(), Session.id.desc())
                 )
                 active_session = result.scalars().first()
