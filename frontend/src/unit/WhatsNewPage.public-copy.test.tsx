@@ -6,6 +6,10 @@ describe('publicChangelogText', () => {
     expect(publicChangelogText('[#994](https://github.com/JoshCLWren/comic-pile/pull/994) replaces internal fields with comic issue labels.')).toBe('replaces internal fields with comic issue labels.')
   })
 
+  it('removes a dangling preposition before a linked pull request', () => {
+    expect(publicChangelogText('Fixed Queue in [#866](https://github.com/JoshCLWren/comic-pile/pull/866).')).toBe('Fixed Queue.')
+  })
+
   it('removes plain PR references while preserving the user-facing change', () => {
     expect(publicChangelogText('PR #990: Rating retries after login recovery.')).toBe('Rating retries after login recovery.')
   })

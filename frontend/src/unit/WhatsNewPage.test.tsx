@@ -28,7 +28,7 @@ describe('parseChangelog', () => {
 })
 
 describe('WhatsNewPage', () => {
-  it('renders GitHub references as text while preserving public external links', async () => {
+  it('removes GitHub pull references while preserving public external links', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       text: async () =>
@@ -45,7 +45,8 @@ describe('WhatsNewPage', () => {
     expect(screen.getByRole('heading', { name: 'Queue' }).tagName).toBe('H3')
     expect(screen.getByText('Plain introduction.')).toBeInTheDocument()
     expect(screen.getByText('Queue', { selector: 'code' })).toBeInTheDocument()
-    expect(screen.getByRole('listitem')).toHaveTextContent('#866')
+    expect(screen.getByRole('listitem')).not.toHaveTextContent('#866')
+    expect(screen.getByRole('listitem')).toHaveTextContent(/Fixed Queue\. See ComicPile.*for more\./)
     expect(screen.queryByRole('link', { name: /#866/ })).not.toBeInTheDocument()
 
     const link = screen.getByRole('link', { name: /ComicPile/ })

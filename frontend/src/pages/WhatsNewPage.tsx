@@ -18,6 +18,7 @@ export function isPublicChangelogLink(url: string) {
 
 export function publicChangelogText(text: string) {
   return text
+    .replace(/\s+\b(?:in|via)\s+\[#\d+\]\(https?:\/\/github\.com\/[^)]+\/pull\/\d+\)/gi, '')
     .replace(/\[#\d+\]\(https?:\/\/github\.com\/[^)]+\/pull\/\d+\)\s*/gi, '')
     .replace(/\bPR\s+#\d+\b:?\s*/gi, '')
     .trim()
