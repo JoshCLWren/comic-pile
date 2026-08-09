@@ -43,14 +43,14 @@ export function useRate() {
       } catch (error: unknown) {
         if (isAuthenticationMutationFailure(error)) {
           try {
-            const recovered = await recoverProtectedRollMutation(
+            const recovery = await recoverProtectedRollMutation(
               data.thread_id,
               () => protectedRollMutationApi.rate(data),
             )
-            if (recovered !== undefined) {
-              await applyRatedThreadCache(queryClient, recovered)
+            if (recovery.status === 'retried') {
+              await applyRatedThreadCache(queryClient, recovery.value)
               await fetchAndPublishRollBootstrap()
-              return recovered
+              return recovery.value
             }
           } catch (recoveryError: unknown) {
             console.error(
