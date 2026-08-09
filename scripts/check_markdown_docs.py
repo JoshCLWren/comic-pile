@@ -22,7 +22,7 @@ ALLOWED_ROOT_MARKDOWN = {
     "TECH_DEBT.md",
     "prd.md",
 }
-IGNORED_DIRECTORIES = {".git", ".venv", "node_modules", "archive"}
+IGNORED_DIRECTORIES = {".git", ".venv", ".vercel", "node_modules", "archive"}
 
 
 def iter_markdown_files(root: Path) -> list[Path]:
