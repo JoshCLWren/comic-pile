@@ -1,5 +1,6 @@
 """Regression coverage for canonical Roll and rating v1 routes."""
 
+from fastapi import FastAPI
 from fastapi.routing import APIRoute
 
 from app.main import create_app
@@ -15,7 +16,7 @@ _ROLL_PATHS = (
 )
 
 
-def _route_by_path(app, path: str) -> APIRoute:
+def _route_by_path(app: FastAPI, path: str) -> APIRoute:
     """Return the API route registered for a path.
 
     Args:
