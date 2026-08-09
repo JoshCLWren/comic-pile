@@ -22,10 +22,6 @@ vi.mock('../components/PositionMenu', () => ({
   ),
 }))
 
-vi.mock('../components/Swipeable', () => ({
-  default: ({ children }: { children: React.ReactNode }) => <div data-testid="mock-swipeable">{children}</div>,
-}))
-
 function createMockThread(overrides: Partial<Thread> = {}): Thread {
   return {
     id: 1,
@@ -54,17 +50,17 @@ function renderCard(thread: Thread, overrides: Partial<Parameters<typeof QueueTh
     isBlocked: false,
     blockingReasons: [] as string[],
     isDragOver: false,
-    snoozeIcon: '',
-    snoozeLabel: '',
+    snoozeIcon: '⏰',
+    snoozeLabel: 'Snooze',
     onCardClick: vi.fn(),
     onDragStart: vi.fn(),
     onDragEnd: vi.fn(),
     onDragOver: vi.fn(),
     onDrop: vi.fn(),
-    onSwipeRead: vi.fn(),
-    onSwipeEdit: vi.fn(),
-    onSwipeSnooze: vi.fn(),
-    onSwipeDelete: vi.fn(),
+    onRead: vi.fn(),
+    onOpenThread: vi.fn(),
+    onSnooze: vi.fn(),
+    onActionDelete: vi.fn(),
     onMoveToFront: vi.fn(),
     onMoveToBack: vi.fn(),
     onReposition: vi.fn(),
@@ -79,6 +75,42 @@ function renderCard(thread: Thread, overrides: Partial<Parameters<typeof QueueTh
 describe('QueueThreadCard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  it('renders visible labeled controls for every former gesture action', () => {
+    renderCard(createMockThread())
+
+    expect(screen.getByRole('button', { name: 'Read' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Snooze' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeVisible()
+  })
+
+  it('invokes visible controls without activating the card', async () => {
+    const user = userEvent.setup()
+    const onCardClick = vi.fn()
+    const onRead = vi.fn()
+    const onOpenThread = vi.fn()
+    const onSnooze = vi.fn()
+    const onActionDelete = vi.fn()
+    renderCard(createMockThread(), {
+      onCardClick,
+      onRead,
+      onOpenThread,
+      onSnooze,
+      onActionDelete,
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Read' }))
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+    await user.click(screen.getByRole('button', { name: 'Snooze' }))
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+
+    expect(onRead).toHaveBeenCalledTimes(1)
+    expect(onOpenThread).toHaveBeenCalledTimes(1)
+    expect(onSnooze).toHaveBeenCalledTimes(1)
+    expect(onActionDelete).toHaveBeenCalledTimes(1)
+    expect(onCardClick).not.toHaveBeenCalled()
   })
 
   it('renders the shared thread action menu as the discoverable card action', () => {
