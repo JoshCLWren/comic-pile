@@ -308,16 +308,16 @@ export const sessionApi = {
     if (pageToken) {
       queryParams.page_token = pageToken;
     }
-    const response = await api.get<SessionListResponse>('/sessions/', {
+    const response = await api.get<SessionListResponse>('/v1/sessions/', {
       params: Object.keys(queryParams).length ? queryParams : undefined,
     })
     return response
   },
-  get: (id: number) => api.get<SessionSummary>(`/sessions/${id}`),
-  getCurrent: () => api.get<SessionCurrent>('/sessions/current/'),
-  getDetails: (id: number | string) => api.get<SessionDetails>(`/sessions/${id}/details`),
-  getSnapshots: (id: number | string) => api.get<SessionSnapshotsResponse>(`/sessions/${id}/snapshots`),
-  restoreSessionStart: (id: number | string) => api.post<void>(`/sessions/${id}/restore-session-start`),
+  get: (id: number) => api.get<SessionSummary>(`/v1/sessions/${id}`),
+  getCurrent: () => api.get<SessionCurrent>('/v1/sessions/current/'),
+  getDetails: (id: number | string) => api.get<SessionDetails>(`/v1/sessions/${id}/details`),
+  getSnapshots: (id: number | string) => api.get<SessionSnapshotsResponse>(`/v1/sessions/${id}/snapshots`),
+  restoreSessionStart: (id: number | string) => api.post<void>(`/v1/sessions/${id}/restore-session-start`),
 }
 
 export const queueApi = {
@@ -330,8 +330,8 @@ export const queueApi = {
 
 export const undoApi = {
   undo: (sessionId: number | string, snapshotId: number | string) =>
-    api.post<void>(`/undo/${sessionId}/undo/${snapshotId}`),
-  listSnapshots: (sessionId: number | string) => api.get<SessionSnapshotsResponse>(`/undo/${sessionId}/snapshots`),
+    api.post<void>(`/v1/undo/${sessionId}/undo/${snapshotId}`),
+  listSnapshots: (sessionId: number | string) => api.get<SessionSnapshotsResponse>(`/v1/undo/${sessionId}/snapshots`),
 }
 
 export const dependenciesApi = {
@@ -361,8 +361,8 @@ export const tasksApi = {
 }
 
 export const snoozeApi = {
-  snooze: () => api.post<void>('/snooze/'),
-  unsnooze: (threadId: number) => api.post<void>(`/snooze/${threadId}/unsnooze`),
+  snooze: () => api.post<void>('/v1/snooze/'),
+  unsnooze: (threadId: number) => api.post<void>(`/v1/snooze/${threadId}/unsnooze`),
 }
 
 export const migrationApi = {
