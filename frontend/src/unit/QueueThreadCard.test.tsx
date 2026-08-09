@@ -27,10 +27,6 @@ vi.mock('../components/PositionMenu', () => ({
   ),
 }))
 
-vi.mock('../components/Swipeable', () => ({
-  default: ({ children }: { children: React.ReactNode }) => <div data-testid="mock-swipeable">{children}</div>,
-}))
-
 vi.mock('../hooks/useCrossoverGroups', () => ({
   useCrossoverGroups,
 }))
@@ -65,15 +61,16 @@ function renderCard(thread: Thread, overrides: Partial<Parameters<typeof QueueTh
     isDragOver: false,
     snoozeIcon: '',
     snoozeLabel: '',
+    snoozeDisabled: false,
     onCardClick: vi.fn(),
     onDragStart: vi.fn(),
     onDragEnd: vi.fn(),
     onDragOver: vi.fn(),
     onDrop: vi.fn(),
-    onSwipeRead: vi.fn(),
-    onSwipeEdit: vi.fn(),
-    onSwipeSnooze: vi.fn(),
-    onSwipeDelete: vi.fn(),
+    onRead: vi.fn(),
+    onOpenThread: vi.fn(),
+    onSnooze: vi.fn(),
+    onActionDelete: vi.fn(),
     onMoveToFront: vi.fn(),
     onMoveToBack: vi.fn(),
     onReposition: vi.fn(),
