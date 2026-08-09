@@ -48,6 +48,7 @@ def _build_fixture(path: Path) -> None:
 
 
 def test_exact_local_volume_and_issue_lookup_avoids_fallback(tmp_path: Path) -> None:
+    """Prefer complete exact local matches without invoking the live provider."""
     database = tmp_path / "localcv.db"
     _build_fixture(database)
     snapshot = LocalComicVineSnapshot(database)
@@ -70,6 +71,7 @@ def test_exact_local_volume_and_issue_lookup_avoids_fallback(tmp_path: Path) -> 
 
 
 def test_missing_or_incomplete_issue_falls_back(tmp_path: Path) -> None:
+    """Use the live provider when the local snapshot cannot supply a complete issue."""
     database = tmp_path / "localcv.db"
     _build_fixture(database)
     snapshot = LocalComicVineSnapshot(database)
@@ -81,6 +83,7 @@ def test_missing_or_incomplete_issue_falls_back(tmp_path: Path) -> None:
 
 
 def test_snapshot_is_optional_and_read_only(tmp_path: Path) -> None:
+    """Allow an absent snapshot and enforce SQLite read-only access when present."""
     missing = LocalComicVineSnapshot(tmp_path / "missing.db")
 
     assert missing.available is False
@@ -100,6 +103,7 @@ def test_snapshot_is_optional_and_read_only(tmp_path: Path) -> None:
 
 
 def test_fts_candidates_are_ranked_but_not_confirmed(tmp_path: Path) -> None:
+    """Return FTS candidates as ranked possibilities rather than confirmed identities."""
     database = tmp_path / "localcv.db"
     _build_fixture(database)
     snapshot = LocalComicVineSnapshot(database)
@@ -112,6 +116,7 @@ def test_fts_candidates_are_ranked_but_not_confirmed(tmp_path: Path) -> None:
 
 
 def test_sync_metadata_exposes_snapshot_freshness(tmp_path: Path) -> None:
+    """Expose sync metadata so callers can judge local snapshot freshness."""
     database = tmp_path / "localcv.db"
     _build_fixture(database)
     snapshot = LocalComicVineSnapshot(database)
