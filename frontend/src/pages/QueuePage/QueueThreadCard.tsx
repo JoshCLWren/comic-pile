@@ -17,14 +17,10 @@ interface QueueThreadCardProps {
   onDragEnd: React.DragEventHandler<HTMLElement>
   onDragOver: React.DragEventHandler<HTMLElement>
   onDrop: React.DragEventHandler<HTMLElement>
-  onRead?: () => void
-  onOpenThread?: () => void
-  onSnooze?: () => void
-  onActionDelete?: () => void
-  onSwipeRead?: () => void
-  onSwipeEdit?: () => void
-  onSwipeSnooze?: () => void
-  onSwipeDelete?: () => void
+  onRead: () => void
+  onOpenThread: () => void
+  onSnooze: () => void
+  onActionDelete: () => void
   onMoveToFront: () => void
   onMoveToBack: () => void
   onReposition: () => void
@@ -50,10 +46,6 @@ export default function QueueThreadCard({
   onOpenThread,
   onSnooze,
   onActionDelete,
-  onSwipeRead,
-  onSwipeEdit,
-  onSwipeSnooze,
-  onSwipeDelete,
   onMoveToFront,
   onMoveToBack,
   onReposition,
@@ -62,14 +54,6 @@ export default function QueueThreadCard({
   onDelete,
 }: QueueThreadCardProps) {
   const isMigrated = thread.total_issues !== null
-  const readAction = onRead ?? onSwipeRead
-  const openThreadAction = onOpenThread ?? onSwipeEdit
-  const snoozeAction = onSnooze ?? onSwipeSnooze
-  const deleteAction = onActionDelete ?? onSwipeDelete
-
-  if (!readAction || !openThreadAction || !snoozeAction || !deleteAction) {
-    throw new Error('QueueThreadCard requires read, edit, snooze, and delete actions')
-  }
 
   return (
     <div
@@ -156,10 +140,10 @@ export default function QueueThreadCard({
         title={thread.title}
         snoozeIcon={snoozeIcon}
         snoozeLabel={snoozeLabel}
-        onRead={readAction}
-        onEdit={openThreadAction}
-        onSnooze={snoozeAction}
-        onDelete={deleteAction}
+        onRead={onRead}
+        onEdit={onOpenThread}
+        onSnooze={onSnooze}
+        onDelete={onActionDelete}
       />
     </div>
   )
