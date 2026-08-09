@@ -5,6 +5,8 @@ import { isPublicChangelogLink } from './WhatsNewPage'
 describe('isPublicChangelogLink', () => {
   it('hides GitHub destinations from the public changelog', () => {
     expect(isPublicChangelogLink('https://github.com/JoshCLWren/comic-pile/pull/948')).toBe(false)
+    expect(isPublicChangelogLink('https://www.github.com/JoshCLWren/comic-pile')).toBe(false)
+    expect(isPublicChangelogLink('https://gist.github.com/JoshCLWren/example')).toBe(false)
   })
 
   it('keeps non-GitHub links available', () => {
