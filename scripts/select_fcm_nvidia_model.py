@@ -12,6 +12,7 @@ from dataclasses import dataclass
 EXCLUDED_MODEL_TERMS = (
     "embed",
     "image",
+    "omni",
     "rerank",
     "safety",
     "vision",
