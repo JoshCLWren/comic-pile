@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./styles.css";
+@import "./layout.css";
 
 :root {
   --theme-primary: #d6890e;
