@@ -146,7 +146,13 @@ export function buildChangelogView(markdown: string, timeZone?: string): Changel
     let cursor = index + 1
     while (cursor < blocks.length) {
       const next = blocks[cursor]
-      if (next.type === 'heading' && next.level === 2 && isSourceDateTime(next.text)) break
+      if (next.type === 'heading' && next.level === 2 && isSourceDateTime(next.text)) {
+        if (next.text === block.text) {
+          cursor += 1
+          continue
+        }
+        break
+      }
       dayBlocks.push(next)
       cursor += 1
     }
