@@ -194,6 +194,14 @@ export function ContinuityIssueRangeSelector({
       onChange(null)
       return
     }
+
+    const nextStartIndex = issues.findIndex((issue) => issue.id === nextStart.id)
+    const nextEndIndex = issues.findIndex((issue) => issue.id === nextEnd.id)
+    if (nextStartIndex < 0 || nextEndIndex < 0 || nextStartIndex > nextEndIndex) {
+      onChange(null)
+      return
+    }
+
     onChange({ thread, startIssue: nextStart, endIssue: nextEnd })
   }
 
