@@ -249,18 +249,40 @@ describe('CrossoversPage issue ranges', () => {
     },
   )
 
-  it('validates the thread id before loading range data', async () => {
+  it.each(['0', '1.5'])(
+    'validates the thread id before loading range data (%s)',
+    async (threadId) => {
+      render(<CrossoversPage />)
+      await screen.findByText('Annihilation')
+      openRangeForm()
+      fireEvent.change(screen.getByLabelText('Thread ID'), { target: { value: threadId } })
+      fireEvent.click(screen.getByRole('button', { name: 'Choose issues' }))
+
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Enter a valid thread ID before choosing issues.',
+      )
+      expect(threadApi.get).not.toHaveBeenCalled()
+      expect(issueApi.list).not.toHaveBeenCalled()
+    },
+  )
+
+  it('explains when the selected thread has no issues to add', async () => {
+    issueApi.list.mockResolvedValue({
+      issues: [],
+      total_count: 0,
+      page_size: 100,
+      next_page_token: null,
+    })
+
     render(<CrossoversPage />)
     await screen.findByText('Annihilation')
     openRangeForm()
-    fireEvent.change(screen.getByLabelText('Thread ID'), { target: { value: '0' } })
+    fireEvent.change(screen.getByLabelText('Thread ID'), { target: { value: '22' } })
     fireEvent.click(screen.getByRole('button', { name: 'Choose issues' }))
 
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Enter a valid thread ID before choosing issues.',
-    )
-    expect(threadApi.get).not.toHaveBeenCalled()
-    expect(issueApi.list).not.toHaveBeenCalled()
+    expect(await screen.findByRole('alert')).toHaveTextContent('Nova has no issues to add.')
+    expect(screen.getByLabelText('First issue')).toBeDisabled()
+    expect(screen.getByLabelText('First issue')).toHaveTextContent('No issues available')
   })
 
   it('clears range state when expanding another crossover', async () => {
