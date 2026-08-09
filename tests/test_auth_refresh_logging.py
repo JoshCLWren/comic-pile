@@ -15,9 +15,9 @@ from app.csrf import log_csrf_rejection
 def _auth_reasons(caplog: pytest.LogCaptureFixture) -> list[str]:
     """Return structured authentication reason codes captured by the test logger."""
     return [
-        record.auth_reason
+        str(record.__dict__["auth_reason"])
         for record in caplog.records
-        if hasattr(record, "auth_reason")
+        if "auth_reason" in record.__dict__
     ]
 
 
@@ -146,6 +146,6 @@ def test_csrf_rejection_logs_reason_without_credentials(
 
     assert "csrf_rejected" in _auth_reasons(caplog)
     assert "secret-value" not in caplog.text
-    record = next(record for record in caplog.records if hasattr(record, "auth_reason"))
-    assert record.request_id == "request-123"
-    assert record.path == "/api/v1/auth/logout"
+    record = next(record for record in caplog.records if "auth_reason" in record.__dict__)
+    assert record.__dict__["request_id"] == "request-123"
+    assert record.__dict__["path"] == "/api/v1/auth/logout"
