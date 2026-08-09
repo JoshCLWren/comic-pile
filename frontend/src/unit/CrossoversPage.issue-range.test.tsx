@@ -226,25 +226,28 @@ describe('CrossoversPage issue ranges', () => {
     expect(screen.getByLabelText('First issue')).toHaveTextContent('#Annual 1')
   })
 
-  it('rejects issue data that lacks a canonical positive position', async () => {
-    issueApi.list.mockResolvedValue({
-      issues: [{ ...issues[0], position: 0 }],
-      total_count: 1,
-      page_size: 100,
-      next_page_token: null,
-    })
+  it.each([0, 1.5])(
+    'rejects issue data with a non-canonical position (%s)',
+    async (position) => {
+      issueApi.list.mockResolvedValue({
+        issues: [{ ...issues[0], position }],
+        total_count: 1,
+        page_size: 100,
+        next_page_token: null,
+      })
 
-    render(<CrossoversPage />)
-    await screen.findByText('Annihilation')
-    openRangeForm()
-    fireEvent.change(screen.getByLabelText('Thread ID'), { target: { value: '22' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Choose issues' }))
+      render(<CrossoversPage />)
+      await screen.findByText('Annihilation')
+      openRangeForm()
+      fireEvent.change(screen.getByLabelText('Thread ID'), { target: { value: '22' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Choose issues' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Comic issue order is unavailable for this series.',
-    )
-    expect(screen.queryByLabelText('First issue')).not.toBeInTheDocument()
-  })
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Comic issue order is unavailable for this series.',
+      )
+      expect(screen.queryByLabelText('First issue')).not.toBeInTheDocument()
+    },
+  )
 
   it('validates the thread id before loading range data', async () => {
     render(<CrossoversPage />)
