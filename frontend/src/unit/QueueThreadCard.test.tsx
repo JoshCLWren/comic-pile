@@ -5,6 +5,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import QueueThreadCard from '../pages/QueuePage/QueueThreadCard'
 import type { Thread } from '../types'
 
+const { useCrossoverGroups } = vi.hoisted(() => ({
+  useCrossoverGroups: vi.fn(() => ({ groupsByThreadId: {}, isPending: false, error: null })),
+}))
+
 vi.mock('../components/Tooltip', () => ({
   default: ({ children, content }: { children: React.ReactNode; content?: string }) => (
     <div data-testid="mock-tooltip" data-content={content}>{children}</div>
@@ -28,7 +32,7 @@ vi.mock('../components/Swipeable', () => ({
 }))
 
 vi.mock('../hooks/useCrossoverGroups', () => ({
-  useCrossoverGroups: () => ({ groupsByThreadId: {}, isPending: false, error: null }),
+  useCrossoverGroups,
 }))
 
 function createMockThread(overrides: Partial<Thread> = {}): Thread {
@@ -182,6 +186,13 @@ describe('QueueThreadCard', () => {
 
     expect(screen.getByRole('link', { name: 'Rotworld' })).toHaveAttribute('href', '/crossovers?group=11')
     expect(screen.getByRole('link', { name: 'Night of the Owls' })).toHaveAttribute('href', '/crossovers?group=12')
+    expect(useCrossoverGroups).toHaveBeenCalledWith([])
+  })
+
+  it('uses the per-thread fallback only when no batch result was supplied', () => {
+    renderCard(createMockThread({ id: 27 }))
+
+    expect(useCrossoverGroups).toHaveBeenCalledWith([27])
   })
 
   it('shows a crossover loading state without inventing empty membership', () => {

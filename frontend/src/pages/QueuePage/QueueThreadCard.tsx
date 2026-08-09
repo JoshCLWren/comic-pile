@@ -63,7 +63,9 @@ export default function QueueThreadCard({
   onDelete,
 }: QueueThreadCardProps) {
   const isMigrated = thread.total_issues !== null
-  const fallbackCrossoverGroups = useCrossoverGroups([thread.id])
+  const fallbackCrossoverGroups = useCrossoverGroups(
+    crossoverGroups === undefined ? [thread.id] : [],
+  )
   const resolvedCrossoverGroups = crossoverGroups ?? fallbackCrossoverGroups.groupsByThreadId[thread.id] ?? []
   const resolvedCrossoverGroupsLoading = crossoverGroupsLoading ?? fallbackCrossoverGroups.isPending
   const resolvedCrossoverGroupsError = crossoverGroupsError ?? Boolean(fallbackCrossoverGroups.error)
