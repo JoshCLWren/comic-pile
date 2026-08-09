@@ -7500,6 +7500,197 @@
         ]
       }
     },
+    "/api/v1/threads/": {
+      "get": {
+        "description": "List threads ordered by position with cursor-based pagination.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    search: Optional case-insensitive title search filter.\n    page_size: Number of threads to return per page (default 50, max 200).\n    page_token: Token for pagination continuation (queue_position,thread_id).\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    QueueThreadListResponse with paginated threads and next_page_token if more exist.\n\nRaises:\n    HTTPException: If a retired ``collection_id`` query parameter is present.",
+        "operationId": "list_threads_api_v1_threads__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "description": "Number of threads to return per page (default 50, max 200)",
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Number of threads to return per page (default 50, max 200)",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Token for pagination continuation (queue_position,thread_id)",
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Token for pagination continuation (queue_position,thread_id)",
+              "title": "Page Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueThreadListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Threads",
+        "tags": [
+          "threads",
+          "threads"
+        ]
+      },
+      "post": {
+        "description": "Create a new thread.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    thread_data: Thread creation data.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    ThreadResponse with created thread details.\n\nRaises:\n    RuntimeError: If failed after max retries.",
+        "operationId": "create_thread_api_v1_threads__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThreadCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Thread",
+        "tags": [
+          "threads",
+          "threads"
+        ]
+      }
+    },
+    "/api/v1/threads/active": {
+      "get": {
+        "description": "List active threads for override modal.\n\nArgs:\n    request: FastAPI request object.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    HTML string with radio button elements for active threads.",
+        "operationId": "list_active_threads_api_v1_threads_active_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Active Threads",
+        "tags": [
+          "threads",
+          "threads"
+        ]
+      }
+    },
+    "/api/v1/threads/completed": {
+      "get": {
+        "description": "List completed threads for reactivation modal.\n\nArgs:\n    request: FastAPI request object.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    HTML string with option elements for completed threads.",
+        "operationId": "list_completed_threads_api_v1_threads_completed_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Completed Threads",
+        "tags": [
+          "threads",
+          "threads"
+        ]
+      }
+    },
     "/api/v1/threads/groups:batch": {
       "post": {
         "description": "List crossover groups for several owned threads in one request.",
@@ -7552,6 +7743,254 @@
         "tags": [
           "dependencies",
           "dependencies"
+        ]
+      }
+    },
+    "/api/v1/threads/reactivate": {
+      "post": {
+        "description": "Reactivate a completed thread by adding more issues.\n\nArgs:\n    request: Reactivation request with thread_id and issues_to_add.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    ThreadResponse with reactivated thread details.\n\nRaises:\n    HTTPException: If thread not found, not completed, or issues_to_add invalid.",
+        "operationId": "reactivate_thread_api_v1_threads_reactivate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReactivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reactivate Thread",
+        "tags": [
+          "threads",
+          "threads"
+        ]
+      }
+    },
+    "/api/v1/threads/stale": {
+      "get": {
+        "description": "List threads not read in specified days (default 30).\n\nArgs:\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n    days: Number of days to consider threads stale.\n\nReturns:\n    List of ThreadResponse objects for stale threads.",
+        "operationId": "list_stale_threads_api_v1_threads_stale_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ThreadResponse"
+                  },
+                  "title": "Response List Stale Threads Api V1 Threads Stale Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Stale Threads",
+        "tags": [
+          "threads",
+          "threads"
+        ]
+      }
+    },
+    "/api/v1/threads/{thread_id}": {
+      "delete": {
+        "description": "Delete a thread.\n\nArgs:\n    thread_id: The thread ID to delete.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nRaises:\n    HTTPException: If thread not found.",
+        "operationId": "delete_thread_api_v1_threads__thread_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Thread",
+        "tags": [
+          "threads",
+          "threads"
+        ]
+      },
+      "get": {
+        "description": "Get a single thread by ID.\n\nArgs:\n    thread_id: The thread ID to retrieve.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    ThreadDetail with thread details.\n\nRaises:\n    HTTPException: If thread not found.",
+        "operationId": "get_thread_api_v1_threads__thread_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Thread",
+        "tags": [
+          "threads",
+          "threads"
+        ]
+      },
+      "put": {
+        "description": "Update a thread.\n\nArgs:\n    thread_id: The thread ID to update.\n    thread_data: Thread update data.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    ThreadResponse with updated thread details.\n\nRaises:\n    HTTPException: If thread not found.",
+        "operationId": "update_thread_api_v1_threads__thread_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThreadUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Thread",
+        "tags": [
+          "threads",
+          "threads"
         ]
       }
     },
@@ -8053,6 +8492,117 @@
         ]
       }
     },
+    "/api/v1/threads/{thread_id}/set-pending": {
+      "post": {
+        "description": "Set a thread as pending for rating (manual selection).\n\nArgs:\n    thread_id: The thread ID to set as pending.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    RollResponse with the selected thread details.\n\nRaises:\n    HTTPException: If thread not found.",
+        "operationId": "set_pending_thread_api_v1_threads__thread_id__set_pending_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Pending Thread",
+        "tags": [
+          "threads",
+          "threads"
+        ]
+      }
+    },
+    "/api/v1/threads/{thread_id}/test-backdate": {
+      "put": {
+        "description": "Test-only endpoint to backdate a thread's last_activity_at for E2E testing.\n\nThis endpoint is only available when TEST_ENVIRONMENT is set.\n\nArgs:\n    thread_id: The thread ID to backdate.\n    days_ago: Number of days to set last_activity_back (1-3650).\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    ThreadResponse with updated thread details.\n\nRaises:\n    HTTPException: If not in test environment, thread not found, or thread doesn't belong to user.",
+        "operationId": "backdate_thread_for_testing_api_v1_threads__thread_id__test_backdate_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of days to backdate the thread",
+            "in": "query",
+            "name": "days_ago",
+            "required": true,
+            "schema": {
+              "description": "Number of days to backdate the thread",
+              "maximum": 3650,
+              "minimum": 1,
+              "title": "Days Ago",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Backdate Thread For Testing",
+        "tags": [
+          "threads",
+          "threads"
+        ]
+      }
+    },
     "/api/v1/threads/{thread_id}:getBlockingInfo": {
       "post": {
         "description": "Return blocked status and human-readable blocking reasons for a thread.",
@@ -8099,6 +8649,124 @@
         "tags": [
           "dependencies",
           "dependencies"
+        ]
+      }
+    },
+    "/api/v1/threads/{thread_id}:migrateToIssues": {
+      "post": {
+        "description": "Migrate an old-style thread to use issue tracking.\n\nCreates issue records #1 through total_issues.\nMarks #1 through last_issue_read as read.\nUpdates thread with issue tracking fields.\n\nArgs:\n    thread_id: The thread ID to migrate\n    request: Migration data with last_issue_read and total_issues\n    current_user: The authenticated user\n    db: Database session\n\nReturns:\n    ThreadResponse with updated thread\n\nRaises:\n    HTTPException: 404 if thread not found, 400 if validation fails",
+        "operationId": "migrate_thread_to_issues_api_v1_threads__thread_id__migrateToIssues_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MigrateToIssuesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Migrate Thread To Issues",
+        "tags": [
+          "threads",
+          "threads"
+        ]
+      }
+    },
+    "/api/v1/threads/{thread_id}:migrateToIssuesSimple": {
+      "post": {
+        "description": "Simplified migration: infer total_issues from current state.\n\nIf user just read issue N, then issues 1-(N-1) were read previously,\nand issue N is what they just rated (should be unread for the rating flow).\n\nThis endpoint infers total_issues from issues_remaining + issue_number,\nmarks issues 1 through (issue_number-1) as READ,\nmarks issue issue_number as UNREAD (so the rating can mark it read),\nand sets next_unread_issue_id to point to issue_number.\n\nArgs:\n    thread_id: The thread ID to migrate\n    request: Migration data with issue_number being the issue just rated\n    current_user: The authenticated user\n    db: Database session\n\nReturns:\n    ThreadResponse with updated thread\n\nRaises:\n    HTTPException: 404 if thread not found, 400 if validation fails",
+        "operationId": "migrate_thread_to_issues_simple_api_v1_threads__thread_id__migrateToIssuesSimple_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MigrateToIssuesSimpleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Migrate Thread To Issues Simple",
+        "tags": [
+          "threads",
+          "threads"
         ]
       }
     },

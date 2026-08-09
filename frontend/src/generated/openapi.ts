@@ -2431,6 +2431,112 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Threads
+         * @description List threads ordered by position with cursor-based pagination.
+         *
+         *     Args:
+         *         request: FastAPI request object for rate limiting.
+         *         search: Optional case-insensitive title search filter.
+         *         page_size: Number of threads to return per page (default 50, max 200).
+         *         page_token: Token for pagination continuation (queue_position,thread_id).
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         QueueThreadListResponse with paginated threads and next_page_token if more exist.
+         *
+         *     Raises:
+         *         HTTPException: If a retired ``collection_id`` query parameter is present.
+         */
+        get: operations["list_threads_api_v1_threads__get"];
+        put?: never;
+        /**
+         * Create Thread
+         * @description Create a new thread.
+         *
+         *     Args:
+         *         request: FastAPI request object for rate limiting.
+         *         thread_data: Thread creation data.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         ThreadResponse with created thread details.
+         *
+         *     Raises:
+         *         RuntimeError: If failed after max retries.
+         */
+        post: operations["create_thread_api_v1_threads__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Active Threads
+         * @description List active threads for override modal.
+         *
+         *     Args:
+         *         request: FastAPI request object.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         HTML string with radio button elements for active threads.
+         */
+        get: operations["list_active_threads_api_v1_threads_active_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/completed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Completed Threads
+         * @description List completed threads for reactivation modal.
+         *
+         *     Args:
+         *         request: FastAPI request object.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         HTML string with option elements for completed threads.
+         */
+        get: operations["list_completed_threads_api_v1_threads_completed_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/groups:batch": {
         parameters: {
             query?: never;
@@ -2446,6 +2552,124 @@ export interface paths {
          */
         post: operations["list_thread_groups_batch_api_v1_threads_groups_batch_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reactivate Thread
+         * @description Reactivate a completed thread by adding more issues.
+         *
+         *     Args:
+         *         request: Reactivation request with thread_id and issues_to_add.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         ThreadResponse with reactivated thread details.
+         *
+         *     Raises:
+         *         HTTPException: If thread not found, not completed, or issues_to_add invalid.
+         */
+        post: operations["reactivate_thread_api_v1_threads_reactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/stale": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Stale Threads
+         * @description List threads not read in specified days (default 30).
+         *
+         *     Args:
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *         days: Number of days to consider threads stale.
+         *
+         *     Returns:
+         *         List of ThreadResponse objects for stale threads.
+         */
+        get: operations["list_stale_threads_api_v1_threads_stale_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{thread_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Thread
+         * @description Get a single thread by ID.
+         *
+         *     Args:
+         *         thread_id: The thread ID to retrieve.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         ThreadDetail with thread details.
+         *
+         *     Raises:
+         *         HTTPException: If thread not found.
+         */
+        get: operations["get_thread_api_v1_threads__thread_id__get"];
+        /**
+         * Update Thread
+         * @description Update a thread.
+         *
+         *     Args:
+         *         thread_id: The thread ID to update.
+         *         thread_data: Thread update data.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         ThreadResponse with updated thread details.
+         *
+         *     Raises:
+         *         HTTPException: If thread not found.
+         */
+        put: operations["update_thread_api_v1_threads__thread_id__put"];
+        post?: never;
+        /**
+         * Delete Thread
+         * @description Delete a thread.
+         *
+         *     Args:
+         *         thread_id: The thread ID to delete.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Raises:
+         *         HTTPException: If thread not found.
+         */
+        delete: operations["delete_thread_api_v1_threads__thread_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2679,6 +2903,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/{thread_id}/set-pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Pending Thread
+         * @description Set a thread as pending for rating (manual selection).
+         *
+         *     Args:
+         *         thread_id: The thread ID to set as pending.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         RollResponse with the selected thread details.
+         *
+         *     Raises:
+         *         HTTPException: If thread not found.
+         */
+        post: operations["set_pending_thread_api_v1_threads__thread_id__set_pending_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{thread_id}/test-backdate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Backdate Thread For Testing
+         * @description Test-only endpoint to backdate a thread's last_activity_at for E2E testing.
+         *
+         *     This endpoint is only available when TEST_ENVIRONMENT is set.
+         *
+         *     Args:
+         *         thread_id: The thread ID to backdate.
+         *         days_ago: Number of days to set last_activity_back (1-3650).
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         ThreadResponse with updated thread details.
+         *
+         *     Raises:
+         *         HTTPException: If not in test environment, thread not found, or thread doesn't belong to user.
+         */
+        put: operations["backdate_thread_for_testing_api_v1_threads__thread_id__test_backdate_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/{thread_id}:getBlockingInfo": {
         parameters: {
             query?: never;
@@ -2693,6 +2982,82 @@ export interface paths {
          * @description Return blocked status and human-readable blocking reasons for a thread.
          */
         post: operations["get_thread_blocking_info_api_v1_threads__thread_id__getBlockingInfo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{thread_id}:migrateToIssues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Migrate Thread To Issues
+         * @description Migrate an old-style thread to use issue tracking.
+         *
+         *     Creates issue records #1 through total_issues.
+         *     Marks #1 through last_issue_read as read.
+         *     Updates thread with issue tracking fields.
+         *
+         *     Args:
+         *         thread_id: The thread ID to migrate
+         *         request: Migration data with last_issue_read and total_issues
+         *         current_user: The authenticated user
+         *         db: Database session
+         *
+         *     Returns:
+         *         ThreadResponse with updated thread
+         *
+         *     Raises:
+         *         HTTPException: 404 if thread not found, 400 if validation fails
+         */
+        post: operations["migrate_thread_to_issues_api_v1_threads__thread_id__migrateToIssues_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{thread_id}:migrateToIssuesSimple": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Migrate Thread To Issues Simple
+         * @description Simplified migration: infer total_issues from current state.
+         *
+         *     If user just read issue N, then issues 1-(N-1) were read previously,
+         *     and issue N is what they just rated (should be unread for the rating flow).
+         *
+         *     This endpoint infers total_issues from issues_remaining + issue_number,
+         *     marks issues 1 through (issue_number-1) as READ,
+         *     marks issue issue_number as UNREAD (so the rating can mark it read),
+         *     and sets next_unread_issue_id to point to issue_number.
+         *
+         *     Args:
+         *         thread_id: The thread ID to migrate
+         *         request: Migration data with issue_number being the issue just rated
+         *         current_user: The authenticated user
+         *         db: Database session
+         *
+         *     Returns:
+         *         ThreadResponse with updated thread
+         *
+         *     Raises:
+         *         HTTPException: 404 if thread not found, 400 if validation fails
+         */
+        post: operations["migrate_thread_to_issues_simple_api_v1_threads__thread_id__migrateToIssuesSimple_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6879,6 +7244,114 @@ export interface operations {
             };
         };
     };
+    list_threads_api_v1_threads__get: {
+        parameters: {
+            query?: {
+                search?: string | null;
+                /** @description Number of threads to return per page (default 50, max 200) */
+                page_size?: number;
+                /** @description Token for pagination continuation (queue_position,thread_id) */
+                page_token?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueThreadListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_thread_api_v1_threads__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThreadCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_active_threads_api_v1_threads_active_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+        };
+    };
+    list_completed_threads_api_v1_threads_completed_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+        };
+    };
     list_thread_groups_batch_api_v1_threads_groups_batch_post: {
         parameters: {
             query?: never;
@@ -6902,6 +7375,165 @@ export interface operations {
                         [key: string]: components["schemas"]["DependencyGroupSummary"][];
                     };
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reactivate_thread_api_v1_threads_reactivate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReactivateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_stale_threads_api_v1_threads_stale_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_thread_api_v1_threads__thread_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_thread_api_v1_threads__thread_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThreadUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_thread_api_v1_threads__thread_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -7203,6 +7835,71 @@ export interface operations {
             };
         };
     };
+    set_pending_thread_api_v1_threads__thread_id__set_pending_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    backdate_thread_for_testing_api_v1_threads__thread_id__test_backdate_put: {
+        parameters: {
+            query: {
+                /** @description Number of days to backdate the thread */
+                days_ago: number;
+            };
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_thread_blocking_info_api_v1_threads__thread_id__getBlockingInfo_post: {
         parameters: {
             query?: never;
@@ -7221,6 +7918,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BlockingExplanation"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    migrate_thread_to_issues_api_v1_threads__thread_id__migrateToIssues_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MigrateToIssuesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    migrate_thread_to_issues_simple_api_v1_threads__thread_id__migrateToIssuesSimple_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MigrateToIssuesSimpleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadResponse"];
                 };
             };
             /** @description Validation Error */

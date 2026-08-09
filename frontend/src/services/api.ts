@@ -267,25 +267,25 @@ rawApi.interceptors.response.use(
 export default api
 
 export const threadsApi = {
-list: async (params?: ThreadQueryParams, pageToken?: string | null): Promise<ThreadListResponse> => {
-      const queryParams = {
-        ...(params ?? {}),
-        ...(pageToken ? { page_token: pageToken } : {}),
-      }
-      const response = await api.get<ThreadListResponse>('/threads/', {
-        params: Object.keys(queryParams).length ? queryParams : undefined,
-      })
-      return response
-    },
-  get: (id: number) => api.get<Thread>(`/threads/${id}`),
-  create: (data: ThreadCreatePayload) => api.post<Thread, ThreadCreatePayload>('/threads/', data),
+  list: async (params?: ThreadQueryParams, pageToken?: string | null): Promise<ThreadListResponse> => {
+    const queryParams = {
+      ...(params ?? {}),
+      ...(pageToken ? { page_token: pageToken } : {}),
+    }
+    const response = await api.get<ThreadListResponse>('/v1/threads/', {
+      params: Object.keys(queryParams).length ? queryParams : undefined,
+    })
+    return response
+  },
+  get: (id: number) => api.get<Thread>(`/v1/threads/${id}`),
+  create: (data: ThreadCreatePayload) => api.post<Thread, ThreadCreatePayload>('/v1/threads/', data),
   update: (id: number, data: ThreadUpdatePayload) =>
-    api.put<Thread, ThreadUpdatePayload>(`/threads/${id}`, data),
-  delete: (id: number) => api.delete<void>(`/threads/${id}`),
+    api.put<Thread, ThreadUpdatePayload>(`/v1/threads/${id}`, data),
+  delete: (id: number) => api.delete<void>(`/v1/threads/${id}`),
   reactivate: (data: ReactivateThreadPayload) =>
-    api.post<Thread, ReactivateThreadPayload>('/threads/reactivate', data),
-  listStale: (days = 30) => api.get<Thread[]>('/threads/stale', { params: { days } }),
-  setPending: (id: number) => api.post<RollResponse>(`/threads/${id}/set-pending`),
+    api.post<Thread, ReactivateThreadPayload>('/v1/threads/reactivate', data),
+  listStale: (days = 30) => api.get<Thread[]>('/v1/threads/stale', { params: { days } }),
+  setPending: (id: number) => api.post<RollResponse>(`/v1/threads/${id}/set-pending`),
 }
 
 export const rollApi = {
@@ -367,7 +367,7 @@ export const snoozeApi = {
 
 export const migrationApi = {
   migrateThread: (threadId: number, data: { last_issue_read: number; total_issues: number }) =>
-    api.post<Thread, { last_issue_read: number; total_issues: number }>(`/threads/${threadId}:migrateToIssues`, data),
+    api.post<Thread, { last_issue_read: number; total_issues: number }>(`/v1/threads/${threadId}:migrateToIssues`, data),
 }
 
 export const bugReportsApi = {
