@@ -226,13 +226,17 @@ describe('QueueThreadCard', () => {
       isDragOver: true,
       ...callbacks,
     })
-    const card = screen.getByRole('button', { name: /view dependencies/i })
-    await user.click(card)
+    const dependencyButton = screen.getByRole('button', { name: /view dependencies/i })
+    await user.click(dependencyButton)
     expect(callbacks.onDependencies).toHaveBeenCalled()
-    const threadCard = screen.getByText('Comic').closest('[role="button"]') as HTMLElement
-    fireEvent.keyDown(threadCard, { key: 'Enter' })
-    fireEvent.keyDown(threadCard, { key: ' ' })
+
+    const openButton = screen.getByRole('button', { name: 'Open Test Thread' })
+    openButton.focus()
+    await user.keyboard('{Enter}')
+    await user.keyboard(' ')
     expect(callbacks.onCardClick).toHaveBeenCalledTimes(2)
+
+    const threadCard = screen.getByTestId('queue-thread-item')
     const drag = screen.getByRole('button', { name: 'Drag to reorder' })
     await user.click(drag)
     fireEvent.dragStart(drag)
