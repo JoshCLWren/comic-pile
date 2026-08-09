@@ -4,7 +4,7 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 import logging
 
-from sqlalchemy import or_, select, text
+from sqlalchemy import and_, or_, select, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,7 +37,10 @@ def _current_session_filter(user_id: int, cutoff_time: datetime):
         & Session.ended_at.is_(None)
         & or_(
             Session.started_at >= cutoff_time,
-            Session.pending_thread_updated_at >= cutoff_time,
+            and_(
+                Session.pending_thread_id.is_not(None),
+                Session.pending_thread_updated_at >= cutoff_time,
+            ),
         )
     )
 
@@ -56,7 +59,15 @@ async def is_active(
 
 
 async def should_start_new(db: AsyncSession, user_id: int) -> bool:
-    """Check whether no current session exists in the configured gap."""
+    """Check whether no current session exists in the configured gap.
+
+    Args:
+        db: Async database session used to resolve current reading sessions.
+        user_id: User whose current reading session should be checked.
+
+    Returns:
+        True when a new reading session should be created.
+    """
     cutoff_time = datetime.now(UTC) - timedelta(hours=_session_gap_hours())
     result = await db.execute(
         select(Session).where(_current_session_filter(user_id, cutoff_time))
@@ -145,7 +156,15 @@ async def create_session_start_snapshot(db: AsyncSession, session: Session) -> N
 
 
 async def get_or_create(db: AsyncSession, user_id: int) -> Session:
-    """Get an active session or create one."""
+    """Get an active session or create one.
+
+    Args:
+        db: Async database session used to resolve or create the reading session.
+        user_id: User whose authoritative reading session should be returned.
+
+    Returns:
+        The user's authoritative current reading session.
+    """
     from app.models import User
 
     max_retries = 3
