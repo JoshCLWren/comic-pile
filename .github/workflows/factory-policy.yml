@@ -11,6 +11,7 @@ on:
       - scripts/comic-pile-opencode-factory-overnight.sh
       - scripts/opencode-model-manifest.sh
       - scripts/opencode-model-scout.sh
+      - scripts/select_fcm_nvidia_model.py
       - scripts/install-git-hooks.sh
       - .githooks/prepare-commit-msg
       - scripts/check-autonomous-factory-policy.py
@@ -18,6 +19,8 @@ on:
       - scripts/tests/test_install_git_hooks.py
       - scripts/tests/test_opencode_model_tools.py
       - scripts/tests/test_opencode_provider_rotation.py
+      - scripts/tests/test_select_fcm_nvidia_model.py
+      - .github/workflows/opencode.yml
       - scripts/tests/test_overnight_factory_cli.py
       - .github/workflows/factory-policy.yml
   push:
@@ -32,6 +35,7 @@ on:
       - scripts/comic-pile-opencode-factory-overnight.sh
       - scripts/opencode-model-manifest.sh
       - scripts/opencode-model-scout.sh
+      - scripts/select_fcm_nvidia_model.py
       - scripts/install-git-hooks.sh
       - .githooks/prepare-commit-msg
       - scripts/check-autonomous-factory-policy.py
@@ -39,6 +43,8 @@ on:
       - scripts/tests/test_install_git_hooks.py
       - scripts/tests/test_opencode_model_tools.py
       - scripts/tests/test_opencode_provider_rotation.py
+      - scripts/tests/test_select_fcm_nvidia_model.py
+      - .github/workflows/opencode.yml
       - scripts/tests/test_overnight_factory_cli.py
       - .github/workflows/factory-policy.yml
 
@@ -67,6 +73,7 @@ jobs:
             scripts/tests/test_install_git_hooks.py \
             scripts/tests/test_opencode_model_tools.py \
             scripts/tests/test_opencode_provider_rotation.py \
+            scripts/tests/test_select_fcm_nvidia_model.py \
             scripts/tests/test_overnight_factory_cli.py
       - name: Check canonical factory invariants
         run: python scripts/check-autonomous-factory-policy.py
@@ -79,5 +86,6 @@ jobs:
           python -m unittest
           scripts/tests/test_opencode_model_tools.py
           scripts/tests/test_opencode_provider_rotation.py
+          scripts/tests/test_select_fcm_nvidia_model.py
       - name: Test overnight factory CLI
         run: python -m unittest scripts/tests/test_overnight_factory_cli.py
