@@ -8,6 +8,7 @@ import BugReportButton from './components/BugReportButton'
 import type { ReportType } from './components/BugReportModal'
 import ResumeRecovery from './components/ResumeRecovery'
 import api, { clearAccessToken, setAccessToken, getAccessToken } from './services/api'
+import { isDefinitiveAuthenticationFailure } from './services/authFailure'
 import type { AuthTokens, AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
 import type { DiagnosticData } from './hooks/useDiagnostics'
@@ -28,6 +29,9 @@ type BugReportSubmit = (
   description: string,
   diagnosticData: DiagnosticData | null,
 ) => Promise<void>
+
+const AUTH_BOOTSTRAP_TIMEOUT_MS = 15000
+const AUTH_BOOTSTRAP_RETRY_DELAY_MS = 1000
 
 const RollPage = lazy(() => import('./pages/RollPage'))
 const QueuePage = lazy(() => import('./pages/QueuePage'))
@@ -65,35 +69,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const recoveryPromise = useRef<Promise<void> | null>(null)
 
-  const revalidateSession = useCallback(async (timeout?: number) => {
-    const response = await api.get<AuthUser>('/v1/auth/me', { timeout, skipAuthRedirect: false })
-    setUser(response)
-    setIsAuthenticated(true)
+  const markDefinitivelyUnauthenticated = useCallback(() => {
+    clearAccessToken()
+    setIsAuthenticated(false)
+    setUser(null)
   }, [])
+
+  const revalidateSession = useCallback(async (timeout?: number) => {
+    try {
+      const response = await api.get<AuthUser>('/v1/auth/me', {
+        timeout,
+        skipAuthRedirect: true,
+      })
+      setUser(response)
+      setIsAuthenticated(true)
+    } catch (error) {
+      if (isDefinitiveAuthenticationFailure(error)) {
+        markDefinitivelyUnauthenticated()
+      }
+      throw error
+    }
+  }, [markDefinitivelyUnauthenticated])
 
   const recoverSession = useCallback((timeout?: number): Promise<void> => {
     if (!recoveryPromise.current) {
       recoveryPromise.current = (async () => {
-        const tokens = await api.post<AuthTokens>('/v1/auth/refresh', undefined, {
-          skipAuthRedirect: false,
-        })
-        setAccessToken(tokens.access_token)
-        const response = await api.get<AuthUser>('/v1/auth/me', {
-          timeout,
-          skipAuthRedirect: false,
-        })
-        setUser(response)
-        setIsAuthenticated(true)
+        try {
+          const tokens = await api.post<AuthTokens>('/v1/auth/refresh', undefined, {
+            skipAuthRedirect: true,
+          })
+          setAccessToken(tokens.access_token)
+          const response = await api.get<AuthUser>('/v1/auth/me', {
+            timeout,
+            skipAuthRedirect: true,
+          })
+          setUser(response)
+          setIsAuthenticated(true)
+        } catch (error) {
+          if (isDefinitiveAuthenticationFailure(error)) {
+            markDefinitivelyUnauthenticated()
+          }
+          throw error
+        }
       })().finally(() => {
         recoveryPromise.current = null
       })
     }
 
     return recoveryPromise.current
-  }, [])
+  }, [markDefinitivelyUnauthenticated])
 
   useEffect(() => {
     let isMounted = true
+    let retryTimer: number | undefined
     const authChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('comic-pile-auth') : null
     const validateSession = async () => {
       const isPublicAuthPage = window.location.pathname === '/login' || window.location.pathname === '/register'
@@ -106,41 +134,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         delete window.__COMIC_PILE_ACCESS_TOKEN
       }
       try {
-        const response = await api.get<AuthUser>('/auth/me')
+        const response = await api.get<AuthUser>('/v1/auth/me', {
+          timeout: AUTH_BOOTSTRAP_TIMEOUT_MS,
+          skipAuthRedirect: true,
+        })
         if (isMounted) {
           setUser(response)
           setIsAuthenticated(true)
+          setIsLoading(false)
         }
-      } catch {
-        if (isMounted) {
-          clearAccessToken()
-          setIsAuthenticated(false)
-          setUser(null)
+      } catch (error) {
+        if (!isMounted) {
+          return
         }
-      } finally {
-        if (isMounted) setIsLoading(false)
+        if (isDefinitiveAuthenticationFailure(error)) {
+          markDefinitivelyUnauthenticated()
+          setIsLoading(false)
+          return
+        }
+
+        retryTimer = window.setTimeout(() => {
+          void validateSession()
+        }, AUTH_BOOTSTRAP_RETRY_DELAY_MS)
       }
     }
     if (authChannel) {
       authChannel.onmessage = (event: MessageEvent<{ type?: string }>) => {
         if (event.data?.type === 'logout') {
-          clearAccessToken()
-          setIsAuthenticated(false)
-          setUser(null)
+          markDefinitivelyUnauthenticated()
+          setIsLoading(false)
         }
       }
     }
     void validateSession()
     return () => {
       isMounted = false
+      if (retryTimer !== undefined) {
+        window.clearTimeout(retryTimer)
+      }
       authChannel?.close()
     }
-  }, [])
+  }, [markDefinitivelyUnauthenticated])
 
   const login = async (accessToken: string) => {
     setAccessToken(accessToken)
     try {
-      const response = await api.get<AuthUser>('/auth/me')
+      const response = await api.get<AuthUser>('/v1/auth/me', { skipAuthRedirect: true })
       setUser(response)
       setIsAuthenticated(true)
     } catch (error) {
@@ -152,9 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = () => {
-    clearAccessToken()
-    setIsAuthenticated(false)
-    setUser(null)
+    markDefinitivelyUnauthenticated()
     if (typeof BroadcastChannel !== 'undefined') {
       const authChannel = new BroadcastChannel('comic-pile-auth')
       authChannel.postMessage({ type: 'logout' })
