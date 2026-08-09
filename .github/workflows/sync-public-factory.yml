@@ -1,0 +1,57 @@
+name: Sync public factory snapshot
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - AGENTS.md
+      - docs/CHATGPT_FACTORY_PROMPT.md
+      - docs/AUTONOMOUS_FACTORY_POLICY.md
+      - docs/ISSUE_EXECUTION_PROTOCOL.md
+      - docs/FACTORY_GITHUB_VISIBILITY.md
+      - scripts/sync_public_factory_snapshot.py
+      - .github/workflows/sync-public-factory.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-public-factory-snapshot
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out private canonical source
+        uses: actions/checkout@v4
+        with:
+          path: comic-pile
+
+      - name: Check out public snapshot
+        uses: actions/checkout@v4
+        with:
+          repository: JoshCLWren/factory
+          path: factory
+          ssh-key: ${{ secrets.FACTORY_SYNC_DEPLOY_KEY }}
+
+      - name: Copy allowlisted factory documentation
+        run: python comic-pile/scripts/sync_public_factory_snapshot.py comic-pile factory
+
+      - name: Commit and push synchronization branch
+        working-directory: factory
+        run: |
+          if git diff --quiet; then
+            echo "Public factory snapshot is already current."
+            exit 0
+          fi
+
+          branch="sync/comic-pile-factory"
+          git config user.name "comic-pile-factory-sync[bot]"
+          git config user.email "comic-pile-factory-sync[bot]@users.noreply.github.com"
+          git switch -C "$branch"
+          git add AGENTS.md FACTORY_PROMPT.md docs/
+          git commit -m "Sync ComicPile factory contract"
+          git push --force-with-lease origin "HEAD:$branch"

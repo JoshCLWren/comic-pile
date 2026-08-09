@@ -721,16 +721,16 @@ The repo is already checked out in your working directory.
 2. Understand the existing code before changing anything — read relevant files first
 3. Implement the fix following EVERY acceptance criterion in the issue
 4. Run: make lint — must pass with zero errors
-5. Run: make pytest — aim for ≥96% coverage; commit even if tests are not fully passing yet
-6. Commit your changes: git add -A && git -c core.hooksPath=/dev/null commit -m 'fix: <description> (closes #${issue})'
+5. Run: make pytest — all tests and the configured coverage gate must pass
+6. Commit your changes: git add -A && git commit -m 'fix: <description> (closes #${issue})'
 7. Write a brief summary of every file you changed and why
 
 STANDARDS:
 - No Any types (ruff ANN401)
 - Mobile-first, touch targets ≥44px for UI changes
-- Update docs/changelog.md
+- Add the required isolated docs/changelog.d fragment when the change is user-facing
 - Do NOT open a PR — stop after committing
-- IMPORTANT: Always use 'git -c core.hooksPath=/dev/null commit' to bypass pre-commit hooks
+- Never bypass pre-commit hooks or commit with failing tests
 
 Start immediately. Do not ask questions."
 
@@ -896,12 +896,12 @@ ${review_summary}
 Your tasks:
 1. Address EVERY numbered problem listed above
 2. Run make lint — must pass
-3. Run make pytest — aim for ≥96% coverage; commit even if not fully passing yet
-4. Commit your changes: git add -A && git -c core.hooksPath=/dev/null commit -m 'fix: address CI/review feedback for #${issue}'
+3. Run make pytest — all tests and the configured coverage gate must pass
+4. Commit your changes: git add -A && git commit -m 'fix: address CI/review feedback for #${issue}'
 5. Push the branch: git push -u origin HEAD
 6. Write a brief summary of what you changed for each item
 
-IMPORTANT: Always use 'git -c core.hooksPath=/dev/null commit' to bypass pre-commit hooks.
+IMPORTANT: Never bypass pre-commit hooks or commit with failing tests.
 Do not skip any item. Do not open a new PR. Do not ask questions."
 
             local reset_state

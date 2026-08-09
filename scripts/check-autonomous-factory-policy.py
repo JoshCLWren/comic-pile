@@ -9,6 +9,9 @@ PROTOCOL = ROOT / "docs/ISSUE_EXECUTION_PROTOCOL.md"
 SCHEDULED_PROMPT = ROOT / "docs/CHATGPT_FACTORY_PROMPT.md"
 ENTRYPOINT = ROOT / "scripts/comic-pile-opencode-factory.sh"
 HEARTBEAT_ENTRYPOINT = ROOT / "scripts/comic-pile-opencode-factory-heartbeat.sh"
+NEXT_TASK_PROMPT = ROOT / "prompts/agent-next-task.md"
+ISSUE_SKILL = ROOT / ".agents/skills/github-issue-kanban/SKILL.md"
+LEGACY_PIPELINE = ROOT / "scripts/opencode_pipeline.sh"
 
 
 def require(text: str, needle: str, source: Path) -> None:
@@ -53,7 +56,7 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         None.
     """
     for needle in (
-        "Version: 18",
+        "Version: 19",
         "Every product, behavior, deployment, operational, or factory-tooling PR must update",
         "exactly one isolated Markdown fragment",
         "`docs/changelog.md` is the frozen historical archive",
@@ -83,6 +86,10 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "Firefox and WebKit may be run manually",
         "Never push directly to `main`.",
         "Never create or convert a draft PR unless Josh explicitly requests a draft.",
+        "## Durable resume packet",
+        "<!-- factory-resume:v1 -->",
+        "one full label-set replacement",
+        "Never implement a transition as separate remove-then-add calls",
     ):
         require(policy, needle, POLICY)
 
@@ -95,6 +102,7 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "comic-pile-factory-fix-claim-v3",
         "comic-pile-factory-fix-progress-v3",
         "comic-pile-factory-ready-v2",
+        "factory-resume:v1",
         "comic-pile-factory-needs-human-v2",
         "comic-pile-factory-claim-released-v3",
     ):
@@ -179,8 +187,37 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "full configured E2E matrix",
         "Firefox + WebKit + Chromium",
         "Treat docs/changelog.md as part of the completion contract",
+        "core.hooksPath=/dev/null",
+        "commit even if tests are not fully passing",
+        "commit even if not fully passing",
     ):
         forbid(entrypoint, obsolete, ENTRYPOINT)
+
+
+def validate_local_guidance() -> None:
+    """Validate every local and scheduled factory entry point independently.
+
+    Returns:
+        None.
+    """
+    for source in (SCHEDULED_PROMPT, HEARTBEAT_ENTRYPOINT, NEXT_TASK_PROMPT, ISSUE_SKILL):
+        text = source.read_text(encoding="utf-8")
+        require(text, "factory-resume:v1", source)
+
+    scheduled = SCHEDULED_PROMPT.read_text(encoding="utf-8")
+    require(scheduled, "Version: 19", SCHEDULED_PROMPT)
+    require(scheduled, "one full atomic label-set replacement", SCHEDULED_PROMPT)
+
+    next_task = NEXT_TASK_PROMPT.read_text(encoding="utf-8")
+    require(next_task, "only\n  after the PR merges", NEXT_TASK_PROMPT)
+
+    issue_skill = ISSUE_SKILL.read_text(encoding="utf-8")
+    require(issue_skill, "After the PR merges", ISSUE_SKILL)
+
+    legacy = LEGACY_PIPELINE.read_text(encoding="utf-8")
+    forbid(legacy, "core.hooksPath=/dev/null", LEGACY_PIPELINE)
+    forbid(legacy, "commit even if tests are not fully passing", LEGACY_PIPELINE)
+    forbid(legacy, "commit even if not fully passing", LEGACY_PIPELINE)
 
 
 def read_entrypoint_text() -> str:
@@ -209,6 +246,7 @@ def main() -> None:
         PROTOCOL.read_text(encoding="utf-8"),
         read_entrypoint_text(),
     )
+    validate_local_guidance()
     print("Autonomous factory policy invariants are aligned.")
 
 
