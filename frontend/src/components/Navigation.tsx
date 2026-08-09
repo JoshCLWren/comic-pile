@@ -103,6 +103,8 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
         </nav>
       )}
 
+      <div className="md:hidden"><BugReportButton onSubmit={onBugReportSubmit} variant="nav" /></div>
+
       <div className="fixed top-2 right-2 md:top-4 md:right-4 z-50 flex items-center gap-2 md:gap-3">
         {isLoading ? <span className="hidden md:inline text-xs text-stone-500 font-medium px-2 py-1">Loading...</span> : hasError ? <span className="hidden md:inline text-xs text-amber-500 font-medium px-2 py-1" title="Failed to load user data">User</span> : username ? <span className="hidden md:inline text-xs text-stone-400 font-medium px-2 py-1">{username}</span> : null}
         <button onClick={handleLogout} className="px-2 py-1.5 md:px-3 text-xs font-bold uppercase tracking-widest text-red-400 hover:text-red-300 bg-[#110e0a]/60 hover:bg-[#110e0a]/80 rounded-lg transition-colors" aria-label="Log out"><span className="md:hidden" aria-hidden="true">⎋</span><span className="hidden md:inline">Log Out</span></button>
