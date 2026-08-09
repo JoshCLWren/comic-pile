@@ -9,9 +9,10 @@ import {
 import type { Issue, Thread } from '../types'
 
 const threads = [
-  { id: 1, title: 'Alpha Flight' },
-  { id: 2, title: 'New Mutants' },
+  { id: 1, title: 'Alpha Flight', format: 'ongoing' },
+  { id: 2, title: 'New Mutants', format: 'ongoing' },
 ] as Thread[]
+const thread = threads[0]
 
 const issues = [
   { id: 11, issue_number: 'Annual 1' },
@@ -105,7 +106,9 @@ describe('continuity comic selectors', () => {
 
     fireEvent.change(screen.getByRole('combobox'), { target: { value: '13' } })
     expect(onChange).toHaveBeenCalledWith(issues[2])
-    expect(screen.getByRole('option', { name: 'Omega' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '#Omega' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '#Annual 1' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '#1/2' })).toBeInTheDocument()
   })
 
   it('covers issue loading, empty, error, disabled, and cleared-selection states', () => {
@@ -125,27 +128,37 @@ describe('continuity comic selectors', () => {
     expect(screen.getByText('Issue load failed')).toBeInTheDocument()
 
     rerender(<ContinuityIssueSelector issues={[]} value={null} onChange={onChange} />)
-    expect(screen.getByText('No issues available.')).toBeInTheDocument()
+    expect(screen.getByText('No issues available')).toBeInTheDocument()
 
     rerender(<ContinuityIssueSelector issues={issues} value={null} onChange={onChange} disabled />)
     expect(screen.getByRole('combobox')).toBeDisabled()
   })
 
-  it('builds ordered ranges from issue labels and explains reversed order without exposing positions', () => {
+  it('builds ordered ranges from issue labels and rejects reversed order without exposing positions', () => {
     const onChange = vi.fn()
-    render(<ContinuityIssueRangeSelector issues={issues} value={null} onChange={onChange} />)
+    render(
+      <ContinuityIssueRangeSelector
+        thread={thread}
+        issues={issues}
+        value={null}
+        onChange={onChange}
+      />,
+    )
 
     const [start, end] = screen.getAllByRole('combobox')
     fireEvent.change(start, { target: { value: '11' } })
     fireEvent.change(end, { target: { value: '13' } })
 
-    expect(onChange).toHaveBeenLastCalledWith({ start: issues[0], end: issues[2] })
-    expect(screen.getByText('Annual 1 through Omega')).toBeInTheDocument()
+    expect(onChange).toHaveBeenLastCalledWith({
+      thread,
+      startIssue: issues[0],
+      endIssue: issues[2],
+    })
     expect(screen.queryByText(/position/i)).not.toBeInTheDocument()
 
     fireEvent.change(start, { target: { value: '13' } })
     fireEvent.change(end, { target: { value: '11' } })
-    expect(screen.getByText('Start issue must come before end issue.')).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('#Omega comes after #Annual 1')
     expect(onChange).toHaveBeenLastCalledWith(null)
   })
 
@@ -153,8 +166,9 @@ describe('continuity comic selectors', () => {
     const onChange = vi.fn()
     const { rerender } = render(
       <ContinuityIssueRangeSelector
+        thread={thread}
         issues={issues}
-        value={{ start: issues[0], end: issues[2] }}
+        value={{ thread, startIssue: issues[0], endIssue: issues[2] }}
         onChange={onChange}
       />,
     )
@@ -167,8 +181,9 @@ describe('continuity comic selectors', () => {
 
     rerender(
       <ContinuityIssueRangeSelector
+        thread={thread}
         issues={issues}
-        value={{ start: issues[1], end: issues[2] }}
+        value={{ thread, startIssue: issues[1], endIssue: issues[2] }}
         onChange={onChange}
       />,
     )
