@@ -1,6 +1,6 @@
 # ComicPile Autonomous Factory Policy
 
-Version: 18
+Version: 19
 
 This is the canonical policy for every scheduled ChatGPT worker, the local OpenCode factory, and interactive factory repair sessions.
 
@@ -173,8 +173,9 @@ claiming, opening or replaying a PR, handing work off, receiving review, startin
 becoming ready, blocking, merging, and ending a turn. Josh must never need to request routine
 factory labels.
 
-Apply these states exactly; remove mutually exclusive state and owner labels during every
-transition:
+Apply these states exactly. Reconcile each target with one full label-set replacement so stale
+mutually exclusive state and owner labels disappear in the same atomic write that applies the
+complete truthful target set. Never implement a transition as separate remove-then-add calls:
 
 | State | Issue labels | Pull-request labels |
 |---|---|---|
@@ -201,8 +202,8 @@ Rules:
 - Cross-worker takeover and merge are allowed. The new worker replaces the owner label and may
   merge work it did not author after every exact-head gate passes.
 - If `gh pr edit` fails because of deprecated Projects Classic GraphQL fields, use the
-  issue-compatible REST endpoints: delete every stale workflow and owner label first, then add the
-  complete target factory label set. A POST alone only adds labels and is not reconciliation.
+  issue-compatible REST label-replacement endpoint with the complete target label set. A POST that
+  only adds labels, or sequential DELETE/POST calls, is not atomic reconciliation.
 - Before ending any turn, compare the issue, PR, review, CI, lease, and merge state and repair any
   metadata contradiction discovered.
 
@@ -244,6 +245,30 @@ Use the existing canonical marker schemas:
 - ready: `<!-- comic-pile-factory-ready-v2:<sha> -->`
 - needs human: `<!-- comic-pile-factory-needs-human-v2:<sha-or-issue> -->`
 - released: `<!-- comic-pile-factory-claim-released-v3:<target>:<worker>:<epoch>:<reason> -->`
+
+## Durable resume packet
+
+Before releasing ownership, reaching a runtime limit, switching work, or ending with a claimed
+issue or PR unfinished, create or update one canonical GitHub comment in place. Do not create a new
+packet on every heartbeat.
+
+```text
+<!-- factory-resume:v1 -->
+## Factory resume packet
+Head: `<current SHA or none>`
+Current hypothesis: <one or two concrete sentences>
+Files touched: <paths, or none>
+Checks: <passed and failed commands/checks; include the decisive failure>
+Next narrow verification: <one specific command, inspection, or experiment>
+Remaining blocker/action: <what the next worker must resolve>
+Updated by: <durable worker ID and UTC timestamp>
+```
+
+Record observed facts, distinguish local checks from CI, include no secrets, and keep the packet
+short. A takeover worker reads the current packet before reconstructing context, verifies that its
+recorded head still matches, and updates or discards stale claims instead of trusting them blindly.
+The packet is operational state, not a substitute for commits, tests, review markers, issue
+acceptance criteria, or truthful labels. Completed and verified work does not require a packet.
 
 Review leases last 45 minutes. Repair and implementation leases last 60 minutes after the latest real progress. Lease expiry permits another worker to continue that issue but does not require a peer to choose it over higher-priority work.
 

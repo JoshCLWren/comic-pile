@@ -21,6 +21,11 @@ Exactly one stage label describes the current state:
 - `factory:ready`: every exact-head merge gate is satisfied;
 - `factory:blocked`: a genuine human, credential, or external blocker remains.
 
+Every transition replaces the complete label set atomically. Preserve unrelated labels, remove all
+stale owner and stage labels, and apply the single truthful owner and stage in one REST label-set
+replacement. Sequential remove/add calls and add-only POST requests are not reconciliation because
+other workers can observe contradictory intermediate state.
+
 The labels are synchronized automatically from existing factory claim, progress, review, ready, release, and needs-human markers. Pull requests on `factory/*` branches are also recognized automatically. A linked issue claim supplies the initial pull-request owner when the branch name starts with `factory/<issue-number>-...`.
 
 Only marker comments from the repository owner, members, or collaborators are trusted. Formal review transitions are accepted from trusted collaborators and CodeRabbit. Public commenters and untrusted fork branches cannot spoof factory ownership or stage labels.

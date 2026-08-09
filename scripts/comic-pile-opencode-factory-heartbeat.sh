@@ -251,6 +251,28 @@ REPOSITORY SAFETY
   or manufacture evidence.
 - Never mutate schedules or factory topology.
 
+GITHUB VISIBILITY
+Maintain `factory`, exactly one workflow-stage label, and exactly one next-action owner label on
+every managed issue and PR. Reconcile each transition with one full atomic label-set replacement;
+never use sequential remove/add calls that expose contradictory intermediate states. This local
+worker maps to `factory:local`. Labels are visibility metadata and never substitute for merge gates.
+
+DURABLE RESUME PACKET V1
+Before releasing ownership, reaching the runtime limit, switching work, or ending with a claimed
+item unfinished, create or update one canonical GitHub comment in place:
+`<!-- factory-resume:v1 -->`
+`## Factory resume packet`
+`Head: <current SHA or none>`
+`Current hypothesis: <one or two concrete sentences>`
+`Files touched: <paths, or none>`
+`Checks: <passed and failed commands/checks; include the decisive failure>`
+`Next narrow verification: <one specific command, inspection, or experiment>`
+`Remaining blocker/action: <what the next worker must resolve>`
+`Updated by: <durable worker ID and UTC timestamp>`
+Keep it short, factual, secret-free, and explicit about local versus CI evidence. A takeover worker
+must verify that the recorded head still matches and update or discard stale claims before acting.
+The packet never substitutes for commits, tests, review markers, acceptance criteria, or labels.
+
 TOOLING GATE
 Confirm checkout, focused tests, commit, push, GitHub reads/writes, review-thread access,
 CI-log access, and merge access. Print:
@@ -298,7 +320,7 @@ PROMPT
 FACTORY_PROMPT="${FACTORY_PROMPT//__WORKER_ID__/$WORKER_ID}"
 FACTORY_PROMPT="${FACTORY_PROMPT//__MODEL_ID__/$MODEL}"
 
-printf 'ComicPile local factory v17 (backlog-drain, release-note fragments, and gated-merge)\n'
+printf 'ComicPile local factory v19 (atomic labels and durable resume packets)\n'
 printf '  Source repo: %s\n' "$SOURCE_REPO"
 printf '  Worktree:    %s\n' "$WORKTREE"
 printf '  Model:       %s\n' "$MODEL"

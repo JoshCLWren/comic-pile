@@ -1,7 +1,6 @@
 ---
 name: github-issue-kanban
 description: Use GitHub Issues as the Comic Pile kanban and execution queue. Trigger whenever the user asks an agent to do the next task, pick the next issue, work from the backlog, update issue status, plan issue work, or keep GitHub work synchronized. Use this skill before editing code for any issue-driven task in this repository.
-compatibility: Requires git, gh CLI authentication, and the repository's GitHub remote.
 ---
 
 # GitHub issue workflow
@@ -18,7 +17,11 @@ make next-task
 
 Use the issue selected by that command unless the user explicitly names another issue. The selector prefers open issues with `ralph-status:pending`, highest `ralph-priority:*`, and no unresolved issue dependencies. Epics, blocked issues, issues already in progress/review, duplicates, and issues with unresolved dependencies are not selected.
 
-Then read only the selected issue body, the files it names, `AGENTS.md`, and `docs/ISSUE_EXECUTION_PROTOCOL.md`. Do not load every issue comment. If the issue points to `docs/issue-plans/<number>.md`, read that plan in bounded chunks.
+Then read the selected issue body, the files it names, `AGENTS.md`, and
+`docs/ISSUE_EXECUTION_PROTOCOL.md`. For factory work, also read
+`docs/AUTONOMOUS_FACTORY_POLICY.md` and the latest canonical resume packet. Do not load unrelated
+comment history. If the issue points to `docs/issue-plans/<number>.md`, read that plan in bounded
+chunks.
 
 ## Start work
 
@@ -26,12 +29,18 @@ Before editing code:
 
 1. Confirm the issue is open and still eligible.
 2. Confirm dependencies are closed or explicitly non-blocking.
-3. Move the issue to active work:
+3. Move the issue to active work. For factory work, replace the complete label set atomically so
+   it contains `factory`, `factory:building`, and exactly one owner label without exposing an
+   intermediate contradictory state:
 
    ```bash
-   gh issue edit ISSUE --remove-label "ralph-status:pending" --add-label "ralph-status:in-progress"
+   gh api --method PUT repos/JoshCLWren/comic-pile/issues/ISSUE/labels \
+     --input /path/to/complete-truthful-label-set.json
    gh issue comment ISSUE --body "Starting implementation from the repository issue workflow."
    ```
+
+   Build the JSON label set from the issue's current unrelated labels plus the complete target
+   Ralph status, factory stage, and factory owner. Do not use add-only or sequential label calls.
 
 4. Make the smallest complete change within the issue scope.
 5. If required work is outside the issue, create a linked issue before expanding scope.
@@ -64,12 +73,19 @@ gh issue comment ISSUE --body-file /path/to/verification-comment.md
 
 The verification comment must include changed files, acceptance criteria evidence, commands and results, and follow-up issue numbers.
 
-After the PR is created and all checks and acceptance criteria pass:
+After the PR merges and acceptance criteria and issue closure are verified:
 
 ```bash
-gh issue edit ISSUE --remove-label "ralph-status:in-review" --add-label "ralph-status:done"
+gh api --method PUT repos/JoshCLWren/comic-pile/issues/ISSUE/labels \
+  --input /path/to/complete-done-label-set.json
 gh issue close ISSUE --reason completed
 ```
+
+If claimed work remains unfinished when releasing ownership, switching work, reaching a runtime
+limit, or ending the turn, create or update one `<!-- factory-resume:v1 -->` comment in place. Keep
+it compact: current head, hypothesis, files touched, passed/failed checks, next narrow verification,
+remaining action, worker ID, and UTC timestamp. A takeover worker must verify the recorded head and
+discard or update stale claims before acting.
 
 ## Issue hierarchy
 
