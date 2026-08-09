@@ -13,6 +13,10 @@ _CSRF_EXEMPT_PATHS = frozenset(
         "/api/auth/login",
         "/api/auth/refresh",
         "/api/auth/register",
+        "/api/v1/auth/csrf",
+        "/api/v1/auth/login",
+        "/api/v1/auth/refresh",
+        "/api/v1/auth/register",
     }
 )
 
