@@ -112,7 +112,7 @@ it('does not refresh session or threads when snooze fails', async () => {
     refetch: refetchThreads,
   })
   mockedUseSession.mockReturnValue({
-    data: { snoozed_threads: [] },
+    data: { pending_thread_id: 1, snoozed_threads: [] },
     refetch: refetchSession,
   })
   mockedUseSnooze.mockReturnValue({ mutate: snooze, isPending: false })
@@ -170,7 +170,7 @@ it('does not refresh session or threads when unsnooze fails', async () => {
   expect(refetchThreads).not.toHaveBeenCalled()
 })
 
-it('keeps snooze actionable before session data has loaded', async () => {
+it('keeps snooze disabled before session data has loaded', async () => {
   const refetchThreads = vi.fn()
   const refetchSession = vi.fn().mockResolvedValue(undefined)
   const snooze = vi.fn().mockResolvedValue(undefined)
@@ -198,12 +198,12 @@ it('keeps snooze actionable before session data has loaded', async () => {
   const user = userEvent.setup()
   renderQueue()
 
-  await user.click(screen.getAllByLabelText('Snooze')[0])
+  const snoozeButton = screen.getAllByLabelText('Snooze')[0]
+  expect(snoozeButton).toBeDisabled()
+  await user.click(snoozeButton)
 
-  await waitFor(() => {
-    expect(refetchSession).toHaveBeenCalledOnce()
-  })
-  expect(snooze).toHaveBeenCalledOnce()
+  expect(refetchSession).not.toHaveBeenCalled()
+  expect(snooze).not.toHaveBeenCalled()
   expect(refetchThreads).not.toHaveBeenCalled()
   expect(alert).not.toHaveBeenCalled()
 })
