@@ -1,6 +1,6 @@
 """Focused tests for blocked-roll recovery guidance."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import ANY, AsyncMock
 
 import pytest
 
@@ -98,7 +98,7 @@ async def test_roll_recovery_preserves_original_and_recommends_readable_leaf(
     assert recovery.readable_prerequisites[0].node_id == 90
     assert recovery.readable_prerequisites[0].label == "Earlier Series #3"
     resolver.assert_awaited_once_with(
-        pytest.ANY,
+        ANY,
         user_id=1,
         node_type="thread",
         node_id=42,
