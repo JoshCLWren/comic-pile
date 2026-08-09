@@ -54,17 +54,16 @@ jobs:
       - name: Install backend dependencies
         run: uv sync --frozen
 
-      - name: Remove stale production E2E records
+      - name: Remove stale disposable production E2E accounts
         env:
-          DATABASE_URL: ${{ secrets.PROD_E2E_DATABASE_URL }}
-          PROD_E2E_ACCOUNT_EMAIL: ${{ secrets.PROD_E2E_ACCOUNT_EMAIL }}
+          DATABASE_URL: ${{ secrets.NEON_DIRECT_DATABASE_URL }}
         run: |
           set -o pipefail
-          if [ -z "$DATABASE_URL" ] || [ -z "$PROD_E2E_ACCOUNT_EMAIL" ]; then
-            echo 'Missing dedicated production E2E cleanup secrets.' >&2
+          if [ -z "$DATABASE_URL" ]; then
+            echo 'Missing NEON_DIRECT_DATABASE_URL.' >&2
             exit 1
           fi
-          uv run python scripts/cleanup_production_e2e_data.py --max-age-hours 24 \
+          uv run python scripts/cleanup_production_e2e_accounts.py --max-age-hours 24 \
             | tee production-e2e-cleanup.json
           echo '### Production E2E cleanup' >> "$GITHUB_STEP_SUMMARY"
           echo '```json' >> "$GITHUB_STEP_SUMMARY"
@@ -79,18 +78,21 @@ jobs:
         working-directory: frontend
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Authenticate dedicated production E2E account
+      - name: Create disposable production E2E account
         working-directory: frontend
         env:
-          PROD_E2E_ACCOUNT_USERNAME: ${{ secrets.PROD_E2E_ACCOUNT_USERNAME }}
-          PROD_E2E_ACCOUNT_PASSWORD: ${{ secrets.PROD_E2E_ACCOUNT_PASSWORD }}
           PROD_PROFILE_STORAGE_STATE: ${{ runner.temp }}/production-storage-state.json
         run: |
-          if [ -z "$PROD_E2E_ACCOUNT_USERNAME" ] || [ -z "$PROD_E2E_ACCOUNT_PASSWORD" ]; then
-            echo 'Missing dedicated production E2E account credentials.' >&2
-            exit 1
-          fi
-          node scripts/create-production-e2e-storage-state.mjs
+          run_key="${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+          username="e2e_${run_key}"
+          email="comicpile-e2e+${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}@example.com"
+          password="$(openssl rand -base64 36 | tr -d '\n')"
+          echo "::add-mask::$password"
+          export PROD_E2E_ACCOUNT_USERNAME="$username"
+          export PROD_E2E_ACCOUNT_EMAIL="$email"
+          export PROD_E2E_ACCOUNT_PASSWORD="$password"
+          echo "PROD_E2E_ACCOUNT_USERNAME=$username" >> "$GITHUB_ENV"
+          node scripts/create-production-e2e-account.mjs
           chmod 600 "$PROD_PROFILE_STORAGE_STATE"
           echo "PROD_PROFILE_STORAGE_STATE=$PROD_PROFILE_STORAGE_STATE" >> "$GITHUB_ENV"
 
@@ -105,6 +107,18 @@ jobs:
             --history test-results/production-performance-history.jsonl \
             --summary test-results/production-performance-summary.md
           cat test-results/production-performance-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Delete disposable production E2E account
+        if: always()
+        env:
+          DATABASE_URL: ${{ secrets.NEON_DIRECT_DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ] || [ -z "$PROD_E2E_ACCOUNT_USERNAME" ]; then
+            echo 'Disposable account was not created or database access is unavailable.' >&2
+            exit 1
+          fi
+          uv run python scripts/cleanup_production_e2e_accounts.py \
+            --account-username "$PROD_E2E_ACCOUNT_USERNAME"
 
       - name: Save bounded performance history
         if: success()
