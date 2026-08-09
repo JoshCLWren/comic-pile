@@ -1,7 +1,21 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CrossoversPage from '../pages/CrossoversPage'
+import { threadsApi } from '../services/api'
 import { dependencyGroupsApi } from '../services/api-dependency-groups'
+import { issuesApi } from '../services/api-issues'
+
+vi.mock('../services/api', () => ({
+  threadsApi: {
+    get: vi.fn(),
+  },
+}))
+
+vi.mock('../services/api-issues', () => ({
+  issuesApi: {
+    list: vi.fn(),
+  },
+}))
 
 vi.mock('../services/api-dependency-groups', () => ({
   dependencyGroupsApi: {
@@ -14,7 +28,9 @@ vi.mock('../services/api-dependency-groups', () => ({
   },
 }))
 
-const api = vi.mocked(dependencyGroupsApi)
+const groupsApi = vi.mocked(dependencyGroupsApi)
+const threadApi = vi.mocked(threadsApi)
+const issueApi = vi.mocked(issuesApi)
 
 const crossover = {
   id: 7,
@@ -28,46 +44,98 @@ const secondCrossover = {
   created_at: '2026-08-06T00:00:00Z',
   memberships: [],
 }
+const thread = {
+  id: 22,
+  title: 'Nova',
+  format: 'single issues',
+  issues_remaining: 3,
+  total_issues: 3,
+  queue_position: 4,
+  status: 'active',
+  is_blocked: false,
+  blocking_reasons: [],
+  created_at: '2026-08-01T00:00:00Z',
+}
+const issues = [
+  {
+    id: 31,
+    thread_id: 22,
+    issue_number: '2',
+    position: 3,
+    status: 'read' as const,
+    read_at: '2026-08-02T00:00:00Z',
+    created_at: '2026-08-01T00:00:00Z',
+  },
+  {
+    id: 32,
+    thread_id: 22,
+    issue_number: 'Annual 1',
+    position: 4,
+    status: 'unread' as const,
+    read_at: null,
+    created_at: '2026-08-01T00:00:00Z',
+  },
+  {
+    id: 33,
+    thread_id: 22,
+    issue_number: '½',
+    position: 5,
+    status: 'unread' as const,
+    read_at: null,
+    created_at: '2026-08-01T00:00:00Z',
+  },
+]
 
 function openRangeForm(name = /Annihilation.*0 members/) {
   fireEvent.click(screen.getByRole('button', { name }))
 }
 
-function fillRange(threadId: string, start: string, end: string) {
-  fireEvent.change(screen.getByLabelText('Thread ID'), { target: { value: threadId } })
-  fireEvent.change(screen.getByLabelText('Start position'), { target: { value: start } })
-  fireEvent.change(screen.getByLabelText('End position'), { target: { value: end } })
+async function loadIssues() {
+  fireEvent.change(screen.getByLabelText('Thread ID'), { target: { value: '22' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Choose issues' }))
+  await screen.findByText('ISSUES FROM NOVA')
+}
+
+function selectRange(firstIssueId: string, lastIssueId: string) {
+  fireEvent.change(screen.getByLabelText('First issue'), { target: { value: firstIssueId } })
+  fireEvent.change(screen.getByLabelText('Last issue'), { target: { value: lastIssueId } })
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
-  api.list.mockResolvedValue([crossover])
+  groupsApi.list.mockResolvedValue([crossover])
+  threadApi.get.mockResolvedValue(thread)
+  issueApi.list.mockResolvedValue({
+    issues,
+    total_count: issues.length,
+    page_size: 100,
+    next_page_token: null,
+  })
 })
 
 describe('CrossoversPage issue ranges', () => {
-  it('rejects invalid range values before calling the API', async () => {
+  it('uses shared issue selectors and never exposes issue positions', async () => {
     render(<CrossoversPage />)
     await screen.findByText('Annihilation')
     openRangeForm()
+    await loadIssues()
 
-    fillRange('0', '3', '2')
-    fireEvent.click(screen.getByRole('button', { name: 'Add range' }))
-
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Enter a valid thread ID and an inclusive issue-position range.',
-    )
-    expect(api.addIssueRange).not.toHaveBeenCalled()
+    expect(screen.queryByLabelText('Start position')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('End position')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('First issue')).toHaveTextContent('#2')
+    expect(screen.getByLabelText('First issue')).toHaveTextContent('#Annual 1')
+    expect(screen.getByLabelText('First issue')).toHaveTextContent('#½')
   })
 
-  it('adds a range, refreshes membership totals, and clears the form', async () => {
-    api.addIssueRange.mockResolvedValue({
+  it('translates selected issue labels to canonical positions when saving', async () => {
+    groupsApi.addIssueRange.mockResolvedValue({
       thread_id: 22,
       start_position: 3,
       end_position: 5,
-      added_issue_ids: [31, 32],
-      already_present_issue_ids: [33],
+      added_issue_ids: [31, 33],
+      already_present_issue_ids: [32],
     })
-    api.get.mockResolvedValue({
+    groupsApi.get.mockResolvedValue({
       ...crossover,
       memberships: [
         { id: 1, issue_id: 31, thread_id: null },
@@ -79,81 +147,114 @@ describe('CrossoversPage issue ranges', () => {
     render(<CrossoversPage />)
     await screen.findByText('Annihilation')
     openRangeForm()
-    fillRange('22', '3', '5')
+    await loadIssues()
+    selectRange('31', '33')
     fireEvent.click(screen.getByRole('button', { name: 'Add range' }))
 
     expect(await screen.findByRole('status')).toHaveTextContent('2 added, 1 already present.')
-    expect(api.addIssueRange).toHaveBeenCalledWith(7, 22, 3, 5)
-    expect(api.get).toHaveBeenCalledWith(7)
+    expect(groupsApi.addIssueRange).toHaveBeenCalledWith(7, 22, 3, 5)
+    expect(groupsApi.get).toHaveBeenCalledWith(7)
     expect(screen.getByText('3 issue memberships and 0 thread memberships.')).toBeInTheDocument()
     expect(screen.getByLabelText('Thread ID')).toHaveValue('')
-    expect(screen.getByLabelText('Start position')).toHaveValue('')
-    expect(screen.getByLabelText('End position')).toHaveValue('')
+    expect(screen.queryByLabelText('First issue')).not.toBeInTheDocument()
+  })
+
+  it('shows reversed-range validation using comic issue labels', async () => {
+    render(<CrossoversPage />)
+    await screen.findByText('Annihilation')
+    openRangeForm()
+    await loadIssues()
+    selectRange('33', '31')
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      '#½ comes after #2 in Nova. Choose a later ending issue.',
+    )
+    expect(screen.getByRole('button', { name: 'Add range' })).toBeDisabled()
+    expect(groupsApi.addIssueRange).not.toHaveBeenCalled()
+  })
+
+  it('loads every issue page so later specials remain selectable', async () => {
+    issueApi.list
+      .mockResolvedValueOnce({
+        issues: issues.slice(0, 2),
+        total_count: 3,
+        page_size: 2,
+        next_page_token: 'next-page',
+      })
+      .mockResolvedValueOnce({
+        issues: issues.slice(2),
+        total_count: 3,
+        page_size: 2,
+        next_page_token: null,
+      })
+
+    render(<CrossoversPage />)
+    await screen.findByText('Annihilation')
+    openRangeForm()
+    await loadIssues()
+
+    expect(issueApi.list).toHaveBeenNthCalledWith(1, 22, { page_size: 100 })
+    expect(issueApi.list).toHaveBeenNthCalledWith(2, 22, {
+      page_size: 100,
+      page_token: 'next-page',
+    })
+    expect(screen.getByLabelText('Last issue')).toHaveTextContent('#½')
   })
 
   it('clears range state when expanding another crossover', async () => {
-    api.list.mockResolvedValue([crossover, secondCrossover])
+    groupsApi.list.mockResolvedValue([crossover, secondCrossover])
     render(<CrossoversPage />)
     await screen.findByText('Annihilation')
 
     openRangeForm()
-    fillRange('22', '3', '5')
+    await loadIssues()
+    selectRange('31', '33')
     openRangeForm(/Secret Wars.*0 members/)
 
     expect(screen.getByLabelText('Thread ID')).toHaveValue('')
-    expect(screen.getByLabelText('Start position')).toHaveValue('')
-    expect(screen.getByLabelText('End position')).toHaveValue('')
+    expect(screen.queryByLabelText('First issue')).not.toBeInTheDocument()
     expect(screen.getByRole('form', { name: 'Add issue range to Secret Wars' })).toBeInTheDocument()
   })
 
-  it('prevents moving the pending request state to another crossover', async () => {
-    api.list.mockResolvedValue([crossover, secondCrossover])
-    api.addIssueRange.mockImplementation(() => new Promise(() => undefined))
+  it('reports issue-loading failures without exposing position inputs', async () => {
+    issueApi.list.mockRejectedValue(new Error('Issues unavailable'))
     render(<CrossoversPage />)
     await screen.findByText('Annihilation')
-
     openRangeForm()
-    fillRange('22', '3', '5')
-    fireEvent.click(screen.getByRole('button', { name: 'Add range' }))
 
-    const secondToggle = screen.getByRole('button', { name: /Secret Wars.*0 members/ })
-    expect(secondToggle).toBeDisabled()
-    fireEvent.click(secondToggle)
-    expect(screen.getByRole('form', { name: 'Add issue range to Annihilation' })).toBeInTheDocument()
-    expect(screen.queryByRole('form', { name: 'Add issue range to Secret Wars' })).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Thread ID'), { target: { value: '22' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Choose issues' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Issues unavailable')
+    expect(screen.queryByLabelText('Start position')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add range' })).toBeDisabled()
   })
 
-  it('disables range controls while saving and reports API failures', async () => {
-    let rejectRange: ((reason?: unknown) => void) | undefined
-    api.addIssueRange.mockImplementation(
-      () => new Promise((_resolve, reject) => { rejectRange = reject }),
-    )
-
+  it('keeps controls locked while a range save is pending', async () => {
+    groupsApi.addIssueRange.mockImplementation(() => new Promise(() => undefined))
     render(<CrossoversPage />)
     await screen.findByText('Annihilation')
     openRangeForm()
-    fillRange('22', '3', '5')
+    await loadIssues()
+    selectRange('31', '33')
     fireEvent.click(screen.getByRole('button', { name: 'Add range' }))
 
     expect(screen.getByRole('button', { name: 'Adding…' })).toBeDisabled()
     expect(screen.getByLabelText('Thread ID')).toBeDisabled()
-    rejectRange?.(new Error('Range unavailable'))
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('Range unavailable')
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Add range' })).toBeEnabled())
+    expect(screen.getByLabelText('First issue')).toBeDisabled()
   })
 
   it('clears expanded range state when deleting the expanded crossover', async () => {
-    api.delete.mockResolvedValue(undefined)
+    groupsApi.delete.mockResolvedValue(undefined)
     vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     render(<CrossoversPage />)
     await screen.findByText('Annihilation')
     openRangeForm()
-    fillRange('22', '3', '5')
+    await loadIssues()
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
 
-    await waitFor(() => expect(api.delete).toHaveBeenCalledWith(7))
+    await waitFor(() => expect(groupsApi.delete).toHaveBeenCalledWith(7))
     expect(screen.queryByText('Annihilation')).not.toBeInTheDocument()
     expect(screen.queryByRole('form', { name: 'Add issue range to Annihilation' })).not.toBeInTheDocument()
   })
