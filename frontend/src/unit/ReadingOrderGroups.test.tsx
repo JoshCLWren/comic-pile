@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ReadingOrderGroups } from '../pages/RollPage/components/ReadingOrderGroups'
 import { useDependencyGroups } from '../hooks/useDependencyGroups'
@@ -9,6 +10,14 @@ vi.mock('../hooks/useDependencyGroups', () => ({
 
 const mockedUseDependencyGroups = vi.mocked(useDependencyGroups)
 
+function renderGroups(threadId: number | null) {
+  return render(
+    <MemoryRouter>
+      <ReadingOrderGroups threadId={threadId} />
+    </MemoryRouter>,
+  )
+}
+
 describe('ReadingOrderGroups', () => {
   beforeEach(() => {
     mockedUseDependencyGroups.mockReset()
@@ -17,7 +26,7 @@ describe('ReadingOrderGroups', () => {
   it('renders nothing when there is no active thread', () => {
     mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: false, error: null })
 
-    const { container } = render(<ReadingOrderGroups threadId={null} />)
+    const { container } = renderGroups(null)
 
     expect(container).toBeEmptyDOMElement()
     expect(mockedUseDependencyGroups).toHaveBeenCalledWith(null)
@@ -26,7 +35,7 @@ describe('ReadingOrderGroups', () => {
   it('announces crossover loading without showing stale names', () => {
     mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: true, error: null })
 
-    render(<ReadingOrderGroups threadId={17} />)
+    renderGroups(17)
 
     expect(screen.getByRole('status')).toHaveTextContent('Loading crossovers')
     expect(screen.queryByRole('list')).not.toBeInTheDocument()
@@ -39,7 +48,7 @@ describe('ReadingOrderGroups', () => {
       error: new Error('network failed'),
     })
 
-    render(<ReadingOrderGroups threadId={17} />)
+    renderGroups(17)
 
     expect(screen.getByRole('alert')).toHaveTextContent('Unable to load crossovers.')
   })
@@ -47,7 +56,7 @@ describe('ReadingOrderGroups', () => {
   it('does not add an empty section for threads without crossovers', () => {
     mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: false, error: null })
 
-    const { container } = render(<ReadingOrderGroups threadId={17} />)
+    const { container } = renderGroups(17)
 
     expect(container).toBeEmptyDOMElement()
   })
@@ -62,7 +71,7 @@ describe('ReadingOrderGroups', () => {
       error: null,
     })
 
-    render(<ReadingOrderGroups threadId={17} />)
+    renderGroups(17)
 
     expect(screen.getByRole('heading', { name: 'Crossovers' })).toBeInTheDocument()
     expect(screen.getByRole('list')).toBeInTheDocument()
