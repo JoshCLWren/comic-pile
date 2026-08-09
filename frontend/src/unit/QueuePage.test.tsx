@@ -459,7 +459,7 @@ it('supports created-date sorting and drag reorder failure feedback', async () =
   expect(cards[0]).toHaveTextContent('New')
   const dragButtons = screen.getAllByRole('button', { name: 'Drag to reorder' })
   fireEvent.dragStart(dragButtons[0]!, { dataTransfer: { effectAllowed: '', setData: vi.fn() } })
-  const targetCard = cards[1]!.querySelector('.queue-thread-card') as HTMLElement
+  const targetCard = cards[1]!
   fireEvent.dragOver(targetCard)
   fireEvent.drop(targetCard, { dataTransfer: { getData: () => '1' } })
   await waitFor(() => expect(move.mutate).toHaveBeenCalled())
