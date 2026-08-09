@@ -61,6 +61,68 @@ describe('continuity comic selectors', () => {
     expect(screen.getByRole('option', { name: /Alpha Flight/i })).toHaveFocus()
   })
 
+  it('handles current-value editing, exclusions, empty results, loading, errors, and disabled state', () => {
+    const onChange = vi.fn()
+    const { rerender } = render(
+      <ContinuityThreadSelector
+        threads={threads}
+        value={threads[0]}
+        onChange={onChange}
+        excludeThreadId={2}
+      />,
+    )
+
+    const search = screen.getByRole('searchbox')
+    expect(search).toHaveValue('Alpha Flight')
+    expect(screen.queryByText('New Mutants')).not.toBeInTheDocument()
+
+    fireEvent.change(search, { target: { value: 'no match' } })
+    expect(onChange).toHaveBeenLastCalledWith(null)
+    expect(screen.getByText('No matching comics found.')).toBeInTheDocument()
+    fireEvent.keyDown(search, { key: 'ArrowDown' })
+    expect(search).toHaveFocus()
+
+    rerender(
+      <ContinuityThreadSelector
+        threads={threads}
+        value={null}
+        onChange={onChange}
+        isLoading
+      />,
+    )
+    expect(screen.getByText('Loading comics…')).toBeInTheDocument()
+
+    rerender(
+      <ContinuityThreadSelector
+        threads={threads}
+        value={null}
+        onChange={onChange}
+        error="Search failed"
+      />,
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent('Search failed')
+
+    rerender(
+      <ContinuityThreadSelector
+        threads={threads}
+        value={null}
+        onChange={onChange}
+        disabled
+      />,
+    )
+    expect(screen.getByRole('searchbox')).toBeDisabled()
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+
+  it('syncs the thread search text when the selected value changes', () => {
+    const { rerender } = render(
+      <ContinuityThreadSelector threads={threads} value={null} onChange={vi.fn()} />,
+    )
+
+    rerender(<ContinuityThreadSelector threads={threads} value={threads[1]} onChange={vi.fn()} />)
+    expect(screen.getByRole('searchbox')).toHaveValue('New Mutants')
+  })
+
   it('selects arbitrary human-facing issue identifiers without numeric parsing', () => {
     const onChange = vi.fn()
     render(<ContinuityIssueSelector issues={issues} value={null} onChange={onChange} />)
@@ -71,6 +133,34 @@ describe('continuity comic selectors', () => {
 
     fireEvent.change(select, { target: { value: '13' } })
     expect(onChange).toHaveBeenLastCalledWith(issues[2])
+  })
+
+  it('covers issue loading, empty, error, disabled, and cleared-selection states', () => {
+    const onChange = vi.fn()
+    const { rerender } = render(
+      <ContinuityIssueSelector issues={[]} value={null} onChange={onChange} emptyMessage="Nothing here" />,
+    )
+    expect(screen.getByRole('combobox')).toBeDisabled()
+    expect(screen.getByRole('option', { name: 'Nothing here' })).toBeInTheDocument()
+
+    rerender(<ContinuityIssueSelector issues={issues} value={null} onChange={onChange} isLoading />)
+    expect(screen.getByRole('combobox')).toBeDisabled()
+    expect(screen.getByRole('option', { name: 'Loading issues…' })).toBeInTheDocument()
+
+    rerender(
+      <ContinuityIssueSelector
+        issues={issues}
+        value={issues[0]}
+        onChange={onChange}
+        error="Issues failed"
+      />,
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent('Issues failed')
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: '' } })
+    expect(onChange).toHaveBeenLastCalledWith(null)
+
+    rerender(<ContinuityIssueSelector issues={issues} value={null} onChange={onChange} disabled />)
+    expect(screen.getByRole('combobox')).toBeDisabled()
   })
 
   it('builds ordered ranges from issue labels and explains reversed order without exposing positions', () => {
@@ -97,5 +187,39 @@ describe('continuity comic selectors', () => {
       startIssue: issues[2],
       endIssue: issues[0],
     })
+  })
+
+  it('publishes null for incomplete ranges and resyncs draft values from props', () => {
+    const onChange = vi.fn()
+    const initialRange = { thread: threads[0], startIssue: issues[0], endIssue: issues[1] }
+    const { rerender } = render(
+      <ContinuityIssueRangeSelector
+        thread={threads[0]}
+        issues={issues}
+        value={initialRange}
+        onChange={onChange}
+      />,
+    )
+
+    expect(screen.getByRole('combobox', { name: 'First issue' })).toHaveValue('11')
+    expect(screen.getByRole('combobox', { name: 'Last issue' })).toHaveValue('12')
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'First issue' }), { target: { value: '' } })
+    expect(onChange).toHaveBeenLastCalledWith(null)
+
+    rerender(
+      <ContinuityIssueRangeSelector
+        thread={threads[0]}
+        issues={issues}
+        value={{ thread: threads[0], startIssue: issues[1], endIssue: issues[2] }}
+        onChange={onChange}
+        error="Range failed"
+        disabled
+      />,
+    )
+    expect(screen.getByRole('combobox', { name: 'First issue' })).toHaveValue('12')
+    expect(screen.getByRole('combobox', { name: 'Last issue' })).toHaveValue('13')
+    expect(screen.getByRole('alert')).toHaveTextContent('Range failed')
+    expect(screen.getByRole('group')).toBeDisabled()
   })
 })
