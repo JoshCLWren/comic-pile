@@ -5,7 +5,7 @@ import {
   ContinuityIssueRangeSelector,
   ContinuityIssueSelector,
   ContinuityThreadSelector,
-} from '../components/ComicSelectors'
+} from '../components/continuity/ComicSelectors'
 import type { Issue, Thread } from '../types'
 
 const threads = [
