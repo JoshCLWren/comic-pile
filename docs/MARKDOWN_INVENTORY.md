@@ -5,7 +5,7 @@
 | .agents/skills/plan-task-handoff/SKILL.md | Repository automation, contribution, or agent execution guidance. | 2026-08-01 | Code-coupled workflow contract that must change atomically with repository behavior. | keep | — |
 | .claude/skills/handoff/SKILL.md | Repository automation, contribution, or agent execution guidance. | 2026-03-26 | Code-coupled workflow contract that must change atomically with repository behavior. | keep | — |
 | .claude/skills/orchestrator/SKILL.md | Repository automation, contribution, or agent execution guidance. | 2026-04-15 | Code-coupled workflow contract that must change atomically with repository behavior. | keep | — |
-| AGENTS.md | Mandatory engineering rules for coding agents. | 2026-08-07 | Code-coupled contract; must not be duplicated in the Wiki. | keep | — |
+| AGENTS.md | Mandatory engineering rules for coding agents. | 2026-08-08 | Code-coupled contract; must not be duplicated in the Wiki. | keep | — |
 | COMIC_DEPENDENCIES_GUIDE.md | Tracked Markdown documentation outside the canonical docs hub. | 2026-04-26 | Standalone narrative documentation should not create another competing repository source of truth. | move to Wiki | ComicPile Wiki |
 | CONTRIBUTING.md | Repository contribution or security contract. | 2026-07-20 | GitHub-facing project policy that belongs beside the code. | keep | — |
 | LOCAL_TESTING.md | Tracked Markdown documentation outside the canonical docs hub. | 2026-03-04 | Standalone narrative documentation should not create another competing repository source of truth. | move to Wiki | ComicPile Wiki |
