@@ -1,23 +1,11 @@
-import axios from 'axios'
 import { describe, expect, it } from 'vitest'
 import { isDefinitiveAuthenticationFailure } from '../services/authFailure'
 
-function axiosError(status?: number) {
-  return new axios.AxiosError(
-    'request failed',
-    undefined,
-    undefined,
-    undefined,
-    status === undefined
-      ? undefined
-      : {
-          status,
-          statusText: 'Error',
-          headers: {},
-          config: { headers: new axios.AxiosHeaders() },
-          data: { detail: 'temporary failure' },
-        },
-  )
+function axiosError(status?: number): unknown {
+  return {
+    isAxiosError: true,
+    response: status === undefined ? undefined : { status },
+  }
 }
 
 describe('isDefinitiveAuthenticationFailure', () => {
