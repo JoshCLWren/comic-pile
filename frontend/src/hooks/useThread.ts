@@ -3,6 +3,8 @@ import axios from 'axios';
 import { threadsApi } from '../services/api';
 import type { ReactivateThreadPayload, Thread, ThreadCreatePayload, ThreadListResponse, ThreadQueryParams, ThreadUpdatePayload } from '../types';
 import { CacheContext } from '../contexts/CacheContextValue';
+import { applyUpdatedThreadCache } from '../query/cacheEffects';
+import { queryClient } from '../query/queryClient';
 
 type UseThreadsOptions = {
   searchTerm?: string;
@@ -218,8 +220,6 @@ export function useCreateThread() {
 }
 
 export function useUpdateThread() {
-  const cache = useContext(CacheContext);
-  const invalidateQueries = useMemo(() => cache?.invalidateQueries ?? (() => {}), [cache]);
   const [isPending, setIsPending] = useState(false);
   const [isError, setIsError] = useState(false);
 
@@ -230,7 +230,7 @@ export function useUpdateThread() {
 
       try {
         const result = await threadsApi.update(id, data);
-        invalidateQueries(['threads']);
+        await applyUpdatedThreadCache(queryClient, result);
         return result;
       } catch (error: unknown) {
         const detail = axios.isAxiosError<{ detail?: string }>(error)
@@ -243,7 +243,7 @@ export function useUpdateThread() {
         setIsPending(false);
       }
     },
-    [invalidateQueries]
+    []
   );
 
   return { mutate, isPending, isError };
