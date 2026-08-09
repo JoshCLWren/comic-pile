@@ -11,8 +11,10 @@ const api = vi.hoisted(() => ({
   threadsApi: { listStale: vi.fn() },
   sessionApi: { getCurrent: vi.fn(), list: vi.fn(), getDetails: vi.fn(), getSnapshots: vi.fn(), restoreSessionStart: vi.fn() },
 }))
+const protectedApi = vi.hoisted(() => ({ rate: vi.fn(), snooze: vi.fn(), bootstrap: vi.fn() }))
 const bootstrapApi = vi.hoisted(() => ({ get: vi.fn() }))
 vi.mock('../services/api', () => api)
+vi.mock('../services/protectedRollMutationApi', () => ({ protectedRollMutationApi: protectedApi }))
 vi.mock('../services/rollBootstrapApi', () => ({ rollBootstrapApi: bootstrapApi }))
 const toast = vi.hoisted(() => ({ showToast: vi.fn() }))
 const cache = vi.hoisted(() => ({ invalidateQueries: vi.fn() }))
@@ -31,6 +33,18 @@ import { useStaleThreads } from '../hooks/useThread'
 beforeEach(() => {
   vi.clearAllMocks()
   Object.values(api).forEach((group) => Object.values(group).forEach((fn) => fn.mockResolvedValue({})))
+  protectedApi.rate.mockResolvedValue({
+    id: 1,
+    title: 'Test',
+    format: 'issue',
+    issues_remaining: 1,
+    total_issues: 1,
+    queue_position: 1,
+    status: 'active',
+    is_blocked: false,
+    blocking_reasons: [],
+    created_at: '2026-08-09T00:00:00Z',
+  })
   bootstrapApi.get.mockResolvedValue({})
   api.rollApi.roll.mockResolvedValue({ result: 4 })
 })
@@ -44,7 +58,7 @@ describe('mutation hook success and failure paths', () => {
     expect(front.result.current.isError).toBe(false)
     const rate = renderHook(() => useRate())
     await act(async () => await rate.result.current.mutate({ thread_id: 1, rating: 4 }))
-    expect(api.rateApi.rate).toHaveBeenCalled()
+    expect(protectedApi.rate).toHaveBeenCalled()
   })
 
   it('sets error state and rethrows mutation failures', async () => {
@@ -65,7 +79,7 @@ describe('mutation hook success and failure paths', () => {
     api.queueApi.shuffle.mockRejectedValueOnce(new Error('shuffle failed'))
     const shuffle = renderHook(() => useShuffleQueue())
     await act(async () => expect(shuffle.result.current.mutate()).rejects.toThrow('shuffle failed'))
-    api.rateApi.rate.mockRejectedValueOnce(new Error('rate failed'))
+    protectedApi.rate.mockRejectedValueOnce(new Error('rate failed'))
     const rate = renderHook(() => useRate())
     await act(async () => expect(rate.result.current.mutate({ thread_id: 1, rating: 1 })).rejects.toThrow('rate failed'))
   })
