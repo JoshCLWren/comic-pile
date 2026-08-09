@@ -95,20 +95,21 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
             self.validate(entrypoint=f"{self.entrypoint}\n{rule}\n")
 
     def test_current_sources_are_aligned(self) -> None:
-        """Accept the current V18 policy, protocol, and runtime prompts.
+        """Accept the current V19 policy, protocol, and runtime prompts.
 
         Returns:
             None.
         """
         self.validate()
+        CHECKER.validate_local_guidance()
 
     def test_version_and_backlog_goal_are_required(self) -> None:
-        """Require V18 and issue-backlog closure as the prime directive.
+        """Require V19 and issue-backlog closure as the prime directive.
 
         Returns:
             None.
         """
-        self.assert_policy_change_fails("Version: 18", "Version: 17")
+        self.assert_policy_change_fails("Version: 19", "Version: 18")
         self.assert_policy_change_fails(
             "Drive the open issue backlog to zero",
             "Keep existing pull requests busy",
@@ -301,6 +302,27 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
         """
         self.assert_runtime_rule_fails("ignore unresolved review threads")
         self.assert_runtime_rule_fails("Firefox + WebKit + Chromium")
+
+    def test_resume_packet_and_atomic_labels_are_required(self) -> None:
+        """Require durable handoff state and atomic label replacement.
+
+        Returns:
+            None.
+        """
+        self.assert_policy_change_fails("<!-- factory-resume:v1 -->", "<!-- resume -->")
+        self.assert_policy_change_fails(
+            "one full label-set replacement",
+            "several label mutations",
+        )
+
+    def test_runtime_rejects_hook_bypass_and_failed_test_commits(self) -> None:
+        """Reject unsafe legacy worker instructions.
+
+        Returns:
+            None.
+        """
+        self.assert_runtime_rule_fails("core.hooksPath=/dev/null")
+        self.assert_runtime_rule_fails("commit even if tests are not fully passing")
 
 
 if __name__ == "__main__":

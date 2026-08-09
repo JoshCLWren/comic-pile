@@ -6,6 +6,9 @@ on:
       - AGENTS.md
       - docs/AUTONOMOUS_FACTORY_POLICY.md
       - docs/ISSUE_EXECUTION_PROTOCOL.md
+      - docs/CHATGPT_FACTORY_PROMPT.md
+      - prompts/agent-next-task.md
+      - .agents/skills/github-issue-kanban/SKILL.md
       - scripts/comic-pile-opencode-factory.sh
       - scripts/comic-pile-opencode-factory-heartbeat.sh
       - scripts/comic-pile-opencode-factory-overnight.sh
@@ -14,6 +17,10 @@ on:
       - scripts/install-git-hooks.sh
       - .githooks/prepare-commit-msg
       - scripts/check-autonomous-factory-policy.py
+      - scripts/opencode_pipeline.sh
+      - scripts/sync_public_factory_snapshot.py
+      - scripts/tests/test_sync_public_factory_snapshot.py
+      - .github/workflows/sync-public-factory.yml
       - scripts/tests/test_autonomous_factory_policy.py
       - scripts/tests/test_install_git_hooks.py
       - scripts/tests/test_opencode_model_tools.py
@@ -27,6 +34,9 @@ on:
       - AGENTS.md
       - docs/AUTONOMOUS_FACTORY_POLICY.md
       - docs/ISSUE_EXECUTION_PROTOCOL.md
+      - docs/CHATGPT_FACTORY_PROMPT.md
+      - prompts/agent-next-task.md
+      - .agents/skills/github-issue-kanban/SKILL.md
       - scripts/comic-pile-opencode-factory.sh
       - scripts/comic-pile-opencode-factory-heartbeat.sh
       - scripts/comic-pile-opencode-factory-overnight.sh
@@ -35,6 +45,10 @@ on:
       - scripts/install-git-hooks.sh
       - .githooks/prepare-commit-msg
       - scripts/check-autonomous-factory-policy.py
+      - scripts/opencode_pipeline.sh
+      - scripts/sync_public_factory_snapshot.py
+      - scripts/tests/test_sync_public_factory_snapshot.py
+      - .github/workflows/sync-public-factory.yml
       - scripts/tests/test_autonomous_factory_policy.py
       - scripts/tests/test_install_git_hooks.py
       - scripts/tests/test_opencode_model_tools.py
@@ -63,7 +77,9 @@ jobs:
         run: |
           python -m py_compile \
             scripts/check-autonomous-factory-policy.py \
+            scripts/sync_public_factory_snapshot.py \
             scripts/tests/test_autonomous_factory_policy.py \
+            scripts/tests/test_sync_public_factory_snapshot.py \
             scripts/tests/test_install_git_hooks.py \
             scripts/tests/test_opencode_model_tools.py \
             scripts/tests/test_opencode_provider_rotation.py \
@@ -71,7 +87,10 @@ jobs:
       - name: Check canonical factory invariants
         run: python scripts/check-autonomous-factory-policy.py
       - name: Test policy drift detection
-        run: python -m unittest scripts/tests/test_autonomous_factory_policy.py
+        run: >-
+          python -m unittest
+          scripts/tests/test_autonomous_factory_policy.py
+          scripts/tests/test_sync_public_factory_snapshot.py
       - name: Test git hook installer
         run: python -m unittest scripts/tests/test_install_git_hooks.py
       - name: Test model rotation and scout supervision
