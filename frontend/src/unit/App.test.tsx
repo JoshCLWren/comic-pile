@@ -9,6 +9,11 @@ const mockSetAccessToken = vi.fn()
 const mockClearAccessToken = vi.fn()
 const mockGetAccessToken = vi.fn<() => string | null>(() => 'test-token')
 
+const unauthenticatedError = () => Object.assign(new Error('unauthenticated'), {
+  isAxiosError: true,
+  response: { status: 401 },
+})
+
 vi.mock('../services/api', () => {
   return {
     default: {
@@ -108,7 +113,7 @@ test('logs in successfully and logs out without BroadcastChannel support', async
 })
 
 test('mounts the application shell', async () => {
-  mockApiGet.mockRejectedValue(new Error('unauthenticated'))
+  mockApiGet.mockRejectedValue(unauthenticatedError())
   render(<App />)
   await waitFor(() => expect(screen.getByTestId('login-page')).toBeInTheDocument())
 })
@@ -185,7 +190,7 @@ describe('route guards', () => {
     mockApiGet.mockReset()
     mockSetAccessToken.mockReset()
     mockClearAccessToken.mockReset()
-    mockApiGet.mockRejectedValue(new Error('unauthenticated'))
+    mockApiGet.mockRejectedValue(unauthenticatedError())
     delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
   })
 
@@ -209,7 +214,7 @@ describe('route guards', () => {
   })
 
   test('allows unauthenticated users to access /login', async () => {
-    mockApiGet.mockRejectedValue(new Error('unauthenticated'))
+    mockApiGet.mockRejectedValue(unauthenticatedError())
     renderWithAuth('/login')
 
     await waitFor(() => {
@@ -218,7 +223,7 @@ describe('route guards', () => {
   })
 
   test('allows unauthenticated users to access /register', async () => {
-    mockApiGet.mockRejectedValue(new Error('unauthenticated'))
+    mockApiGet.mockRejectedValue(unauthenticatedError())
     renderWithAuth('/register')
 
     await waitFor(() => {
@@ -255,13 +260,13 @@ describe('auth state race condition regression', () => {
     mockApiGet.mockReset()
     mockSetAccessToken.mockReset()
     mockClearAccessToken.mockReset()
-    mockApiGet.mockRejectedValue(new Error('unauthenticated'))
+    mockApiGet.mockRejectedValue(unauthenticatedError())
     delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
   })
 
   test('auth state updates immediately after login - no redirect loop', async () => {
     mockApiGet
-      .mockRejectedValueOnce(new Error('unauthenticated'))
+      .mockRejectedValueOnce(unauthenticatedError())
       .mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
 
     renderWithAuth('/login')
@@ -288,7 +293,7 @@ describe('auth state race condition regression', () => {
 
   test('auth state updates immediately after register - no redirect loop', async () => {
     mockApiGet
-      .mockRejectedValueOnce(new Error('unauthenticated'))
+      .mockRejectedValueOnce(unauthenticatedError())
       .mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
 
     renderWithAuth('/register')
@@ -334,10 +339,11 @@ describe('anonymous no-token probe suppression', () => {
     await waitFor(() => {
       expect(screen.getByTestId('login-page')).toBeInTheDocument()
     })
-    expect(mockApiGet).not.toHaveBeenCalledWith('/auth/me')
+    expect(mockApiGet).not.toHaveBeenCalledWith('/v1/auth/me', expect.anything())
   })
 
   test('anonymous user falls through correctly to login page from protected route', async () => {
+    mockApiGet.mockRejectedValue(unauthenticatedError())
     renderWithAuth('/')
 
     await waitFor(() => {
@@ -354,7 +360,10 @@ describe('anonymous no-token probe suppression', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('login-page')).not.toBeInTheDocument()
     })
-    expect(mockApiGet).toHaveBeenCalledWith('/auth/me')
+    expect(mockApiGet).toHaveBeenCalledWith('/v1/auth/me', {
+      timeout: 15000,
+      skipAuthRedirect: true,
+    })
     expect(mockSetAccessToken).toHaveBeenCalledWith('ssr-token')
   })
 })
