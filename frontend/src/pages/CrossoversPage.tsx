@@ -1,9 +1,43 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react'
 import axios from 'axios'
 import {
+  ContinuityIssueRangeSelector,
+  type SelectedIssueRange,
+} from '../components/continuity'
+import { threadsApi } from '../services/api'
+import {
   dependencyGroupsApi,
   type DependencyGroup,
 } from '../services/api-dependency-groups'
+import { issuesApi } from '../services/api-issues'
+import type { Issue, Thread } from '../types'
+
+type PositionedIssue = Issue & { position: number }
+
+async function fetchAllIssues(threadId: number): Promise<PositionedIssue[]> {
+  const issues: PositionedIssue[] = []
+  const seenPageTokens = new Set<string>()
+  let nextPageToken: string | null = null
+
+  while (true) {
+    const data = await issuesApi.list(threadId, {
+      page_size: 100,
+      ...(nextPageToken ? { page_token: nextPageToken } : {}),
+    })
+    const pageIssues = data.issues as PositionedIssue[]
+    if (pageIssues.some((issue) => !Number.isInteger(issue.position) || issue.position < 1)) {
+      throw new Error('Comic issue order is unavailable for this series.')
+    }
+    issues.push(...pageIssues)
+
+    if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) {
+      return issues
+    }
+
+    seenPageTokens.add(data.next_page_token)
+    nextPageToken = data.next_page_token
+  }
+}
 
 function errorMessage(error: unknown, fallback: string): string {
   if (axios.isAxiosError(error)) {
@@ -27,8 +61,11 @@ export default function CrossoversPage() {
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [memberThreadId, setMemberThreadId] = useState('')
   const [rangeThreadId, setRangeThreadId] = useState('')
-  const [rangeStart, setRangeStart] = useState('')
-  const [rangeEnd, setRangeEnd] = useState('')
+  const [rangeThread, setRangeThread] = useState<Thread | null>(null)
+  const [rangeIssues, setRangeIssues] = useState<PositionedIssue[]>([])
+  const [rangeSelection, setRangeSelection] = useState<SelectedIssueRange | null>(null)
+  const [isLoadingRangeIssues, setIsLoadingRangeIssues] = useState(false)
+  const [rangeLoadError, setRangeLoadError] = useState<string | null>(null)
   const [membershipMessage, setMembershipMessage] = useState<string | null>(null)
 
   const loadGroups = useCallback(async () => {
@@ -47,11 +84,18 @@ export default function CrossoversPage() {
     void loadGroups()
   }, [loadGroups])
 
+  const clearRangeState = () => {
+    setRangeThreadId('')
+    setRangeThread(null)
+    setRangeIssues([])
+    setRangeSelection(null)
+    setRangeLoadError(null)
+    setIsLoadingRangeIssues(false)
+  }
+
   const clearMembershipState = () => {
     setMemberThreadId('')
-    setRangeThreadId('')
-    setRangeStart('')
-    setRangeEnd('')
+    clearRangeState()
     setMembershipMessage(null)
   }
 
@@ -164,32 +208,71 @@ export default function CrossoversPage() {
     }
   }
 
+  const loadRangeIssues = async () => {
+    const threadId = Number(rangeThreadId)
+    if (!Number.isInteger(threadId) || threadId < 1) {
+      setRangeLoadError('Enter a valid thread ID before choosing issues.')
+      setRangeThread(null)
+      setRangeIssues([])
+      setRangeSelection(null)
+      return
+    }
+
+    setIsLoadingRangeIssues(true)
+    setRangeLoadError(null)
+    setRangeSelection(null)
+    try {
+      const [thread, issues] = await Promise.all([
+        threadsApi.get(threadId),
+        fetchAllIssues(threadId),
+      ])
+      setRangeThread(thread)
+      setRangeIssues(issues)
+      if (issues.length === 0) {
+        setRangeLoadError(`${thread.title} has no issues to add.`)
+      }
+    } catch (error) {
+      setRangeThread(null)
+      setRangeIssues([])
+      setRangeLoadError(errorMessage(error, 'Unable to load issues for this series.'))
+    } finally {
+      setIsLoadingRangeIssues(false)
+    }
+  }
+
   const addRange = async (event: FormEvent<HTMLFormElement>, groupId: number) => {
     event.preventDefault()
     const threadId = Number(rangeThreadId)
-    const start = Number(rangeStart)
-    const end = Number(rangeEnd)
-    if (
-      !Number.isInteger(threadId)
-      || threadId < 1
-      || !Number.isInteger(start)
-      || start < 1
-      || !Number.isInteger(end)
-      || end < start
-    ) {
-      setMutationError('Enter a valid thread ID and an inclusive issue-position range.')
+    if (!rangeThread || !rangeSelection || rangeThread.id !== threadId) {
+      setMutationError('Choose a series and an inclusive first and last issue.')
       return
     }
+
+    const startPosition = (rangeSelection.startIssue as PositionedIssue).position
+    const endPosition = (rangeSelection.endIssue as PositionedIssue).position
+    if (
+      !Number.isInteger(startPosition)
+      || !Number.isInteger(endPosition)
+      || startPosition < 1
+      || endPosition < startPosition
+    ) {
+      setMutationError('Choose a valid issue range in reading order.')
+      return
+    }
+
     setMutationError(null)
     setMembershipMessage(null)
     setBusyId(groupId)
     try {
-      const result = await dependencyGroupsApi.addIssueRange(groupId, threadId, start, end)
+      const result = await dependencyGroupsApi.addIssueRange(
+        groupId,
+        threadId,
+        startPosition,
+        endPosition,
+      )
       const successMessage = `${result.added_issue_ids.length} added, ${result.already_present_issue_ids.length} already present.`
       setMembershipMessage(successMessage)
-      setRangeThreadId('')
-      setRangeStart('')
-      setRangeEnd('')
+      clearRangeState()
       try {
         const refreshed = await dependencyGroupsApi.get(groupId)
         setGroups((current) =>
@@ -383,21 +466,59 @@ export default function CrossoversPage() {
                     <form
                       onSubmit={(event) => void addRange(event, group.id)}
                       aria-label={`Add issue range to ${group.name}`}
-                      className="grid gap-2 rounded-xl border border-stone-800 bg-stone-950/50 p-3 sm:grid-cols-4"
+                      className="grid gap-3 rounded-xl border border-stone-800 bg-stone-950/50 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]"
                     >
-                      <label className="grid gap-1">
-                        <span className="font-bold text-stone-300">Thread ID</span>
-                        <input inputMode="numeric" value={rangeThreadId} onChange={(event) => setRangeThreadId(event.target.value)} disabled={hasPendingMutation} className="rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-stone-100" />
-                      </label>
-                      <label className="grid gap-1">
-                        <span className="font-bold text-stone-300">Start position</span>
-                        <input inputMode="numeric" value={rangeStart} onChange={(event) => setRangeStart(event.target.value)} disabled={hasPendingMutation} className="rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-stone-100" />
-                      </label>
-                      <label className="grid gap-1">
-                        <span className="font-bold text-stone-300">End position</span>
-                        <input inputMode="numeric" value={rangeEnd} onChange={(event) => setRangeEnd(event.target.value)} disabled={hasPendingMutation} className="rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-stone-100" />
-                      </label>
-                      <button type="submit" disabled={hasPendingMutation} className="self-end rounded-lg bg-amber-500 px-3 py-2 font-bold text-stone-950 disabled:opacity-50">
+                      <div className="grid gap-2">
+                        <label className="grid gap-1">
+                          <span className="font-bold text-stone-300">Thread ID</span>
+                          <input
+                            inputMode="numeric"
+                            value={rangeThreadId}
+                            onChange={(event) => {
+                              setRangeThreadId(event.target.value)
+                              setRangeThread(null)
+                              setRangeIssues([])
+                              setRangeSelection(null)
+                              setRangeLoadError(null)
+                            }}
+                            disabled={hasPendingMutation || isLoadingRangeIssues}
+                            className="rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-stone-100"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => void loadRangeIssues()}
+                          disabled={hasPendingMutation || isLoadingRangeIssues}
+                          className="rounded-lg border border-stone-600 px-3 py-2 font-bold text-stone-300 disabled:opacity-50"
+                        >
+                          {isLoadingRangeIssues ? 'Loading issues…' : 'Choose issues'}
+                        </button>
+                      </div>
+
+                      <div className="min-w-0">
+                        {rangeThread ? (
+                          <ContinuityIssueRangeSelector
+                            thread={rangeThread}
+                            issues={rangeIssues}
+                            value={rangeSelection}
+                            onChange={setRangeSelection}
+                            label={`Issues from ${rangeThread.title}`}
+                            isLoading={isLoadingRangeIssues}
+                            error={rangeLoadError}
+                            disabled={hasPendingMutation}
+                          />
+                        ) : rangeLoadError ? (
+                          <p role="alert" className="text-xs text-red-400">{rangeLoadError}</p>
+                        ) : (
+                          <p className="text-xs text-stone-500">Load a series to choose the first and last issue by comic issue number.</p>
+                        )}
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={hasPendingMutation || isLoadingRangeIssues || !rangeSelection}
+                        className="self-end rounded-lg bg-amber-500 px-3 py-2 font-bold text-stone-950 disabled:opacity-50"
+                      >
                         {isBusy ? 'Adding…' : 'Add range'}
                       </button>
                     </form>
