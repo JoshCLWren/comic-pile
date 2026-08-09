@@ -106,7 +106,6 @@ beforeEach(() => {
   api.list.mockResolvedValue([crossover])
   threadApi.list.mockResolvedValue({
     threads: [thread, xmenThread],
-    page_size: 100,
     next_page_token: null,
   })
   issueApi.list.mockResolvedValue({
