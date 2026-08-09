@@ -2,6 +2,8 @@ name: opencode
 
 on:
   workflow_dispatch:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
   issue_comment:
     types: [created]
   pull_request_review_comment:
@@ -11,6 +13,15 @@ jobs:
   opencode:
     if: |
       github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'pull_request' &&
+        !github.event.pull_request.draft &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        (
+          startsWith(github.event.pull_request.head.ref, 'factory/') ||
+          contains(github.event.pull_request.labels.*.name, 'factory')
+        )
+      ) ||
       (
         contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
         (
@@ -86,5 +97,6 @@ jobs:
         uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a
         env:
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          PROMPT: ${{ github.event_name == 'pull_request' && 'Perform an exact-head code review of this pull request. Read the complete diff and relevant surrounding code. Report only actionable correctness, security, regression, maintainability, or missing-test findings; include file and line references. Do not modify or push code. If no actionable findings exist, state that the exact head passed review.' || '' }}
         with:
           model: ${{ steps.model.outputs.model }}
