@@ -1,16 +1,18 @@
 import { useRef, useState } from 'react'
 import { applyRatedThreadCache } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
-import { rateApi } from '../services/api'
+import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { RatePayload } from '../types'
 import {
   fetchAndPublishRollBootstrap,
   isAmbiguousNetworkFailure,
+  isAuthenticationMutationFailure,
   reconcileAmbiguousRollMutation,
+  recoverProtectedRollMutation,
 } from './rollMutationReconciliation'
 
-type RateResult = Awaited<ReturnType<typeof rateApi.rate>> | undefined
+type RateResult = Awaited<ReturnType<typeof protectedRollMutationApi.rate>> | undefined
 
 export function useRate() {
   const [isPending, setIsPending] = useState(false)
@@ -25,7 +27,7 @@ export function useRate() {
 
     const request: Promise<RateResult> = (async () => {
       try {
-        const result = await rateApi.rate(data)
+        const result = await protectedRollMutationApi.rate(data)
         await applyRatedThreadCache(queryClient, result)
 
         try {
@@ -39,6 +41,25 @@ export function useRate() {
 
         return result
       } catch (error: unknown) {
+        if (isAuthenticationMutationFailure(error)) {
+          try {
+            const recovered = await recoverProtectedRollMutation(
+              data.thread_id,
+              () => protectedRollMutationApi.rate(data),
+            )
+            if (recovered !== undefined) {
+              await applyRatedThreadCache(queryClient, recovered)
+              await fetchAndPublishRollBootstrap()
+              return recovered
+            }
+          } catch (recoveryError: unknown) {
+            console.error(
+              'Failed to recover rating after authentication expiry:',
+              getApiErrorDetail(recoveryError),
+            )
+          }
+        }
+
         if (isAmbiguousNetworkFailure(error)) {
           try {
             const committed = await reconcileAmbiguousRollMutation(data.thread_id)
