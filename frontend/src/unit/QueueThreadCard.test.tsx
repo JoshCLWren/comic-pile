@@ -27,10 +27,6 @@ vi.mock('../components/PositionMenu', () => ({
   ),
 }))
 
-vi.mock('../components/Swipeable', () => ({
-  default: ({ children }: { children: React.ReactNode }) => <div data-testid="mock-swipeable">{children}</div>,
-}))
-
 vi.mock('../hooks/useCrossoverGroups', () => ({
   useCrossoverGroups,
 }))
@@ -65,15 +61,16 @@ function renderCard(thread: Thread, overrides: Partial<Parameters<typeof QueueTh
     isDragOver: false,
     snoozeIcon: '',
     snoozeLabel: '',
+    snoozeDisabled: false,
     onCardClick: vi.fn(),
     onDragStart: vi.fn(),
     onDragEnd: vi.fn(),
     onDragOver: vi.fn(),
     onDrop: vi.fn(),
-    onSwipeRead: vi.fn(),
-    onSwipeEdit: vi.fn(),
-    onSwipeSnooze: vi.fn(),
-    onSwipeDelete: vi.fn(),
+    onRead: vi.fn(),
+    onOpenThread: vi.fn(),
+    onSnooze: vi.fn(),
+    onActionDelete: vi.fn(),
     onMoveToFront: vi.fn(),
     onMoveToBack: vi.fn(),
     onReposition: vi.fn(),
@@ -229,13 +226,17 @@ describe('QueueThreadCard', () => {
       isDragOver: true,
       ...callbacks,
     })
-    const card = screen.getByRole('button', { name: /view dependencies/i })
-    await user.click(card)
+    const dependencyButton = screen.getByRole('button', { name: /view dependencies/i })
+    await user.click(dependencyButton)
     expect(callbacks.onDependencies).toHaveBeenCalled()
-    const threadCard = screen.getByText('Comic').closest('[role="button"]') as HTMLElement
-    fireEvent.keyDown(threadCard, { key: 'Enter' })
-    fireEvent.keyDown(threadCard, { key: ' ' })
+
+    const openButton = screen.getByRole('button', { name: 'Open Test Thread' })
+    openButton.focus()
+    await user.keyboard('{Enter}')
+    await user.keyboard(' ')
     expect(callbacks.onCardClick).toHaveBeenCalledTimes(2)
+
+    const threadCard = screen.getByTestId('queue-thread-item')
     const drag = screen.getByRole('button', { name: 'Drag to reorder' })
     await user.click(drag)
     fireEvent.dragStart(drag)

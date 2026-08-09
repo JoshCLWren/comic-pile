@@ -209,7 +209,7 @@ it('shuffles the queue from the header control', async () => {
   expect(mockRefetch).toHaveBeenCalled()
 })
 
-describe('Action Sheet Snooze/Unsnooze', () => {
+describe('Visible action Snooze/Unsnooze', () => {
   const mockSnoozeMutation = { mutate: vi.fn(), isPending: false }
   const mockUnsnoozeMutation = { mutate: vi.fn(), isPending: false }
 
@@ -220,7 +220,7 @@ describe('Action Sheet Snooze/Unsnooze', () => {
     mockedUseUnsnooze.mockReturnValue(mockUnsnoozeMutation)
   })
 
-  it('shows swipe actions for thread cards', () => {
+  it('shows visible actions for thread cards', () => {
     render(
       <BrowserRouter>
         <ToastProvider>
@@ -239,7 +239,12 @@ describe('Action Sheet Snooze/Unsnooze', () => {
     expect(deleteButtons.length).toBeGreaterThan(0)
   })
 
-  it('calls snooze mutation when snooze swipe action is clicked', async () => {
+  it('calls snooze mutation when the pending comic Snooze action is clicked', async () => {
+    mockedUseSession.mockReturnValue({
+      data: { snoozed_threads: [], pending_thread_id: 1 },
+      refetch: vi.fn(),
+    })
+
     const user = userEvent.setup()
     render(
       <BrowserRouter>
@@ -252,11 +257,11 @@ describe('Action Sheet Snooze/Unsnooze', () => {
     const snoozeButtons = screen.getAllByLabelText('Snooze')
     await user.click(snoozeButtons[0])
 
-    expect(mockSnoozeMutation.mutate).toHaveBeenCalled()
+    expect(mockSnoozeMutation.mutate).toHaveBeenCalledWith(1)
     expect(mockUnsnoozeMutation.mutate).not.toHaveBeenCalled()
   })
 
-  it('calls unsnooze mutation when unsnooze swipe action is clicked', async () => {
+  it('calls unsnooze mutation when the Unsnooze action is clicked', async () => {
     mockedUseSession.mockReturnValue({
       data: {
         snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }]
@@ -284,7 +289,7 @@ describe('Action Sheet Snooze/Unsnooze', () => {
     const mockRefetchSession = vi.fn()
     const mockRefetch = vi.fn()
     mockedUseSession.mockReturnValue({
-      data: { snoozed_threads: [] },
+      data: { snoozed_threads: [], pending_thread_id: 1 },
       refetch: mockRefetchSession,
     })
     mockedUseThreads.mockReturnValue({
@@ -459,7 +464,7 @@ it('supports created-date sorting and drag reorder failure feedback', async () =
   expect(cards[0]).toHaveTextContent('New')
   const dragButtons = screen.getAllByRole('button', { name: 'Drag to reorder' })
   fireEvent.dragStart(dragButtons[0]!, { dataTransfer: { effectAllowed: '', setData: vi.fn() } })
-  const targetCard = cards[1]!.querySelector('.queue-thread-card') as HTMLElement
+  const targetCard = cards[1]!
   fireEvent.dragOver(targetCard)
   fireEvent.drop(targetCard, { dataTransfer: { getData: () => '1' } })
   await waitFor(() => expect(move.mutate).toHaveBeenCalled())

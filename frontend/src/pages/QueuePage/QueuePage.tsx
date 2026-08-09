@@ -212,24 +212,18 @@ export default function QueuePage() {
 
       if (hasIssueRange && result?.id) {
         try {
-          // Check if the range is a simple contiguous integer sequence starting from 1 (e.g., "1-25")
           const rangeMatch = createForm.issues.trim().match(/^(\d+)-(\d+)$/)
           const isSimpleRange = !!rangeMatch && Number(rangeMatch[1]) === 1
           
           if (isSimpleRange) {
-            // Use migrateThread for simple ranges starting from 1 (creates sequential issues 1..N)
             const requestedLastRead = Number(createForm.lastIssueRead) || 0
             const lastRead = Math.max(0, Math.min(requestedLastRead, issuesRemaining))
             await issuesApi.migrateThread(result.id, lastRead, issuesRemaining)
           } else {
-            // Use issuesApi.create for complex ranges (preserves non-contiguous/non-integer identifiers)
             const issueListResponse = await issuesApi.create(result.id, createForm.issues.trim())
-            
-            // Mark issues as read if lastIssueRead is specified
             const requestedLastRead = Number(createForm.lastIssueRead) || 0
             const lastRead = Math.max(0, Math.min(requestedLastRead, issueListResponse.issues.length))
             if (lastRead > 0 && issueListResponse.issues.length > 0) {
-              // Mark the first N issues as read
               const issuesToMark = issueListResponse.issues.slice(0, lastRead)
               await Promise.all(issuesToMark.map(issue => issuesApi.markRead(issue.id)))
             }
@@ -260,7 +254,6 @@ export default function QueuePage() {
         notes: editForm.notes || null,
       }
 
-      // Include issues_remaining for unmigrated threads
       if (editingThread.total_issues === null) {
         updateData.issues_remaining = Number(editForm.issuesRemaining)
       }
@@ -448,9 +441,6 @@ export default function QueuePage() {
     }
   }
 
-  // Shared render callback used by both the virtualized list (>50 threads) and the
-  // responsive grid (≤50 threads). Keeps the two rendering paths in lockstep so any
-  // future handler change only needs one edit.
   function renderThreadCard(thread: Thread, index: number) {
     const isDragOver = dragOverThreadId === thread.id
     const isBlocked = thread.is_blocked
@@ -458,6 +448,7 @@ export default function QueuePage() {
     const isSnoozed = session?.snoozed_threads?.some((t) => t.id === thread.id) ?? false
     const snoozeIcon = isSnoozed ? '🔔' : '😴'
     const snoozeLabel = isSnoozed ? 'Unsnooze' : 'Snooze'
+    const snoozeDisabled = !isSnoozed && session?.pending_thread_id !== thread.id
 
     return (
       <QueueThreadCard
@@ -469,27 +460,28 @@ export default function QueuePage() {
         isDragOver={isDragOver}
         snoozeIcon={snoozeIcon}
         snoozeLabel={snoozeLabel}
+        snoozeDisabled={snoozeDisabled}
         onCardClick={() => handleThreadClick(thread)}
         onDragStart={handleDragStart(thread.id)}
         onDragEnd={handleDragEnd}
         onDragOver={handleDragOver(thread.id)}
         onDrop={handleDrop(thread.id)}
-        onSwipeRead={() => handleActionForThread(thread)}
-        onSwipeEdit={() => navigate(`/thread/${thread.id}`)}
-        onSwipeSnooze={async () => {
+        onRead={() => handleActionForThread(thread)}
+        onOpenThread={() => navigate(`/thread/${thread.id}`)}
+        onSnooze={async () => {
           try {
             if (isSnoozed) {
               await unsnoozeMutation.mutate(thread.id)
             } else {
-              await snoozeMutation.mutate()
+              await snoozeMutation.mutate(thread.id)
             }
             await refetchSession()
           } catch (error: unknown) {
-            console.error('Swipe snooze failed:', error)
+            console.error('Snooze action failed:', error)
             alert(`Failed to ${isSnoozed ? 'unsnooze' : 'snooze'} thread: ${getApiErrorDetail(error)}`)
           }
         }}
-        onSwipeDelete={() => handleDelete(thread.id)}
+        onActionDelete={() => handleDelete(thread.id)}
         onMoveToFront={() => handleMoveToFront(thread.id)}
         onMoveToBack={() => handleMoveToBack(thread.id)}
         onReposition={() => openRepositionModal(thread)}
@@ -561,7 +553,6 @@ export default function QueuePage() {
         </div>
       </header>
 
-      {/* Mobile FAB for Add Thread */}
       {!isAnyModalOpen && (
       <button
         type="button"
@@ -608,7 +599,6 @@ export default function QueuePage() {
         onReactivate={openReactivateModal}
       />
 
-  {/* Create Thread Modal */}
   <Modal isOpen={isCreateOpen} title="Create Thread" onClose={closeCreateModal}>
   <form className="space-y-4" onSubmit={handleCreateSubmit}>
   <div className="space-y-2">
@@ -701,7 +691,6 @@ export default function QueuePage() {
         </form>
       </Modal>
 
-  {/* Edit Thread Modal */}
   <Modal isOpen={isEditOpen} title="Edit Thread" onClose={closeEditModal} overlayClassName="edit-modal__overlay">
   <div className="space-y-4">
   <form id="edit-thread-form" className="space-y-4" onSubmit={handleEditSubmit}>
@@ -726,7 +715,6 @@ export default function QueuePage() {
   />
   </div>
 
-  {/* Issues remaining for unmigrated threads */}
   {editingThread?.total_issues === null && (
   <div className="space-y-2">
   <label htmlFor="edit-thread-issues-remaining" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues Remaining</label>
@@ -776,7 +764,6 @@ export default function QueuePage() {
             )}
           </form>
 
-          {/* Issue list for migrated threads lives outside the edit form so Enter only adds issues. */}
           {editingThread && editingThread.total_issues !== null && (
             <IssueToggleList threadId={editingThread.id} />
           )}
