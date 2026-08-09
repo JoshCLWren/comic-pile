@@ -97,6 +97,8 @@
 | docs/changelog.d/2026-08-08-919.md | Product changelog history or generated changelog fragment. | 2026-08-08 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
 | docs/changelog.d/2026-08-08-941.md | Product changelog history or generated changelog fragment. | 2026-08-08 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
 | docs/changelog.d/2026-08-08-945.md | Product changelog history or generated changelog fragment. | 2026-08-08 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
+| docs/changelog.d/2026-08-08-950.md | Product changelog history or generated changelog fragment. | 2026-08-08 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
+| docs/changelog.d/2026-08-08-951.md | Product changelog history or generated changelog fragment. | 2026-08-08 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
 | docs/changelog.d/2026-08-08-962.md | Product changelog history or generated changelog fragment. | 2026-08-08 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
 | docs/changelog.d/README.md | Product changelog history or generated changelog fragment. | 2026-08-06 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
 | docs/changelog.md | Product changelog history or generated changelog fragment. | 2026-08-06 | Canonical What's New source; fragments are assembled into the product surface. | keep | — |
