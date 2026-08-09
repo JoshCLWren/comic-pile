@@ -53,7 +53,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
     if (isAuthenticated) {
       setIsLoading(true)
       setHasError(false)
-      api.get<AuthUser>('/auth/me', { skipAuthRedirect: true })
+      api.get<AuthUser>('/v1/auth/me', { skipAuthRedirect: true })
         .then(user => {
           setUsername(user.username || '')
           setHasError(false)
@@ -74,7 +74,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
 
   const handleLogout = async () => {
     try {
-      await api.post('/auth/logout', null, { skipAuthRedirect: true })
+      await api.post('/v1/auth/logout', null, { skipAuthRedirect: true })
     } catch (err: unknown) {
       console.error('Logout API failed:', err)
     }

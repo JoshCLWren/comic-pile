@@ -58,18 +58,29 @@ async def test_safe_methods_do_not_require_csrf_token(auth_client: AsyncClient) 
     auth_client.headers.pop(CSRF_HEADER_NAME, None)
     auth_client.cookies.delete(CSRF_COOKIE_NAME)
 
-    response = await auth_client.get("/api/auth/me")
+    response = await auth_client.get("/api/v1/auth/me")
 
     assert response.status_code == 200
 
 
 @pytest.mark.asyncio
-async def test_csrf_bootstrap_endpoint_sets_cookie(client: AsyncClient) -> None:
-    """The CSRF bootstrap endpoint returns a token and refreshes the cookie."""
+@pytest.mark.parametrize("prefix", ["/api/auth", "/api/v1/auth"])
+async def test_csrf_bootstrap_endpoint_sets_cookie(
+    client: AsyncClient, prefix: str
+) -> None:
+    """Both auth aliases bootstrap the same readable CSRF cookie.
+
+    Args:
+        client: Unauthenticated HTTP client for making requests.
+        prefix: Auth route prefix to test ("/api/auth" or "/api/v1/auth").
+
+    Returns:
+        None: Assertions verify CSRF bootstrap behavior.
+    """
     client.headers.pop(CSRF_HEADER_NAME, None)
     client.cookies.delete(CSRF_COOKIE_NAME)
 
-    response = await client.get("/api/auth/csrf")
+    response = await client.get(f"{prefix}/csrf")
 
     assert response.status_code == 200
     token = response.json()["csrf_token"]
@@ -78,16 +89,31 @@ async def test_csrf_bootstrap_endpoint_sets_cookie(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_login_and_refresh_are_exempt_from_csrf(client: AsyncClient) -> None:
-    """First-time auth flows stay usable without a CSRF token."""
+@pytest.mark.parametrize("prefix", ["/api/auth", "/api/v1/auth"])
+async def test_login_register_and_refresh_are_exempt_from_csrf(
+    client: AsyncClient,
+    prefix: str,
+) -> None:
+    """Canonical and legacy first-time auth flows share the same CSRF contract.
+
+    Args:
+        client: Unauthenticated HTTP client for making requests.
+        prefix: Auth route prefix to test ("/api/auth" or "/api/v1/auth").
+
+    Returns:
+        None: Assertions verify login/register/refresh are CSRF-exempt.
+    """
+    username = "csrf-user-v1" if "/v1/" in prefix else "csrf-user-legacy"
+    email = f"{username}@example.com"
+
     client.headers.pop(CSRF_HEADER_NAME, None)
     client.cookies.delete(CSRF_COOKIE_NAME)
 
     register_response = await client.post(
-        "/api/auth/register",
+        f"{prefix}/register",
         json={
-            "username": "csrf-user",
-            "email": "csrf@example.com",
+            "username": username,
+            "email": email,
             "password": "password123",
         },
     )
@@ -98,8 +124,8 @@ async def test_login_and_refresh_are_exempt_from_csrf(client: AsyncClient) -> No
     client.cookies.delete(CSRF_COOKIE_NAME)
 
     login_response = await client.post(
-        "/api/auth/login",
-        json={"username": "csrf-user", "password": "password123"},
+        f"{prefix}/login",
+        json={"username": username, "password": "password123"},
     )
     assert login_response.status_code == 200
     assert client.cookies.get(CSRF_COOKIE_NAME) is not None
@@ -107,18 +133,29 @@ async def test_login_and_refresh_are_exempt_from_csrf(client: AsyncClient) -> No
     client.headers.pop(CSRF_HEADER_NAME, None)
     client.cookies.delete(CSRF_COOKIE_NAME)
 
-    refresh_response = await client.post("/api/auth/refresh")
+    refresh_response = await client.post(f"{prefix}/refresh")
     assert refresh_response.status_code == 200
     assert client.cookies.get(CSRF_COOKIE_NAME) is not None
 
 
 @pytest.mark.asyncio
-async def test_logout_remains_protected_by_csrf(auth_client: AsyncClient) -> None:
-    """Logout still requires CSRF because it mutates server-side auth state."""
+@pytest.mark.parametrize("prefix", ["/api/auth", "/api/v1/auth"])
+async def test_logout_remains_protected_by_csrf(
+    auth_client: AsyncClient, prefix: str
+) -> None:
+    """Both logout aliases require CSRF because they mutate server-side auth state.
+
+    Args:
+        auth_client: Authenticated HTTP client for making requests.
+        prefix: Auth route prefix to test ("/api/auth" or "/api/v1/auth").
+
+    Returns:
+        None: Assertions verify logout requires CSRF token.
+    """
     auth_client.headers.pop(CSRF_HEADER_NAME, None)
     auth_client.cookies.delete(CSRF_COOKIE_NAME)
 
-    response = await auth_client.post("/api/auth/logout")
+    response = await auth_client.post(f"{prefix}/logout")
 
     assert response.status_code == 403
     assert response.json() == {"detail": "CSRF token missing or invalid"}
