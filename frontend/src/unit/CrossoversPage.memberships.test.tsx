@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CrossoversPage from '../pages/CrossoversPage'
 import { threadsApi } from '../services/api'
@@ -97,7 +97,8 @@ const issues = [
 
 function selectThread(label: string, query: string, title: string) {
   fireEvent.change(screen.getByLabelText(label), { target: { value: query } })
-  fireEvent.click(screen.getByRole('option', { name: new RegExp(title) }))
+  const listbox = screen.getByRole('listbox', { name: `${label} results` })
+  fireEvent.click(within(listbox).getByRole('option', { name: new RegExp(title) }))
 }
 
 beforeEach(() => {
