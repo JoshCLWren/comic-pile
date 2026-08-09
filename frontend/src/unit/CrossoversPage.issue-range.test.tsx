@@ -108,7 +108,6 @@ beforeEach(() => {
   groupsApi.list.mockResolvedValue([crossover])
   threadApi.list.mockResolvedValue({
     threads: [thread],
-    total_count: 1,
     page_size: 100,
     next_page_token: null,
   })
@@ -263,7 +262,6 @@ describe('CrossoversPage issue ranges', () => {
     await screen.findByText('Annihilation')
     openRangeForm()
 
-    // With empty query, listbox shows all threads but none selected
     expect(screen.getByRole('button', { name: 'Add range' })).toBeDisabled()
     expect(threadApi.get).not.toHaveBeenCalled()
     expect(issueApi.list).not.toHaveBeenCalled()
@@ -275,7 +273,6 @@ describe('CrossoversPage issue ranges', () => {
     openRangeForm()
     fireEvent.change(screen.getByLabelText('Comic series for issue range'), { target: { value: 'abc' } })
 
-    // No matching series, no listbox, button disabled
     expect(screen.queryByRole('listbox', { name: 'Comic series for issue range results' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Add range' })).toBeDisabled()
     expect(threadApi.get).not.toHaveBeenCalled()
@@ -291,16 +288,8 @@ describe('CrossoversPage issue ranges', () => {
     fireEvent.click(within(listbox).getByRole('option', { name: /Nova/ }))
     await screen.findByText(/Issues from Nova/)
 
-    // Series selected but no range chosen - button still disabled
     expect(screen.getByRole('button', { name: 'Add range' })).toBeDisabled()
-
-    // Manually enable and click to trigger validation (simulating form submit)
-    // The form's onSubmit checks for rangeSelection
     fireEvent.click(screen.getByRole('button', { name: 'Add range' }))
-
-    // Actually, the button is disabled so click won't work. The validation message
-    // appears in addRange function when called directly. Let's test that the
-    // button remains disabled without a range selection.
     expect(screen.getByRole('button', { name: 'Add range' })).toBeDisabled()
   })
 
