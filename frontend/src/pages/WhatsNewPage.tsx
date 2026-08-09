@@ -1,11 +1,23 @@
-import { Fragment, useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 
 type Block =
   | { type: 'heading'; level: number; text: string }
   | { type: 'list'; items: string[] }
   | { type: 'paragraph'; text: string }
 
+type ChangelogDay = {
+  type: 'day'
+  sourceDateTime: string
+  label: string
+  summary: string
+  blocks: Block[]
+}
+
+type ChangelogViewItem = Block | ChangelogDay
+
 const CHANGELOG_ASSET = '/changelog.md'
+const SOURCE_DATE = /^\d{4}-\d{2}-\d{2}$/
+const SOURCE_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/
 
 export function isPublicChangelogLink(url: string) {
   try {
@@ -71,10 +83,100 @@ export function parseChangelog(markdown: string): Block[] {
   return blocks
 }
 
+function isSourceDateTime(value: string) {
+  if (SOURCE_DATE.test(value)) return true
+  if (!SOURCE_TIMESTAMP.test(value)) return false
+  return !Number.isNaN(Date.parse(value))
+}
+
+function formatSourceDateTime(value: string, timeZone?: string) {
+  if (SOURCE_DATE.test(value)) {
+    const [year, month, day] = value.split('-').map(Number)
+    return new Intl.DateTimeFormat(undefined, {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      timeZone: 'UTC',
+    }).format(new Date(Date.UTC(year, month - 1, day)))
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone,
+    timeZoneName: 'short',
+  }).format(new Date(value))
+}
+
+function summarizeDay(blocks: Block[]) {
+  const areas = blocks
+    .filter((block): block is Extract<Block, { type: 'heading' }> => block.type === 'heading' && block.level >= 3)
+    .map(block => publicChangelogText(block.text))
+    .filter(Boolean)
+  const updateCount = blocks.reduce((count, block) => {
+    if (block.type === 'list') return count + block.items.length
+    if (block.type === 'paragraph') return count + 1
+    return count
+  }, 0)
+  const countText = `${updateCount || 1} ${updateCount === 1 ? 'update' : 'updates'}`
+  const uniqueAreas = [...new Set(areas)]
+
+  if (uniqueAreas.length === 0) return `${countText} published this day.`
+  if (uniqueAreas.length === 1) return `${countText} for ${uniqueAreas[0]}.`
+  if (uniqueAreas.length === 2) return `${countText} across ${uniqueAreas[0]} and ${uniqueAreas[1]}.`
+  return `${countText} across ${uniqueAreas.slice(0, 2).join(', ')}, and more.`
+}
+
+export function buildChangelogView(markdown: string, timeZone?: string): ChangelogViewItem[] {
+  const blocks = parseChangelog(markdown)
+  const view: ChangelogViewItem[] = []
+
+  for (let index = 0; index < blocks.length; index += 1) {
+    const block = blocks[index]
+    if (block.type !== 'heading' || block.level !== 2 || !isSourceDateTime(block.text)) {
+      view.push(block)
+      continue
+    }
+
+    const dayBlocks: Block[] = []
+    let cursor = index + 1
+    while (cursor < blocks.length) {
+      const next = blocks[cursor]
+      if (next.type === 'heading' && next.level === 2 && isSourceDateTime(next.text)) break
+      dayBlocks.push(next)
+      cursor += 1
+    }
+
+    view.push({
+      type: 'day',
+      sourceDateTime: block.text,
+      label: formatSourceDateTime(block.text, timeZone),
+      summary: summarizeDay(dayBlocks),
+      blocks: dayBlocks,
+    })
+    index = cursor - 1
+  }
+
+  return view
+}
+
+function BlockContent({ block }: { block: Block }) {
+  if (block.type === 'heading') {
+    const Tag = block.level <= 2 ? 'h2' : 'h3'
+    return <Tag className={block.level <= 2 ? 'border-b border-stone-800 pb-2 pt-4 text-2xl font-black text-stone-100 first:pt-0' : 'pt-3 text-lg font-bold text-amber-200'}>{renderInline(block.text)}</Tag>
+  }
+  if (block.type === 'list') return <ul className="list-disc space-y-2 pl-6 leading-7">{block.items.map((item, itemIndex) => <li key={itemIndex}>{renderInline(item)}</li>)}</ul>
+  return <p className="leading-7">{renderInline(block.text)}</p>
+}
+
 export default function WhatsNewPage() {
   const [markdown, setMarkdown] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
+  const view = useMemo(() => (markdown ? buildChangelogView(markdown) : []), [markdown])
 
   const load = useCallback(async () => {
     setMarkdown(null)
@@ -112,13 +214,19 @@ export default function WhatsNewPage() {
 
       {markdown && (
         <article className="space-y-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-5 text-stone-300">
-          {parseChangelog(markdown).map((block, index) => {
-            if (block.type === 'heading') {
-              const Tag = block.level <= 2 ? 'h2' : 'h3'
-              return <Tag key={index} className={block.level <= 2 ? 'border-b border-stone-800 pb-2 pt-4 text-2xl font-black text-stone-100 first:pt-0' : 'pt-3 text-lg font-bold text-amber-200'}>{renderInline(block.text)}</Tag>
-            }
-            if (block.type === 'list') return <ul key={index} className="list-disc space-y-2 pl-6 leading-7">{block.items.map((item, itemIndex) => <li key={itemIndex}>{renderInline(item)}</li>)}</ul>
-            return <p key={index} className="leading-7">{renderInline(block.text)}</p>
+          {view.map((item, index) => {
+            if (item.type !== 'day') return <BlockContent key={index} block={item} />
+            return (
+              <section key={`${item.sourceDateTime}-${index}`} aria-labelledby={`release-day-${index}`} className="border-t border-stone-800 pt-5 first:border-t-0 first:pt-0">
+                <h2 id={`release-day-${index}`} className="text-2xl font-black text-stone-100">
+                  <time dateTime={item.sourceDateTime}>{item.label}</time>
+                </h2>
+                <p className="mt-1 text-sm text-stone-400">{item.summary}</p>
+                <div className="mt-3 space-y-3">
+                  {item.blocks.map((block, blockIndex) => <BlockContent key={blockIndex} block={block} />)}
+                </div>
+              </section>
+            )
           })}
         </article>
       )}
