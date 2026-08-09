@@ -235,9 +235,9 @@ rawApi.interceptors.response.use(
       isRefreshing = true
 
       try {
-        const response = await api.post<AuthTokens>('/v1/auth/refresh', undefined, {
-          skipAuthRedirect: originalRequest.skipAuthRedirect,
-        })
+        const response = originalRequest.skipAuthRedirect
+          ? await api.post<AuthTokens>('/v1/auth/refresh', undefined, { skipAuthRedirect: true })
+          : await api.post<AuthTokens>('/v1/auth/refresh')
 
         const { access_token } = response
         setAccessToken(access_token)
