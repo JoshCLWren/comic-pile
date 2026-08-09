@@ -193,7 +193,7 @@ describe('QueuePage callback coverage', () => {
     await user.click(screen.getAllByRole('button', { name: /add thread/i })[0])
     await user.type(screen.getByLabelText('Title'), 'Annuals')
     await user.type(screen.getByLabelText('Issues'), 'Annual 1, 3-4')
-    await user.type(screen.getByLabelText(/Last issue read/i), '1')
+    await user.type(screen.getByLabelText(/Issues already read/i), '1')
     expect(screen.getByText(/Will create/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /create thread/i }))
     await waitFor(() => expect(issuesApi.markRead).toHaveBeenCalledWith(21))
@@ -239,8 +239,8 @@ describe('QueuePage callback coverage', () => {
 
     await user.click(screen.getAllByRole('button', { name: /add thread/i })[0])
     await user.selectOptions(screen.getByLabelText('Format'), 'Graphic Novel')
-    await user.clear(screen.getByLabelText('Last issue read (optional)'))
-    await user.type(screen.getByLabelText('Last issue read (optional)'), '2')
+    await user.clear(screen.getByLabelText('Issues already read (optional)'))
+    await user.type(screen.getByLabelText('Issues already read (optional)'), '2')
     await user.type(screen.getByLabelText('Notes'), 'remember this')
     await user.click(screen.getByRole('button', { name: 'close modal' }))
 

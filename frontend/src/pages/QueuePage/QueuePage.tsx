@@ -647,12 +647,15 @@ export default function QueuePage() {
   Will create {issuePreview} issue{issuePreview !== 1 ? 's' : ''}
   </p>
   )}
+  <p className="text-xs text-stone-400">
+  Enter the exact issues you want to track, such as 71. You do not need to add earlier issues.
+  </p>
   {issueParseError && (
   <p className="text-xs text-red-400">{issueParseError}</p>
   )}
   </div>
   <div className="space-y-2">
-  <label htmlFor="create-thread-last-read" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Last issue read (optional)</label>
+  <label htmlFor="create-thread-last-read" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues already read (optional)</label>
   <input
   id="create-thread-last-read"
   type="number"
@@ -669,6 +672,9 @@ export default function QueuePage() {
   }}
   className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
   />
+            <p className="text-xs text-stone-400">
+              Enter a count from the issue list above, not an issue number.
+            </p>
             {createForm.lastIssueRead > 0 && issuePreview !== null && (
               <p className="text-xs text-stone-400">
                 First {Math.min(createForm.lastIssueRead, issuePreview)} issues (in creation order) of {issuePreview} will be marked as read

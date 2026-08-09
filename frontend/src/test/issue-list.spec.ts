@@ -183,7 +183,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
     await expect(previewLocator).not.toBeVisible();
   });
 
-  test('should create thread with single issue', async ({ authenticatedPage }) => {
+  test('should create thread starting with a later single issue', async ({ authenticatedPage }) => {
     const timestamp = Date.now();
     const uniqueTitle = `Single Issue Comic ${timestamp}`;
     
@@ -197,8 +197,10 @@ test.describe('Thread Creation with Issue Ranges', () => {
     await authenticatedPage.fill('label:has-text("Title") + input', uniqueTitle);
     await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
 
-    // Fill in single issue
-    await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1');
+    // A later issue can be tracked directly without adding issues 1-70 first.
+    await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '71');
+    await expect(authenticatedPage.getByText('You do not need to add earlier issues.')).toBeVisible();
+    await expect(authenticatedPage.getByLabel('Issues already read (optional)')).toHaveValue('0');
     
     // Verify preview shows "Will create 1 issue"
     await expect(authenticatedPage.locator(SELECTORS.threadCreate.issuePreview)).toContainText('Will create 1 issue');
