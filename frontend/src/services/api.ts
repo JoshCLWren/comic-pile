@@ -214,7 +214,7 @@ rawApi.interceptors.response.use(
     if (isAuthenticationFailure(error) && !originalRequest._retry) {
       const requestPathname = getRequestPathname(originalRequest.url ?? '')
       if (AUTH_ENDPOINT_PATHS.has(requestPathname)) {
-        if (requestPathname === '/v1/auth/refresh') {
+        if (requestPathname === '/v1/auth/refresh' && !originalRequest.skipAuthRedirect) {
           redirectToLogin()
         }
         return Promise.reject(error)
@@ -235,7 +235,9 @@ rawApi.interceptors.response.use(
       isRefreshing = true
 
       try {
-        const response = await api.post<AuthTokens>('/v1/auth/refresh')
+        const response = originalRequest.skipAuthRedirect
+          ? await api.post<AuthTokens>('/v1/auth/refresh', undefined, { skipAuthRedirect: true })
+          : await api.post<AuthTokens>('/v1/auth/refresh')
 
         const { access_token } = response
         setAccessToken(access_token)

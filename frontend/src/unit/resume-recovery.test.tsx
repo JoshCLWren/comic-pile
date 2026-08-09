@@ -55,7 +55,7 @@ describe('ResumeRecovery', () => {
 
     expect(screen.getByText('Last usable screen')).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent('Reconnecting ComicPile')
-    await waitFor(() => expect(revalidateSession).toHaveBeenCalledWith(8000))
+    await waitFor(() => expect(revalidateSession).toHaveBeenCalledWith(15000))
     await waitFor(() => expect(invalidateQueries).toHaveBeenCalledOnce())
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument())
     expect(recoverSession).not.toHaveBeenCalled()
@@ -98,7 +98,7 @@ describe('ResumeRecovery', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
 
     expect(screen.getByRole('status')).toHaveTextContent('Reconnecting ComicPile')
-    expect(recoverSession).toHaveBeenCalledWith(8000)
+    expect(recoverSession).toHaveBeenCalledWith(15000)
     expect(revalidateSession).toHaveBeenCalledTimes(2)
 
     await act(async () => {

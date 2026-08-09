@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { queryClient } from '../query/queryClient'
 
-const RESUME_REQUEST_TIMEOUT_MS = 8000
+const RESUME_REQUEST_TIMEOUT_MS = 15000
 const RESUME_RETRY_DELAY_MS = 750
 const MAX_RESUME_ATTEMPTS = 2
 
