@@ -162,17 +162,20 @@ async def test_refresh_logs_revoked_token_and_success(
 async def test_csrf_middleware_logs_rejection_without_credentials(
     client: AsyncClient,
     caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The middleware logs rejected auth mutations before returning 403.
 
     Args:
         client: Async application client backed by the PostgreSQL test database.
         caplog: Pytest log-capture fixture.
+        monkeypatch: Environment patch helper used to exercise production CSRF behavior.
 
     Returns:
         None.
     """
     caplog.set_level(logging.WARNING)
+    monkeypatch.delenv("TEST_ENVIRONMENT", raising=False)
     secret_value = "Bearer secret-value"
 
     response = await client.post(
