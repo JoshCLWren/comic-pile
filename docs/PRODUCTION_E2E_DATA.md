@@ -1,21 +1,18 @@
 # Production E2E data safety
 
-Production browser monitoring uses a dedicated account and must never create records under a personal account.
+Production browser monitoring creates a disposable account through the real registration UI for every run. It must never use a personal account.
 
-## Dedicated account contract
+## Disposable account contract
 
-Create one normal ComicPile production user used only by automated browser monitoring. The account does not need administrative privileges and must not contain personal reading data.
+The workflow generates a unique username, email, and password from the GitHub run ID and attempt. The password is masked immediately, exists only in the runner environment, and is never stored as a repository secret or artifact.
 
-Store its credentials in GitHub Actions repository secrets:
+The only database credential is the existing GitHub Actions repository secret:
 
-- `PROD_E2E_ACCOUNT_USERNAME`
-- `PROD_E2E_ACCOUNT_PASSWORD`
-- `PROD_E2E_ACCOUNT_EMAIL`
-- `PROD_E2E_DATABASE_URL`
+- `NEON_DIRECT_DATABASE_URL`
 
-The scheduled production workflow signs in through the real `/login` UI and writes the resulting Playwright storage state only to the GitHub runner temporary directory. Authentication cookies and tokens are therefore short-lived runner files rather than a long-lived storage-state secret. They are never uploaded as artifacts.
+The scheduled workflow registers through `/register` and writes the resulting Playwright storage state only to the GitHub runner temporary directory. Authentication cookies and tokens are therefore short-lived runner files. They are never uploaded as artifacts.
 
-`PROD_E2E_ACCOUNT_EMAIL` identifies the same dedicated account to the production-data janitor. `PROD_E2E_DATABASE_URL` is used only for that ownership-scoped cleanup path.
+Usernames and emails follow strict reserved patterns containing the GitHub run ID and attempt. The janitor uses `NEON_DIRECT_DATABASE_URL` and refuses to delete accounts outside those patterns or accounts containing application data.
 
 ## Naming contract
 
@@ -29,19 +26,17 @@ The run ID may contain letters, numbers, dots, underscores, and hyphens. Tests s
 
 Each test that mutates production must delete its own records in a `finally` block or fixture teardown. The janitor is a recovery boundary for interrupted processes, not the normal cleanup path.
 
-## Scheduled janitor
+## Account cleanup
 
-`scripts/cleanup_production_e2e_data.py` runs before scheduled production performance monitoring. It deletes a thread only when all of these are true:
+`scripts/cleanup_production_e2e_accounts.py` runs both before and after production monitoring. Exact post-run cleanup deletes the current disposable account. Pre-run cleanup reaps accounts older than 24 hours after interrupted runs.
 
-- the thread belongs to the exact user identified by `PROD_E2E_ACCOUNT_EMAIL`;
-- `Thread.is_test` is true;
-- the title strictly matches the production E2E naming contract;
-- the thread is older than 24 hours.
+- both username and email match the reserved run-scoped patterns;
+- the run ID and attempt encoded in the username and email agree;
+- stale cleanup considers only accounts older than 24 hours;
+- the account owns no threads, reading orders, dependency groups, or continuity rules.
 
-The command is idempotent and supports `--dry-run`. Its output contains only the cutoff, candidate count, account-found state, and dry-run state. It never logs titles, record IDs, email addresses, tokens, passwords, or database connection details.
+The command is idempotent and supports `--dry-run`. Its output contains only counts, the cutoff, and dry-run state. It never logs usernames, email addresses, IDs, tokens, passwords, or database connection details.
 
-## Rotation and recovery
+## Recovery
 
-Rotate the account password by updating `PROD_E2E_ACCOUNT_PASSWORD`; no checked-in storage-state file needs replacement. If the account username or email changes, update the corresponding repository secrets together. After any credential change, run the Production Performance workflow manually and verify authentication, cleanup, and the production milestones before relying on the next scheduled run.
-
-If authentication begins failing, do not substitute a personal account. Repair or recreate the dedicated account, update the repository secrets, and rerun the workflow. Test-created data remains recognizable by the `[E2E]` prefix and `is_test=true` boundary.
+If registration or cleanup fails, do not substitute a personal account and do not weaken the ownership guard. Inspect the workflow artifacts and repair the registration or cleanup boundary. A later run may reap an interrupted account only after it crosses the 24-hour cutoff.
