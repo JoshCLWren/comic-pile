@@ -93,7 +93,7 @@ function openRangeForm(name = /Annihilation.*0 members/) {
 async function loadIssues() {
   fireEvent.change(screen.getByLabelText('Thread ID'), { target: { value: '22' } })
   fireEvent.click(screen.getByRole('button', { name: 'Choose issues' }))
-  await screen.findByText('ISSUES FROM NOVA')
+  await screen.findByText(/Issues from Nova/)
 }
 
 function selectRange(firstIssueId: string, lastIssueId: string) {
