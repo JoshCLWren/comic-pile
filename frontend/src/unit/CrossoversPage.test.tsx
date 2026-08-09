@@ -120,15 +120,16 @@ describe('CrossoversPage', () => {
     expect(screen.getAllByRole('button', { name: 'Rename' })[1]).toBeEnabled()
   })
 
-  it('opens crossover detail with issue and thread counts', async () => {
+  it('opens crossover detail with member count', async () => {
     api.list.mockResolvedValue([annihilation])
     render(<CrossoversPage />)
 
     const groupButton = await screen.findByRole('button', { name: /Annihilation.*2 members/ })
     fireEvent.click(groupButton)
 
-    expect(screen.getByText('1 issue memberships and 1 thread memberships.')).toBeInTheDocument()
     expect(groupButton).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('Issue 11')).toBeInTheDocument()
+    expect(screen.getByText('Thread 22')).toBeInTheDocument()
   })
 
   it('shows singular and empty membership states and collapses details', async () => {
@@ -140,9 +141,9 @@ describe('CrossoversPage', () => {
 
     const secretWars = await screen.findByRole('button', { name: /Secret Wars.*1 member/ })
     fireEvent.click(secretWars)
-    expect(screen.getByText('1 issue memberships and 0 thread memberships.')).toBeInTheDocument()
+    expect(screen.getByText('Issue 12')).toBeInTheDocument()
     fireEvent.click(secretWars)
-    expect(screen.queryByText('1 issue memberships and 0 thread memberships.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Issue 12')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /House of M.*0 members/ }))
     expect(screen.getByText('This crossover has no comics yet.')).toBeInTheDocument()
