@@ -201,6 +201,65 @@ describe('CrossoversPage issue ranges', () => {
     expect(screen.getByLabelText('Last issue')).toHaveTextContent('#½')
   })
 
+  it('stops pagination safely when an API page token repeats', async () => {
+    issueApi.list
+      .mockResolvedValueOnce({
+        issues: issues.slice(0, 1),
+        total_count: 2,
+        page_size: 1,
+        next_page_token: 'repeat-page',
+      })
+      .mockResolvedValueOnce({
+        issues: issues.slice(1, 2),
+        total_count: 2,
+        page_size: 1,
+        next_page_token: 'repeat-page',
+      })
+
+    render(<CrossoversPage />)
+    await screen.findByText('Annihilation')
+    openRangeForm()
+    await loadIssues()
+
+    expect(issueApi.list).toHaveBeenCalledTimes(2)
+    expect(screen.getByLabelText('First issue')).toHaveTextContent('#2')
+    expect(screen.getByLabelText('First issue')).toHaveTextContent('#Annual 1')
+  })
+
+  it('rejects issue data that lacks a canonical positive position', async () => {
+    issueApi.list.mockResolvedValue({
+      issues: [{ ...issues[0], position: 0 }],
+      total_count: 1,
+      page_size: 100,
+      next_page_token: null,
+    })
+
+    render(<CrossoversPage />)
+    await screen.findByText('Annihilation')
+    openRangeForm()
+    fireEvent.change(screen.getByLabelText('Thread ID'), { target: { value: '22' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Choose issues' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Comic issue order is unavailable for this series.',
+    )
+    expect(screen.queryByLabelText('First issue')).not.toBeInTheDocument()
+  })
+
+  it('validates the thread id before loading range data', async () => {
+    render(<CrossoversPage />)
+    await screen.findByText('Annihilation')
+    openRangeForm()
+    fireEvent.change(screen.getByLabelText('Thread ID'), { target: { value: '0' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Choose issues' }))
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Enter a valid thread ID before choosing issues.',
+    )
+    expect(threadApi.get).not.toHaveBeenCalled()
+    expect(issueApi.list).not.toHaveBeenCalled()
+  })
+
   it('clears range state when expanding another crossover', async () => {
     groupsApi.list.mockResolvedValue([crossover, secondCrossover])
     render(<CrossoversPage />)
