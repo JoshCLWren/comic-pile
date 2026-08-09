@@ -36,6 +36,21 @@ describe('buildChangelogView', () => {
     ])
   })
 
+  it('merges repeated generated date fragments into one daily section', () => {
+    expect(buildChangelogView('## 2026-08-09\n### Queue\n- Faster loading\n## 2026-08-09\n### Roll\n- Better recovery\n## 2026-08-08\n### Sessions\n- Clearer history', 'UTC')).toEqual([
+      { type: 'day', sourceDateTime: '2026-08-09', label: 'August 9, 2026', summary: '2 updates across Queue and Roll.', blocks: [
+        { type: 'heading', level: 3, text: 'Queue' },
+        { type: 'list', items: ['Faster loading'] },
+        { type: 'heading', level: 3, text: 'Roll' },
+        { type: 'list', items: ['Better recovery'] },
+      ] },
+      { type: 'day', sourceDateTime: '2026-08-08', label: 'August 8, 2026', summary: '1 update for Sessions.', blocks: [
+        { type: 'heading', level: 3, text: 'Sessions' },
+        { type: 'list', items: ['Clearer history'] },
+      ] },
+    ])
+  })
+
   it('covers singular, unscoped, and many-area daily summaries', () => {
     expect(buildChangelogView('## 2026-08-09\n### Queue\nOne change', 'UTC')[0]).toHaveProperty('summary', '1 update for Queue.')
     expect(buildChangelogView('## 2026-08-09\nOne change', 'UTC')[0]).toHaveProperty('summary', '1 update published this day.')
