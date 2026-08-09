@@ -6,9 +6,9 @@ const RECOVERY_CONFIG = { skipAuthRedirect: true }
 
 export const protectedRollMutationApi = {
   rate: (data: RatePayload): Promise<Thread> =>
-    api.post<Thread, RatePayload>('/rate/', data, RECOVERY_CONFIG),
+    api.post<Thread, RatePayload>('/v1/rate/', data, RECOVERY_CONFIG),
   snooze: (): Promise<void> =>
     api.post<void>('/snooze/', undefined, RECOVERY_CONFIG),
   bootstrap: (): Promise<RollBootstrapResponse> =>
-    api.get<RollBootstrapResponse>('/roll/bootstrap', RECOVERY_CONFIG),
+    api.get<RollBootstrapResponse>('/v1/roll/bootstrap', RECOVERY_CONFIG),
 }

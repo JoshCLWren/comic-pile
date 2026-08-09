@@ -289,17 +289,17 @@ list: async (params?: ThreadQueryParams, pageToken?: string | null): Promise<Thr
 }
 
 export const rollApi = {
-  roll: () => api.post<RollResponse>('/roll/'),
-  override: (data: { thread_id: number }) => api.post<RollResponse, { thread_id: number }>('/roll/override', data),
-  dismissPending: () => api.post<void>('/roll/dismiss-pending'),
-  reroll: () => api.post<RollResponse>('/roll/'),
-  setDie: (die: number) => api.post<void>('/roll/set-die', null, { params: { die } }),
-  clearManualDie: () => api.post<void>('/roll/clear-manual-die'),
+  roll: () => api.post<RollResponse>('/v1/roll/'),
+  override: (data: { thread_id: number }) => api.post<RollResponse, { thread_id: number }>('/v1/roll/override', data),
+  dismissPending: () => api.post<void>('/v1/roll/dismiss-pending'),
+  reroll: () => api.post<RollResponse>('/v1/roll/'),
+  setDie: (die: number) => api.post<void>('/v1/roll/set-die', null, { params: { die } }),
+  clearManualDie: () => api.post<void>('/v1/roll/clear-manual-die'),
 }
 
 export const rateApi = {
   rate: (data: { thread_id: number; rating: number; issues_read?: number; finish_session?: boolean; issue_number?: string }) =>
-    api.post<Thread, { thread_id: number; rating: number; issues_read?: number; finish_session?: boolean; issue_number?: string }>('/rate/', data),
+    api.post<Thread, { thread_id: number; rating: number; issues_read?: number; finish_session?: boolean; issue_number?: string }>('/v1/rate/', data),
 }
 
 export const sessionApi = {
