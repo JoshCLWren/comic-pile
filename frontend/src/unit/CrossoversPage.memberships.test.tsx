@@ -1,7 +1,21 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CrossoversPage from '../pages/CrossoversPage'
+import { threadsApi } from '../services/api'
 import { dependencyGroupsApi } from '../services/api-dependency-groups'
+import { issuesApi } from '../services/api-issues'
+
+vi.mock('../services/api', () => ({
+  threadsApi: {
+    get: vi.fn(),
+  },
+}))
+
+vi.mock('../services/api-issues', () => ({
+  issuesApi: {
+    list: vi.fn(),
+  },
+}))
 
 vi.mock('../services/api-dependency-groups', () => ({
   dependencyGroupsApi: {
@@ -17,6 +31,8 @@ vi.mock('../services/api-dependency-groups', () => ({
 }))
 
 const api = vi.mocked(dependencyGroupsApi)
+const threadApi = vi.mocked(threadsApi)
+const issueApi = vi.mocked(issuesApi)
 
 const crossover = {
   id: 7,
@@ -28,9 +44,59 @@ const crossover = {
   ],
 }
 
+const thread = {
+  id: 22,
+  title: 'Nova',
+  format: 'single issues',
+  issues_remaining: 3,
+  total_issues: 3,
+  queue_position: 4,
+  status: 'active',
+  is_blocked: false,
+  blocking_reasons: [],
+  created_at: '2026-08-01T00:00:00Z',
+}
+
+const issues = [
+  {
+    id: 31,
+    thread_id: 22,
+    issue_number: '2',
+    position: 3,
+    status: 'read' as const,
+    read_at: '2026-08-02T00:00:00Z',
+    created_at: '2026-08-01T00:00:00Z',
+  },
+  {
+    id: 32,
+    thread_id: 22,
+    issue_number: 'Annual 1',
+    position: 4,
+    status: 'unread' as const,
+    read_at: null,
+    created_at: '2026-08-01T00:00:00Z',
+  },
+  {
+    id: 33,
+    thread_id: 22,
+    issue_number: '½',
+    position: 5,
+    status: 'unread' as const,
+    read_at: null,
+    created_at: '2026-08-01T00:00:00Z',
+  },
+]
+
 beforeEach(() => {
   vi.clearAllMocks()
   api.list.mockResolvedValue([crossover])
+  threadApi.get.mockResolvedValue(thread)
+  issueApi.list.mockResolvedValue({
+    issues,
+    total_count: issues.length,
+    page_size: 100,
+    next_page_token: null,
+  })
 })
 
 describe('CrossoversPage membership editing', () => {
@@ -93,8 +159,10 @@ describe('CrossoversPage membership editing', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
 
     fireEvent.change(screen.getByLabelText('Thread ID'), { target: { value: '22' } })
-    fireEvent.change(screen.getByLabelText('Start position'), { target: { value: '3' } })
-    fireEvent.change(screen.getByLabelText('End position'), { target: { value: '5' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Choose issues' }))
+    await screen.findByText(/Issues from Nova/)
+    fireEvent.change(screen.getByLabelText('First issue'), { target: { value: '31' } })
+    fireEvent.change(screen.getByLabelText('Last issue'), { target: { value: '33' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add range' }))
 
     const status = await screen.findByRole('status')
@@ -102,8 +170,9 @@ describe('CrossoversPage membership editing', () => {
     expect(status).toHaveTextContent('latest memberships could not be refreshed: Refresh unavailable')
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.getByLabelText('Thread ID')).toHaveValue('')
-    expect(screen.getByLabelText('Start position')).toHaveValue('')
-    expect(screen.getByLabelText('End position')).toHaveValue('')
+    expect(screen.queryByLabelText('First issue')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Last issue')).not.toBeInTheDocument()
+    expect(api.addIssueRange).toHaveBeenCalledWith(7, 22, 3, 5)
     expect(api.addIssueRange).toHaveBeenCalledTimes(1)
   })
 
