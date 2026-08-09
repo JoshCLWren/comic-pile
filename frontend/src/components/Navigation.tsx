@@ -41,6 +41,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
       const target = event.target
       if (!(target instanceof Node)) return
       if (moreButtonRef.current?.contains(target) || moreMenuRef.current?.contains(target)) return
+      if (target instanceof Element && target.closest('[data-overlay-layer="dialog"]')) return
       setIsMoreOpen(false)
     }
 
@@ -102,8 +103,6 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
           <div className="border-t border-stone-800 pt-2 md:hidden"><BugReportButton onSubmit={onBugReportSubmit} variant="nav" /></div>
         </nav>
       )}
-
-      <div className="md:hidden"><BugReportButton onSubmit={onBugReportSubmit} variant="nav" /></div>
 
       <div className="fixed top-2 right-2 md:top-4 md:right-4 z-50 flex items-center gap-2 md:gap-3">
         {isLoading ? <span className="hidden md:inline text-xs text-stone-500 font-medium px-2 py-1">Loading...</span> : hasError ? <span className="hidden md:inline text-xs text-amber-500 font-medium px-2 py-1" title="Failed to load user data">User</span> : username ? <span className="hidden md:inline text-xs text-stone-400 font-medium px-2 py-1">{username}</span> : null}
