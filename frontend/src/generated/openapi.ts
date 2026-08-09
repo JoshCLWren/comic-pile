@@ -1907,6 +1907,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rate Thread
+         * @description Rate current reading and update its thread.
+         *
+         *     Args:
+         *         request: FastAPI request object for rate limiting.
+         *         rate_data: Rating request data.
+         *         current_user: Authenticated user making the request.
+         *         db: SQLAlchemy session.
+         *
+         *     Returns:
+         *         Updated thread response.
+         *
+         *     Raises:
+         *         HTTPException: If no active session, rating, or thread is valid.
+         */
+        post: operations["rate_thread_api_v1_rate__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reading-order-groups/": {
         parameters: {
             query?: never;
@@ -2034,6 +2066,181 @@ export interface paths {
          * @description Remove one membership from an owned group.
          */
         delete: operations["remove_member_api_v1_reading_order_groups__group_id__members__member_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/roll/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Roll Dice
+         * @description Roll dice to select a thread.
+         *
+         *     Args:
+         *         roll_request: The roll request.
+         *         request: FastAPI request object for rate limiting.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         RollResponse with selected thread and die result.
+         *
+         *     Raises:
+         *         HTTPException: If no active threads available.
+         */
+        post: operations["roll_dice_api_v1_roll__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/roll/bootstrap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Roll Bootstrap
+         * @description Return bounded bootstrap data for the Roll initial render.
+         *
+         *     Replaces the need for separate session, full-thread-library, and stale-thread requests
+         *     by returning only the retained data required for the first interactive screen.
+         *
+         *     Args:
+         *         current_user: The authenticated user.
+         *         db: Async database session.
+         *
+         *     Returns:
+         *         RollBootstrapResponse with session state, bounded pool, snoozed/blocked/stale summaries.
+         */
+        get: operations["roll_bootstrap_api_v1_roll_bootstrap_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/roll/clear-manual-die": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clear Manual Die
+         * @description Clear manual die size and return to automatic dice ladder mode.
+         *
+         *     Args:
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         HTML string with the current die size.
+         */
+        post: operations["clear_manual_die_api_v1_roll_clear_manual_die_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/roll/dismiss-pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Pending Roll
+         * @description Clear any pending thread for the current session.
+         *
+         *     Args:
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         */
+        post: operations["dismiss_pending_roll_api_v1_roll_dismiss_pending_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/roll/override": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Override Roll
+         * @description Manually select a thread.
+         *
+         *     Args:
+         *         request: Override request containing thread_id.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         RollResponse with selected thread.
+         *
+         *     Raises:
+         *         HTTPException: If thread not found.
+         */
+        post: operations["override_roll_api_v1_roll_override_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/roll/set-die": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Manual Die
+         * @description Set manual die size for current session.
+         *
+         *     Args:
+         *         die: The die size to set (must be 4, 6, 8, 10, 12, 20, 30, 50, or 100).
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         HTML string with the die size.
+         *
+         *     Raises:
+         *         HTTPException: If die size is invalid.
+         */
+        post: operations["set_manual_die_api_v1_roll_set_die_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -6027,6 +6234,39 @@ export interface operations {
             };
         };
     };
+    rate_thread_api_v1_rate__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_groups_api_v1_reading_order_groups__get: {
         parameters: {
             query?: never;
@@ -6294,6 +6534,161 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    roll_dice_api_v1_roll__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RollRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    roll_bootstrap_api_v1_roll_bootstrap_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollBootstrapResponse"];
+                };
+            };
+        };
+    };
+    clear_manual_die_api_v1_roll_clear_manual_die_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+        };
+    };
+    dismiss_pending_roll_api_v1_roll_dismiss_pending_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    override_roll_api_v1_roll_override_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OverrideRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_manual_die_api_v1_roll_set_die_post: {
+        parameters: {
+            query: {
+                die: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
             };
             /** @description Validation Error */
             422: {
