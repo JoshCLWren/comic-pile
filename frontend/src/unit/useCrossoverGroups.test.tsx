@@ -1,7 +1,9 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const listForThreads = vi.fn()
+const { listForThreads } = vi.hoisted(() => ({
+  listForThreads: vi.fn(),
+}))
 
 vi.mock('../services/api-dependency-groups', () => ({
   dependencyGroupsApi: { listForThreads },
