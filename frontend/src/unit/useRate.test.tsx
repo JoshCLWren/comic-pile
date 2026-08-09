@@ -4,14 +4,16 @@ import { useRate } from '../hooks/useRate'
 import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from '../hooks/rollMutationReconciliation'
 import { applyRatedThreadCache } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
-import { rateApi } from '../services/api'
+import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
 import type { RatePayload, Thread } from '../types'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 
-vi.mock('../services/api', () => ({
-  rateApi: {
+vi.mock('../services/protectedRollMutationApi', () => ({
+  protectedRollMutationApi: {
     rate: vi.fn(),
+    snooze: vi.fn(),
+    bootstrap: vi.fn(),
   },
 }))
 
@@ -25,7 +27,7 @@ vi.mock('../query/cacheEffects', () => ({
   applyRatedThreadCache: vi.fn(),
 }))
 
-const mockedRateApi = vi.mocked(rateApi)
+const mockedProtectedApi = vi.mocked(protectedRollMutationApi)
 const mockedRollBootstrapApi = vi.mocked(rollBootstrapApi)
 const mockedApplyRatedThreadCache = vi.mocked(applyRatedThreadCache)
 
@@ -64,7 +66,7 @@ const bootstrapState = (
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockedRateApi.rate.mockResolvedValue(thread)
+  mockedProtectedApi.rate.mockResolvedValue(thread)
   mockedRollBootstrapApi.get.mockResolvedValue(bootstrapState(null))
   mockedApplyRatedThreadCache.mockResolvedValue()
 })
@@ -82,7 +84,7 @@ it('submits ratings, applies the authoritative thread cache, and publishes Roll 
       response = await result.current.mutate(payload)
     })
 
-    expect(mockedRateApi.rate).toHaveBeenCalledWith(payload)
+    expect(mockedProtectedApi.rate).toHaveBeenCalledWith(payload)
     expect(mockedApplyRatedThreadCache).toHaveBeenCalledWith(queryClient, thread)
     expect(response).toBe(thread)
     expect(mockedRollBootstrapApi.get).toHaveBeenCalledTimes(1)
@@ -95,7 +97,7 @@ it('submits ratings, applies the authoritative thread cache, and publishes Roll 
 
 it('shares one in-flight request across repeated submissions', async () => {
   let resolveRequest: (() => void) | undefined
-  mockedRateApi.rate.mockReturnValue(new Promise((resolve) => {
+  mockedProtectedApi.rate.mockReturnValue(new Promise((resolve) => {
     resolveRequest = () => resolve(undefined as never)
   }))
 
@@ -109,7 +111,7 @@ it('shares one in-flight request across repeated submissions', async () => {
     secondRequest = result.current.mutate(payload)
   })
 
-  expect(mockedRateApi.rate).toHaveBeenCalledTimes(1)
+  expect(mockedProtectedApi.rate).toHaveBeenCalledTimes(1)
   expect(result.current.isPending).toBe(true)
 
   await act(async () => {
@@ -128,7 +130,7 @@ it('reconciles a committed rating after the delayed response crosses the client 
   const timeout = Object.assign(new Error('timeout of 10000ms exceeded'), {
     code: 'ECONNABORTED',
   })
-  mockedRateApi.rate.mockImplementation(() => new Promise((_, reject) => {
+  mockedProtectedApi.rate.mockImplementation(() => new Promise((_, reject) => {
     setTimeout(() => reject(timeout), 10_000)
   }))
   mockedRollBootstrapApi.get.mockResolvedValue(bootstrapState(null, 10))
@@ -144,7 +146,7 @@ it('reconciles a committed rating after the delayed response crosses the client 
       secondRequest = result.current.mutate(payload)
     })
 
-    expect(mockedRateApi.rate).toHaveBeenCalledTimes(1)
+    expect(mockedProtectedApi.rate).toHaveBeenCalledTimes(1)
     expect(result.current.isPending).toBe(true)
 
     await act(async () => {
@@ -166,7 +168,7 @@ it('surfaces a delayed timeout when authoritative state still has the same pendi
   const timeout = Object.assign(new Error('timeout of 10000ms exceeded'), {
     code: 'ECONNABORTED',
   })
-  mockedRateApi.rate.mockImplementation(() => new Promise((_, reject) => {
+  mockedProtectedApi.rate.mockImplementation(() => new Promise((_, reject) => {
     setTimeout(() => reject(timeout), 10_000)
   }))
   mockedRollBootstrapApi.get.mockResolvedValue(bootstrapState(1))
