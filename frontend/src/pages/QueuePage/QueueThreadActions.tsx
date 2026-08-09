@@ -2,6 +2,7 @@ interface QueueThreadActionsProps {
   title: string
   snoozeIcon: string
   snoozeLabel: string
+  snoozeDisabled: boolean
   onRead: () => void
   onEdit: () => void
   onSnooze: () => void
@@ -12,6 +13,7 @@ export default function QueueThreadActions({
   title,
   snoozeIcon,
   snoozeLabel,
+  snoozeDisabled,
   onRead,
   onEdit,
   onSnooze,
@@ -47,8 +49,10 @@ export default function QueueThreadActions({
       <button
         type="button"
         aria-label={snoozeLabel}
+        disabled={snoozeDisabled}
+        title={snoozeDisabled ? 'Only the comic currently waiting to be read can be snoozed.' : undefined}
         onClick={stopCardClick(onSnooze)}
-        className="px-3 py-2 rounded-lg bg-teal-600/15 text-teal-300 text-xs font-bold hover:bg-teal-600/25"
+        className="px-3 py-2 rounded-lg bg-teal-600/15 text-teal-300 text-xs font-bold hover:bg-teal-600/25 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-teal-600/15"
       >
         {snoozeIcon} {snoozeLabel}
       </button>
