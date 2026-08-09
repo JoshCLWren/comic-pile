@@ -16,9 +16,18 @@ export function isPublicChangelogLink(url: string) {
   }
 }
 
+export function publicChangelogText(text: string) {
+  return text
+    .replace(/\s+\b(?:in|via)\s+\[#\d+\]\(https?:\/\/github\.com\/[^)]+\/pull\/\d+\)/gi, '')
+    .replace(/\[#\d+\]\(https?:\/\/github\.com\/[^)]+\/pull\/\d+\)\s*/gi, '')
+    .replace(/\bPR\s+#\d+\b:?\s*/gi, '')
+    .trim()
+}
+
 function renderInline(text: string) {
+  const publicText = publicChangelogText(text)
   const pattern = /(`[^`]+`|\[[^\]]+\]\(https?:\/\/[^)]+\))/g
-  return text.split(pattern).map((part, index) => {
+  return publicText.split(pattern).map((part, index) => {
     const code = part.match(/^`([^`]+)`$/)
     if (code) return <code key={index} className="rounded bg-stone-800 px-1.5 py-0.5 text-amber-200">{code[1]}</code>
     const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)$/)
