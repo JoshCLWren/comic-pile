@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import WhatsNewPage, { parseChangelog } from '../pages/WhatsNewPage'
+import WhatsNewPage, { buildChangelogView, parseChangelog } from '../pages/WhatsNewPage'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -27,7 +27,69 @@ describe('parseChangelog', () => {
   })
 })
 
+describe('buildChangelogView', () => {
+  it('groups multiple entries under one day and summarizes public feature areas', () => {
+    expect(
+      buildChangelogView(
+        '# Changelog\n\n## 2026-08-09\n### Queue\n- Faster loading\n- Clearer controls\n### Roll\n- Preserves the active comic',
+        'UTC',
+      ),
+    ).toEqual([
+      { type: 'heading', level: 1, text: 'Changelog' },
+      {
+        type: 'day',
+        sourceDateTime: '2026-08-09',
+        label: 'August 9, 2026',
+        summary: '3 updates across Queue and Roll.',
+        blocks: [
+          { type: 'heading', level: 3, text: 'Queue' },
+          { type: 'list', items: ['Faster loading', 'Clearer controls'] },
+          { type: 'heading', level: 3, text: 'Roll' },
+          { type: 'list', items: ['Preserves the active comic'] },
+        ],
+      },
+    ])
+  })
+
+  it('uses the viewer timezone for exact source timestamps', () => {
+    const view = buildChangelogView(
+      '## 2026-08-09T00:30:00Z\n### Roll\n- Fixed resume behavior',
+      'America/Los_Angeles',
+    )
+    expect(view[0]).toMatchObject({
+      type: 'day',
+      sourceDateTime: '2026-08-09T00:30:00Z',
+    })
+    expect(view[0]).toHaveProperty('label', 'August 8, 2026 at 5:30 PM PDT')
+  })
+
+  it('keeps malformed or missing timestamps usable as ordinary headings', () => {
+    expect(buildChangelogView('## Recently\n- Still readable')).toEqual([
+      { type: 'heading', level: 2, text: 'Recently' },
+      { type: 'list', items: ['Still readable'] },
+    ])
+  })
+})
+
 describe('WhatsNewPage', () => {
+  it('groups dated entries with readable time elements and daily summaries', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () =>
+        '# Changelog\n\n## 2026-08-09\n### Queue\n- Faster loading\n- Clearer controls\n### Roll\n- Preserves the active comic',
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<WhatsNewPage />)
+
+    const dayHeading = await screen.findByRole('heading', { name: /August 9, 2026/ })
+    const time = dayHeading.querySelector('time')
+    expect(time).toHaveAttribute('datetime', '2026-08-09')
+    expect(screen.getByText('3 updates across Queue and Roll.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Queue' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Roll' })).toBeInTheDocument()
+  })
+
   it('removes GitHub pull references while preserving public external links', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
