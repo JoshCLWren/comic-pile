@@ -56,13 +56,23 @@ class LocalComicVineSnapshot:
     def _normalize_row(cls, row: sqlite3.Row) -> dict[str, object]:
         return {key: cls._decode_value(row[key]) for key in row.keys()}
 
-    def _lookup(self, table: str, external_id: int, required: tuple[str, ...]) -> LocalComicVineResult | None:
+    def _lookup(
+        self,
+        table: str,
+        external_id: int,
+        required: tuple[str, ...],
+    ) -> LocalComicVineResult | None:
         if not self.available:
             return None
         with self._connect() as connection:
             columns = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
+            id_candidates = (
+                "id",
+                "comicvine_id",
+                f"{table.removeprefix('cv_')}_id",
+            )
             id_column = next(
-                (candidate for candidate in ("id", "comicvine_id", f"{table.removeprefix('cv_')}_id") if candidate in columns),
+                (candidate for candidate in id_candidates if candidate in columns),
                 None,
             )
             if id_column is None:
@@ -79,17 +89,11 @@ class LocalComicVineSnapshot:
 
     def get_volume(self, volume_id: int) -> LocalComicVineResult | None:
         """Look up one volume by ComicVine ID."""
-        result = self._lookup("cv_volume", volume_id, ("id", "name"))
-        if result is None:
-            result = self._lookup("cv_volume", volume_id, ("comicvine_id", "name"))
-        return result
+        return self._lookup("cv_volume", volume_id, ("name",))
 
     def get_issue(self, issue_id: int) -> LocalComicVineResult | None:
         """Look up one issue by ComicVine ID, including decoded relationship JSON."""
-        result = self._lookup("cv_issue", issue_id, ("id", "volume_id", "issue_number"))
-        if result is None:
-            result = self._lookup("cv_issue", issue_id, ("comicvine_id", "volume_id", "issue_number"))
-        return result
+        return self._lookup("cv_issue", issue_id, ("volume_id", "issue_number"))
 
     def search_volumes(self, query: str, *, limit: int = 10) -> list[LocalComicVineResult]:
         """Return ranked local candidates without treating rank as identity confirmation."""
@@ -99,17 +103,22 @@ class LocalComicVineSnapshot:
             fts_tables = [
                 row[0]
                 for row in connection.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'cv_volume%fts%'"
+                    "SELECT name FROM sqlite_master "
+                    "WHERE type='table' AND name LIKE 'cv_volume%fts%'"
                 )
             ]
             if not fts_tables:
                 return []
             table = fts_tables[0]
             rows = connection.execute(
-                f"SELECT *, bm25({table}) AS rank FROM {table} WHERE {table} MATCH ? ORDER BY rank LIMIT ?",
+                f"SELECT *, bm25({table}) AS rank FROM {table} "
+                f"WHERE {table} MATCH ? ORDER BY rank LIMIT ?",
                 (query, limit),
             ).fetchall()
-        return [LocalComicVineResult(data=self._normalize_row(row), complete=False) for row in rows]
+        return [
+            LocalComicVineResult(data=self._normalize_row(row), complete=False)
+            for row in rows
+        ]
 
     def sync_metadata(self) -> dict[str, object]:
         """Expose snapshot freshness metadata when the snapshot provides it."""
@@ -117,7 +126,8 @@ class LocalComicVineSnapshot:
             return {}
         with self._connect() as connection:
             exists = connection.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='cv_sync_metadata'"
+                "SELECT 1 FROM sqlite_master "
+                "WHERE type='table' AND name='cv_sync_metadata'"
             ).fetchone()
             if exists is None:
                 return {}
@@ -129,7 +139,7 @@ class LocalComicVineSnapshot:
         issue_id: int,
         fallback: Callable[[int], Mapping[str, object]],
     ) -> LocalComicVineResult:
-        """Prefer a complete local issue and call the live provider only for a miss/incomplete row."""
+        """Prefer a complete local issue; use the live provider only for a miss/incomplete row."""
         local = self.get_issue(issue_id)
         if local is not None and local.complete:
             return local
