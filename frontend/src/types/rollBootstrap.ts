@@ -14,7 +14,7 @@ export interface RollRecoveryBlocker {
   source_type: 'issue' | 'crossover'
   source_id: number
   source_label: string
-  satisfaction_type: 'complete' | 'reach_issue'
+  satisfaction_type: 'item_read' | 'all_members_read' | 'checkpoint' | 'selected_members_read'
   satisfied: false
   causing_issue_ids: number[]
   causing_member_issue_ids: number[]
