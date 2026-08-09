@@ -14,227 +14,25 @@ permissions:
   issues: write
   pull-requests: write
 
+concurrency:
+  group: >-
+    factory-visibility-${{ github.repository }}-${{
+    github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: false
+
 jobs:
   label-factory-work:
     runs-on: ubuntu-latest
     steps:
+      - name: Check out trusted workflow code
+        uses: actions/checkout@v7
+
+      - name: Run factory visibility regression tests
+        run: node --test .github/scripts/factory-visibility.test.cjs
+
       - name: Synchronize factory owner and stage labels
         uses: actions/github-script@v7
         with:
           script: |
-            const definitions = {
-              factory: ['5319E7', 'Work owned or produced by an autonomous ComicPile factory'],
-              'factory:1': ['0366D6', 'Current next-action owner is ComicPile Factory 1'],
-              'factory:2': ['0366D6', 'Current next-action owner is ComicPile Factory 2'],
-              'factory:3': ['0366D6', 'Current next-action owner is ComicPile Factory 3'],
-              'factory:4': ['0366D6', 'Current next-action owner is ComicPile Factory 4'],
-              'factory:5': ['0366D6', 'Current next-action owner is ComicPile Factory 5'],
-              'factory:local': ['0366D6', 'Current next-action owner is the local OpenCode factory'],
-              'factory:unowned': ['BFDADC', 'Factory work has no current next-action owner'],
-              'factory:building': ['FBCA04', 'A factory is actively implementing or repairing this work'],
-              'factory:review': ['D4C5F9', 'The exact current head needs review or re-review'],
-              'factory:changes-requested': ['D73A4A', 'Actionable review findings currently block progress'],
-              'factory:ci': ['1D76DB', 'Review passed and required exact-head checks are being verified'],
-              'factory:ready': ['0E8A16', 'All exact-head factory merge gates are satisfied'],
-              'factory:blocked': ['B60205', 'A genuine human, credential, or external blocker remains'],
-            };
-            const ownerLabels = [
-              'factory:1', 'factory:2', 'factory:3', 'factory:4',
-              'factory:5', 'factory:local', 'factory:unowned',
-            ];
-            const stageLabels = [
-              'factory:building', 'factory:review', 'factory:changes-requested',
-              'factory:ci', 'factory:ready', 'factory:blocked',
-            ];
-            const trustedAssociations = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
-
-            function trusted(login, association) {
-              return trustedAssociations.has(association)
-                || login === 'coderabbitai[bot]'
-                || login === 'coderabbitai';
-            }
-
-            function workerFrom(body) {
-              for (const pattern of [
-                /comic-pile-factory-implement-(?:claim|progress)-v\d+:issue-\d+:([^:\s>]+):/,
-                /comic-pile-factory-review-claim-v\d+:[^:\s>]+:([^:\s>]+):/,
-                /comic-pile-factory-fix-(?:claim|progress)-v\d+:[^:\s>]+:([^:\s>]+):/,
-                /comic-pile-factory-claim-released-v\d+:[^:\s>]+:([^:\s>]+):/,
-              ]) {
-                const match = body.match(pattern);
-                if (match) return match[1];
-              }
-              return null;
-            }
-
-            function ownerFor(worker) {
-              const scheduled = worker?.match(/^chatgpt-factory-([1-5])$/);
-              if (scheduled) return `factory:${scheduled[1]}`;
-              if (worker?.startsWith('local-opencode-') || worker === 'local-opencode') {
-                return 'factory:local';
-              }
-              return 'factory:unowned';
-            }
-
-            function stageFrom(body) {
-              if (/comic-pile-factory-needs-human-v\d+:/.test(body)) return 'factory:blocked';
-              if (/comic-pile-factory-ready-v\d+:/.test(body)) return 'factory:ready';
-              if (/comic-pile-factory-review-v\d+:[^:\s>]+:changes-required/.test(body)) {
-                return 'factory:changes-requested';
-              }
-              if (/comic-pile-factory-review-v\d+:[^:\s>]+:pass/.test(body)) return 'factory:ci';
-              if (/comic-pile-factory-review-claim-v\d+:/.test(body)) return 'factory:review';
-              if (
-                /comic-pile-factory-implement-(?:claim|progress)-v\d+:/.test(body)
-                || /comic-pile-factory-fix-(?:claim|progress)-v\d+:/.test(body)
-              ) return 'factory:building';
-              return null;
-            }
-
-            async function ensureLabels() {
-              const existing = await github.paginate(github.rest.issues.listLabelsForRepo, {
-                owner: context.repo.owner, repo: context.repo.repo, per_page: 100,
-              });
-              const byName = new Map(existing.map((label) => [label.name, label]));
-              for (const [name, [color, description]] of Object.entries(definitions)) {
-                const current = byName.get(name);
-                if (!current) {
-                  await github.rest.issues.createLabel({
-                    owner: context.repo.owner, repo: context.repo.repo,
-                    name, color, description,
-                  });
-                } else if (
-                  current.color.toUpperCase() !== color
-                  || (current.description || '') !== description
-                ) {
-                  await github.rest.issues.updateLabel({
-                    owner: context.repo.owner, repo: context.repo.repo,
-                    name, new_name: name, color, description,
-                  });
-                }
-              }
-            }
-
-            async function currentLabels(number) {
-              const labels = await github.paginate(github.rest.issues.listLabelsOnIssue, {
-                owner: context.repo.owner, repo: context.repo.repo,
-                issue_number: number, per_page: 100,
-              });
-              return new Set(labels.map((label) => label.name));
-            }
-
-            async function replaceGroup(number, group, next) {
-              const current = await currentLabels(number);
-              for (const label of group) {
-                if (label !== next && current.has(label)) {
-                  await github.rest.issues.removeLabel({
-                    owner: context.repo.owner, repo: context.repo.repo,
-                    issue_number: number, name: label,
-                  });
-                }
-              }
-              if (next && !current.has(next)) {
-                await github.rest.issues.addLabels({
-                  owner: context.repo.owner, repo: context.repo.repo,
-                  issue_number: number, labels: [next],
-                });
-              }
-            }
-
-            async function markFactory(number) {
-              const current = await currentLabels(number);
-              if (!current.has('factory')) {
-                await github.rest.issues.addLabels({
-                  owner: context.repo.owner, repo: context.repo.repo,
-                  issue_number: number, labels: ['factory'],
-                });
-              }
-            }
-
-            async function ownerFromLinkedIssue(pr) {
-              const branch = pr.head.ref.match(/^factory\/(\d+)(?:-|$)/);
-              const closing = (pr.body || '').match(
-                /(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/i,
-              );
-              const issueNumber = Number(branch?.[1] || closing?.[1] || 0);
-              if (!issueNumber) return 'factory:unowned';
-
-              const comments = await github.paginate(github.rest.issues.listComments, {
-                owner: context.repo.owner, repo: context.repo.repo,
-                issue_number: issueNumber, per_page: 100,
-              });
-              comments.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-              for (const comment of comments) {
-                if (!trusted(comment.user?.login, comment.author_association)) continue;
-                const body = comment.body || '';
-                if (/comic-pile-factory-claim-released-v\d+:/.test(body)) {
-                  return 'factory:unowned';
-                }
-                const worker = workerFrom(body);
-                if (worker) return ownerFor(worker);
-              }
-              return 'factory:unowned';
-            }
-
-            await ensureLabels();
-
-            if (context.eventName === 'issue_comment') {
-              const comment = context.payload.comment;
-              const body = comment?.body || '';
-              if (!body.includes('comic-pile-factory-')) return;
-              if (!trusted(comment?.user?.login, comment?.author_association)) return;
-
-              const number = context.payload.issue.number;
-              await markFactory(number);
-              const released = /comic-pile-factory-claim-released-v\d+:/.test(body);
-              const worker = workerFrom(body);
-              if (released || worker) {
-                await replaceGroup(number, ownerLabels, released ? 'factory:unowned' : ownerFor(worker));
-              }
-              const stage = stageFrom(body);
-              if (stage) await replaceGroup(number, stageLabels, stage);
-              return;
-            }
-
-            if (context.eventName === 'pull_request_target') {
-              const pr = context.payload.pull_request;
-              const sameRepo = pr.head.repo?.full_name === context.payload.repository.full_name;
-              const alreadyFactory = (pr.labels || []).some((label) => label.name === 'factory');
-              const isFactory = alreadyFactory || (
-                sameRepo
-                && (pr.head.ref.startsWith('factory/') || (pr.body || '').includes('comic-pile-factory-'))
-              );
-              if (!isFactory) return;
-
-              await markFactory(pr.number);
-              if (['opened', 'reopened', 'ready_for_review'].includes(context.payload.action)) {
-                await replaceGroup(pr.number, ownerLabels, await ownerFromLinkedIssue(pr));
-              }
-              await replaceGroup(pr.number, stageLabels, 'factory:review');
-              return;
-            }
-
-            if (context.eventName === 'pull_request_review') {
-              const pr = context.payload.pull_request;
-              const current = await currentLabels(pr.number);
-              const sameRepo = pr.head.repo?.full_name === context.payload.repository.full_name;
-              if (!(current.has('factory') || (sameRepo && pr.head.ref.startsWith('factory/')))) return;
-
-              await markFactory(pr.number);
-              if (context.payload.action === 'dismissed') {
-                await replaceGroup(pr.number, stageLabels, 'factory:review');
-                return;
-              }
-
-              const review = context.payload.review;
-              if (!trusted(review.user?.login, review.author_association)) return;
-              const state = (review.state || '').toUpperCase();
-              const body = review.body || '';
-              let stage = 'factory:review';
-              if (state === 'CHANGES_REQUESTED') stage = 'factory:changes-requested';
-              else if (state === 'APPROVED') stage = 'factory:ci';
-              else if (/Actionable comments posted:\s*[1-9]\d*/i.test(body)) {
-                stage = 'factory:changes-requested';
-              }
-              await replaceGroup(pr.number, stageLabels, stage);
-            }
+            const reconcile = require('./.github/scripts/factory-visibility.cjs');
+            await reconcile({ github, context, core });
