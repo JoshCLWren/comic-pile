@@ -121,7 +121,8 @@ function summarizeDay(blocks: Block[]) {
     if (block.type === 'paragraph') return count + 1
     return count
   }, 0)
-  const countText = `${updateCount || 1} ${updateCount === 1 ? 'update' : 'updates'}`
+  const effectiveUpdateCount = updateCount || 1
+  const countText = `${effectiveUpdateCount} ${effectiveUpdateCount === 1 ? 'update' : 'updates'}`
   const uniqueAreas = [...new Set(areas)]
 
   if (uniqueAreas.length === 0) return `${countText} published this day.`
