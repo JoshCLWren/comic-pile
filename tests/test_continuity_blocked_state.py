@@ -54,6 +54,7 @@ async def test_continuity_rule_immediately_updates_denormalized_blocked_state(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
+    """Continuity rules refresh persisted blocked state immediately."""
     user = await get_or_create_user_async(async_db)
     source_thread, source_issue = await _make_thread_with_issue(
         async_db,
@@ -107,6 +108,7 @@ async def test_continuity_rule_immediately_updates_denormalized_blocked_state(
 async def test_unified_blocked_ids_preserve_legacy_issue_dependencies(
     async_db: AsyncSession,
 ) -> None:
+    """Unified blocked-state evaluation preserves legacy issue dependencies."""
     user = await get_or_create_user_async(async_db)
     _legacy_source_thread, legacy_source_issue = await _make_thread_with_issue(
         async_db,
