@@ -9,12 +9,17 @@ on:
   pull_request_review_comment:
     types: [created]
 
+concurrency:
+  group: opencode-${{ github.workflow }}-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   opencode:
     if: |
       github.event_name == 'workflow_dispatch' ||
       (
         github.event_name == 'pull_request' &&
+        (github.event.action != 'labeled' || github.event.label.name == 'factory') &&
         !github.event.pull_request.draft &&
         github.event.pull_request.head.repo.full_name == github.repository &&
         (
@@ -35,13 +40,30 @@ jobs:
     permissions:
       id-token: write
       contents: read
-      pull-requests: read
-      issues: read
+      pull-requests: write
+      issues: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
           persist-credentials: false
+
+      - name: Mark automatic review in progress
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          for label in factory:building factory:changes-requested factory:ci factory:ready; do
+            gh api --method DELETE \
+              "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels/${label}" \
+              >/dev/null 2>&1 || true
+          done
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" \
+            --input - <<'JSON' >/dev/null
+          {"labels":["factory","factory:review"]}
+          JSON
 
       - name: Install pinned FCM discovery CLI
         run: npm install --global --ignore-scripts free-coding-models@0.5.69
@@ -97,6 +119,43 @@ jobs:
         uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a
         env:
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
-          PROMPT: ${{ github.event_name == 'pull_request' && 'Perform an exact-head code review of this pull request. Read the complete diff and relevant surrounding code. Report only actionable correctness, security, regression, maintainability, or missing-test findings. For every actionable finding, use the GitHub API or gh CLI to create a pull-request review comment directly on the relevant changed RIGHT-side diff line; include a concise explanation and a valid suggested patch when appropriate. Do not merely list findings in the final summary, do not comment on unchanged lines, and do not modify or push code. Use the final PR comment only for an overall verdict and a count of inline findings. If no actionable findings exist, state that the exact head passed review with zero inline findings.' || '' }}
+          PROMPT: >-
+            ${{ github.event_name == 'pull_request' && 'Perform an exact-head code review of this pull request. Read the complete diff and relevant surrounding code. Report only actionable correctness, security, regression, maintainability, or missing-test findings. For every actionable finding, use the GitHub API or gh CLI to create a pull-request review comment directly on the relevant changed RIGHT-side diff line; include a concise explanation and a valid suggested patch when appropriate. Do not merely list findings in the final summary, do not comment on unchanged lines, and do not modify, push, or change labels. Use the final PR comment only for an overall verdict and a count of inline findings. End that verdict with exactly OPENCODE_REVIEW: PASS when there are zero actionable inline findings, or OPENCODE_REVIEW: CHANGES_REQUIRED when one or more actionable inline findings were posted.' || '' }}
         with:
           model: ${{ steps.model.outputs.model }}
+
+      - name: Reconcile automatic review stage
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          current_head="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq .head.sha)"
+          if [[ "$current_head" != "$EXPECTED_HEAD" ]]; then
+            echo "PR moved from ${EXPECTED_HEAD} to ${current_head}; refusing to tag a stale review." >&2
+            exit 1
+          fi
+          verdict="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" | \
+            jq -r --arg run "/actions/runs/${GITHUB_RUN_ID}" \
+              '.[] | select(.user.login == "opencode-agent[bot]" and (.body | contains($run))) | .body' | \
+            tail -n 1)"
+          if grep -q 'OPENCODE_REVIEW: CHANGES_REQUIRED' <<< "$verdict"; then
+            target_stage='factory:changes-requested'
+          elif grep -q 'OPENCODE_REVIEW: PASS' <<< "$verdict"; then
+            target_stage='factory:ci'
+          else
+            echo 'OpenCode omitted the required exact-head verdict marker; leaving factory:review in place.' >&2
+            exit 1
+          fi
+          for label in factory:building factory:review factory:changes-requested factory:ci factory:ready; do
+            gh api --method DELETE \
+              "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels/${label}" \
+              >/dev/null 2>&1 || true
+          done
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" \
+            --input - <<JSON >/dev/null
+          {"labels":["factory","${target_stage}"]}
+          JSON
