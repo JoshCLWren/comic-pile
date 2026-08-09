@@ -1,9 +1,10 @@
 """Roll-related Pydantic schemas for request/response validation."""
 
-from typing import ClassVar
+from typing import ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.schemas.continuity_readiness import ContinuityBlocker
 from app.schemas.session import ActiveThreadInfo
 
 
@@ -48,6 +49,23 @@ class RollBootstrapThread(BaseModel):
     last_activity_at: str | None = None
 
 
+class RollRecoveryPrerequisite(BaseModel):
+    """One currently readable prerequisite recommended for a blocked active roll."""
+
+    node_type: Literal["issue", "crossover"]
+    node_id: int
+    label: str
+
+
+class RollRecoveryInfo(BaseModel):
+    """Structured recovery context for a pending roll that became blocked."""
+
+    original_thread_id: int
+    original_thread_title: str
+    direct_blockers: list[ContinuityBlocker] = Field(default_factory=list)
+    readable_prerequisites: list[RollRecoveryPrerequisite] = Field(default_factory=list)
+
+
 class RollBootstrapResponse(BaseModel):
     """Bounded bootstrap payload for the Roll initial render.
 
@@ -64,6 +82,7 @@ class RollBootstrapResponse(BaseModel):
     pending_thread_id: int | None
     last_rolled_result: int | None
     active_thread: ActiveThreadInfo | None
+    roll_recovery: RollRecoveryInfo | None = None
     roll_pool: list[RollBootstrapThread]
     snoozed_threads: list[RollBootstrapThread]
     snoozed_count: int
