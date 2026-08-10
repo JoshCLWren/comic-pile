@@ -100,12 +100,26 @@ async def resolve_current_session(db: AsyncSession, user_id: int) -> Session | N
 async def is_active(
     started_at: datetime,
     ended_at: datetime | None,
-    _db: AsyncSession,
+    db: AsyncSession,
 ) -> bool:
-    """Check whether a session start is within the configured gap."""
-    cutoff_time = datetime.now(UTC) - timedelta(hours=_session_gap_hours())
-    session_time = _as_utc(started_at)
-    return session_time >= cutoff_time and ended_at is None
+    """Check whether a session is the authoritative current session."""
+    if ended_at is not None:
+        return False
+
+    session_result = await db.execute(
+        select(Session)
+        .where(Session.started_at == started_at)
+        .where(Session.ended_at.is_(None))
+        .order_by(Session.id.desc())
+        .limit(1)
+    )
+    session = session_result.scalars().first()
+    if session is None:
+        cutoff_time = datetime.now(UTC) - timedelta(hours=_session_gap_hours())
+        return _as_utc(started_at) >= cutoff_time
+
+    current = await resolve_current_session(db, session.user_id)
+    return current is not None and current.id == session.id
 
 
 async def should_start_new(db: AsyncSession, user_id: int) -> bool:
