@@ -17,9 +17,23 @@ def _local_fixture(path: Path) -> None:
     connection = sqlite3.connect(path)
     connection.executescript(
         """
-        CREATE TABLE cv_volume (id INTEGER PRIMARY KEY, name TEXT, publisher TEXT, start_year INTEGER);
-        CREATE TABLE cv_issue (id INTEGER PRIMARY KEY, volume_id INTEGER, issue_number TEXT, name TEXT);
-        CREATE VIRTUAL TABLE cv_volume_fts USING fts5(name, content='cv_volume', content_rowid='id');
+        CREATE TABLE cv_volume (
+            id INTEGER PRIMARY KEY,
+            name TEXT,
+            publisher TEXT,
+            start_year INTEGER
+        );
+        CREATE TABLE cv_issue (
+            id INTEGER PRIMARY KEY,
+            volume_id INTEGER,
+            issue_number TEXT,
+            name TEXT
+        );
+        CREATE VIRTUAL TABLE cv_volume_fts USING fts5(
+            name,
+            content='cv_volume',
+            content_rowid='id'
+        );
         INSERT INTO cv_volume VALUES (77, 'Planetary', 'WildStorm', 1999);
         INSERT INTO cv_issue VALUES (700, 77, '15', NULL);
         INSERT INTO cv_volume_fts(rowid, name) VALUES (77, 'Planetary');
@@ -55,6 +69,75 @@ async def test_repair_prefers_local_candidates_without_live_search(
     assert scores[0].candidate.issue_id == 700
     assert scores[0].candidate.source == "comicvine-local-sqlite"
     assert decision.status in {"candidate", "confirmed"}
+
+
+@pytest.mark.asyncio
+async def test_exact_cbl_id_bypasses_search_and_uses_exact_local_lookup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Exact embedded CBL issue IDs should confirm without FTS or live search."""
+    database = tmp_path / "localcv.db"
+    _local_fixture(database)
+    snapshot = LocalComicVineSnapshot(database)
+    client = ComicVineClient("secret", tmp_path / "cache")
+
+    monkeypatch.setattr(
+        snapshot,
+        "search_volumes",
+        lambda query, limit=10: (_ for _ in ()).throw(AssertionError("unexpected FTS search")),
+    )
+
+    def fail_live_request(endpoint: str, params: object) -> dict[str, object]:
+        raise AssertionError(f"unexpected live request: {endpoint} {params}")
+
+    monkeypatch.setattr(client, "_request_sync", fail_live_request)
+
+    decision, scores = await repair_identity(
+        snapshot=snapshot,
+        client=client,
+        context=ComicVineRepairContext(title="Planetary", issue_label="15"),
+        thread_issue_labels=["14", "15", "16"],
+        embedded_cbl_issue_id=700,
+    )
+
+    assert decision.status == "confirmed"
+    assert decision.winner is not None
+    assert decision.winner.candidate.issue_id == 700
+    assert len(scores) == 1
+
+
+@pytest.mark.asyncio
+async def test_existing_confirmed_id_bypasses_all_candidate_discovery(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An existing confirmed mapping should remain authoritative without provider discovery."""
+    snapshot = LocalComicVineSnapshot(tmp_path / "missing.db")
+    client = ComicVineClient("secret", tmp_path / "cache")
+
+    monkeypatch.setattr(
+        snapshot,
+        "search_volumes",
+        lambda query, limit=10: (_ for _ in ()).throw(AssertionError("unexpected FTS search")),
+    )
+
+    def fail_live_request(endpoint: str, params: object) -> dict[str, object]:
+        raise AssertionError(f"unexpected live request: {endpoint} {params}")
+
+    monkeypatch.setattr(client, "_request_sync", fail_live_request)
+
+    decision, scores = await repair_identity(
+        snapshot=snapshot,
+        client=client,
+        context=ComicVineRepairContext(title="X-Men", issue_label="1"),
+        thread_issue_labels=["1"],
+        existing_confirmed_issue_id=999,
+    )
+
+    assert decision.status == "confirmed"
+    assert decision.reason == "preserved existing confirmed ComicVine issue mapping"
+    assert scores == ()
 
 
 @pytest.mark.asyncio
