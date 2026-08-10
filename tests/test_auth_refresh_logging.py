@@ -8,6 +8,7 @@ from httpx import AsyncClient
 from jose import jwt
 
 from app.auth import ALGORITHM, SECRET_KEY
+from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME
 
 
 def _auth_reasons(caplog: pytest.LogCaptureFixture) -> list[str]:
@@ -176,6 +177,8 @@ async def test_csrf_middleware_logs_rejection_without_credentials(
     """
     caplog.set_level(logging.WARNING)
     monkeypatch.delenv("TEST_ENVIRONMENT", raising=False)
+    client.cookies.delete(CSRF_COOKIE_NAME)
+    client.headers.pop(CSRF_HEADER_NAME, None)
     secret_value = "Bearer secret-value"
 
     response = await client.post(
@@ -196,17 +199,20 @@ async def test_csrf_middleware_logs_rejection_without_credentials(
 async def test_csrf_middleware_allows_matching_token(
     client: AsyncClient,
     caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A protected auth mutation succeeds when cookie and header CSRF tokens match.
 
     Args:
         client: Async application client backed by the PostgreSQL test database.
         caplog: Pytest log-capture fixture.
+        monkeypatch: Environment patch helper used to exercise production CSRF behavior.
 
     Returns:
         None.
     """
     caplog.set_level(logging.WARNING)
+    monkeypatch.delenv("TEST_ENVIRONMENT", raising=False)
     csrf_response = await client.get("/api/v1/auth/csrf")
     assert csrf_response.status_code == 200
     csrf_token = csrf_response.json()["csrf_token"]
