@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_session_settings
 from app.models import Event, Issue, Session, Snapshot, Thread
+from app.performance_diagnostics import get_request_diagnostics
 from app.services.snapshot_contract import USES_ISSUE_TRACKING_KEY
 
 logger = logging.getLogger(__name__)
@@ -116,6 +117,7 @@ def _log_session_resolution(
     creation_reason: str | None = None,
 ) -> None:
     """Emit one structured record describing current-session resolution."""
+    request_diagnostics = get_request_diagnostics()
     logger.info(
         "Resolved current reading session",
         extra={
@@ -127,6 +129,8 @@ def _log_session_resolution(
             "candidate_unended_sessions": candidate_unended_sessions,
             "has_pending_thread": session.pending_thread_id is not None,
             "has_pending_issue": session.pending_issue_id is not None,
+            "request_id": request_diagnostics.request_id,
+            "route": request_diagnostics.route,
         },
     )
 
@@ -160,9 +164,6 @@ async def is_active(
         cutoff_time = datetime.now(UTC) - timedelta(hours=_session_gap_hours())
         return _as_utc(started_at) >= cutoff_time
     if len(sessions) != 1:
-        # started_at is not a unique identity. Refuse ambiguous authority so the caller
-        # falls back to the user-scoped canonical resolver instead of selecting another
-        # user's session that happens to share the same timestamp.
         return False
 
     session = sessions[0]
