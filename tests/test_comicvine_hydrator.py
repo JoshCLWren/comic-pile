@@ -45,23 +45,41 @@ def target(*, external_id: int | None, issue_number: str = "12") -> HydrationTar
     )
 
 
-def test_unmapped_issue_remains_unresolved() -> None:
+async def test_unmapped_issue_remains_unresolved() -> None:
     """Never guess provider identity when no confirmed mapping exists."""
-    result = inspect_local_snapshot(target(external_id=None), FakeSnapshot())
+    result = await inspect_local_snapshot(target(external_id=None), FakeSnapshot())
 
     assert result.status == "unresolved"
     assert result.comicvine_issue_id is None
 
 
-def test_confirmed_identity_local_miss_is_not_reinterpreted() -> None:
+async def test_confirmed_identity_local_miss_is_not_reinterpreted() -> None:
     """A stale/local miss stays attached to its confirmed provider identity."""
-    result = inspect_local_snapshot(target(external_id=123), FakeSnapshot())
+    result = await inspect_local_snapshot(target(external_id=123), FakeSnapshot())
 
     assert result.status == "local-miss"
     assert result.comicvine_issue_id == 123
 
 
-def test_human_label_preserves_confirmed_mapping() -> None:
+async def test_incomplete_local_row_remains_a_local_miss() -> None:
+    """Incomplete snapshot rows never masquerade as hydrated matches."""
+    snapshot = FakeSnapshot(
+        {
+            55: LocalComicVineResult(
+                data={"issue_number": "5"},
+                complete=False,
+            )
+        }
+    )
+
+    result = await inspect_local_snapshot(target(external_id=55), snapshot)
+
+    assert result.status == "local-miss"
+    assert result.comicvine_issue_id == 55
+    assert "required hydration data is missing" in result.detail
+
+
+async def test_human_label_preserves_confirmed_mapping() -> None:
     """Human issue labels need not equal ComicVine numeric issue text."""
     snapshot = FakeSnapshot(
         {
@@ -71,13 +89,16 @@ def test_human_label_preserves_confirmed_mapping() -> None:
         }
     )
 
-    result = inspect_local_snapshot(target(external_id=55, issue_number="Revival"), snapshot)
+    result = await inspect_local_snapshot(
+        target(external_id=55, issue_number="Revival"),
+        snapshot,
+    )
 
     assert result.status == "matched"
     assert "differs" in result.detail
 
 
-def test_report_counts_are_deterministic() -> None:
+async def test_report_counts_are_deterministic() -> None:
     """Summary categories match per-issue report states."""
     snapshot = FakeSnapshot(
         {1: LocalComicVineResult(data={"issue_number": "1", "volume_id": 10})}
@@ -88,7 +109,7 @@ def test_report_counts_are_deterministic() -> None:
         HydrationTarget(12, 4, "X-Men", "3", 14, None),
     ]
 
-    report = build_report(targets, snapshot)
+    report = await build_report(targets, snapshot)
 
     assert report["summary"] == {
         "total": 3,
@@ -141,6 +162,27 @@ async def test_enumerate_user_issues_ignores_invalid_confirmed_identity() -> Non
     assert db.execute.await_count == 2
 
 
+async def test_conflicting_confirmed_identities_are_order_independent() -> None:
+    """Conflicting confirmed IDs stay unresolved regardless of database row order."""
+    issue = SimpleNamespace(id=10, issue_number="12", position=12)
+    thread = SimpleNamespace(id=4, title="X-Men")
+
+    async def enumerate_with_rows(rows: list[tuple[int, str]]) -> HydrationTarget:
+        issue_rows = Mock()
+        issue_rows.all.return_value = [(issue, thread)]
+        mapping_rows = Mock()
+        mapping_rows.all.return_value = rows
+        db = AsyncMock()
+        db.execute.side_effect = [issue_rows, mapping_rows]
+        return (await enumerate_user_issues(db, user_id=1))[0]
+
+    first = await enumerate_with_rows([(10, "55"), (10, "56")])
+    reversed_order = await enumerate_with_rows([(10, "56"), (10, "55")])
+
+    assert first.comicvine_issue_id is None
+    assert reversed_order.comicvine_issue_id is None
+
+
 def test_write_report_creates_parent_and_replaces_temporary_file(tmp_path: Path) -> None:
     """Report writes create parent directories and leave no temporary artifact behind."""
     destination = tmp_path / "nested" / "hydration.json"
@@ -150,4 +192,4 @@ def test_write_report_creates_parent_and_replaces_temporary_file(tmp_path: Path)
 
     assert json.loads(destination.read_text(encoding="utf-8")) == report
     assert destination.read_text(encoding="utf-8").endswith("\n")
-    assert not destination.with_suffix(".json.tmp").exists()
+    assert list(destination.parent.glob(".hydration.json.*.tmp")) == []
