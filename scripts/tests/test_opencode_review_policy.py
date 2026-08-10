@@ -25,12 +25,16 @@ class OpenCodeReviewPolicyTests(unittest.TestCase):
         )
 
     def test_workflow_reconciles_labels_atomically_and_preserves_owner(self) -> None:
-        """Reject sequential stage mutation or owner-dropping label replacement."""
+        """Reject additive/sequential stage mutation or owner-dropping replacement."""
         workflow = OPENCODE_WORKFLOW.read_text(encoding="utf-8")
         self.assertNotIn("gh api --method DELETE", workflow)
         self.assertIn('^factory:(unowned|local|[1-5])$', workflow)
         self.assertIn('first // "factory:unowned"', workflow)
-        self.assertGreaterEqual(workflow.count('gh api --method POST'), 2)
+        self.assertEqual(workflow.count('gh api --method PUT'), 2)
+        self.assertNotIn(
+            'gh api --method POST \\\n            "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels"',
+            workflow,
+        )
         self.assertGreaterEqual(workflow.count('"factory", $owner'), 2)
 
     def test_reviewer_has_no_merge_or_label_mutation_command(self) -> None:
