@@ -2,6 +2,7 @@
 
 from unittest.mock import ANY, AsyncMock
 
+from fastapi import HTTPException
 import pytest
 
 from app.continuity_chains import ContinuityTraversalNode, ContinuityTraversalResult
@@ -51,6 +52,40 @@ async def test_roll_recovery_is_absent_when_pending_roll_is_readable(
 
     assert recovery is None
     resolver.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_roll_recovery_ignores_stale_pending_thread(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    resolver = AsyncMock(side_effect=HTTPException(status_code=404, detail="Thread 42 not found"))
+    monkeypatch.setattr("app.roll_recovery.resolve_continuity_chains", resolver)
+
+    recovery = await build_roll_recovery(
+        AsyncMock(),
+        user_id=1,
+        pending_thread_id=42,
+        pending_thread_title="Original Roll",
+    )
+
+    assert recovery is None
+    resolver.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_roll_recovery_preserves_non_stale_resolver_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    resolver = AsyncMock(side_effect=HTTPException(status_code=500, detail="Traversal failed"))
+    monkeypatch.setattr("app.roll_recovery.resolve_continuity_chains", resolver)
+
+    with pytest.raises(HTTPException, match="Traversal failed"):
+        await build_roll_recovery(
+            AsyncMock(),
+            user_id=1,
+            pending_thread_id=42,
+            pending_thread_title="Original Roll",
+        )
 
 
 @pytest.mark.asyncio
