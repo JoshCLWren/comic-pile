@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Protocol
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,9 +12,28 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 from app.models.issue import Issue
 from app.models.thread import Thread
-from comic_pile.local_comicvine import LocalComicVineSnapshot
+from comic_pile.local_comicvine import LocalComicVineResult
 
 HydrationStatus = Literal["matched", "local-miss", "unresolved"]
+
+
+class ComicVineSnapshotReader(Protocol):
+    """Read-only ComicVine snapshot contract used by the hydrator."""
+
+    path: Path | None
+
+    @property
+    def available(self) -> bool:
+        """Return whether snapshot data can be read."""
+        ...
+
+    def get_issue(self, issue_id: int) -> LocalComicVineResult | None:
+        """Return one local ComicVine issue by provider ID."""
+        ...
+
+    def sync_metadata(self) -> dict[str, object]:
+        """Return snapshot freshness metadata."""
+        ...
 
 
 @dataclass(frozen=True)
@@ -118,7 +137,7 @@ async def enumerate_user_issues(
 
 def inspect_local_snapshot(
     target: HydrationTarget,
-    snapshot: LocalComicVineSnapshot,
+    snapshot: ComicVineSnapshotReader,
 ) -> HydrationResult:
     """Resolve one target from confirmed identity plus the local snapshot only.
 
@@ -183,7 +202,7 @@ def inspect_local_snapshot(
 
 def build_report(
     targets: list[HydrationTarget],
-    snapshot: LocalComicVineSnapshot,
+    snapshot: ComicVineSnapshotReader,
 ) -> dict[str, object]:
     """Build a deterministic report suitable for resumable hydrator handoff.
 
