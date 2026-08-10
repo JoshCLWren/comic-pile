@@ -20,6 +20,7 @@ from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Thread
 from app.models.user import User
+from app.roll_recovery import build_roll_recovery
 from app.schemas import (
     OverrideRequest,
     RollBootstrapResponse,
@@ -336,7 +337,7 @@ async def clear_manual_die(
 
     Args:
         current_user: The authenticated user making the request.
-        db: SQLAlchemy session for database operations.
+        db: Async database session.
 
     Returns:
         HTML string with the current die size.
@@ -382,6 +383,17 @@ async def roll_bootstrap(
     manual_die = current_session.manual_die
     pending_thread_id = current_session.pending_thread_id
     last_rolled_result = active_thread.last_rolled_result if active_thread else None
+    pending_thread_title = (
+        active_thread.title
+        if active_thread is not None and active_thread.id == pending_thread_id
+        else None
+    )
+    roll_recovery = await build_roll_recovery(
+        db,
+        user_id=user_id,
+        pending_thread_id=pending_thread_id,
+        pending_thread_title=pending_thread_title,
+    )
 
     pool_query = (
         select(Thread.id, Thread.title, Thread.format)
@@ -462,7 +474,9 @@ async def roll_bootstrap(
         )
         stale_row = stale_result.first()
         if stale_row:
-            stale_last_activity = stale_row.last_activity_at.isoformat() if stale_row.last_activity_at else None
+            stale_last_activity = (
+                stale_row.last_activity_at.isoformat() if stale_row.last_activity_at else None
+            )
             stale_thread = RollBootstrapThread(
                 id=stale_row.id,
                 title=stale_row.title,
@@ -477,6 +491,7 @@ async def roll_bootstrap(
         last_rolled_result=last_rolled_result,
         active_thread=active_thread,
         roll_pool=roll_pool,
+        roll_recovery=roll_recovery,
         snoozed_threads=snoozed_threads,
         snoozed_count=len(snoozed_threads),
         blocked_count=blocked_count,

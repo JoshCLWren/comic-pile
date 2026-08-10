@@ -8,6 +8,34 @@ export interface RollBootstrapThread {
   last_activity_at?: string | null
 }
 
+/** One direct continuity blocker for a pending roll. */
+export interface RollRecoveryBlocker {
+  rule_id: number
+  source_type: 'issue' | 'crossover'
+  source_id: number
+  source_label: string
+  satisfaction_type: 'item_read' | 'all_members_read' | 'checkpoint' | 'selected_members_read'
+  satisfied: false
+  causing_issue_ids: number[]
+  causing_member_issue_ids: number[]
+  note: string | null
+}
+
+/** One currently readable prerequisite recommended by continuity traversal. */
+export interface RollRecoveryPrerequisite {
+  node_type: 'issue' | 'crossover'
+  node_id: number
+  label: string
+}
+
+/** Recovery context that keeps the original pending roll visible while blocked. */
+export interface RollRecoveryInfo {
+  original_thread_id: number
+  original_thread_title: string
+  direct_blockers: RollRecoveryBlocker[]
+  readable_prerequisites: RollRecoveryPrerequisite[]
+}
+
 /** Bounded bootstrap payload for the Roll initial render. */
 export interface RollBootstrapResponse {
   session_id: number
@@ -17,6 +45,7 @@ export interface RollBootstrapResponse {
   pending_thread_id: number | null
   last_rolled_result: number | null
   active_thread: SessionThread | null
+  roll_recovery?: RollRecoveryInfo | null
   roll_pool: RollBootstrapThread[]
   snoozed_threads: RollBootstrapThread[]
   snoozed_count: number

@@ -2055,6 +2055,16 @@
             "title": "Roll Pool",
             "type": "array"
           },
+          "roll_recovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RollRecoveryInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "session_id": {
             "title": "Session Id",
             "type": "integer"
@@ -2141,6 +2151,67 @@
           "format"
         ],
         "title": "RollBootstrapThread",
+        "type": "object"
+      },
+      "RollRecoveryInfo": {
+        "description": "Structured recovery context for a pending roll that became blocked.",
+        "properties": {
+          "direct_blockers": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityBlocker"
+            },
+            "title": "Direct Blockers",
+            "type": "array"
+          },
+          "original_thread_id": {
+            "title": "Original Thread Id",
+            "type": "integer"
+          },
+          "original_thread_title": {
+            "title": "Original Thread Title",
+            "type": "string"
+          },
+          "readable_prerequisites": {
+            "items": {
+              "$ref": "#/components/schemas/RollRecoveryPrerequisite"
+            },
+            "title": "Readable Prerequisites",
+            "type": "array"
+          }
+        },
+        "required": [
+          "original_thread_id",
+          "original_thread_title"
+        ],
+        "title": "RollRecoveryInfo",
+        "type": "object"
+      },
+      "RollRecoveryPrerequisite": {
+        "description": "One currently readable prerequisite recommended for a blocked active roll.",
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "integer"
+          },
+          "node_type": {
+            "enum": [
+              "issue",
+              "crossover"
+            ],
+            "title": "Node Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "node_type",
+          "node_id",
+          "label"
+        ],
+        "title": "RollRecoveryPrerequisite",
         "type": "object"
       },
       "RollRequest": {
@@ -4114,7 +4185,7 @@
     },
     "/api/roll/clear-manual-die": {
       "post": {
-        "description": "Clear manual die size and return to automatic dice ladder mode.\n\nArgs:\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    HTML string with the current die size.",
+        "description": "Clear manual die size and return to automatic dice ladder mode.\n\nArgs:\n    current_user: The authenticated user making the request.\n    db: Async database session.\n\nReturns:\n    HTML string with the current die size.",
         "operationId": "clear_manual_die_api_roll_clear_manual_die_post",
         "responses": {
           "200": {
@@ -7060,7 +7131,7 @@
     },
     "/api/v1/roll/clear-manual-die": {
       "post": {
-        "description": "Clear manual die size and return to automatic dice ladder mode.\n\nArgs:\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    HTML string with the current die size.",
+        "description": "Clear manual die size and return to automatic dice ladder mode.\n\nArgs:\n    current_user: The authenticated user making the request.\n    db: Async database session.\n\nReturns:\n    HTML string with the current die size.",
         "operationId": "clear_manual_die_api_v1_roll_clear_manual_die_post",
         "responses": {
           "200": {

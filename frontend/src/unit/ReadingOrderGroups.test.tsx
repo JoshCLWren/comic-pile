@@ -3,12 +3,17 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ReadingOrderGroups } from '../pages/RollPage/components/ReadingOrderGroups'
 import { useDependencyGroups } from '../hooks/useDependencyGroups'
+import { useRollBootstrap } from '../hooks/useRollBootstrap'
 
 vi.mock('../hooks/useDependencyGroups', () => ({
   useDependencyGroups: vi.fn(),
 }))
+vi.mock('../hooks/useRollBootstrap', () => ({
+  useRollBootstrap: vi.fn(),
+}))
 
 const mockedUseDependencyGroups = vi.mocked(useDependencyGroups)
+const mockedUseRollBootstrap = vi.mocked(useRollBootstrap)
 
 function renderGroups(threadId: number | null) {
   return render(
@@ -21,6 +26,14 @@ function renderGroups(threadId: number | null) {
 describe('ReadingOrderGroups', () => {
   beforeEach(() => {
     mockedUseDependencyGroups.mockReset()
+    mockedUseRollBootstrap.mockReset()
+    mockedUseRollBootstrap.mockReturnValue({
+      data: null,
+      isPending: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    })
   })
 
   it('renders nothing when there is no active thread', () => {
