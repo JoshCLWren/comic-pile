@@ -1,6 +1,5 @@
 """Queue API routes."""
 
-import asyncio
 import logging
 from datetime import UTC, datetime
 from typing import Annotated
@@ -10,9 +9,9 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.session import _invalidate_session_caches
-from app.api.thread import _invalidate_thread_caches, thread_to_response
+from app.api.thread import thread_to_response
 from app.auth import get_current_user
+from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Thread, User
@@ -27,10 +26,7 @@ router = APIRouter()
 
 async def _invalidate_queue_caches(user_id: int) -> None:
     """Invalidate every cached view affected by queue reordering."""
-    await asyncio.gather(
-        _invalidate_thread_caches(user_id, all_details=True),
-        _invalidate_session_caches(user_id),
-    )
+    await invalidate_user_view(user_id)
 
 
 class PositionRequest(BaseModel):
