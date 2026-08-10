@@ -4,7 +4,7 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 import logging
 
-from sqlalchemy import and_, or_, select, text
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,34 +45,69 @@ def _current_session_filter(user_id: int, cutoff_time: datetime):
     )
 
 
+def _as_utc(value: datetime) -> datetime:
+    """Normalize persisted timestamps for deterministic comparisons."""
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
+def _last_activity_at(session: Session, last_event_at: datetime | None) -> datetime:
+    """Return the latest durable reading activity for a session."""
+    candidates = [_as_utc(session.started_at)]
+    if session.pending_thread_updated_at is not None:
+        candidates.append(_as_utc(session.pending_thread_updated_at))
+    if last_event_at is not None:
+        candidates.append(_as_utc(last_event_at))
+    return max(candidates)
+
+
+async def resolve_current_session(db: AsyncSession, user_id: int) -> Session | None:
+    """Resolve the authoritative unended session from durable recent activity."""
+    cutoff_time = datetime.now(UTC) - timedelta(hours=_session_gap_hours())
+    result = await db.execute(
+        select(Session, func.max(Event.timestamp).label("last_event_at"))
+        .outerjoin(Event, Event.session_id == Session.id)
+        .where(Session.user_id == user_id)
+        .where(Session.ended_at.is_(None))
+        .group_by(Session.id)
+    )
+
+    candidates: list[tuple[bool, datetime, datetime, int, Session]] = []
+    for session, last_event_at in result.all():
+        activity_at = _last_activity_at(session, last_event_at)
+        if activity_at < cutoff_time:
+            continue
+        has_pending_context = (
+            session.pending_thread_id is not None or session.pending_issue_id is not None
+        )
+        candidates.append(
+            (
+                has_pending_context,
+                activity_at,
+                _as_utc(session.started_at),
+                session.id or 0,
+                session,
+            )
+        )
+
+    if not candidates:
+        return None
+    return max(candidates, key=lambda candidate: candidate[:4])[4]
+
+
 async def is_active(
     started_at: datetime,
     ended_at: datetime | None,
     _db: AsyncSession,
 ) -> bool:
-    """Check whether a session is within the configured gap."""
+    """Check whether a session start is within the configured gap."""
     cutoff_time = datetime.now(UTC) - timedelta(hours=_session_gap_hours())
-    session_time = started_at
-    if session_time.tzinfo is None:
-        session_time = session_time.replace(tzinfo=UTC)
+    session_time = _as_utc(started_at)
     return session_time >= cutoff_time and ended_at is None
 
 
 async def should_start_new(db: AsyncSession, user_id: int) -> bool:
-    """Check whether no current session exists in the configured gap.
-
-    Args:
-        db: Async database session used to resolve current reading sessions.
-        user_id: User whose current reading session should be checked.
-
-    Returns:
-        True when a new reading session should be created.
-    """
-    cutoff_time = datetime.now(UTC) - timedelta(hours=_session_gap_hours())
-    result = await db.execute(
-        select(Session).where(_current_session_filter(user_id, cutoff_time))
-    )
-    return len(result.scalars().all()) == 0
+    """Check whether no authoritative current session exists."""
+    return await resolve_current_session(db, user_id) is None
 
 
 async def create_session_start_snapshot(db: AsyncSession, session: Session) -> None:
@@ -156,15 +191,7 @@ async def create_session_start_snapshot(db: AsyncSession, session: Session) -> N
 
 
 async def get_or_create(db: AsyncSession, user_id: int) -> Session:
-    """Get an active session or create one.
-
-    Args:
-        db: Async database session used to resolve or create the reading session.
-        user_id: User whose authoritative reading session should be returned.
-
-    Returns:
-        The user's authoritative current reading session.
-    """
+    """Get the authoritative active session or create one race-safely."""
     from app.models import User
 
     max_retries = 3
@@ -173,7 +200,6 @@ async def get_or_create(db: AsyncSession, user_id: int) -> Session:
 
     while retries < max_retries:
         try:
-            session_gap_hours = _session_gap_hours()
             start_die = _start_die()
 
             user_result = await db.execute(select(User).where(User.id == user_id))
@@ -183,19 +209,16 @@ async def get_or_create(db: AsyncSession, user_id: int) -> Session:
                 db.add(user)
                 await db.commit()
 
-            cutoff_time = datetime.now(UTC) - timedelta(hours=session_gap_hours)
-            result = await db.execute(
-                select(Session)
-                .where(_current_session_filter(user_id, cutoff_time))
-                .order_by(Session.started_at.desc(), Session.id.desc())
-            )
-            active_session = result.scalars().first()
+            active_session = await resolve_current_session(db, user_id)
             if active_session:
                 return active_session
 
             async with _session_creation_lock:
                 try:
-                    await db.execute(text("SELECT pg_advisory_xact_lock(12345)"))
+                    await db.execute(
+                        text("SELECT pg_advisory_xact_lock(:user_id)"),
+                        {"user_id": user_id},
+                    )
                 except Exception as error:
                     logger.warning(
                         "Advisory lock failed: %s. Continuing with asyncio.Lock "
@@ -203,12 +226,7 @@ async def get_or_create(db: AsyncSession, user_id: int) -> Session:
                         error,
                     )
 
-                result = await db.execute(
-                    select(Session)
-                    .where(_current_session_filter(user_id, cutoff_time))
-                    .order_by(Session.started_at.desc(), Session.id.desc())
-                )
-                active_session = result.scalars().first()
+                active_session = await resolve_current_session(db, user_id)
                 if active_session:
                     return active_session
 
@@ -217,6 +235,15 @@ async def get_or_create(db: AsyncSession, user_id: int) -> Session:
                 await create_session_start_snapshot(db, new_session)
                 await db.commit()
                 await db.refresh(new_session)
+                logger.info(
+                    "Resolved current reading session",
+                    extra={
+                        "user_id": user_id,
+                        "session_id": new_session.id,
+                        "session_resolution": "created",
+                        "session_creation_reason": "no_recent_unended_session",
+                    },
+                )
                 return new_session
         except OperationalError as error:
             if "deadlock" not in str(error).lower():
