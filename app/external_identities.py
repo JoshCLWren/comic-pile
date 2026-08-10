@@ -3,6 +3,7 @@
 from datetime import datetime
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.external_identity import (
@@ -31,23 +32,7 @@ async def upsert_external_identity(
     metadata_json: dict[str, object] | None = None,
     provider_updated_at: datetime | None = None,
 ) -> ExternalIdentity:
-    """Create or update one provider identity without duplicating its stable key.
-
-    Args:
-        db: Active asynchronous database session.
-        provider: Provider namespace, such as ``comicvine`` or ``cbl``.
-        entity_type: ``issue`` or ``series``.
-        external_id: Stable identifier inside the provider namespace.
-        external_url: Optional diagnostic provider URL.
-        metadata_json: Provider-specific identity metadata retained for diagnostics.
-        provider_updated_at: Optional provider freshness timestamp.
-
-    Returns:
-        The existing or newly created external identity.
-
-    Raises:
-        ExternalIdentityMappingError: If required identity fields are invalid.
-    """
+    """Create or update one provider identity without duplicating its stable key."""
     normalized_provider = provider.strip().lower()
     normalized_external_id = external_id.strip()
     if not normalized_provider or not normalized_external_id:
@@ -55,26 +40,29 @@ async def upsert_external_identity(
     if entity_type not in ENTITY_TYPES:
         raise ExternalIdentityMappingError(f"unsupported entity_type: {entity_type}")
 
-    result = await db.execute(
-        select(ExternalIdentity).where(
-            ExternalIdentity.provider == normalized_provider,
-            ExternalIdentity.entity_type == entity_type,
-            ExternalIdentity.external_id == normalized_external_id,
-        )
+    identity_query = select(ExternalIdentity).where(
+        ExternalIdentity.provider == normalized_provider,
+        ExternalIdentity.entity_type == entity_type,
+        ExternalIdentity.external_id == normalized_external_id,
     )
-    identity = result.scalar_one_or_none()
+    identity = (await db.execute(identity_query)).scalar_one_or_none()
     if identity is None:
-        identity = ExternalIdentity(
-            provider=normalized_provider,
-            entity_type=entity_type,
-            external_id=normalized_external_id,
-            external_url=external_url,
-            metadata_json=metadata_json or {},
-            provider_updated_at=provider_updated_at,
-        )
-        db.add(identity)
-        await db.flush()
-        return identity
+        try:
+            async with db.begin_nested():
+                identity = ExternalIdentity(
+                    provider=normalized_provider,
+                    entity_type=entity_type,
+                    external_id=normalized_external_id,
+                    external_url=external_url,
+                    metadata_json=metadata_json or {},
+                    provider_updated_at=provider_updated_at,
+                )
+                db.add(identity)
+                await db.flush()
+        except IntegrityError:
+            identity = (await db.execute(identity_query)).scalar_one()
+        else:
+            return identity
 
     if (
         provider_updated_at is not None
@@ -104,29 +92,13 @@ async def link_issue_external_identity(
     confidence: float | None = None,
     rejection_reason: str | None = None,
 ) -> IssueExternalIdentityMapping:
-    """Attach issue-level external evidence after enforcing user ownership.
-
-    Args:
-        db: Active asynchronous database session.
-        user_id: Owner of the target ComicPile issue.
-        issue_id: ComicPile issue to map.
-        external_identity_id: Provider identity to attach.
-        status: Mapping state.
-        evidence_source: Human-readable provenance such as a CBL source path.
-        confidence: Optional normalized score in the inclusive range 0..1.
-        rejection_reason: Optional reason retained for rejected candidates.
-
-    Returns:
-        The idempotently created or updated mapping.
-
-    Raises:
-        ExternalIdentityMappingError: If ownership, entity type, status, or confidence is invalid.
-    """
+    """Attach issue-level external evidence after enforcing user ownership."""
     _validate_mapping_fields(status=status, confidence=confidence)
     owned_issue = await db.scalar(
         select(Issue.id)
         .join(Thread, Thread.id == Issue.thread_id)
         .where(Issue.id == issue_id, Thread.user_id == user_id)
+        .with_for_update(of=Issue)
     )
     if owned_issue is None:
         raise ExternalIdentityMappingError("issue is not owned by this user")
@@ -187,14 +159,12 @@ async def link_thread_external_series(
     evidence_source: str | None = None,
     confidence: float | None = None,
 ) -> ThreadExternalSeriesMapping:
-    """Attach non-exclusive external series evidence to an owned reading thread.
-
-    Multiple series identities may be confirmed for one thread because a ComicPile thread is a
-    reading project rather than an external provider volume.
-    """
+    """Attach non-exclusive external series evidence to an owned reading thread."""
     _validate_mapping_fields(status=status, confidence=confidence)
     owned_thread = await db.scalar(
-        select(Thread.id).where(Thread.id == thread_id, Thread.user_id == user_id)
+        select(Thread.id)
+        .where(Thread.id == thread_id, Thread.user_id == user_id)
+        .with_for_update(of=Thread)
     )
     if owned_thread is None:
         raise ExternalIdentityMappingError("thread is not owned by this user")
