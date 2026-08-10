@@ -19,6 +19,11 @@ def _resolution_record(caplog: pytest.LogCaptureFixture) -> logging.LogRecord:
     )
 
 
+def _field(record: logging.LogRecord, name: str) -> object:
+    """Read a structured logging field without inventing LogRecord attributes for typing."""
+    return record.__dict__[name]
+
+
 @pytest.mark.asyncio
 async def test_reused_session_logs_resolution_and_request_context(
     async_db: AsyncSession,
@@ -51,14 +56,14 @@ async def test_reused_session_logs_resolution_and_request_context(
 
     assert resolved.id == current.id
     record = _resolution_record(caplog)
-    assert record.session_id == current.id
-    assert record.session_resolution == "reused"
-    assert record.session_creation_reason is None
-    assert record.candidate_unended_sessions == 2
-    assert record.has_pending_thread is False
-    assert record.has_pending_issue is False
-    assert record.request_id == "request-987-reuse"
-    assert record.route == "/api/v1/roll/bootstrap"
+    assert _field(record, "session_id") == current.id
+    assert _field(record, "session_resolution") == "reused"
+    assert _field(record, "session_creation_reason") is None
+    assert _field(record, "candidate_unended_sessions") == 2
+    assert _field(record, "has_pending_thread") is False
+    assert _field(record, "has_pending_issue") is False
+    assert _field(record, "request_id") == "request-987-reuse"
+    assert _field(record, "route") == "/api/v1/roll/bootstrap"
 
 
 @pytest.mark.asyncio
@@ -87,11 +92,11 @@ async def test_created_session_logs_reason_and_candidate_count(
         end_request_diagnostics(token)
 
     record = _resolution_record(caplog)
-    assert record.session_id == created.id
-    assert record.session_resolution == "created"
-    assert record.session_creation_reason == "no_recent_unended_session"
-    assert record.candidate_unended_sessions == 1
-    assert record.has_pending_thread is False
-    assert record.has_pending_issue is False
-    assert record.request_id == "request-987-create"
-    assert record.route == "/api/v1/roll/bootstrap"
+    assert _field(record, "session_id") == created.id
+    assert _field(record, "session_resolution") == "created"
+    assert _field(record, "session_creation_reason") == "no_recent_unended_session"
+    assert _field(record, "candidate_unended_sessions") == 1
+    assert _field(record, "has_pending_thread") is False
+    assert _field(record, "has_pending_issue") is False
+    assert _field(record, "request_id") == "request-987-create"
+    assert _field(record, "route") == "/api/v1/roll/bootstrap"
