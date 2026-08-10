@@ -41,7 +41,14 @@ class CBLParseFailure:
 
 
 def discover_cbl_files(mirror_path: Path) -> tuple[Path, ...]:
-    """Return every CBL file beneath a mirror in deterministic relative-path order."""
+    """Return every CBL file beneath a mirror in deterministic relative-path order.
+
+    Args:
+        mirror_path: Root directory of the configured local CBL mirror.
+
+    Returns:
+        All discovered CBL file paths sorted by case-insensitive relative path.
+    """
     return tuple(
         sorted(
             (path for path in mirror_path.rglob("*") if path.is_file() and path.suffix.lower() == ".cbl"),
@@ -51,7 +58,15 @@ def discover_cbl_files(mirror_path: Path) -> tuple[Path, ...]:
 
 
 def parse_cbl_file(path: Path, *, mirror_path: Path) -> CBLList:
-    """Parse a CBL file without performing database or network I/O."""
+    """Parse a CBL file without performing database or network I/O.
+
+    Args:
+        path: CBL file to parse.
+        mirror_path: Root directory used to derive stable source-relative provenance.
+
+    Returns:
+        Parsed list metadata, ordered book entries, source path, and content hash.
+    """
     raw = path.read_bytes()
     relative_path = path.relative_to(mirror_path).as_posix()
     try:
@@ -74,7 +89,14 @@ def parse_cbl_file(path: Path, *, mirror_path: Path) -> CBLList:
 
 
 def parse_cbl_mirror(mirror_path: Path) -> tuple[tuple[CBLList, ...], tuple[CBLParseFailure, ...]]:
-    """Parse all CBL files while isolating malformed files with path-specific diagnostics."""
+    """Parse all CBL files while isolating malformed files with path-specific diagnostics.
+
+    Args:
+        mirror_path: Root directory of the configured local CBL mirror.
+
+    Returns:
+        A pair containing successfully parsed lists and path-specific parse failures.
+    """
     parsed: list[CBLList] = []
     failures: list[CBLParseFailure] = []
     for path in discover_cbl_files(mirror_path):
