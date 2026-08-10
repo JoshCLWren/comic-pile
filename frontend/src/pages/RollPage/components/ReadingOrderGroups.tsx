@@ -28,16 +28,21 @@ export function ReadingOrderGroups({ threadId }: ReadingOrderGroupsProps) {
   const recovery = bootstrap?.roll_recovery
   const handleReadNow = async (prerequisite: RollRecoveryPrerequisite) => {
     if (isSwitching) return
+    if (prerequisite.node_type !== 'issue') {
+      setSwitchError('Choose a concrete readable issue from this crossover before switching the Roll target.')
+      return
+    }
+
     setIsSwitching(true)
     setSwitchError(null)
     try {
       await rollBootstrapApi.switchPrerequisite({
-        node_type: prerequisite.node_type,
+        node_type: 'issue',
         node_id: prerequisite.node_id,
       })
       await fetchAndPublishRollBootstrap()
-    } catch {
-      setSwitchError('That prerequisite changed before ComicPile could switch to it. The guidance has been refreshed.')
+    } catch (error) {
+      setSwitchError(getApiErrorDetail(error))
       try {
         await fetchAndPublishRollBootstrap()
       } catch {
