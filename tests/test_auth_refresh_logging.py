@@ -5,10 +5,15 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
+from httpx._transports.asgi import ASGITransport
 from jose import jwt
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import ALGORITHM, SECRET_KEY
 from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME
+from app.database import get_db
+from app.main import app
+from tests.conftest import _create_async_db_override
 
 
 def _auth_reasons(caplog: pytest.LogCaptureFixture) -> list[str]:
@@ -161,14 +166,14 @@ async def test_refresh_logs_revoked_token_and_success(
 
 @pytest.mark.asyncio
 async def test_csrf_middleware_logs_rejection_without_credentials(
-    client: AsyncClient,
+    async_db: AsyncSession,
     caplog: pytest.LogCaptureFixture,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The middleware logs rejected auth mutations before returning 403.
 
     Args:
-        client: Async application client backed by the PostgreSQL test database.
+        async_db: Async SQLAlchemy session backed by the PostgreSQL test database.
         caplog: Pytest log-capture fixture.
         monkeypatch: Environment patch helper used to exercise production CSRF behavior.
 
@@ -177,14 +182,16 @@ async def test_csrf_middleware_logs_rejection_without_credentials(
     """
     caplog.set_level(logging.WARNING)
     monkeypatch.delenv("TEST_ENVIRONMENT", raising=False)
-    client.cookies.delete(CSRF_COOKIE_NAME)
-    client.headers.pop(CSRF_HEADER_NAME, None)
-    secret_value = "Bearer secret-value"
 
-    response = await client.post(
-        "/api/v1/auth/logout",
-        headers={"Authorization": secret_value},
-    )
+    app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        secret_value = "Bearer secret-value"
+
+        response = await ac.post(
+            "/api/v1/auth/logout",
+            headers={"Authorization": secret_value},
+        )
 
     assert response.status_code == 403
     assert "csrf_rejected" in _auth_reasons(caplog)
