@@ -9,7 +9,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -59,7 +59,7 @@ class PersistentEndpointLimiter:
         path: str | Path,
         *,
         requests_per_hour: int = DEFAULT_REQUESTS_PER_HOUR,
-        clock: callable = time.time,
+        clock: Callable[[], float] = time.time,
     ) -> None:
         """Configure a persistent rolling-hour limiter.
 
@@ -87,7 +87,9 @@ class PersistentEndpointLimiter:
         result: dict[str, list[float]] = {}
         for endpoint, timestamps in raw.items():
             if isinstance(endpoint, str) and isinstance(timestamps, list):
-                result[endpoint] = [float(value) for value in timestamps if isinstance(value, int | float)]
+                result[endpoint] = [
+                    float(value) for value in timestamps if isinstance(value, int | float)
+                ]
         return result
 
     def _write(self, ledger: Mapping[str, list[float]]) -> None:
