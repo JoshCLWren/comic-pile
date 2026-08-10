@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   issues: write
 
 concurrency:
@@ -23,13 +23,6 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
-
-      - name: Check out PR head for generated-artifact repair
-        if: github.event_name == 'pull_request' && github.head_ref == 'factory/850-continuity-chain-viewer'
-        shell: bash
-        run: |
-          git fetch origin "$GITHUB_HEAD_REF"
-          git checkout -B "$GITHUB_HEAD_REF" "origin/$GITHUB_HEAD_REF"
 
       - name: Set up Python 3.14
         uses: actions/setup-python@v6
@@ -69,16 +62,6 @@ jobs:
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
-
-      - name: Commit regenerated artifacts for PR 1051 repair
-        if: github.event_name == 'pull_request' && github.head_ref == 'factory/850-continuity-chain-viewer' && steps.drift.outputs.changed == 'true'
-        shell: bash
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add frontend/src/generated/openapi.json frontend/src/generated/openapi.ts
-          git commit -m 'Regenerate OpenAPI client artifacts'
-          git push origin "HEAD:$GITHUB_HEAD_REF"
 
       - name: Upload regenerated artifacts
         id: generated-artifacts
@@ -207,7 +190,7 @@ jobs:
               owner,
               repo,
               issue_number: handoffIssue.number,
-              body: `Generated OpenAPI artifacts are current on \`${context.sha}\`. Closing the factory handoff automatically.`,
+              body: `Generated OpenAPI artifacts are current on \`main\` at \`${context.sha}\`. Closing the factory handoff automatically.`,
             });
             core.notice(`Closed resolved OpenAPI drift issue #${handoffIssue.number}.`);
 
