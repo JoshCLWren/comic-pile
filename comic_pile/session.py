@@ -110,7 +110,6 @@ async def is_active(
         select(Session)
         .where(Session.started_at == started_at)
         .where(Session.ended_at.is_(None))
-        .order_by(Session.id.desc())
         .limit(1)
     )
     session = session_result.scalars().first()
