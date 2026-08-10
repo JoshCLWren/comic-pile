@@ -15,7 +15,7 @@ class RollPrerequisiteSwitchRequest(BaseModel):
 
 
 class RollPrerequisiteSwitchResponse(BaseModel):
-    """Durable active-target state after accepting a prerequisite recommendation."""
+    """Durable active-target state after accepting a recovery recommendation."""
 
     original_thread_id: int
     target_thread_id: int
