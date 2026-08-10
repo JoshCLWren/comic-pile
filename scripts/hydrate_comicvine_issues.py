@@ -43,7 +43,8 @@ async def run(args: argparse.Namespace) -> None:
             user_id=args.user_id,
             include_test_threads=args.include_test_threads,
         )
-    write_report(build_report(targets, snapshot), args.output)
+    report = await build_report(targets, snapshot)
+    write_report(report, args.output)
 
 
 def main() -> None:
