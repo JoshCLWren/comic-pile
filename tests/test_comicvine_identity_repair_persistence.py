@@ -76,7 +76,9 @@ async def test_persist_repair_decision_records_score_evidence_and_segment(
     assert mapping.evidence_json["segment_start"] == "1"
     assert mapping.evidence_json["segment_end"] == "41"
     assert mapping.evidence_json["stale_snapshot"] is False
-    assert "publisher matches" in mapping.evidence_json["evidence"]
+    evidence = mapping.evidence_json["evidence"]
+    assert isinstance(evidence, list)
+    assert "publisher matches" in evidence
 
 
 @pytest.mark.asyncio
