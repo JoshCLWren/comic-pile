@@ -63,8 +63,11 @@ def _last_activity_at(session: Session, last_event_at: datetime | None) -> datet
     return max(candidates)
 
 
-async def resolve_current_session(db: AsyncSession, user_id: int) -> Session | None:
-    """Resolve the authoritative unended session from durable recent activity."""
+async def _resolve_current_session_with_candidate_count(
+    db: AsyncSession,
+    user_id: int,
+) -> tuple[Session | None, int]:
+    """Resolve current session and report how many unended rows were considered."""
     cutoff_time = datetime.now(UTC) - timedelta(hours=_session_gap_hours())
     result = await db.execute(
         select(Session, func.max(Event.timestamp).label("last_event_at"))
@@ -73,9 +76,10 @@ async def resolve_current_session(db: AsyncSession, user_id: int) -> Session | N
         .where(Session.ended_at.is_(None))
         .group_by(Session.id)
     )
+    rows = result.all()
 
     candidates: list[tuple[bool, datetime, datetime, int, Session]] = []
-    for session, last_event_at in result.all():
+    for session, last_event_at in rows:
         activity_at = _last_activity_at(session, last_event_at)
         if activity_at < cutoff_time:
             continue
@@ -93,8 +97,38 @@ async def resolve_current_session(db: AsyncSession, user_id: int) -> Session | N
         )
 
     if not candidates:
-        return None
-    return max(candidates, key=lambda candidate: candidate[:4])[4]
+        return None, len(rows)
+    return max(candidates, key=lambda candidate: candidate[:4])[4], len(rows)
+
+
+async def resolve_current_session(db: AsyncSession, user_id: int) -> Session | None:
+    """Resolve the authoritative unended session from durable recent activity."""
+    session, _ = await _resolve_current_session_with_candidate_count(db, user_id)
+    return session
+
+
+def _log_session_resolution(
+    *,
+    user_id: int,
+    session: Session,
+    resolution: str,
+    candidate_unended_sessions: int,
+    creation_reason: str | None = None,
+) -> None:
+    """Emit one structured record describing current-session resolution."""
+    logger.info(
+        "Resolved current reading session",
+        extra={
+            "event": "reading_session_resolution",
+            "user_id": user_id,
+            "session_id": session.id,
+            "session_resolution": resolution,
+            "session_creation_reason": creation_reason,
+            "candidate_unended_sessions": candidate_unended_sessions,
+            "has_pending_thread": session.pending_thread_id is not None,
+            "has_pending_issue": session.pending_issue_id is not None,
+        },
+    )
 
 
 async def is_active(
@@ -240,8 +274,17 @@ async def get_or_create(db: AsyncSession, user_id: int) -> Session:
                 db.add(user)
                 await db.commit()
 
-            active_session = await resolve_current_session(db, user_id)
+            active_session, candidate_count = await _resolve_current_session_with_candidate_count(
+                db,
+                user_id,
+            )
             if active_session:
+                _log_session_resolution(
+                    user_id=user_id,
+                    session=active_session,
+                    resolution="reused",
+                    candidate_unended_sessions=candidate_count,
+                )
                 return active_session
 
             async with _session_creation_lock:
@@ -257,8 +300,16 @@ async def get_or_create(db: AsyncSession, user_id: int) -> Session:
                         error,
                     )
 
-                active_session = await resolve_current_session(db, user_id)
+                active_session, candidate_count = (
+                    await _resolve_current_session_with_candidate_count(db, user_id)
+                )
                 if active_session:
+                    _log_session_resolution(
+                        user_id=user_id,
+                        session=active_session,
+                        resolution="reused",
+                        candidate_unended_sessions=candidate_count,
+                    )
                     return active_session
 
                 new_session = Session(start_die=start_die, user_id=user_id)
@@ -266,14 +317,12 @@ async def get_or_create(db: AsyncSession, user_id: int) -> Session:
                 await create_session_start_snapshot(db, new_session)
                 await db.commit()
                 await db.refresh(new_session)
-                logger.info(
-                    "Resolved current reading session",
-                    extra={
-                        "user_id": user_id,
-                        "session_id": new_session.id,
-                        "session_resolution": "created",
-                        "session_creation_reason": "no_recent_unended_session",
-                    },
+                _log_session_resolution(
+                    user_id=user_id,
+                    session=new_session,
+                    resolution="created",
+                    creation_reason="no_recent_unended_session",
+                    candidate_unended_sessions=candidate_count,
                 )
                 return new_session
         except OperationalError as error:
