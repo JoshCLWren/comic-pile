@@ -32,7 +32,12 @@ def _provider_issue_id(payload: Mapping[str, object]) -> int | None:
 
 def _volume_issue_ids(rows: list[dict[str, object]]) -> set[int]:
     """Return integer issue IDs from one validated ComicVine volume roster."""
-    return {value for row in rows if isinstance((value := row.get("id")), int)}
+    issue_ids: set[int] = set()
+    for row in rows:
+        value = row.get("id")
+        if isinstance(value, int):
+            issue_ids.add(value)
+    return issue_ids
 
 
 def _recount(report: dict[str, object]) -> None:
@@ -50,17 +55,17 @@ def _recount(report: dict[str, object]) -> None:
     report["summary"] = {"total": len(issues), **counts}
 
 
-def _mark_matched(row: dict[str, object], *, from_cache: bool, detail: str) -> None:
+def _mark_matched(row: dict[str, object], *, provenance: str, detail: str) -> None:
     """Mark one hydration row as safely reconciled without replacing its identity."""
     row["status"] = "matched"
-    row["provenance"] = "comicvine-cache" if from_cache else "comicvine-live"
+    row["provenance"] = provenance
     row["detail"] = detail
 
 
-def _mark_failed(row: dict[str, object], *, from_cache: bool, detail: str) -> None:
+def _mark_failed(row: dict[str, object], *, provenance: str, detail: str) -> None:
     """Mark one hydration row failed while preserving its confirmed identity."""
     row["status"] = "failed"
-    row["provenance"] = "comicvine-cache" if from_cache else "comicvine-live"
+    row["provenance"] = provenance
     row["detail"] = detail
 
 
@@ -98,7 +103,7 @@ async def refresh_confirmed_local_misses(
         and row.get("status") == "local-miss"
         and isinstance(row.get("comicvine_issue_id"), int)
     ]
-    attempted = len(eligible)
+    attempted_rows: set[int] = set()
     matched = 0
     failed = 0
     budget_exhausted = False
@@ -112,6 +117,7 @@ async def refresh_confirmed_local_misses(
             volume_groups[volume_id].append(row)
 
     for volume_id, rows in volume_groups.items():
+        attempted_rows.update(id(row) for row in rows)
         try:
             roster = await client.fetch_volume_issues(volume_id, refresh=refresh)
         except ComicVineRateLimitError:
@@ -127,7 +133,7 @@ async def refresh_confirmed_local_misses(
             if isinstance(issue_id, int) and issue_id in roster_ids:
                 _mark_matched(
                     row,
-                    from_cache=False,
+                    provenance="comicvine-volume-roster",
                     detail=(
                         "Confirmed identity resolved through a volume-batched ComicVine issue "
                         "roster."
@@ -143,6 +149,7 @@ async def refresh_confirmed_local_misses(
             if not isinstance(issue_id, int):
                 continue
 
+            attempted_rows.add(id(row))
             issue_requests += 1
             try:
                 response = await client.fetch_issue(issue_id, refresh=refresh)
@@ -156,11 +163,12 @@ async def refresh_confirmed_local_misses(
                 failed += 1
                 continue
 
+            provenance = "comicvine-cache" if response.from_cache else "comicvine-live"
             returned_id = _provider_issue_id(response.payload)
             if returned_id != issue_id:
                 _mark_failed(
                     row,
-                    from_cache=response.from_cache,
+                    provenance=provenance,
                     detail=(
                         "Provider response did not match the confirmed ComicVine issue identity."
                     ),
@@ -170,11 +178,12 @@ async def refresh_confirmed_local_misses(
 
             _mark_matched(
                 row,
-                from_cache=response.from_cache,
+                provenance=provenance,
                 detail="Confirmed identity resolved through the budgeted ComicVine issue endpoint.",
             )
             matched += 1
 
+    attempted = len(attempted_rows)
     _recount(report)
     report["live_refresh"] = {
         "attempted": attempted,
