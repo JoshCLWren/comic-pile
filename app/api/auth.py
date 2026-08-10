@@ -1,9 +1,11 @@
 """Authentication API endpoints."""
 
+import logging
 import secrets
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from jose.exceptions import ExpiredSignatureError
 from sqlalchemy import exc as sqlalchemy_exc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,9 +38,33 @@ from app.security import (
 )
 
 router = APIRouter(tags=["auth"])
+logger = logging.getLogger(__name__)
 
 REFRESH_COOKIE_NAME = "refresh_token"
 REFRESH_COOKIE_PATH = "/api"
+
+
+def _log_refresh_outcome(request: Request, *, outcome: str, reason: str) -> None:
+    """Emit one secret-free structured refresh diagnostic.
+
+    Args:
+        request: Incoming refresh request.
+        outcome: Stable high-level result, either ``success`` or ``rejected``.
+        reason: Stable reason code suitable for production log filtering.
+    """
+    logger.warning(
+        "Auth refresh %s: %s",
+        outcome,
+        reason,
+        extra={
+            "event": "auth_refresh",
+            "auth_outcome": outcome,
+            "auth_reason": reason,
+            "path": request.url.path,
+            "request_id": getattr(request.state, "request_id", None),
+            "level": "WARNING",
+        },
+    )
 
 
 def _set_refresh_cookie(response: Response, request: Request, refresh_token: str) -> None:
@@ -75,7 +101,6 @@ async def register_user(
     Raises:
         HTTPException: If username or email already exists.
     """
-    # Check if username or email already exists (single query)
     conditions = [User.username == user_data.username]
     if user_data.email:
         conditions.append(User.email == user_data.email)
@@ -96,7 +121,6 @@ async def register_user(
                 detail="Email already registered",
             )
 
-    # Create new user
     hashed_password = hash_password(user_data.password)
     username = user_data.username
     user = User(
@@ -114,7 +138,6 @@ async def register_user(
             detail="Username or email already registered",
         ) from None
 
-    # Create tokens
     jti = secrets.token_urlsafe(32)
     ensure_csrf_cookie(request, response)
     access_token = create_access_token(data={"sub": username, "jti": jti})
@@ -207,22 +230,32 @@ async def refresh_access_token(
     Raises:
         HTTPException: If refresh token is invalid or revoked.
     """
-    try:
-        refresh_token = (
-            refresh_data.refresh_token if refresh_data else request.cookies.get(REFRESH_COOKIE_NAME)
+    refresh_token = (
+        refresh_data.refresh_token if refresh_data else request.cookies.get(REFRESH_COOKIE_NAME)
+    )
+    if not refresh_token:
+        _log_refresh_outcome(request, outcome="rejected", reason="missing_cookie")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing refresh token",
         )
-        if not refresh_token:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing refresh token",
-            )
+
+    try:
         payload = verify_token(refresh_token)
+    except ExpiredSignatureError as e:
+        _log_refresh_outcome(request, outcome="rejected", reason="expired_token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+        ) from e
     except JWTError as e:
+        _log_refresh_outcome(request, outcome="rejected", reason="invalid_token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token",
         ) from e
     except (AttributeError, TypeError) as e:
+        _log_refresh_outcome(request, outcome="rejected", reason="invalid_token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token format",
@@ -239,17 +272,18 @@ async def refresh_access_token(
         or not isinstance(jti, str)
         or token_type != "refresh"
     ):
+        _log_refresh_outcome(request, outcome="rejected", reason="invalid_token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token",
         )
 
-    # Check if refresh token is revoked
     from app.models.revoked_token import RevokedToken
 
     result = await db.execute(select(RevokedToken).where(RevokedToken.jti == jti).limit(1))
     revoked = result.scalar_one_or_none()
     if revoked:
+        _log_refresh_outcome(request, outcome="rejected", reason="revoked_token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token has been revoked",
@@ -258,17 +292,18 @@ async def refresh_access_token(
     result = await db.execute(select(User).where(User.username == username).limit(1))
     user = result.scalar_one_or_none()
     if not user:
+        _log_refresh_outcome(request, outcome="rejected", reason="invalid_token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
         )
 
-    # Create new tokens
     new_jti = secrets.token_urlsafe(32)
     ensure_csrf_cookie(request, response)
     access_token = create_access_token(data={"sub": user.username, "jti": new_jti})
     refresh_token = create_refresh_token(data={"sub": user.username, "jti": new_jti})
     _set_refresh_cookie(response, request, refresh_token)
+    _log_refresh_outcome(request, outcome="success", reason="refreshed")
 
     return TokenResponse(
         access_token=access_token,
@@ -296,22 +331,18 @@ async def logout_user(
         This endpoint allows logout even with invalid/expired tokens to enable
         clients to clear local storage and redirect to login.
     """
-    # Try to get and revoke token, but don't fail if token is invalid
     auth_header = request.headers.get("authorization")
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.split(" ")[1]
         try:
-            # Verify token to get user ID
             payload = verify_token(token)
             username = payload.get("sub")
             if username:
-                # Get user from database
                 result = await db.execute(select(User).where(User.username == username).limit(1))
                 user = result.scalar_one_or_none()
                 if user:
                     await revoke_token(db, token, user.id)
         except (JWTError, AttributeError, TypeError):
-            # Token is invalid/expired - that's ok, just return success
             pass
 
     response.delete_cookie(
