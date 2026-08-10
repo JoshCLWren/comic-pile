@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   issues: write
 
 concurrency:
@@ -73,6 +73,18 @@ jobs:
             frontend/src/generated/openapi.json
             frontend/src/generated/openapi.ts
           if-no-files-found: error
+
+      - name: Commit regenerated artifacts to factory branch
+        if: >-
+          github.event_name == 'pull_request' && steps.regenerate.outcome == 'success' &&
+          steps.drift.outputs.changed == 'true' && startsWith(github.head_ref, 'factory/')
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/src/generated/openapi.json frontend/src/generated/openapi.ts
+          git commit -m "Regenerate OpenAPI client artifacts"
+          git push origin "HEAD:${GITHUB_HEAD_REF}"
 
       - name: Reconcile post-merge factory handoff
         if: >-
