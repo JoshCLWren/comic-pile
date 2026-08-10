@@ -65,7 +65,7 @@ jobs:
               . != "factory"
             )) + ["factory", $owner, "factory:review"] | unique
           ' <<< "$current_labels")"
-          gh api --method POST \
+          gh api --method PUT \
             "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" \
             --input - <<< "{\"labels\":${target_labels}}" >/dev/null
 
@@ -165,6 +165,6 @@ jobs:
               . != "factory"
             )) + ["factory", $owner, $stage] | unique
           ' <<< "$current_labels")"
-          gh api --method POST \
+          gh api --method PUT \
             "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" \
             --input - <<< "{\"labels\":${target_labels}}" >/dev/null
