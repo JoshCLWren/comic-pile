@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
+import tempfile
+from collections import defaultdict
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal, Protocol
@@ -28,11 +32,22 @@ class ComicVineSnapshotReader(Protocol):
         ...
 
     def get_issue(self, issue_id: int) -> LocalComicVineResult | None:
-        """Return one local ComicVine issue by provider ID."""
+        """Return one local ComicVine issue by provider ID.
+
+        Args:
+            issue_id: ComicVine provider issue ID.
+
+        Returns:
+            The normalized local snapshot row when present, otherwise None.
+        """
         ...
 
     def sync_metadata(self) -> dict[str, object]:
-        """Return snapshot freshness metadata."""
+        """Return snapshot freshness metadata.
+
+        Returns:
+            JSON-compatible snapshot synchronization metadata.
+        """
         ...
 
 
@@ -101,7 +116,7 @@ async def enumerate_user_issues(
 
     rows = (await db.execute(issue_query)).all()
     issue_ids = [issue.id for issue, _thread in rows]
-    confirmed_by_issue: dict[int, int] = {}
+    confirmed_ids_by_issue: dict[int, set[int]] = defaultdict(set)
     if issue_ids:
         mapping_query = (
             select(IssueExternalIdentityMapping.issue_id, ExternalIdentity.external_id)
@@ -118,10 +133,15 @@ async def enumerate_user_issues(
         )
         for issue_id, external_id in (await db.execute(mapping_query)).all():
             try:
-                confirmed_by_issue[issue_id] = int(external_id)
+                confirmed_ids_by_issue[issue_id].add(int(external_id))
             except (TypeError, ValueError):
                 continue
 
+    confirmed_by_issue = {
+        issue_id: next(iter(external_ids))
+        for issue_id, external_ids in confirmed_ids_by_issue.items()
+        if len(external_ids) == 1
+    }
     return [
         HydrationTarget(
             issue_id=issue.id,
@@ -135,7 +155,7 @@ async def enumerate_user_issues(
     ]
 
 
-def inspect_local_snapshot(
+async def inspect_local_snapshot(
     target: HydrationTarget,
     snapshot: ComicVineSnapshotReader,
 ) -> HydrationResult:
@@ -145,6 +165,9 @@ def inspect_local_snapshot(
     snapshot miss is reported rather than converted into a guessed mapping. Live
     provider fallback is deliberately left to the endpoint-budgeted client from
     #1019 so this foundation remains safe and restart-friendly.
+
+    SQLite snapshot reads are moved to a worker thread so the asynchronous CLI
+    does not block its event loop while reading the developer-local snapshot.
 
     Args:
         target: ComicPile issue to inspect.
@@ -166,7 +189,7 @@ def inspect_local_snapshot(
             detail="No confirmed ComicVine issue identity is available yet.",
         )
 
-    local = snapshot.get_issue(target.comicvine_issue_id)
+    local = await asyncio.to_thread(snapshot.get_issue, target.comicvine_issue_id)
     if local is None:
         return HydrationResult(
             issue_id=target.issue_id,
@@ -178,6 +201,18 @@ def inspect_local_snapshot(
             comicvine_issue_id=target.comicvine_issue_id,
             provenance="comicvine-local-sqlite",
             detail="Confirmed identity is absent from the configured local snapshot.",
+        )
+    if not local.complete:
+        return HydrationResult(
+            issue_id=target.issue_id,
+            thread_id=target.thread_id,
+            thread_title=target.thread_title,
+            issue_number=target.issue_number,
+            position=target.position,
+            status="local-miss",
+            comicvine_issue_id=target.comicvine_issue_id,
+            provenance=local.provenance,
+            detail="Confirmed identity exists locally, but required hydration data is missing.",
         )
 
     provider_issue_number = str(local.data.get("issue_number", "")).strip()
@@ -200,7 +235,7 @@ def inspect_local_snapshot(
     )
 
 
-def build_report(
+async def build_report(
     targets: list[HydrationTarget],
     snapshot: ComicVineSnapshotReader,
 ) -> dict[str, object]:
@@ -213,16 +248,17 @@ def build_report(
     Returns:
         Summary counts, snapshot metadata, and per-issue results.
     """
-    results = [inspect_local_snapshot(target, snapshot) for target in targets]
+    results = [await inspect_local_snapshot(target, snapshot) for target in targets]
     counts: dict[str, int] = {"matched": 0, "local-miss": 0, "unresolved": 0}
     for result in results:
         counts[result.status] += 1
+    sync_metadata = await asyncio.to_thread(snapshot.sync_metadata)
     return {
         "summary": {"total": len(results), **counts},
         "snapshot": {
             "path": str(snapshot.path) if snapshot.path is not None else None,
             "available": snapshot.available,
-            "sync_metadata": snapshot.sync_metadata(),
+            "sync_metadata": sync_metadata,
         },
         "issues": [result.to_dict() for result in results],
     }
@@ -235,10 +271,22 @@ def write_report(report: dict[str, object], output_path: str | Path) -> None:
         report: JSON-compatible hydration report.
         output_path: Destination file path.
     """
-    import json
-
     destination = Path(output_path)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_suffix(destination.suffix + ".tmp")
-    temporary.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    temporary.replace(destination)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=destination.parent,
+            prefix=f".{destination.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary:
+            json.dump(report, temporary, indent=2, sort_keys=True)
+            temporary.write("\n")
+            temporary_path = Path(temporary.name)
+        temporary_path.replace(destination)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
