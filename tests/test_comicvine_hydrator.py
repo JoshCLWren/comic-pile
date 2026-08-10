@@ -1,8 +1,17 @@
 """Tests for read-only ComicVine hydration planning."""
 
+import json
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
 
-from comic_pile.comicvine_hydrator import HydrationTarget, build_report, inspect_local_snapshot
+from comic_pile.comicvine_hydrator import (
+    HydrationTarget,
+    build_report,
+    enumerate_user_issues,
+    inspect_local_snapshot,
+    write_report,
+)
 from comic_pile.local_comicvine import LocalComicVineResult
 
 
@@ -87,3 +96,58 @@ def test_report_counts_are_deterministic() -> None:
         "local-miss": 1,
         "unresolved": 1,
     }
+
+
+async def test_enumerate_user_issues_reuses_confirmed_identity() -> None:
+    """Confirmed provider IDs are attached while enumerating user-owned issues."""
+    issue = SimpleNamespace(id=10, issue_number="Revival", position=7)
+    thread = SimpleNamespace(id=4, title="B.P.R.D.: War on Frogs")
+    issue_rows = Mock()
+    issue_rows.all.return_value = [(issue, thread)]
+    mapping_rows = Mock()
+    mapping_rows.all.return_value = [(10, "55")]
+    db = AsyncMock()
+    db.execute.side_effect = [issue_rows, mapping_rows]
+
+    targets = await enumerate_user_issues(db, user_id=1)
+
+    assert targets == [
+        HydrationTarget(
+            issue_id=10,
+            thread_id=4,
+            thread_title="B.P.R.D.: War on Frogs",
+            issue_number="Revival",
+            position=7,
+            comicvine_issue_id=55,
+        )
+    ]
+    assert db.execute.await_count == 2
+
+
+async def test_enumerate_user_issues_ignores_invalid_confirmed_identity() -> None:
+    """Malformed external IDs do not become guessed ComicVine mappings."""
+    issue = SimpleNamespace(id=10, issue_number="12", position=12)
+    thread = SimpleNamespace(id=4, title="X-Men")
+    issue_rows = Mock()
+    issue_rows.all.return_value = [(issue, thread)]
+    mapping_rows = Mock()
+    mapping_rows.all.return_value = [(10, "not-an-integer")]
+    db = AsyncMock()
+    db.execute.side_effect = [issue_rows, mapping_rows]
+
+    targets = await enumerate_user_issues(db, user_id=1, include_test_threads=True)
+
+    assert targets[0].comicvine_issue_id is None
+    assert db.execute.await_count == 2
+
+
+def test_write_report_creates_parent_and_replaces_temporary_file(tmp_path: Path) -> None:
+    """Report writes create parent directories and leave no temporary artifact behind."""
+    destination = tmp_path / "nested" / "hydration.json"
+    report: dict[str, object] = {"summary": {"total": 1}, "issues": [{"issue_id": 10}]}
+
+    write_report(report, destination)
+
+    assert json.loads(destination.read_text(encoding="utf-8")) == report
+    assert destination.read_text(encoding="utf-8").endswith("\n")
+    assert not destination.with_suffix(".json.tmp").exists()
