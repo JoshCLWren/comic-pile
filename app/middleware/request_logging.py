@@ -233,7 +233,10 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
         started_at = time.perf_counter()
         request_id = uuid.uuid4().hex
         startup = next_request_snapshot()
-        diagnostics_token = begin_request_diagnostics()
+        diagnostics_token = begin_request_diagnostics(
+            request_id=request_id,
+            route=request.url.path,
+        )
         request.state.request_id = request_id
 
         try:
