@@ -22,6 +22,7 @@ def _candidate_evidence(score: CandidateScore, decision_reason: str) -> dict[str
         "evidence": list(score.evidence),
         "stale_snapshot": score.stale_snapshot,
         "decision_reason": decision_reason,
+        "rejection_reason": score.rejection_reason,
         "volume_id": candidate.volume_id,
         "volume_name": candidate.volume_name,
         "publisher": candidate.publisher,
@@ -40,22 +41,11 @@ async def persist_repair_decision(
     issue_id: int,
     decision: RepairDecision,
 ) -> list[IssueExternalIdentityMapping]:
-    """Persist all scored candidates while confirming only the decision winner.
-
-    Args:
-        db: Async database session.
-        user_id: ComicPile resource owner.
-        issue_id: ComicPile issue being repaired.
-        decision: Deterministic scoring decision.
-
-    Returns:
-        Persisted mappings in decision candidate order, followed by rejected evidence.
-    """
+    """Persist all scored candidates while confirming only the decision winner."""
     persisted: list[IssueExternalIdentityMapping] = []
     winner_id = decision.winner.candidate.issue_id if decision.winner is not None else None
 
-    all_scores = list(decision.candidates)
-    for score in all_scores:
+    for score in (*decision.candidates, *decision.rejected):
         candidate = score.candidate
         identity = await upsert_external_identity(
             db,
@@ -65,17 +55,18 @@ async def persist_repair_decision(
             metadata_json={
                 "issue_number": candidate.issue_number,
                 "name": candidate.issue_name,
-                "volume": {
-                    "id": candidate.volume_id,
-                    "name": candidate.volume_name,
-                },
+                "volume": {"id": candidate.volume_id, "name": candidate.volume_name},
             },
         )
-        status = (
-            "confirmed"
-            if decision.status == "confirmed" and candidate.issue_id == winner_id
-            else "candidate"
-        )
+        if score.rejection_reason is not None:
+            status = "rejected"
+            rejection_reason = score.rejection_reason
+        elif decision.status == "confirmed" and candidate.issue_id == winner_id:
+            status = "confirmed"
+            rejection_reason = None
+        else:
+            status = "candidate"
+            rejection_reason = None
         mapping = await link_issue_external_identity(
             db,
             user_id=user_id,
@@ -84,7 +75,7 @@ async def persist_repair_decision(
             status=status,
             evidence_source=candidate.source,
             confidence=score.score,
-            rejection_reason=None,
+            rejection_reason=rejection_reason,
         )
         mapping.evidence_json = _candidate_evidence(score, decision.reason)
         persisted.append(mapping)
@@ -101,22 +92,7 @@ async def review_candidate_mapping(
     status: str,
     rejection_reason: str | None = None,
 ) -> IssueExternalIdentityMapping:
-    """Manually confirm or reject one persisted candidate without discarding its audit evidence.
-
-    Args:
-        db: Async database session.
-        user_id: ComicPile resource owner.
-        issue_id: ComicPile issue being reviewed.
-        external_identity_id: Persisted external identity candidate.
-        status: Explicit manual decision, ``confirmed`` or ``rejected``.
-        rejection_reason: Required explanation for a rejection.
-
-    Returns:
-        Updated mapping with prior structured evidence retained.
-
-    Raises:
-        ExternalIdentityMappingError: If the decision is invalid or the candidate does not exist.
-    """
+    """Manually confirm or reject one persisted candidate without discarding its audit evidence."""
     if status not in {"confirmed", "rejected"}:
         raise ExternalIdentityMappingError("manual candidate review must confirm or reject")
     if status == "rejected" and not (rejection_reason or "").strip():
