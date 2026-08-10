@@ -98,41 +98,32 @@ async def resolve_current_session(db: AsyncSession, user_id: int) -> Session | N
 
 
 async def is_active(
-    started_at: datetime,
-    ended_at: datetime | None,
+    session_id: int,
+    user_id: int,
     db: AsyncSession,
 ) -> bool:
-    """Check whether a session timestamp identifies the authoritative current session.
+    """Check whether a session identifies the authoritative current session.
 
     Args:
-        started_at: Persisted start timestamp for the candidate session.
-        ended_at: Persisted end timestamp, or None when the candidate is unended.
+        session_id: Persisted session ID for the candidate session.
+        user_id: Owner ID of the candidate session.
         db: Async database session used to resolve current-session authority.
 
     Returns:
-        True only when the timestamp identifies one unended authoritative session.
+        True only when the session identifies one unended authoritative session.
     """
-    if ended_at is not None:
-        return False
-
     session_result = await db.execute(
         select(Session)
-        .where(Session.started_at == started_at)
+        .where(Session.id == session_id)
+        .where(Session.user_id == user_id)
         .where(Session.ended_at.is_(None))
-        .limit(2)
+        .limit(1)
     )
-    sessions = session_result.scalars().all()
-    if not sessions:
-        cutoff_time = datetime.now(UTC) - timedelta(hours=_session_gap_hours())
-        return _as_utc(started_at) >= cutoff_time
-    if len(sessions) != 1:
-        # started_at is not a unique identity. Refuse ambiguous authority so the caller
-        # falls back to the user-scoped canonical resolver instead of selecting another
-        # user's session that happens to share the same timestamp.
+    session = session_result.scalar_one_or_none()
+    if not session:
         return False
 
-    session = sessions[0]
-    current = await resolve_current_session(db, session.user_id)
+    current = await resolve_current_session(db, user_id)
     return current is not None and current.id == session.id
 
 

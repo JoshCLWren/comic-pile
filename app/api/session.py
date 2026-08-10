@@ -414,7 +414,7 @@ async def get_current_session(
             active_session = active_session_result.scalars().first()
 
             if active_session is None or not await is_active(
-                active_session.started_at, active_session.ended_at, db
+                active_session.id, active_session.user_id, db
             ):
                 active_session = await get_or_create(db, user_id=current_user.id)
 

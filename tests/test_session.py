@@ -93,7 +93,7 @@ async def test_is_active_true(async_db: AsyncSession, default_user: User) -> Non
     async_db.add(session)
     await async_db.commit()
 
-    result = await is_active(session.started_at, session.ended_at, async_db)
+    result = await is_active(session.id, session.user_id, async_db)
     assert result is True
 
 
@@ -108,7 +108,7 @@ async def test_is_active_false_old(async_db: AsyncSession, default_user: User) -
     async_db.add(session)
     await async_db.commit()
 
-    result = await is_active(session.started_at, session.ended_at, async_db)
+    result = await is_active(session.id, session.user_id, async_db)
     assert result is False
 
 
@@ -124,7 +124,7 @@ async def test_is_active_false_ended(async_db: AsyncSession, default_user: User)
     async_db.add(session)
     await async_db.commit()
 
-    result = await is_active(session.started_at, session.ended_at, async_db)
+    result = await is_active(session.id, session.user_id, async_db)
     assert result is False
 
 
@@ -235,7 +235,7 @@ async def test_is_active_exactly_6_hours(async_db: AsyncSession, default_user: U
     async_db.add(session)
     await async_db.commit()
 
-    result = await is_active(session.started_at, session.ended_at, async_db)
+    result = await is_active(session.id, session.user_id, async_db)
     assert result is True
 
 
@@ -1110,20 +1110,17 @@ async def test_is_active_no_lazy_load(async_db: AsyncSession, default_user: User
     await async_db.commit()
     await async_db.refresh(session)
 
-    started_at = session.started_at
-    ended_at = session.ended_at
-
-    result = await is_active(started_at, ended_at, async_db)
+    result = await is_active(session.id, session.user_id, async_db)
     assert result is True
 
-    old_started_at = datetime.now(UTC) - timedelta(hours=7)
-    old_ended_at = None
-    result = await is_active(old_started_at, old_ended_at, async_db)
+    # Non-existent session should return False
+    result = await is_active(999999, default_user.id, async_db)
     assert result is False
 
-    ended_started_at = datetime.now(UTC) - timedelta(hours=1)
-    ended_ended_at = datetime.now(UTC)
-    result = await is_active(ended_started_at, ended_ended_at, async_db)
+    # Ended session should return False
+    session.ended_at = datetime.now(UTC)
+    await async_db.commit()
+    result = await is_active(session.id, session.user_id, async_db)
     assert result is False
 
 
@@ -1197,43 +1194,52 @@ async def test_get_or_create_non_deadlock_operational_error(
 
 
 @pytest.mark.asyncio
-async def test_is_active_with_naive_datetime(async_db: AsyncSession, default_user: User) -> None:
-    """Test that is_active handles datetime without timezone.
-
-    When a datetime has no tzinfo, it should be treated as UTC.
-    This test verifies the branch is executed (coverage).
-    """
+async def test_is_active_returns_true_for_current_session(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """Test that is_active returns True for the authoritative current session."""
     session = SessionModel(
-        started_at=datetime.now() - timedelta(hours=1),
+        started_at=datetime.now(UTC) - timedelta(hours=1),
         start_die=6,
         user_id=default_user.id,
     )
     async_db.add(session)
     await async_db.commit()
+    await async_db.refresh(session)
 
-    naive_dt = datetime.now() - timedelta(hours=1)
-    assert naive_dt.tzinfo is None
-
-    result = await is_active(naive_dt, None, async_db)
-    assert result is not None
+    result = await is_active(session.id, session.user_id, async_db)
+    assert result is True
 
 
 @pytest.mark.asyncio
-async def test_is_active_naive_old_datetime(async_db: AsyncSession, default_user: User) -> None:
-    """Test that is_active handles old naive datetime correctly."""
+async def test_is_active_returns_false_for_ended_session(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """Test that is_active returns False for an ended session."""
     session = SessionModel(
-        started_at=datetime.now() - timedelta(hours=1),
+        started_at=datetime.now(UTC) - timedelta(hours=1),
         start_die=6,
         user_id=default_user.id,
     )
     async_db.add(session)
     await async_db.commit()
+    await async_db.refresh(session)
 
-    naive_dt = datetime.now() - timedelta(hours=7)
-    assert naive_dt.tzinfo is None
+    # End the session
+    session.ended_at = datetime.now(UTC)
+    await async_db.commit()
 
-    result = await is_active(naive_dt, None, async_db)
-    assert result is not None
+    result = await is_active(session.id, session.user_id, async_db)
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_is_active_returns_false_for_non_existent_session(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """Test that is_active returns False for a non-existent session ID."""
+    result = await is_active(999999, default_user.id, async_db)
+    assert result is False
 
 
 @pytest.mark.asyncio

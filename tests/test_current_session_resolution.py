@@ -61,6 +61,36 @@ async def test_current_session_prefers_older_pending_session_over_newer_blank_du
 
 
 @pytest.mark.asyncio
+async def test_current_session_creates_new_when_only_completed_sessions_exist(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """The current-session endpoint creates a new session when only ended sessions exist."""
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    # Create only completed (ended) sessions
+    old_session = SessionModel(
+        started_at=datetime.now(UTC) - timedelta(hours=2),
+        ended_at=datetime.now(UTC) - timedelta(hours=1),
+        start_die=6,
+        user_id=user.id,
+    )
+    async_db.add(old_session)
+    await async_db.commit()
+
+    response = await auth_client.get("/api/sessions/current/")
+
+    assert response.status_code == 200
+    data = response.json()
+    # Should have created a new session, not returned the ended one
+    assert data["id"] != old_session.id
+    assert data["ended_at"] is None
+    assert data["start_die"] == 6  # Default start die
+
+
+@pytest.mark.asyncio
 async def test_is_active_rejects_timestamp_shared_by_multiple_users(
     async_db: AsyncSession,
 ) -> None:
@@ -77,4 +107,8 @@ async def test_is_active_rejects_timestamp_shared_by_multiple_users(
     async_db.add_all(sessions)
     await async_db.commit()
 
-    assert await is_active(started_at, None, async_db) is False
+    # Query by identity - each session should only be active for its own owner
+    assert await is_active(sessions[0].id, sessions[0].user_id, async_db) is True
+    assert await is_active(sessions[1].id, sessions[1].user_id, async_db) is True
+    # Cross-user query should return False
+    assert await is_active(sessions[0].id, sessions[1].user_id, async_db) is False
