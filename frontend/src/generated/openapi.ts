@@ -636,7 +636,7 @@ export interface paths {
          *
          *     Args:
          *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
+         *         db: Async database session.
          *
          *     Returns:
          *         HTML string with the current die size.
@@ -2148,7 +2148,7 @@ export interface paths {
          *
          *     Args:
          *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
+         *         db: Async database session.
          *
          *     Returns:
          *         HTML string with the current die size.
@@ -4073,6 +4073,7 @@ export interface components {
             pending_thread_id: number | null;
             /** Roll Pool */
             roll_pool: components["schemas"]["RollBootstrapThread"][];
+            roll_recovery?: components["schemas"]["RollRecoveryInfo"] | null;
             /** Session Id */
             session_id: number;
             /** Snoozed Count */
@@ -4098,6 +4099,35 @@ export interface components {
             last_activity_at?: string | null;
             /** Title */
             title: string;
+        };
+        /**
+         * RollRecoveryInfo
+         * @description Structured recovery context for a pending roll that became blocked.
+         */
+        RollRecoveryInfo: {
+            /** Direct Blockers */
+            direct_blockers?: components["schemas"]["ContinuityBlocker"][];
+            /** Original Thread Id */
+            original_thread_id: number;
+            /** Original Thread Title */
+            original_thread_title: string;
+            /** Readable Prerequisites */
+            readable_prerequisites?: components["schemas"]["RollRecoveryPrerequisite"][];
+        };
+        /**
+         * RollRecoveryPrerequisite
+         * @description One currently readable prerequisite recommended for a blocked active roll.
+         */
+        RollRecoveryPrerequisite: {
+            /** Label */
+            label: string;
+            /** Node Id */
+            node_id: number;
+            /**
+             * Node Type
+             * @enum {string}
+             */
+            node_type: "issue" | "crossover";
         };
         /**
          * RollRequest
