@@ -6,11 +6,11 @@ from pydantic import BaseModel, ConfigDict
 
 
 class RollPrerequisiteSwitchRequest(BaseModel):
-    """One concrete issue recommendation selected from current Roll guidance."""
+    """One recovery recommendation selected from the current Roll guidance."""
 
     model_config = ConfigDict(extra="forbid")
 
-    node_type: Literal["issue"]
+    node_type: Literal["issue", "crossover"]
     node_id: int
 
 
