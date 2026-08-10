@@ -45,7 +45,7 @@ export interface RollBootstrapResponse {
   pending_thread_id: number | null
   last_rolled_result: number | null
   active_thread: SessionThread | null
-  roll_recovery: RollRecoveryInfo | null
+  roll_recovery?: RollRecoveryInfo | null
   roll_pool: RollBootstrapThread[]
   snoozed_threads: RollBootstrapThread[]
   snoozed_count: number
