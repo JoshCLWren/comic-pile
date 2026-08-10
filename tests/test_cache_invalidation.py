@@ -42,3 +42,15 @@ async def test_invalidation_rejects_non_positive_user_ids(user_id: int) -> None:
 
     with pytest.raises(ValueError, match="user_id must be positive"):
         await cache_invalidation.invalidate_user_views((1, user_id))
+
+
+@pytest.mark.asyncio
+async def test_invalid_batch_does_not_issue_partial_invalidation(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Validate the complete batch before touching any user generation namespace."""
+    invalidator = AsyncMock(return_value=1)
+    monkeypatch.setattr(cache_invalidation, "invalidate_user_caches", invalidator)
+
+    with pytest.raises(ValueError, match="user_id must be positive"):
+        await cache_invalidation.invalidate_user_views((7, 0, 9))
+
+    invalidator.assert_not_awaited()
