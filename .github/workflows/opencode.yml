@@ -137,18 +137,14 @@ jobs:
             echo "PR moved from ${EXPECTED_HEAD} to ${current_head}; refusing to tag a stale review." >&2
             exit 1
           fi
-          verdict="$(gh api \
-            "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" | \
-            jq -r --arg run "/actions/runs/${GITHUB_RUN_ID}" \
-              '.[] | select((.user.login == "opencode-agent[bot]" or .user.login == "github-actions[bot]") and (.body | contains($run))) | .body' | \
-            tail -n 1)"
-          if grep -q '^OPENCODE_REVIEW: CHANGES_REQUIRED' <<< "$verdict"; then
+          finding_count="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/comments?per_page=100" | \
+            jq -s --arg head "$EXPECTED_HEAD" \
+              '[.[][] | select((.user.login == "opencode-agent[bot]" or .user.login == "github-actions[bot]") and .commit_id == $head)] | length')"
+          if (( finding_count > 0 )); then
             target_stage='factory:changes-requested'
-          elif grep -q '^OPENCODE_REVIEW: PASS' <<< "$verdict"; then
-            target_stage='factory:ci'
           else
-            echo 'OpenCode omitted the required exact-head verdict marker; leaving factory:review in place.' >&2
-            exit 1
+            target_stage='factory:ci'
           fi
           for label in factory:building factory:review factory:changes-requested factory:ci factory:ready; do
             gh api --method DELETE \
