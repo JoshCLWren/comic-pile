@@ -1,13 +1,50 @@
 import type { RollRecoveryInfo, RollRecoveryPrerequisite } from '../../../types/rollBootstrap'
 
 interface RollRecoveryCardProps {
-  recovery: RollRecoveryInfo
+  recovery?: RollRecoveryInfo | null
   onReadNow?: (prerequisite: RollRecoveryPrerequisite) => void
   isPending?: boolean
+  isLoading?: boolean
+  errorMessage?: string | null
 }
 
 /** Explain a blocked pending roll without replacing the original selection. */
-export function RollRecoveryCard({ recovery, onReadNow, isPending = false }: RollRecoveryCardProps) {
+export function RollRecoveryCard({
+  recovery,
+  onReadNow,
+  isPending = false,
+  isLoading = false,
+  errorMessage = null,
+}: RollRecoveryCardProps) {
+  if (isLoading) {
+    return (
+      <section
+        aria-label="Blocked roll recovery"
+        aria-busy="true"
+        className="mx-auto w-full max-w-xl rounded-2xl border border-amber-500/30 bg-amber-950/20 p-4 shadow-lg"
+      >
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-500">Roll blocked</p>
+        <p className="mt-2 text-sm text-stone-300">Checking what needs to be read first…</p>
+      </section>
+    )
+  }
+
+  if (errorMessage) {
+    return (
+      <section
+        aria-label="Blocked roll recovery"
+        role="alert"
+        className="mx-auto w-full max-w-xl rounded-2xl border border-red-500/30 bg-red-950/20 p-4 shadow-lg"
+      >
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-red-400">Recovery unavailable</p>
+        <p className="mt-2 text-sm text-stone-300">{errorMessage}</p>
+        <p className="mt-2 text-xs text-stone-400">Your original roll is still preserved.</p>
+      </section>
+    )
+  }
+
+  if (!recovery) return null
+
   const primaryBlocker = recovery.direct_blockers[0]
   const recommendations = recovery.readable_prerequisites
 
