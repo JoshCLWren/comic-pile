@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 from pathlib import Path
 
 from app.database import AsyncSessionLocal
 from comic_pile.comicvine_hydrator import build_report, enumerate_user_issues, write_report
+from comic_pile.comicvine_live_refresh import refresh_confirmed_local_misses
+from comic_pile.comicvine_provider import ComicVineClient, DEFAULT_REQUESTS_PER_HOUR
 from comic_pile.local_comicvine import LocalComicVineSnapshot
 
 
@@ -26,6 +29,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--user-id", type=int, required=True)
     parser.add_argument("--comicvine-db", type=Path)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--cache-dir", type=Path, default=Path(".cache/comicvine-hydrator"))
+    parser.add_argument(
+        "--requests-per-hour",
+        type=int,
+        default=DEFAULT_REQUESTS_PER_HOUR,
+        help="Per-endpoint rolling request ceiling; defaults to the conservative provider budget.",
+    )
+    parser.add_argument(
+        "--live-refresh",
+        action="store_true",
+        help="Use cached/live ComicVine issue requests for confirmed identities missing locally.",
+    )
+    parser.add_argument(
+        "--force-refresh",
+        action="store_true",
+        help="Bypass successful response cache entries during --live-refresh.",
+    )
     parser.add_argument("--include-test-threads", action="store_true")
     return parser.parse_args()
 
@@ -44,6 +64,18 @@ async def run(args: argparse.Namespace) -> None:
             include_test_threads=args.include_test_threads,
         )
     report = await build_report(targets, snapshot)
+
+    if args.live_refresh:
+        api_key = os.environ.get("COMICVINE_API_KEY", "")
+        if not api_key.strip():
+            raise RuntimeError("COMICVINE_API_KEY is required when --live-refresh is enabled")
+        client = ComicVineClient(
+            api_key,
+            args.cache_dir,
+            requests_per_hour=args.requests_per_hour,
+        )
+        await refresh_confirmed_local_misses(report, client, refresh=args.force_refresh)
+
     write_report(report, args.output)
 
 
