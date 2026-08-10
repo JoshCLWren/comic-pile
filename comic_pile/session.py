@@ -103,7 +103,15 @@ async def _resolve_current_session_with_candidate_count(
 
 
 async def resolve_current_session(db: AsyncSession, user_id: int) -> Session | None:
-    """Resolve the authoritative unended session from durable recent activity."""
+    """Resolve the authoritative unended session from durable recent activity.
+
+    Args:
+        db: Async database session used to inspect current-session candidates.
+        user_id: User whose authoritative current reading session should be resolved.
+
+    Returns:
+        The authoritative current Session when one exists, otherwise None.
+    """
     session, _ = await _resolve_current_session_with_candidate_count(db, user_id)
     return session
 
