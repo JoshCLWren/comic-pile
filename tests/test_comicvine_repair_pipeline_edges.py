@@ -194,12 +194,12 @@ async def test_embedded_id_uses_live_exact_evidence_when_local_snapshot_misses(
     client = ComicVineClient("secret", tmp_path / "cache")
 
     def fake_request(endpoint: str, params: object) -> dict[str, object]:
-        if endpoint == "issue/100":
+        if endpoint == "issue/4000-100":
             return {
                 "status_code": 1,
                 "results": {"id": 100, "issue_number": "1", "volume": {"id": 10}},
             }
-        if endpoint == "volume/10":
+        if endpoint == "volume/4050-10":
             return {
                 "status_code": 1,
                 "results": {
