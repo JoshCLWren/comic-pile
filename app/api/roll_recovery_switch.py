@@ -1,9 +1,8 @@
 """Mutation endpoint for accepting blocked-roll prerequisite guidance."""
 
-from typing import Annotated, Literal
+from typing import Annotated
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.session import _invalidate_session_caches
@@ -11,28 +10,12 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.roll_recovery_switch import switch_pending_roll_to_prerequisite
+from app.schemas.roll_recovery_switch import (
+    RollPrerequisiteSwitchRequest,
+    RollPrerequisiteSwitchResponse,
+)
 
 router = APIRouter(tags=["roll"])
-
-
-class RollPrerequisiteSwitchRequest(BaseModel):
-    """One recovery recommendation selected from the current Roll guidance."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    node_type: Literal["issue", "crossover"]
-    node_id: int
-
-
-class RollPrerequisiteSwitchResponse(BaseModel):
-    """Durable active-target state after accepting a recovery recommendation."""
-
-    original_thread_id: int
-    target_thread_id: int
-    target_thread_title: str
-    target_issue_id: int
-    target_issue_number: str
-    changed: bool
 
 
 @router.post("/switch-prerequisite", response_model=RollPrerequisiteSwitchResponse)
