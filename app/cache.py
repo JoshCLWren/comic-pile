@@ -71,7 +71,7 @@ def _get_ttl_value(tier: TTL) -> int:
 
 
 class CircuitState(enum.Enum):
-    """Circuit breaker states."""
+    """Simple circuit breaker states."""
 
     CLOSED = "closed"
     OPEN = "open"
@@ -79,7 +79,7 @@ class CircuitState(enum.Enum):
 
 
 class CircuitBreaker:
-    """Simple circuit breaker for Redis resilience.
+    """Simple circuit breaker states.
 
     Prevents cascading failures when Redis is unavailable.
     """
@@ -453,12 +453,39 @@ def _generate_cache_key(
     return f"cache:{key_str}"
 
 
+def _has_user_cache_scope(
+    func: Callable[..., Any],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> bool:
+    """Return whether a cached call carries an explicit positive user identity."""
+    try:
+        bound = inspect.signature(func).bind_partial(*args, **kwargs)
+    except (TypeError, ValueError):
+        return False
+
+    explicit_user_id = bound.arguments.get("user_id")
+    if isinstance(explicit_user_id, int) and explicit_user_id > 0:
+        return True
+
+    for name in ("user", "current_user"):
+        user = bound.arguments.get(name)
+        candidate = getattr(user, "id", None)
+        if isinstance(candidate, int) and candidate > 0:
+            return True
+    return False
+
+
 def cached(
     ttl: int | TTL = TTL.MEDIUM,
     *,
     falsy_ttl: int | None = None,
 ) -> Callable[[Callable[..., Awaitable[T]]], Callable[..., Awaitable[T]]]:
     """Decorator to cache async function results.
+
+    User-scoped calls are routed through the bounded generation namespace so
+    mutations can invalidate every cached view for one user with one generation
+    bump. Calls without a resolvable user identity retain the legacy key behavior.
 
     Args:
         ttl: Time-to-live in seconds or TTL tier enum
@@ -473,9 +500,24 @@ def cached(
     def decorator(func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
         # Resolve TTL enum to actual value
         actual_ttl = _get_ttl_value(ttl) if isinstance(ttl, TTL) else ttl
+        generation_wrapper: Callable[..., Awaitable[T]] | None = None
 
         @functools.wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> T:
+            nonlocal generation_wrapper
+
+            if _has_user_cache_scope(func, args, kwargs):
+                if generation_wrapper is None:
+                    # Lazy import avoids a module cycle: cache_generation imports
+                    # this module's cache primitives to implement the namespace.
+                    from app.cache_generation import generation_cached
+
+                    generation_wrapper = generation_cached(
+                        ttl,
+                        falsy_ttl=falsy_ttl,
+                    )(func)
+                return await generation_wrapper(*args, **kwargs)
+
             # Skip if cache not initialized
             if not cache.is_initialized:
                 return await func(*args, **kwargs)
