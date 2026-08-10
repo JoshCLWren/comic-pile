@@ -1,6 +1,10 @@
+import { useState } from 'react'
 import { CrossoverTags } from '../../../components/CrossoverTags'
 import { useDependencyGroups } from '../../../hooks/useDependencyGroups'
+import { fetchAndPublishRollBootstrap } from '../../../hooks/rollMutationReconciliation'
 import { useRollBootstrap } from '../../../hooks/useRollBootstrap'
+import { rollBootstrapApi } from '../../../services/rollBootstrapApi'
+import type { RollRecoveryPrerequisite } from '../../../types/rollBootstrap'
 import { getApiErrorDetail } from '../../../utils/apiError'
 import { RollRecoveryCard } from './RollRecoveryCard'
 
@@ -16,15 +20,41 @@ export function ReadingOrderGroups({ threadId }: ReadingOrderGroupsProps) {
     isError: isBootstrapError,
     error: bootstrapError,
   } = useRollBootstrap()
+  const [isSwitching, setIsSwitching] = useState(false)
+  const [switchError, setSwitchError] = useState<string | null>(null)
 
   if (threadId == null) return null
 
   const recovery = bootstrap?.roll_recovery
+  const handleReadNow = async (prerequisite: RollRecoveryPrerequisite) => {
+    if (isSwitching) return
+    setIsSwitching(true)
+    setSwitchError(null)
+    try {
+      await rollBootstrapApi.switchPrerequisite({
+        node_type: prerequisite.node_type,
+        node_id: prerequisite.node_id,
+      })
+      await fetchAndPublishRollBootstrap()
+    } catch {
+      setSwitchError('That prerequisite changed before ComicPile could switch to it. The guidance has been refreshed.')
+      try {
+        await fetchAndPublishRollBootstrap()
+      } catch {
+        setSwitchError('ComicPile could not switch the roll or refresh its recovery guidance. Your original roll is still preserved.')
+      }
+    } finally {
+      setIsSwitching(false)
+    }
+  }
+
   const recoveryCard = recovery ? (
     <RollRecoveryCard
       recovery={recovery}
+      onReadNow={handleReadNow}
+      isPending={isSwitching}
       isLoading={isBootstrapLoading}
-      errorMessage={isBootstrapError ? getApiErrorDetail(bootstrapError) : null}
+      errorMessage={switchError ?? (isBootstrapError ? getApiErrorDetail(bootstrapError) : null)}
     />
   ) : null
 
