@@ -1,6 +1,5 @@
 """Snooze API endpoint."""
 
-import asyncio
 import logging
 from typing import Annotated
 
@@ -8,9 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.session import _invalidate_session_caches, build_ladder_path
+from app.api.session import build_ladder_path
 from app.auth import get_current_user
-from app.cache import invalidate_cache
+from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Snapshot, Thread
@@ -196,11 +195,7 @@ async def snooze_thread(
 
     await db.commit()
 
-    await asyncio.gather(
-        _invalidate_session_caches(current_user.id),
-        invalidate_cache(f"cache:list_threads:User:{current_user.id}:*"),
-        invalidate_cache(f"cache:get_thread:{pending_thread_id}:User:{current_user.id}:"),
-    )
+    await invalidate_user_view(current_user.id)
 
     await db.refresh(current_session)
 
@@ -250,10 +245,7 @@ async def unsnooze_thread(
 
     await db.commit()
 
-    await asyncio.gather(
-        _invalidate_session_caches(current_user.id),
-        invalidate_cache(f"cache:list_threads:User:{current_user.id}:*"),
-    )
+    await invalidate_user_view(current_user.id)
 
     await db.refresh(current_session)
     return await build_session_response(current_session, db)
