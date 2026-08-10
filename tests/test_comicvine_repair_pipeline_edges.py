@@ -7,6 +7,11 @@ from pathlib import Path
 
 import pytest
 
+from comic_pile.comicvine_candidate_discovery import (
+    _integer as _local_integer,
+    _publisher_name as _local_publisher_name,
+    _segment_for_labels,
+)
 from comic_pile.comicvine_identity_repair import ComicVineRepairContext
 from comic_pile.comicvine_provider import ComicVineClient, ComicVineError
 from comic_pile.comicvine_repair_pipeline import (
@@ -64,6 +69,19 @@ def test_pipeline_helpers_reject_invalid_provider_shapes() -> None:
     assert _publisher_name(3) is None
     with pytest.raises(ComicVineError, match="object result"):
         _object_result({"results": []}, "issue")
+
+
+def test_local_discovery_helpers_cover_normalization_and_segments() -> None:
+    """Local discovery helpers should normalize metadata and bound contiguous volume segments."""
+    assert _local_integer(7) == 7
+    assert _local_integer("8") == 8
+    assert _local_integer("8a") is None
+    assert _local_publisher_name(" Marvel ") == "Marvel"
+    assert _local_publisher_name({"name": " DC Comics "}) == "DC Comics"
+    assert _local_publisher_name({"name": ""}) is None
+    assert _local_publisher_name(3) is None
+    assert _segment_for_labels(["1", "2", "3", "4"], "2", {"1", "2", "3"}) == ("1", "3")
+    assert _segment_for_labels(["1", "2"], "9", {"1", "2"}) == (None, None)
 
 
 def test_candidate_from_rows_requires_ids_title_and_issue_match() -> None:
@@ -127,6 +145,9 @@ async def test_live_discovery_skips_bad_search_rows_and_deduplicates(
                 ],
             }
         if endpoint == "issues":
+            assert isinstance(params, dict)
+            if params.get("filter") == "volume:11":
+                return {"status_code": 1, "number_of_total_results": 0, "results": []}
             return {
                 "status_code": 1,
                 "number_of_total_results": 2,
@@ -162,6 +183,51 @@ async def test_live_discovery_rejects_non_list_search_results(
             client,
             ComicVineRepairContext(title="X-Men", issue_label="1"),
         )
+
+
+@pytest.mark.asyncio
+async def test_embedded_id_uses_live_exact_evidence_when_local_snapshot_misses(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An embedded CBL ID may auto-confirm only after exact live issue and volume validation."""
+    client = ComicVineClient("secret", tmp_path / "cache")
+
+    def fake_request(endpoint: str, params: object) -> dict[str, object]:
+        if endpoint == "issue/100":
+            return {
+                "status_code": 1,
+                "results": {"id": 100, "issue_number": "1", "volume": {"id": 10}},
+            }
+        if endpoint == "volume/10":
+            return {
+                "status_code": 1,
+                "results": {
+                    "id": 10,
+                    "name": "X-Men",
+                    "publisher": {"name": "Marvel"},
+                    "start_year": 1991,
+                },
+            }
+        raise AssertionError(endpoint)
+
+    monkeypatch.setattr(client, "_request_sync", fake_request)
+    decision, scores = await repair_identity(
+        snapshot=LocalComicVineSnapshot(tmp_path / "missing.db"),
+        client=client,
+        context=ComicVineRepairContext(
+            title="X-Men",
+            issue_label="1",
+            publisher="Marvel",
+            start_year=1991,
+        ),
+        thread_issue_labels=["1"],
+        embedded_cbl_issue_id=100,
+    )
+    assert decision.status == "confirmed"
+    assert decision.winner is not None
+    assert decision.winner.candidate.issue_id == 100
+    assert len(scores) == 1
 
 
 @pytest.mark.asyncio
