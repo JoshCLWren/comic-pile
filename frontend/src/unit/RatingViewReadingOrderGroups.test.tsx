@@ -15,6 +15,15 @@ vi.mock('../hooks/useDependencyGroups', () => ({
     error: null,
   }),
 }))
+vi.mock('../hooks/useRollBootstrap', () => ({
+  useRollBootstrap: () => ({
+    data: null,
+    isPending: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+}))
 
 const callbacks = {
   onUpdateRating: vi.fn(),
