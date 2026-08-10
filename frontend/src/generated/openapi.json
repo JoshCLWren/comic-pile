@@ -2153,9 +2153,103 @@
         "title": "RollBootstrapThread",
         "type": "object"
       },
+      "RollRecoveryChainNode": {
+        "description": "One labeled issue or crossover step in a prerequisite chain.",
+        "properties": {
+          "is_readable": {
+            "title": "Is Readable",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "integer"
+          },
+          "node_type": {
+            "enum": [
+              "issue",
+              "crossover"
+            ],
+            "title": "Node Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "node_type",
+          "node_id",
+          "label",
+          "is_readable"
+        ],
+        "title": "RollRecoveryChainNode",
+        "type": "object"
+      },
+      "RollRecoveryDiagnostic": {
+        "description": "One bounded-traversal diagnostic suitable for reader-facing explanation.",
+        "properties": {
+          "code": {
+            "enum": [
+              "cycle_detected",
+              "depth_limit_exceeded",
+              "node_limit_exceeded"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "integer"
+          },
+          "node_type": {
+            "enum": [
+              "issue",
+              "crossover"
+            ],
+            "title": "Node Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "node_type",
+          "node_id"
+        ],
+        "title": "RollRecoveryDiagnostic",
+        "type": "object"
+      },
       "RollRecoveryInfo": {
         "description": "Structured recovery context for a pending roll that became blocked.",
         "properties": {
+          "chains": {
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/RollRecoveryChainNode"
+              },
+              "type": "array"
+            },
+            "title": "Chains",
+            "type": "array"
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/RollRecoveryDiagnostic"
+            },
+            "title": "Diagnostics",
+            "type": "array"
+          },
           "direct_blockers": {
             "items": {
               "$ref": "#/components/schemas/ContinuityBlocker"
