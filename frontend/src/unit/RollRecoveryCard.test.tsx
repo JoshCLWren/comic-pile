@@ -54,8 +54,13 @@ describe('RollRecoveryCard', () => {
   it('expands branching dependency paths with node kinds and readable leaves', () => {
     render(<RollRecoveryCard recovery={recovery} />)
 
-    fireEvent.click(screen.getByText(/Why is this blocked\? \(2 paths\)/))
+    const summary = screen.getByText(/Why is this blocked\? \(2 paths\)/)
+    const details = summary.closest('details')
+    expect(details).not.toHaveAttribute('open')
 
+    fireEvent.click(summary)
+
+    expect(details).toHaveAttribute('open')
     expect(screen.getByRole('list', { name: 'Dependency path 1' })).toHaveTextContent('Event Alpha')
     expect(screen.getByRole('list', { name: 'Dependency path 2' })).toHaveTextContent('Parallel branch')
     expect(screen.getAllByText('Readable now')).toHaveLength(2)
