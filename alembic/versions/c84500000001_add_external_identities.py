@@ -34,7 +34,11 @@ def _mapping_columns(owner_column: str, owner_table: str) -> list[sa.Column]:
 
 
 def upgrade() -> None:
-    """Create external identities and non-exclusive issue/thread mappings."""
+    """Create external identities and non-exclusive issue/thread mappings.
+
+    Args: None
+    Returns: None
+    """
     op.create_table(
         "external_identities",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -111,7 +115,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Remove provider-independent external identity persistence."""
+    """Remove provider-independent external identity persistence.
+
+    Args: None
+    Returns: None
+    """
     op.drop_index("ix_thread_external_series_external_id", table_name="thread_external_series_mappings")
     op.drop_index("ix_thread_external_series_thread_id", table_name="thread_external_series_mappings")
     op.drop_table("thread_external_series_mappings")

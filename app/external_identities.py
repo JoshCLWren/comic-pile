@@ -32,17 +32,36 @@ async def upsert_external_identity(
     metadata_json: dict[str, object] | None = None,
     provider_updated_at: datetime | None = None,
 ) -> ExternalIdentity:
-    """Create or update one provider identity without duplicating its stable key."""
+    """Create or update one provider identity without duplicating its stable key.
+
+    Args:
+        db: Async database session.
+        provider: External provider name (normalized to lowercase).
+        entity_type: Entity type, either "issue" or "series" (normalized to lowercase).
+        external_id: Provider-specific identifier (whitespace trimmed).
+        external_url: Optional URL to the external resource.
+        metadata_json: Optional arbitrary metadata from the provider.
+        provider_updated_at: Optional timestamp of last provider update; stale
+            updates are ignored to prevent overwriting fresher data.
+
+    Returns:
+        The created or existing external identity.
+
+    Raises:
+        ExternalIdentityMappingError: If provider/external_id are empty or
+            entity_type is unsupported.
+    """
     normalized_provider = provider.strip().lower()
+    normalized_entity_type = entity_type.strip().lower()
     normalized_external_id = external_id.strip()
     if not normalized_provider or not normalized_external_id:
         raise ExternalIdentityMappingError("provider and external_id are required")
-    if entity_type not in ENTITY_TYPES:
+    if normalized_entity_type not in ENTITY_TYPES:
         raise ExternalIdentityMappingError(f"unsupported entity_type: {entity_type}")
 
     identity_query = select(ExternalIdentity).where(
         ExternalIdentity.provider == normalized_provider,
-        ExternalIdentity.entity_type == entity_type,
+        ExternalIdentity.entity_type == normalized_entity_type,
         ExternalIdentity.external_id == normalized_external_id,
     )
     identity = (await db.execute(identity_query)).scalar_one_or_none()
@@ -51,7 +70,7 @@ async def upsert_external_identity(
             async with db.begin_nested():
                 identity = ExternalIdentity(
                     provider=normalized_provider,
-                    entity_type=entity_type,
+                    entity_type=normalized_entity_type,
                     external_id=normalized_external_id,
                     external_url=external_url,
                     metadata_json=metadata_json or {},
@@ -92,7 +111,25 @@ async def link_issue_external_identity(
     confidence: float | None = None,
     rejection_reason: str | None = None,
 ) -> IssueExternalIdentityMapping:
-    """Attach issue-level external evidence after enforcing user ownership."""
+    """Attach issue-level external evidence after enforcing user ownership.
+
+    Args:
+        db: Async database session.
+        user_id: Owner user ID for authorization.
+        issue_id: Issue to associate with the external identity.
+        external_identity_id: External issue identity to link.
+        status: Mapping status (unresolved, candidate, confirmed, rejected).
+        evidence_source: Optional source of the evidence.
+        confidence: Optional confidence score (0-1).
+        rejection_reason: Optional reason when status is "rejected".
+
+    Returns:
+        The created or updated issue-external identity mapping.
+
+    Raises:
+        ExternalIdentityMappingError: If issue not owned, identity not an issue,
+            provider conflict on confirm, or validation fails.
+    """
     _validate_mapping_fields(status=status, confidence=confidence)
     owned_issue = await db.scalar(
         select(Issue.id)
@@ -135,11 +172,22 @@ async def link_issue_external_identity(
     )
     mapping = result.scalar_one_or_none()
     if mapping is None:
-        mapping = IssueExternalIdentityMapping(
-            issue_id=issue_id,
-            external_identity_id=external_identity_id,
-        )
-        db.add(mapping)
+        try:
+            async with db.begin_nested():
+                mapping = IssueExternalIdentityMapping(
+                    issue_id=issue_id,
+                    external_identity_id=external_identity_id,
+                )
+                db.add(mapping)
+                await db.flush()
+        except IntegrityError:
+            result = await db.execute(
+                select(IssueExternalIdentityMapping).where(
+                    IssueExternalIdentityMapping.issue_id == issue_id,
+                    IssueExternalIdentityMapping.external_identity_id == external_identity_id,
+                )
+            )
+            mapping = result.scalar_one()
 
     mapping.status = status
     mapping.evidence_source = evidence_source
@@ -159,7 +207,24 @@ async def link_thread_external_series(
     evidence_source: str | None = None,
     confidence: float | None = None,
 ) -> ThreadExternalSeriesMapping:
-    """Attach non-exclusive external series evidence to an owned reading thread."""
+    """Attach non-exclusive external series evidence to an owned reading thread.
+
+    Args:
+        db: Async database session.
+        user_id: Owner user ID for authorization.
+        thread_id: Thread to associate with the series.
+        external_identity_id: External series identity to link.
+        status: Mapping status (unresolved, candidate, confirmed, rejected).
+        evidence_source: Optional source of the evidence.
+        confidence: Optional confidence score (0-1).
+
+    Returns:
+        The created or updated thread-series mapping.
+
+    Raises:
+        ExternalIdentityMappingError: If thread not owned, identity not a series,
+            or validation fails.
+    """
     _validate_mapping_fields(status=status, confidence=confidence)
     owned_thread = await db.scalar(
         select(Thread.id)
@@ -181,11 +246,22 @@ async def link_thread_external_series(
     )
     mapping = result.scalar_one_or_none()
     if mapping is None:
-        mapping = ThreadExternalSeriesMapping(
-            thread_id=thread_id,
-            external_identity_id=external_identity_id,
-        )
-        db.add(mapping)
+        try:
+            async with db.begin_nested():
+                mapping = ThreadExternalSeriesMapping(
+                    thread_id=thread_id,
+                    external_identity_id=external_identity_id,
+                )
+                db.add(mapping)
+                await db.flush()
+        except IntegrityError:
+            result = await db.execute(
+                select(ThreadExternalSeriesMapping).where(
+                    ThreadExternalSeriesMapping.thread_id == thread_id,
+                    ThreadExternalSeriesMapping.external_identity_id == external_identity_id,
+                )
+            )
+            mapping = result.scalar_one()
 
     mapping.status = status
     mapping.evidence_source = evidence_source

@@ -44,6 +44,7 @@ async def _owned_issue(db: AsyncSession, *, username: str, title: str, issue_num
 async def test_external_identity_upsert_is_idempotent_and_rejects_stale_provider_evidence(
     async_db: AsyncSession,
 ) -> None:
+    """Idempotent upsert preserves freshest provider metadata and rejects stale evidence."""
     fresh_at = datetime.now(UTC)
     fresh = await upsert_external_identity(
         async_db,
@@ -85,6 +86,7 @@ async def test_external_identity_upsert_is_idempotent_and_rejects_stale_provider
 async def test_issue_mapping_preserves_candidates_rejections_and_user_ownership(
     async_db: AsyncSession,
 ) -> None:
+    """Candidate, confirmed, rejected states preserved; ownership enforced; provider conflict blocked."""
     owner, _thread, issue = await _owned_issue(
         async_db,
         username="external_identity_owner",
@@ -171,6 +173,7 @@ async def test_issue_mapping_preserves_candidates_rejections_and_user_ownership(
 async def test_composite_thread_supports_multiple_series_and_issue_mapping_survives_title_change(
     async_db: AsyncSession,
 ) -> None:
+    """Thread can link multiple confirmed series; issue mapping survives thread title change."""
     owner, thread, issue = await _owned_issue(
         async_db,
         username="external_identity_composite",
@@ -230,6 +233,7 @@ async def test_composite_thread_supports_multiple_series_and_issue_mapping_survi
 async def test_deleting_external_evidence_never_deletes_user_owned_reading_data(
     async_db: AsyncSession,
 ) -> None:
+    """Deleting external identity cascades only mappings; user threads/issues remain intact."""
     owner, thread, issue = await _owned_issue(
         async_db,
         username="external_identity_delete_safety",
