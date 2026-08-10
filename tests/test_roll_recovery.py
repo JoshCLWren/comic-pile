@@ -12,6 +12,7 @@ from app.schemas.continuity_readiness import ContinuityBlocker
 
 @pytest.mark.asyncio
 async def test_roll_recovery_is_absent_without_pending_roll(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Skip continuity traversal when there is no preserved pending roll."""
     resolver = AsyncMock()
     monkeypatch.setattr("app.roll_recovery.resolve_continuity_chains", resolver)
 
@@ -30,6 +31,7 @@ async def test_roll_recovery_is_absent_without_pending_roll(monkeypatch: pytest.
 async def test_roll_recovery_is_absent_when_pending_roll_is_readable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Return no recovery guidance when the pending roll has no blockers."""
     resolver = AsyncMock(
         return_value=ContinuityTraversalResult(
             node_type="thread",
@@ -58,6 +60,7 @@ async def test_roll_recovery_is_absent_when_pending_roll_is_readable(
 async def test_roll_recovery_ignores_stale_pending_thread(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Treat a missing pending thread as stale state rather than a bootstrap failure."""
     resolver = AsyncMock(side_effect=HTTPException(status_code=404, detail="Thread 42 not found"))
     monkeypatch.setattr("app.roll_recovery.resolve_continuity_chains", resolver)
 
@@ -76,6 +79,7 @@ async def test_roll_recovery_ignores_stale_pending_thread(
 async def test_roll_recovery_preserves_non_stale_resolver_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Propagate real traversal failures instead of hiding them as stale state."""
     resolver = AsyncMock(side_effect=HTTPException(status_code=500, detail="Traversal failed"))
     monkeypatch.setattr("app.roll_recovery.resolve_continuity_chains", resolver)
 
@@ -92,6 +96,7 @@ async def test_roll_recovery_preserves_non_stale_resolver_errors(
 async def test_roll_recovery_preserves_original_and_recommends_readable_leaf(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Preserve the original roll while exposing the resolver's readable leaf."""
     blocker = ContinuityBlocker(
         rule_id=7,
         source_type="issue",
