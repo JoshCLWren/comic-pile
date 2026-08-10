@@ -43,8 +43,8 @@ describe('RollRecoveryCard', () => {
 
     expect(screen.getByRole('heading', { name: 'Original Roll' })).toBeInTheDocument()
     expect(screen.getByText('Prerequisite #2')).toBeInTheDocument()
-    expect(screen.getByText('Deep prerequisite #1')).toBeInTheDocument()
-    expect(screen.getByText('Event chapter')).toBeInTheDocument()
+    expect(screen.getAllByText('Deep prerequisite #1')).toHaveLength(2)
+    expect(screen.getAllByText('Event chapter')).toHaveLength(2)
     expect(screen.getByText('Recommended first')).toBeInTheDocument()
 
     fireEvent.click(screen.getAllByText('Read now')[0])
