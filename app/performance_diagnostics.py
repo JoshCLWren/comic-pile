@@ -69,7 +69,15 @@ def begin_request_diagnostics(
     request_id: str | None = None,
     route: str | None = None,
 ) -> Token[RequestDiagnostics | None]:
-    """Start a fresh diagnostics context for the current request."""
+    """Start a fresh diagnostics context for the current request.
+
+    Args:
+        request_id: Correlation identifier for the current HTTP request, when available.
+        route: Request route associated with the diagnostics context, when available.
+
+    Returns:
+        ContextVar token used to restore the previous diagnostics context.
+    """
     return _request_diagnostics.set(RequestDiagnostics(request_id=request_id, route=route))
 
 
