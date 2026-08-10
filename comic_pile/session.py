@@ -100,12 +100,40 @@ async def resolve_current_session(db: AsyncSession, user_id: int) -> Session | N
 async def is_active(
     started_at: datetime,
     ended_at: datetime | None,
-    _db: AsyncSession,
+    db: AsyncSession,
 ) -> bool:
-    """Check whether a session start is within the configured gap."""
-    cutoff_time = datetime.now(UTC) - timedelta(hours=_session_gap_hours())
-    session_time = _as_utc(started_at)
-    return session_time >= cutoff_time and ended_at is None
+    """Check whether a session timestamp identifies the authoritative current session.
+
+    Args:
+        started_at: Persisted start timestamp for the candidate session.
+        ended_at: Persisted end timestamp, or None when the candidate is unended.
+        db: Async database session used to resolve current-session authority.
+
+    Returns:
+        True only when the timestamp identifies one unended authoritative session.
+    """
+    if ended_at is not None:
+        return False
+
+    session_result = await db.execute(
+        select(Session)
+        .where(Session.started_at == started_at)
+        .where(Session.ended_at.is_(None))
+        .limit(2)
+    )
+    sessions = session_result.scalars().all()
+    if not sessions:
+        cutoff_time = datetime.now(UTC) - timedelta(hours=_session_gap_hours())
+        return _as_utc(started_at) >= cutoff_time
+    if len(sessions) != 1:
+        # started_at is not a unique identity. Refuse ambiguous authority so the caller
+        # falls back to the user-scoped canonical resolver instead of selecting another
+        # user's session that happens to share the same timestamp.
+        return False
+
+    session = sessions[0]
+    current = await resolve_current_session(db, session.user_id)
+    return current is not None and current.id == session.id
 
 
 async def should_start_new(db: AsyncSession, user_id: int) -> bool:
