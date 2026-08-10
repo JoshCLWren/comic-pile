@@ -22,6 +22,7 @@ CBL = """<?xml version="1.0"?>
 
 
 def test_discovers_all_cbl_files_recursively_and_deterministically(tmp_path: Path) -> None:
+    """Discover CBL files recursively in deterministic relative-path order."""
     (tmp_path / "Marvel" / "Events").mkdir(parents=True)
     (tmp_path / "DC" / "Other").mkdir(parents=True)
     (tmp_path / "Marvel" / "Events" / "z.cbl").write_text(CBL)
@@ -37,6 +38,7 @@ def test_discovers_all_cbl_files_recursively_and_deterministically(tmp_path: Pat
 
 
 def test_parses_order_provenance_and_comicvine_evidence(tmp_path: Path) -> None:
+    """Preserve ordered books, provenance, hashes, and ComicVine evidence."""
     path = tmp_path / "Events" / "x.cbl"
     path.parent.mkdir()
     path.write_text(CBL)
@@ -60,6 +62,7 @@ def test_parses_order_provenance_and_comicvine_evidence(tmp_path: Path) -> None:
 
 
 def test_malformed_file_is_isolated_from_successful_files(tmp_path: Path) -> None:
+    """Isolate malformed CBL files without discarding valid parse results."""
     (tmp_path / "good.cbl").write_text(CBL)
     (tmp_path / "bad.cbl").write_text("<ReadingList><Books>")
 
@@ -72,6 +75,7 @@ def test_malformed_file_is_isolated_from_successful_files(tmp_path: Path) -> Non
 
 
 def test_invalid_book_reports_path_specific_failure(tmp_path: Path) -> None:
+    """Report the source path when a book omits required identity fields."""
     path = tmp_path / "broken.cbl"
     path.write_text("<ReadingList><Books><Book Series='X-Men' /></Books></ReadingList>")
 
@@ -83,6 +87,7 @@ def test_invalid_book_reports_path_specific_failure(tmp_path: Path) -> None:
 
 
 def test_invalid_numeric_metadata_is_rejected(tmp_path: Path) -> None:
+    """Reject malformed numeric metadata instead of silently coercing it."""
     path = tmp_path / "bad-year.cbl"
     path.write_text("<ReadingList><Books><Book Series='X-Men' Number='1' Year='nope' /></Books></ReadingList>")
 
