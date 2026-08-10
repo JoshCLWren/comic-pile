@@ -96,6 +96,31 @@ class LocalComicVineSnapshot:
         """Look up one issue by ComicVine ID, including decoded relationship JSON."""
         return self._lookup("cv_issue", issue_id, ("volume_id", "issue_number"))
 
+    def get_volume_issues(self, volume_id: int) -> list[LocalComicVineResult]:
+        """Return every locally cached issue in one ComicVine volume.
+
+        Args:
+            volume_id: ComicVine volume identity.
+
+        Returns:
+            Issue rows in stable numeric-ID order, or an empty list when unavailable.
+        """
+        if not self.available:
+            return []
+        with self._connect() as connection:
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(cv_issue)")}
+            if "volume_id" not in columns:
+                return []
+            order_column = "id" if "id" in columns else "issue_number"
+            rows = connection.execute(
+                f"SELECT * FROM cv_issue WHERE volume_id = ? ORDER BY {order_column}",
+                (volume_id,),
+            ).fetchall()
+        return [
+            LocalComicVineResult(data=self._normalize_row(row), complete=True)
+            for row in rows
+        ]
+
     def search_volumes(self, query: str, *, limit: int = 10) -> list[LocalComicVineResult]:
         """Return ranked local candidates without treating rank as identity confirmation."""
         if not self.available or not query.strip() or limit <= 0:
@@ -112,7 +137,7 @@ class LocalComicVineSnapshot:
                 return []
             table = fts_tables[0]
             rows = connection.execute(
-                f"SELECT *, bm25({table}) AS rank FROM {table} "
+                f"SELECT rowid AS id, *, bm25({table}) AS rank FROM {table} "
                 f"WHERE {table} MATCH ? ORDER BY rank LIMIT ?",
                 (query, limit),
             ).fetchall()
