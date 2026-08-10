@@ -1,5 +1,6 @@
 """Build structured recovery context for blocked pending rolls."""
 
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.continuity_chains import resolve_continuity_chains
@@ -17,17 +18,25 @@ async def build_roll_recovery(
 
     The pending roll remains the source of truth. This helper only explains its
     direct blockers and recommends currently readable prerequisite leaves from
-    the canonical continuity traversal.
+    the canonical continuity traversal. A stale pending-thread reference is
+    treated as no recovery data so bootstrap can still render and let the
+    existing session-reconciliation path recover it.
     """
     if pending_thread_id is None:
         return None
 
-    traversal = await resolve_continuity_chains(
-        db,
-        user_id=user_id,
-        node_type="thread",
-        node_id=pending_thread_id,
-    )
+    try:
+        traversal = await resolve_continuity_chains(
+            db,
+            user_id=user_id,
+            node_type="thread",
+            node_id=pending_thread_id,
+        )
+    except HTTPException as exc:
+        if exc.status_code == 404:
+            return None
+        raise
+
     if not traversal.direct_blockers:
         return None
 
