@@ -71,6 +71,7 @@ async def test_refresh_rejects_provider_identity_mismatch() -> None:
     assert summary.failed == 1
     assert report["summary"] == {"total": 2, "matched": 1, "failed": 1}
     assert _issue_rows(report)[1]["status"] == "failed"
+    assert _issue_rows(report)[1]["comicvine_issue_id"] == 202
 
 
 async def test_refresh_rejects_malformed_provider_payload() -> None:
@@ -90,6 +91,7 @@ async def test_refresh_rejects_malformed_provider_payload() -> None:
 
     assert summary.failed == 1
     assert _issue_rows(report)[1]["status"] == "failed"
+    assert _issue_rows(report)[1]["comicvine_issue_id"] == 202
 
 
 async def test_refresh_records_provider_failure_and_continues() -> None:
