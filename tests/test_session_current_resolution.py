@@ -14,8 +14,21 @@ async def test_pending_activity_keeps_long_running_session_current(
     async_db: AsyncSession, default_user: User
 ) -> None:
     """A recent pending roll keeps a session current even when it started hours ago."""
+    thread = Thread(
+        title="Pending Activity",
+        format="comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=default_user.id,
+        created_at=datetime.now(UTC) - timedelta(days=1),
+    )
+    async_db.add(thread)
+    await async_db.flush()
+
     session = Session(
         started_at=datetime.now(UTC) - timedelta(hours=7),
+        pending_thread_id=thread.id,
         pending_thread_updated_at=datetime.now(UTC) - timedelta(minutes=5),
         start_die=12,
         user_id=default_user.id,
