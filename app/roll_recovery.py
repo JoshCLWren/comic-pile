@@ -21,6 +21,15 @@ async def build_roll_recovery(
     the canonical continuity traversal. A stale pending-thread reference is
     treated as no recovery data so bootstrap can still render and let the
     existing session-reconciliation path recover it.
+
+    Args:
+        db: Async database session used for continuity resolution.
+        user_id: Authenticated owner of the pending thread.
+        pending_thread_id: Preserved pending thread identifier.
+        pending_thread_title: Preserved pending thread title, when available.
+
+    Returns:
+        Recovery guidance for a blocked pending roll, or ``None``.
     """
     if pending_thread_id is None:
         return None
