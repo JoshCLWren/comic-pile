@@ -28,12 +28,27 @@ export interface RollRecoveryPrerequisite {
   label: string
 }
 
+/** One labeled step in a continuity prerequisite path. */
+export interface RollRecoveryChainNode extends RollRecoveryPrerequisite {
+  is_readable: boolean
+}
+
+/** A bounded traversal diagnostic that explains malformed or oversized plans. */
+export interface RollRecoveryDiagnostic {
+  code: 'cycle_detected' | 'depth_limit_exceeded' | 'node_limit_exceeded'
+  node_type: 'issue' | 'crossover'
+  node_id: number
+  limit?: number | null
+}
+
 /** Recovery context that keeps the original pending roll visible while blocked. */
 export interface RollRecoveryInfo {
   original_thread_id: number
   original_thread_title: string
   direct_blockers: RollRecoveryBlocker[]
   readable_prerequisites: RollRecoveryPrerequisite[]
+  chains?: RollRecoveryChainNode[][]
+  diagnostics?: RollRecoveryDiagnostic[]
 }
 
 /** Bounded bootstrap payload for the Roll initial render. */
