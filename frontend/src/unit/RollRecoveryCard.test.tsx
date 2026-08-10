@@ -60,4 +60,24 @@ describe('RollRecoveryCard', () => {
     expect(screen.getByText('Original Roll')).toBeInTheDocument()
     expect(screen.getByText(/No readable prerequisite is available yet/)).toBeInTheDocument()
   })
+
+  it('shows a non-destructive loading state while recovery guidance is being resolved', () => {
+    render(<RollRecoveryCard isLoading />)
+
+    expect(screen.getByLabelText('Blocked roll recovery')).toHaveAttribute('aria-busy', 'true')
+    expect(screen.getByText(/Checking what needs to be read first/)).toBeInTheDocument()
+  })
+
+  it('preserves the original roll when recovery guidance fails to load', () => {
+    render(<RollRecoveryCard errorMessage="Could not load prerequisite guidance." />)
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not load prerequisite guidance.')
+    expect(screen.getByText('Your original roll is still preserved.')).toBeInTheDocument()
+  })
+
+  it('renders nothing when there is no recovery state to explain', () => {
+    const { container } = render(<RollRecoveryCard />)
+
+    expect(container).toBeEmptyDOMElement()
+  })
 })
