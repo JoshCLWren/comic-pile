@@ -4,7 +4,10 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ReadingOrderGroups } from '../pages/RollPage/components/ReadingOrderGroups'
 import { useDependencyGroups } from '../hooks/useDependencyGroups'
-import { fetchAndPublishRollBootstrap } from '../hooks/rollMutationReconciliation'
+import {
+  fetchAndPublishRollBootstrap,
+  isAmbiguousNetworkFailure,
+} from '../hooks/rollMutationReconciliation'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
 
@@ -16,6 +19,7 @@ vi.mock('../hooks/useRollBootstrap', () => ({
 }))
 vi.mock('../hooks/rollMutationReconciliation', () => ({
   fetchAndPublishRollBootstrap: vi.fn(),
+  isAmbiguousNetworkFailure: vi.fn(),
 }))
 vi.mock('../services/rollBootstrapApi', () => ({
   rollBootstrapApi: {
@@ -27,6 +31,7 @@ const mockedUseDependencyGroups = vi.mocked(useDependencyGroups)
 const mockedUseRollBootstrap = vi.mocked(useRollBootstrap)
 const mockedSwitchPrerequisite = vi.mocked(rollBootstrapApi.switchPrerequisite)
 const mockedFetchAndPublishRollBootstrap = vi.mocked(fetchAndPublishRollBootstrap)
+const mockedIsAmbiguousNetworkFailure = vi.mocked(isAmbiguousNetworkFailure)
 
 const recovery = {
   original_thread_id: 17,
@@ -49,6 +54,24 @@ const recovery = {
   }],
 }
 
+const bootstrapWithRecovery = {
+  session_id: 1,
+  user_id: 1,
+  current_die: 8,
+  manual_die: null,
+  pending_thread_id: 17,
+  last_rolled_result: 4,
+  active_thread: null,
+  roll_recovery: recovery,
+  roll_pool: [],
+  snoozed_threads: [],
+  snoozed_count: 0,
+  blocked_count: 1,
+  blocked_threads: [],
+  stale_thread_count: 0,
+  stale_thread: null,
+}
+
 function renderGroups(threadId: number | null) {
   return render(
     <MemoryRouter>
@@ -63,6 +86,8 @@ describe('ReadingOrderGroups', () => {
     mockedUseRollBootstrap.mockReset()
     mockedSwitchPrerequisite.mockReset()
     mockedFetchAndPublishRollBootstrap.mockReset()
+    mockedIsAmbiguousNetworkFailure.mockReset()
+    mockedIsAmbiguousNetworkFailure.mockReturnValue(false)
     mockedUseRollBootstrap.mockReturnValue({
       data: null,
       isPending: false,
@@ -134,23 +159,7 @@ describe('ReadingOrderGroups', () => {
     const user = userEvent.setup()
     mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: false, error: null })
     mockedUseRollBootstrap.mockReturnValue({
-      data: {
-        session_id: 1,
-        user_id: 1,
-        current_die: 8,
-        manual_die: null,
-        pending_thread_id: 17,
-        last_rolled_result: 4,
-        active_thread: null,
-        roll_recovery: recovery,
-        roll_pool: [],
-        snoozed_threads: [],
-        snoozed_count: 0,
-        blocked_count: 1,
-        blocked_threads: [],
-        stale_thread_count: 0,
-        stale_thread: null,
-      },
+      data: bootstrapWithRecovery,
       isPending: false,
       isError: false,
       error: null,
@@ -173,27 +182,38 @@ describe('ReadingOrderGroups', () => {
     expect(mockedFetchAndPublishRollBootstrap).toHaveBeenCalledTimes(1)
   })
 
+  it('reports a successful switch separately when refreshing guidance fails', async () => {
+    const user = userEvent.setup()
+    mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: false, error: null })
+    mockedUseRollBootstrap.mockReturnValue({
+      data: bootstrapWithRecovery,
+      isPending: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    })
+    mockedSwitchPrerequisite.mockResolvedValue({
+      original_thread_id: 17,
+      target_thread_id: 9,
+      target_thread_title: 'Earlier Series',
+      target_issue_id: 90,
+      target_issue_number: '3',
+      changed: true,
+    })
+    mockedFetchAndPublishRollBootstrap.mockRejectedValue(new Error('refresh failed'))
+
+    renderGroups(17)
+    await user.click(screen.getByRole('button', { name: /Earlier Series #3.*Read now/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('The roll switched')
+    expect(screen.getByRole('alert')).toHaveTextContent('could not refresh')
+  })
+
   it('keeps the original roll and refreshes guidance when the switch becomes stale', async () => {
     const user = userEvent.setup()
     mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: false, error: null })
     mockedUseRollBootstrap.mockReturnValue({
-      data: {
-        session_id: 1,
-        user_id: 1,
-        current_die: 8,
-        manual_die: null,
-        pending_thread_id: 17,
-        last_rolled_result: 4,
-        active_thread: null,
-        roll_recovery: recovery,
-        roll_pool: [],
-        snoozed_threads: [],
-        snoozed_count: 0,
-        blocked_count: 1,
-        blocked_threads: [],
-        stale_thread_count: 0,
-        stale_thread: null,
-      },
+      data: bootstrapWithRecovery,
       isPending: false,
       isError: false,
       error: null,
@@ -208,5 +228,26 @@ describe('ReadingOrderGroups', () => {
     await waitFor(() => expect(mockedFetchAndPublishRollBootstrap).toHaveBeenCalledTimes(1))
     expect(screen.getByRole('alert')).toHaveTextContent('guidance has been refreshed')
     expect(screen.getByText('Your original roll is still preserved.')).toBeInTheDocument()
+  })
+
+  it('uses neutral copy when a network failure leaves the switch outcome ambiguous', async () => {
+    const user = userEvent.setup()
+    mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: false, error: null })
+    mockedUseRollBootstrap.mockReturnValue({
+      data: bootstrapWithRecovery,
+      isPending: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    })
+    mockedIsAmbiguousNetworkFailure.mockReturnValue(true)
+    mockedSwitchPrerequisite.mockRejectedValue(new Error('Network Error'))
+    mockedFetchAndPublishRollBootstrap.mockResolvedValue({} as never)
+
+    renderGroups(17)
+    await user.click(screen.getByRole('button', { name: /Earlier Series #3.*Read now/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('could not confirm whether the roll switched')
+    expect(screen.getByRole('alert')).not.toHaveTextContent('switch failed')
   })
 })
