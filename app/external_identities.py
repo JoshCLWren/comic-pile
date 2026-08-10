@@ -76,6 +76,13 @@ async def upsert_external_identity(
         await db.flush()
         return identity
 
+    if (
+        provider_updated_at is not None
+        and identity.provider_updated_at is not None
+        and provider_updated_at < identity.provider_updated_at
+    ):
+        return identity
+
     if external_url is not None:
         identity.external_url = external_url
     if metadata_json is not None:
