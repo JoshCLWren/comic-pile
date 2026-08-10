@@ -24,16 +24,7 @@ async def switch_roll_prerequisite(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> RollPrerequisiteSwitchResponse:
-    """Replace a blocked pending roll with one still-readable prerequisite issue.
-
-    Args:
-        request: Concrete issue recommendation selected by the reader.
-        current_user: Authenticated ComicPile user.
-        db: Async database session.
-
-    Returns:
-        The durable Roll target after accepting the prerequisite.
-    """
+    """Replace a blocked pending roll with one still-readable prerequisite."""
     result = await switch_pending_roll_to_prerequisite(
         db,
         user_id=current_user.id,
