@@ -41,7 +41,7 @@ describe('RollRecoveryCard', () => {
     const onReadNow = vi.fn()
     render(<RollRecoveryCard recovery={recovery} onReadNow={onReadNow} />)
 
-    expect(screen.getByText('Original Roll')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Original Roll' })).toBeInTheDocument()
     expect(screen.getByText('Prerequisite #2')).toBeInTheDocument()
     expect(screen.getByText('Deep prerequisite #1')).toBeInTheDocument()
     expect(screen.getByText('Event chapter')).toBeInTheDocument()
@@ -81,7 +81,7 @@ describe('RollRecoveryCard', () => {
   it('shows recommendations without a mutating action before safe replacement exists', () => {
     render(<RollRecoveryCard recovery={recovery} />)
 
-    expect(screen.getByText('Original Roll')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Original Roll' })).toBeInTheDocument()
     expect(screen.getAllByText('Read now')).toHaveLength(2)
     expect(screen.queryByRole('button', { name: /Deep prerequisite #1/i })).not.toBeInTheDocument()
   })
@@ -94,7 +94,7 @@ describe('RollRecoveryCard', () => {
       />,
     )
 
-    expect(screen.getByText('Original Roll')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Original Roll' })).toBeInTheDocument()
     expect(screen.getByText(/No readable prerequisite is available yet/)).toBeInTheDocument()
   })
 
