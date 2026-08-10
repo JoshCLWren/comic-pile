@@ -1,12 +1,23 @@
 """Regression tests for the automatic OpenCode reviewer safety contract."""
 
-import json
 import unittest
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[2]
-OPENCODE_CONFIG = ROOT / "opencode.json"
+REVIEWER_AGENT = ROOT / ".opencode" / "agents" / "pr-reviewer.md"
 OPENCODE_WORKFLOW = ROOT / ".github" / "workflows" / "opencode.yml"
+
+
+def _load_agent_permission() -> dict:
+    """Load the pr-reviewer agent's permission block from its frontmatter."""
+    text = REVIEWER_AGENT.read_text(encoding="utf-8")
+    if not text.startswith("---"):
+        raise AssertionError("pr-reviewer agent must start with YAML frontmatter")
+    _, frontmatter, _ = text.split("---", 2)
+    config = yaml.safe_load(frontmatter)
+    return config["permission"]
 
 
 class OpenCodeReviewPolicyTests(unittest.TestCase):
@@ -14,9 +25,10 @@ class OpenCodeReviewPolicyTests(unittest.TestCase):
 
     def test_reviewer_cannot_edit_or_run_arbitrary_shell_commands(self) -> None:
         """Require structural denial of edits and arbitrary shell execution."""
-        config = json.loads(OPENCODE_CONFIG.read_text(encoding="utf-8"))
-        permission = config["permission"]
+        permission = _load_agent_permission()
         self.assertEqual(permission["edit"], "deny")
+        self.assertEqual(permission["task"], "deny")
+        self.assertEqual(permission["external_directory"], "deny")
         self.assertEqual(permission["question"], "deny")
         self.assertEqual(permission["bash"]["*"], "deny")
         self.assertEqual(
@@ -39,10 +51,10 @@ class OpenCodeReviewPolicyTests(unittest.TestCase):
 
     def test_reviewer_has_no_merge_or_label_mutation_command(self) -> None:
         """Keep automatic review limited to posting inline findings."""
-        config = json.loads(OPENCODE_CONFIG.read_text(encoding="utf-8"))
+        permission = _load_agent_permission()
         allowed_bash = {
             command
-            for command, decision in config["permission"]["bash"].items()
+            for command, decision in permission["bash"].items()
             if decision == "allow"
         }
         self.assertFalse(any("merge" in command for command in allowed_bash))
