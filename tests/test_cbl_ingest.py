@@ -89,7 +89,10 @@ def test_invalid_book_reports_path_specific_failure(tmp_path: Path) -> None:
 def test_invalid_numeric_metadata_is_rejected(tmp_path: Path) -> None:
     """Reject malformed numeric metadata instead of silently coercing it."""
     path = tmp_path / "bad-year.cbl"
-    path.write_text("<ReadingList><Books><Book Series='X-Men' Number='1' Year='nope' /></Books></ReadingList>")
+    path.write_text(
+        "<ReadingList><Books><Book Series='X-Men' Number='1' "
+        "Year='nope' /></Books></ReadingList>"
+    )
 
     with pytest.raises(ValueError, match="expected integer value"):
         parse_cbl_file(path, mirror_path=tmp_path)
