@@ -13,8 +13,7 @@ from comic_pile.comicvine_provider import (
 )
 
 
-def report_with_misses() -> dict[str, object]:
-    """Build a compact hydration report fixture."""
+def _report_with_misses() -> dict[str, object]:
     return {
         "summary": {"total": 3, "matched": 1, "local-miss": 2},
         "issues": [
@@ -25,8 +24,7 @@ def report_with_misses() -> dict[str, object]:
     }
 
 
-def issue_rows(report: dict[str, object]) -> list[dict[str, object]]:
-    """Return typed issue rows from a report fixture."""
+def _issue_rows(report: dict[str, object]) -> list[dict[str, object]]:
     value = report["issues"]
     assert isinstance(value, list)
     assert all(isinstance(row, dict) for row in value)
@@ -43,14 +41,14 @@ async def test_refresh_reconciles_confirmed_miss_from_cache() -> None:
             cache_key="issue-cached",
         )
     )
-    report = report_with_misses()
-    report["issues"] = issue_rows(report)[:2]
+    report = _report_with_misses()
+    report["issues"] = _issue_rows(report)[:2]
 
     summary = await refresh_confirmed_local_misses(report, client)
 
     assert summary.matched == 1
     assert report["summary"] == {"total": 2, "matched": 2}
-    refreshed = issue_rows(report)[1]
+    refreshed = _issue_rows(report)[1]
     assert refreshed["provenance"] == "comicvine-cache"
     client.fetch_issue.assert_awaited_once_with(202, refresh=False)
 
@@ -65,14 +63,14 @@ async def test_refresh_rejects_provider_identity_mismatch() -> None:
             cache_key="issue-live",
         )
     )
-    report = report_with_misses()
-    report["issues"] = issue_rows(report)[:2]
+    report = _report_with_misses()
+    report["issues"] = _issue_rows(report)[:2]
 
     summary = await refresh_confirmed_local_misses(report, client)
 
     assert summary.failed == 1
     assert report["summary"] == {"total": 2, "matched": 1, "failed": 1}
-    assert issue_rows(report)[1]["status"] == "failed"
+    assert _issue_rows(report)[1]["status"] == "failed"
 
 
 async def test_refresh_rejects_malformed_provider_payload() -> None:
@@ -85,13 +83,13 @@ async def test_refresh_rejects_malformed_provider_payload() -> None:
             cache_key="issue-live",
         )
     )
-    report = report_with_misses()
-    report["issues"] = issue_rows(report)[:2]
+    report = _report_with_misses()
+    report["issues"] = _issue_rows(report)[:2]
 
     summary = await refresh_confirmed_local_misses(report, client)
 
     assert summary.failed == 1
-    assert issue_rows(report)[1]["status"] == "failed"
+    assert _issue_rows(report)[1]["status"] == "failed"
 
 
 async def test_refresh_records_provider_failure_and_continues() -> None:
@@ -107,14 +105,14 @@ async def test_refresh_records_provider_failure_and_continues() -> None:
             ),
         ]
     )
-    report = report_with_misses()
+    report = _report_with_misses()
 
     summary = await refresh_confirmed_local_misses(report, client)
 
     assert summary.attempted == 2
     assert summary.failed == 1
     assert summary.matched == 1
-    rows = issue_rows(report)
+    rows = _issue_rows(report)
     assert rows[1]["status"] == "failed"
     assert rows[1]["provenance"] == "comicvine-live"
     assert rows[2]["status"] == "matched"
@@ -163,14 +161,14 @@ async def test_budget_exhaustion_stops_cleanly_and_preserves_remaining_misses() 
     """The rolling provider ceiling leaves untouched rows resumable on the next run."""
     client = Mock()
     client.fetch_issue = AsyncMock(side_effect=ComicVineRateLimitError("budget exhausted"))
-    report = report_with_misses()
+    report = _report_with_misses()
 
     summary = await refresh_confirmed_local_misses(report, client)
 
     assert summary.budget_exhausted is True
     assert summary.attempted == 1
     assert report["summary"] == {"total": 3, "matched": 1, "local-miss": 2}
-    rows = issue_rows(report)
+    rows = _issue_rows(report)
     assert rows[1]["status"] == "local-miss"
     assert rows[2]["status"] == "local-miss"
     live_refresh = report["live_refresh"]
@@ -188,8 +186,8 @@ async def test_force_refresh_is_forwarded_to_provider_client() -> None:
             cache_key="issue-live",
         )
     )
-    report = report_with_misses()
-    report["issues"] = issue_rows(report)[:2]
+    report = _report_with_misses()
+    report["issues"] = _issue_rows(report)[:2]
 
     await refresh_confirmed_local_misses(report, client, refresh=True)
 
