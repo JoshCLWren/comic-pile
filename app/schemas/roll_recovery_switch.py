@@ -6,16 +6,16 @@ from pydantic import BaseModel, ConfigDict
 
 
 class RollPrerequisiteSwitchRequest(BaseModel):
-    """One recovery recommendation selected from the current Roll guidance."""
+    """One concrete issue recommendation selected from current Roll guidance."""
 
     model_config = ConfigDict(extra="forbid")
 
-    node_type: Literal["issue", "crossover"]
+    node_type: Literal["issue"]
     node_id: int
 
 
 class RollPrerequisiteSwitchResponse(BaseModel):
-    """Durable active-target state after accepting a recovery recommendation."""
+    """Durable active-target state after accepting a prerequisite recommendation."""
 
     original_thread_id: int
     target_thread_id: int
