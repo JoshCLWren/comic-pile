@@ -71,7 +71,11 @@ async def persist_repair_decision(
                 },
             },
         )
-        status = "confirmed" if decision.status == "confirmed" and candidate.issue_id == winner_id else "candidate"
+        status = (
+            "confirmed"
+            if decision.status == "confirmed" and candidate.issue_id == winner_id
+            else "candidate"
+        )
         mapping = await link_issue_external_identity(
             db,
             user_id=user_id,
