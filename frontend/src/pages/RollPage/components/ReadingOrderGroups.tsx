@@ -19,13 +19,14 @@ export function ReadingOrderGroups({ threadId }: ReadingOrderGroupsProps) {
 
   if (threadId == null) return null
 
-  const recoveryCard = (
+  const recovery = bootstrap?.roll_recovery
+  const recoveryCard = recovery ? (
     <RollRecoveryCard
-      recovery={bootstrap?.roll_recovery}
+      recovery={recovery}
       isLoading={isBootstrapLoading}
       errorMessage={isBootstrapError ? getApiErrorDetail(bootstrapError) : null}
     />
-  )
+  ) : null
 
   if (isLoading) {
     return (
