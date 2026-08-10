@@ -17,7 +17,7 @@ from comic_pile.session import get_current_die, get_or_create
 
 @dataclass(frozen=True, slots=True)
 class RollPrerequisiteSwitchResult:
-    """Result of replacing a blocked pending roll with one readable issue."""
+    """Result of replacing one blocked pending roll with one readable issue."""
 
     original_thread_id: int
     target_thread_id: int
@@ -52,19 +52,6 @@ async def switch_pending_roll_to_prerequisite(
     ``selection_method=dependency_recovery``, and points the session at the
     prerequisite's owning thread. Repeated requests for the already-active
     prerequisite return success without creating another event.
-
-    Args:
-        db: Async database session.
-        user_id: Authenticated owner of the reading session.
-        node_type: Recommended continuity-node type selected by the reader.
-        node_id: Recommended continuity-node identifier.
-
-    Returns:
-        The active prerequisite target and whether durable state changed.
-
-    Raises:
-        HTTPException: When there is no pending roll, the recommendation is
-            stale, or the selected node cannot safely become a Roll target.
     """
     if node_type != "issue":
         raise HTTPException(
@@ -74,20 +61,6 @@ async def switch_pending_roll_to_prerequisite(
                 "message": "Choose a concrete readable issue before switching the Roll target.",
             },
         )
-
-    issue_result = await db.execute(
-        select(Issue, Thread)
-        .join(Thread, Thread.id == Issue.thread_id)
-        .where(Issue.id == node_id)
-        .where(Thread.user_id == user_id)
-    )
-    target_row = issue_result.one_or_none()
-    if target_row is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue {node_id} not found",
-        )
-    target_issue, target_thread = target_row
 
     current_session = await get_or_create(db, user_id=user_id)
     session_result = await db.execute(
@@ -103,6 +76,24 @@ async def switch_pending_roll_to_prerequisite(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "no_pending_roll", "message": "There is no pending roll to recover."},
         )
+
+    # Read the selected prerequisite only after serializing this user's session.
+    # Rating/snooze mutations use the same session boundary, so this prevents a
+    # recommendation fetched before the lock from being accepted after another
+    # client has already advanced the reading state.
+    issue_result = await db.execute(
+        select(Issue, Thread)
+        .join(Thread, Thread.id == Issue.thread_id)
+        .where(Issue.id == node_id)
+        .where(Thread.user_id == user_id)
+    )
+    target_row = issue_result.one_or_none()
+    if target_row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue {node_id} not found",
+        )
+    target_issue, target_thread = target_row
 
     original_thread_id = locked_session.pending_thread_id
     original_thread_result = await db.execute(
@@ -140,8 +131,6 @@ async def switch_pending_roll_to_prerequisite(
         )
         raise _stale_recovery(refreshed)
 
-    # Duplicate taps after a successful switch are idempotent, but only while
-    # the target is still the same readable next issue.
     if locked_session.pending_thread_id == target_thread.id:
         return RollPrerequisiteSwitchResult(
             original_thread_id=original_thread_id,
