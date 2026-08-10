@@ -23,14 +23,14 @@ async def test_invalidate_user_view_delegates_to_generation_boundary(monkeypatch
 async def test_invalidate_user_views_deduplicates_inside_generation_boundary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A logical batch should delegate all affected owners in one bounded call."""
+    """A logical batch should delegate each affected owner exactly once."""
     invalidator = AsyncMock(return_value=2)
     monkeypatch.setattr(cache_invalidation, "invalidate_user_caches", invalidator)
 
-    user_ids: Iterator[int] = iter((7, 7, 9))
+    user_ids: Iterator[int] = iter((9, 7, 7, 9))
     assert await cache_invalidation.invalidate_user_views(user_ids) == 2
 
-    invalidator.assert_awaited_once_with((7, 7, 9))
+    invalidator.assert_awaited_once_with((7, 9))
 
 
 @pytest.mark.asyncio
