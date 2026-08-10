@@ -1,7 +1,5 @@
 """Authenticated API for user-owned named dependency groups."""
 
-import asyncio
-import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -12,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth import get_current_user
-from app.cache import invalidate_cache
+from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
 from app.models import DependencyGroup, DependencyGroupMembership, Issue, Thread
 from app.models.user import User
@@ -28,7 +26,6 @@ from app.schemas.dependency_group import (
 )
 from comic_pile.dependencies import refresh_user_blocked_status
 
-logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/reading-order-groups", tags=["reading-order-groups"])
 MAX_RANGE_SIZE = 250
 
@@ -41,20 +38,10 @@ def _normalize_name(name: str) -> str:
 
 
 async def _refresh_crossover_blocked_state(user_id: int, db: AsyncSession) -> None:
-    """Persist blocked-state changes and invalidate dependent read caches."""
+    """Persist blocked-state changes and invalidate dependent user-scoped reads."""
     await refresh_user_blocked_status(user_id, db)
     await db.commit()
-    results = await asyncio.gather(
-        invalidate_cache(f"cache:continuity:*:User:{user_id}:*"),
-        invalidate_cache(f"cache:get_blocked_thread_ids:{user_id}:"),
-        invalidate_cache(f"cache:list_threads:User:{user_id}:*"),
-        invalidate_cache(f"cache:get_thread_blocking_info:*:User:{user_id}:"),
-        invalidate_cache(f"cache:get_threads_blocking_info:*:User:{user_id}:"),
-        return_exceptions=True,
-    )
-    for result in results:
-        if isinstance(result, BaseException):
-            logger.warning("Crossover cache invalidation failed", exc_info=result)
+    await invalidate_user_view(user_id)
 
 
 async def _owned_group(db: AsyncSession, group_id: int, user_id: int) -> DependencyGroup:
