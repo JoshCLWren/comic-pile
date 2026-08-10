@@ -52,16 +52,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          for label in factory:building factory:changes-requested factory:ci factory:ready; do
-            gh api --method DELETE \
-              "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels/${label}" \
-              >/dev/null 2>&1 || true
-          done
-          gh api --method POST \
+          current_labels="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels?per_page=100" \
+            --jq '[.[].name]')"
+          owner="$(jq -r '
+            map(select(test("^factory:(unowned|local|[1-5])$"))) | first // "factory:unowned"
+          ' <<< "$current_labels")"
+          target_labels="$(jq -c --arg owner "$owner" '
+            map(select(
+              (test("^factory:(building|review|changes-requested|ci|ready|blocked)$") | not) and
+              (test("^factory:(unowned|local|[1-5])$") | not) and
+              . != "factory"
+            )) + ["factory", $owner, "factory:review"] | unique
+          ' <<< "$current_labels")"
+          gh api --method PUT \
             "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" \
-            --input - <<'JSON' >/dev/null
-          {"labels":["factory","factory:review"]}
-          JSON
+            --input - <<< "{\"labels\":${target_labels}}" >/dev/null
 
       - name: Install pinned FCM discovery CLI
         run: npm install --global --ignore-scripts free-coding-models@0.5.69
@@ -146,13 +152,19 @@ jobs:
           else
             target_stage='factory:ci'
           fi
-          for label in factory:building factory:review factory:changes-requested factory:ci factory:ready; do
-            gh api --method DELETE \
-              "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels/${label}" \
-              >/dev/null 2>&1 || true
-          done
-          gh api --method POST \
+          current_labels="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels?per_page=100" \
+            --jq '[.[].name]')"
+          owner="$(jq -r '
+            map(select(test("^factory:(unowned|local|[1-5])$"))) | first // "factory:unowned"
+          ' <<< "$current_labels")"
+          target_labels="$(jq -c --arg owner "$owner" --arg stage "$target_stage" '
+            map(select(
+              (test("^factory:(building|review|changes-requested|ci|ready|blocked)$") | not) and
+              (test("^factory:(unowned|local|[1-5])$") | not) and
+              . != "factory"
+            )) + ["factory", $owner, $stage] | unique
+          ' <<< "$current_labels")"
+          gh api --method PUT \
             "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" \
-            --input - <<JSON >/dev/null
-          {"labels":["factory","${target_stage}"]}
-          JSON
+            --input - <<< "{\"labels\":${target_labels}}" >/dev/null
