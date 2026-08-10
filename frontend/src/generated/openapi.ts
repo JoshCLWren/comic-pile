@@ -2246,6 +2246,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/roll/switch-prerequisite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Switch Roll Prerequisite
+         * @description Replace a blocked pending roll with one still-readable prerequisite.
+         */
+        post: operations["switch_roll_prerequisite_api_v1_roll_switch_prerequisite_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/": {
         parameters: {
             query?: never;
@@ -4099,6 +4119,37 @@ export interface components {
             last_activity_at?: string | null;
             /** Title */
             title: string;
+        };
+        /**
+         * RollPrerequisiteSwitchRequest
+         * @description One recovery recommendation selected from the current Roll guidance.
+         */
+        RollPrerequisiteSwitchRequest: {
+            /** Node Id */
+            node_id: number;
+            /**
+             * Node Type
+             * @enum {string}
+             */
+            node_type: "issue" | "crossover";
+        };
+        /**
+         * RollPrerequisiteSwitchResponse
+         * @description Durable active-target state after accepting a recovery recommendation.
+         */
+        RollPrerequisiteSwitchResponse: {
+            /** Changed */
+            changed: boolean;
+            /** Original Thread Id */
+            original_thread_id: number;
+            /** Target Issue Id */
+            target_issue_id: number;
+            /** Target Issue Number */
+            target_issue_number: string;
+            /** Target Thread Id */
+            target_thread_id: number;
+            /** Target Thread Title */
+            target_thread_title: string;
         };
         /**
          * RollRecoveryInfo
@@ -7083,6 +7134,39 @@ export interface operations {
                 };
                 content: {
                     "text/html": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    switch_roll_prerequisite_api_v1_roll_switch_prerequisite_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RollPrerequisiteSwitchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollPrerequisiteSwitchResponse"];
                 };
             };
             /** @description Validation Error */
