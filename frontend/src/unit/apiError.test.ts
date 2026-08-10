@@ -26,6 +26,17 @@ describe('getApiErrorDetail', () => {
     expect(getApiErrorDetail(error)).toBe('Internal server error')
   })
 
+  it('returns Unknown error for Axios errors without detail or a message', () => {
+    const error = {
+      isAxiosError: true,
+      response: {
+        status: 500,
+        data: {},
+      },
+    }
+    expect(getApiErrorDetail(error)).toBe('Unknown error')
+  })
+
   it('handles network errors with Axios', () => {
     const error = {
       isAxiosError: true,
@@ -61,6 +72,16 @@ describe('getApiErrorDetail', () => {
       },
     }
     expect(getApiErrorDetail(error)).toBe('Not found')
+  })
+
+  it('returns Unknown error for generic response objects without detail', () => {
+    const error = {
+      response: {
+        status: 500,
+        data: {},
+      },
+    }
+    expect(getApiErrorDetail(error)).toBe('Unknown error')
   })
 
   it('returns Unknown error for objects without response', () => {
