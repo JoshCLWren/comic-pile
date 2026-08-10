@@ -36,9 +36,9 @@ export interface RollRecoveryInfo {
   readable_prerequisites: RollRecoveryPrerequisite[]
 }
 
-/** Request for accepting one blocked-roll prerequisite recommendation. */
+/** Request for accepting one concrete issue prerequisite recommendation. */
 export interface RollPrerequisiteSwitchRequest {
-  node_type: 'issue' | 'crossover'
+  node_type: 'issue'
   node_id: number
 }
 
