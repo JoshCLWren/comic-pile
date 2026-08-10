@@ -150,6 +150,7 @@ class FakeClient:
     """Provider-client stand-in that records endpoint hydration requests."""
 
     def __init__(self) -> None:
+        """Initialize an empty story-arc request ledger."""
         self.story_arcs: list[int] = []
 
     async def fetch_issue(self, issue_id: int, *, refresh: bool = False) -> ComicVineResponse:
