@@ -1,9 +1,16 @@
 """Tests for budgeted live refresh of ComicVine hydration misses."""
 
+from typing import cast
 from unittest.mock import AsyncMock, Mock
 
-from comic_pile.comicvine_live_refresh import refresh_confirmed_local_misses
-from comic_pile.comicvine_provider import ComicVineRateLimitError, ComicVineResponse
+import pytest
+
+from comic_pile.comicvine_live_refresh import _recount, refresh_confirmed_local_misses
+from comic_pile.comicvine_provider import (
+    ComicVineError,
+    ComicVineRateLimitError,
+    ComicVineResponse,
+)
 
 
 def report_with_misses() -> dict[str, object]:
@@ -23,7 +30,7 @@ def issue_rows(report: dict[str, object]) -> list[dict[str, object]]:
     value = report["issues"]
     assert isinstance(value, list)
     assert all(isinstance(row, dict) for row in value)
-    return value
+    return cast(list[dict[str, object]], value)
 
 
 async def test_refresh_reconciles_confirmed_miss_from_cache() -> None:
@@ -66,6 +73,90 @@ async def test_refresh_rejects_provider_identity_mismatch() -> None:
     assert summary.failed == 1
     assert report["summary"] == {"total": 2, "matched": 1, "failed": 1}
     assert issue_rows(report)[1]["status"] == "failed"
+
+
+async def test_refresh_rejects_malformed_provider_payload() -> None:
+    """A singular response without an integer ID cannot satisfy a confirmed identity."""
+    client = Mock()
+    client.fetch_issue = AsyncMock(
+        return_value=ComicVineResponse(
+            payload={"results": "unexpected"},
+            from_cache=False,
+            cache_key="issue-live",
+        )
+    )
+    report = report_with_misses()
+    report["issues"] = issue_rows(report)[:2]
+
+    summary = await refresh_confirmed_local_misses(report, client)
+
+    assert summary.failed == 1
+    assert issue_rows(report)[1]["status"] == "failed"
+
+
+async def test_refresh_records_provider_failure_and_continues() -> None:
+    """Provider failures become report rows while later confirmed misses remain resumable."""
+    client = Mock()
+    client.fetch_issue = AsyncMock(
+        side_effect=[
+            ComicVineError("provider unavailable"),
+            ComicVineResponse(
+                payload={"results": {"id": 303}},
+                from_cache=False,
+                cache_key="issue-live",
+            ),
+        ]
+    )
+    report = report_with_misses()
+
+    summary = await refresh_confirmed_local_misses(report, client)
+
+    assert summary.attempted == 2
+    assert summary.failed == 1
+    assert summary.matched == 1
+    rows = issue_rows(report)
+    assert rows[1]["status"] == "failed"
+    assert rows[1]["provenance"] == "comicvine-live"
+    assert rows[2]["status"] == "matched"
+
+
+async def test_refresh_skips_ineligible_rows() -> None:
+    """Only local misses with integer confirmed identities can spend provider budget."""
+    client = Mock()
+    client.fetch_issue = AsyncMock()
+    report: dict[str, object] = {
+        "issues": [
+            "not-a-row",
+            {"status": "matched", "comicvine_issue_id": 101},
+            {"status": "local-miss", "comicvine_issue_id": "202"},
+        ]
+    }
+
+    summary = await refresh_confirmed_local_misses(report, client)
+
+    assert summary.attempted == 0
+    assert report["summary"] == {"total": 3, "matched": 1, "local-miss": 1}
+    client.fetch_issue.assert_not_awaited()
+
+
+async def test_refresh_requires_issue_list() -> None:
+    """Malformed hydration reports fail before any provider request is attempted."""
+    client = Mock()
+    client.fetch_issue = AsyncMock()
+
+    with pytest.raises(ValueError, match="issues list"):
+        await refresh_confirmed_local_misses({"issues": "invalid"}, client)
+
+    client.fetch_issue.assert_not_awaited()
+
+
+def test_recount_ignores_non_list_issue_payload() -> None:
+    """Recount is a no-op when called on an unrelated report shape."""
+    report: dict[str, object] = {"issues": "invalid", "summary": {"total": 1}}
+
+    _recount(report)
+
+    assert report["summary"] == {"total": 1}
 
 
 async def test_budget_exhaustion_stops_cleanly_and_preserves_remaining_misses() -> None:
