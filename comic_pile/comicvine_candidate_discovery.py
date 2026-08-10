@@ -13,14 +13,7 @@ from comic_pile.local_comicvine import LocalComicVineSnapshot
 
 
 def snapshot_sync_time(snapshot: LocalComicVineSnapshot) -> datetime | None:
-    """Return the newest parseable local snapshot sync timestamp.
-
-    Args:
-        snapshot: Read-only local ComicVine snapshot.
-
-    Returns:
-        Newest timestamp exposed by ``cv_sync_metadata``, when available.
-    """
+    """Return the newest parseable local snapshot sync timestamp."""
     timestamps: list[datetime] = []
     for row in snapshot.sync_metadata().values():
         if not isinstance(row, dict):
@@ -80,20 +73,7 @@ def discover_local_candidates(
     thread_issue_labels: list[str],
     limit: int = 20,
 ) -> list[ComicVineCandidate]:
-    """Discover issue-level candidates from local FTS plus exact volume issue validation.
-
-    FTS is used only to discover volumes. Every returned candidate is validated against an actual
-    issue row, and the result order is deterministic by provider IDs rather than FTS rank.
-
-    Args:
-        snapshot: Read-only local ComicVine snapshot.
-        context: ComicPile issue evidence.
-        thread_issue_labels: Ordered labels from the ComicPile reading-project thread.
-        limit: Maximum FTS volume candidates to inspect.
-
-    Returns:
-        Deterministically ordered, issue-validated candidates.
-    """
+    """Discover issue-level candidates from local FTS plus exact volume issue validation."""
     expected = normalize_issue_label(context.issue_label)
     candidates: list[ComicVineCandidate] = []
     seen_issue_ids: set[int] = set()
@@ -110,7 +90,11 @@ def discover_local_candidates(
             label
             for issue in issues
             for label in (
-                normalize_issue_label(str(issue.data.get("issue_number", ""))),
+                normalize_issue_label(
+                    str(issue.data["issue_number"])
+                    if issue.data.get("issue_number") is not None
+                    else None
+                ),
                 normalize_issue_label(
                     issue.data.get("name") if isinstance(issue.data.get("name"), str) else None
                 ),
