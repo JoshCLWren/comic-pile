@@ -42,9 +42,11 @@ export function ReadingOrderGroups({ threadId }: ReadingOrderGroupsProps) {
       })
       await fetchAndPublishRollBootstrap()
     } catch (error) {
-      setSwitchError(getApiErrorDetail(error))
+      const switchFailure = getApiErrorDetail(error)
+      setSwitchError(switchFailure)
       try {
         await fetchAndPublishRollBootstrap()
+        setSwitchError(`${switchFailure}. Recovery guidance has been refreshed.`)
       } catch {
         setSwitchError('ComicPile could not switch the roll or refresh its recovery guidance. Your original roll is still preserved.')
       }
