@@ -72,10 +72,7 @@ class LocalComicVineSnapshot:
                 "comicvine_id",
                 f"{table.removeprefix('cv_')}_id",
             )
-            id_column = next(
-                (candidate for candidate in id_candidates if candidate in columns),
-                None,
-            )
+            id_column = next((candidate for candidate in id_candidates if candidate in columns), None)
             if id_column is None:
                 return None
             row = connection.execute(
@@ -97,14 +94,7 @@ class LocalComicVineSnapshot:
         return self._lookup("cv_issue", issue_id, ("volume_id", "issue_number"))
 
     def get_volume_issues(self, volume_id: int) -> list[LocalComicVineResult]:
-        """Return every locally cached issue in one ComicVine volume.
-
-        Args:
-            volume_id: ComicVine volume identity.
-
-        Returns:
-            Issue rows in stable numeric-ID order, or an empty list when unavailable.
-        """
+        """Return every locally cached issue in one ComicVine volume."""
         if not self.available:
             return []
         with self._connect() as connection:
@@ -116,26 +106,28 @@ class LocalComicVineSnapshot:
                 f"SELECT * FROM cv_issue WHERE volume_id = ? ORDER BY {order_column}",
                 (volume_id,),
             ).fetchall()
-        return [
-            LocalComicVineResult(data=self._normalize_row(row), complete=True)
-            for row in rows
-        ]
+        return [LocalComicVineResult(data=self._normalize_row(row), complete=True) for row in rows]
 
     def search_volumes(self, query: str, *, limit: int = 10) -> list[LocalComicVineResult]:
-        """Return ranked local candidates without treating rank as identity confirmation."""
+        """Return ranked local candidates only when FTS rowid is the ComicVine volume ID."""
         if not self.available or not query.strip() or limit <= 0:
             return []
         with self._connect() as connection:
-            fts_tables = [
-                row[0]
-                for row in connection.execute(
-                    "SELECT name FROM sqlite_master "
-                    "WHERE type='table' AND name LIKE 'cv_volume%fts%'"
-                )
-            ]
-            if not fts_tables:
+            fts_rows = connection.execute(
+                "SELECT name, sql FROM sqlite_master "
+                "WHERE type='table' AND name LIKE 'cv_volume%fts%'"
+            ).fetchall()
+            table = None
+            for row in fts_rows:
+                sql = row[1]
+                if not isinstance(sql, str):
+                    continue
+                normalized_sql = "".join(sql.casefold().split()).replace('"', "'")
+                if "content='cv_volume'" in normalized_sql and "content_rowid='id'" in normalized_sql:
+                    table = row[0]
+                    break
+            if table is None:
                 return []
-            table = fts_tables[0]
             rows = connection.execute(
                 f"SELECT rowid AS id, *, bm25({table}) AS rank FROM {table} "
                 f"WHERE {table} MATCH ? ORDER BY rank LIMIT ?",
