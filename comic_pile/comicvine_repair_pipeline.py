@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from comic_pile.comicvine_candidate_discovery import discover_local_candidates
 from comic_pile.comicvine_identity_repair import (
     CandidateScore,
@@ -33,10 +35,12 @@ def _publisher_name(value: object) -> str | None:
     return None
 
 
-def _live_candidate(
+def _candidate_from_rows(
     volume: dict[str, object],
     issue: dict[str, object],
     context: ComicVineRepairContext,
+    *,
+    source: str,
 ) -> ComicVineCandidate | None:
     volume_id = _integer(volume.get("id"))
     issue_id = _integer(issue.get("id"))
@@ -61,8 +65,57 @@ def _live_candidate(
         issue_name=issue_name,
         publisher=_publisher_name(volume.get("publisher")),
         start_year=_integer(volume.get("start_year")),
-        source="comicvine-live",
+        source=source,
     )
+
+
+def _object_result(payload: dict[str, object], resource: str) -> dict[str, object]:
+    result = payload.get("results")
+    if not isinstance(result, dict):
+        raise ComicVineError(f"ComicVine {resource} response did not contain an object result")
+    return cast(dict[str, object], result)
+
+
+def _exact_local_candidate(
+    snapshot: LocalComicVineSnapshot,
+    issue_id: int,
+    context: ComicVineRepairContext,
+) -> ComicVineCandidate | None:
+    issue = snapshot.get_issue(issue_id)
+    if issue is None:
+        return None
+    volume_id = _integer(issue.data.get("volume_id"))
+    if volume_id is None:
+        return None
+    volume = snapshot.get_volume(volume_id)
+    if volume is None:
+        return None
+    issue_row = {**issue.data, "id": issue_id}
+    volume_row = {**volume.data, "id": volume_id}
+    return _candidate_from_rows(
+        volume_row,
+        issue_row,
+        context,
+        source="comicvine-local-sqlite",
+    )
+
+
+async def _exact_live_candidate(
+    client: ComicVineClient,
+    issue_id: int,
+    context: ComicVineRepairContext,
+) -> ComicVineCandidate | None:
+    issue_response = await client.fetch_issue(issue_id)
+    issue = _object_result(issue_response.payload, "issue")
+    volume_ref = issue.get("volume")
+    if not isinstance(volume_ref, dict):
+        return None
+    volume_id = _integer(volume_ref.get("id"))
+    if volume_id is None:
+        return None
+    volume_response = await client.fetch_volume(volume_id)
+    volume = _object_result(volume_response.payload, "volume")
+    return _candidate_from_rows(volume, issue, context, source="comicvine-live")
 
 
 async def discover_live_candidates(
@@ -73,8 +126,8 @@ async def discover_live_candidates(
 ) -> list[ComicVineCandidate]:
     """Search live ComicVine only after local evidence is insufficient.
 
-    Provider search rank is treated only as discovery. Each candidate volume is locally validated
-    against the issue roster returned by ``/issues`` before it can be scored.
+    Provider search rank is treated only as discovery. Each candidate volume is validated against
+    the issue roster returned by ``/issues`` before it can be scored.
 
     Args:
         client: Endpoint-budgeted ComicVine client.
@@ -111,7 +164,7 @@ async def discover_live_candidates(
             continue
         issues = await client.fetch_volume_issues(volume_id)
         for issue in issues:
-            candidate = _live_candidate(row, issue, context)
+            candidate = _candidate_from_rows(row, issue, context, source="comicvine-live")
             if candidate is None or candidate.issue_id in seen:
                 continue
             seen.add(candidate.issue_id)
@@ -135,25 +188,36 @@ async def repair_identity(
         client: Live provider client; required only when local evidence is insufficient.
         context: ComicPile-side issue evidence.
         thread_issue_labels: Ordered labels for local segment discovery.
-        existing_confirmed_issue_id: Existing confirmed mapping to preserve.
+        existing_confirmed_issue_id: Existing confirmed mapping to preserve without search.
         embedded_cbl_issue_id: Exact CBL-embedded ComicVine issue identity.
 
     Returns:
         Safe resolution decision plus every scored candidate used to reach it.
     """
-    local = discover_local_candidates(
+    if existing_confirmed_issue_id is not None:
+        decision = decide_candidates([], existing_confirmed_issue_id=existing_confirmed_issue_id)
+        return decision, ()
+
+    if embedded_cbl_issue_id is not None:
+        exact = _exact_local_candidate(snapshot, embedded_cbl_issue_id, context)
+        if exact is None and client is not None:
+            exact = await _exact_live_candidate(client, embedded_cbl_issue_id, context)
+        if exact is not None:
+            score = score_candidate(context, exact)
+            decision = decide_candidates(
+                [score],
+                embedded_cbl_issue_id=embedded_cbl_issue_id,
+            )
+            return decision, (score,)
+
+    candidates = discover_local_candidates(
         snapshot,
         context,
         thread_issue_labels=thread_issue_labels,
     )
-    candidates = local
     if not candidates and client is not None:
         candidates = await discover_live_candidates(client, context)
 
     scores = tuple(score_candidate(context, candidate) for candidate in candidates)
-    decision = decide_candidates(
-        list(scores),
-        existing_confirmed_issue_id=existing_confirmed_issue_id,
-        embedded_cbl_issue_id=embedded_cbl_issue_id,
-    )
+    decision = decide_candidates(list(scores))
     return decision, scores
