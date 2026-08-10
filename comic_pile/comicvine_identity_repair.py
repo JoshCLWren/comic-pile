@@ -7,7 +7,7 @@ import unicodedata
 from dataclasses import dataclass
 from datetime import date, datetime
 
-AUTO_CONFIRM_THRESHOLD = 0.82
+AUTO_CONFIRM_THRESHOLD = 0.78
 AUTO_CONFIRM_MARGIN = 0.12
 
 
