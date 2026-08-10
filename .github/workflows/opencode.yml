@@ -117,6 +117,7 @@ jobs:
         if: github.event_name != 'workflow_dispatch'
         uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
           PROMPT: >-
             ${{ github.event_name == 'pull_request' && 'Perform an exact-head code review of this pull request. Read the complete diff and relevant surrounding code. Report only actionable correctness, security, regression, maintainability, or missing-test findings. For every actionable finding, use the GitHub API or gh CLI to create a pull-request review comment directly on the relevant changed RIGHT-side diff line; include a concise explanation and a valid suggested patch when appropriate. Do not merely list findings in the final summary, do not comment on unchanged lines, and do not modify, push, or change labels. Use the final PR comment only for an overall verdict and a count of inline findings. End that verdict with exactly OPENCODE_REVIEW: PASS when there are zero actionable inline findings, or OPENCODE_REVIEW: CHANGES_REQUIRED when one or more actionable inline findings were posted.' || '' }}
@@ -139,7 +140,7 @@ jobs:
           verdict="$(gh api \
             "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" | \
             jq -r --arg run "/actions/runs/${GITHUB_RUN_ID}" \
-              '.[] | select(.user.login == "opencode-agent[bot]" and (.body | contains($run))) | .body' | \
+              '.[] | select((.user.login == "opencode-agent[bot]" or .user.login == "github-actions[bot]") and (.body | contains($run))) | .body' | \
             tail -n 1)"
           if grep -q 'OPENCODE_REVIEW: CHANGES_REQUIRED' <<< "$verdict"; then
             target_stage='factory:changes-requested'
