@@ -4101,10 +4101,51 @@ export interface components {
             title: string;
         };
         /**
+         * RollRecoveryChainNode
+         * @description One labeled issue or crossover step in a prerequisite chain.
+         */
+        RollRecoveryChainNode: {
+            /** Is Readable */
+            is_readable: boolean;
+            /** Label */
+            label: string;
+            /** Node Id */
+            node_id: number;
+            /**
+             * Node Type
+             * @enum {string}
+             */
+            node_type: "issue" | "crossover";
+        };
+        /**
+         * RollRecoveryDiagnostic
+         * @description One bounded-traversal diagnostic suitable for reader-facing explanation.
+         */
+        RollRecoveryDiagnostic: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "cycle_detected" | "depth_limit_exceeded" | "node_limit_exceeded";
+            /** Limit */
+            limit?: number | null;
+            /** Node Id */
+            node_id: number;
+            /**
+             * Node Type
+             * @enum {string}
+             */
+            node_type: "issue" | "crossover";
+        };
+        /**
          * RollRecoveryInfo
          * @description Structured recovery context for a pending roll that became blocked.
          */
         RollRecoveryInfo: {
+            /** Chains */
+            chains?: components["schemas"]["RollRecoveryChainNode"][][];
+            /** Diagnostics */
+            diagnostics?: components["schemas"]["RollRecoveryDiagnostic"][];
             /** Direct Blockers */
             direct_blockers?: components["schemas"]["ContinuityBlocker"][];
             /** Original Thread Id */

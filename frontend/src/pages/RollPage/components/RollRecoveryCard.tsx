@@ -8,6 +8,12 @@ interface RollRecoveryCardProps {
   errorMessage?: string | null
 }
 
+const diagnosticMessages = {
+  cycle_detected: 'This continuity plan contains a cycle, so ComicPile stopped before looping.',
+  depth_limit_exceeded: 'This dependency chain is deeper than ComicPile can safely traverse.',
+  node_limit_exceeded: 'This dependency graph is larger than ComicPile can safely traverse at once.',
+} as const
+
 /** Explain a blocked pending roll without replacing the original selection. */
 export function RollRecoveryCard({
   recovery,
@@ -47,6 +53,8 @@ export function RollRecoveryCard({
 
   const primaryBlocker = recovery.direct_blockers[0]
   const recommendations = recovery.readable_prerequisites
+  const chains = recovery.chains ?? []
+  const diagnostics = recovery.diagnostics ?? []
 
   return (
     <section
@@ -60,6 +68,57 @@ export function RollRecoveryCard({
           ? <><strong>{primaryBlocker.source_label}</strong> has to be read first.</>
           : <>A continuity prerequisite has to be completed first.</>}
       </p>
+
+      {chains.length > 0 && (
+        <details className="mt-4 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+          <summary className="cursor-pointer text-xs font-black uppercase tracking-widest text-stone-300">
+            Why is this blocked? ({chains.length} {chains.length === 1 ? 'path' : 'paths'})
+          </summary>
+          <div className="mt-3 space-y-3">
+            {chains.map((chain, chainIndex) => (
+              <ol
+                key={chain.map((node) => `${node.node_type}-${node.node_id}`).join(':')}
+                aria-label={`Dependency path ${chainIndex + 1}`}
+                className="space-y-1"
+              >
+                <li className="text-xs font-bold text-stone-400">{recovery.original_thread_title}</li>
+                {chain.map((node, index) => (
+                  <li
+                    key={`${node.node_type}-${node.node_id}-${index}`}
+                    className="flex items-center gap-2 pl-2 text-sm text-stone-200"
+                  >
+                    <span aria-hidden="true" className="text-stone-600">↳</span>
+                    <span className="min-w-0 flex-1">
+                      {node.label}
+                      <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-stone-500">
+                        {node.node_type}
+                      </span>
+                    </span>
+                    {node.is_readable && (
+                      <span className="shrink-0 text-[10px] font-black uppercase tracking-wider text-emerald-400">
+                        Readable now
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            ))}
+          </div>
+        </details>
+      )}
+
+      {diagnostics.length > 0 && (
+        <div role="alert" className="mt-3 rounded-xl border border-red-500/30 bg-red-950/20 px-3 py-2">
+          <p className="text-[10px] font-black uppercase tracking-widest text-red-400">Continuity warning</p>
+          <ul className="mt-1 space-y-1 text-xs text-stone-300">
+            {diagnostics.map((diagnostic) => (
+              <li key={`${diagnostic.code}-${diagnostic.node_type}-${diagnostic.node_id}`}>
+                {diagnosticMessages[diagnostic.code]}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {recommendations.length > 0 ? (
         <div className="mt-4 space-y-2">
