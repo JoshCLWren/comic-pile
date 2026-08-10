@@ -1,9 +1,7 @@
-import { useState } from 'react'
 import { CrossoverTags } from '../../../components/CrossoverTags'
 import { useDependencyGroups } from '../../../hooks/useDependencyGroups'
-import { fetchAndPublishRollBootstrap } from '../../../hooks/rollMutationReconciliation'
 import { useRollBootstrap } from '../../../hooks/useRollBootstrap'
-import { rollBootstrapApi } from '../../../services/rollBootstrapApi'
+import { useRollPrerequisiteSwitch } from '../../../hooks/useRollPrerequisiteSwitch'
 import type { RollRecoveryPrerequisite } from '../../../types/rollBootstrap'
 import { getApiErrorDetail } from '../../../utils/apiError'
 import { RollRecoveryCard } from './RollRecoveryCard'
@@ -20,39 +18,18 @@ export function ReadingOrderGroups({ threadId }: ReadingOrderGroupsProps) {
     isError: isBootstrapError,
     error: bootstrapError,
   } = useRollBootstrap()
-  const [isSwitching, setIsSwitching] = useState(false)
-  const [switchError, setSwitchError] = useState<string | null>(null)
+  const {
+    isPending: isSwitching,
+    errorMessage: switchError,
+    switchIssue,
+  } = useRollPrerequisiteSwitch()
 
   if (threadId == null) return null
 
   const recovery = bootstrap?.roll_recovery
   const handleReadNow = async (prerequisite: RollRecoveryPrerequisite) => {
-    if (isSwitching) return
-    if (prerequisite.node_type !== 'issue') {
-      setSwitchError('Choose a concrete readable issue from this crossover before switching the Roll target.')
-      return
-    }
-
-    setIsSwitching(true)
-    setSwitchError(null)
-    try {
-      await rollBootstrapApi.switchPrerequisite({
-        node_type: 'issue',
-        node_id: prerequisite.node_id,
-      })
-      await fetchAndPublishRollBootstrap()
-    } catch (error) {
-      const switchFailure = getApiErrorDetail(error)
-      setSwitchError(switchFailure)
-      try {
-        await fetchAndPublishRollBootstrap()
-        setSwitchError(`${switchFailure}. Recovery guidance has been refreshed.`)
-      } catch {
-        setSwitchError('ComicPile could not switch the roll or refresh its recovery guidance. Your original roll is still preserved.')
-      }
-    } finally {
-      setIsSwitching(false)
-    }
+    if (prerequisite.node_type !== 'issue') return
+    await switchIssue(prerequisite.node_id)
   }
 
   const recoveryCard = recovery ? (
