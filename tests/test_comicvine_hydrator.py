@@ -38,7 +38,7 @@ def target(*, external_id: int | None, issue_number: str = "12") -> HydrationTar
 
 def test_unmapped_issue_remains_unresolved() -> None:
     """Never guess provider identity when no confirmed mapping exists."""
-    result = inspect_local_snapshot(target(external_id=None), FakeSnapshot())  # type: ignore[arg-type]
+    result = inspect_local_snapshot(target(external_id=None), FakeSnapshot())
 
     assert result.status == "unresolved"
     assert result.comicvine_issue_id is None
@@ -46,7 +46,7 @@ def test_unmapped_issue_remains_unresolved() -> None:
 
 def test_confirmed_identity_local_miss_is_not_reinterpreted() -> None:
     """A stale/local miss stays attached to its confirmed provider identity."""
-    result = inspect_local_snapshot(target(external_id=123), FakeSnapshot())  # type: ignore[arg-type]
+    result = inspect_local_snapshot(target(external_id=123), FakeSnapshot())
 
     assert result.status == "local-miss"
     assert result.comicvine_issue_id == 123
@@ -62,9 +62,7 @@ def test_human_label_preserves_confirmed_mapping() -> None:
         }
     )
 
-    result = inspect_local_snapshot(
-        target(external_id=55, issue_number="Revival"), snapshot  # type: ignore[arg-type]
-    )
+    result = inspect_local_snapshot(target(external_id=55, issue_number="Revival"), snapshot)
 
     assert result.status == "matched"
     assert "differs" in result.detail
@@ -81,7 +79,7 @@ def test_report_counts_are_deterministic() -> None:
         HydrationTarget(12, 4, "X-Men", "3", 14, None),
     ]
 
-    report = build_report(targets, snapshot)  # type: ignore[arg-type]
+    report = build_report(targets, snapshot)
 
     assert report["summary"] == {
         "total": 3,
