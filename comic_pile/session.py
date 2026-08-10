@@ -53,7 +53,10 @@ def _as_utc(value: datetime) -> datetime:
 def _last_activity_at(session: Session, last_event_at: datetime | None) -> datetime:
     """Return the latest durable reading activity for a session."""
     candidates = [_as_utc(session.started_at)]
-    if session.pending_thread_updated_at is not None:
+    if (
+        session.pending_thread_updated_at is not None
+        and (session.pending_thread_id is not None or session.pending_issue_id is not None)
+    ):
         candidates.append(_as_utc(session.pending_thread_updated_at))
     if last_event_at is not None:
         candidates.append(_as_utc(last_event_at))
