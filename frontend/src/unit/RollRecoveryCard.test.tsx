@@ -24,6 +24,16 @@ const recovery: RollRecoveryInfo = {
     { node_type: 'issue', node_id: 30, label: 'Deep prerequisite #1' },
     { node_type: 'crossover', node_id: 40, label: 'Event chapter' },
   ],
+  chains: [
+    [
+      { node_type: 'crossover', node_id: 25, label: 'Event Alpha', is_readable: false },
+      { node_type: 'issue', node_id: 30, label: 'Deep prerequisite #1', is_readable: true },
+    ],
+    [
+      { node_type: 'issue', node_id: 35, label: 'Parallel branch', is_readable: false },
+      { node_type: 'crossover', node_id: 40, label: 'Event chapter', is_readable: true },
+    ],
+  ],
 }
 
 describe('RollRecoveryCard', () => {
@@ -39,6 +49,33 @@ describe('RollRecoveryCard', () => {
 
     fireEvent.click(screen.getAllByText('Read now')[0])
     expect(onReadNow).toHaveBeenCalledWith(recovery.readable_prerequisites[0])
+  })
+
+  it('expands branching dependency paths with node kinds and readable leaves', () => {
+    render(<RollRecoveryCard recovery={recovery} />)
+
+    fireEvent.click(screen.getByText(/Why is this blocked\? \(2 paths\)/))
+
+    expect(screen.getByRole('list', { name: 'Dependency path 1' })).toHaveTextContent('Event Alpha')
+    expect(screen.getByRole('list', { name: 'Dependency path 2' })).toHaveTextContent('Parallel branch')
+    expect(screen.getAllByText('Readable now')).toHaveLength(2)
+    expect(screen.getAllByText('crossover')).toHaveLength(2)
+  })
+
+  it('shows traversal diagnostics instead of failing on an invalid continuity plan', () => {
+    render(
+      <RollRecoveryCard
+        recovery={{
+          ...recovery,
+          chains: [],
+          diagnostics: [
+            { code: 'cycle_detected', node_type: 'issue', node_id: 30 },
+          ],
+        }}
+      />,
+    )
+
+    expect(screen.getByRole('alert')).toHaveTextContent('contains a cycle')
   })
 
   it('shows recommendations without a mutating action before safe replacement exists', () => {
