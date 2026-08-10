@@ -53,6 +53,8 @@ async def test_refresh_batches_confirmed_misses_by_volume() -> None:
     assert summary.volume_batches == 1
     assert summary.issue_requests == 0
     assert report["summary"] == {"total": 3, "matched": 3}
+    assert rows[1]["provenance"] == "comicvine-volume-roster"
+    assert rows[2]["provenance"] == "comicvine-volume-roster"
     client.fetch_volume_issues.assert_awaited_once_with(500, refresh=False)
     client.fetch_issue.assert_not_awaited()
 
@@ -130,6 +132,7 @@ async def test_volume_budget_exhaustion_preserves_resumable_rows() -> None:
     summary = await refresh_confirmed_local_misses(report, client)
 
     assert summary.budget_exhausted is True
+    assert summary.attempted == 2
     assert summary.matched == 0
     assert summary.issue_requests == 0
     assert rows[1]["status"] == "local-miss"
@@ -274,7 +277,7 @@ async def test_budget_exhaustion_stops_cleanly_and_preserves_remaining_misses() 
     summary = await refresh_confirmed_local_misses(report, client)
 
     assert summary.budget_exhausted is True
-    assert summary.attempted == 2
+    assert summary.attempted == 1
     assert summary.issue_requests == 1
     assert report["summary"] == {"total": 3, "matched": 1, "local-miss": 2}
     rows = _issue_rows(report)
