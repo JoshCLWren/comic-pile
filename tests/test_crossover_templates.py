@@ -21,25 +21,48 @@ def _evidence(
     )
 
 
-def test_x_of_swords_preserves_context_around_explicit_core() -> None:
-    """CBL context stays distinct from ComicVine's explicit event membership."""
+def test_x_of_swords_preserves_24_entry_cbl_order_around_22_chapter_core() -> None:
+    """The complete CBL event list keeps two preludes distinct from ComicVine's 22 chapters."""
+    path = "x-of-swords.cbl"
     evidence = (
-        _evidence(12, (("x-of-swords.cbl", 1),), ("dawn",)),
-        _evidence(13, (("x-of-swords.cbl", 2),), ("dawn",)),
-        _evidence(14, (("x-of-swords.cbl", 3),), ("xos",)),
-        _evidence(15, (("x-of-swords.cbl", 24),), ("reign",)),
+        _evidence(1, ((path, 1),), ("dawn",)),  # Excalibur #12
+        _evidence(2, ((path, 2),), ("dawn",)),  # X-Men #12
+        _evidence(3, ((path, 3),), ("xos",)),  # Creation #1, chapter 1
+        _evidence(4, ((path, 4),), ("xos",)),  # X-Factor #4
+        _evidence(5, ((path, 5),), ("xos",)),  # Wolverine #6
+        _evidence(6, ((path, 6),), ("xos",)),  # X-Force #13
+        _evidence(7, ((path, 7),), ("xos",)),  # Marauders #13
+        _evidence(8, ((path, 8),), ("xos",)),  # Hellions #5
+        _evidence(9, ((path, 9),), ("xos",)),  # New Mutants #13
+        _evidence(10, ((path, 10),), ("xos",)),  # Cable #5
+        _evidence(11, ((path, 11),), ("xos",)),  # Excalibur #13
+        _evidence(12, ((path, 12),), ("xos",)),  # X-Men #13
+        _evidence(13, ((path, 13),), ("xos",)),  # Stasis #1
+        _evidence(14, ((path, 14),), ("xos",)),  # X-Men #14
+        _evidence(15, ((path, 15),), ("xos",)),  # Marauders #14
+        _evidence(16, ((path, 16),), ("xos",)),  # Marauders #15
+        _evidence(17, ((path, 17),), ("xos",)),  # Excalibur #14
+        _evidence(18, ((path, 18),), ("xos",)),  # Wolverine #7
+        _evidence(19, ((path, 19),), ("xos",)),  # X-Force #14
+        _evidence(20, ((path, 20),), ("xos",)),  # Hellions #6
+        _evidence(21, ((path, 21),), ("xos",)),  # Cable #6
+        _evidence(22, ((path, 22),), ("xos",)),  # X-Men #15
+        _evidence(23, ((path, 23),), ("xos",)),  # Excalibur #15
+        _evidence(24, ((path, 24),), ("xos",)),  # Destruction #1, chapter 22
     )
 
     template = derive_crossover_template(evidence)
 
-    assert [item.role for item in template.items] == [
+    assert len(template.items) == 24
+    assert [item.suggested_position for item in template.items] == list(range(1, 25))
+    assert [item.role for item in template.items[:2]] == [
         "context/prelude",
         "context/prelude",
-        "core",
-        "epilogue",
     ]
+    assert all(item.role == "core" for item in template.items[2:])
     assert template.items[2].explanation.startswith("ComicVine explicitly tags")
-    assert template.items[0].source_paths == ("x-of-swords.cbl",)
+    assert template.items[-1].role == "core"
+    assert template.items[0].source_paths == (path,)
 
 
 def test_conflicting_source_order_is_inspectable_not_serialized() -> None:
