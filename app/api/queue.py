@@ -29,6 +29,17 @@ async def _invalidate_queue_caches(user_id: int) -> None:
     await invalidate_user_view(user_id)
 
 
+async def _active_queue_positions(user_id: int, db: AsyncSession) -> dict[int, int]:
+    """Return the authenticated user's active queue positions by thread ID."""
+    result = await db.execute(
+        select(Thread.id, Thread.queue_position)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .where(Thread.queue_position >= 1)
+    )
+    return {thread_id: queue_position for thread_id, queue_position in result.all()}
+
+
 class PositionRequest(BaseModel):
     """Schema for position update request."""
 
@@ -75,11 +86,15 @@ async def move_thread_position(
             detail=f"Thread {thread_id} not found",
         )
 
-    old_position = thread.queue_position
-    logger.info(f"Thread {thread_id} current position: {old_position}")
+    logger.info(f"Thread {thread_id} current position: {thread.queue_position}")
 
     try:
-        await move_to_position(thread_id, current_user.id, position_request.new_position, db)
+        changes = await move_to_position(
+            thread_id,
+            current_user.id,
+            position_request.new_position,
+            db,
+        )
         await db.refresh(thread)
         logger.info(f"Thread {thread_id} refreshed, new position: {thread.queue_position}")
     except ValueError as e:
@@ -96,7 +111,7 @@ async def move_thread_position(
         )
         raise
 
-    if old_position != thread.queue_position:
+    if changes:
         reorder_event = Event(
             type="reorder",
             timestamp=datetime.now(UTC),
@@ -105,8 +120,7 @@ async def move_thread_position(
         db.add(reorder_event)
         await db.commit()
         await db.refresh(thread)
-
-    await _invalidate_queue_caches(current_user.id)
+        await _invalidate_queue_caches(current_user.id)
 
     return await thread_to_response(thread, db)
 
@@ -143,11 +157,10 @@ async def move_thread_front(
             detail=f"Thread {thread_id} not found",
         )
 
-    old_position = thread.queue_position
-    await move_to_front(thread_id, current_user.id, db)
+    changes = await move_to_front(thread_id, current_user.id, db)
     await db.refresh(thread)
 
-    if old_position != thread.queue_position:
+    if changes:
         reorder_event = Event(
             type="reorder",
             timestamp=datetime.now(UTC),
@@ -156,8 +169,7 @@ async def move_thread_front(
         db.add(reorder_event)
         await db.commit()
         await db.refresh(thread)
-
-    await _invalidate_queue_caches(current_user.id)
+        await _invalidate_queue_caches(current_user.id)
 
     return await thread_to_response(thread, db)
 
@@ -194,11 +206,10 @@ async def move_thread_back(
             detail=f"Thread {thread_id} not found",
         )
 
-    old_position = thread.queue_position
-    await move_to_back(thread_id, current_user.id, db)
+    changes = await move_to_back(thread_id, current_user.id, db)
     await db.refresh(thread)
 
-    if old_position != thread.queue_position:
+    if changes:
         reorder_event = Event(
             type="reorder",
             timestamp=datetime.now(UTC),
@@ -207,8 +218,7 @@ async def move_thread_back(
         db.add(reorder_event)
         await db.commit()
         await db.refresh(thread)
-
-    await _invalidate_queue_caches(current_user.id)
+        await _invalidate_queue_caches(current_user.id)
 
     return await thread_to_response(thread, db)
 
@@ -236,7 +246,10 @@ async def shuffle_threads(
         request.url,
     )
 
+    before_positions = await _active_queue_positions(current_user.id, db)
     await shuffle_queue(current_user.id, db)
-    await _invalidate_queue_caches(current_user.id)
+    after_positions = await _active_queue_positions(current_user.id, db)
+    if after_positions != before_positions:
+        await _invalidate_queue_caches(current_user.id)
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
