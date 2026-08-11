@@ -22,7 +22,8 @@ from app.services.release_ledger import (
 IMPORTER_VERSION = "release-import-v1"
 SOURCE_REPOSITORY = "JoshCLWren/comic-pile"
 _DATE_HEADING_RE = re.compile(r"^##\s+(\d{4}-\d{2}-\d{2})(?:[ T].*)?\s*$")
-_CATEGORY_HEADING_RE = re.compile(r"^###\s+(.+?)\s*$")
+_MARKDOWN_CATEGORY_RE = re.compile(r"^###\s+(.+?)\s*$")
+_BOLD_CATEGORY_RE = re.compile(r"^\*\*(.+?)\*\*\s*$")
 _PR_LINK_RE = re.compile(r"github\.com/[^/]+/[^/]+/pull/(\d+)")
 _FRAGMENT_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-(\d+)\.md$")
 
@@ -128,11 +129,19 @@ def _fragment_identity(path: Path) -> tuple[str | None, int | None]:
     return match.group(1), int(match.group(2))
 
 
-def _extract_pr_number(text: str) -> int | None:
-    """Extract one explicit GitHub pull-request identity without guessing."""
-    matches = {int(value) for value in _PR_LINK_RE.findall(text)}
-    if len(matches) == 1:
-        return matches.pop()
+def _extract_pr_numbers(text: str) -> tuple[int, ...]:
+    """Extract explicit GitHub pull-request identities without guessing."""
+    return tuple(dict.fromkeys(int(value) for value in _PR_LINK_RE.findall(text)))
+
+
+def _category(stripped: str) -> str | None:
+    """Recognize both modern Markdown and frozen-archive feature-area headings."""
+    markdown_match = _MARKDOWN_CATEGORY_RE.match(stripped)
+    if markdown_match is not None:
+        return markdown_match.group(1).strip()
+    bold_match = _BOLD_CATEGORY_RE.match(stripped)
+    if bold_match is not None:
+        return bold_match.group(1).strip()
     return None
 
 
@@ -140,15 +149,7 @@ def parse_changelog_source(
     path: Path,
     text: str,
 ) -> tuple[list[ReleaseImportCandidate], list[ReleaseImportAnomaly]]:
-    """Parse one changelog source into ordered candidates and anomalies.
-
-    Args:
-        path: Repository-relative Markdown source path.
-        text: Exact source text.
-
-    Returns:
-        Ordered import candidates and preserved anomalies.
-    """
+    """Parse one changelog source into ordered candidates and anomalies."""
     checksum = _checksum(text)
     fragment_date, fragment_pr = _fragment_identity(path)
     current_date = fragment_date
@@ -174,9 +175,9 @@ def parse_changelog_source(
                 )
             continue
 
-        category_match = _CATEGORY_HEADING_RE.match(stripped)
-        if category_match is not None:
-            current_category = category_match.group(1).strip()
+        category = _category(stripped)
+        if category is not None:
+            current_category = category
             continue
 
         if stripped.startswith("#"):
@@ -196,13 +197,31 @@ def parse_changelog_source(
         if not summary:
             continue
 
-        linked_pr = _extract_pr_number(summary)
+        linked_prs = _extract_pr_numbers(summary)
+        linked_pr = linked_prs[0] if len(linked_prs) == 1 else None
+        if len(linked_prs) > 1:
+            anomalies.append(
+                ReleaseImportAnomaly(
+                    str(path),
+                    line_number,
+                    "entry references multiple PRs; preserving it without a singular PR identity",
+                )
+            )
         if fragment_pr is not None and linked_pr not in {None, fragment_pr}:
             anomalies.append(
                 ReleaseImportAnomaly(
                     str(path),
                     line_number,
                     f"fragment filename PR {fragment_pr} conflicts with linked PR {linked_pr}",
+                )
+            )
+            continue
+        if fragment_pr is not None and len(linked_prs) > 1 and fragment_pr not in linked_prs:
+            anomalies.append(
+                ReleaseImportAnomaly(
+                    str(path),
+                    line_number,
+                    f"fragment filename PR {fragment_pr} is absent from linked PR set {linked_prs}",
                 )
             )
             continue
@@ -226,20 +245,23 @@ def parse_changelog_source(
 
 
 def audit_changelog_corpus(repository_root: Path) -> ReleaseImportReport:
-    """Parse the frozen archive and every current fragment without mutating data.
-
-    Args:
-        repository_root: ComicPile repository root.
-
-    Returns:
-        Complete deterministic dry-run report for the source corpus.
-    """
+    """Parse the frozen archive and every valid current fragment without mutating data."""
     sources = [repository_root / "docs" / "changelog.md"]
     fragments_dir = repository_root / "docs" / "changelog.d"
-    if fragments_dir.exists():
-        sources.extend(sorted(fragments_dir.glob("*.md")))
-
     report = ReleaseImportReport()
+    if fragments_dir.exists():
+        for fragment in sorted(fragments_dir.glob("*.md")):
+            if _FRAGMENT_RE.fullmatch(fragment.name) is None:
+                report.anomalies.append(
+                    ReleaseImportAnomaly(
+                        str(fragment.relative_to(repository_root)),
+                        0,
+                        "ignored changelog fragment with invalid filename",
+                    )
+                )
+                continue
+            sources.append(fragment)
+
     for source in sources:
         relative_path = source.relative_to(repository_root)
         text = source.read_text(encoding="utf-8")
@@ -260,7 +282,7 @@ def _title(candidate: ReleaseImportCandidate) -> str:
     return candidate.summary[:255]
 
 
-def _payload(candidate: ReleaseImportCandidate) -> ReleaseUpsertRequest:
+def _payload(candidate: ReleaseImportCandidate, *, sort_order: int) -> ReleaseUpsertRequest:
     """Build the release-service payload for a PR-backed candidate."""
     if candidate.source_pr_number is None:
         raise ValueError("PR-backed payload requires source_pr_number")
@@ -271,7 +293,7 @@ def _payload(candidate: ReleaseImportCandidate) -> ReleaseUpsertRequest:
         category=candidate.category,
         title=_title(candidate),
         summary=candidate.summary,
-        sort_order=-candidate.source_order,
+        sort_order=sort_order,
         provenance_json=candidate.provenance(),
     )
 
@@ -287,7 +309,8 @@ async def import_changelog_report(
 ) -> ReleaseWriteReport:
     """Persist audited candidates idempotently while refusing silent source rewrites."""
     result = ReleaseWriteReport(source_count=len(report.candidates))
-    for candidate in report.candidates:
+    for corpus_order, candidate in enumerate(report.candidates):
+        sort_order = -corpus_order
         if candidate.source_pr_number is not None:
             existing = await find_release_by_source(
                 db,
@@ -310,7 +333,7 @@ async def import_changelog_report(
             if existing is not None:
                 result.unchanged_count += 1
                 continue
-            await upsert_release(db, _payload(candidate))
+            await upsert_release(db, _payload(candidate, sort_order=sort_order))
             result.imported_count += 1
             continue
 
@@ -343,7 +366,7 @@ async def import_changelog_report(
                 category=candidate.category,
                 title=_title(candidate),
                 summary=candidate.summary,
-                sort_order=-candidate.source_order,
+                sort_order=sort_order,
                 provenance_json=candidate.provenance(),
             )
         except ReleaseSourceConflictError as error:
@@ -361,7 +384,7 @@ async def reconcile_changelog_report(
 ) -> ReleaseWriteReport:
     """Verify source-to-database coverage, provenance, dates, content, and ordering."""
     result = ReleaseWriteReport(source_count=len(report.candidates))
-    for candidate in report.candidates:
+    for corpus_order, candidate in enumerate(report.candidates):
         if candidate.source_pr_number is not None:
             release = await find_release_by_source(
                 db,
@@ -386,7 +409,7 @@ async def reconcile_changelog_report(
             "released_at": released_at(candidate),
             "category": candidate.category,
             "summary": candidate.summary,
-            "sort_order": -candidate.source_order,
+            "sort_order": -corpus_order,
         }
         actual = {
             "checksum": (release.provenance_json or {}).get("source_checksum"),
