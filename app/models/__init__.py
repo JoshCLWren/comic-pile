@@ -13,6 +13,7 @@ from app.models.external_identity import (
 from app.models.failed_login_attempt import FailedLoginAttempt
 from app.models.issue import Issue
 from app.models.reading_order import ReadingOrder, ReadingOrderItem
+from app.models.release import Release
 from app.models.revoked_token import RevokedToken
 from app.models.session import Session
 from app.models.snapshot import Snapshot
@@ -35,6 +36,7 @@ __all__ = [
     "IssueExternalIdentityMapping",
     "ReadingOrder",
     "ReadingOrderItem",
+    "Release",
     "RevokedToken",
     "Session",
     "Snapshot",

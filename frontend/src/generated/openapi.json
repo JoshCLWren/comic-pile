@@ -2282,6 +2282,312 @@
         "title": "RefreshTokenRequest",
         "type": "object"
       },
+      "ReleaseListResponse": {
+        "description": "Paginated published releases for What's New.",
+        "properties": {
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "releases": {
+            "items": {
+              "$ref": "#/components/schemas/ReleaseResponse"
+            },
+            "title": "Releases",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "releases",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "ReleaseListResponse",
+        "type": "object"
+      },
+      "ReleaseResponse": {
+        "description": "One release ledger record returned by the API.",
+        "properties": {
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "merged_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merged At"
+          },
+          "provenance_json": {
+            "additionalProperties": true,
+            "title": "Provenance Json",
+            "type": "object"
+          },
+          "released_at": {
+            "format": "date-time",
+            "title": "Released At",
+            "type": "string"
+          },
+          "sort_order": {
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "source_merge_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Merge Sha"
+          },
+          "source_pr_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Pr Number"
+          },
+          "source_repository": {
+            "title": "Source Repository",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "draft",
+              "published",
+              "retracted"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "visibility": {
+            "enum": [
+              "public",
+              "internal"
+            ],
+            "title": "Visibility",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source_repository",
+          "source_pr_number",
+          "source_merge_sha",
+          "merged_at",
+          "released_at",
+          "category",
+          "title",
+          "summary",
+          "body",
+          "visibility",
+          "status",
+          "sort_order",
+          "provenance_json",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ReleaseResponse",
+        "type": "object"
+      },
+      "ReleaseSourceResponse": {
+        "description": "Result of reconciling a GitHub source identity with the ledger.",
+        "properties": {
+          "exists": {
+            "title": "Exists",
+            "type": "boolean"
+          },
+          "release": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReleaseResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "exists"
+        ],
+        "title": "ReleaseSourceResponse",
+        "type": "object"
+      },
+      "ReleaseUpsertRequest": {
+        "description": "Idempotent release publication payload from trusted automation.",
+        "properties": {
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "category": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Category",
+            "type": "string"
+          },
+          "merged_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merged At"
+          },
+          "provenance_json": {
+            "additionalProperties": true,
+            "title": "Provenance Json",
+            "type": "object"
+          },
+          "released_at": {
+            "format": "date-time",
+            "title": "Released At",
+            "type": "string"
+          },
+          "sort_order": {
+            "default": 0,
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "source_merge_sha": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 7,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Merge Sha"
+          },
+          "source_pr_number": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Pr Number"
+          },
+          "source_repository": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Source Repository",
+            "type": "string"
+          },
+          "status": {
+            "default": "published",
+            "enum": [
+              "draft",
+              "published",
+              "retracted"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "summary": {
+            "minLength": 1,
+            "title": "Summary",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "visibility": {
+            "default": "public",
+            "enum": [
+              "public",
+              "internal"
+            ],
+            "title": "Visibility",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_repository",
+          "released_at",
+          "category",
+          "title",
+          "summary"
+        ],
+        "title": "ReleaseUpsertRequest",
+        "type": "object"
+      },
       "RollBootstrapResponse": {
         "description": "Bounded bootstrap payload for the Roll initial render.\n\nReturns only the retained data required for the first interactive screen.\nDoes not include the full queue, collection data, or secondary detail panels.",
         "properties": {
@@ -7557,6 +7863,268 @@
           "dependencies",
           "dependencies",
           "reading-order-groups"
+        ]
+      }
+    },
+    "/api/v1/releases/": {
+      "get": {
+        "description": "List public published releases newest-first.",
+        "operationId": "list_releases_api_v1_releases__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Releases",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "releases"
+        ]
+      },
+      "put": {
+        "description": "Idempotently create or update one merged-PR-backed release.",
+        "operationId": "publish_release_api_v1_releases__put",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-release-writer-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Release-Writer-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseUpsertRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Publish Release",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "releases"
+        ]
+      }
+    },
+    "/api/v1/releases/source": {
+      "get": {
+        "description": "Resolve whether trusted automation already published a GitHub source.",
+        "operationId": "reconcile_release_source_api_v1_releases_source_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source_repository",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Source Repository",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source_pr_number",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Pr Number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source_merge_sha",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "minLength": 7,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Merge Sha"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-release-writer-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Release-Writer-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseSourceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reconcile Release Source",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "releases"
+        ]
+      }
+    },
+    "/api/v1/releases/{release_id}": {
+      "get": {
+        "description": "Fetch one public published release.",
+        "operationId": "get_release_api_v1_releases__release_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "release_id",
+            "required": true,
+            "schema": {
+              "title": "Release Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Release",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "releases"
         ]
       }
     },
