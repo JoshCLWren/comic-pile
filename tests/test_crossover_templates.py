@@ -12,12 +12,17 @@ def _evidence(
     placements: tuple[tuple[str, int], ...],
     story_arc_ids: tuple[str, ...] = (),
     target_story_arc_id: str | None = "xos",
+    *,
+    thread_id: int | None = None,
+    thread_position: int | None = None,
 ) -> TemplateEvidence:
     return TemplateEvidence(
         issue_id=issue_id,
         cbl_placements=tuple(CBLPlacement(path, position) for path, position in placements),
         story_arc_ids=story_arc_ids,
         target_story_arc_id=target_story_arc_id,
+        thread_id=thread_id,
+        thread_position=thread_position,
     )
 
 
@@ -63,10 +68,30 @@ def test_x_of_swords_preserves_24_entry_cbl_order_around_22_chapter_core() -> No
     assert template.items[2].explanation.startswith("ComicVine explicitly tags")
     assert template.items[-1].role == "core"
     assert template.items[0].source_paths == (path,)
+    assert template.items[0].cbl_placements == (CBLPlacement(path, 1),)
+    assert template.items[0].story_arc_ids == ("dawn",)
 
 
-def test_conflicting_source_order_is_inspectable_not_serialized() -> None:
-    """A less-linear event keeps disagreement as evidence instead of an edge."""
+def test_x_men_16_reign_of_x_is_context_after_x_of_swords_core() -> None:
+    """Reign of X evidence remains inspectable without pretending it is X of Swords core."""
+    path = "x-of-swords-with-followup.cbl"
+    template = derive_crossover_template(
+        (
+            _evidence(24, ((path, 24),), ("xos",)),  # Destruction #1
+            _evidence(25, ((path, 25),), ("reign-of-x",)),  # X-Men #16
+        )
+    )
+
+    x_men_16 = template.items[1]
+    assert x_men_16.issue_id == 25
+    assert x_men_16.story_arc_ids == ("reign-of-x",)
+    assert x_men_16.target_story_arc_id == "xos"
+    assert x_men_16.role == "epilogue"
+    assert "after the explicit ComicVine core" in x_men_16.explanation
+
+
+def test_conflicting_source_order_is_parallel_candidate_not_serialized() -> None:
+    """A less-linear event keeps disagreement as advisory evidence instead of an edge."""
     template = derive_crossover_template(
         (
             _evidence(20, (("a.cbl", 1), ("b.cbl", 4)), target_story_arc_id=None),
@@ -84,6 +109,57 @@ def test_conflicting_source_order_is_inspectable_not_serialized() -> None:
         (item.first_issue_id, item.second_issue_id, item.source_paths)
         for item in template.conflicts
     ] == [(20, 30, ("a.cbl", "b.cbl"))]
+    assert [
+        (item.first_issue_id, item.second_issue_id, item.source_paths)
+        for item in template.parallel_candidates
+    ] == [(20, 30, ("a.cbl", "b.cbl"))]
+    assert "possible parallel branch" in template.parallel_candidates[0].explanation
+
+
+def test_same_thread_spines_and_cross_series_intersections_are_advisory() -> None:
+    """Series order and cross-series bridges are exposed without generating dependencies."""
+    path = "event.cbl"
+    template = derive_crossover_template(
+        (
+            _evidence(
+                101,
+                ((path, 1),),
+                target_story_arc_id=None,
+                thread_id=10,
+                thread_position=5,
+            ),
+            _evidence(
+                201,
+                ((path, 2),),
+                target_story_arc_id=None,
+                thread_id=20,
+                thread_position=8,
+            ),
+            _evidence(
+                102,
+                ((path, 3),),
+                target_story_arc_id=None,
+                thread_id=10,
+                thread_position=6,
+            ),
+        )
+    )
+
+    assert len(template.serial_spines) == 1
+    spine = template.serial_spines[0]
+    assert spine.thread_id == 10
+    assert spine.issue_ids == (101, 102)
+    assert spine.source_paths == (path,)
+    assert "not an added continuity dependency" in spine.explanation
+
+    assert [
+        (item.first_issue_id, item.second_issue_id, item.source_paths)
+        for item in template.intersections
+    ] == [
+        (101, 201, (path,)),
+        (201, 102, (path,)),
+    ]
+    assert all("advisory order only" in item.explanation for item in template.intersections)
 
 
 def test_conflict_detection_binds_positions_to_source_provenance() -> None:

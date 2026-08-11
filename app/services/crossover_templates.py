@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+from app.models.issue import Issue
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -27,6 +28,8 @@ class TemplateEvidence:
     cbl_placements: tuple[CBLPlacement, ...]
     story_arc_ids: tuple[str, ...] = ()
     target_story_arc_id: str | None = None
+    thread_id: int | None = None
+    thread_position: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +42,9 @@ class CrossoverTemplateItem:
     confidence: str
     explanation: str
     source_paths: tuple[str, ...]
+    cbl_placements: tuple[CBLPlacement, ...]
+    story_arc_ids: tuple[str, ...]
+    target_story_arc_id: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,11 +57,44 @@ class CrossoverTemplateConflict:
 
 
 @dataclass(frozen=True, slots=True)
+class CrossoverTemplateParallelCandidate:
+    """Advisory pair that may represent parallel branches."""
+
+    first_issue_id: int
+    second_issue_id: int
+    source_paths: tuple[str, ...]
+    explanation: str
+
+
+@dataclass(frozen=True, slots=True)
+class CrossoverTemplateSerialSpine:
+    """Same-thread issue order preserved as advisory series structure."""
+
+    thread_id: int
+    issue_ids: tuple[int, ...]
+    source_paths: tuple[str, ...]
+    explanation: str
+
+
+@dataclass(frozen=True, slots=True)
+class CrossoverTemplateIntersection:
+    """Consistent cross-thread ordering observation, never a hard dependency."""
+
+    first_issue_id: int
+    second_issue_id: int
+    source_paths: tuple[str, ...]
+    explanation: str
+
+
+@dataclass(frozen=True, slots=True)
 class DerivedCrossoverTemplate:
     """Rebuildable crossover suggestion that never creates continuity rules."""
 
     items: tuple[CrossoverTemplateItem, ...]
     conflicts: tuple[CrossoverTemplateConflict, ...]
+    parallel_candidates: tuple[CrossoverTemplateParallelCandidate, ...] = ()
+    serial_spines: tuple[CrossoverTemplateSerialSpine, ...] = ()
+    intersections: tuple[CrossoverTemplateIntersection, ...] = ()
 
 
 async def derive_crossover_template_from_lists(
@@ -76,7 +115,7 @@ async def derive_crossover_template_from_lists(
         target_story_arc_id: ComicVine story-arc identity defining explicit core membership.
 
     Returns:
-        Deterministic derived template with inspectable provenance and conflicts.
+        Deterministic derived template with inspectable provenance and advisory structure.
     """
     if not source_list_ids:
         return DerivedCrossoverTemplate(items=(), conflicts=())
@@ -90,6 +129,7 @@ async def derive_crossover_template_from_lists(
                     CBLSource,
                     IssueExternalIdentityMapping,
                     ExternalIdentity,
+                    Issue,
                 )
                 .join(CBLSourceList, CBLSourceList.id == CBLSourceEntry.list_id)
                 .join(CBLSource, CBLSource.id == CBLSourceList.source_id)
@@ -102,6 +142,7 @@ async def derive_crossover_template_from_lists(
                     ExternalIdentity,
                     ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
                 )
+                .join(Issue, Issue.id == IssueExternalIdentityMapping.issue_id)
                 .where(
                     CBLSourceEntry.list_id.in_(source_list_ids),
                     CBLSourceList.active.is_(True),
@@ -121,7 +162,8 @@ async def derive_crossover_template_from_lists(
 
     placements_by_issue: dict[int, list[CBLPlacement]] = {}
     arcs_by_issue: dict[int, set[str]] = {}
-    for entry, source_list, source, mapping, identity in rows:
+    issue_structure: dict[int, tuple[int, int]] = {}
+    for entry, source_list, source, mapping, identity, issue in rows:
         source_path = f"{source.repository}:{source_list.source_path}"
         placements_by_issue.setdefault(mapping.issue_id, []).append(
             CBLPlacement(source_path=source_path, position=entry.position)
@@ -129,6 +171,7 @@ async def derive_crossover_template_from_lists(
         arcs_by_issue.setdefault(mapping.issue_id, set()).update(
             _story_arc_ids(identity.metadata_json)
         )
+        issue_structure[mapping.issue_id] = (issue.thread_id, issue.position)
 
     evidence = tuple(
         TemplateEvidence(
@@ -136,6 +179,8 @@ async def derive_crossover_template_from_lists(
             cbl_placements=tuple(sorted(placements)),
             story_arc_ids=tuple(sorted(arcs_by_issue.get(issue_id, set()))),
             target_story_arc_id=target_story_arc_id,
+            thread_id=issue_structure[issue_id][0],
+            thread_position=issue_structure[issue_id][1],
         )
         for issue_id, placements in sorted(placements_by_issue.items())
     )
@@ -150,8 +195,15 @@ def derive_crossover_template(
     ComicVine membership is sufficient for a ``core`` role only when the caller
     supplies the target story-arc identity. CBL-only members remain contextual
     candidates when they surround known core members, otherwise ``unknown``.
-    Source-order disagreements are reported rather than flattened into hard
-    dependency semantics.
+    Source-order disagreements become advisory parallel candidates instead of
+    hard dependencies. Same-thread runs and consistent cross-thread intersections
+    are exposed as inspectable structure without mutating continuity.
+
+    Args:
+        evidence: External evidence for candidate template members.
+
+    Returns:
+        Deterministic non-blocking template derived only from the supplied evidence.
     """
     if not evidence:
         return DerivedCrossoverTemplate(items=(), conflicts=())
@@ -174,11 +226,23 @@ def derive_crossover_template(
             role=_role(item, first_core=first_core, last_core=last_core),
             confidence="high" if _is_core(item) else "medium" if item.cbl_placements else "low",
             explanation=_explanation(item, first_core=first_core, last_core=last_core),
-            source_paths=tuple(sorted({placement.source_path for placement in item.cbl_placements})),
+            source_paths=tuple(
+                sorted({placement.source_path for placement in item.cbl_placements})
+            ),
+            cbl_placements=tuple(sorted(item.cbl_placements)),
+            story_arc_ids=tuple(sorted(item.story_arc_ids)),
+            target_story_arc_id=item.target_story_arc_id,
         )
         for index, item in enumerate(ordered, start=1)
     )
-    return DerivedCrossoverTemplate(items=items, conflicts=_order_conflicts(evidence))
+    conflicts = _order_conflicts(evidence)
+    return DerivedCrossoverTemplate(
+        items=items,
+        conflicts=conflicts,
+        parallel_candidates=_parallel_candidates(conflicts),
+        serial_spines=_serial_spines(evidence),
+        intersections=_cross_series_intersections(ordered),
+    )
 
 
 def _is_core(item: TemplateEvidence) -> bool:
@@ -216,7 +280,9 @@ def _explanation(
         return "CBL places this issue before the explicit ComicVine core; role remains contextual."
     if role == "epilogue":
         return "CBL places this issue after the explicit ComicVine core; role remains contextual."
-    return "External evidence suggests membership but is insufficient to assign a core/context role."
+    return (
+        "External evidence suggests membership but is insufficient to assign a core/context role."
+    )
 
 
 def _sort_key(item: TemplateEvidence) -> tuple[float, int]:
@@ -239,7 +305,9 @@ def _order_conflicts(
 ) -> tuple[CrossoverTemplateConflict, ...]:
     conflicts: list[CrossoverTemplateConflict] = []
     for index, first in enumerate(evidence):
-        first_by_path = {placement.source_path: placement.position for placement in first.cbl_placements}
+        first_by_path = {
+            placement.source_path: placement.position for placement in first.cbl_placements
+        }
         for second in evidence[index + 1 :]:
             second_by_path = {
                 placement.source_path: placement.position for placement in second.cbl_placements
@@ -266,6 +334,114 @@ def _order_conflicts(
             key=lambda item: (item.first_issue_id, item.second_issue_id, item.source_paths),
         )
     )
+
+
+def _parallel_candidates(
+    conflicts: tuple[CrossoverTemplateConflict, ...],
+) -> tuple[CrossoverTemplateParallelCandidate, ...]:
+    return tuple(
+        CrossoverTemplateParallelCandidate(
+            first_issue_id=conflict.first_issue_id,
+            second_issue_id=conflict.second_issue_id,
+            source_paths=conflict.source_paths,
+            explanation=(
+                "Source lists disagree on relative order; preserve this pair as a possible "
+                "parallel branch until a user chooses continuity semantics."
+            ),
+        )
+        for conflict in conflicts
+    )
+
+
+def _serial_spines(
+    evidence: tuple[TemplateEvidence, ...],
+) -> tuple[CrossoverTemplateSerialSpine, ...]:
+    by_thread: dict[int, list[TemplateEvidence]] = {}
+    for item in evidence:
+        if item.thread_id is None or item.thread_position is None:
+            continue
+        by_thread.setdefault(item.thread_id, []).append(item)
+
+    spines: list[CrossoverTemplateSerialSpine] = []
+    for thread_id, members in sorted(by_thread.items()):
+        ordered_members = sorted(
+            members,
+            key=lambda item: (
+                item.thread_position if item.thread_position is not None else -1,
+                item.issue_id,
+            ),
+        )
+        if len(ordered_members) < 2:
+            continue
+        spines.append(
+            CrossoverTemplateSerialSpine(
+                thread_id=thread_id,
+                issue_ids=tuple(item.issue_id for item in ordered_members),
+                source_paths=tuple(
+                    sorted(
+                        {
+                            placement.source_path
+                            for item in ordered_members
+                            for placement in item.cbl_placements
+                        }
+                    )
+                ),
+                explanation=(
+                    "ComicPile issue positions preserve this same-thread serial spine; it is "
+                    "advisory structure, not an added continuity dependency."
+                ),
+            )
+        )
+    return tuple(spines)
+
+
+def _cross_series_intersections(
+    ordered: tuple[TemplateEvidence, ...],
+) -> tuple[CrossoverTemplateIntersection, ...]:
+    intersections: list[CrossoverTemplateIntersection] = []
+    for first, second in zip(ordered, ordered[1:], strict=False):
+        if (
+            first.thread_id is None
+            or second.thread_id is None
+            or first.thread_id == second.thread_id
+        ):
+            continue
+        source_paths = _consistently_ordered_shared_paths(first, second)
+        if not source_paths:
+            continue
+        intersections.append(
+            CrossoverTemplateIntersection(
+                first_issue_id=first.issue_id,
+                second_issue_id=second.issue_id,
+                source_paths=source_paths,
+                explanation=(
+                    "Shared source evidence consistently places these adjacent issues across "
+                    "different series; preserve the intersection as advisory order only."
+                ),
+            )
+        )
+    return tuple(intersections)
+
+
+def _consistently_ordered_shared_paths(
+    first: TemplateEvidence,
+    second: TemplateEvidence,
+) -> tuple[str, ...]:
+    first_by_path = {
+        placement.source_path: placement.position for placement in first.cbl_placements
+    }
+    second_by_path = {
+        placement.source_path: placement.position for placement in second.cbl_placements
+    }
+    shared_paths = sorted(first_by_path.keys() & second_by_path.keys())
+    comparisons = [
+        (first_by_path[path] > second_by_path[path]) - (first_by_path[path] < second_by_path[path])
+        for path in shared_paths
+        if first_by_path[path] != second_by_path[path]
+    ]
+    if not comparisons or len(set(comparisons)) != 1:
+        return ()
+    return tuple(path for path in shared_paths if first_by_path[path] != second_by_path[path])
 
 
 def _story_arc_ids(metadata: dict[str, object]) -> set[str]:
