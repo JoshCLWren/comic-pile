@@ -1,9 +1,6 @@
-import { useEffect, useState } from 'react'
-import {
-  comicVineApi,
-  type ComicVineIssueIntelligence,
-  type ComicVineRelatedIssue,
-} from '../../../services/api'
+import { useState } from 'react'
+import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueIntelligence'
+import { type ComicVineRelatedIssue } from '../../../services/api'
 
 interface ComicVineIssueCardProps {
   issueId: number | null | undefined
@@ -29,30 +26,8 @@ function relatedLabel(issue: ComicVineRelatedIssue): string {
 }
 
 export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
-  const [metadata, setMetadata] = useState<ComicVineIssueIntelligence | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-  const [imageFailed, setImageFailed] = useState(false)
-
-  useEffect(() => {
-    let active = true
-    setMetadata(null)
-    setImageFailed(false)
-    if (!issueId) return () => { active = false }
-
-    setIsLoading(true)
-    comicVineApi.getIssueIntelligence(issueId)
-      .then((result) => {
-        if (active) setMetadata(result)
-      })
-      .catch(() => {
-        if (active) setMetadata(null)
-      })
-      .finally(() => {
-        if (active) setIsLoading(false)
-      })
-
-    return () => { active = false }
-  }, [issueId])
+  const { metadata, isLoading } = useComicVineIssueIntelligence(issueId)
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null)
 
   if (!issueId || (!isLoading && !metadata)) return null
   if (isLoading) {
@@ -64,13 +39,13 @@ export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
   return (
     <details className="group bg-white/5 border border-white/10 rounded-2xl overflow-hidden text-left">
       <summary className="min-h-16 p-3 flex items-center gap-3 cursor-pointer list-none focus:ring-2 focus:ring-amber-500">
-        {metadata.image_url && !imageFailed && (
+        {metadata.image_url && metadata.image_url !== failedImageUrl && (
           <img
             src={metadata.image_url}
             alt=""
             loading="lazy"
             className="w-11 h-16 object-cover rounded-md bg-stone-900 shrink-0"
-            onError={() => setImageFailed(true)}
+            onError={() => setFailedImageUrl(metadata.image_url)}
           />
         )}
         <div className="min-w-0 flex-1">
