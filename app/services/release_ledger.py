@@ -1,5 +1,7 @@
 """Service layer for the durable What's New release ledger."""
 
+from datetime import datetime
+
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -208,7 +210,7 @@ async def create_historical_release(
     db: AsyncSession,
     *,
     source_repository: str,
-    released_at: object,
+    released_at: datetime,
     category: str,
     title: str,
     summary: str,
