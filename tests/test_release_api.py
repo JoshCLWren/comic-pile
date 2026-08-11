@@ -2,11 +2,15 @@
 
 from datetime import UTC, datetime, timedelta
 
+from httpx import AsyncClient
 import pytest
 
 
 @pytest.mark.asyncio
-async def test_release_writer_requires_server_only_credential(auth_client, monkeypatch):
+async def test_release_writer_requires_server_only_credential(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Normal authenticated users must not inherit release-writer authority."""
     monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
     payload = _release_payload(pr_number=1201, merge_sha="a" * 40)
@@ -17,7 +21,10 @@ async def test_release_writer_requires_server_only_credential(auth_client, monke
 
 
 @pytest.mark.asyncio
-async def test_release_upsert_is_idempotent_and_reconcilable(auth_client, monkeypatch):
+async def test_release_upsert_is_idempotent_and_reconcilable(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Retrying the same merged PR updates one durable release record."""
     monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
     headers = {"X-Release-Writer-Token": "writer-secret"}
@@ -44,7 +51,34 @@ async def test_release_upsert_is_idempotent_and_reconcilable(auth_client, monkey
 
 
 @pytest.mark.asyncio
-async def test_release_source_conflict_returns_409(auth_client, monkeypatch):
+async def test_release_partial_retry_preserves_source_identity(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Omitting one identity on retry must not erase established provenance."""
+    monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
+    headers = {"X-Release-Writer-Token": "writer-secret"}
+    payload = _release_payload(pr_number=1210, merge_sha="3" * 40)
+
+    first = await auth_client.put("/api/v1/releases/", json=payload, headers=headers)
+    assert first.status_code == 200
+
+    retry_payload = dict(payload)
+    retry_payload["source_merge_sha"] = None
+    retry_payload["summary"] = "Retried with PR identity only"
+    retry = await auth_client.put("/api/v1/releases/", json=retry_payload, headers=headers)
+
+    assert retry.status_code == 200
+    assert retry.json()["source_pr_number"] == 1210
+    assert retry.json()["source_merge_sha"] == "3" * 40
+    assert retry.json()["summary"] == "Retried with PR identity only"
+
+
+@pytest.mark.asyncio
+async def test_release_source_conflict_returns_409(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """One merge SHA cannot silently move between distinct source PRs."""
     monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
     headers = {"X-Release-Writer-Token": "writer-secret"}
@@ -66,7 +100,10 @@ async def test_release_source_conflict_returns_409(auth_client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_public_release_list_filters_and_orders(auth_client, monkeypatch):
+async def test_public_release_list_filters_and_orders(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """What's New sees only public published rows in deterministic newest-first order."""
     monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
     headers = {"X-Release-Writer-Token": "writer-secret"}
