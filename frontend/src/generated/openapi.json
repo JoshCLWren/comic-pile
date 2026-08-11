@@ -300,6 +300,301 @@
         "title": "BugReportResponse",
         "type": "object"
       },
+      "ComicVineComicPileMatch": {
+        "description": "One user-owned ComicPile representation of an external issue.",
+        "properties": {
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "issue_number": {
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "thread_title": {
+            "title": "Thread Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status"
+        ],
+        "title": "ComicVineComicPileMatch",
+        "type": "object"
+      },
+      "ComicVineCreator": {
+        "description": "One credited creator and their provider-supplied roles.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Roles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ComicVineCreator",
+        "type": "object"
+      },
+      "ComicVineIssueIntelligence": {
+        "description": "Curated ComicVine metadata for one confirmed ComicPile issue mapping.",
+        "properties": {
+          "comicvine_issue_id": {
+            "title": "Comicvine Issue Id",
+            "type": "string"
+          },
+          "comicvine_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comicvine Url"
+          },
+          "cover_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Date"
+          },
+          "creators": {
+            "items": {
+              "$ref": "#/components/schemas/ComicVineCreator"
+            },
+            "title": "Creators",
+            "type": "array"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "issue_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Number"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "series_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series Id"
+          },
+          "series_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series Name"
+          },
+          "store_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Store Date"
+          },
+          "story_arcs": {
+            "items": {
+              "$ref": "#/components/schemas/ComicVineStoryArc"
+            },
+            "title": "Story Arcs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "comicvine_issue_id"
+        ],
+        "title": "ComicVineIssueIntelligence",
+        "type": "object"
+      },
+      "ComicVineRelatedIssue": {
+        "description": "One external issue related through explicit story-arc membership.",
+        "properties": {
+          "comicpile_matches": {
+            "items": {
+              "$ref": "#/components/schemas/ComicVineComicPileMatch"
+            },
+            "title": "Comicpile Matches",
+            "type": "array"
+          },
+          "comicvine_issue_id": {
+            "title": "Comicvine Issue Id",
+            "type": "string"
+          },
+          "comicvine_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comicvine Url"
+          },
+          "cover_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Date"
+          },
+          "issue_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Number"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "series_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series Name"
+          }
+        },
+        "required": [
+          "comicvine_issue_id"
+        ],
+        "title": "ComicVineRelatedIssue",
+        "type": "object"
+      },
+      "ComicVineStoryArc": {
+        "description": "An explicit ComicVine story arc and its unordered issue membership.",
+        "properties": {
+          "comicvine_arc_id": {
+            "title": "Comicvine Arc Id",
+            "type": "integer"
+          },
+          "comicvine_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comicvine Url"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "related_issues": {
+            "items": {
+              "$ref": "#/components/schemas/ComicVineRelatedIssue"
+            },
+            "title": "Related Issues",
+            "type": "array"
+          }
+        },
+        "required": [
+          "comicvine_arc_id",
+          "name"
+        ],
+        "title": "ComicVineStoryArc",
+        "type": "object"
+      },
       "ConnectedThreadInfo": {
         "description": "Lightweight info about a thread connected via dependencies.",
         "properties": {
@@ -6515,6 +6810,63 @@
           }
         ],
         "summary": "Get Issue",
+        "tags": [
+          "issues",
+          "issues"
+        ]
+      }
+    },
+    "/api/v1/issues/{issue_id}/comicvine": {
+      "get": {
+        "description": "Return curated ComicVine intelligence for a user-owned ComicPile issue.\n\nArgs:\n    issue_id: ComicPile issue identifier.\n    current_user: Authenticated owner of the requested issue.\n    db: Async database session.\n\nReturns:\n    Curated ComicVine intelligence, or ``None`` when no confirmed mapping exists.",
+        "operationId": "get_issue_comicvine_intelligence_api_v1_issues__issue_id__comicvine_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "title": "Issue Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ComicVineIssueIntelligence"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Issue Comicvine Intelligence Api V1 Issues  Issue Id  Comicvine Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Issue Comicvine Intelligence",
         "tags": [
           "issues",
           "issues"

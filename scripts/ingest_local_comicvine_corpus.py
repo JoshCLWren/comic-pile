@@ -153,7 +153,14 @@ def open_localcv(path: Path) -> sqlite3.Connection:
 
 
 def parse_json_value(value: object) -> object:
-    """Decode JSON text from the local ComicVine snapshot when needed."""
+    """Decode JSON text from the local ComicVine snapshot when needed.
+
+    Args:
+        value: Raw SQLite field value.
+
+    Returns:
+        The decoded JSON value when applicable, otherwise the original value.
+    """
     if value is None or isinstance(value, (dict, list, int, float, bool)):
         return value
     if not isinstance(value, str):
@@ -213,7 +220,14 @@ def issues_for_volumes(db: sqlite3.Connection, volume_ids: set[int]) -> Iterator
 
 
 def story_arc_ids(value: object) -> set[int]:
-    """Extract stable ComicVine story-arc IDs from one relationship payload."""
+    """Extract stable ComicVine story-arc IDs from one relationship payload.
+
+    Args:
+        value: Raw or decoded ComicVine story-arc relationship payload.
+
+    Returns:
+        Stable integer ComicVine story-arc identifiers.
+    """
     credits = parse_json_value(value)
     if not isinstance(credits, list):
         return set()

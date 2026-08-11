@@ -37,7 +37,13 @@ describe('date and issue utilities', () => {
     expect(formatDate('2024-01-02')).toContain('Jan')
     expect(formatTime('2024-01-02T13:04:00Z')).toMatch(/\d:04/)
     expect(formatDateTime('2024-01-02T13:04:00Z')).toContain('Jan')
-    expect(formatTime24('2024-01-02T13:04:00Z')).toMatch(/13:04|07:04/)
+    expect(formatTime24('2024-01-02T13:04:00Z')).toBe(
+      new Date('2024-01-02T13:04:00Z').toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }),
+    )
   })
 
   it('parses ranges, literals, duplicates, and rejects unsafe ranges', () => {

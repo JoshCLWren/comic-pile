@@ -9,6 +9,7 @@ import type { RatingThread } from '../types'
 import type { ReadingOrder } from '../../../services/api-reading-orders'
 import type { ConnectedThreadInfo } from '../../../types'
 import { ReadingOrderGroups } from './ReadingOrderGroups'
+import { ComicVineIssueCard } from './ComicVineIssueCard'
 
 interface RatingViewProps {
   activeRatingThread: RatingThread | null
@@ -178,6 +179,8 @@ export function RatingView({
       )}
 
       <ReadingOrderGroups threadId={activeRatingThread?.id} />
+
+      <ComicVineIssueCard issueId={activeRatingThread?.issue_id ?? activeRatingThread?.next_issue_id} />
 
       <div className="space-y-5 md:space-y-8">
         <div id="rating-preview-dice" className="dice-perspective">

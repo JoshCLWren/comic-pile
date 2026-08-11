@@ -358,6 +358,56 @@ export const dependenciesApi = {
     api.patch<Dependency, { note: string | null }>(`/v1/dependencies/${dependencyId}`, { note }),
 }
 
+export interface ComicVineCreator {
+  name: string
+  roles: string[]
+}
+
+export interface ComicVineComicPileMatch {
+  issue_id: number
+  thread_id: number
+  thread_title: string
+  issue_number: string
+  status: 'read' | 'unread'
+}
+
+export interface ComicVineRelatedIssue {
+  comicvine_issue_id: string
+  series_name: string | null
+  issue_number: string | null
+  name: string | null
+  cover_date: string | null
+  comicvine_url: string | null
+  comicpile_matches: ComicVineComicPileMatch[]
+}
+
+export interface ComicVineStoryArc {
+  comicvine_arc_id: number
+  name: string
+  comicvine_url: string | null
+  related_issues: ComicVineRelatedIssue[]
+}
+
+export interface ComicVineIssueIntelligence {
+  comicvine_issue_id: string
+  comicvine_url: string | null
+  series_name: string | null
+  series_id: number | null
+  issue_number: string | null
+  name: string | null
+  description: string | null
+  image_url: string | null
+  cover_date: string | null
+  store_date: string | null
+  creators: ComicVineCreator[]
+  story_arcs: ComicVineStoryArc[]
+}
+
+export const comicVineApi = {
+  getIssueIntelligence: (issueId: number) =>
+    api.get<ComicVineIssueIntelligence | null>(`/v1/issues/${issueId}/comicvine`),
+}
+
 export const tasksApi = {
   getMetrics: () => api.get<AnalyticsMetrics>('/analytics/metrics'),
 }
