@@ -1,0 +1,94 @@
+"""Safety evidence for the remote-cache re-enable decision."""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass, field
+
+import pytest
+
+from app.cache import cache
+from app.cache_generation import bump_user_generation, generation_cached, generation_key
+from app.config import RedisSettings
+
+
+@dataclass
+class SharedRedisState:
+    """State shared by independent Redis-shaped application clients."""
+
+    generations: dict[str, int] = field(default_factory=dict)
+    values: dict[str, str] = field(default_factory=dict)
+
+
+class SharedUpstashClient:
+    """Minimal Upstash-shaped client backed by shared cross-instance state."""
+
+    def __init__(self, state: SharedRedisState) -> None:
+        self.state = state
+
+    async def eval(
+        self,
+        script: str,
+        keys: list[str],
+        args: list[str],
+    ) -> list[object | None]:
+        assert "redis.call('GET', KEYS[1])" in script
+        generation = self.state.generations.get(keys[0], 0)
+        value_key = f"{args[0]}{generation}:{args[1]}"
+        return [str(generation), self.state.values.get(value_key)]
+
+    async def set(self, key: str, value: str, ex: int | None = None) -> None:
+        _ = ex
+        self.state.values[key] = value
+
+    async def incr(self, key: str) -> int:
+        generation = self.state.generations.get(key, 0) + 1
+        self.state.generations[key] = generation
+        return generation
+
+
+@pytest.mark.asyncio
+async def test_generation_invalidation_is_visible_across_application_clients(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A mutation on one instance invalidates another instance's cached view."""
+    shared = SharedRedisState()
+    instance_a = SharedUpstashClient(shared)
+    instance_b = SharedUpstashClient(shared)
+    source = {"title": "before"}
+    executions = 0
+
+    monkeypatch.setattr(cache, "_initialized", True)
+    monkeypatch.setattr(cache, "_is_upstash", True)
+    monkeypatch.setattr(cache, "_client", instance_a)
+
+    @generation_cached(ttl=60)
+    async def load_issue(user_id: int) -> dict[str, str]:
+        nonlocal executions
+        executions += 1
+        return dict(source)
+
+    assert await load_issue(7) == {"title": "before"}
+    assert await load_issue(7) == {"title": "before"}
+    assert executions == 1
+
+    source["title"] = "after"
+    assert await bump_user_generation(instance_b, 7) == 1
+    assert shared.generations[generation_key(7)] == 1
+
+    monkeypatch.setattr(cache, "_client", instance_a)
+    assert await load_issue(7) == {"title": "after"}
+    assert executions == 2
+
+
+def test_remote_cache_remains_explicitly_disabled_by_default() -> None:
+    """Provider credentials alone must not silently turn remote caching back on."""
+    settings = RedisSettings(
+        _env_file=None,
+        cache_enabled=False,
+        upstash_redis_rest_url="https://example.invalid",
+        upstash_redis_rest_token="test-token",
+    )
+
+    assert settings.cache_enabled is False
+    assert settings.is_configured is False
