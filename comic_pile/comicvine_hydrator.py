@@ -229,10 +229,11 @@ async def apply_cbl_issue_identities(
                 continue
             if issue_id <= 0:
                 continue
-            key = (
-                _normalized_cbl_key(book.series),
-                _normalized_cbl_key(book.issue_number),
-            )
+            series_key = _normalized_cbl_key(book.series)
+            issue_key = _normalized_cbl_key(book.issue_number)
+            if not series_key or not issue_key:
+                continue
+            key = (series_key, issue_key)
             ids_by_key[key].add(issue_id)
 
     resolved: list[HydrationTarget] = []
