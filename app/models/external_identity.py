@@ -58,6 +58,7 @@ class IssueExternalIdentityMapping(Base):
     )
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="candidate")
     evidence_source: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    evidence_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     rejection_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))

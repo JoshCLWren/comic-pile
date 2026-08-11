@@ -4,7 +4,12 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.continuity_chains import resolve_continuity_chains
-from app.schemas.roll import RollRecoveryInfo, RollRecoveryPrerequisite
+from app.schemas.roll import (
+    RollRecoveryChainNode,
+    RollRecoveryDiagnostic,
+    RollRecoveryInfo,
+    RollRecoveryPrerequisite,
+)
 
 
 async def build_roll_recovery(
@@ -60,5 +65,26 @@ async def build_roll_recovery(
                 label=node.label,
             )
             for node in traversal.readable_prerequisites
+        ],
+        chains=[
+            [
+                RollRecoveryChainNode(
+                    node_type=node.node_type,
+                    node_id=node.node_id,
+                    label=node.label,
+                    is_readable=node.is_readable,
+                )
+                for node in chain
+            ]
+            for chain in traversal.chains
+        ],
+        diagnostics=[
+            RollRecoveryDiagnostic(
+                code=diagnostic.code,
+                node_type=diagnostic.node_type,
+                node_id=diagnostic.node_id,
+                limit=diagnostic.limit,
+            )
+            for diagnostic in traversal.diagnostics
         ],
     )

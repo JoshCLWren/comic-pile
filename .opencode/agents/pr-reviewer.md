@@ -8,7 +8,7 @@ permission:
   question: deny
   bash:
     "*": deny
-    "gh api *": allow
+    "gh api --method POST repos/*/pulls/*/comments*": allow
     "git diff*": allow
     "git log*": allow
     "git show*": allow

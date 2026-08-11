@@ -10,7 +10,7 @@ class RollPrerequisiteSwitchRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    node_type: Literal["issue", "crossover"]
+    node_type: Literal["issue"]
     node_id: int
 
 

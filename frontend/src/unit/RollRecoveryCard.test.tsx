@@ -24,6 +24,16 @@ const recovery: RollRecoveryInfo = {
     { node_type: 'issue', node_id: 30, label: 'Deep prerequisite #1' },
     { node_type: 'crossover', node_id: 40, label: 'Event chapter' },
   ],
+  chains: [
+    [
+      { node_type: 'crossover', node_id: 25, label: 'Event Alpha', is_readable: false },
+      { node_type: 'issue', node_id: 30, label: 'Deep prerequisite #1', is_readable: true },
+    ],
+    [
+      { node_type: 'issue', node_id: 35, label: 'Parallel branch', is_readable: false },
+      { node_type: 'crossover', node_id: 40, label: 'Event chapter', is_readable: true },
+    ],
+  ],
 }
 
 describe('RollRecoveryCard', () => {
@@ -31,20 +41,52 @@ describe('RollRecoveryCard', () => {
     const onReadNow = vi.fn()
     render(<RollRecoveryCard recovery={recovery} onReadNow={onReadNow} />)
 
-    expect(screen.getByText('Original Roll')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Original Roll' })).toBeInTheDocument()
     expect(screen.getByText('Prerequisite #2')).toBeInTheDocument()
-    expect(screen.getByText('Deep prerequisite #1')).toBeInTheDocument()
-    expect(screen.getByText('Event chapter')).toBeInTheDocument()
+    expect(screen.getAllByText('Deep prerequisite #1')).toHaveLength(2)
+    expect(screen.getAllByText('Event chapter')).toHaveLength(2)
     expect(screen.getByText('Recommended first')).toBeInTheDocument()
 
     fireEvent.click(screen.getAllByText('Read now')[0])
     expect(onReadNow).toHaveBeenCalledWith(recovery.readable_prerequisites[0])
   })
 
+  it('expands branching dependency paths with node kinds and readable leaves', () => {
+    render(<RollRecoveryCard recovery={recovery} />)
+
+    const summary = screen.getByText(/Why is this blocked\? \(2 paths\)/)
+    const details = summary.closest('details')
+    expect(details).not.toHaveAttribute('open')
+
+    fireEvent.click(summary)
+
+    expect(details).toHaveAttribute('open')
+    expect(screen.getByRole('list', { name: 'Dependency path 1' })).toHaveTextContent('Event Alpha')
+    expect(screen.getByRole('list', { name: 'Dependency path 2' })).toHaveTextContent('Parallel branch')
+    expect(screen.getAllByText('Readable now')).toHaveLength(2)
+    expect(screen.getAllByText('crossover')).toHaveLength(2)
+  })
+
+  it('shows traversal diagnostics instead of failing on an invalid continuity plan', () => {
+    render(
+      <RollRecoveryCard
+        recovery={{
+          ...recovery,
+          chains: [],
+          diagnostics: [
+            { code: 'cycle_detected', node_type: 'issue', node_id: 30 },
+          ],
+        }}
+      />,
+    )
+
+    expect(screen.getByRole('alert')).toHaveTextContent('contains a cycle')
+  })
+
   it('shows recommendations without a mutating action before safe replacement exists', () => {
     render(<RollRecoveryCard recovery={recovery} />)
 
-    expect(screen.getByText('Original Roll')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Original Roll' })).toBeInTheDocument()
     expect(screen.getAllByText('Read now')).toHaveLength(2)
     expect(screen.queryByRole('button', { name: /Deep prerequisite #1/i })).not.toBeInTheDocument()
   })
@@ -57,7 +99,7 @@ describe('RollRecoveryCard', () => {
       />,
     )
 
-    expect(screen.getByText('Original Roll')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Original Roll' })).toBeInTheDocument()
     expect(screen.getByText(/No readable prerequisite is available yet/)).toBeInTheDocument()
   })
 

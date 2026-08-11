@@ -57,6 +57,24 @@ class RollRecoveryPrerequisite(BaseModel):
     label: str
 
 
+class RollRecoveryChainNode(BaseModel):
+    """One labeled issue or crossover step in a prerequisite chain."""
+
+    node_type: Literal["issue", "crossover"]
+    node_id: int
+    label: str
+    is_readable: bool
+
+
+class RollRecoveryDiagnostic(BaseModel):
+    """One bounded-traversal diagnostic suitable for reader-facing explanation."""
+
+    code: Literal["cycle_detected", "depth_limit_exceeded", "node_limit_exceeded"]
+    node_type: Literal["issue", "crossover"]
+    node_id: int
+    limit: int | None = None
+
+
 class RollRecoveryInfo(BaseModel):
     """Structured recovery context for a pending roll that became blocked."""
 
@@ -64,6 +82,8 @@ class RollRecoveryInfo(BaseModel):
     original_thread_title: str
     direct_blockers: list[ContinuityBlocker] = Field(default_factory=list)
     readable_prerequisites: list[RollRecoveryPrerequisite] = Field(default_factory=list)
+    chains: list[list[RollRecoveryChainNode]] = Field(default_factory=list)
+    diagnostics: list[RollRecoveryDiagnostic] = Field(default_factory=list)
 
 
 class RollBootstrapResponse(BaseModel):

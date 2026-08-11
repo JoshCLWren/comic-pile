@@ -4,12 +4,26 @@ from datetime import UTC, datetime
 
 from httpx import AsyncClient
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, Session, Thread
 from app.models.continuity_rule import ContinuityRule
+from app.schemas.roll_recovery_switch import RollPrerequisiteSwitchRequest
 from tests.conftest import get_or_create_user_async
+
+
+def test_switch_request_rejects_crossover_nodes() -> None:
+    """Only concrete issues belong to the prerequisite-switch contract.
+
+    Returns:
+        None.
+    """
+    with pytest.raises(ValidationError):
+        RollPrerequisiteSwitchRequest.model_validate(
+            {"node_type": "crossover", "node_id": 1},
+        )
 
 
 async def _make_issue(async_db: AsyncSession, *, user_id: int, suffix: str) -> Issue:

@@ -42,7 +42,7 @@ async def switch_pending_roll_to_prerequisite(
     db: AsyncSession,
     *,
     user_id: int,
-    node_type: Literal["issue", "crossover"],
+    node_type: Literal["issue"],
     node_id: int,
 ) -> RollPrerequisiteSwitchResult:
     """Switch the current blocked roll to a still-readable prerequisite issue.
@@ -64,17 +64,8 @@ async def switch_pending_roll_to_prerequisite(
 
     Raises:
         HTTPException: When there is no pending roll, the recommendation is stale,
-            the selected node is not a concrete issue, or it cannot safely become the Roll target.
+            or the selected issue cannot safely become the Roll target.
     """
-    if node_type != "issue":
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={
-                "code": "unsupported_roll_prerequisite",
-                "message": "Choose a concrete readable issue before switching the Roll target.",
-            },
-        )
-
     current_session = await get_or_create(db, user_id=user_id)
     session_result = await db.execute(
         select(Session)
