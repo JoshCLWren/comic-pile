@@ -30,6 +30,11 @@ async def invalidate_user_view(user_id: int) -> bool:
 async def invalidate_user_views(user_ids: Iterable[int]) -> int:
     """Invalidate each distinct user namespace at most once.
 
+    The mutation boundary validates the complete batch before delegating and
+    collapses duplicate owners up front. Nested helpers therefore cannot multiply
+    generation-bump work for the same user, and an invalid owner cannot cause a
+    partial multi-user invalidation before the error is raised.
+
     Args:
         user_ids: User identifiers affected by one logical mutation batch.
 
@@ -39,4 +44,5 @@ async def invalidate_user_views(user_ids: Iterable[int]) -> int:
     normalized = tuple(user_ids)
     if any(user_id <= 0 for user_id in normalized):
         raise ValueError("user_id must be positive")
-    return await invalidate_user_caches(normalized)
+    distinct_user_ids = tuple(sorted(set(normalized)))
+    return await invalidate_user_caches(distinct_user_ids)

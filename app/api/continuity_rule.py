@@ -1,7 +1,5 @@
 """Generalized continuity-rule CRUD endpoints."""
 
-import asyncio
-import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -11,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth import get_current_user
-from app.cache import invalidate_cache
+from app.cache_invalidation import invalidate_user_view
 from app.continuity_rules import ensure_owned_continuity_rule_references
 from app.database import get_db
 from app.models.continuity_rule import ContinuityRule, ContinuityRuleSelectedMember
@@ -23,24 +21,13 @@ from app.schemas.continuity_rule import (
 )
 from comic_pile.dependencies import refresh_user_blocked_status
 
-logger = logging.getLogger(__name__)
 router = APIRouter(tags=["continuity"])
 CONTINUITY_LOCK_NAMESPACE = 1_129_274_964
 
 
 async def _invalidate_continuity_caches(user_id: int) -> None:
-    """Invalidate continuity and legacy blocked-state caches after a mutation."""
-    results = await asyncio.gather(
-        invalidate_cache(f"cache:continuity:*:User:{user_id}:*"),
-        invalidate_cache(f"cache:get_blocked_thread_ids:{user_id}:"),
-        invalidate_cache(f"cache:list_threads:User:{user_id}:*"),
-        invalidate_cache(f"cache:get_thread_blocking_info:*:User:{user_id}:"),
-        invalidate_cache(f"cache:get_threads_blocking_info:*:User:{user_id}:"),
-        return_exceptions=True,
-    )
-    for result in results:
-        if isinstance(result, BaseException):
-            logger.warning("Continuity cache invalidation failed", exc_info=result)
+    """Invalidate all user-scoped cached views after a continuity mutation."""
+    await invalidate_user_view(user_id)
 
 
 async def _refresh_blocked_state(user_id: int, db: AsyncSession) -> None:

@@ -233,15 +233,10 @@ async def test_other_users_rules_are_hidden_and_unreferenceable(
 
 @pytest.mark.asyncio
 async def test_continuity_mutations_invalidate_related_caches(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Continuity mutations clear both continuity and legacy blocked-state cache families."""
+    """Continuity mutations advance exactly one bounded user cache generation."""
     invalidate = AsyncMock()
-    monkeypatch.setattr(continuity_rule_api, "invalidate_cache", invalidate)
+    monkeypatch.setattr(continuity_rule_api, "invalidate_user_view", invalidate)
 
     await continuity_rule_api._invalidate_continuity_caches(42)
 
-    invalidate.assert_any_await("cache:continuity:*:User:42:*")
-    invalidate.assert_any_await("cache:get_blocked_thread_ids:42:")
-    invalidate.assert_any_await("cache:list_threads:User:42:*")
-    invalidate.assert_any_await("cache:get_thread_blocking_info:*:User:42:")
-    invalidate.assert_any_await("cache:get_threads_blocking_info:*:User:42:")
-    assert invalidate.await_count == 5
+    invalidate.assert_awaited_once_with(42)

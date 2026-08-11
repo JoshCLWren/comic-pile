@@ -6,7 +6,8 @@ import json
 
 import pytest
 
-from app.cache import cache
+from app import cache_generation
+from app.cache import cache, cached
 from app.cache_generation import (
     _atomic_generation_value_get,
     bump_user_generation,
@@ -137,7 +138,9 @@ async def test_invalid_user_id_does_not_consume_generation_budget() -> None:
 
 
 @pytest.mark.asyncio
-async def test_atomic_read_keeps_generation_and_value_in_one_snapshot(monkeypatch) -> None:
+async def test_atomic_read_keeps_generation_and_value_in_one_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Prevent invalidation from interleaving generation and value lookups."""
     client = AtomicReadClient()
     monkeypatch.setattr(cache, "_client", client)
@@ -155,7 +158,7 @@ async def test_atomic_read_keeps_generation_and_value_in_one_snapshot(monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_generation_cached_preserves_cached_none(monkeypatch) -> None:
+async def test_generation_cached_preserves_cached_none(monkeypatch: pytest.MonkeyPatch) -> None:
     """Treat a stored JSON null as a cache hit when falsy caching is enabled."""
     client = NullValueClient()
     monkeypatch.setattr(cache, "_client", client)
@@ -177,3 +180,69 @@ async def test_generation_cached_preserves_cached_none(monkeypatch) -> None:
     assert client.eval_calls == 2
     assert client.set_calls == 1
     assert client.value == "null"
+
+
+@pytest.mark.asyncio
+async def test_cached_routes_user_scoped_calls_to_generation_namespace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Existing @cached endpoints should gain generation semantics without rewrites."""
+    routed_user_ids: list[int] = []
+
+    def fake_generation_cached(ttl, *, falsy_ttl=None):
+        assert ttl == 300
+        assert falsy_ttl is None
+
+        def decorator(func):
+            async def wrapper(*args, **kwargs):
+                user = kwargs.get("current_user")
+                if user is None and args:
+                    user = args[0]
+                assert user is not None
+                routed_user_ids.append(user.id)
+                return await func(*args, **kwargs)
+
+            return wrapper
+
+        return decorator
+
+    monkeypatch.setattr(cache_generation, "generation_cached", fake_generation_cached)
+
+    class User:
+        id = 7
+
+    executions = 0
+
+    @cached(ttl=300)
+    async def load(current_user: User) -> int:
+        nonlocal executions
+        executions += 1
+        return current_user.id
+
+    assert await load(User()) == 7
+    assert await load(User()) == 7
+    assert executions == 2
+    assert routed_user_ids == [7, 7]
+
+
+@pytest.mark.asyncio
+async def test_cached_keeps_non_user_calls_on_legacy_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Non-user cache consumers must not be forced into a shared user namespace."""
+    routed = False
+
+    def fake_generation_cached(ttl, *, falsy_ttl=None):
+        nonlocal routed
+        routed = True
+        raise AssertionError("generation cache should not be constructed")
+
+    monkeypatch.setattr(cache_generation, "generation_cached", fake_generation_cached)
+    monkeypatch.setattr(cache, "_initialized", False)
+
+    @cached(ttl=300)
+    async def load_global(slug: str) -> str:
+        return slug.upper()
+
+    assert await load_global("comic-pile") == "COMIC-PILE"
+    assert routed is False

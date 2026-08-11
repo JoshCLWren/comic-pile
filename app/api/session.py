@@ -9,7 +9,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
-from app.cache import TTL, cached, invalidate_cache
+from app.cache import TTL, cached
+from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Issue, Session as SessionModel, Snapshot, Thread, User
@@ -55,13 +56,8 @@ def _to_session_list_item(sr: SessionResponse) -> SessionListItem:
 
 
 async def _invalidate_session_caches(user_id: int) -> None:
-    await asyncio.gather(
-        invalidate_cache(f"cache:get_current_session:User:{user_id}:"),
-        invalidate_cache(f"cache:list_sessions:User:{user_id}:*"),
-        invalidate_cache(f"cache:get_session:*:User:{user_id}:"),
-        invalidate_cache(f"cache:get_session_details:*:User:{user_id}:"),
-        invalidate_cache(f"cache:get_session_snapshots:*:User:{user_id}:"),
-    )
+    """Invalidate session-derived views with one bounded user generation bump."""
+    await invalidate_user_view(user_id)
 
 
 async def _fetch_thread_issue_metadata(
@@ -1019,14 +1015,7 @@ async def restore_session_start(
             await db.commit()
             await db.refresh(session)
 
-            await asyncio.gather(
-                _invalidate_session_caches(current_user.id),
-                invalidate_cache(f"cache:list_threads:User:{current_user.id}:*"),
-                invalidate_cache(f"cache:get_thread:*:User:{current_user.id}:"),
-                invalidate_cache(f"cache:list_issues:*:User:{current_user.id}:*"),
-                invalidate_cache(f"cache:get_issue:*:User:{current_user.id}:"),
-                invalidate_cache(f"cache:get_blocked_thread_ids:{current_user.id}:"),
-            )
+            await invalidate_user_view(current_user.id)
 
             from sqlalchemy import func
 
