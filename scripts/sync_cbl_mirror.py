@@ -42,6 +42,7 @@ def _parser() -> argparse.ArgumentParser:
 async def _run(args: argparse.Namespace) -> int:
     """Parse the mirror, synchronize valid lists, and emit one JSON summary."""
     parsed, failures = parse_cbl_mirror(args.mirror_path)
+    failed_paths = frozenset(failure.source_path for failure in failures)
     async with AsyncSessionLocal() as db:
         async with db.begin():
             summary = await sync_cbl_lists(
@@ -49,6 +50,7 @@ async def _run(args: argparse.Namespace) -> int:
                 repository=args.repository,
                 revision_sha=args.revision_sha,
                 parsed_lists=parsed,
+                protected_paths=failed_paths,
                 dry_run=args.dry_run,
             )
 
