@@ -1,5 +1,7 @@
 """Service layer for the durable What's New release ledger."""
 
+from datetime import datetime
+
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,7 +11,7 @@ from app.schemas.release import ReleaseUpsertRequest
 
 
 class ReleaseSourceConflictError(ValueError):
-    """Raised when PR and merge-SHA provenance identify different releases."""
+    """Raised when durable source provenance conflicts with an existing release."""
 
 
 async def list_published_releases(
@@ -107,6 +109,36 @@ async def find_release_by_source(
     return matches[0] if matches else None
 
 
+async def find_historical_release(
+    db: AsyncSession,
+    *,
+    source_repository: str,
+    source_path: str,
+    source_order: int,
+) -> Release | None:
+    """Resolve a historical release by its durable Markdown source position.
+
+    Historical changelog entries often predate pull-request provenance. Their stable
+    identity is therefore the source path plus original entry order, while the exact
+    source checksum protects that identity from silent rewrites.
+    """
+    result = await db.execute(
+        select(Release).where(
+            Release.source_repository == source_repository,
+            Release.source_pr_number.is_(None),
+            Release.source_merge_sha.is_(None),
+        )
+    )
+    for release in result.scalars().all():
+        provenance = release.provenance_json or {}
+        if (
+            provenance.get("source_path") == source_path
+            and provenance.get("source_order") == source_order
+        ):
+            return release
+    return None
+
+
 def _apply_payload(release: Release, payload: ReleaseUpsertRequest) -> None:
     """Apply a validated publication payload while protecting established source identity."""
     if (
@@ -170,5 +202,65 @@ async def upsert_release(db: AsyncSession, payload: ReleaseUpsertRequest) -> Rel
         _apply_payload(release, payload)
         await db.commit()
 
+    await db.refresh(release)
+    return release
+
+
+async def create_historical_release(
+    db: AsyncSession,
+    *,
+    source_repository: str,
+    released_at: datetime,
+    category: str,
+    title: str,
+    summary: str,
+    sort_order: int,
+    provenance_json: dict[str, object],
+) -> Release:
+    """Create or return one PR-less historical release without inventing GitHub identity.
+
+    Raises:
+        ReleaseSourceConflictError: If the same source position already exists with a
+            different checksum.
+    """
+    source_path = provenance_json.get("source_path")
+    source_order = provenance_json.get("source_order")
+    source_checksum = provenance_json.get("source_checksum")
+    if not isinstance(source_path, str) or not isinstance(source_order, int):
+        raise ValueError("historical releases require source_path and source_order provenance")
+    if not isinstance(source_checksum, str):
+        raise ValueError("historical releases require source_checksum provenance")
+
+    existing = await find_historical_release(
+        db,
+        source_repository=source_repository,
+        source_path=source_path,
+        source_order=source_order,
+    )
+    if existing is not None:
+        existing_checksum = (existing.provenance_json or {}).get("source_checksum")
+        if existing_checksum != source_checksum:
+            raise ReleaseSourceConflictError(
+                f"historical source changed at {source_path} entry {source_order}"
+            )
+        return existing
+
+    release = Release(
+        source_repository=source_repository,
+        source_pr_number=None,
+        source_merge_sha=None,
+        merged_at=None,
+        released_at=released_at,
+        category=category,
+        title=title,
+        summary=summary,
+        body=None,
+        visibility="public",
+        status="published",
+        sort_order=sort_order,
+        provenance_json=provenance_json,
+    )
+    db.add(release)
+    await db.commit()
     await db.refresh(release)
     return release
