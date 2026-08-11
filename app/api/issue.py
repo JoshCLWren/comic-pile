@@ -23,6 +23,8 @@ from app.schemas import (
     IssueReorderRequest,
     IssueResponse,
 )
+from app.schemas.comicvine import ComicVineIssueIntelligence
+from app.services.comicvine_intelligence import get_issue_intelligence
 from app.utils.issue_parser import parse_issue_ranges
 from app.services.ownership import get_owned_issue_or_404, get_owned_thread_or_404
 from comic_pile.dependencies import (
@@ -33,6 +35,20 @@ from comic_pile.dependencies import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["issues"])
+
+
+@router.get(
+    "/issues/{issue_id}/comicvine",
+    response_model=ComicVineIssueIntelligence | None,
+)
+async def get_issue_comicvine_intelligence(
+    issue_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> ComicVineIssueIntelligence | None:
+    """Return curated ComicVine intelligence for a user-owned ComicPile issue."""
+    await get_owned_issue_or_404(db, current_user.id, issue_id)
+    return await get_issue_intelligence(db, issue_id, current_user.id)
 
 
 async def _invalidate_issue_caches(user_id: int) -> None:
