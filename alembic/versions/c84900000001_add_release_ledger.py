@@ -17,7 +17,14 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    """Create the releases table and deterministic publication index."""
+    """Create the releases table and deterministic publication index.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
     op.create_table(
         "releases",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -64,6 +71,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Remove the durable release ledger."""
+    """Remove the durable release ledger.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
     op.drop_index("ix_release_published_order", table_name="releases")
     op.drop_table("releases")
