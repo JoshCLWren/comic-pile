@@ -14,6 +14,7 @@ class IsolatedGenerationClient:
     """Minimal Upstash-compatible client with per-user generation state."""
 
     def __init__(self) -> None:
+        """Initialize isolated generation counters and cached values."""
         self.generations: dict[str, int] = {}
         self.values: dict[str, str] = {}
 
