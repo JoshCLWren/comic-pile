@@ -1,6 +1,8 @@
 import { CrossoverTags } from '../../../components/CrossoverTags'
 import { useDependencyGroups } from '../../../hooks/useDependencyGroups'
 import { useRollBootstrap } from '../../../hooks/useRollBootstrap'
+import { useRollPrerequisiteSwitch } from '../../../hooks/useRollPrerequisiteSwitch'
+import type { RollRecoveryPrerequisite } from '../../../types/rollBootstrap'
 import { getApiErrorDetail } from '../../../utils/apiError'
 import { RollRecoveryCard } from './RollRecoveryCard'
 
@@ -16,15 +18,27 @@ export function ReadingOrderGroups({ threadId }: ReadingOrderGroupsProps) {
     isError: isBootstrapError,
     error: bootstrapError,
   } = useRollBootstrap()
+  const {
+    isPending: isSwitching,
+    errorMessage: switchError,
+    switchIssue,
+  } = useRollPrerequisiteSwitch()
 
   if (threadId == null) return null
 
   const recovery = bootstrap?.roll_recovery
+  const handleReadNow = async (prerequisite: RollRecoveryPrerequisite) => {
+    if (prerequisite.node_type !== 'issue') return
+    await switchIssue(prerequisite.node_id)
+  }
+
   const recoveryCard = recovery ? (
     <RollRecoveryCard
       recovery={recovery}
+      onReadNow={handleReadNow}
+      isPending={isSwitching}
       isLoading={isBootstrapLoading}
-      errorMessage={isBootstrapError ? getApiErrorDetail(bootstrapError) : null}
+      errorMessage={switchError ?? (isBootstrapError ? getApiErrorDetail(bootstrapError) : null)}
     />
   ) : null
 

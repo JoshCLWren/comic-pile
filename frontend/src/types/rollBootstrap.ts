@@ -51,6 +51,22 @@ export interface RollRecoveryInfo {
   diagnostics?: RollRecoveryDiagnostic[]
 }
 
+/** Request for accepting one concrete issue prerequisite recommendation. */
+export interface RollPrerequisiteSwitchRequest {
+  node_type: 'issue'
+  node_id: number
+}
+
+/** Active Roll target after accepting a prerequisite recommendation. */
+export interface RollPrerequisiteSwitchResponse {
+  original_thread_id: number
+  target_thread_id: number
+  target_thread_title: string
+  target_issue_id: number
+  target_issue_number: string
+  changed: boolean
+}
+
 /** Bounded bootstrap payload for the Roll initial render. */
 export interface RollBootstrapResponse {
   session_id: number
