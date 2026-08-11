@@ -226,7 +226,9 @@ def derive_crossover_template(
             role=_role(item, first_core=first_core, last_core=last_core),
             confidence="high" if _is_core(item) else "medium" if item.cbl_placements else "low",
             explanation=_explanation(item, first_core=first_core, last_core=last_core),
-            source_paths=tuple(sorted({placement.source_path for placement in item.cbl_placements})),
+            source_paths=tuple(
+                sorted({placement.source_path for placement in item.cbl_placements})
+            ),
             cbl_placements=tuple(sorted(item.cbl_placements)),
             story_arc_ids=tuple(sorted(item.story_arc_ids)),
             target_story_arc_id=item.target_story_arc_id,
@@ -278,7 +280,9 @@ def _explanation(
         return "CBL places this issue before the explicit ComicVine core; role remains contextual."
     if role == "epilogue":
         return "CBL places this issue after the explicit ComicVine core; role remains contextual."
-    return "External evidence suggests membership but is insufficient to assign a core/context role."
+    return (
+        "External evidence suggests membership but is insufficient to assign a core/context role."
+    )
 
 
 def _sort_key(item: TemplateEvidence) -> tuple[float, int]:
@@ -301,7 +305,9 @@ def _order_conflicts(
 ) -> tuple[CrossoverTemplateConflict, ...]:
     conflicts: list[CrossoverTemplateConflict] = []
     for index, first in enumerate(evidence):
-        first_by_path = {placement.source_path: placement.position for placement in first.cbl_placements}
+        first_by_path = {
+            placement.source_path: placement.position for placement in first.cbl_placements
+        }
         for second in evidence[index + 1 :]:
             second_by_path = {
                 placement.source_path: placement.position for placement in second.cbl_placements
@@ -421,8 +427,12 @@ def _consistently_ordered_shared_paths(
     first: TemplateEvidence,
     second: TemplateEvidence,
 ) -> tuple[str, ...]:
-    first_by_path = {placement.source_path: placement.position for placement in first.cbl_placements}
-    second_by_path = {placement.source_path: placement.position for placement in second.cbl_placements}
+    first_by_path = {
+        placement.source_path: placement.position for placement in first.cbl_placements
+    }
+    second_by_path = {
+        placement.source_path: placement.position for placement in second.cbl_placements
+    }
     shared_paths = sorted(first_by_path.keys() & second_by_path.keys())
     comparisons = [
         (first_by_path[path] > second_by_path[path]) - (first_by_path[path] < second_by_path[path])
