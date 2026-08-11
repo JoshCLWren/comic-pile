@@ -190,7 +190,7 @@ jobs:
               owner,
               repo,
               issue_number: handoffIssue.number,
-              body: `Generated OpenAPI artifacts are current on \`${context.sha}\`. Closing the factory handoff automatically.`,
+              body: `Generated OpenAPI artifacts are current on \`main\` at \`${context.sha}\`. Closing the factory handoff automatically.`,
             });
             core.notice(`Closed resolved OpenAPI drift issue #${handoffIssue.number}.`);
 
