@@ -2,6 +2,9 @@ name: Chromium E2E discovery
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - chromium-discovery
 
 permissions:
   contents: read
