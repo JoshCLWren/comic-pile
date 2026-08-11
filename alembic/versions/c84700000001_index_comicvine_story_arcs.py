@@ -16,7 +16,11 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    """Add a provider-metadata GIN index for containment queries."""
+    """Add a provider-metadata GIN index for containment queries.
+
+    Returns:
+        None.
+    """
     op.execute(
         """
         CREATE INDEX ix_external_identity_metadata_jsonb_path
@@ -27,5 +31,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Remove the provider-metadata GIN index."""
+    """Remove the provider-metadata GIN index.
+
+    Returns:
+        None.
+    """
     op.drop_index("ix_external_identity_metadata_jsonb_path", table_name="external_identities")
