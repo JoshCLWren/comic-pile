@@ -1,6 +1,7 @@
 """SQLAlchemy database models."""
 
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
+from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule, ContinuityRuleSelectedMember
 from app.models.dependency import Dependency
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
@@ -24,6 +25,7 @@ __all__ = [
     "CBLSource",
     "CBLSourceEntry",
     "CBLSourceList",
+    "ContinuityPlan",
     "ContinuityRule",
     "ContinuityRuleSelectedMember",
     "Dependency",
