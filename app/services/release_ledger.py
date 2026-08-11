@@ -18,7 +18,16 @@ async def list_published_releases(
     limit: int,
     offset: int,
 ) -> tuple[list[Release], int]:
-    """List public published releases in deterministic newest-first order."""
+    """List public published releases in deterministic newest-first order.
+
+    Args:
+        db: Async database session.
+        limit: Maximum releases to return.
+        offset: Number of releases to skip.
+
+    Returns:
+        The page of releases and total matching release count.
+    """
     filters = (Release.status == "published", Release.visibility == "public")
     total = await db.scalar(select(func.count(Release.id)).where(*filters))
     result = await db.execute(
@@ -36,7 +45,15 @@ async def list_published_releases(
 
 
 async def get_published_release(db: AsyncSession, release_id: int) -> Release | None:
-    """Fetch one public published release by id."""
+    """Fetch one public published release by id.
+
+    Args:
+        db: Async database session.
+        release_id: Release primary key.
+
+    Returns:
+        The published public release, or None when unavailable.
+    """
     result = await db.execute(
         select(Release).where(
             Release.id == release_id,
@@ -55,6 +72,15 @@ async def find_release_by_source(
     source_merge_sha: str | None,
 ) -> Release | None:
     """Resolve a release by stable GitHub source identity.
+
+    Args:
+        db: Async database session.
+        source_repository: Repository containing the source pull request.
+        source_pr_number: Source pull request number when known.
+        source_merge_sha: Source merge commit SHA when known.
+
+    Returns:
+        The matching release, or None when no source identity matches.
 
     Raises:
         ReleaseSourceConflictError: If the PR and merge SHA point to different rows.
@@ -96,11 +122,25 @@ def _apply_payload(release: Release, payload: ReleaseUpsertRequest) -> None:
     ):
         raise ReleaseSourceConflictError("source PR is already attached to another merge SHA")
     for field, value in payload.model_dump().items():
+        if field in {"source_pr_number", "source_merge_sha"} and value is None:
+            continue
         setattr(release, field, value)
 
 
 async def upsert_release(db: AsyncSession, payload: ReleaseUpsertRequest) -> Release:
-    """Create or update one GitHub-backed release idempotently, including concurrent retries."""
+    """Create or update one GitHub-backed release idempotently, including concurrent retries.
+
+    Args:
+        db: Async database session.
+        payload: Validated release publication payload.
+
+    Returns:
+        The created or updated durable release.
+
+    Raises:
+        ReleaseSourceConflictError: If source identities conflict with established provenance.
+        IntegrityError: If persistence fails for a reason other than a concurrent duplicate retry.
+    """
     existing = await find_release_by_source(
         db,
         source_repository=payload.source_repository,
