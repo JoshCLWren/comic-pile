@@ -138,7 +138,9 @@ async def test_invalid_user_id_does_not_consume_generation_budget() -> None:
 
 
 @pytest.mark.asyncio
-async def test_atomic_read_keeps_generation_and_value_in_one_snapshot(monkeypatch) -> None:
+async def test_atomic_read_keeps_generation_and_value_in_one_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Prevent invalidation from interleaving generation and value lookups."""
     client = AtomicReadClient()
     monkeypatch.setattr(cache, "_client", client)
@@ -156,7 +158,7 @@ async def test_atomic_read_keeps_generation_and_value_in_one_snapshot(monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_generation_cached_preserves_cached_none(monkeypatch) -> None:
+async def test_generation_cached_preserves_cached_none(monkeypatch: pytest.MonkeyPatch) -> None:
     """Treat a stored JSON null as a cache hit when falsy caching is enabled."""
     client = NullValueClient()
     monkeypatch.setattr(cache, "_client", client)
@@ -181,7 +183,9 @@ async def test_generation_cached_preserves_cached_none(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_cached_routes_user_scoped_calls_to_generation_namespace(monkeypatch) -> None:
+async def test_cached_routes_user_scoped_calls_to_generation_namespace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Existing @cached endpoints should gain generation semantics without rewrites."""
     routed_user_ids: list[int] = []
 
@@ -221,7 +225,9 @@ async def test_cached_routes_user_scoped_calls_to_generation_namespace(monkeypat
 
 
 @pytest.mark.asyncio
-async def test_cached_keeps_non_user_calls_on_legacy_path(monkeypatch) -> None:
+async def test_cached_keeps_non_user_calls_on_legacy_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Non-user cache consumers must not be forced into a shared user namespace."""
     routed = False
 
