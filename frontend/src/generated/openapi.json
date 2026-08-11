@@ -7431,7 +7431,7 @@
     },
     "/api/v1/roll/switch-prerequisite": {
       "post": {
-        "description": "Replace a blocked pending roll with one still-readable prerequisite.",
+        "description": "Replace a blocked pending roll with one still-readable prerequisite.\n\nArgs:\n    request: Selected prerequisite issue from the current recovery guidance.\n    current_user: Authenticated owner of the pending Roll.\n    db: Async database session.\n\nReturns:\n    The durable active Roll target after accepting the prerequisite.",
         "operationId": "switch_roll_prerequisite_api_v1_roll_switch_prerequisite_post",
         "requestBody": {
           "content": {

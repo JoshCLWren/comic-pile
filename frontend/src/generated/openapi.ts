@@ -2258,6 +2258,14 @@ export interface paths {
         /**
          * Switch Roll Prerequisite
          * @description Replace a blocked pending roll with one still-readable prerequisite.
+         *
+         *     Args:
+         *         request: Selected prerequisite issue from the current recovery guidance.
+         *         current_user: Authenticated owner of the pending Roll.
+         *         db: Async database session.
+         *
+         *     Returns:
+         *         The durable active Roll target after accepting the prerequisite.
          */
         post: operations["switch_roll_prerequisite_api_v1_roll_switch_prerequisite_post"];
         delete?: never;

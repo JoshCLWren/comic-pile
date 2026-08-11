@@ -24,7 +24,16 @@ async def switch_roll_prerequisite(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> RollPrerequisiteSwitchResponse:
-    """Replace a blocked pending roll with one still-readable prerequisite."""
+    """Replace a blocked pending roll with one still-readable prerequisite.
+
+    Args:
+        request: Selected prerequisite issue from the current recovery guidance.
+        current_user: Authenticated owner of the pending Roll.
+        db: Async database session.
+
+    Returns:
+        The durable active Roll target after accepting the prerequisite.
+    """
     result = await switch_pending_roll_to_prerequisite(
         db,
         user_id=current_user.id,

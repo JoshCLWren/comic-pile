@@ -27,7 +27,16 @@ def test_switch_request_rejects_crossover_nodes() -> None:
 
 
 async def _make_issue(async_db: AsyncSession, *, user_id: int, suffix: str) -> Issue:
-    """Create one active issue-tracked thread with one unread issue."""
+    """Create one active issue-tracked thread with one unread issue.
+
+    Args:
+        async_db: Async test database session.
+        user_id: Owner of the test thread.
+        suffix: Unique suffix for the generated thread title.
+
+    Returns:
+        The created unread issue.
+    """
     thread = Thread(
         title=f"Recovery {suffix}",
         format="comic",
@@ -49,7 +58,16 @@ async def _make_issue(async_db: AsyncSession, *, user_id: int, suffix: str) -> I
 
 
 def _item_rule(*, user_id: int, source_id: int, target_id: int) -> ContinuityRule:
-    """Create one issue-to-issue item-read continuity rule."""
+    """Create one issue-to-issue item-read continuity rule.
+
+    Args:
+        user_id: Owner of the continuity rule.
+        source_id: Prerequisite issue identifier.
+        target_id: Blocked issue identifier.
+
+    Returns:
+        The unpersisted continuity rule.
+    """
     return ContinuityRule(
         user_id=user_id,
         source_type="issue",
@@ -61,7 +79,15 @@ def _item_rule(*, user_id: int, source_id: int, target_id: int) -> ContinuityRul
 
 
 async def _set_pending_roll(auth_client: AsyncClient, thread_id: int) -> None:
-    """Use the existing override flow to create an auditable pending roll."""
+    """Use the existing override flow to create an auditable pending roll.
+
+    Args:
+        auth_client: Authenticated API test client.
+        thread_id: Thread to set as the pending Roll.
+
+    Returns:
+        None.
+    """
     response = await auth_client.post("/api/roll/override", json={"thread_id": thread_id})
     assert response.status_code == 200
 
@@ -71,7 +97,15 @@ async def test_switches_blocked_roll_to_direct_readable_prerequisite(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """A direct readable prerequisite becomes active without reading the original."""
+    """A direct readable prerequisite becomes active without reading the original.
+
+    Args:
+        auth_client: Authenticated API test client.
+        async_db: Async test database session.
+
+    Returns:
+        None.
+    """
     user = await get_or_create_user_async(async_db)
     blocked = await _make_issue(async_db, user_id=user.id, suffix="blocked")
     prerequisite = await _make_issue(async_db, user_id=user.id, suffix="prerequisite")
@@ -118,7 +152,15 @@ async def test_switches_to_transitive_readable_leaf(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """A→B→C recovery accepts C while B remains blocked."""
+    """A→B→C recovery accepts C while B remains blocked.
+
+    Args:
+        auth_client: Authenticated API test client.
+        async_db: Async test database session.
+
+    Returns:
+        None.
+    """
     user = await get_or_create_user_async(async_db)
     blocked = await _make_issue(async_db, user_id=user.id, suffix="transitive-a")
     middle = await _make_issue(async_db, user_id=user.id, suffix="transitive-b")
@@ -147,7 +189,15 @@ async def test_duplicate_switch_is_idempotent(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """A duplicate tap returns success without writing a second recovery event."""
+    """A duplicate tap returns success without writing a second recovery event.
+
+    Args:
+        auth_client: Authenticated API test client.
+        async_db: Async test database session.
+
+    Returns:
+        None.
+    """
     user = await get_or_create_user_async(async_db)
     blocked = await _make_issue(async_db, user_id=user.id, suffix="duplicate-blocked")
     prerequisite = await _make_issue(async_db, user_id=user.id, suffix="duplicate-prerequisite")
@@ -187,7 +237,15 @@ async def test_rejects_stale_recommendation_after_prerequisite_becomes_read(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """Mutation-time revalidation rejects guidance invalidated after bootstrap."""
+    """Mutation-time revalidation rejects guidance invalidated after bootstrap.
+
+    Args:
+        auth_client: Authenticated API test client.
+        async_db: Async test database session.
+
+    Returns:
+        None.
+    """
     user = await get_or_create_user_async(async_db)
     blocked = await _make_issue(async_db, user_id=user.id, suffix="stale-blocked")
     prerequisite = await _make_issue(async_db, user_id=user.id, suffix="stale-prerequisite")
@@ -214,7 +272,15 @@ async def test_rejects_issue_that_was_not_recommended(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """A readable but unrelated issue cannot replace the pending roll."""
+    """A readable but unrelated issue cannot replace the pending roll.
+
+    Args:
+        auth_client: Authenticated API test client.
+        async_db: Async test database session.
+
+    Returns:
+        None.
+    """
     user = await get_or_create_user_async(async_db)
     blocked = await _make_issue(async_db, user_id=user.id, suffix="unrelated-blocked")
     prerequisite = await _make_issue(async_db, user_id=user.id, suffix="unrelated-prerequisite")
