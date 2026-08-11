@@ -137,6 +137,35 @@ async def test_cbl_sync_replaces_changed_entries_and_marks_removed_lists_inactiv
 
 
 @pytest.mark.asyncio
+async def test_cbl_sync_preserves_last_good_row_for_parse_failed_path(
+    async_db: AsyncSession,
+) -> None:
+    """A present but malformed file must not be mistaken for a removed source list."""
+    parsed = _list()
+    await sync_cbl_lists(
+        async_db,
+        repository="JoshCLWren/CBL-ReadingLists",
+        revision_sha="abc123",
+        parsed_lists=(parsed,),
+    )
+
+    summary = await sync_cbl_lists(
+        async_db,
+        repository="JoshCLWren/CBL-ReadingLists",
+        revision_sha="def456",
+        parsed_lists=(),
+        protected_paths=frozenset({parsed.source_path}),
+    )
+    stored = await async_db.scalar(select(CBLSourceList))
+
+    assert summary.deactivated_lists == 0
+    assert stored is not None
+    assert stored.active is True
+    assert stored.revision_sha == "abc123"
+    assert await async_db.scalar(select(func.count()).select_from(CBLSourceEntry)) == 2
+
+
+@pytest.mark.asyncio
 async def test_cbl_sync_dry_run_reports_without_writes(async_db: AsyncSession) -> None:
     """Dry-run mode returns machine-readable intent without touching persistence."""
     summary = await sync_cbl_lists(
