@@ -7,7 +7,7 @@ test.describe('Bug Report Button', () => {
       if (msg.type() === 'error') consoleErrors.push(msg.text())
     })
 
-    const button = authenticatedPage.getByRole('button', { name: /report a bug/i }).last()
+    const button = authenticatedPage.getByRole('button', { name: 'Send feedback' }).last()
     await expect(button).toBeVisible()
     await button.click()
 
@@ -19,13 +19,17 @@ test.describe('Bug Report Button', () => {
     await expect(authenticatedPage.getByText(/browser info & console errors/i)).toBeVisible()
   })
 
-  test('moves the bug report entry point into the mobile nav', async ({ authenticatedPage }) => {
+  test('moves the feedback entry point into the mobile More menu', async ({ authenticatedPage }) => {
     await authenticatedPage.setViewportSize({ width: 390, height: 844 })
     await authenticatedPage.reload({ waitUntil: 'domcontentloaded' })
 
     await expect(authenticatedPage.getByRole('link', { name: /help page/i })).toHaveCount(0)
 
-    const button = authenticatedPage.getByRole('navigation', { name: /main navigation/i }).getByLabel('Report a bug')
+    const mainNavigation = authenticatedPage.getByRole('navigation', { name: /main navigation/i })
+    await mainNavigation.getByRole('button', { name: 'More pages' }).click()
+
+    const moreNavigation = authenticatedPage.getByRole('navigation', { name: /more pages/i })
+    const button = moreNavigation.getByRole('button', { name: 'Send feedback' })
     await expect(button).toBeVisible()
     await button.click()
 
@@ -37,7 +41,11 @@ test.describe('Bug Report Button', () => {
     await authenticatedPage.setViewportSize({ width: 320, height: 400 })
     await authenticatedPage.reload({ waitUntil: 'domcontentloaded' })
 
-    const reportButton = authenticatedPage.getByRole('button', { name: /report a bug/i }).last()
+    const mainNavigation = authenticatedPage.getByRole('navigation', { name: /main navigation/i })
+    await mainNavigation.getByRole('button', { name: 'More pages' }).click()
+
+    const moreNavigation = authenticatedPage.getByRole('navigation', { name: /more pages/i })
+    const reportButton = moreNavigation.getByRole('button', { name: 'Send feedback' })
     await expect(reportButton).toBeVisible()
     await reportButton.click()
 
