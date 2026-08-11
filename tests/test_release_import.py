@@ -1,8 +1,11 @@
 """Tests for historical changelog import parsing and provenance."""
 
 from pathlib import Path
+import re
 
-from app.services.release_import import parse_changelog_source
+from app.services.release_import import audit_changelog_corpus, parse_changelog_source
+
+_FRAGMENT_RE = re.compile(r"^\d{4}-\d{2}-\d{2}-(\d+)\.md$")
 
 
 def test_fragment_preserves_filename_pr_and_provenance() -> None:
@@ -117,3 +120,21 @@ def test_fragment_date_mismatch_is_preserved_as_anomaly() -> None:
     assert len(candidates) == 1
     assert candidates[0].source_date == "2026-08-10"
     assert any("does not match filename date" in anomaly.message for anomaly in anomalies)
+
+
+def test_repository_changelog_corpus_represents_every_valid_fragment() -> None:
+    """The dry-run parser covers the real frozen archive and every valid current fragment."""
+    repository_root = Path(__file__).resolve().parents[1]
+    report = audit_changelog_corpus(repository_root)
+    fragment_paths: dict[str, int] = {}
+    for path in (repository_root / "docs" / "changelog.d").glob("*.md"):
+        match = _FRAGMENT_RE.fullmatch(path.name)
+        if match is not None:
+            fragment_paths[str(path.relative_to(repository_root))] = int(match.group(1))
+
+    assert report.candidates
+    assert any(candidate.category != "General" for candidate in report.candidates)
+    candidates_by_path = {candidate.source_path: candidate for candidate in report.candidates}
+    assert fragment_paths.keys() <= candidates_by_path.keys()
+    for source_path, pr_number in fragment_paths.items():
+        assert candidates_by_path[source_path].source_pr_number == pr_number
