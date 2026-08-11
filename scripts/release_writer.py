@@ -153,6 +153,7 @@ def _skip(raw: str) -> None:
 
 
 def main() -> None:
+    """Run the release-writer command-line interface."""
     if len(sys.argv) < 2:
         _fail("usage: release_writer.py check|publish|skip ...")
     command = sys.argv[1]
