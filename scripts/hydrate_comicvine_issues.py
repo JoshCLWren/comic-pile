@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 
 from app.database import AsyncSessionLocal
+from comic_pile.comicvine_deep_hydration import hydrate_deep_metadata
 from comic_pile.comicvine_hydrator import (
     apply_cbl_issue_identities,
     apply_local_volume_segments,
@@ -65,12 +66,45 @@ def parse_args() -> argparse.Namespace:
         help="Use cached/live ComicVine issue requests for confirmed identities missing locally.",
     )
     parser.add_argument(
+        "--deep-hydration",
+        action="store_true",
+        help=(
+            "Fetch full singular ComicVine issue metadata for matched confirmed identities and "
+            "store it only in the generated report."
+        ),
+    )
+    parser.add_argument(
+        "--hydrate-story-arcs",
+        action="store_true",
+        help=(
+            "With --deep-hydration, fetch each unique story arc discovered from issue metadata "
+            "at most once per pass."
+        ),
+    )
+    parser.add_argument(
         "--force-refresh",
         action="store_true",
-        help="Bypass successful response cache entries during --live-refresh.",
+        help="Bypass successful response cache entries during live or deep hydration.",
     )
     parser.add_argument("--include-test-threads", action="store_true")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.hydrate_story_arcs and not args.deep_hydration:
+        parser.error("--hydrate-story-arcs requires --deep-hydration")
+    return args
+
+
+def _provider_client(args: argparse.Namespace) -> ComicVineClient:
+    """Build the shared endpoint-budgeted provider client for network-enabled modes."""
+    api_key = os.environ.get("COMICVINE_API_KEY", "")
+    if not api_key.strip():
+        raise RuntimeError(
+            "COMICVINE_API_KEY is required when live or deep ComicVine hydration is enabled"
+        )
+    return ComicVineClient(
+        api_key,
+        args.cache_dir,
+        requests_per_hour=args.requests_per_hour,
+    )
 
 
 async def run(args: argparse.Namespace) -> None:
@@ -95,17 +129,22 @@ async def run(args: argparse.Namespace) -> None:
         targets = await apply_local_volume_segments(targets, snapshot, segments)
 
     report = await build_report(targets, snapshot)
+    client: ComicVineClient | None = None
+    if args.live_refresh or args.deep_hydration:
+        client = _provider_client(args)
 
     if args.live_refresh:
-        api_key = os.environ.get("COMICVINE_API_KEY", "")
-        if not api_key.strip():
-            raise RuntimeError("COMICVINE_API_KEY is required when --live-refresh is enabled")
-        client = ComicVineClient(
-            api_key,
-            args.cache_dir,
-            requests_per_hour=args.requests_per_hour,
-        )
+        assert client is not None
         await refresh_confirmed_local_misses(report, client, refresh=args.force_refresh)
+
+    if args.deep_hydration:
+        assert client is not None
+        await hydrate_deep_metadata(
+            report,
+            client,
+            hydrate_story_arcs=args.hydrate_story_arcs,
+            refresh=args.force_refresh,
+        )
 
     write_report(report, args.output)
 
