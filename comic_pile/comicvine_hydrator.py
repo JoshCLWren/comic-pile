@@ -13,6 +13,7 @@ from typing import Literal, Protocol
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cbl_ingest import parse_cbl_mirror
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 from app.models.issue import Issue
 from app.models.thread import Thread
@@ -190,6 +191,66 @@ async def enumerate_user_issues(
         )
         for issue, thread in rows
     ]
+
+
+def _normalized_cbl_key(value: str) -> str:
+    """Normalize exact CBL matching text without introducing fuzzy equivalence."""
+    return " ".join(value.strip().casefold().split()).removeprefix("#").strip()
+
+
+async def apply_cbl_issue_identities(
+    targets: list[HydrationTarget],
+    mirror_path: str | Path,
+) -> list[HydrationTarget]:
+    """Fill unresolved targets from unique exact CBL embedded ComicVine issue IDs.
+
+    Existing confirmed database mappings remain authoritative. CBL evidence is only applied
+    when the normalized CBL series title and issue label exactly match the ComicPile target
+    and every matching CBL occurrence with an embedded ComicVine issue ID agrees on one ID.
+    Conflicting or malformed CBL evidence stays unresolved.
+
+    Args:
+        targets: Ordered ComicPile hydration targets.
+        mirror_path: Root directory containing CBL reading-list files.
+
+    Returns:
+        Targets with safe exact CBL issue identities filled where uniquely supported.
+    """
+    root = Path(mirror_path)
+    parsed_lists, _failures = await asyncio.to_thread(parse_cbl_mirror, root)
+    ids_by_key: dict[tuple[str, str], set[int]] = defaultdict(set)
+    for reading_list in parsed_lists:
+        for book in reading_list.books:
+            if book.comicvine_issue_id is None:
+                continue
+            try:
+                issue_id = int(book.comicvine_issue_id)
+            except ValueError:
+                continue
+            if issue_id <= 0:
+                continue
+            series_key = _normalized_cbl_key(book.series)
+            issue_key = _normalized_cbl_key(book.issue_number)
+            if not series_key or not issue_key:
+                continue
+            key = (series_key, issue_key)
+            ids_by_key[key].add(issue_id)
+
+    resolved: list[HydrationTarget] = []
+    for target in targets:
+        if target.comicvine_issue_id is not None:
+            resolved.append(target)
+            continue
+        key = (
+            _normalized_cbl_key(target.thread_title),
+            _normalized_cbl_key(target.issue_number),
+        )
+        matches = ids_by_key.get(key, set())
+        if len(matches) == 1:
+            resolved.append(replace(target, comicvine_issue_id=next(iter(matches))))
+        else:
+            resolved.append(target)
+    return resolved
 
 
 def load_volume_segments(path: str | Path) -> list[VolumeSegment]:

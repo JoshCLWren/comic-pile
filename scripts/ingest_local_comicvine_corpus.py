@@ -152,7 +152,7 @@ def open_localcv(path: Path) -> sqlite3.Connection:
     return connection
 
 
-def parse_json_value(value: Any) -> Any:
+def parse_json_value(value: object) -> object:
     """Decode JSON text from the local ComicVine snapshot when needed."""
     if value is None or isinstance(value, (dict, list, int, float, bool)):
         return value
@@ -212,7 +212,7 @@ def issues_for_volumes(db: sqlite3.Connection, volume_ids: set[int]) -> Iterator
         )
 
 
-def story_arc_ids(value: Any) -> set[int]:
+def story_arc_ids(value: object) -> set[int]:
     """Extract stable ComicVine story-arc IDs from one relationship payload."""
     credits = parse_json_value(value)
     if not isinstance(credits, list):

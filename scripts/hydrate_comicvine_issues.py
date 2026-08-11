@@ -9,6 +9,7 @@ from pathlib import Path
 
 from app.database import AsyncSessionLocal
 from comic_pile.comicvine_hydrator import (
+    apply_cbl_issue_identities,
     apply_local_volume_segments,
     build_report,
     enumerate_user_issues,
@@ -28,11 +29,19 @@ def parse_args() -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(
         description=(
-            "Inspect existing ComicPile issues against confirmed ComicVine identities "
+            "Inspect existing ComicPile issues against confirmed/CBL ComicVine identities "
             "and a read-only local ComicVine snapshot."
         )
     )
     parser.add_argument("--user-id", type=int, required=True)
+    parser.add_argument(
+        "--cbl-mirror",
+        type=Path,
+        help=(
+            "Optional CBL mirror root. Exact embedded ComicVine issue IDs are applied before "
+            "local volume-segment or live provider discovery."
+        ),
+    )
     parser.add_argument("--comicvine-db", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
@@ -77,6 +86,9 @@ async def run(args: argparse.Namespace) -> None:
             user_id=args.user_id,
             include_test_threads=args.include_test_threads,
         )
+
+    if args.cbl_mirror is not None:
+        targets = await apply_cbl_issue_identities(targets, args.cbl_mirror)
 
     if args.segment_map is not None:
         segments = load_volume_segments(args.segment_map)
