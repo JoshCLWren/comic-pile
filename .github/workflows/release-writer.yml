@@ -1,0 +1,78 @@
+name: Release writer
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Optional merged pull request number to reconcile
+        required: false
+        type: string
+  schedule:
+    - cron: '23 * * * *'
+
+jobs:
+  publish-release:
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    env:
+      RELEASE_API_URL: https://comic-pile.vercel.app/api/v1/releases
+      RELEASE_WRITER_TOKEN: ${{ secrets.RELEASE_WRITER_TOKEN }}
+      NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+    steps:
+      - name: Checkout merged main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Install pinned FCM discovery CLI
+        run: npm install --global --ignore-scripts free-coding-models@0.5.69
+
+      - name: Select a healthy NVIDIA model
+        id: model
+        run: |
+          fcm_output="$(free-coding-models --json --origin nvidia --hide-unconfigured --best --no-telemetry)"
+          candidates="$(printf '%s\n' "$fcm_output" | python scripts/select_fcm_nvidia_model.py)"
+          selected_model="$(printf '%s\n' "$candidates" | head -n 1)"
+          if [[ -z "$selected_model" ]]; then
+            echo 'No configured NVIDIA release-writer model is available' >&2
+            exit 1
+          fi
+          echo "model=$selected_model" >> "$GITHUB_OUTPUT"
+
+      - name: Build release-writer prompt
+        id: prompt
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_PR: ${{ github.event.pull_request.number }}
+          INPUT_PR: ${{ inputs.pr_number }}
+        run: |
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            prompt="Process merged pull request #${EVENT_PR} in ${GITHUB_REPOSITORY}. Verify it is merged, inspect its changed-file summary and linked issue context, then publish or explicitly skip it according to the release-writer contract."
+          elif [[ -n "$INPUT_PR" ]]; then
+            prompt="Reconcile merged pull request #${INPUT_PR} in ${GITHUB_REPOSITORY}. Check the release ledger first, then publish it if missing or report a source conflict."
+          else
+            prompt="Reconcile recent merged pull requests in ${GITHUB_REPOSITORY}. Inspect up to the 50 most recently merged PRs, check the release ledger for each source identity, and publish or explicitly skip only missing entries. Stop and report any source-identity conflict instead of overwriting provenance."
+          fi
+          printf 'prompt=%s\n' "$prompt" >> "$GITHUB_OUTPUT"
+
+      - name: Run dedicated release writer
+        uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          RELEASE_API_URL: ${{ env.RELEASE_API_URL }}
+          RELEASE_WRITER_TOKEN: ${{ secrets.RELEASE_WRITER_TOKEN }}
+          PROMPT: ${{ steps.prompt.outputs.prompt }}
+        with:
+          model: ${{ steps.model.outputs.model }}
+          agent: release-writer
+          use_github_token: true
