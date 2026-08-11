@@ -1,6 +1,7 @@
 """API route handlers."""
 
 from app.api import analytics as analytics
+from app.api import continuity_plan as continuity_plan
 from app.api import continuity_readiness as continuity_readiness
 from app.api import continuity_rule as continuity_rule
 from app.api import dependency as dependency
@@ -16,12 +17,14 @@ dependency.router.include_router(issue_dependency_batch.router)
 dependency.router.include_router(dependency_group.router)
 dependency.router.include_router(dependency_group_batch.router)
 dependency.router.include_router(continuity_rule.router)
+dependency.router.include_router(continuity_plan.router)
 dependency.router.include_router(continuity_readiness.router)
 dependency.router.include_router(roll_recovery_switch.router, prefix="/roll")
 dependency.router.include_router(releases.router, prefix="/releases")
 
 __all__ = [
     "analytics",
+    "continuity_plan",
     "continuity_readiness",
     "continuity_rule",
     "dependency",
