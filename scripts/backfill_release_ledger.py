@@ -7,9 +7,17 @@ import argparse
 import asyncio
 import json
 from pathlib import Path
+import sys
 
-from app.database import AsyncSessionLocal
-from app.services.release_import import (
+# Running a script by path puts scripts/ rather than the repository root on
+# sys.path. Add the checkout root before importing the application package so
+# the documented one-shot command works in CI and from a clean checkout.
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from app.database import AsyncSessionLocal  # noqa: E402
+from app.services.release_import import (  # noqa: E402
     audit_changelog_corpus,
     import_changelog_report,
     reconcile_changelog_report,
@@ -27,7 +35,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--repository-root",
         type=Path,
-        default=Path(__file__).resolve().parents[1],
+        default=REPOSITORY_ROOT,
         help="ComicPile checkout root containing docs/changelog.md and docs/changelog.d.",
     )
     return parser
