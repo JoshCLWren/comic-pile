@@ -60,10 +60,15 @@ export const dependencyGroupsApi = {
   listForThreads: async (
     threadIds: number[],
   ): Promise<Record<number, DependencyGroupSummary[]>> => {
-    return api.post<Record<number, DependencyGroupSummary[]>>(
-      '/v1/reading-order-groups/threads/groups:batch',
-      { thread_ids: threadIds },
+    const entries = await Promise.all(
+      threadIds.map(async (threadId) => [
+        threadId,
+        await api.get<DependencyGroupSummary[]>(
+          `/v1/reading-order-groups/threads/${threadId}/groups`,
+        ),
+      ] as const),
     )
+    return Object.fromEntries(entries)
   },
 
   addMember: async (
