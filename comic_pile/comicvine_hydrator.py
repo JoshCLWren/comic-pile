@@ -6,7 +6,7 @@ import asyncio
 import json
 import tempfile
 from collections import defaultdict
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Literal, Protocol
 
@@ -42,6 +42,10 @@ class ComicVineSnapshotReader(Protocol):
         """
         ...
 
+    def get_volume_issues(self, volume_id: int) -> list[LocalComicVineResult]:
+        """Return locally cached issues for one ComicVine volume."""
+        ...
+
     def sync_metadata(self) -> dict[str, object]:
         """Return snapshot freshness metadata.
 
@@ -61,6 +65,39 @@ class HydrationTarget:
     issue_number: str
     position: int
     comicvine_issue_id: int | None = None
+
+
+@dataclass(frozen=True)
+class VolumeSegment:
+    """Explicit provider-volume evidence for one contiguous slice of a ComicPile thread."""
+
+    thread_id: int
+    start_position: int
+    end_position: int
+    comicvine_volume_id: int
+
+    @classmethod
+    def from_dict(cls, value: dict[str, object]) -> VolumeSegment:
+        """Parse and validate one JSON segment declaration.
+
+        Args:
+            value: JSON-compatible mapping describing a thread slice and ComicVine volume.
+
+        Returns:
+            Validated segment declaration.
+
+        Raises:
+            ValueError: If required integer fields are absent or invalid.
+        """
+        fields: dict[str, int] = {}
+        for name in ("thread_id", "start_position", "end_position", "comicvine_volume_id"):
+            raw = value.get(name)
+            if not isinstance(raw, int) or isinstance(raw, bool) or raw <= 0:
+                raise ValueError(f"segment {name} must be a positive integer")
+            fields[name] = raw
+        if fields["end_position"] < fields["start_position"]:
+            raise ValueError("segment end_position must be >= start_position")
+        return cls(**fields)
 
 
 @dataclass(frozen=True)
@@ -153,6 +190,106 @@ async def enumerate_user_issues(
         )
         for issue, thread in rows
     ]
+
+
+def load_volume_segments(path: str | Path) -> list[VolumeSegment]:
+    """Load deterministic issue-level volume segments from JSON.
+
+    The file is intentionally explicit evidence. Segments scope a provider volume to a
+    position range inside one ComicPile reading thread; they never declare that an entire
+    thread is one external volume.
+
+    Args:
+        path: JSON file containing either a segment list or {"segments": [...]}.
+
+    Returns:
+        Validated segments sorted by thread and position.
+
+    Raises:
+        ValueError: If the JSON shape is invalid or segments overlap within a thread.
+    """
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    items = raw.get("segments") if isinstance(raw, dict) else raw
+    if not isinstance(items, list):
+        raise ValueError("segment map must be a JSON list or an object containing 'segments'")
+
+    segments = [VolumeSegment.from_dict(item) for item in items if isinstance(item, dict)]
+    if len(segments) != len(items):
+        raise ValueError("every segment entry must be a JSON object")
+    segments.sort(key=lambda segment: (segment.thread_id, segment.start_position, segment.end_position))
+
+    previous_by_thread: dict[int, VolumeSegment] = {}
+    for segment in segments:
+        previous = previous_by_thread.get(segment.thread_id)
+        if previous is not None and segment.start_position <= previous.end_position:
+            raise ValueError(f"overlapping volume segments for thread {segment.thread_id}")
+        previous_by_thread[segment.thread_id] = segment
+    return segments
+
+
+async def apply_local_volume_segments(
+    targets: list[HydrationTarget],
+    snapshot: ComicVineSnapshotReader,
+    segments: list[VolumeSegment],
+) -> list[HydrationTarget]:
+    """Resolve unresolved issue identities from explicit per-thread volume segments.
+
+    A segment is only an optimization/evidence boundary. Each issue must still match exactly
+    one provider issue by number or provider issue name inside that volume. Existing confirmed
+    issue identities always win, and ambiguous/missing labels remain unresolved.
+
+    Args:
+        targets: Ordered ComicPile hydration targets.
+        snapshot: Read-only local ComicVine snapshot.
+        segments: Explicit issue-level volume segment declarations.
+
+    Returns:
+        Targets with safe local identities filled where uniquely resolved.
+    """
+    segments_by_thread: dict[int, list[VolumeSegment]] = defaultdict(list)
+    for segment in segments:
+        segments_by_thread[segment.thread_id].append(segment)
+
+    roster_cache: dict[int, dict[str, set[int]]] = {}
+    resolved: list[HydrationTarget] = []
+    for target in targets:
+        if target.comicvine_issue_id is not None:
+            resolved.append(target)
+            continue
+        segment = next(
+            (
+                candidate
+                for candidate in segments_by_thread.get(target.thread_id, [])
+                if candidate.start_position <= target.position <= candidate.end_position
+            ),
+            None,
+        )
+        if segment is None:
+            resolved.append(target)
+            continue
+
+        if segment.comicvine_volume_id not in roster_cache:
+            rows = await asyncio.to_thread(snapshot.get_volume_issues, segment.comicvine_volume_id)
+            labels: dict[str, set[int]] = defaultdict(set)
+            for row in rows:
+                issue_id = row.data.get("id")
+                if not isinstance(issue_id, int) or isinstance(issue_id, bool):
+                    continue
+                for raw_label in (row.data.get("issue_number"), row.data.get("name")):
+                    if raw_label is None:
+                        continue
+                    label = str(raw_label).strip().casefold().removeprefix("#").strip()
+                    if label:
+                        labels[label].add(issue_id)
+            roster_cache[segment.comicvine_volume_id] = labels
+
+        expected = target.issue_number.strip().casefold().removeprefix("#").strip()
+        matches = roster_cache[segment.comicvine_volume_id].get(expected, set())
+        if len(matches) == 1:
+            resolved.append(replace(target, comicvine_issue_id=next(iter(matches))))
+        else:
+            resolved.append(target)
+    return resolved
 
 
 async def inspect_local_snapshot(
