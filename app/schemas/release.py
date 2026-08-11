@@ -60,7 +60,17 @@ class ReleaseUpsertRequest(BaseModel):
 
     @model_validator(mode="after")
     def require_github_identity(self) -> ReleaseUpsertRequest:
-        """Require at least one stable source identity for retry-safe publication."""
+        """Require at least one stable source identity for retry-safe publication.
+
+        Args:
+            self: Validated release publication request.
+
+        Returns:
+            The validated request when a GitHub source identity is present.
+
+        Raises:
+            ValueError: If both source PR number and merge SHA are absent.
+        """
         if self.source_pr_number is None and self.source_merge_sha is None:
             raise ValueError("source_pr_number or source_merge_sha is required")
         return self
