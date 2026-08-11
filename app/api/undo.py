@@ -288,8 +288,8 @@ async def _restore_from_delta_snapshot(
 
     session_state = snapshot.session_state
     if session_state:
-        session.start_die = snapshot.session_state.get("start_die", session.start_die)
-        session.manual_die = snapshot.session_state.get("manual_die", session.manual_die)
+        session.start_die = session_state.get("start_die", session.start_die)
+        session.manual_die = session_state.get("manual_die", session.manual_die)
         if "pending_thread_id" in session_state:
             session.pending_thread_id = session_state["pending_thread_id"]
         if "pending_thread_updated_at" in session_state:
