@@ -1,6 +1,7 @@
 """Service layer for the durable What's New release ledger."""
 
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.release import Release
@@ -80,8 +81,26 @@ async def find_release_by_source(
     return matches[0] if matches else None
 
 
+def _apply_payload(release: Release, payload: ReleaseUpsertRequest) -> None:
+    """Apply a validated publication payload while protecting established source identity."""
+    if (
+        payload.source_pr_number is not None
+        and release.source_pr_number is not None
+        and payload.source_pr_number != release.source_pr_number
+    ):
+        raise ReleaseSourceConflictError("merge SHA is already attached to another source PR")
+    if (
+        payload.source_merge_sha is not None
+        and release.source_merge_sha is not None
+        and payload.source_merge_sha != release.source_merge_sha
+    ):
+        raise ReleaseSourceConflictError("source PR is already attached to another merge SHA")
+    for field, value in payload.model_dump().items():
+        setattr(release, field, value)
+
+
 async def upsert_release(db: AsyncSession, payload: ReleaseUpsertRequest) -> Release:
-    """Create or update one GitHub-backed release idempotently."""
+    """Create or update one GitHub-backed release idempotently, including concurrent retries."""
     existing = await find_release_by_source(
         db,
         source_repository=payload.source_repository,
@@ -93,22 +112,23 @@ async def upsert_release(db: AsyncSession, payload: ReleaseUpsertRequest) -> Rel
         release = Release(**payload.model_dump())
         db.add(release)
     else:
-        if (
-            payload.source_pr_number is not None
-            and existing.source_pr_number is not None
-            and payload.source_pr_number != existing.source_pr_number
-        ):
-            raise ReleaseSourceConflictError("merge SHA is already attached to another source PR")
-        if (
-            payload.source_merge_sha is not None
-            and existing.source_merge_sha is not None
-            and payload.source_merge_sha != existing.source_merge_sha
-        ):
-            raise ReleaseSourceConflictError("source PR is already attached to another merge SHA")
         release = existing
-        for field, value in payload.model_dump().items():
-            setattr(release, field, value)
+        _apply_payload(release, payload)
 
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        release = await find_release_by_source(
+            db,
+            source_repository=payload.source_repository,
+            source_pr_number=payload.source_pr_number,
+            source_merge_sha=payload.source_merge_sha,
+        )
+        if release is None:
+            raise
+        _apply_payload(release, payload)
+        await db.commit()
+
     await db.refresh(release)
     return release
