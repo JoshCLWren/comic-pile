@@ -95,6 +95,7 @@ async def test_cbl_sync_cli_emits_machine_readable_partial_summary(
     sync.assert_awaited_once()
     assert sync.await_args.kwargs["dry_run"] is True
     assert sync.await_args.kwargs["revision_sha"] == "abc123"
+    assert sync.await_args.kwargs["protected_paths"] == frozenset({"broken/list.cbl"})
 
 
 def test_cbl_sync_cli_rejects_non_directory_mirror(
