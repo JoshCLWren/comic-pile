@@ -229,6 +229,8 @@ function isExpectedAnonymousAuthProbe(message: string): boolean {
   const anonymousProbePaths = [
     'api/auth/me',
     'api/auth/refresh',
+    'api/v1/auth/me',
+    'api/v1/auth/refresh',
     'api/sessions/current',
     'api/threads/',
     'api/v1/dependencies/blocked',
@@ -238,13 +240,23 @@ function isExpectedAnonymousAuthProbe(message: string): boolean {
 }
 
 function isExpectedBrowserNoise(message: string): boolean {
+  const isExternalFontFailure = (
+    message.includes('fonts.googleapis.com')
+    || message.includes('fonts.gstatic.com')
+  ) && (
+    message.includes('404')
+    || message.includes('Failed to load resource')
+    || message.includes('downloadable font: download failed')
+  );
+
   return (
     (message.includes('GPU stall due to ReadPixels') && message.includes('GL Driver Message'))
     || message.includes("Couldn't load preload assets")
-    ||     (message.includes('Network Error') && message.includes('/assets/'))
+    || (message.includes('Network Error') && message.includes('/assets/'))
     || message.includes('Failed to fetch user: Error @')
     || message.includes('Failed to rate thread: Network error. Please check your connection and try again.')
     || message.includes('Failed to snooze thread: Network error. Please check your connection and try again.')
+    || isExternalFontFailure
     || message.includes('downloadable font: download failed')
     || message.includes('This site appears to use a scroll-linked positioning effect.')
     || (message.includes('XMLHttpRequest cannot load') && message.includes('due to access control checks.'))
