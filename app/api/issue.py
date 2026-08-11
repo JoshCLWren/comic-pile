@@ -46,7 +46,16 @@ async def get_issue_comicvine_intelligence(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> ComicVineIssueIntelligence | None:
-    """Return curated ComicVine intelligence for a user-owned ComicPile issue."""
+    """Return curated ComicVine intelligence for a user-owned ComicPile issue.
+
+    Args:
+        issue_id: ComicPile issue identifier.
+        current_user: Authenticated owner of the requested issue.
+        db: Async database session.
+
+    Returns:
+        Curated ComicVine intelligence, or ``None`` when no confirmed mapping exists.
+    """
     await get_owned_issue_or_404(db, current_user.id, issue_id)
     return await get_issue_intelligence(db, issue_id, current_user.id)
 
