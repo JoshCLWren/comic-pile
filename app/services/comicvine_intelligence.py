@@ -17,6 +17,10 @@ from app.schemas.comicvine import (
     ComicVineRelatedIssue,
     ComicVineStoryArc,
 )
+from app.services.comicvine_fallback import (
+    metadata_needs_hydration,
+    schedule_issue_metadata_hydration,
+)
 
 COMICVINE_PROVIDER = "comicvine"
 MAX_RELATED_ISSUES_PER_ARC = 60
@@ -209,6 +213,9 @@ async def get_issue_intelligence(
 ) -> ComicVineIssueIntelligence | None:
     """Build curated metadata and explicit story-arc relationships for one issue.
 
+    Missing or stale metadata is refreshed asynchronously from the confirmed issue-level ComicVine
+    identity. The current database-backed result is always returned without waiting on ComicVine.
+
     Args:
         db: Async database session.
         issue_id: ComicPile issue identifier.
@@ -220,6 +227,9 @@ async def get_issue_intelligence(
     identity = await _confirmed_identity(db, issue_id)
     if identity is None:
         return None
+
+    if metadata_needs_hydration(identity):
+        schedule_issue_metadata_hydration(identity.id)
 
     metadata = identity.metadata_json
     arc_refs = _arc_references(metadata)
