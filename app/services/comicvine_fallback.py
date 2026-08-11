@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.comicvine_hydration import hydrate_issue
 from app.database import AsyncSessionLocal
@@ -121,6 +122,48 @@ def schedule_issue_metadata_hydration(identity_id: int) -> bool:
     return True
 
 
+async def _hydrate_with_retries(
+    db: AsyncSession,
+    client: ComicVineClient,
+    *,
+    identity_id: int,
+    issue_id: int,
+) -> bool:
+    """Run one bounded provider hydration with retry and rate-limit handling."""
+    for attempt in range(1, COMICVINE_FALLBACK_MAX_ATTEMPTS + 1):
+        try:
+            await hydrate_issue(db, client, issue_id, refresh=True)
+            await db.commit()
+            logger.info(
+                "comicvine_fallback_hydrated identity_id=%s comicvine_issue_id=%s attempt=%s",
+                identity_id,
+                issue_id,
+                attempt,
+            )
+            return True
+        except ComicVineRateLimitError:
+            logger.warning(
+                "comicvine_fallback_deferred identity_id=%s comicvine_issue_id=%s "
+                "reason=rate_limit",
+                identity_id,
+                issue_id,
+            )
+            return False
+        except (ComicVineError, TimeoutError) as exc:
+            logger.warning(
+                "comicvine_fallback_attempt_failed identity_id=%s comicvine_issue_id=%s "
+                "attempt=%s error=%s",
+                identity_id,
+                issue_id,
+                attempt,
+                type(exc).__name__,
+            )
+            if attempt == COMICVINE_FALLBACK_MAX_ATTEMPTS:
+                return False
+            await asyncio.sleep(COMICVINE_FALLBACK_RETRY_DELAY_SECONDS * attempt)
+    return False
+
+
 async def _run_issue_hydration(identity_id: int) -> None:
     """Hydrate one confirmed identity under a cross-process advisory lock."""
     api_key = os.environ.get("COMICVINE_API_KEY", "").strip()
@@ -174,35 +217,9 @@ async def _run_issue_hydration(identity_id: int) -> None:
             cache_dir,
             timeout_seconds=COMICVINE_REQUEST_TIMEOUT_SECONDS,
         )
-
-        for attempt in range(1, COMICVINE_FALLBACK_MAX_ATTEMPTS + 1):
-            try:
-                await hydrate_issue(db, client, issue_id, refresh=True)
-                await db.commit()
-                logger.info(
-                    "comicvine_fallback_hydrated identity_id=%s comicvine_issue_id=%s attempt=%s",
-                    identity_id,
-                    issue_id,
-                    attempt,
-                )
-                return
-            except ComicVineRateLimitError:
-                logger.warning(
-                    "comicvine_fallback_deferred identity_id=%s comicvine_issue_id=%s "
-                    "reason=rate_limit",
-                    identity_id,
-                    issue_id,
-                )
-                return
-            except (ComicVineError, TimeoutError) as exc:
-                logger.warning(
-                    "comicvine_fallback_attempt_failed identity_id=%s comicvine_issue_id=%s "
-                    "attempt=%s error=%s",
-                    identity_id,
-                    issue_id,
-                    attempt,
-                    type(exc).__name__,
-                )
-                if attempt == COMICVINE_FALLBACK_MAX_ATTEMPTS:
-                    return
-                await asyncio.sleep(COMICVINE_FALLBACK_RETRY_DELAY_SECONDS * attempt)
+        await _hydrate_with_retries(
+            db,
+            client,
+            identity_id=identity_id,
+            issue_id=issue_id,
+        )
