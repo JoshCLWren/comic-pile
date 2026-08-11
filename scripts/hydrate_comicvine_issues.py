@@ -19,6 +19,7 @@ from comic_pile.comicvine_hydrator import (
 )
 from comic_pile.comicvine_live_refresh import refresh_confirmed_local_misses
 from comic_pile.comicvine_provider import ComicVineClient, DEFAULT_REQUESTS_PER_HOUR
+from comic_pile.comicvine_report_classification import classify_hydration_report
 from comic_pile.local_comicvine import LocalComicVineSnapshot
 
 
@@ -146,7 +147,7 @@ async def run(args: argparse.Namespace) -> None:
             refresh=args.force_refresh,
         )
 
-    write_report(report, args.output)
+    write_report(classify_hydration_report(report), args.output)
 
 
 def main() -> None:
