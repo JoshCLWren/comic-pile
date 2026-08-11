@@ -11,7 +11,14 @@ from app.api import queue
 async def test_queue_invalidation_uses_one_user_generation_bump(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Queue mutations should invalidate one bounded user namespace."""
+    """Queue mutations should invalidate one bounded user namespace.
+
+    Args:
+        monkeypatch: Pytest fixture used to replace the generation invalidator.
+
+    Returns:
+        None.
+    """
     invalidator = AsyncMock(return_value=True)
     monkeypatch.setattr(queue, "invalidate_user_view", invalidator)
 
@@ -24,7 +31,14 @@ async def test_queue_invalidation_uses_one_user_generation_bump(
 async def test_queue_invalidation_keeps_users_isolated(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Separate owners must remain separate generation invalidations."""
+    """Separate owners must remain separate generation invalidations.
+
+    Args:
+        monkeypatch: Pytest fixture used to replace the generation invalidator.
+
+    Returns:
+        None.
+    """
     invalidator = AsyncMock(return_value=True)
     monkeypatch.setattr(queue, "invalidate_user_view", invalidator)
 
