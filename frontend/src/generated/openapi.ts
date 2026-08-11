@@ -2099,6 +2099,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/releases/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Releases
+         * @description List public published releases newest-first.
+         */
+        get: operations["list_releases_api_v1_releases__get"];
+        /**
+         * Publish Release
+         * @description Idempotently create or update one merged-PR-backed release.
+         */
+        put: operations["publish_release_api_v1_releases__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/releases/source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Reconcile Release Source
+         * @description Resolve whether trusted automation already published a GitHub source.
+         */
+        get: operations["reconcile_release_source_api_v1_releases_source_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/releases/{release_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Release
+         * @description Fetch one public published release.
+         */
+        get: operations["get_release_api_v1_releases__release_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/roll/": {
         parameters: {
             query?: never;
@@ -4195,6 +4259,132 @@ export interface components {
         RefreshTokenRequest: {
             /** Refresh Token */
             refresh_token: string;
+        };
+        /**
+         * ReleaseListResponse
+         * @description Paginated published releases for What's New.
+         */
+        ReleaseListResponse: {
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Releases */
+            releases: components["schemas"]["ReleaseResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * ReleaseResponse
+         * @description One release ledger record returned by the API.
+         */
+        ReleaseResponse: {
+            /** Body */
+            body: string | null;
+            /** Category */
+            category: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Merged At */
+            merged_at: string | null;
+            /** Provenance Json */
+            provenance_json: {
+                [key: string]: unknown;
+            };
+            /**
+             * Released At
+             * Format: date-time
+             */
+            released_at: string;
+            /** Sort Order */
+            sort_order: number;
+            /** Source Merge Sha */
+            source_merge_sha: string | null;
+            /** Source Pr Number */
+            source_pr_number: number | null;
+            /** Source Repository */
+            source_repository: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "published" | "retracted";
+            /** Summary */
+            summary: string;
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Visibility
+             * @enum {string}
+             */
+            visibility: "public" | "internal";
+        };
+        /**
+         * ReleaseSourceResponse
+         * @description Result of reconciling a GitHub source identity with the ledger.
+         */
+        ReleaseSourceResponse: {
+            /** Exists */
+            exists: boolean;
+            release?: components["schemas"]["ReleaseResponse"] | null;
+        };
+        /**
+         * ReleaseUpsertRequest
+         * @description Idempotent release publication payload from trusted automation.
+         */
+        ReleaseUpsertRequest: {
+            /** Body */
+            body?: string | null;
+            /** Category */
+            category: string;
+            /** Merged At */
+            merged_at?: string | null;
+            /** Provenance Json */
+            provenance_json?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Released At
+             * Format: date-time
+             */
+            released_at: string;
+            /**
+             * Sort Order
+             * @default 0
+             */
+            sort_order: number;
+            /** Source Merge Sha */
+            source_merge_sha?: string | null;
+            /** Source Pr Number */
+            source_pr_number?: number | null;
+            /** Source Repository */
+            source_repository: string;
+            /**
+             * Status
+             * @default published
+             * @enum {string}
+             */
+            status: "draft" | "published" | "retracted";
+            /** Summary */
+            summary: string;
+            /** Title */
+            title: string;
+            /**
+             * Visibility
+             * @default public
+             * @enum {string}
+             */
+            visibility: "public" | "internal";
         };
         /**
          * RollBootstrapResponse
@@ -7178,6 +7368,139 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_releases_api_v1_releases__get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publish_release_api_v1_releases__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-release-writer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReleaseUpsertRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reconcile_release_source_api_v1_releases_source_get: {
+        parameters: {
+            query: {
+                source_repository: string;
+                source_pr_number?: number | null;
+                source_merge_sha?: string | null;
+            };
+            header?: {
+                "x-release-writer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseSourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_release_api_v1_releases__release_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                release_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
