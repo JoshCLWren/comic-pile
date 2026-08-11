@@ -31,6 +31,115 @@ def _issue_rows(report: dict[str, object]) -> list[dict[str, object]]:
     return cast(list[dict[str, object]], value)
 
 
+async def test_refresh_batches_confirmed_misses_by_volume() -> None:
+    """One volume roster can satisfy many confirmed misses without singular requests."""
+    client = Mock()
+    client.fetch_volume_issues = AsyncMock(
+        return_value=[
+            {"id": 202, "issue_number": "12", "volume": {"id": 500}},
+            {"id": 303, "issue_number": "13", "volume": {"id": 500}},
+        ]
+    )
+    client.fetch_issue = AsyncMock()
+    report = _report_with_misses()
+    rows = _issue_rows(report)
+    rows[1]["comicvine_volume_id"] = 500
+    rows[2]["comicvine_volume_id"] = 500
+
+    summary = await refresh_confirmed_local_misses(report, client)
+
+    assert summary.attempted == 2
+    assert summary.matched == 2
+    assert summary.volume_batches == 1
+    assert summary.issue_requests == 0
+    assert report["summary"] == {"total": 3, "matched": 3}
+    assert rows[1]["provenance"] == "comicvine-volume-roster"
+    assert rows[2]["provenance"] == "comicvine-volume-roster"
+    client.fetch_volume_issues.assert_awaited_once_with(500, refresh=False)
+    client.fetch_issue.assert_not_awaited()
+
+
+async def test_volume_batch_preserves_identity_and_falls_back_narrowly() -> None:
+    """A missing confirmed ID in a volume roster falls back to its singular issue lookup."""
+    client = Mock()
+    client.fetch_volume_issues = AsyncMock(
+        return_value=[{"id": 202, "issue_number": "12", "volume": {"id": 500}}]
+    )
+    client.fetch_issue = AsyncMock(
+        return_value=ComicVineResponse(
+            payload={"results": {"id": 303}},
+            from_cache=False,
+            cache_key="issue-live",
+        )
+    )
+    report = _report_with_misses()
+    rows = _issue_rows(report)
+    rows[1]["comicvine_volume_id"] = 500
+    rows[2]["comicvine_volume_id"] = 500
+
+    summary = await refresh_confirmed_local_misses(report, client)
+
+    assert summary.matched == 2
+    assert summary.volume_batches == 1
+    assert summary.issue_requests == 1
+    assert rows[2]["comicvine_issue_id"] == 303
+    client.fetch_issue.assert_awaited_once_with(303, refresh=False)
+
+
+async def test_volume_batch_failure_uses_singular_fallback() -> None:
+    """A failed volume request does not strand confirmed identities that can use /issue."""
+    client = Mock()
+    client.fetch_volume_issues = AsyncMock(side_effect=ComicVineError("volume unavailable"))
+    client.fetch_issue = AsyncMock(
+        side_effect=[
+            ComicVineResponse(
+                payload={"results": {"id": 202}},
+                from_cache=False,
+                cache_key="issue-202",
+            ),
+            ComicVineResponse(
+                payload={"results": {"id": 303}},
+                from_cache=False,
+                cache_key="issue-303",
+            ),
+        ]
+    )
+    report = _report_with_misses()
+    rows = _issue_rows(report)
+    rows[1]["comicvine_volume_id"] = 500
+    rows[2]["comicvine_volume_id"] = 500
+
+    summary = await refresh_confirmed_local_misses(report, client)
+
+    assert summary.matched == 2
+    assert summary.volume_batches == 0
+    assert summary.issue_requests == 2
+    assert client.fetch_issue.await_count == 2
+
+
+async def test_volume_budget_exhaustion_preserves_resumable_rows() -> None:
+    """Provider throttling during volume batching stops before spending another endpoint budget."""
+    client = Mock()
+    client.fetch_volume_issues = AsyncMock(
+        side_effect=ComicVineRateLimitError("volume budget exhausted")
+    )
+    client.fetch_issue = AsyncMock()
+    report = _report_with_misses()
+    rows = _issue_rows(report)
+    rows[1]["comicvine_volume_id"] = 500
+    rows[2]["comicvine_volume_id"] = 500
+
+    summary = await refresh_confirmed_local_misses(report, client)
+
+    assert summary.budget_exhausted is True
+    assert summary.attempted == 2
+    assert summary.matched == 0
+    assert summary.issue_requests == 0
+    assert rows[1]["status"] == "local-miss"
+    assert rows[2]["status"] == "local-miss"
+    client.fetch_issue.assert_not_awaited()
+
+
 async def test_refresh_reconciles_confirmed_miss_from_cache() -> None:
     """Cached exact issue responses satisfy a local miss without spending new quota."""
     client = Mock()
@@ -169,6 +278,7 @@ async def test_budget_exhaustion_stops_cleanly_and_preserves_remaining_misses() 
 
     assert summary.budget_exhausted is True
     assert summary.attempted == 1
+    assert summary.issue_requests == 1
     assert report["summary"] == {"total": 3, "matched": 1, "local-miss": 2}
     rows = _issue_rows(report)
     assert rows[1]["status"] == "local-miss"
