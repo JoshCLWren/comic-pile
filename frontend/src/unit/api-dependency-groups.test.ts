@@ -79,6 +79,30 @@ describe('dependencyGroupsApi', () => {
     )
   })
 
+  it('loads multiple thread groups through routes that exist on the backend', async () => {
+    apiMock.get
+      .mockResolvedValueOnce([{ id: 7, name: 'Annihilation' }])
+      .mockResolvedValueOnce([])
+
+    await expect(dependencyGroupsApi.listForThreads([42, 43])).resolves.toEqual({
+      42: [{ id: 7, name: 'Annihilation' }],
+      43: [],
+    })
+
+    expect(apiMock.get).toHaveBeenNthCalledWith(
+      1,
+      '/v1/reading-order-groups/threads/42/groups',
+    )
+    expect(apiMock.get).toHaveBeenNthCalledWith(
+      2,
+      '/v1/reading-order-groups/threads/43/groups',
+    )
+    expect(apiMock.post).not.toHaveBeenCalledWith(
+      '/v1/reading-order-groups/threads/groups:batch',
+      expect.anything(),
+    )
+  })
+
   it('adds inclusive issue-position ranges', async () => {
     const result = {
       thread_id: 42,
