@@ -207,7 +207,16 @@ async def get_issue_intelligence(
     issue_id: int,
     user_id: int,
 ) -> ComicVineIssueIntelligence | None:
-    """Build curated metadata and explicit story-arc relationships for one issue."""
+    """Build curated metadata and explicit story-arc relationships for one issue.
+
+    Args:
+        db: Async database session.
+        issue_id: ComicPile issue identifier.
+        user_id: Owner whose ComicPile representations may be returned.
+
+    Returns:
+        Curated ComicVine intelligence, or ``None`` when no confirmed mapping exists.
+    """
     identity = await _confirmed_identity(db, issue_id)
     if identity is None:
         return None
