@@ -87,12 +87,20 @@ class CacheCommandMetrics:
             self._counts[normalized] += count
 
     def snapshot(self) -> dict[str, int]:
-        """Return a detached command-count snapshot suitable for metrics/tests."""
+        """Return a detached command-count snapshot suitable for metrics/tests.
+
+        Returns:
+            Detached mapping from approved command family to aggregate count.
+        """
         with self._lock:
             return dict(self._counts)
 
     def total(self) -> int:
-        """Return the total recorded provider command count."""
+        """Return the total recorded provider command count.
+
+        Returns:
+            Aggregate count across all approved command families.
+        """
         with self._lock:
             return sum(self._counts.values())
 
