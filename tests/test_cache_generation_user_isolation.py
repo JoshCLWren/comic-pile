@@ -42,7 +42,9 @@ class IsolatedGenerationClient:
 
 
 @pytest.mark.asyncio
-async def test_generation_invalidation_isolated_between_users(monkeypatch) -> None:
+async def test_generation_invalidation_isolated_between_users(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Invalidating one user must not evict or recompute another user's cached view."""
     client = IsolatedGenerationClient()
     monkeypatch.setattr(cache, "_client", client)
