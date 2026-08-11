@@ -26,12 +26,23 @@ def test_snapshot_is_detached_from_internal_state() -> None:
     assert metrics.snapshot() == {"set": 1}
 
 
-@pytest.mark.parametrize(("command", "count"), [("", 1), ("   ", 1), ("get", 0), ("get", -1)])
+@pytest.mark.parametrize(
+    ("command", "count"),
+    [
+        ("", 1),
+        ("   ", 1),
+        ("get", 0),
+        ("get", -1),
+        ("get cache:user:7:g3:private-key", 1),
+    ],
+)
 def test_rejects_invalid_metric_records(command: str, count: int) -> None:
     metrics = CacheCommandMetrics()
 
     with pytest.raises(ValueError):
         metrics.record(command, count=count)
+
+    assert metrics.snapshot() == {}
 
 
 def test_reset_clears_all_counts() -> None:
