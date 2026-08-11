@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
+from typing import TypeGuard
 
 from comic_pile.comicvine_provider import ComicVineClient, ComicVineError, ComicVineRateLimitError
 
@@ -22,10 +23,15 @@ class DeepHydrationSummary:
     story_arc_budget_exhausted: bool
 
 
+def _is_object_dict(value: object) -> TypeGuard[dict[str, object]]:
+    """Return whether a JSON-like value is a string-keyed object mapping."""
+    return isinstance(value, dict) and all(isinstance(key, str) for key in value)
+
+
 def _provider_result(payload: Mapping[str, object]) -> dict[str, object] | None:
     """Return one singular provider result when the payload shape is valid."""
     result = payload.get("results")
-    return result if isinstance(result, dict) else None
+    return result if _is_object_dict(result) else None
 
 
 def _story_arc_ids(issue: Mapping[str, object]) -> set[int]:
@@ -35,7 +41,7 @@ def _story_arc_ids(issue: Mapping[str, object]) -> set[int]:
         return set()
     ids: set[int] = set()
     for credit in credits:
-        if not isinstance(credit, dict):
+        if not _is_object_dict(credit):
             continue
         value = credit.get("id")
         if isinstance(value, int) and not isinstance(value, bool) and value > 0:
@@ -51,7 +57,7 @@ def _eligible_issue_rows(report: Mapping[str, object]) -> list[dict[str, object]
     return [
         row
         for row in issues
-        if isinstance(row, dict)
+        if _is_object_dict(row)
         and row.get("status") == "matched"
         and isinstance(row.get("comicvine_issue_id"), int)
         and not isinstance(row.get("comicvine_issue_id"), bool)
