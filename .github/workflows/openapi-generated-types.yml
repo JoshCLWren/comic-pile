@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   issues: write
 
 concurrency:
@@ -23,8 +23,6 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Python 3.14
         uses: actions/setup-python@v6
@@ -75,17 +73,6 @@ jobs:
             frontend/src/generated/openapi.json
             frontend/src/generated/openapi.ts
           if-no-files-found: error
-
-      - name: Commit regenerated artifacts to the PR branch
-        if: github.event_name == 'pull_request' && steps.drift.outputs.changed == 'true'
-        env:
-          HEAD_REF: ${{ github.head_ref }}
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add frontend/src/generated/openapi.json frontend/src/generated/openapi.ts
-          git commit -m 'Regenerate OpenAPI client artifacts'
-          git push origin "HEAD:${HEAD_REF}"
 
       - name: Reconcile post-merge factory handoff
         if: >-
