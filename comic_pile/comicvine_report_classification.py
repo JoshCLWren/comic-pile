@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypedDict
 
 REPORT_CLASSIFICATIONS = (
     "matched",
@@ -16,7 +16,14 @@ REPORT_CLASSIFICATIONS = (
 )
 
 
-def classify_hydration_report(report: dict[str, object]) -> dict[str, object]:
+class HydrationReport(TypedDict):
+    """Normalized hydration report shape used by operators and tests."""
+
+    summary: dict[str, Any]
+    issues: list[dict[str, Any]]
+
+
+def classify_hydration_report(report: dict[str, object]) -> HydrationReport:
     """Add stable outcome classifications without discarding the lower-level status.
 
     The local-first hydrator can prove three states directly: a complete local match, a
@@ -29,7 +36,7 @@ def classify_hydration_report(report: dict[str, object]) -> dict[str, object]:
     if not isinstance(raw_issues, list):
         raise ValueError("hydration report issues must be a list")
 
-    counts = {name: 0 for name in REPORT_CLASSIFICATIONS}
+    counts = dict.fromkeys(REPORT_CLASSIFICATIONS, 0)
     classified: list[dict[str, Any]] = []
     for raw_issue in raw_issues:
         if not isinstance(raw_issue, dict):
@@ -57,4 +64,4 @@ def classify_hydration_report(report: dict[str, object]) -> dict[str, object]:
     summary = report.get("summary")
     normalized_summary = dict(summary) if isinstance(summary, dict) else {}
     normalized_summary["classifications"] = counts
-    return {**report, "summary": normalized_summary, "issues": classified}
+    return {"summary": normalized_summary, "issues": classified}
