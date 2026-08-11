@@ -2448,6 +2448,66 @@
         "title": "RollBootstrapThread",
         "type": "object"
       },
+      "RollPrerequisiteSwitchRequest": {
+        "additionalProperties": false,
+        "description": "One recovery recommendation selected from the current Roll guidance.",
+        "properties": {
+          "node_id": {
+            "title": "Node Id",
+            "type": "integer"
+          },
+          "node_type": {
+            "const": "issue",
+            "title": "Node Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "node_type",
+          "node_id"
+        ],
+        "title": "RollPrerequisiteSwitchRequest",
+        "type": "object"
+      },
+      "RollPrerequisiteSwitchResponse": {
+        "description": "Durable active-target state after accepting a recovery recommendation.",
+        "properties": {
+          "changed": {
+            "title": "Changed",
+            "type": "boolean"
+          },
+          "original_thread_id": {
+            "title": "Original Thread Id",
+            "type": "integer"
+          },
+          "target_issue_id": {
+            "title": "Target Issue Id",
+            "type": "integer"
+          },
+          "target_issue_number": {
+            "title": "Target Issue Number",
+            "type": "string"
+          },
+          "target_thread_id": {
+            "title": "Target Thread Id",
+            "type": "integer"
+          },
+          "target_thread_title": {
+            "title": "Target Thread Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "original_thread_id",
+          "target_thread_id",
+          "target_thread_title",
+          "target_issue_id",
+          "target_issue_number",
+          "changed"
+        ],
+        "title": "RollPrerequisiteSwitchResponse",
+        "type": "object"
+      },
       "RollRecoveryChainNode": {
         "description": "One labeled issue or crossover step in a prerequisite chain.",
         "properties": {
@@ -7717,6 +7777,55 @@
         "summary": "Set Manual Die",
         "tags": [
           "roll",
+          "roll"
+        ]
+      }
+    },
+    "/api/v1/roll/switch-prerequisite": {
+      "post": {
+        "description": "Replace a blocked pending roll with one still-readable prerequisite.\n\nArgs:\n    request: Selected prerequisite issue from the current recovery guidance.\n    current_user: Authenticated owner of the pending Roll.\n    db: Async database session.\n\nReturns:\n    The durable active Roll target after accepting the prerequisite.",
+        "operationId": "switch_roll_prerequisite_api_v1_roll_switch_prerequisite_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RollPrerequisiteSwitchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollPrerequisiteSwitchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Switch Roll Prerequisite",
+        "tags": [
+          "dependencies",
+          "dependencies",
           "roll"
         ]
       }
