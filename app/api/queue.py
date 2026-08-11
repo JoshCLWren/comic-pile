@@ -37,7 +37,7 @@ async def _active_queue_positions(user_id: int, db: AsyncSession) -> dict[int, i
         .where(Thread.status == "active")
         .where(Thread.queue_position >= 1)
     )
-    return {thread_id: queue_position for thread_id, queue_position in result.all()}
+    return dict(result.tuples().all())
 
 
 class PositionRequest(BaseModel):
