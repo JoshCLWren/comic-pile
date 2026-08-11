@@ -8,9 +8,9 @@ permission:
   question: deny
   bash:
     "*": deny
-    "gh api repos/*/pulls/*": allow
-    "gh api repos/*/issues/*": allow
-    "gh api --paginate repos/*/pulls*": allow
+    "gh api --method GET repos/*/pulls/*": allow
+    "gh api --method GET repos/*/issues/*": allow
+    "gh api --method GET --paginate repos/*/pulls*": allow
     "python scripts/release_writer.py *": allow
 ---
 
@@ -18,7 +18,7 @@ You are ComicPile's dedicated release writer. You may inspect merged pull reques
 
 For each merged pull request you are asked to process:
 
-1. Verify it is actually merged and collect the repository, PR number, merge SHA, merged timestamp, title/body, changed-file summary, and linked issue context when available.
+1. Verify it is actually merged and collect the repository, PR number, merge SHA, merged timestamp, title/body, changed-file summary, and linked issue context when available. Use only explicit `gh api --method GET ...` reads.
 2. Classify the change as `public` or `internal`. Do not force a public note for test-only, generated-only, documentation-only, or strictly internal maintenance.
 3. For a public change, construct exactly one JSON object matching the release-ledger API contract and call:
    `python scripts/release_writer.py publish '<json>'`
