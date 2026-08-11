@@ -11,7 +11,15 @@ async def test_release_writer_requires_server_only_credential(
     auth_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Normal authenticated users must not inherit release-writer authority."""
+    """Normal authenticated users must not inherit release-writer authority.
+
+    Args:
+        auth_client: Authenticated async API client.
+        monkeypatch: Pytest environment patch helper.
+
+    Returns:
+        None.
+    """
     monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
     payload = _release_payload(pr_number=1201, merge_sha="a" * 40)
 
@@ -25,7 +33,15 @@ async def test_release_upsert_is_idempotent_and_reconcilable(
     auth_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Retrying the same merged PR updates one durable release record."""
+    """Retrying the same merged PR updates one durable release record.
+
+    Args:
+        auth_client: Authenticated async API client.
+        monkeypatch: Pytest environment patch helper.
+
+    Returns:
+        None.
+    """
     monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
     headers = {"X-Release-Writer-Token": "writer-secret"}
     payload = _release_payload(pr_number=1202, merge_sha="b" * 40)
@@ -55,7 +71,15 @@ async def test_release_partial_retry_preserves_source_identity(
     auth_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Omitting one identity on retry must not erase established provenance."""
+    """Omitting one identity on retry must not erase established provenance.
+
+    Args:
+        auth_client: Authenticated async API client.
+        monkeypatch: Pytest environment patch helper.
+
+    Returns:
+        None.
+    """
     monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
     headers = {"X-Release-Writer-Token": "writer-secret"}
     payload = _release_payload(pr_number=1210, merge_sha="3" * 40)
@@ -79,7 +103,15 @@ async def test_release_source_conflict_returns_409(
     auth_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """One merge SHA cannot silently move between distinct source PRs."""
+    """One merge SHA cannot silently move between distinct source PRs.
+
+    Args:
+        auth_client: Authenticated async API client.
+        monkeypatch: Pytest environment patch helper.
+
+    Returns:
+        None.
+    """
     monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
     headers = {"X-Release-Writer-Token": "writer-secret"}
     shared_sha = "c" * 40
@@ -104,7 +136,15 @@ async def test_public_release_list_filters_and_orders(
     auth_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """What's New sees only public published rows in deterministic newest-first order."""
+    """What's New sees only public published rows in deterministic newest-first order.
+
+    Args:
+        auth_client: Authenticated async API client.
+        monkeypatch: Pytest environment patch helper.
+
+    Returns:
+        None.
+    """
     monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
     headers = {"X-Release-Writer-Token": "writer-secret"}
     now = datetime.now(UTC)
