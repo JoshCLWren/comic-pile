@@ -1,8 +1,9 @@
-"""Privacy-safe cache command-count instrumentation.
+"""Privacy-safe cache command-count instrumentation and flow budgets.
 
-The recorder intentionally stores only command names and aggregate counts. Cache
-keys, user ids, values, and provider credentials are never accepted by the API,
-which keeps operational command-budget metrics free of user data.
+The recorder stores only normalized command-family names and aggregate counts. Cache
+keys, user IDs, values, and provider credentials are never accepted by this API.
+Production generation-cache operations share the same counter so tests and operators
+observe the commands the application actually issues.
 """
 
 from __future__ import annotations
@@ -10,12 +11,38 @@ from __future__ import annotations
 from collections import Counter
 from threading import Lock
 
+from app.cache_generation import command_budget
+
+UPSTASH_FREE_MONTHLY_COMMANDS = 500_000
+CONSERVATIVE_MONTHLY_COMMAND_BUDGET = 350_000
+MONTHLY_HEADROOM_COMMANDS = UPSTASH_FREE_MONTHLY_COMMANDS - CONSERVATIVE_MONTHLY_COMMAND_BUDGET
+
+# Upper bounds for the cache-command composition of representative product flows.
+# These are deliberately conservative cold-cache ceilings. A generation-scoped
+# cached read costs at most two commands (atomic EVAL + SET) and a mutation
+# invalidation costs one INCR.
+CACHE_FLOW_COMMAND_CEILINGS: dict[str, int] = {
+    "bootstrap": 4,
+    "queue_load": 2,
+    "roll": 5,
+    "snooze": 1,
+    "rating": 1,
+    "thread_mutation": 1,
+    "issue_mutation": 1,
+    "continuity_mutation": 1,
+}
+
 
 class CacheCommandMetrics:
     """Track aggregate cache command counts without recording command payloads."""
 
-    def __init__(self) -> None:
-        self._counts: Counter[str] = Counter()
+    def __init__(self, counts: Counter[str] | None = None) -> None:
+        """Initialize a recorder, optionally sharing an existing aggregate counter.
+
+        Args:
+            counts: Existing command counter to expose through this privacy-safe API.
+        """
+        self._counts = counts if counts is not None else Counter()
         self._lock = Lock()
 
     def record(self, command: str, *, count: int = 1) -> None:
@@ -52,5 +79,23 @@ class CacheCommandMetrics:
         with self._lock:
             self._counts.clear()
 
+    def assert_within_flow_ceiling(self, flow: str) -> None:
+        """Raise when the current aggregate count exceeds a named flow ceiling.
 
-cache_command_metrics = CacheCommandMetrics()
+        Args:
+            flow: Key from :data:`CACHE_FLOW_COMMAND_CEILINGS`.
+
+        Raises:
+            KeyError: If ``flow`` has no documented ceiling.
+            AssertionError: If recorded commands exceed the ceiling.
+        """
+        ceiling = CACHE_FLOW_COMMAND_CEILINGS[flow]
+        total = self.total()
+        if total > ceiling:
+            raise AssertionError(f"{flow} used {total} cache commands; ceiling is {ceiling}")
+
+
+# ``command_budget`` is the production generation-cache instrumentation introduced
+# with bounded invalidation. Sharing its Counter makes this the stable public metrics
+# surface without adding keys, values, or user identifiers to instrumentation.
+cache_command_metrics = CacheCommandMetrics(command_budget.counts)
