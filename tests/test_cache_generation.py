@@ -198,6 +198,7 @@ async def test_cached_routes_user_scoped_calls_to_generation_namespace(
                 user = kwargs.get("current_user")
                 if user is None and args:
                     user = args[0]
+                assert user is not None
                 routed_user_ids.append(user.id)
                 return await func(*args, **kwargs)
 
