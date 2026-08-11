@@ -37,7 +37,7 @@ async def _active_queue_positions(user_id: int, db: AsyncSession) -> dict[int, i
         .where(Thread.status == "active")
         .where(Thread.queue_position >= 1)
     )
-    return {thread_id: queue_position for thread_id, queue_position in result.all()}
+    return dict(result.all())
 
 
 class PositionRequest(BaseModel):
@@ -87,6 +87,9 @@ async def move_thread_position(
         )
 
     logger.info(f"Thread {thread_id} current position: {thread.queue_position}")
+    if thread.queue_position == position_request.new_position:
+        return await thread_to_response(thread, db)
+
     before_positions = await _active_queue_positions(current_user.id, db)
 
     try:
