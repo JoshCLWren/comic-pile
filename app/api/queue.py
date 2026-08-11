@@ -37,7 +37,7 @@ async def _active_queue_positions(user_id: int, db: AsyncSession) -> dict[int, i
         .where(Thread.status == "active")
         .where(Thread.queue_position >= 1)
     )
-    return dict(result.all())
+    return {thread_id: queue_position for thread_id, queue_position in result.all()}
 
 
 class PositionRequest(BaseModel):
@@ -87,9 +87,10 @@ async def move_thread_position(
         )
 
     logger.info(f"Thread {thread_id} current position: {thread.queue_position}")
+    before_positions = await _active_queue_positions(current_user.id, db)
 
     try:
-        changes = await move_to_position(
+        await move_to_position(
             thread_id,
             current_user.id,
             position_request.new_position,
@@ -111,7 +112,8 @@ async def move_thread_position(
         )
         raise
 
-    if changes:
+    after_positions = await _active_queue_positions(current_user.id, db)
+    if after_positions != before_positions:
         reorder_event = Event(
             type="reorder",
             timestamp=datetime.now(UTC),
@@ -157,10 +159,12 @@ async def move_thread_front(
             detail=f"Thread {thread_id} not found",
         )
 
-    changes = await move_to_front(thread_id, current_user.id, db)
+    before_positions = await _active_queue_positions(current_user.id, db)
+    await move_to_front(thread_id, current_user.id, db)
     await db.refresh(thread)
+    after_positions = await _active_queue_positions(current_user.id, db)
 
-    if changes:
+    if after_positions != before_positions:
         reorder_event = Event(
             type="reorder",
             timestamp=datetime.now(UTC),
@@ -206,10 +210,12 @@ async def move_thread_back(
             detail=f"Thread {thread_id} not found",
         )
 
-    changes = await move_to_back(thread_id, current_user.id, db)
+    before_positions = await _active_queue_positions(current_user.id, db)
+    await move_to_back(thread_id, current_user.id, db)
     await db.refresh(thread)
+    after_positions = await _active_queue_positions(current_user.id, db)
 
-    if changes:
+    if after_positions != before_positions:
         reorder_event = Event(
             type="reorder",
             timestamp=datetime.now(UTC),
