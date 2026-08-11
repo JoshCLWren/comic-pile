@@ -1797,6 +1797,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/issues/{issue_id}/comicvine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Issue Comicvine Intelligence
+         * @description Return curated ComicVine intelligence for a user-owned ComicPile issue.
+         */
+        get: operations["get_issue_comicvine_intelligence_api_v1_issues__issue_id__comicvine_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/issues/{issue_id}/dependencies": {
         parameters: {
             query?: never;
@@ -3356,6 +3376,96 @@ export interface components {
         BugReportResponse: {
             /** Issue Url */
             issue_url: string;
+        };
+        /**
+         * ComicVineComicPileMatch
+         * @description One user-owned ComicPile representation of an external issue.
+         */
+        ComicVineComicPileMatch: {
+            /** Issue Id */
+            issue_id: number;
+            /** Issue Number */
+            issue_number: string;
+            /** Status */
+            status: string;
+            /** Thread Id */
+            thread_id: number;
+            /** Thread Title */
+            thread_title: string;
+        };
+        /**
+         * ComicVineCreator
+         * @description One credited creator and their provider-supplied roles.
+         */
+        ComicVineCreator: {
+            /** Name */
+            name: string;
+            /** Roles */
+            roles?: string[];
+        };
+        /**
+         * ComicVineIssueIntelligence
+         * @description Curated ComicVine metadata for one confirmed ComicPile issue mapping.
+         */
+        ComicVineIssueIntelligence: {
+            /** Comicvine Issue Id */
+            comicvine_issue_id: string;
+            /** Comicvine Url */
+            comicvine_url?: string | null;
+            /** Cover Date */
+            cover_date?: string | null;
+            /** Creators */
+            creators?: components["schemas"]["ComicVineCreator"][];
+            /** Description */
+            description?: string | null;
+            /** Image Url */
+            image_url?: string | null;
+            /** Issue Number */
+            issue_number?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Series Id */
+            series_id?: number | null;
+            /** Series Name */
+            series_name?: string | null;
+            /** Store Date */
+            store_date?: string | null;
+            /** Story Arcs */
+            story_arcs?: components["schemas"]["ComicVineStoryArc"][];
+        };
+        /**
+         * ComicVineRelatedIssue
+         * @description One external issue related through explicit story-arc membership.
+         */
+        ComicVineRelatedIssue: {
+            /** Comicpile Matches */
+            comicpile_matches?: components["schemas"]["ComicVineComicPileMatch"][];
+            /** Comicvine Issue Id */
+            comicvine_issue_id: string;
+            /** Comicvine Url */
+            comicvine_url?: string | null;
+            /** Cover Date */
+            cover_date?: string | null;
+            /** Issue Number */
+            issue_number?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Series Name */
+            series_name?: string | null;
+        };
+        /**
+         * ComicVineStoryArc
+         * @description An explicit ComicVine story arc and its unordered issue membership.
+         */
+        ComicVineStoryArc: {
+            /** Comicvine Arc Id */
+            comicvine_arc_id: number;
+            /** Comicvine Url */
+            comicvine_url?: string | null;
+            /** Name */
+            name: string;
+            /** Related Issues */
+            related_issues?: components["schemas"]["ComicVineRelatedIssue"][];
         };
         /**
          * ConnectedThreadInfo
@@ -6595,6 +6705,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_issue_comicvine_intelligence_api_v1_issues__issue_id__comicvine_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComicVineIssueIntelligence"] | null;
+                };
             };
             /** @description Validation Error */
             422: {
