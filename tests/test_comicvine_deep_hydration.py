@@ -30,6 +30,12 @@ def _rows(report: dict[str, object]) -> list[dict[str, object]]:
     return cast(list[dict[str, object]], issues)
 
 
+def _dict(value: object) -> dict[str, object]:
+    assert isinstance(value, dict)
+    assert all(isinstance(key, str) for key in value)
+    return cast(dict[str, object], value)
+
+
 async def test_deep_hydration_attaches_metadata_without_changing_identity_status() -> None:
     """Deep metadata remains report-only and preserves the matched identity state."""
     client = Mock()
@@ -62,7 +68,7 @@ async def test_deep_hydration_attaches_metadata_without_changing_identity_status
         "provenance": "comicvine-cache",
         "metadata": {"id": 101, "name": "One", "story_arc_credits": []},
     }
-    assert rows[1]["deep_hydration"]["provenance"] == "comicvine-live"
+    assert _dict(rows[1]["deep_hydration"])["provenance"] == "comicvine-live"
     client.fetch_story_arc.assert_not_awaited()
 
 
@@ -116,7 +122,7 @@ async def test_story_arc_hydration_deduplicates_ids_across_issues() -> None:
     assert client.fetch_story_arc.await_count == 2
     client.fetch_story_arc.assert_any_await(9001, refresh=False)
     client.fetch_story_arc.assert_any_await(9002, refresh=False)
-    assert set(cast(dict[str, object], report["story_arcs"])) == {"9001", "9002"}
+    assert set(_dict(report["story_arcs"])) == {"9001", "9002"}
 
 
 async def test_deep_hydration_rejects_identity_mismatch() -> None:
@@ -145,7 +151,7 @@ async def test_deep_hydration_rejects_identity_mismatch() -> None:
     first = _rows(report)[0]
     assert first["status"] == "matched"
     assert first["comicvine_issue_id"] == 101
-    assert first["deep_hydration"]["status"] == "failed"
+    assert _dict(first["deep_hydration"])["status"] == "failed"
 
 
 async def test_issue_budget_exhaustion_preserves_unattempted_rows() -> None:
@@ -214,8 +220,51 @@ async def test_provider_failure_is_recorded_without_aborting_later_issues() -> N
 
     assert summary.failed_issues == 1
     assert summary.hydrated_issues == 1
-    assert _rows(report)[0]["deep_hydration"]["status"] == "failed"
-    assert _rows(report)[1]["deep_hydration"]["status"] == "hydrated"
+    assert _dict(_rows(report)[0]["deep_hydration"])["status"] == "failed"
+    assert _dict(_rows(report)[1]["deep_hydration"])["status"] == "hydrated"
+
+
+async def test_story_arc_failures_are_recorded_and_later_arcs_continue() -> None:
+    """Provider errors and mismatched arc identities are isolated per discovered story arc."""
+    client = Mock()
+    client.fetch_issue = AsyncMock(
+        side_effect=[
+            ComicVineResponse(
+                payload={
+                    "results": {
+                        "id": 101,
+                        "story_arc_credits": [None, {"id": True}, {"id": 9001}, {"id": 9002}],
+                    }
+                },
+                from_cache=False,
+                cache_key="issue-101",
+            ),
+            ComicVineResponse(
+                payload={"results": {"id": 202, "story_arc_credits": "invalid"}},
+                from_cache=False,
+                cache_key="issue-202",
+            ),
+        ]
+    )
+    client.fetch_story_arc = AsyncMock(
+        side_effect=[
+            ComicVineError("arc provider unavailable"),
+            ComicVineResponse(
+                payload={"results": {"id": 9999}},
+                from_cache=False,
+                cache_key="arc-9002",
+            ),
+        ]
+    )
+    report = _report()
+
+    summary = await hydrate_deep_metadata(report, client, hydrate_story_arcs=True)
+
+    assert summary.discovered_story_arcs == 2
+    assert summary.failed_story_arcs == 2
+    arcs = _dict(report["story_arcs"])
+    assert _dict(arcs["9001"])["detail"] == "arc provider unavailable"
+    assert _dict(arcs["9002"])["status"] == "failed"
 
 
 async def test_malformed_report_fails_before_provider_calls() -> None:
