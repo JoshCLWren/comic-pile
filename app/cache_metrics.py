@@ -17,6 +17,26 @@ UPSTASH_FREE_MONTHLY_COMMANDS = 500_000
 CONSERVATIVE_MONTHLY_COMMAND_BUDGET = 350_000
 MONTHLY_HEADROOM_COMMANDS = UPSTASH_FREE_MONTHLY_COMMANDS - CONSERVATIVE_MONTHLY_COMMAND_BUDGET
 
+# Explicitly bounded labels prevent cache keys, user data, values, or credentials from
+# being smuggled into metric dimensions. Add a family only when application code issues
+# that provider command and the corresponding budget test is updated.
+_ALLOWED_COMMAND_FAMILIES = frozenset(
+    {
+        "delete",
+        "eval",
+        "generation_get",
+        "generation_incr",
+        "generation_value_get",
+        "get",
+        "incr",
+        "mget",
+        "mset",
+        "scan",
+        "set",
+        "value_set",
+    }
+)
+
 # Upper bounds for the cache-command composition of representative product flows.
 # These are deliberately conservative cold-cache ceilings. A generation-scoped
 # cached read costs at most two commands (atomic EVAL + SET) and a mutation
@@ -49,15 +69,17 @@ class CacheCommandMetrics:
         """Record one or more provider-billed cache commands.
 
         Args:
-            command: Stable command family such as ``get``, ``set``, or ``delete``.
+            command: Stable command family from the explicit privacy-safe allowlist.
             count: Number of provider commands represented by this operation.
 
         Raises:
-            ValueError: If the command is empty or count is not positive.
+            ValueError: If the command family is unknown or count is not positive.
         """
         normalized = command.strip().lower()
         if not normalized:
             raise ValueError("cache metric command must not be empty")
+        if normalized not in _ALLOWED_COMMAND_FAMILIES:
+            raise ValueError("cache metric command must be an approved command family")
         if count <= 0:
             raise ValueError("cache metric count must be positive")
 
