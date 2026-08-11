@@ -34,13 +34,14 @@ import json
 import logging
 import time
 from collections.abc import Awaitable, Callable
-from typing import Any, TypeVar, cast
+from typing import Any, ParamSpec, TypeVar, cast
 
 import redis.asyncio as aioredis
 from upstash_redis.asyncio import Redis as UpstashRedis
 
 logger = logging.getLogger(__name__)
 
+P = ParamSpec("P")
 T = TypeVar("T")
 
 # Types to skip when generating cache keys (request objects, db sessions)
@@ -454,9 +455,9 @@ def _generate_cache_key(
 
 
 def _has_user_cache_scope(
-    func: Callable[..., Any],
-    args: tuple[Any, ...],
-    kwargs: dict[str, Any],
+    func: Callable[P, Awaitable[T]],
+    args: P.args,
+    kwargs: P.kwargs,
 ) -> bool:
     """Return whether a cached call carries an explicit positive user identity."""
     try:
@@ -480,7 +481,7 @@ def cached(
     ttl: int | TTL = TTL.MEDIUM,
     *,
     falsy_ttl: int | None = None,
-) -> Callable[[Callable[..., Awaitable[T]]], Callable[..., Awaitable[T]]]:
+) -> Callable[[Callable[P, Awaitable[T]]], Callable[P, Awaitable[T]]]:
     """Decorator to cache async function results.
 
     User-scoped calls are routed through the bounded generation namespace so
@@ -497,13 +498,13 @@ def cached(
             ...
     """
 
-    def decorator(func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
+    def decorator(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitable[T]]:
         # Resolve TTL enum to actual value
         actual_ttl = _get_ttl_value(ttl) if isinstance(ttl, TTL) else ttl
-        generation_wrapper: Callable[..., Awaitable[T]] | None = None
+        generation_wrapper: Callable[P, Awaitable[T]] | None = None
 
         @functools.wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> T:
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
             nonlocal generation_wrapper
 
             if _has_user_cache_scope(func, args, kwargs):
@@ -543,7 +544,7 @@ def cached(
 
             return result
 
-        return cast(Callable[..., Awaitable[T]], wrapper)
+        return wrapper
 
     return decorator
 
