@@ -198,11 +198,6 @@ async def _build_entry(
             provider="comicvine",
             entity_type="series",
             external_id=book.comicvine_series_id,
-            metadata_json={
-                "series_name": book.series,
-                "volume_year": book.volume_year,
-                "evidence_source": "cbl",
-            },
         )
         series_identity_id = identity.id
 
@@ -212,12 +207,6 @@ async def _build_entry(
             provider="comicvine",
             entity_type="issue",
             external_id=book.comicvine_issue_id,
-            metadata_json={
-                "series_name": book.series,
-                "issue_number": book.issue_number,
-                "publication_year": book.publication_year,
-                "evidence_source": "cbl",
-            },
         )
         issue_identity_id = identity.id
 
