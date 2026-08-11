@@ -36,7 +36,7 @@ def test_archive_keeps_historical_entry_without_inventing_pr_identity() -> None:
     """Historical notes without explicit PR evidence remain representable without a fake mapping."""
     text = """## 2025-12-30
 
-### Foundation
+**Foundation**
 
 ComicPile launched with dice-driven reading queues.
 """
@@ -46,7 +46,40 @@ ComicPile launched with dice-driven reading queues.
     assert anomalies == []
     assert len(candidates) == 1
     assert candidates[0].source_pr_number is None
+    assert candidates[0].category == "Foundation"
     assert candidates[0].summary == "ComicPile launched with dice-driven reading queues."
+
+
+def test_archive_preserves_bold_feature_area_heading() -> None:
+    """The frozen archive's bold headings remain feature areas instead of becoming notes."""
+    text = """## 2026-08-06
+
+**Crossovers and reading order**
+
+- Reading-order groups are now presented as Crossovers.
+"""
+
+    candidates, anomalies = parse_changelog_source(Path("docs/changelog.md"), text)
+
+    assert anomalies == []
+    assert len(candidates) == 1
+    assert candidates[0].category == "Crossovers and reading order"
+
+
+def test_archive_multi_pr_entry_is_preserved_as_ambiguous() -> None:
+    """A historical bullet with several PRs stays readable without inventing one identity."""
+    text = """## 2026-08-05
+
+**Maintenance**
+
+- Fixed both paths ([#810](https://github.com/JoshCLWren/comic-pile/pull/810), [#811](https://github.com/JoshCLWren/comic-pile/pull/811)).
+"""
+
+    candidates, anomalies = parse_changelog_source(Path("docs/changelog.md"), text)
+
+    assert len(candidates) == 1
+    assert candidates[0].source_pr_number is None
+    assert any("multiple PRs" in anomaly.message for anomaly in anomalies)
 
 
 def test_conflicting_fragment_identity_is_reported_instead_of_guessed() -> None:
