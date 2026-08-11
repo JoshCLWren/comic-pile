@@ -26,7 +26,9 @@ def test_fragment_preserves_filename_pr_and_provenance() -> None:
     assert candidate.source_date == "2026-08-11"
     assert candidate.category == "Roll"
     assert candidate.source_order == 0
-    assert candidate.provenance()["raw_source"].startswith("- [#1077]")
+    assert candidate.provenance()["raw_source"] == (
+        "- [#1077](https://github.com/JoshCLWren/comic-pile/pull/1077) repairs feedback E2E."
+    )
     assert len(candidate.source_checksum) == 64
 
 
