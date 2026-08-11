@@ -55,7 +55,11 @@ async def require_release_writer_token(
         )
 
 
-@router.get("/source", response_model=ReleaseSourceResponse)
+@router.get(
+    "/source",
+    response_model=ReleaseSourceResponse,
+    description="Resolve whether trusted automation already published a GitHub source.",
+)
 async def reconcile_release_source(
     _: Annotated[None, Depends(require_release_writer_token)],
     db: AsyncSession = Depends(get_db),
@@ -95,7 +99,11 @@ async def reconcile_release_source(
     return ReleaseSourceResponse(exists=release is not None, release=release)
 
 
-@router.get("/", response_model=ReleaseListResponse)
+@router.get(
+    "/",
+    response_model=ReleaseListResponse,
+    description="List public published releases newest-first.",
+)
 async def list_releases(
     db: AsyncSession = Depends(get_db),
     limit: int = Query(default=20, ge=1, le=100),
@@ -115,7 +123,11 @@ async def list_releases(
     return ReleaseListResponse(releases=releases, total=total, limit=limit, offset=offset)
 
 
-@router.get("/{release_id}", response_model=ReleaseResponse)
+@router.get(
+    "/{release_id}",
+    response_model=ReleaseResponse,
+    description="Fetch one public published release.",
+)
 async def get_release(
     release_id: int,
     db: AsyncSession = Depends(get_db),
@@ -138,7 +150,11 @@ async def get_release(
     return ReleaseResponse.model_validate(release)
 
 
-@router.put("/", response_model=ReleaseResponse)
+@router.put(
+    "/",
+    response_model=ReleaseResponse,
+    description="Idempotently create or update one merged-PR-backed release.",
+)
 async def publish_release(
     payload: ReleaseUpsertRequest,
     _: Annotated[None, Depends(require_release_writer_token)],
