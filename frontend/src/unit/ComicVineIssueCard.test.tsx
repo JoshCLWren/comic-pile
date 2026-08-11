@@ -11,7 +11,9 @@ vi.mock('../services/api', async () => {
 const getIntelligence = vi.mocked(comicVineApi.getIssueIntelligence)
 
 describe('ComicVineIssueCard', () => {
-  beforeEach(() => getIntelligence.mockReset())
+  beforeEach(() => {
+    getIntelligence.mockReset()
+  })
 
   it('progressively reveals metadata and mapped versus missing story-arc issues', async () => {
     getIntelligence.mockResolvedValue({
@@ -59,5 +61,100 @@ describe('ComicVineIssueCard', () => {
     const { container } = render(<ComicVineIssueCard issueId={9} />)
     await waitFor(() => expect(getIntelligence).toHaveBeenCalledWith(9))
     await waitFor(() => expect(container).toBeEmptyDOMElement())
+  })
+
+  it('handles sparse metadata, read matches, and a cover image failure', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '200',
+      comicvine_url: null,
+      series_name: null,
+      series_id: null,
+      issue_number: null,
+      name: null,
+      description: null,
+      image_url: 'https://images.example/broken.jpg',
+      cover_date: null,
+      store_date: 'Coming soon',
+      creators: [{ name: 'Artist Only', roles: [] }],
+      story_arcs: [
+        {
+          comicvine_arc_id: 50,
+          name: 'First Arc',
+          comicvine_url: null,
+          related_issues: [{
+            comicvine_issue_id: '201',
+            series_name: null,
+            issue_number: null,
+            name: 'Named Special',
+            cover_date: null,
+            comicvine_url: null,
+            comicpile_matches: [{
+              issue_id: 20,
+              thread_id: 2,
+              thread_title: 'Specials',
+              issue_number: '1',
+              status: 'read',
+            }],
+          }],
+        },
+        {
+          comicvine_arc_id: 51,
+          name: 'Second Arc',
+          comicvine_url: null,
+          related_issues: [{
+            comicvine_issue_id: '202',
+            series_name: null,
+            issue_number: null,
+            name: null,
+            cover_date: null,
+            comicvine_url: null,
+            comicpile_matches: [],
+          }],
+        },
+      ],
+    })
+
+    const { container } = render(<ComicVineIssueCard issueId={2} />)
+    expect(await screen.findByText('ComicVine')).toBeInTheDocument()
+    expect(screen.getByText('2 story arcs')).toBeInTheDocument()
+    expect(screen.getByText('Coming soon')).toBeInTheDocument()
+    expect(screen.getByText('Artist Only')).toBeInTheDocument()
+    expect(screen.getByText('Named Special')).toBeInTheDocument()
+    expect(screen.getByText('ComicVine issue 202')).toBeInTheDocument()
+    expect(screen.getByText('Read')).toBeInTheDocument()
+    expect(screen.queryByText('View source on ComicVine')).not.toBeInTheDocument()
+
+    const cover = container.querySelector('img')
+    expect(cover).not.toBeNull()
+    fireEvent.error(cover!)
+    expect(container.querySelector('img')).toBeNull()
+  })
+
+  it('does not request metadata when no issue is selected', () => {
+    const { container } = render(<ComicVineIssueCard issueId={null} />)
+    expect(getIntelligence).not.toHaveBeenCalled()
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it('fails closed when metadata loading fails', async () => {
+    getIntelligence.mockRejectedValue(new Error('metadata unavailable'))
+    const { container } = render(<ComicVineIssueCard issueId={3} />)
+    await waitFor(() => expect(getIntelligence).toHaveBeenCalledWith(3))
+    await waitFor(() => expect(screen.queryByLabelText('Loading comic details')).not.toBeInTheDocument())
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it('ignores a response that arrives after the card unmounts', async () => {
+    let resolveRequest: ((value: null) => void) | undefined
+    getIntelligence.mockImplementation(() => new Promise((resolve) => {
+      resolveRequest = resolve
+    }))
+    const { unmount } = render(<ComicVineIssueCard issueId={4} />)
+    await waitFor(() => expect(getIntelligence).toHaveBeenCalledWith(4))
+
+    unmount()
+    resolveRequest?.(null)
+    await Promise.resolve()
+    await Promise.resolve()
   })
 })
