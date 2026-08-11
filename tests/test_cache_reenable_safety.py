@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 
 import pytest
@@ -24,6 +23,7 @@ class SharedUpstashClient:
     """Minimal Upstash-shaped client backed by shared cross-instance state."""
 
     def __init__(self, state: SharedRedisState) -> None:
+        """Bind this client to the shared Redis state."""
         self.state = state
 
     async def eval(
@@ -32,16 +32,19 @@ class SharedUpstashClient:
         keys: list[str],
         args: list[str],
     ) -> list[object | None]:
+        """Return one atomic generation/value snapshot."""
         assert "redis.call('GET', KEYS[1])" in script
         generation = self.state.generations.get(keys[0], 0)
         value_key = f"{args[0]}{generation}:{args[1]}"
         return [str(generation), self.state.values.get(value_key)]
 
     async def set(self, key: str, value: str, ex: int | None = None) -> None:
+        """Store one serialized generation-scoped value."""
         _ = ex
         self.state.values[key] = value
 
     async def incr(self, key: str) -> int:
+        """Advance and return the shared generation counter."""
         generation = self.state.generations.get(key, 0) + 1
         self.state.generations[key] = generation
         return generation
