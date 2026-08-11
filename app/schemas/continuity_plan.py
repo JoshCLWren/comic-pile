@@ -39,7 +39,7 @@ class ContinuityPlanWrite(BaseModel):
 
     @model_validator(mode="after")
     def validate_structure(self) -> ContinuityPlanWrite:
-        """Reject duplicate identifiers and malformed lane ordering."""
+        """Reject duplicate identifiers and malformed ordering before persistence."""
         lane_ids = [lane.id for lane in self.lanes]
         if len(set(lane_ids)) != len(lane_ids):
             raise ValueError("lane ids must be unique")
@@ -57,10 +57,14 @@ class ContinuityPlanWrite(BaseModel):
             positions_by_lane.setdefault(node.lane_id, []).append(node.position)
         if any(len(values) != len(set(values)) for values in positions_by_lane.values()):
             raise ValueError("node positions must be unique within each lane")
-        if self.ordering_mode == "strict_sequential" and any(
-            node.node_type == "thread" for node in self.nodes
-        ):
-            raise ValueError("strict sequential plans may contain only issue/crossover nodes")
+        if self.ordering_mode == "strict_sequential":
+            if len(self.lanes) != 1:
+                raise ValueError("strict sequential plans must use exactly one lane")
+            if any(node.node_type == "thread" for node in self.nodes):
+                raise ValueError("strict sequential plans may contain only issue/crossover nodes")
+            positions = sorted(node.position for node in self.nodes)
+            if positions != list(range(len(positions))):
+                raise ValueError("strict sequential positions must be contiguous starting at zero")
         return self
 
 
