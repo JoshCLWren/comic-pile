@@ -1,4 +1,4 @@
-"""Parse historical changelog Markdown into auditable release-import candidates."""
+"""Parse and import historical changelog Markdown into the durable release ledger."""
 
 from __future__ import annotations
 
@@ -8,7 +8,19 @@ import hashlib
 from pathlib import Path
 import re
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.schemas.release import ReleaseUpsertRequest
+from app.services.release_ledger import (
+    ReleaseSourceConflictError,
+    create_historical_release,
+    find_historical_release,
+    find_release_by_source,
+    upsert_release,
+)
+
 IMPORTER_VERSION = "release-import-v1"
+SOURCE_REPOSITORY = "JoshCLWren/comic-pile"
 _DATE_HEADING_RE = re.compile(r"^##\s+(\d{4}-\d{2}-\d{2})(?:[ T].*)?\s*$")
 _CATEGORY_HEADING_RE = re.compile(r"^###\s+(.+?)\s*$")
 _PR_LINK_RE = re.compile(r"github\.com/[^/]+/[^/]+/pull/(\d+)")
@@ -72,6 +84,37 @@ class ReleaseImportReport:
         }
 
 
+@dataclass(frozen=True)
+class ReleaseImportConflict:
+    """One source record that could not be safely reconciled with durable state."""
+
+    source_path: str
+    source_order: int
+    message: str
+
+
+@dataclass
+class ReleaseWriteReport:
+    """Machine-readable result of a write or reconciliation pass."""
+
+    source_count: int
+    imported_count: int = 0
+    unchanged_count: int = 0
+    missing_count: int = 0
+    conflicts: list[ReleaseImportConflict] = field(default_factory=list)
+
+    def as_dict(self) -> dict[str, object]:
+        """Serialize write/reconciliation totals and conflicts."""
+        return {
+            "source_count": self.source_count,
+            "imported_count": self.imported_count,
+            "unchanged_count": self.unchanged_count,
+            "missing_count": self.missing_count,
+            "conflict_count": len(self.conflicts),
+            "conflicts": [asdict(conflict) for conflict in self.conflicts],
+        }
+
+
 def _checksum(text: str) -> str:
     """Return a stable checksum for exact source-content reconciliation."""
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
@@ -93,7 +136,10 @@ def _extract_pr_number(text: str) -> int | None:
     return None
 
 
-def parse_changelog_source(path: Path, text: str) -> tuple[list[ReleaseImportCandidate], list[ReleaseImportAnomaly]]:
+def parse_changelog_source(
+    path: Path,
+    text: str,
+) -> tuple[list[ReleaseImportCandidate], list[ReleaseImportAnomaly]]:
     """Parse one changelog source into ordered candidates and anomalies.
 
     Args:
@@ -207,3 +253,156 @@ def audit_changelog_corpus(repository_root: Path) -> ReleaseImportReport:
 def released_at(candidate: ReleaseImportCandidate) -> datetime:
     """Convert a source date into the deterministic UTC release timestamp used by importers."""
     return datetime.strptime(candidate.source_date, "%Y-%m-%d").replace(tzinfo=UTC)
+
+
+def _title(candidate: ReleaseImportCandidate) -> str:
+    """Derive a stable display title without discarding the full summary."""
+    return candidate.summary[:255]
+
+
+def _payload(candidate: ReleaseImportCandidate) -> ReleaseUpsertRequest:
+    """Build the release-service payload for a PR-backed candidate."""
+    if candidate.source_pr_number is None:
+        raise ValueError("PR-backed payload requires source_pr_number")
+    return ReleaseUpsertRequest(
+        source_repository=SOURCE_REPOSITORY,
+        source_pr_number=candidate.source_pr_number,
+        released_at=released_at(candidate),
+        category=candidate.category,
+        title=_title(candidate),
+        summary=candidate.summary,
+        sort_order=-candidate.source_order,
+        provenance_json=candidate.provenance(),
+    )
+
+
+def _checksum_matches(candidate: ReleaseImportCandidate, provenance: dict[str, object]) -> bool:
+    """Return whether durable provenance still matches the exact source corpus."""
+    return provenance.get("source_checksum") == candidate.source_checksum
+
+
+async def import_changelog_report(
+    db: AsyncSession,
+    report: ReleaseImportReport,
+) -> ReleaseWriteReport:
+    """Persist audited candidates idempotently while refusing silent source rewrites."""
+    result = ReleaseWriteReport(source_count=len(report.candidates))
+    for candidate in report.candidates:
+        if candidate.source_pr_number is not None:
+            existing = await find_release_by_source(
+                db,
+                source_repository=SOURCE_REPOSITORY,
+                source_pr_number=candidate.source_pr_number,
+                source_merge_sha=None,
+            )
+            if existing is not None and not _checksum_matches(
+                candidate,
+                existing.provenance_json or {},
+            ):
+                result.conflicts.append(
+                    ReleaseImportConflict(
+                        candidate.source_path,
+                        candidate.source_order,
+                        f"source checksum changed for PR #{candidate.source_pr_number}",
+                    )
+                )
+                continue
+            if existing is not None:
+                result.unchanged_count += 1
+                continue
+            await upsert_release(db, _payload(candidate))
+            result.imported_count += 1
+            continue
+
+        existing = await find_historical_release(
+            db,
+            source_repository=SOURCE_REPOSITORY,
+            source_path=candidate.source_path,
+            source_order=candidate.source_order,
+        )
+        if existing is not None and not _checksum_matches(
+            candidate,
+            existing.provenance_json or {},
+        ):
+            result.conflicts.append(
+                ReleaseImportConflict(
+                    candidate.source_path,
+                    candidate.source_order,
+                    "historical source checksum changed",
+                )
+            )
+            continue
+        if existing is not None:
+            result.unchanged_count += 1
+            continue
+        try:
+            await create_historical_release(
+                db,
+                source_repository=SOURCE_REPOSITORY,
+                released_at=released_at(candidate),
+                category=candidate.category,
+                title=_title(candidate),
+                summary=candidate.summary,
+                sort_order=-candidate.source_order,
+                provenance_json=candidate.provenance(),
+            )
+        except ReleaseSourceConflictError as error:
+            result.conflicts.append(
+                ReleaseImportConflict(candidate.source_path, candidate.source_order, str(error))
+            )
+            continue
+        result.imported_count += 1
+    return result
+
+
+async def reconcile_changelog_report(
+    db: AsyncSession,
+    report: ReleaseImportReport,
+) -> ReleaseWriteReport:
+    """Verify source-to-database coverage, provenance, dates, content, and ordering."""
+    result = ReleaseWriteReport(source_count=len(report.candidates))
+    for candidate in report.candidates:
+        if candidate.source_pr_number is not None:
+            release = await find_release_by_source(
+                db,
+                source_repository=SOURCE_REPOSITORY,
+                source_pr_number=candidate.source_pr_number,
+                source_merge_sha=None,
+            )
+        else:
+            release = await find_historical_release(
+                db,
+                source_repository=SOURCE_REPOSITORY,
+                source_path=candidate.source_path,
+                source_order=candidate.source_order,
+            )
+
+        if release is None:
+            result.missing_count += 1
+            continue
+
+        expected = {
+            "checksum": candidate.source_checksum,
+            "released_at": released_at(candidate),
+            "category": candidate.category,
+            "summary": candidate.summary,
+            "sort_order": -candidate.source_order,
+        }
+        actual = {
+            "checksum": (release.provenance_json or {}).get("source_checksum"),
+            "released_at": release.released_at,
+            "category": release.category,
+            "summary": release.summary,
+            "sort_order": release.sort_order,
+        }
+        if actual != expected:
+            result.conflicts.append(
+                ReleaseImportConflict(
+                    candidate.source_path,
+                    candidate.source_order,
+                    "durable release does not match source provenance/content/order",
+                )
+            )
+            continue
+        result.unchanged_count += 1
+    return result
