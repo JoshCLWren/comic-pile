@@ -455,9 +455,9 @@ def _generate_cache_key(
 
 
 def _has_user_cache_scope(
-    func: Callable[P, Awaitable[T]],
-    args: P.args,
-    kwargs: P.kwargs,
+    func: Callable[..., object],
+    *args: object,
+    **kwargs: object,
 ) -> bool:
     """Return whether a cached call carries an explicit positive user identity."""
     try:
@@ -492,6 +492,9 @@ def cached(
         ttl: Time-to-live in seconds or TTL tier enum
         falsy_ttl: Optional different TTL for falsy results
 
+    Returns:
+        A decorator preserving the wrapped async function's parameter and return types.
+
     Usage:
         @cached(ttl=TTL.SHORT)
         async def get_roll_pool(user_id: int, db: AsyncSession):
@@ -507,7 +510,7 @@ def cached(
         async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
             nonlocal generation_wrapper
 
-            if _has_user_cache_scope(func, args, kwargs):
+            if _has_user_cache_scope(func, *args, **kwargs):
                 if generation_wrapper is None:
                     # Lazy import avoids a module cycle: cache_generation imports
                     # this module's cache primitives to implement the namespace.
