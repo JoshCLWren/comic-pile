@@ -32,6 +32,7 @@ async def sync_cbl_lists(
     repository: str,
     revision_sha: str,
     parsed_lists: tuple[CBLList, ...],
+    protected_paths: frozenset[str] = frozenset(),
     dry_run: bool = False,
     synced_at: datetime | None = None,
 ) -> CBLSyncSummary:
@@ -40,7 +41,9 @@ async def sync_cbl_lists(
     The caller owns the surrounding transaction. Changed list entries are
     replaced inside that transaction, while files with an unchanged content
     hash are left untouched. Lists missing from the new mirror revision are
-    retained and marked inactive rather than deleted.
+    retained and marked inactive rather than deleted. Paths that were present
+    but failed parsing are protected from deactivation so malformed source data
+    cannot erase the last known-good imported state.
 
     Args:
         db: Async database session participating in the sync transaction.
@@ -48,6 +51,8 @@ async def sync_cbl_lists(
             ``JoshCLWren/CBL-ReadingLists``.
         revision_sha: Mirror revision being synchronized.
         parsed_lists: Successfully parsed CBL files for this revision.
+        protected_paths: Source paths known to be present but unavailable for
+            persistence, such as files that failed parsing.
         dry_run: Report intended changes without mutating persistence.
         synced_at: Optional deterministic synchronization timestamp for tests.
 
@@ -71,6 +76,8 @@ async def sync_cbl_lists(
         raise ValueError("CBL source paths must be unique within one sync")
     if any(not item.content_hash.strip() for item in parsed_lists):
         raise ValueError("CBL content hashes must be non-empty")
+    if any(not path.strip() for path in protected_paths):
+        raise ValueError("protected CBL source paths must be non-empty")
 
     source = await db.scalar(select(CBLSource).where(CBLSource.repository == normalized_repository))
     source_created = source is None
@@ -110,7 +117,11 @@ async def sync_cbl_lists(
         entries_written += len(parsed.books)
 
     for existing in existing_lists:
-        if existing.active and existing.source_path not in incoming_paths:
+        if (
+            existing.active
+            and existing.source_path not in incoming_paths
+            and existing.source_path not in protected_paths
+        ):
             deactivated += 1
 
     if dry_run:
@@ -166,7 +177,11 @@ async def sync_cbl_lists(
             db.add(await _build_entry(db, list_id=stored.id, book=book))
 
     for stored in existing_lists:
-        if stored.active and stored.source_path not in incoming_paths:
+        if (
+            stored.active
+            and stored.source_path not in incoming_paths
+            and stored.source_path not in protected_paths
+        ):
             stored.active = False
             stored.revision_sha = normalized_revision
 
