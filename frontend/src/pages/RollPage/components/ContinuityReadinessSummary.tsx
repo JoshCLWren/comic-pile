@@ -5,7 +5,7 @@ interface ContinuityReadinessSummaryProps {
 }
 
 export function ContinuityReadinessSummary({ issueId }: ContinuityReadinessSummaryProps) {
-  const { readiness, isLoading, error } = useContinuityReadiness(issueId)
+  const { readiness, isLoading, error, refetch } = useContinuityReadiness(issueId)
 
   if (issueId == null) {
     return (
@@ -51,6 +51,13 @@ export function ContinuityReadinessSummary({ issueId }: ContinuityReadinessSumma
         <p className="mt-1 text-[11px] leading-relaxed text-stone-400">
           The roll stays pending. Retry before treating this issue as safe to read.
         </p>
+        <button
+          type="button"
+          onClick={refetch}
+          className="mt-3 min-h-11 rounded-xl border border-rose-700/40 bg-rose-900/20 px-4 text-xs font-black text-rose-200 hover:bg-rose-900/35 focus:ring-2 focus:ring-rose-500"
+        >
+          Retry readiness
+        </button>
       </section>
     )
   }
@@ -82,14 +89,23 @@ export function ContinuityReadinessSummary({ issueId }: ContinuityReadinessSumma
       <h3 id="readiness-heading" className="text-xs font-black text-rose-300">
         Blocked by continuity
       </h3>
-      <ul className="mt-2 space-y-1.5" aria-label="Unresolved prerequisites">
-        {readiness.blockers.map((blocker) => (
-          <li key={blocker.rule_id} className="text-[11px] leading-relaxed text-stone-300">
-            <span className="font-bold text-rose-200">{blocker.source_label}</span>
-            {blocker.note ? <span className="text-stone-500"> · {blocker.note}</span> : null}
-          </li>
-        ))}
-      </ul>
+      {readiness.blockers.length > 0 ? (
+        <ul className="mt-2 space-y-1.5" aria-label="Unresolved prerequisites">
+          {readiness.blockers.map((blocker) => (
+            <li
+              key={`${blocker.rule_id}-${blocker.source_type}-${blocker.source_id}`}
+              className="text-[11px] leading-relaxed text-stone-300"
+            >
+              <span className="font-bold text-rose-200">{blocker.source_label}</span>
+              {blocker.note ? <span className="text-stone-500"> · {blocker.note}</span> : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-1 text-[11px] leading-relaxed text-stone-400">
+          The server reported this issue as blocked but returned no prerequisite details.
+        </p>
+      )}
     </section>
   )
 }
