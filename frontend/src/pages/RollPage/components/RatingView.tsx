@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import IssueCorrectionDialog from '../../../components/IssueCorrectionDialog'
 import Tooltip from '../../../components/Tooltip'
 import type { ReadingOrder } from '../../../services/api-reading-orders'
@@ -59,7 +59,6 @@ export function RatingView({
 }: RatingViewProps) {
   const [isCorrectionDialogOpen, setIsCorrectionDialogOpen] = useState(false)
   const [isRouteExplanationOpen, setIsRouteExplanationOpen] = useState(false)
-  const routeExplanationTriggerRef = useRef<HTMLButtonElement>(null)
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
   const threadTitle = activeRatingThread?.title ?? 'Loading…'
   const issueNumber = activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number ?? null
@@ -193,10 +192,7 @@ export function RatingView({
                     <p className="text-[10px] font-bold text-stone-500">{routeProgress}% complete</p>
                     <button
                       type="button"
-                      onClick={(event) => {
-                        routeExplanationTriggerRef.current = event.currentTarget
-                        setIsRouteExplanationOpen(true)
-                      }}
+                      onClick={() => setIsRouteExplanationOpen(true)}
                       className="min-h-11 rounded-lg border border-amber-700/40 bg-amber-900/15 px-3 text-[10px] font-black text-amber-200 focus:ring-2 focus:ring-amber-500"
                       aria-label={`Explain why ${threadTitle} ${issueNumber != null ? `#${issueNumber}` : ''} is next in ${order.name}`}
                     >
@@ -301,10 +297,7 @@ export function RatingView({
         issueLabel={`${threadTitle}${issueNumber != null ? ` #${issueNumber}` : ''}`}
         readingOrders={readingOrders}
         connectedThreads={connectedThreads}
-        onClose={() => {
-          setIsRouteExplanationOpen(false)
-          requestAnimationFrame(() => routeExplanationTriggerRef.current?.focus())
-        }}
+        onClose={() => setIsRouteExplanationOpen(false)}
       />
 
       {activeRatingThread ? (
