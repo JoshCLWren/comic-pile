@@ -1,6 +1,10 @@
 name: NVIDIA Factory 6 install repair
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/nvidia-factory-6-install-fix.yml
   workflow_dispatch:
 
 permissions:
@@ -16,6 +20,8 @@ jobs:
           ref: main
           persist-credentials: true
       - name: Repair OpenCode install step
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           python - <<'PY'
           from pathlib import Path
