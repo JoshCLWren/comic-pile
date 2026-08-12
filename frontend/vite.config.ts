@@ -54,13 +54,13 @@ function readFragments(fragmentsDir: string): ChangelogFragment[] {
 
     const content = readFileSync(path.join(fragmentsDir, entry.name), 'utf-8').trim()
     const expectedHeading = `## ${date}`
-    const expectedLink = `[#${prNumber}](https://github.com/JoshCLWren/comic-pile/pull/${prNumber})`
+    const expectedLinkTarget = `https://github.com/JoshCLWren/comic-pile/pull/${prNumber}`
 
     if (!content.startsWith(`${expectedHeading}\n`)) {
       throw new Error(`${entry.name} must start with ${expectedHeading}`)
     }
-    if (!content.includes(expectedLink)) {
-      throw new Error(`${entry.name} must link ${expectedLink}`)
+    if (!content.includes(`](${expectedLinkTarget})`)) {
+      throw new Error(`${entry.name} must link ${expectedLinkTarget}`)
     }
 
     fragments.push({ date, prNumber, content, fileName: entry.name })
