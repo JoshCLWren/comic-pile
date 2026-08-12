@@ -7,13 +7,14 @@ import argparse
 import asyncio
 import json
 from pathlib import Path
+import sys
 
-from app.database import AsyncSessionLocal
-from app.services.release_import import (
-    audit_changelog_corpus,
-    import_changelog_report,
-    reconcile_changelog_report,
-)
+# Running a script by path puts scripts/ rather than the repository root on
+# sys.path. Add the checkout root before importing the application package so
+# the documented one-shot command works in CI and from a clean checkout.
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -27,7 +28,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--repository-root",
         type=Path,
-        default=Path(__file__).resolve().parents[1],
+        default=REPOSITORY_ROOT,
         help="ComicPile checkout root containing docs/changelog.md and docs/changelog.d.",
     )
     return parser
@@ -35,6 +36,13 @@ def _parser() -> argparse.ArgumentParser:
 
 async def _run(repository_root: Path, *, write: bool) -> int:
     """Execute one dry-run or write/reconciliation pass."""
+    from app.database import AsyncSessionLocal
+    from app.services.release_import import (
+        audit_changelog_corpus,
+        import_changelog_report,
+        reconcile_changelog_report,
+    )
+
     audit = audit_changelog_corpus(repository_root)
     print(json.dumps({"phase": "audit", **audit.as_dict()}, indent=2, sort_keys=True))
     if not write:
