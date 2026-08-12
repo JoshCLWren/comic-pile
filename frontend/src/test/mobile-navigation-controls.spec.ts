@@ -40,7 +40,13 @@ test.describe('Mobile navigation and Roll controls (#1091)', () => {
     await page.setViewportSize({ width: 430, height: 932 });
     await page.goto('/');
 
-    await page.getByRole('button', { name: 'Pick manually' }).click();
+    const manualPicker = page.getByRole('button', { name: 'Pick manually' });
+    await expect(manualPicker).toBeVisible();
+    const manualPickerBox = await manualPicker.boundingBox();
+    expect(manualPickerBox).not.toBeNull();
+    expect(manualPickerBox!.height).toBeGreaterThanOrEqual(44);
+
+    await manualPicker.click();
     await expect(page.getByRole('dialog', { name: 'Pick manually' })).toBeVisible();
     await expect(page.getByText('Choose the eligible thread you want to read next.')).toBeVisible();
     await page.getByRole('button', { name: 'Close modal' }).click();
