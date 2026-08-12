@@ -170,7 +170,7 @@ it('explains automatic and manual die modes on mobile', async () => {
   expect(dieControl).toHaveTextContent('Auto')
   await user.click(dieControl)
   expect(screen.getByText(/automatic mode is active at d6/i)).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: /use automatic/i })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /^auto$/i })).toBeInTheDocument()
 })
 
 it('shows a retry action when bootstrap loading fails', async () => {
