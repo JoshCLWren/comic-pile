@@ -2,7 +2,7 @@ name: NVIDIA Factory 6
 
 on:
   schedule:
-    - cron: "37 */2 * * *"
+    - cron: "37 * * * *"
   workflow_dispatch:
   push:
     branches: [main]
