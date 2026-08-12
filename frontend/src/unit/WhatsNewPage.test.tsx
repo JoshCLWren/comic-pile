@@ -53,6 +53,13 @@ describe('release ordering helpers', () => {
     expect(sortReleasesNewestFirst(releases).map(item => item.id)).toEqual([3, 1, 2])
   })
 
+  it('pushes malformed historical timestamps behind valid release dates', () => {
+    expect(sortReleasesNewestFirst([
+      release({ id: 1, released_at: 'not-a-date' }),
+      release({ id: 2, released_at: '2026-08-10T20:00:00Z' }),
+    ]).map(item => item.id)).toEqual([2, 1])
+  })
+
   it('groups historical and PR-backed releases by localized release day', () => {
     const days = groupReleasesByDay([
       release({ id: 3, source_pr_number: 1096, released_at: '2026-08-11T20:00:00Z' }),
@@ -121,7 +128,35 @@ describe('WhatsNewPage', () => {
     expect(screen.queryByRole('button', { name: 'Load older updates' })).not.toBeInTheDocument()
   })
 
-  it('keeps retry behavior when the release API fails', async () => {
+  it('retries the exact failed pagination request instead of restarting history', async () => {
+    api.list
+      .mockResolvedValueOnce({
+        releases: [release({ id: 2, title: 'Newest release' })],
+        total: 2,
+        limit: RELEASE_PAGE_SIZE,
+        offset: 0,
+      })
+      .mockRejectedValueOnce(new Error('older page unavailable'))
+      .mockResolvedValueOnce({
+        releases: [release({ id: 1, title: 'Recovered older release', released_at: '2026-08-10T20:00:00Z' })],
+        total: 2,
+        limit: RELEASE_PAGE_SIZE,
+        offset: 1,
+      })
+
+    render(<WhatsNewPage />)
+    await screen.findByText('Newest release')
+    fireEvent.click(screen.getByRole('button', { name: 'Load older updates' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('older page unavailable')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+    expect(await screen.findByText('Recovered older release')).toBeInTheDocument()
+    expect(api.list).toHaveBeenNthCalledWith(2, RELEASE_PAGE_SIZE, 1)
+    expect(api.list).toHaveBeenNthCalledWith(3, RELEASE_PAGE_SIZE, 1)
+  })
+
+  it('keeps retry behavior when the initial release API request fails', async () => {
     api.list
       .mockRejectedValueOnce(new Error('release API unavailable'))
       .mockResolvedValueOnce({ releases: [], total: 0, limit: RELEASE_PAGE_SIZE, offset: 0 })
@@ -132,6 +167,7 @@ describe('WhatsNewPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
 
     await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2))
+    expect(api.list).toHaveBeenNthCalledWith(2, RELEASE_PAGE_SIZE, 0)
     expect(await screen.findByText('No release notes have been published yet.')).toBeInTheDocument()
   })
 
