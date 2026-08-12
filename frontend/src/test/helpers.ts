@@ -373,7 +373,7 @@ export const SELECTORS = {
 	},
 	rate: {
 		ratingInput: '#rating-input',
-		submitButton: 'button:has-text("Mark read & save")',
+		submitButton: 'button[data-testid="save-and-continue"]',
 		snoozeButton: 'button:has-text("Snooze")',
 	},
 	thread: {
