@@ -1,6 +1,12 @@
 name: NVIDIA Factory Fleet 6-10
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/nvidia-factory-6.yml'
+      - '.github/scripts/nvidia-factory-worker.sh'
+      - '.github/workflows/nvidia-factory-owner-reconcile.yml'
   schedule:
     - cron: "7 * * * *"
     - cron: "19 * * * *"
@@ -28,7 +34,30 @@ permissions:
   checks: read
 
 jobs:
+  bootstrap:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Create and verify all durable fleet owner labels
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for worker in 6 7 8 9 10; do
+            if ! gh api "repos/${GITHUB_REPOSITORY}/labels/factory%3A${worker}" >/dev/null 2>&1; then
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" \
+                -f name="factory:${worker}" \
+                -f color='5319e7' \
+                -f description="Owned by OpenCode NVIDIA Factory ${worker}" >/dev/null
+              echo "Created factory:${worker}"
+            fi
+            gh api "repos/${GITHUB_REPOSITORY}/labels/factory%3A${worker}" --jq '.name'
+          done
+          echo 'NVIDIA fleet ownership labels 6-10 are visible.'
+
   factory:
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 58
     env:
