@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -82,6 +83,34 @@ describe('ReadingRouteExplanation', () => {
 
     await userEvent.setup().keyboard('{Escape}')
     expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('traps focus and restores it to the route trigger after Escape', async () => {
+    function Harness() {
+      const [isOpen, setIsOpen] = useState(false)
+      return (
+        <>
+          <button type="button" onClick={() => setIsOpen(true)}>Explain route</button>
+          <ReadingRouteExplanation
+            isOpen={isOpen}
+            issueId={7}
+            issueLabel="Avengers #7"
+            readingOrders={routes}
+            connectedThreads={[]}
+            onClose={() => setIsOpen(false)}
+          />
+        </>
+      )
+    }
+
+    const user = userEvent.setup()
+    render(<Harness />)
+    const trigger = screen.getByRole('button', { name: 'Explain route' })
+    await user.click(trigger)
+    expect(screen.getByRole('button', { name: 'Close modal' })).toHaveFocus()
+
+    await user.keyboard('{Escape}')
+    expect(trigger).toHaveFocus()
   })
 
   it('states when an eligible issue has no unresolved hard prerequisites', () => {
