@@ -1,241 +1,212 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { releasesApi, type Release } from '../services/api-releases'
 
-type Block =
-  | { type: 'heading'; level: number; text: string }
-  | { type: 'list'; items: string[] }
-  | { type: 'paragraph'; text: string }
+export const RELEASE_PAGE_SIZE = 20
 
-type ChangelogDay = {
-  type: 'day'
-  sourceDateTime: string
+type ReleaseDay = {
+  key: string
   label: string
-  summary: string
-  blocks: Block[]
+  releases: Release[]
 }
 
-type ChangelogViewItem = Block | ChangelogDay
-
-const CHANGELOG_ASSET = '/changelog.md'
-const SOURCE_DATE = /^\d{4}-\d{2}-\d{2}$/
-const SOURCE_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/
-
-export function isPublicChangelogLink(url: string) {
-  try {
-    const hostname = new URL(url).hostname.toLowerCase().replace(/\.$/, '')
-    return hostname !== 'github.com' && !hostname.endsWith('.github.com')
-  } catch {
-    return false
-  }
+type ReleaseRequest = {
+  offset: number
+  replace: boolean
 }
 
-export function publicChangelogText(text: string) {
-  return text
-    .replace(/\s+\b(?:in|via)\s+\[#\d+\]\(https?:\/\/github\.com\/[^)]+\/pull\/\d+\)/gi, '')
-    .replace(/\[#\d+\]\(https?:\/\/github\.com\/[^)]+\/pull\/\d+\)\s*/gi, '')
-    .replace(/\bPR\s+#\d+\b:?\s*/gi, '')
-    .trim()
+function releasedAtTimestamp(release: Release) {
+  const parsed = Date.parse(release.released_at)
+  return Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed
 }
 
-function renderInline(text: string) {
-  const publicText = publicChangelogText(text)
-  const pattern = /(`[^`]+`|\[[^\]]+\]\(https?:\/\/[^)]+\))/g
-  return publicText.split(pattern).map((part, index) => {
-    const code = part.match(/^`([^`]+)`$/)
-    if (code) return <code key={index} className="rounded bg-stone-800 px-1.5 py-0.5 text-amber-200">{code[1]}</code>
-    const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)$/)
-    if (link) {
-      if (!isPublicChangelogLink(link[2])) return <Fragment key={index}>{link[1]}</Fragment>
-      return <a key={index} href={link[2]} target="_blank" rel="noreferrer" className="font-semibold text-amber-300 underline decoration-amber-500/50 underline-offset-4">{link[1]} <span aria-label="opens in a new tab">↗</span></a>
-    }
-    return <Fragment key={index}>{part}</Fragment>
+export function sortReleasesNewestFirst(releases: Release[]): Release[] {
+  return [...releases].sort((left, right) => {
+    const timestampDifference = releasedAtTimestamp(right) - releasedAtTimestamp(left)
+    if (timestampDifference !== 0) return timestampDifference
+    if (right.sort_order !== left.sort_order) return right.sort_order - left.sort_order
+    return right.id - left.id
   })
 }
 
-export function parseChangelog(markdown: string): Block[] {
-  const blocks: Block[] = []
-  let list: string[] = []
-  const flushList = () => {
-    if (list.length) blocks.push({ type: 'list', items: list })
-    list = []
-  }
+function releaseDayKey(value: string, timeZone?: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'unknown'
 
-  for (const rawLine of markdown.split(/\r?\n/)) {
-    const line = rawLine.trim()
-    if (!line) {
-      flushList()
-      continue
-    }
-    const heading = line.match(/^(#{1,4})\s+(.+)$/)
-    if (heading) {
-      flushList()
-      blocks.push({ type: 'heading', level: heading[1].length, text: heading[2] })
-      continue
-    }
-    const item = line.match(/^[-*]\s+(.+)$/)
-    if (item) {
-      list.push(item[1])
-      continue
-    }
-    flushList()
-    blocks.push({ type: 'paragraph', text: line })
-  }
-  flushList()
-  return blocks
-}
-
-function isSourceDateTime(value: string) {
-  if (SOURCE_DATE.test(value)) return true
-  if (!SOURCE_TIMESTAMP.test(value)) return false
-  return !Number.isNaN(Date.parse(value))
-}
-
-function formatSourceDateTime(value: string, timeZone?: string) {
-  if (SOURCE_DATE.test(value)) {
-    const [year, month, day] = value.split('-').map(Number)
-    return new Intl.DateTimeFormat(undefined, {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
       year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      timeZone: 'UTC',
-    }).format(new Date(Date.UTC(year, month - 1, day)))
-  }
+      month: '2-digit',
+      day: '2-digit',
+      timeZone,
+    })
+      .formatToParts(date)
+      .map(part => [part.type, part.value]),
+  )
+  return `${parts.year}-${parts.month}-${parts.day}`
+}
 
+function releaseDayLabel(value: string, timeZone?: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Unknown date'
   return new Intl.DateTimeFormat(undefined, {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
     timeZone,
-    timeZoneName: 'short',
-  }).format(new Date(value))
+  }).format(date)
 }
 
-function summarizeDay(blocks: Block[]) {
-  const areas = blocks
-    .filter((block): block is Extract<Block, { type: 'heading' }> => block.type === 'heading' && block.level >= 3)
-    .map(block => publicChangelogText(block.text))
-    .filter(Boolean)
-  const updateCount = blocks.reduce((count, block) => {
-    if (block.type === 'list') return count + block.items.length
-    if (block.type === 'paragraph') return count + 1
-    return count
-  }, 0)
-  const effectiveUpdateCount = updateCount || 1
-  const countText = `${effectiveUpdateCount} ${effectiveUpdateCount === 1 ? 'update' : 'updates'}`
-  const uniqueAreas = [...new Set(areas)]
+export function groupReleasesByDay(releases: Release[], timeZone?: string): ReleaseDay[] {
+  const days: ReleaseDay[] = []
+  const byKey = new Map<string, ReleaseDay>()
 
-  if (uniqueAreas.length === 0) return `${countText} published this day.`
-  if (uniqueAreas.length === 1) return `${countText} for ${uniqueAreas[0]}.`
-  if (uniqueAreas.length === 2) return `${countText} across ${uniqueAreas[0]} and ${uniqueAreas[1]}.`
-  return `${countText} across ${uniqueAreas.slice(0, 2).join(', ')}, and more.`
-}
-
-export function buildChangelogView(markdown: string, timeZone?: string): ChangelogViewItem[] {
-  const blocks = parseChangelog(markdown)
-  const view: ChangelogViewItem[] = []
-
-  for (let index = 0; index < blocks.length; index += 1) {
-    const block = blocks[index]
-    if (block.type !== 'heading' || block.level !== 2 || !isSourceDateTime(block.text)) {
-      view.push(block)
-      continue
-    }
-
-    const dayBlocks: Block[] = []
-    let cursor = index + 1
-    while (cursor < blocks.length) {
-      const next = blocks[cursor]
-      if (next.type === 'heading' && next.level === 2 && isSourceDateTime(next.text)) {
-        if (next.text === block.text) {
-          cursor += 1
-          continue
-        }
-        break
+  for (const release of sortReleasesNewestFirst(releases)) {
+    const key = releaseDayKey(release.released_at, timeZone)
+    let day = byKey.get(key)
+    if (!day) {
+      day = {
+        key,
+        label: releaseDayLabel(release.released_at, timeZone),
+        releases: [],
       }
-      dayBlocks.push(next)
-      cursor += 1
+      byKey.set(key, day)
+      days.push(day)
     }
-
-    view.push({
-      type: 'day',
-      sourceDateTime: block.text,
-      label: formatSourceDateTime(block.text, timeZone),
-      summary: summarizeDay(dayBlocks),
-      blocks: dayBlocks,
-    })
-    index = cursor - 1
+    day.releases.push(release)
   }
 
-  return view
+  return days
 }
 
-function BlockContent({ block }: { block: Block }) {
-  if (block.type === 'heading') {
-    const Tag = block.level <= 2 ? 'h2' : 'h3'
-    return <Tag className={block.level <= 2 ? 'border-b border-stone-800 pb-2 pt-4 text-2xl font-black text-stone-100 first:pt-0' : 'pt-3 text-lg font-bold text-amber-200'}>{renderInline(block.text)}</Tag>
-  }
-  if (block.type === 'list') return <ul className="list-disc space-y-2 pl-6 leading-7">{block.items.map((item, itemIndex) => <li key={itemIndex}>{renderInline(item)}</li>)}</ul>
-  return <p className="leading-7">{renderInline(block.text)}</p>
+function ReleaseCard({ release }: { release: Release }) {
+  return (
+    <article className="rounded-xl border border-stone-800 bg-stone-900/50 p-4">
+      <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-400">
+        {release.category}
+      </p>
+      <h3 className="mt-1 text-lg font-bold text-stone-100">{release.title}</h3>
+      <p className="mt-2 leading-7 text-stone-300">{release.summary}</p>
+    </article>
+  )
 }
 
 export default function WhatsNewPage() {
-  const [markdown, setMarkdown] = useState<string | null>(null)
+  const [releases, setReleases] = useState<Release[]>([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [attempt, setAttempt] = useState(0)
-  const view = useMemo(() => (markdown ? buildChangelogView(markdown) : []), [markdown])
+  const [failedRequest, setFailedRequest] = useState<ReleaseRequest>({ offset: 0, replace: true })
+  const days = useMemo(() => groupReleasesByDay(releases), [releases])
+  const hasMore = releases.length < total
 
-  const load = useCallback(async () => {
-    setMarkdown(null)
+  const load = useCallback(async (offset: number, replace: boolean) => {
+    if (replace) setLoading(true)
+    else setLoadingMore(true)
     setError(null)
+
     try {
-      const response = await fetch(CHANGELOG_ASSET, { cache: 'no-cache' })
-      if (!response.ok) throw new Error(response.status === 404 ? 'The changelog file is missing.' : 'The changelog could not be loaded.')
-      const body = await response.text()
-      if (!body.trim()) throw new Error('The changelog file is empty.')
-      setMarkdown(body)
+      const response = await releasesApi.list(RELEASE_PAGE_SIZE, offset)
+      setReleases(current => replace ? response.releases : [...current, ...response.releases])
+      setTotal(response.total)
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'The changelog could not be loaded.')
+      setFailedRequest({ offset, replace })
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : 'Release notes could not be loaded.',
+      )
+    } finally {
+      if (replace) setLoading(false)
+      else setLoadingMore(false)
     }
   }, [])
 
-  useEffect(() => { void load() }, [load, attempt])
+  useEffect(() => {
+    void load(0, true)
+  }, [load])
+
+  const retry = () => {
+    void load(failedRequest.offset, failedRequest.replace)
+  }
 
   return (
     <section aria-labelledby="whats-new-title" className="mx-auto max-w-3xl pb-8">
       <header className="mb-6 rounded-2xl border border-amber-500/20 bg-stone-950/70 p-5 shadow-lg">
-        <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-400">ComicPile release notes</p>
-        <h1 id="whats-new-title" className="mt-2 text-3xl font-black text-stone-100">What’s New</h1>
-        <p className="mt-2 text-sm leading-6 text-stone-400">Recent improvements, fixes, and new ways to manage your reading pile.</p>
+        <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-400">
+          ComicPile release notes
+        </p>
+        <h1 id="whats-new-title" className="mt-2 text-3xl font-black text-stone-100">
+          What’s New
+        </h1>
+        <p className="mt-2 text-sm leading-6 text-stone-400">
+          Recent improvements, fixes, and new ways to manage your reading pile.
+        </p>
       </header>
 
-      {!markdown && !error && <div role="status" className="rounded-xl border border-stone-800 bg-stone-950/60 p-6 text-stone-400">Loading release notes…</div>}
-
-      {error && (
-        <div role="alert" className="rounded-xl border border-red-900/60 bg-red-950/30 p-6">
-          <h2 className="text-lg font-bold text-red-200">Release notes unavailable</h2>
-          <p className="mt-2 text-sm text-red-100/80">{error}</p>
-          <button type="button" onClick={() => setAttempt(value => value + 1)} className="mt-4 min-h-11 rounded-lg bg-amber-400 px-4 py-2 font-bold text-stone-950">Try again</button>
+      {loading && (
+        <div role="status" className="rounded-xl border border-stone-800 bg-stone-950/60 p-6 text-stone-400">
+          Loading release notes…
         </div>
       )}
 
-      {markdown && (
-        <article className="space-y-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-5 text-stone-300">
-          {view.map((item, index) => {
-            if (item.type !== 'day') return <BlockContent key={index} block={item} />
-            return (
-              <section key={`${item.sourceDateTime}-${index}`} aria-labelledby={`release-day-${index}`} className="border-t border-stone-800 pt-5 first:border-t-0 first:pt-0">
-                <h2 id={`release-day-${index}`} className="text-2xl font-black text-stone-100">
-                  <time dateTime={item.sourceDateTime}>{item.label}</time>
+      {!loading && releases.length === 0 && !error && (
+        <div className="rounded-xl border border-stone-800 bg-stone-950/60 p-6 text-stone-400">
+          No release notes have been published yet.
+        </div>
+      )}
+
+      {error && (
+        <div role="alert" className="mb-4 rounded-xl border border-red-900/60 bg-red-950/30 p-6">
+          <h2 className="text-lg font-bold text-red-200">Release notes unavailable</h2>
+          <p className="mt-2 text-sm text-red-100/80">{error}</p>
+          <button
+            type="button"
+            onClick={retry}
+            className="mt-4 min-h-11 rounded-lg bg-amber-400 px-4 py-2 font-bold text-stone-950"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
+      {!loading && releases.length > 0 && (
+        <div className="space-y-6">
+          {days.map(day => (
+            <section
+              key={day.key}
+              aria-labelledby={`release-day-${day.key}`}
+              className="rounded-2xl border border-stone-800 bg-stone-950/60 p-5"
+            >
+              <div className="mb-4 border-b border-stone-800 pb-3">
+                <h2 id={`release-day-${day.key}`} className="text-2xl font-black text-stone-100">
+                  {day.label}
                 </h2>
-                <p className="mt-1 text-sm text-stone-400">{item.summary}</p>
-                <div className="mt-3 space-y-3">
-                  {item.blocks.map((block, blockIndex) => <BlockContent key={blockIndex} block={block} />)}
-                </div>
-              </section>
-            )
-          })}
-        </article>
+                <p className="mt-1 text-sm text-stone-400">
+                  {day.releases.length} {day.releases.length === 1 ? 'update' : 'updates'} published this day.
+                </p>
+              </div>
+              <div className="space-y-3">
+                {day.releases.map(release => (
+                  <ReleaseCard key={release.id} release={release} />
+                ))}
+              </div>
+            </section>
+          ))}
+
+          {hasMore && (
+            <div className="flex justify-center">
+              <button
+                type="button"
+                disabled={loadingMore}
+                onClick={() => void load(releases.length, false)}
+                className="min-h-11 rounded-lg border border-amber-500/40 bg-stone-950 px-5 py-2 font-bold text-amber-300 disabled:cursor-wait disabled:opacity-60"
+              >
+                {loadingMore ? 'Loading older updates…' : 'Load older updates'}
+              </button>
+            </div>
+          )}
+        </div>
       )}
     </section>
   )
