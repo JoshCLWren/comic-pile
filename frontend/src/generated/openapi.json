@@ -699,6 +699,188 @@
         "title": "ContinuityBlocker",
         "type": "object"
       },
+      "ContinuityPlanLane": {
+        "description": "One visual lane in a continuity plan.",
+        "properties": {
+          "id": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "order": {
+            "minimum": 0.0,
+            "title": "Order",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "order"
+        ],
+        "title": "ContinuityPlanLane",
+        "type": "object"
+      },
+      "ContinuityPlanNode": {
+        "description": "One ordered reference in a continuity plan.",
+        "properties": {
+          "id": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "lane_id": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Lane Id",
+            "type": "string"
+          },
+          "node_type": {
+            "enum": [
+              "issue",
+              "crossover",
+              "thread"
+            ],
+            "title": "Node Type",
+            "type": "string"
+          },
+          "position": {
+            "minimum": 0.0,
+            "title": "Position",
+            "type": "integer"
+          },
+          "ref_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Ref Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "node_type",
+          "ref_id",
+          "lane_id",
+          "position"
+        ],
+        "title": "ContinuityPlanNode",
+        "type": "object"
+      },
+      "ContinuityPlanResponse": {
+        "description": "Persisted continuity plan response.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "lanes": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanLane"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Lanes",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanNode"
+            },
+            "maxItems": 1000,
+            "title": "Nodes",
+            "type": "array"
+          },
+          "ordering_mode": {
+            "default": "informational",
+            "enum": [
+              "informational",
+              "strict_sequential"
+            ],
+            "title": "Ordering Mode",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "lanes",
+          "id",
+          "user_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ContinuityPlanResponse",
+        "type": "object"
+      },
+      "ContinuityPlanWrite": {
+        "description": "Create/replace payload for a persisted continuity plan.",
+        "properties": {
+          "lanes": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanLane"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Lanes",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanNode"
+            },
+            "maxItems": 1000,
+            "title": "Nodes",
+            "type": "array"
+          },
+          "ordering_mode": {
+            "default": "informational",
+            "enum": [
+              "informational",
+              "strict_sequential"
+            ],
+            "title": "Ordering Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "lanes"
+        ],
+        "title": "ContinuityPlanWrite",
+        "type": "object"
+      },
       "ContinuityReadinessRequest": {
         "description": "Request readiness for one owned issue, thread, or crossover.",
         "properties": {
@@ -6515,6 +6697,204 @@
         "tags": [
           "auth",
           "auth"
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/": {
+      "post": {
+        "description": "Create a plan and compile rules only when strict intent is explicit.",
+        "operationId": "create_continuity_plan_api_v1_continuity_plans__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinuityPlanWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Continuity Plan",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "continuity-plans"
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}": {
+      "delete": {
+        "description": "Delete one plan and only the hard rules compiled by that plan.",
+        "operationId": "delete_continuity_plan_api_v1_continuity_plans__plan_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "title": "Plan Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Continuity Plan",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "continuity-plans"
+        ]
+      },
+      "get": {
+        "description": "Return one owned continuity plan.",
+        "operationId": "get_continuity_plan_api_v1_continuity_plans__plan_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "title": "Plan Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Continuity Plan",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "continuity-plans"
+        ]
+      },
+      "put": {
+        "description": "Replace a plan atomically, including rules explicitly owned by that plan.",
+        "operationId": "update_continuity_plan_api_v1_continuity_plans__plan_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "title": "Plan Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinuityPlanWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Continuity Plan",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "continuity-plans"
         ]
       }
     },

@@ -1611,6 +1611,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/continuity-plans/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Continuity Plan
+         * @description Create a plan and compile rules only when strict intent is explicit.
+         */
+        post: operations["create_continuity_plan_api_v1_continuity_plans__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/continuity-plans/{plan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Continuity Plan
+         * @description Return one owned continuity plan.
+         */
+        get: operations["get_continuity_plan_api_v1_continuity_plans__plan_id__get"];
+        /**
+         * Update Continuity Plan
+         * @description Replace a plan atomically, including rules explicitly owned by that plan.
+         */
+        put: operations["update_continuity_plan_api_v1_continuity_plans__plan_id__put"];
+        post?: never;
+        /**
+         * Delete Continuity Plan
+         * @description Delete one plan and only the hard rules compiled by that plan.
+         */
+        delete: operations["delete_continuity_plan_api_v1_continuity_plans__plan_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/continuity-rules/": {
         parameters: {
             query?: never;
@@ -3586,6 +3634,87 @@ export interface components {
              * @enum {string}
              */
             source_type: "issue" | "crossover";
+        };
+        /**
+         * ContinuityPlanLane
+         * @description One visual lane in a continuity plan.
+         */
+        ContinuityPlanLane: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Order */
+            order: number;
+        };
+        /**
+         * ContinuityPlanNode
+         * @description One ordered reference in a continuity plan.
+         */
+        ContinuityPlanNode: {
+            /** Id */
+            id: string;
+            /** Lane Id */
+            lane_id: string;
+            /**
+             * Node Type
+             * @enum {string}
+             */
+            node_type: "issue" | "crossover" | "thread";
+            /** Position */
+            position: number;
+            /** Ref Id */
+            ref_id: number;
+        };
+        /**
+         * ContinuityPlanResponse
+         * @description Persisted continuity plan response.
+         */
+        ContinuityPlanResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Lanes */
+            lanes: components["schemas"]["ContinuityPlanLane"][];
+            /** Name */
+            name: string;
+            /** Nodes */
+            nodes?: components["schemas"]["ContinuityPlanNode"][];
+            /**
+             * Ordering Mode
+             * @default informational
+             * @enum {string}
+             */
+            ordering_mode: "informational" | "strict_sequential";
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** User Id */
+            user_id: number;
+        };
+        /**
+         * ContinuityPlanWrite
+         * @description Create/replace payload for a persisted continuity plan.
+         */
+        ContinuityPlanWrite: {
+            /** Lanes */
+            lanes: components["schemas"]["ContinuityPlanLane"][];
+            /** Name */
+            name: string;
+            /** Nodes */
+            nodes?: components["schemas"]["ContinuityPlanNode"][];
+            /**
+             * Ordering Mode
+             * @default informational
+             * @enum {string}
+             */
+            ordering_mode: "informational" | "strict_sequential";
         };
         /**
          * ContinuityReadinessRequest
@@ -6510,6 +6639,134 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TokenResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_continuity_plan_api_v1_continuity_plans__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContinuityPlanWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityPlanResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_continuity_plan_api_v1_continuity_plans__plan_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityPlanResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_continuity_plan_api_v1_continuity_plans__plan_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContinuityPlanWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityPlanResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_continuity_plan_api_v1_continuity_plans__plan_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
