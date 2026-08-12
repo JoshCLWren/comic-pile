@@ -1,146 +1,143 @@
 import '@testing-library/jest-dom/vitest'
-import { render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import WhatsNewPage, { buildChangelogView, parseChangelog } from '../pages/WhatsNewPage'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import WhatsNewPage, {
+  groupReleasesByDay,
+  RELEASE_PAGE_SIZE,
+  sortReleasesNewestFirst,
+} from '../pages/WhatsNewPage'
+import { releasesApi, type Release } from '../services/api-releases'
 
-afterEach(() => {
-  vi.unstubAllGlobals()
-  vi.restoreAllMocks()
+vi.mock('../services/api-releases', () => ({
+  releasesApi: {
+    list: vi.fn(),
+  },
+}))
+
+const api = vi.mocked(releasesApi)
+
+function release(overrides: Partial<Release> = {}): Release {
+  return {
+    id: 1,
+    source_repository: 'JoshCLWren/comic-pile',
+    source_pr_number: null,
+    source_merge_sha: null,
+    merged_at: null,
+    released_at: '2026-08-11T20:00:00Z',
+    category: 'Queue',
+    title: 'Queue cards open details',
+    summary: 'Selecting a Queue card now opens its thread details reliably.',
+    body: null,
+    visibility: 'public',
+    status: 'published',
+    sort_order: 0,
+    provenance_json: {},
+    created_at: '2026-08-11T20:00:00Z',
+    updated_at: '2026-08-11T20:00:00Z',
+    ...overrides,
+  } as Release
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
 })
 
-describe('parseChangelog', () => {
-  it('parses headings, paragraphs, both list markers, blank lines, and a trailing list', () => {
-    expect(parseChangelog('# Changelog\n\nIntro paragraph\n## 2026-08-06\n- First item\n* Second item\n\n### Details\nFinal paragraph\n- Trailing item')).toEqual([
-      { type: 'heading', level: 1, text: 'Changelog' },
-      { type: 'paragraph', text: 'Intro paragraph' },
-      { type: 'heading', level: 2, text: '2026-08-06' },
-      { type: 'list', items: ['First item', 'Second item'] },
-      { type: 'heading', level: 3, text: 'Details' },
-      { type: 'paragraph', text: 'Final paragraph' },
-      { type: 'list', items: ['Trailing item'] },
-    ])
-  })
-})
+describe('release ordering helpers', () => {
+  it('orders releases newest-first with deterministic same-time tie breakers', () => {
+    const releases = [
+      release({ id: 2, sort_order: 1, released_at: '2026-08-10T20:00:00Z' }),
+      release({ id: 3, sort_order: 2 }),
+      release({ id: 1, sort_order: 1 }),
+    ]
 
-describe('buildChangelogView', () => {
-  it('groups multiple entries under one day and summarizes public feature areas', () => {
-    expect(buildChangelogView('# Changelog\n\n## 2026-08-09\n### Queue\n- Faster loading\n- Clearer controls\n### Roll\n- Preserves the active comic', 'UTC')).toEqual([
-      { type: 'heading', level: 1, text: 'Changelog' },
-      { type: 'day', sourceDateTime: '2026-08-09', label: 'August 9, 2026', summary: '3 updates across Queue and Roll.', blocks: [
-        { type: 'heading', level: 3, text: 'Queue' },
-        { type: 'list', items: ['Faster loading', 'Clearer controls'] },
-        { type: 'heading', level: 3, text: 'Roll' },
-        { type: 'list', items: ['Preserves the active comic'] },
-      ] },
-    ])
+    expect(sortReleasesNewestFirst(releases).map(item => item.id)).toEqual([3, 1, 2])
   })
 
-  it('merges repeated generated date fragments into one daily section', () => {
-    expect(buildChangelogView('## 2026-08-09\n### Queue\n- Faster loading\n## 2026-08-09\n### Roll\n- Better recovery\n## 2026-08-08\n### Sessions\n- Clearer history', 'UTC')).toEqual([
-      { type: 'day', sourceDateTime: '2026-08-09', label: 'August 9, 2026', summary: '2 updates across Queue and Roll.', blocks: [
-        { type: 'heading', level: 3, text: 'Queue' },
-        { type: 'list', items: ['Faster loading'] },
-        { type: 'heading', level: 3, text: 'Roll' },
-        { type: 'list', items: ['Better recovery'] },
-      ] },
-      { type: 'day', sourceDateTime: '2026-08-08', label: 'August 8, 2026', summary: '1 update for Sessions.', blocks: [
-        { type: 'heading', level: 3, text: 'Sessions' },
-        { type: 'list', items: ['Clearer history'] },
-      ] },
-    ])
-  })
+  it('groups historical and PR-backed releases by localized release day', () => {
+    const days = groupReleasesByDay([
+      release({ id: 3, source_pr_number: 1096, released_at: '2026-08-11T20:00:00Z' }),
+      release({ id: 2, source_pr_number: null, released_at: '2026-08-11T10:00:00Z' }),
+      release({ id: 1, source_pr_number: null, released_at: '2026-08-10T20:00:00Z' }),
+    ], 'UTC')
 
-  it('covers singular, unscoped, and many-area daily summaries', () => {
-    expect(buildChangelogView('## 2026-08-09\n### Queue\nOne change', 'UTC')[0]).toHaveProperty('summary', '1 update for Queue.')
-    expect(buildChangelogView('## 2026-08-09\nOne change', 'UTC')[0]).toHaveProperty('summary', '1 update published this day.')
-    expect(buildChangelogView('## 2026-08-09\n### Queue\n- A\n### Roll\n- B\n### Sessions\n- C', 'UTC')[0]).toHaveProperty('summary', '3 updates across Queue, Roll, and more.')
-    expect(buildChangelogView('## 2026-08-09\n### Queue', 'UTC')[0]).toHaveProperty('summary', '1 update for Queue.')
-  })
-
-  it('uses the viewer timezone for exact source timestamps', () => {
-    const view = buildChangelogView('## 2026-08-09T00:30:00Z\n### Roll\n- Fixed resume behavior', 'America/Los_Angeles')
-    expect(view[0]).toMatchObject({ type: 'day', sourceDateTime: '2026-08-09T00:30:00Z' })
-    expect(view[0]).toHaveProperty('label', 'August 8, 2026 at 5:30 PM PDT')
-  })
-
-  it('keeps malformed or missing timestamps usable as ordinary headings', () => {
-    expect(buildChangelogView('## Recently\n- Still readable')).toEqual([
-      { type: 'heading', level: 2, text: 'Recently' },
-      { type: 'list', items: ['Still readable'] },
-    ])
-    expect(buildChangelogView('## 2026-99-99T99:99Z\n- Still readable')).toEqual([
-      { type: 'heading', level: 2, text: '2026-99-99T99:99Z' },
-      { type: 'list', items: ['Still readable'] },
-    ])
+    expect(days).toHaveLength(2)
+    expect(days[0].releases.map(item => item.id)).toEqual([3, 2])
+    expect(days[1].releases.map(item => item.id)).toEqual([1])
   })
 })
 
 describe('WhatsNewPage', () => {
-  it('groups dated entries with readable time elements and daily summaries', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, text: async () => '# Changelog\n\n## 2026-08-09\n### Queue\n- Faster loading\n- Clearer controls\n### Roll\n- Preserves the active comic' })
-    vi.stubGlobal('fetch', fetchMock)
-    render(<WhatsNewPage />)
-    const dayHeading = await screen.findByRole('heading', { name: /August 9, 2026/ })
-    expect(dayHeading.querySelector('time')).toHaveAttribute('datetime', '2026-08-09')
-    expect(screen.getByText('3 updates across Queue and Roll.')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Queue' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Roll' })).toBeInTheDocument()
-  })
+  it('shows loading and then the empty release-ledger state', async () => {
+    let resolveList: ((value: { releases: Release[]; total: number; limit: number; offset: number }) => void) | undefined
+    api.list.mockImplementation(() => new Promise(resolve => { resolveList = resolve }))
 
-  it('removes GitHub pull references while preserving public external links', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, text: async () => '# Changelog\n\nPlain introduction.\n\n## Today\n\n### Queue\n\n- Fixed `Queue` in [#866](https://github.com/JoshCLWren/comic-pile/pull/866). See [ComicPile](https://comic-pile.vercel.app/) for more. [Internal notes](https://github.com/JoshCLWren/comic-pile/issues/981).' })
-    vi.stubGlobal('fetch', fetchMock)
     render(<WhatsNewPage />)
     expect(screen.getByRole('status')).toHaveTextContent('Loading release notes')
-    expect(fetchMock).toHaveBeenCalledWith('/changelog.md', { cache: 'no-cache' })
-    expect(await screen.findByRole('heading', { name: 'Changelog' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Today' }).tagName).toBe('H2')
-    expect(screen.getByRole('heading', { name: 'Queue' }).tagName).toBe('H3')
-    expect(screen.getByText('Plain introduction.')).toBeInTheDocument()
-    expect(screen.getByText('Queue', { selector: 'code' })).toBeInTheDocument()
-    expect(screen.getByRole('listitem')).not.toHaveTextContent('#866')
-    expect(screen.getByRole('listitem')).toHaveTextContent(/Fixed Queue\. See ComicPile.*for more\./)
-    expect(screen.queryByRole('link', { name: /#866/ })).not.toBeInTheDocument()
-    expect(screen.getByText(/Internal notes/)).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /Internal notes/ })).not.toBeInTheDocument()
-    const link = screen.getByRole('link', { name: /ComicPile/ })
-    expect(link).toHaveAttribute('href', 'https://comic-pile.vercel.app/')
-    expect(link).toHaveAttribute('target', '_blank')
-    expect(link).toHaveAttribute('rel', 'noreferrer')
-    expect(screen.getByLabelText('opens in a new tab')).toBeInTheDocument()
+
+    resolveList?.({ releases: [], total: 0, limit: RELEASE_PAGE_SIZE, offset: 0 })
+    expect(await screen.findByText('No release notes have been published yet.')).toBeInTheDocument()
   })
 
-  it('distinguishes a missing changelog from other HTTP failures', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce({ ok: false, status: 404 }).mockResolvedValueOnce({ ok: false, status: 500 })
-    vi.stubGlobal('fetch', fetchMock)
+  it('renders structured public fields without exposing PR or provenance metadata', async () => {
+    api.list.mockResolvedValue({
+      releases: [release({ source_pr_number: 1096, provenance_json: { importer: 'release-import-v1' } })],
+      total: 1,
+      limit: RELEASE_PAGE_SIZE,
+      offset: 0,
+    })
+
     render(<WhatsNewPage />)
-    expect(await screen.findByRole('alert')).toHaveTextContent('changelog file is missing')
-    await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('could not be loaded')
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    expect(await screen.findByText('Queue cards open details')).toBeInTheDocument()
+    expect(screen.getByText('Queue')).toBeInTheDocument()
+    expect(screen.getByText('Selecting a Queue card now opens its thread details reliably.')).toBeInTheDocument()
+    expect(screen.queryByText(/1096/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/release-import-v1/)).not.toBeInTheDocument()
   })
 
-  it('reports an empty successful response', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => '  \n ' }))
+  it('loads older releases incrementally using the current offset', async () => {
+    api.list
+      .mockResolvedValueOnce({
+        releases: [release({ id: 2, title: 'Newest release' })],
+        total: 2,
+        limit: RELEASE_PAGE_SIZE,
+        offset: 0,
+      })
+      .mockResolvedValueOnce({
+        releases: [release({ id: 1, title: 'Older release', released_at: '2026-08-10T20:00:00Z' })],
+        total: 2,
+        limit: RELEASE_PAGE_SIZE,
+        offset: 1,
+      })
+
     render(<WhatsNewPage />)
-    expect(await screen.findByRole('alert')).toHaveTextContent('changelog file is empty')
+    await screen.findByText('Newest release')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load older updates' }))
+
+    expect(await screen.findByText('Older release')).toBeInTheDocument()
+    expect(api.list).toHaveBeenNthCalledWith(1, RELEASE_PAGE_SIZE, 0)
+    expect(api.list).toHaveBeenNthCalledWith(2, RELEASE_PAGE_SIZE, 1)
+    expect(screen.queryByRole('button', { name: 'Load older updates' })).not.toBeInTheDocument()
   })
 
-  it('reports thrown Error objects and recovers on retry', async () => {
-    const fetchMock = vi.fn().mockRejectedValueOnce(new Error('network unavailable')).mockResolvedValueOnce({ ok: true, text: async () => '## Recovered' })
-    vi.stubGlobal('fetch', fetchMock)
+  it('keeps retry behavior when the release API fails', async () => {
+    api.list
+      .mockRejectedValueOnce(new Error('release API unavailable'))
+      .mockResolvedValueOnce({ releases: [], total: 0, limit: RELEASE_PAGE_SIZE, offset: 0 })
+
     render(<WhatsNewPage />)
-    expect(await screen.findByRole('alert')).toHaveTextContent('network unavailable')
-    await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
-    expect(await screen.findByRole('heading', { name: 'Recovered' })).toBeInTheDocument()
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('release API unavailable')
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+    await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2))
+    expect(await screen.findByText('No release notes have been published yet.')).toBeInTheDocument()
   })
 
-  it('uses the safe fallback for non-Error rejections', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue('offline'))
+  it('uses a safe fallback for non-Error API failures', async () => {
+    api.list.mockRejectedValue('offline')
     render(<WhatsNewPage />)
-    expect(await screen.findByRole('alert')).toHaveTextContent('could not be loaded')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Release notes could not be loaded.')
   })
 })
