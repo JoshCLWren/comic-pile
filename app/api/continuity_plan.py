@@ -77,7 +77,7 @@ async def _validate_node_ownership(
             await ensure_owned_continuity_node(
                 db,
                 user_id=user_id,
-                node_type=cast(ContinuityNodeType, node.node_type),
+                node_type=node.node_type,
                 node_id=node.ref_id,
             )
         except HTTPException as exc:
