@@ -9074,6 +9074,81 @@
         ]
       }
     },
+    "/api/v1/snooze/": {
+      "post": {
+        "description": "Snooze the pending thread, demote it in the queue, and step the die up.\n\nThis endpoint:\n1. Gets the current session (must exist with a pending_thread_id)\n2. Moves the pending thread beyond the widened roll range\n3. Adds the pending_thread_id to snoozed_thread_ids\n4. Steps the die UP (wider pool) using dice ladder logic\n5. Records a \"snooze\" event\n6. Clears pending_thread_id\n7. Returns the updated session\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    SessionResponse containing the updated session with snoozed_thread_ids,\n    cleared pending_thread_id, and current die state.\n\nRaises:\n    HTTPException: If no active session exists or no pending thread to snooze.",
+        "operationId": "snooze_thread_api_v1_snooze__post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Snooze Thread",
+        "tags": [
+          "snooze"
+        ]
+      }
+    },
+    "/api/v1/snooze/{thread_id}/unsnooze": {
+      "post": {
+        "description": "Remove thread from snoozed list.",
+        "operationId": "unsnooze_thread_api_v1_snooze__thread_id__unsnooze_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Unsnooze Thread",
+        "tags": [
+          "snooze"
+        ]
+      }
+    },
     "/api/v1/threads/": {
       "get": {
         "description": "List threads ordered by position with cursor-based pagination.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    search: Optional case-insensitive title search filter.\n    page_size: Number of threads to return per page (default 50, max 200).\n    page_token: Token for pagination continuation (queue_position,thread_id).\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    QueueThreadListResponse with paginated threads and next_page_token if more exist.\n\nRaises:\n    HTTPException: If a retired ``collection_id`` query parameter is present.",
@@ -10389,6 +10464,118 @@
         "tags": [
           "dependencies",
           "dependencies"
+        ]
+      }
+    },
+    "/api/v1/undo/{session_id}/snapshots": {
+      "get": {
+        "description": "List all snapshots for a session.\n\nArgs:\n    session_id: Session whose snapshots should be listed.\n    current_user: Authenticated user.\n    db: Database session.\n\nReturns:\n    Snapshot metadata in reverse chronological order.\n\nRaises:\n    HTTPException: If the session is not owned by the current user.",
+        "operationId": "list_session_snapshots_api_v1_undo__session_id__snapshots_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response List Session Snapshots Api V1 Undo  Session Id  Snapshots Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Session Snapshots",
+        "tags": [
+          "undo",
+          "undo"
+        ]
+      }
+    },
+    "/api/v1/undo/{session_id}/undo/{snapshot_id}": {
+      "post": {
+        "description": "Undo session state to a snapshot with deadlock retry handling.\n\nArgs:\n    session_id: Session to restore.\n    snapshot_id: Snapshot to restore.\n    current_user: Authenticated user.\n    db: Database session.\n\nReturns:\n    Restored session response.\n\nRaises:\n    RuntimeError: If all deadlock retries fail.",
+        "operationId": "undo_to_snapshot_api_v1_undo__session_id__undo__snapshot_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "snapshot_id",
+            "required": true,
+            "schema": {
+              "title": "Snapshot Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Undo To Snapshot",
+        "tags": [
+          "undo",
+          "undo"
         ]
       }
     },
