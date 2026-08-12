@@ -20,7 +20,7 @@ test.describe('Mobile navigation and Roll controls (#1091)', () => {
 
     await navigation.getByRole('button', { name: 'More pages' }).click();
     await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
-    await expect(page.getByText('Submit Feedback', { exact: true })).toBeVisible();
+    await expect(page.getByText('Feedback', { exact: true })).toBeVisible();
 
     const shellSpacing = await page.locator('[data-app-shell-ready] > main').evaluate((main) => {
       const style = window.getComputedStyle(main);
