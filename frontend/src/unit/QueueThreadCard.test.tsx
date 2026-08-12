@@ -111,6 +111,19 @@ describe('QueueThreadCard', () => {
     expect(onCardClick).toHaveBeenCalledTimes(1)
   })
 
+  it('opens thread details from the focused card with Enter or Space', async () => {
+    const user = userEvent.setup()
+    const onCardClick = vi.fn()
+    renderCard(createMockThread(), { onCardClick })
+
+    const card = screen.getByRole('link', { name: 'Open Test Thread details' })
+    card.focus()
+    await user.keyboard('{Enter}')
+    await user.keyboard(' ')
+
+    expect(onCardClick).toHaveBeenCalledTimes(2)
+  })
+
   it('uses the shared action menu for dependency management without opening details', async () => {
     const user = userEvent.setup()
     const onDependencies = vi.fn()
