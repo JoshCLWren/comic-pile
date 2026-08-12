@@ -101,13 +101,26 @@ describe('QueueThreadCard', () => {
     expect(screen.queryByTestId('mobile-dependency-action')).not.toBeInTheDocument()
   })
 
-  it('uses the shared action menu for dependency management', async () => {
+  it('opens thread details when the card surface is clicked', async () => {
+    const user = userEvent.setup()
+    const onCardClick = vi.fn()
+    renderCard(createMockThread(), { onCardClick })
+
+    await user.click(screen.getByTestId('queue-thread-item'))
+
+    expect(onCardClick).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses the shared action menu for dependency management without opening details', async () => {
     const user = userEvent.setup()
     const onDependencies = vi.fn()
-    renderCard(createMockThread(), { onDependencies })
+    const onCardClick = vi.fn()
+    renderCard(createMockThread(), { onDependencies, onCardClick })
 
     await user.click(screen.getByTestId('mock-position-menu'))
+
     expect(onDependencies).toHaveBeenCalledTimes(1)
+    expect(onCardClick).not.toHaveBeenCalled()
   })
 
   it('does not treat shared action-menu keyboard activation as card activation', () => {
