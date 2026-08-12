@@ -37,7 +37,7 @@ describe('ThreadPool bootstrap edge branches', () => {
       />,
     )
 
-    const thread = screen.getByRole('button', { name: /Die face 1: Next unread issue, Saga/i })
+    const thread = screen.getByRole('button', { name: /Die face 1: Saga/i })
     expect(thread).not.toHaveClass('pool-thread-selected')
     fireEvent.keyDown(thread, { key: 'Enter' })
     expect(onThreadClick).toHaveBeenCalledWith({ id: 1, title: 'Saga', format: 'Comic' })
