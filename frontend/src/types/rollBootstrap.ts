@@ -5,6 +5,9 @@ export interface RollBootstrapThread {
   id: number
   title: string
   format: string
+  issue_id?: number | null
+  issue_number?: string | null
+  route_labels?: string[]
   last_activity_at?: string | null
 }
 
@@ -91,6 +94,9 @@ declare module './index' {
     id: number
     title: string
     format: string
+    issue_id?: number | null
+    issue_number?: string | null
+    route_labels?: string[]
     last_activity_at?: string | null
   }
 }
