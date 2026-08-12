@@ -31,12 +31,12 @@ beforeEach(() => {
   mockClearAccessToken.mockReset()
 })
 
-const renderWithAuth = () => {
+const renderWithAuth = (initialEntry = '/') => {
   mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
   mockSetAccessToken.mockImplementation(() => undefined)
 
   return render(
-    <MemoryRouter initialEntries={['/']}>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <AuthProvider>
         <BugReportRestoreProvider>
           <Navigation onBugReportSubmit={vi.fn()} />
@@ -74,6 +74,14 @@ test('renders retained navigation links when authenticated', async () => {
   expect(screen.getByText('Crossovers')).toBeVisible()
   expect(screen.getByText('More')).toBeVisible()
   expect(screen.queryByRole('link', { name: /analytics page/i })).not.toBeInTheDocument()
+})
+
+test('marks More as the only active destination on submenu routes', async () => {
+  renderWithAuth('/glossary')
+
+  const moreButton = await screen.findByRole('button', { name: /more pages/i })
+  expect(moreButton).toHaveClass('active')
+  expect(document.querySelectorAll('.nav-item.active')).toHaveLength(1)
 })
 
 test('dismisses the More tray only when tapping outside it', async () => {
