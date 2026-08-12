@@ -67,13 +67,22 @@ describe('getTopologicalPath', () => {
     expect(result.map((t) => t.id)).toEqual([1, 2, 3])
   })
 
-  it('ignores issue-level dependencies without parent thread IDs', () => {
+  it('ignores issue-level dependencies without a source parent thread ID', () => {
     const threads = [makeThread(1), makeThread(2)]
     const deps = [
-      makeDep(-10, -20, true), // Missing parent thread IDs
+      makeDep(-10, -20, true),
     ]
     const result = getTopologicalPath(threads, deps)
-    // Both threads have no dependencies, order depends on input order
+    expect(result).toHaveLength(2)
+    expect(result.map((t) => t.id).sort()).toEqual([1, 2])
+  })
+
+  it('ignores issue-level dependencies without a target parent thread ID', () => {
+    const threads = [makeThread(1), makeThread(2)]
+    const deps = [
+      makeDep(-10, -20, true, 1),
+    ]
+    const result = getTopologicalPath(threads, deps)
     expect(result).toHaveLength(2)
     expect(result.map((t) => t.id).sort()).toEqual([1, 2])
   })
