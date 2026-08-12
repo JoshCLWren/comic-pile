@@ -119,7 +119,7 @@ it('renders the bounded bootstrap pool without Collections state', () => {
   render(<RollPage />)
 
   expect(screen.getByText('Pile Roller')).toBeInTheDocument()
-  expect(screen.getByLabelText('Roll pool')).toBeInTheDocument()
+  expect(screen.getByLabelText(/Eligible now, 2 mapped results/i)).toBeInTheDocument()
   expect(screen.getByText('Saga')).toBeInTheDocument()
   expect(screen.getByText('X-Men')).toBeInTheDocument()
   expect(screen.queryByText(/collection/i)).not.toBeInTheDocument()
