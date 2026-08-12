@@ -192,9 +192,11 @@ export function RatingView({
                   <div className="mt-2 flex items-center justify-between gap-2">
                     <p className="text-[10px] font-bold text-stone-500">{routeProgress}% complete</p>
                     <button
-                      ref={routeExplanationTriggerRef}
                       type="button"
-                      onClick={() => setIsRouteExplanationOpen(true)}
+                      onClick={(event) => {
+                        routeExplanationTriggerRef.current = event.currentTarget
+                        setIsRouteExplanationOpen(true)
+                      }}
                       className="min-h-11 rounded-lg border border-amber-700/40 bg-amber-900/15 px-3 text-[10px] font-black text-amber-200 focus:ring-2 focus:ring-amber-500"
                       aria-label={`Explain why ${threadTitle} ${issueNumber != null ? `#${issueNumber}` : ''} is next in ${order.name}`}
                     >
