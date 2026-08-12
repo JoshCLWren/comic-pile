@@ -32,15 +32,17 @@ function releaseDayKey(value: string, timeZone?: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return 'unknown'
 
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    timeZone,
-  }).formatToParts(date)
-  const part = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find(candidate => candidate.type === type)?.value ?? ''
-  return `${part('year')}-${part('month')}-${part('day')}`
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      timeZone,
+    })
+      .formatToParts(date)
+      .map(part => [part.type, part.value]),
+  )
+  return `${parts.year}-${parts.month}-${parts.day}`
 }
 
 function releaseDayLabel(value: string, timeZone?: string) {
@@ -94,7 +96,7 @@ export default function WhatsNewPage() {
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [failedRequest, setFailedRequest] = useState<ReleaseRequest | null>(null)
+  const [failedRequest, setFailedRequest] = useState<ReleaseRequest>({ offset: 0, replace: true })
   const days = useMemo(() => groupReleasesByDay(releases), [releases])
   const hasMore = releases.length < total
 
@@ -107,7 +109,6 @@ export default function WhatsNewPage() {
       const response = await releasesApi.list(RELEASE_PAGE_SIZE, offset)
       setReleases(current => replace ? response.releases : [...current, ...response.releases])
       setTotal(response.total)
-      setFailedRequest(null)
     } catch (loadError) {
       setFailedRequest({ offset, replace })
       setError(
@@ -126,8 +127,7 @@ export default function WhatsNewPage() {
   }, [load])
 
   const retry = () => {
-    const request = failedRequest ?? { offset: 0, replace: true }
-    void load(request.offset, request.replace)
+    void load(failedRequest.offset, failedRequest.replace)
   }
 
   return (
