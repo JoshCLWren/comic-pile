@@ -114,7 +114,7 @@ test('puts the mobile Sign out action inside More', async () => {
   expect(screen.queryByRole('button', { name: /sign out/i })).not.toBeInTheDocument()
   await user.click(await screen.findByRole('button', { name: /more pages/i }))
   expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: /log out/i })).toHaveClass('md:inline')
+  expect(screen.getByRole('button', { name: /log out/i })).not.toBeVisible()
 })
 
 test('shows loading and non-auth failure states and logs out gracefully', async () => {
