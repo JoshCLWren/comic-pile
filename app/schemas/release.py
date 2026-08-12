@@ -9,38 +9,6 @@ ReleaseVisibility = Literal["public", "internal"]
 ReleaseStatus = Literal["draft", "published", "retracted"]
 
 
-class ReleaseResponse(BaseModel):
-    """One release ledger record returned by the API."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    source_repository: str
-    source_pr_number: int | None
-    source_merge_sha: str | None
-    merged_at: datetime | None
-    released_at: datetime
-    category: str
-    title: str
-    summary: str
-    body: str | None
-    visibility: ReleaseVisibility
-    status: ReleaseStatus
-    sort_order: int
-    provenance_json: dict[str, object]
-    created_at: datetime
-    updated_at: datetime
-
-
-class ReleaseListResponse(BaseModel):
-    """Paginated published releases for What's New."""
-
-    releases: list[ReleaseResponse]
-    total: int
-    limit: int
-    offset: int
-
-
 class ReleaseUpsertRequest(BaseModel):
     """Idempotent release publication payload from trusted automation."""
 
@@ -74,6 +42,31 @@ class ReleaseUpsertRequest(BaseModel):
         if self.source_pr_number is None and self.source_merge_sha is None:
             raise ValueError("source_pr_number or source_merge_sha is required")
         return self
+
+
+class ReleaseResponse(BaseModel):
+    """One release ledger record returned by public-facing endpoints."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    released_at: datetime
+    category: str
+    title: str
+    summary: str
+    body: str | None
+    sort_order: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class ReleaseListResponse(BaseModel):
+    """Paginated published releases for What's New."""
+
+    releases: list[ReleaseResponse]
+    total: int
+    limit: int
+    offset: int
 
 
 class ReleaseSourceResponse(BaseModel):
