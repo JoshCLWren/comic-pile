@@ -11,6 +11,14 @@ vi.mock('../components/IssueCorrectionDialog', () => ({ default: () => null }))
 vi.mock('../pages/RollPage/components/ReadingOrderGroups', () => ({
   ReadingOrderGroups: () => null,
 }))
+vi.mock('../hooks/useContinuityReadiness', () => ({
+  useContinuityReadiness: () => ({
+    readiness: null,
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+}))
 
 const callbacks = {
   onUpdateRating: vi.fn(),
