@@ -11,7 +11,7 @@ on:
 
 concurrency:
   group: nvidia-factory-6
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -41,12 +41,8 @@ jobs:
           git config user.name "opencode-nvidia-factory-6[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Install OpenCode and NVIDIA model discovery
-        run: |
-          npm install --global opencode-ai@1.15.2
-          npm install --global --ignore-scripts free-coding-models@0.5.69
-          opencode --version
-          free-coding-models --version || true
+      - name: Install pinned FCM discovery CLI
+        run: npm install --global --ignore-scripts free-coding-models@0.5.69
 
       - name: Select a healthy NVIDIA model
         id: model
@@ -141,22 +137,16 @@ jobs:
 
       - name: Run OpenCode NVIDIA factory
         if: steps.target.outputs.has_target == 'true'
+        uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a
         env:
-          MODEL: ${{ steps.model.outputs.model }}
-          MODE: ${{ steps.target.outputs.mode }}
-          NUMBER: ${{ steps.target.outputs.number }}
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          if [[ "$MODE" == "pr" ]]; then
-            target="pull request #${NUMBER}"
-            mission="Resume this Factory 6 PR. Inspect current CI and review feedback, fix only actionable closure-critical defects, run focused validation, and leave the PR ready for supervising merge."
-          else
-            target="issue #${NUMBER}"
-            mission="Implement the full acceptance contract for this issue in one coherent non-draft PR. Make closure-critical code and tests and run focused validation."
-          fi
-          prompt="You are OpenCode NVIDIA Factory 6 for JoshCLWren/comic-pile. Durable worker ID: ${FACTORY_WORKER_ID}. Model: ${MODEL}. Assigned target: ${target}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. ${mission} Product bugs outrank test plumbing, docs, changelog work, CI cosmetics, and optional cleanup. You may edit files, run tests, use gh, commit, and push this branch. You MUST NOT merge, enable auto-merge, push main, touch production databases, or alter automation schedules. Do the work, do not merely summarize it."
-          opencode run -m "$MODEL" --agent build --auto --dir "$GITHUB_WORKSPACE" --title "ComicPile NVIDIA Factory 6" "$prompt" | tee /tmp/opencode-factory.log
+          GITHUB_TOKEN: ${{ github.token }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          PROMPT: >-
+            You are OpenCode NVIDIA Factory 6 for JoshCLWren/comic-pile. Durable worker ID: opencode-nvidia-factory-6. Your assigned target is ${{ steps.target.outputs.mode }} #${{ steps.target.outputs.number }}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Work only on this assigned target. If it is an issue, implement its full closure-critical acceptance contract with code and focused tests. If it is a PR, inspect current CI and actionable review feedback and repair only what is needed to finish it. Product bugs outrank test plumbing, docs, changelog work, CI cosmetics, and optional cleanup. Edit the checked-out branch and run focused validation. Do not merely summarize. Do not merge, enable auto-merge, push main, touch production databases, or alter automation schedules.
+        with:
+          model: ${{ steps.model.outputs.model }}
+          agent: build
+          use_github_token: true
 
       - name: Persist implementation and open PR
         if: steps.target.outputs.has_target == 'true'
