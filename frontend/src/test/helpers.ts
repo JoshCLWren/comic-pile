@@ -194,7 +194,7 @@ export async function submitRatingAndWaitForRateResponse(
   submitAction: () => Promise<void>,
 ): Promise<void> {
   const rateResponse = page.waitForResponse(
-    (response) => response.url().includes('/api/rate/') && response.request().method() === 'POST',
+    (response) => response.url().includes('/api/v1/rate/') && response.request().method() === 'POST',
   )
 
   await submitAction()
@@ -373,7 +373,7 @@ export const SELECTORS = {
 	},
 	rate: {
 		ratingInput: '#rating-input',
-		submitButton: 'button:has-text("Save & Continue")',
+		submitButton: 'button:has-text("Mark read & save")',
 		snoozeButton: 'button:has-text("Snooze")',
 	},
 	thread: {
