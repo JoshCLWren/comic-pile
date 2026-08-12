@@ -108,7 +108,7 @@ describe('RollPage bootstrap modal coverage', () => {
     render(<RollPage />)
 
     fireEvent.click(screen.getAllByRole('button', { name: 'complete dice' })[0]!)
-    await user.click(screen.getByRole('button', { name: 'Override' }))
+    await user.click(screen.getByRole('button', { name: 'Pick manually' }))
 
     await waitFor(() => expect(spies.list).toHaveBeenCalled())
     const select = screen.getByRole('combobox')
@@ -116,9 +116,9 @@ describe('RollPage bootstrap modal coverage', () => {
     expect(screen.getByRole('option', { name: 'Watchmen (Comic)' })).toBeInTheDocument()
 
     await user.selectOptions(select, '1')
-    await user.click(screen.getByRole('button', { name: 'Override Roll' }))
+    await user.click(screen.getByRole('button', { name: 'Pick this thread' }))
     await waitFor(() => expect(spies.override).toHaveBeenCalledWith({ thread_id: 1 }))
-    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Override Roll' })).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Pick manually' })).not.toBeInTheDocument())
   })
 
   it('renders pending override and manual-die states and closes the die modal after a successful choice', async () => {
@@ -127,13 +127,12 @@ describe('RollPage bootstrap modal coverage', () => {
     const user = userEvent.setup()
     render(<RollPage />)
 
-    await user.click(screen.getByRole('button', { name: 'Override' }))
-    expect(screen.getByRole('button', { name: 'Overriding...' })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: 'Pick manually' }))
+    expect(screen.getByRole('button', { name: 'Selecting...' })).toBeDisabled()
     await user.click(screen.getByRole('button', { name: 'close modal' }))
-    expect(screen.queryByRole('heading', { name: 'Override Roll' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Pick manually' })).not.toBeInTheDocument()
 
-    const d6Buttons = screen.getAllByRole('button', { name: 'd6' })
-    await user.click(d6Buttons[d6Buttons.length - 1]!)
+    await user.click(screen.getByRole('button', { name: /current die d6, manual mode/i }))
     expect(screen.getByRole('heading', { name: 'Select Die' })).toBeInTheDocument()
     const d8Buttons = screen.getAllByRole('button', { name: 'd8' })
     await user.click(d8Buttons[d8Buttons.length - 1]!)

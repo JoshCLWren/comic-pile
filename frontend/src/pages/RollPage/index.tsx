@@ -733,7 +733,7 @@ export default function RollPage() {
             </div>
           )}
         </div>
-        <div className="flex items-center gap-1 md:gap-2 shrink-0">
+        <div className={`items-center gap-1 md:gap-2 shrink-0 ${isRatingView ? 'hidden' : 'flex'}`}>
           <div id="die-selector">
             <div className="hidden md:flex gap-2">
               {DICE_LADDER.map((die) => (
@@ -750,8 +750,10 @@ export default function RollPage() {
             </div>
             <div className="md:hidden">
               <button onClick={() => setIsDieModalOpen(true)} disabled={setDieMutation.isPending}
-                className="px-3 py-1.5 text-[11px] font-black rounded-lg border bg-amber-600/20 border-amber-600 text-amber-500 transition-colors">
-                d{currentDie}
+                aria-label={`Current die d${currentDie}, ${bootstrap.manual_die ? 'manual mode' : 'automatic mode'}`}
+                className="flex min-h-11 flex-col items-center justify-center rounded-lg border border-amber-600 bg-amber-600/20 px-3 py-1 text-amber-500 transition-colors">
+                <span className="text-[11px] font-black">d{currentDie}</span>
+                <span className="text-[8px] font-bold uppercase tracking-wide">{bootstrap.manual_die ? 'Manual' : 'Auto'}</span>
               </button>
             </div>
           </div>
@@ -768,9 +770,9 @@ export default function RollPage() {
               <span id="header-die-label" className="text-[10px] font-black text-amber-500">d{currentDie}</span>
             </div>
           </div>
-          <Tooltip content="Manually select a thread to override the next roll result.">
-            <button type="button" onClick={() => { setOverrideThreads(null); setIsOverrideOpen(true) }} className="px-2 md:px-3 py-1.5 md:py-2 bg-white/5 border border-white/10 text-stone-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all">
-              Override
+          <Tooltip content="Pick a specific eligible thread for the next result.">
+            <button type="button" onClick={() => { setOverrideThreads(null); setIsOverrideOpen(true) }} className="min-h-11 px-2 md:px-3 py-1.5 md:py-2 bg-white/5 border border-white/10 text-stone-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all">
+              Pick manually
             </button>
           </Tooltip>
         </div>
@@ -861,9 +863,9 @@ export default function RollPage() {
           <SimpleMigrationDialog threadTitle={activeRatingThread.title} onComplete={handleSimpleMigrationComplete} onClose={() => setShowSimpleMigration(false)} />
         )}
 
-        <Modal isOpen={isOverrideOpen} title="Override Roll" onClose={() => { setIsOverrideOpen(false); setOverrideErrorMessage('') }}>
+        <Modal isOpen={isOverrideOpen} title="Pick manually" onClose={() => { setIsOverrideOpen(false); setOverrideErrorMessage('') }}>
           <form className="space-y-4" onSubmit={handleOverrideSubmit}>
-            <p className="text-xs text-stone-400">Pick a thread to force next roll result.</p>
+            <p className="text-xs text-stone-400">Choose the eligible thread you want to read next.</p>
             <div className="space-y-2">
               <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Thread</label>
               <select value={overrideThreadId} onChange={(event: ChangeEvent<HTMLSelectElement>) => setOverrideThreadId(event.target.value)}
@@ -884,12 +886,17 @@ export default function RollPage() {
             )}
             <button type="submit" disabled={overrideMutation.isPending || !overrideThreadId}
               className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-60">
-              {overrideMutation.isPending ? 'Overriding...' : 'Override Roll'}
+              {overrideMutation.isPending ? 'Selecting...' : 'Pick this thread'}
             </button>
           </form>
         </Modal>
 
         <Modal isOpen={isDieModalOpen} title="Select Die" onClose={() => setIsDieModalOpen(false)}>
+          <p className="mb-3 text-xs text-stone-400">
+            {bootstrap.manual_die
+              ? `Manual mode is active at d${bootstrap.manual_die}. Choose another die or return to automatic mode.`
+              : `Automatic mode is active at d${currentDie}. Choosing a die switches to manual mode.`}
+          </p>
           <div className="grid grid-cols-3 gap-2">
             {DICE_LADDER.map((die) => (
               <button key={die} onClick={async () => { if (await handleSetDie(die)) setIsDieModalOpen(false) }}

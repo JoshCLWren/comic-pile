@@ -31,12 +31,12 @@ beforeEach(() => {
   mockClearAccessToken.mockReset()
 })
 
-const renderWithAuth = () => {
+const renderWithAuth = (initialEntry = '/') => {
   mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
   mockSetAccessToken.mockImplementation(() => undefined)
 
   return render(
-    <MemoryRouter initialEntries={['/']}>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <AuthProvider>
         <BugReportRestoreProvider>
           <Navigation onBugReportSubmit={vi.fn()} />
@@ -67,7 +67,21 @@ test('renders retained navigation links when authenticated', async () => {
   })
   expect(screen.getByRole('link', { name: /queue page/i })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /history page/i })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /crossovers page/i })).toBeInTheDocument()
+  expect(screen.getByText('Roll')).toBeVisible()
+  expect(screen.getByText('Queue')).toBeVisible()
+  expect(screen.getByText('History')).toBeVisible()
+  expect(screen.getByText('Crossovers')).toBeVisible()
+  expect(screen.getByText('More')).toBeVisible()
   expect(screen.queryByRole('link', { name: /analytics page/i })).not.toBeInTheDocument()
+})
+
+test('marks More as the only active destination on submenu routes', async () => {
+  renderWithAuth('/glossary')
+
+  const moreButton = await screen.findByRole('button', { name: /more pages/i })
+  expect(moreButton).toHaveClass('active')
+  expect(document.querySelectorAll('.nav-item.active')).toHaveLength(1)
 })
 
 test('dismisses the More tray only when tapping outside it', async () => {
@@ -100,13 +114,14 @@ test('does not render when not authenticated', async () => {
   })
 })
 
-test('shows logout button when authenticated', async () => {
+test('puts the mobile Sign out action inside More', async () => {
   mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
   renderWithAuth()
+  const user = userEvent.setup()
 
-  await waitFor(() => {
-    expect(screen.getByRole('button', { name: /log out/i })).toBeInTheDocument()
-  })
+  expect(screen.queryByRole('button', { name: /sign out/i })).not.toBeInTheDocument()
+  await user.click(await screen.findByRole('button', { name: /more pages/i }))
+  expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument()
 })
 
 test('shows loading and non-auth failure states and logs out gracefully', async () => {
@@ -121,9 +136,10 @@ test('shows loading and non-auth failure states and logs out gracefully', async 
       </AuthProvider>
     </MemoryRouter>,
   )
-  await waitFor(() => expect(screen.getByRole('button', { name: /log out/i })).toBeInTheDocument())
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('button', { name: /more pages/i }))
   mockApiPost.mockRejectedValueOnce(new Error('logout unavailable'))
-  await userEvent.setup().click(screen.getByRole('button', { name: /log out/i }))
+  await user.click(screen.getByRole('button', { name: /sign out/i }))
   await waitFor(() => expect(mockClearAccessToken).toHaveBeenCalled())
 
 })
@@ -155,7 +171,7 @@ test('falls back to an empty username when the user profile omits it', async () 
       </AuthProvider>
     </MemoryRouter>,
   )
-  await waitFor(() => expect(screen.getByRole('button', { name: /log out/i })).toBeInTheDocument())
+  await waitFor(() => expect(screen.getByRole('button', { name: /more pages/i })).toBeInTheDocument())
   // empty username is falsy, so no username span is rendered for it
   expect(screen.queryByText('testuser')).not.toBeInTheDocument()
 })

@@ -106,7 +106,7 @@ describe('RollPage parent handlers', () => {
     fireEvent.click(screen.getByRole('button', { name: 'refresh rating' }))
     fireEvent.click(screen.getByRole('button', { name: 'save rating' }))
     await waitFor(() => expect(screen.queryByRole('button', { name: 'save rating' })).not.toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: /^Override$/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Pick manually$/ }))
     fireEvent.click(screen.getByRole('button', { name: 'close modal' }))
     fireEvent.click(screen.getByRole('button', { name: 'shuffle pool' }))
     fireEvent.click(screen.getByRole('button', { name: 'toggle snoozed' }))
@@ -182,13 +182,13 @@ describe('RollPage parent handlers', () => {
   it('opens override, submits it, and handles a pending migration flow', async () => {
     const user = userEvent.setup()
     render(<RollPage />)
-    await user.click(screen.getByRole('button', { name: /^Override$/ }))
+    await user.click(screen.getByRole('button', { name: /^Pick manually$/ }))
     await user.selectOptions(screen.getAllByRole('combobox').at(-1)!, '1')
-    await user.click(screen.getByRole('button', { name: /Override Roll/ }))
+    await user.click(screen.getByRole('button', { name: /Pick this thread/ }))
     await waitFor(() => expect(spies.override).toHaveBeenCalled())
 
-    await user.click(screen.getByRole('button', { name: /^Override$/ }))
-    fireEvent.submit(screen.getByRole('button', { name: /Override Roll/ }).closest('form')!)
+    await user.click(screen.getByRole('button', { name: /^Pick manually$/ }))
+    fireEvent.submit(screen.getByRole('button', { name: /Pick this thread/ }).closest('form')!)
     await user.click(screen.getByRole('button', { name: 'close modal' }))
 
     spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, result: 3 })
@@ -251,9 +251,9 @@ describe('RollPage parent handlers', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Roll the dice' })).toBeInTheDocument())
 
     spies.override.mockRejectedValueOnce(error)
-    await user.click(screen.getByRole('button', { name: /^Override$/ }))
+    await user.click(screen.getByRole('button', { name: /^Pick manually$/ }))
     await user.selectOptions(screen.getAllByRole('combobox').at(-1)!, '1')
-    await user.click(screen.getByRole('button', { name: /Override Roll/ }))
+    await user.click(screen.getByRole('button', { name: /Pick this thread/ }))
     await waitFor(() => expect(screen.getByText('failed')).toBeInTheDocument())
 
     spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, result: 3 })
@@ -312,7 +312,7 @@ describe('RollPage parent handlers', () => {
     bootstrapData.stale_thread_count = 1
     render(<RollPage />)
     expect(screen.getByText('offset active')).toBeInTheDocument()
-    await userEvent.setup().click(screen.getAllByRole('button', { name: 'd6' })[1]!)
+    await userEvent.setup().click(screen.getByRole('button', { name: /current die d6, (?:automatic|manual) mode/i }))
     expect(screen.getByRole('heading', { name: 'Select Die' })).toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: 'close modal' }))
     expect(screen.getByRole('button', { name: 'read stale' })).toBeInTheDocument()
@@ -995,12 +995,12 @@ describe('RollPage parent handlers', () => {
 
   it('selects a die and clears manual die from the mobile die modal', async () => {
     render(<RollPage />)
-    await userEvent.setup().click(screen.getAllByRole('button', { name: 'd6' })[1]!)
+    await userEvent.setup().click(screen.getByRole('button', { name: /current die d6, (?:automatic|manual) mode/i }))
     const autoModal = screen.getByRole('heading', { name: 'Select Die' }).closest('section')!
     await userEvent.setup().click(within(autoModal).getByRole('button', { name: 'Auto' }))
     expect(spies.clearDie).toHaveBeenCalled()
 
-    await userEvent.setup().click(screen.getAllByRole('button', { name: 'd6' })[1]!)
+    await userEvent.setup().click(screen.getByRole('button', { name: /current die d6, (?:automatic|manual) mode/i }))
     const dieModal = screen.getByRole('heading', { name: 'Select Die' }).closest('section')!
     await userEvent.setup().click(within(dieModal).getByRole('button', { name: 'd4' }))
     expect(spies.setDie).toHaveBeenCalledWith(4)
@@ -1029,7 +1029,7 @@ describe('RollPage parent handlers', () => {
     render(<RollPage />)
     expect(screen.getByRole('button', { name: 'Auto' })).toHaveAttribute('title', 'Exit manual mode (currently d4)')
 
-    await userEvent.setup().click(screen.getAllByRole('button', { name: 'd6' })[1]!)
+    await userEvent.setup().click(screen.getByRole('button', { name: /current die d6, (?:automatic|manual) mode/i }))
     const modal = screen.getByRole('heading', { name: 'Select Die' }).closest('section')!
     spies.setDie.mockRejectedValueOnce(new Error('die failed'))
     await userEvent.setup().click(within(modal).getByRole('button', { name: 'd4' }))
