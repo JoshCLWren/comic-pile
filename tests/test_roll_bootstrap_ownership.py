@@ -72,6 +72,9 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
             "id": 101,
             "title": "Owned",
             "format": "ongoing",
+            "issue_id": None,
+            "issue_number": None,
+            "route_labels": [],
             "last_activity_at": None,
         }
     ]
