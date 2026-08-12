@@ -41,14 +41,15 @@ test.describe('Rate Thread Feature', () => {
     await expect(actions).toBeVisible();
     await expect(navigation).toBeVisible();
 
-    const [actionsBox, navigationBox] = await Promise.all([
-      actions.boundingBox(),
+    const primaryAction = page.getByRole('button', { name: /Mark read & (save|complete)/ });
+    await expect(primaryAction).toBeVisible();
+    const [buttonBox, navigationBox] = await Promise.all([
+      primaryAction.boundingBox(),
       navigation.boundingBox(),
     ]);
-    expect(actionsBox).not.toBeNull();
+    expect(buttonBox).not.toBeNull();
     expect(navigationBox).not.toBeNull();
-    expect(actionsBox!.y + actionsBox!.height).toBeGreaterThan(navigationBox!.y);
-    await expect(page.getByRole('button', { name: /Mark read & (save|complete)/ })).toBeVisible();
+    expect(buttonBox!.y + buttonBox!.height).toBeLessThanOrEqual(navigationBox!.y);
   });
 
   test('should display rating input on inline rating view', async ({ authenticatedWithThreadsPage }) => {
