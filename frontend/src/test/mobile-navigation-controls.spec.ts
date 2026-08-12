@@ -47,6 +47,6 @@ test.describe('Mobile navigation and Roll controls (#1091)', () => {
 
     await page.getByRole('button', { name: /current die d\d+, automatic mode/i }).click();
     await expect(page.getByText(/Automatic mode is active at d\d+/)).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Use automatic' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Auto' })).toBeVisible();
   });
 });
