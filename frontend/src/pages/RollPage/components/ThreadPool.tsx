@@ -70,22 +70,24 @@ export function ThreadPool({
         </p>
       )}
 
-      <div className="flex items-center gap-2 shrink-0 mb-4">
+      {!isRatingView && <div className="flex items-center gap-2 shrink-0 mb-4">
         <div className="w-2 h-2 rounded-full bg-amber-600 shadow-[0_0_15px_var(--accent-red)]"></div>
         <div className="flex-1">
-          <p className="text-[10px] font-black uppercase tracking-wider text-stone-300">Roll Pool</p>
+          <p className="text-[10px] font-black uppercase tracking-wider text-stone-300">Eligible now · {pool.length}</p>
         </div>
         <button
           type="button"
           onClick={onShuffle}
           disabled={shuffleIsPending || pool.length < 2}
+          aria-describedby="shuffle-queue-description"
           className="h-8 px-3 rounded-lg border border-white/10 bg-white/5 text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 disabled:opacity-50"
         >
-          Shuffle
+          Shuffle queue
         </button>
-      </div>
+        <span id="shuffle-queue-description" className="sr-only">Randomizes the complete active queue, then refreshes these eligible die mappings.</span>
+      </div>}
 
-      <div className="space-y-2" data-roll-pool aria-label="Roll pool">
+      {!isRatingView && <div className="space-y-2" data-roll-pool aria-label={`Eligible now, ${pool.length} mapped result${pool.length === 1 ? '' : 's'}`}>
         {pool.length === 0 && blockedThreads.length === 0 && snoozedThreads.length === 0 ? (
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🎲</div>
@@ -137,6 +139,7 @@ export function ThreadPool({
                 }}
                 role="button"
                 tabIndex={0}
+                aria-label={`Die face ${index + 1}: ${thread.issue_number ? `issue ${thread.issue_number}, ` : ''}${thread.title}${thread.route_labels?.length ? `, routes ${thread.route_labels.join(', ')}` : ''}. Open thread actions.`}
                 className={`flex items-center gap-3 px-4 py-3 bg-white/5 border border-white/5 rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-amber-500/30' : ''
                   }`}
               >
@@ -144,14 +147,22 @@ export function ThreadPool({
                   {index + 1}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-stone-300 truncate text-sm">{thread.title}</p>
+                  <p className="font-bold text-stone-200 truncate text-sm">
+                    {thread.issue_number ? `Issue ${thread.issue_number}` : 'Next unread issue'}
+                  </p>
+                  <p className="truncate text-xs text-stone-400">{thread.title}</p>
                   <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mt-0.5">{thread.format}</p>
+                  {thread.route_labels?.length ? (
+                    <p className="mt-1 truncate text-[10px] text-sky-300">
+                      Routes: {thread.route_labels.join(' · ')}
+                    </p>
+                  ) : null}
                 </div>
               </div>
             )
           })
         )}
-      </div>
+      </div>}
 
       {blockedThreads.length > 0 && !isRatingView && (
         <div className="mt-4">
