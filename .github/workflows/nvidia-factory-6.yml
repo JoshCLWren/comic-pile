@@ -1,0 +1,194 @@
+name: NVIDIA Factory 6
+
+on:
+  schedule:
+    - cron: "37 */2 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nvidia-factory-6
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: read
+  checks: read
+
+jobs:
+  factory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+      FACTORY_OWNER: factory:6
+      FACTORY_WORKER_ID: opencode-nvidia-factory-6
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Configure git identity
+        run: |
+          git config user.name "opencode-nvidia-factory-6[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Install OpenCode and NVIDIA model discovery
+        run: |
+          npm install --global opencode-ai@1.15.2
+          npm install --global --ignore-scripts free-coding-models@0.5.69
+          opencode --version
+          free-coding-models --version || true
+
+      - name: Select a healthy NVIDIA model
+        id: model
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          fcm_output="$(free-coding-models --json --origin nvidia --hide-unconfigured --best --no-telemetry)"
+          candidates="$(printf '%s\n' "$fcm_output" | python scripts/select_fcm_nvidia_model.py)"
+          selected_model=""
+          while IFS= read -r candidate; do
+            [[ -n "$candidate" ]] || continue
+            echo "Probing $candidate"
+            provider_model="${candidate#nvidia/}"
+            request="$(jq -nc --arg model "$provider_model" '{model:$model,messages:[{role:"user",content:"Reply with exactly: FCM_NVIDIA_MODEL_OK"}],max_tokens:32}')"
+            response="$(curl --silent --show-error --fail-with-body \
+              --header "Authorization: Bearer $NVIDIA_API_KEY" \
+              --header 'Content-Type: application/json' \
+              --data "$request" \
+              https://integrate.api.nvidia.com/v1/chat/completions || true)"
+            if jq -e '.choices[0].message.content | strings | contains("FCM_NVIDIA_MODEL_OK")' >/dev/null 2>&1 <<< "$response"; then
+              selected_model="$candidate"
+              break
+            fi
+          done <<< "$candidates"
+          if [[ -z "$selected_model" ]]; then
+            echo "No compatible NVIDIA model is currently healthy" >&2
+            exit 1
+          fi
+          echo "Selected $selected_model"
+          echo "model=$selected_model" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure Factory 6 label exists
+        run: |
+          if ! gh api "repos/${GITHUB_REPOSITORY}/labels/factory%3A6" >/dev/null 2>&1; then
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" \
+              -f name='factory:6' \
+              -f color='5319e7' \
+              -f description='Owned by OpenCode NVIDIA Factory 6' >/dev/null
+          fi
+
+      - name: Select and claim product work
+        id: target
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          owner_re='^factory:(unowned|local|[1-6])$'
+          stage_re='^factory:(building|review|changes-requested|ci|ready|blocked)$'
+
+          existing_pr="$(gh pr list --state open --label "$FACTORY_OWNER" --limit 100 --json number,headRefName,updatedAt | jq 'sort_by(.updatedAt) | first // empty')"
+          if [[ -n "$existing_pr" ]]; then
+            echo "mode=pr" >> "$GITHUB_OUTPUT"
+            echo "number=$(jq -r .number <<< "$existing_pr")" >> "$GITHUB_OUTPUT"
+            echo "branch=$(jq -r .headRefName <<< "$existing_pr")" >> "$GITHUB_OUTPUT"
+            echo "has_target=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          choose_issue() {
+            local labels=("$@")
+            local args=(issue list --state open --limit 200 --json number,labels,createdAt)
+            for label in "${labels[@]}"; do args+=(--label "$label"); done
+            gh "${args[@]}" | jq -r --arg owner_re "$owner_re" '
+              map(select(.number != 679))
+              | map(select((([.labels[].name | select(test($owner_re))] | length) == 0) or (([.labels[].name | select(. == "factory:unowned")] | length) == 1)))
+              | sort_by(.createdAt) | reverse | first | .number // empty'
+          }
+
+          number="$(choose_issue user-reported bug)"
+          [[ -n "$number" ]] || number="$(choose_issue bug)"
+          [[ -n "$number" ]] || number="$(choose_issue)"
+          if [[ -z "$number" ]]; then
+            echo "No unclaimed executable work found"
+            echo "has_target=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
+          if jq -e --arg owner_re "$owner_re" '[.[] | select(test($owner_re) and . != "factory:unowned")] | length > 0' >/dev/null <<< "$labels"; then
+            echo "Issue #$number was claimed during selection"
+            echo "has_target=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          target_labels="$(jq -c --arg owner_re "$owner_re" --arg stage_re "$stage_re" 'map(select((test($owner_re)|not) and (test($stage_re)|not) and . != "factory")) + ["factory","factory:6","factory:building"] | unique' <<< "$labels")"
+          gh api --method PUT "repos/${GITHUB_REPOSITORY}/issues/${number}/labels" --input - <<< "{\"labels\":${target_labels}}" >/dev/null
+
+          echo "mode=issue" >> "$GITHUB_OUTPUT"
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+          echo "branch=factory/6-${number}-nvidia" >> "$GITHUB_OUTPUT"
+          echo "has_target=true" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout factory branch
+        if: steps.target.outputs.has_target == 'true'
+        env:
+          MODE: ${{ steps.target.outputs.mode }}
+          BRANCH: ${{ steps.target.outputs.branch }}
+        run: |
+          git fetch --prune origin
+          if [[ "$MODE" == "pr" ]]; then
+            git fetch origin "$BRANCH:$BRANCH"
+            git switch "$BRANCH"
+          elif git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            git fetch origin "$BRANCH:$BRANCH"
+            git switch "$BRANCH"
+          else
+            git switch -c "$BRANCH" origin/main
+          fi
+
+      - name: Run OpenCode NVIDIA factory
+        if: steps.target.outputs.has_target == 'true'
+        env:
+          MODEL: ${{ steps.model.outputs.model }}
+          MODE: ${{ steps.target.outputs.mode }}
+          NUMBER: ${{ steps.target.outputs.number }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ "$MODE" == "pr" ]]; then
+            target="pull request #${NUMBER}"
+            mission="Resume this Factory 6 PR. Inspect current CI and review feedback, fix only actionable closure-critical defects, run focused validation, and leave the PR ready for supervising merge."
+          else
+            target="issue #${NUMBER}"
+            mission="Implement the full acceptance contract for this issue in one coherent non-draft PR. Make closure-critical code and tests and run focused validation."
+          fi
+          prompt="You are OpenCode NVIDIA Factory 6 for JoshCLWren/comic-pile. Durable worker ID: ${FACTORY_WORKER_ID}. Model: ${MODEL}. Assigned target: ${target}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. ${mission} Product bugs outrank test plumbing, docs, changelog work, CI cosmetics, and optional cleanup. You may edit files, run tests, use gh, commit, and push this branch. You MUST NOT merge, enable auto-merge, push main, touch production databases, or alter automation schedules. Do the work, do not merely summarize it."
+          opencode run -m "$MODEL" --agent build --auto --dir "$GITHUB_WORKSPACE" --title "ComicPile NVIDIA Factory 6" "$prompt" | tee /tmp/opencode-factory.log
+
+      - name: Persist implementation and open PR
+        if: steps.target.outputs.has_target == 'true'
+        env:
+          MODE: ${{ steps.target.outputs.mode }}
+          BRANCH: ${{ steps.target.outputs.branch }}
+          NUMBER: ${{ steps.target.outputs.number }}
+          MODEL: ${{ steps.model.outputs.model }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git add -A
+            git commit -m "factory: advance #${NUMBER} with NVIDIA OpenCode"
+          fi
+          git push --set-upstream origin "$BRANCH"
+
+          if [[ "$MODE" == "issue" ]]; then
+            pr_number="$(gh pr list --state open --head "$BRANCH" --json number --jq '.[0].number // empty')"
+            if [[ -z "$pr_number" && "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]]; then
+              title="$(gh issue view "$NUMBER" --json title --jq .title)"
+              gh pr create --base main --head "$BRANCH" --title "$title" --body "Implements #${NUMBER}.\n\nModel: ${MODEL}\nWorker: ${FACTORY_WORKER_ID}\n\nProduced by OpenCode NVIDIA Factory 6. Normal merge gates still apply."
+            fi
+          fi
