@@ -1,6 +1,6 @@
 # ComicPile Autonomous Factory Policy
 
-Version: 19
+Version: 20
 
 This is the canonical policy for every scheduled ChatGPT worker, the local OpenCode factory, and interactive factory repair sessions.
 
@@ -271,6 +271,14 @@ The packet is operational state, not a substitute for commits, tests, review mar
 acceptance criteria, or truthful labels. Completed and verified work does not require a packet.
 
 Review leases last 45 minutes. Repair and implementation leases last 60 minutes after the latest real progress. Lease expiry permits another worker to continue that issue but does not require a peer to choose it over higher-priority work.
+
+## External scheduled-factory heartbeat
+
+Scheduled ChatGPT workers must update their assigned permanent comment on registry issue #1093 at the start and completion of every run, following `docs/FACTORY_GITHUB_VISIBILITY.md`. The registry and the watchdog's alert issue are operational telemetry, not executable backlog work. Workers must never claim, implement, label, or close them.
+
+A start update records current UTC and `Outcome: running`. A completion update preserves the start time and records current UTC, the actual work item, and truthful outcome. If an update fails, retry once through another available GitHub path and continue delivery; telemetry failure is not authority to stop.
+
+Heartbeat telemetry never counts as substantive progress, never satisfies a valid heartbeat outcome, never outranks executable product work, never extends a lease, and never justifies ending a run. The external watchdog may report missing or stuck heartbeats, but only Josh or an interactive session acting on his direct instruction may change a scheduled task.
 
 ## Communication
 
