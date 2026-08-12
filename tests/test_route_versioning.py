@@ -14,6 +14,7 @@ This test file verifies two things:
 
 import pytest
 
+from fastapi.routing import APIRoute
 from httpx import AsyncClient
 
 from app.main import create_app
@@ -55,7 +56,7 @@ def test_v1_snooze_and_undo_aliases_match_legacy_route_methods() -> None:
     methods_by_path = {
         route.path: frozenset(route.methods or set())
         for route in app.routes
-        if getattr(route, "path", None)
+        if isinstance(route, APIRoute)
     }
 
     alias_pairs = (
