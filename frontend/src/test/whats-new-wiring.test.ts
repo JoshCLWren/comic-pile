@@ -18,17 +18,21 @@ describe('What’s New wiring', () => {
     expect(navigationSource).toContain('What’s New')
   })
 
-  it('keeps the archive and fragments wired to the production static asset', () => {
-    const viteConfigSource = readFileSync(path.join(frontendRoot, 'vite.config.ts'), 'utf-8')
-    const changelogSource = readFileSync(
-      path.resolve(frontendRoot, '../docs/changelog.md'),
+  it('reads the database-backed release API without a static changelog build dependency', () => {
+    const pageSource = readFileSync(
+      path.join(frontendRoot, 'src/pages/WhatsNewPage.tsx'),
       'utf-8',
     )
+    const releaseApiSource = readFileSync(
+      path.join(frontendRoot, 'src/services/api-releases.ts'),
+      'utf-8',
+    )
+    const viteConfigSource = readFileSync(path.join(frontendRoot, 'vite.config.ts'), 'utf-8')
 
-    expect(changelogSource).toMatch(/^# Changelog/m)
-    expect(viteConfigSource).toContain("const defaultArchivePath = path.resolve(__dirname, '../docs/changelog.md')")
-    expect(viteConfigSource).toContain("const defaultFragmentsDir = path.resolve(__dirname, '../docs/changelog.d')")
-    expect(viteConfigSource).toContain("fileName: 'changelog.md'")
-    expect(viteConfigSource).toContain('source: renderChangelog(options)')
+    expect(pageSource).toContain('releasesApi.list')
+    expect(releaseApiSource).toContain("'/v1/releases/'")
+    expect(pageSource).not.toContain('/changelog.md')
+    expect(viteConfigSource).not.toContain('changelogAsset')
+    expect(viteConfigSource).not.toContain('docs/changelog')
   })
 })

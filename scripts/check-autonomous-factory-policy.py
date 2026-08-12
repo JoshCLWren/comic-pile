@@ -56,12 +56,10 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         None.
     """
     for needle in (
-        "Version: 20",
-        "Every product, behavior, deployment, operational, or factory-tooling PR must update",
-        "exactly one isolated Markdown fragment",
-        "`docs/changelog.md` is the frozen historical archive",
-        "Changelog: not user-facing",
-        "A missing required changelog entry is an actionable review defect",
+        "Version: 21",
+        "Release notes are asynchronous post-merge infrastructure",
+        "Implementation workers must not create, repair, or require `docs/changelog.d` fragments",
+        "They are not runtime truth",
         "Drive the open issue backlog to zero",
         "An empty or blocked ordinary backlog is never an idle condition",
         "If no ordinary executable issue can be selected, do not declare the factory idle.",
@@ -111,6 +109,11 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         require(policy, marker, POLICY)
 
     for obsolete in (
+        "## User-facing changelog gate",
+        "Every product, behavior, deployment, operational, or factory-tooling PR must update",
+        "exactly one isolated Markdown fragment",
+        "Changelog: not user-facing",
+        "A missing required changelog entry is an actionable review defect",
         "HONEST STAGE FAST PATH",
         "Planning PRs are encouraged",
         "Always split large PRs into stages",
@@ -150,9 +153,8 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
     for needle in (
         "docs/AUTONOMOUS_FACTORY_POLICY.md",
         "Drive the open issue backlog to zero",
-        "Treat the generated changelog as part of the completion contract",
-        "docs/changelog.d/YYYY-MM-DD-<pr-number>.md",
-        "Changelog: not user-facing",
+        "Release notes are post-merge infrastructure",
+        "database-backed release ledger",
         "newest unclaimed open issue labeled both `user-reported` and `bug`",
         "reproducible E2E-discovered",
         "fewer than four substantive implementation PRs",
@@ -175,6 +177,9 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         require(entrypoint, needle, ENTRYPOINT)
 
     for obsolete in (
+        "Treat the generated changelog as part of the completion contract",
+        "docs/changelog.d/YYYY-MM-DD-<pr-number>.md",
+        "Changelog: not user-facing",
         "open a truthful draft PR",
         "mark a draft ready when",
         "HONEST STAGE FAST PATH",
@@ -207,7 +212,9 @@ def validate_local_guidance() -> None:
         require(text, "factory-resume:v1", source)
 
     scheduled = SCHEDULED_PROMPT.read_text(encoding="utf-8")
-    require(scheduled, "Version: 20", SCHEDULED_PROMPT)
+    require(scheduled, "Version: 21", SCHEDULED_PROMPT)
+    require(scheduled, "FACTORY POLICY V21", SCHEDULED_PROMPT)
+    require(scheduled, "Release notes are post-merge infrastructure", SCHEDULED_PROMPT)
     require(scheduled, "one full atomic label-set replacement", SCHEDULED_PROMPT)
     require(scheduled, "At the start of every scheduled run", SCHEDULED_PROMPT)
     require(scheduled, "Heartbeat telemetry never counts as substantive progress", SCHEDULED_PROMPT)

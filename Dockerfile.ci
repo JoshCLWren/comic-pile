@@ -60,8 +60,6 @@ RUN pnpm install --frozen-lockfile && \
 # Stage 6: Frontend build.
 FROM frontend-deps AS frontend-build
 COPY frontend/ frontend/
-COPY docs/changelog.md docs/changelog.md
-COPY docs/changelog.d/ docs/changelog.d/
 RUN pnpm --filter frontend run build
 
 # Stage 7: Final image with everything.

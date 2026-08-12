@@ -187,13 +187,10 @@ ANTI-ORBIT RULES
 - Waiting for CI, review, merge, Josh, or external availability does not reserve the worker.
   Preserve context and select another free issue.
 - Do not create replacement PRs merely because main advanced.
-- Treat the generated changelog as part of the completion contract for every product, behavior,
-  deployment, operational, or factory-tooling PR. Add exactly one isolated fragment at
-  `docs/changelog.d/YYYY-MM-DD-<pr-number>.md` with a matching date heading, the actual PR link,
-  and a user-facing explanation of what changed and why it matters. Never rewrite or backfill
-  `docs/changelog.md`; it is the frozen archive. Only documentation-only, test-only,
-  generated-artifact-only, or strictly internal refactors may omit a fragment, and the PR body
-  must say `Changelog: not user-facing`.
+- Release notes are post-merge infrastructure. Never create, repair, or gate implementation
+  delivery on `docs/changelog.d` fragments or `/changelog.md`; the dedicated release writer
+  publishes merged user-facing work to the database-backed release ledger and reconciliation
+  owns missed records.
 - Do not split one issue into avoidable foundation or stage PRs. Implement the full contract
   in one coherent non-draft PR whenever reasonably reviewable.
 
@@ -320,7 +317,7 @@ PROMPT
 FACTORY_PROMPT="${FACTORY_PROMPT//__WORKER_ID__/$WORKER_ID}"
 FACTORY_PROMPT="${FACTORY_PROMPT//__MODEL_ID__/$MODEL}"
 
-printf 'ComicPile local factory v19 (atomic labels and durable resume packets)\n'
+printf 'ComicPile local factory v21 (database release ledger)\n'
 printf '  Source repo: %s\n' "$SOURCE_REPO"
 printf '  Worktree:    %s\n' "$WORKTREE"
 printf '  Model:       %s\n' "$MODEL"

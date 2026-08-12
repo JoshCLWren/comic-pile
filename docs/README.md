@@ -4,7 +4,7 @@ This directory is the authoritative index for documentation that must remain ver
 
 ## Documentation ownership
 
-Use the repository for contracts that must change with code: engineering rules, factory policy, API and architecture contracts, migrations, operational recovery procedures, test instructions, and the product changelog. Use the Wiki for owner-oriented architecture overviews, feature terminology, FAQs, troubleshooting narratives, and historical decisions that do not need to ship atomically with code.
+Use the repository for contracts that must change with code: engineering rules, factory policy, API and architecture contracts, migrations, operational recovery procedures, test instructions, and release-pipeline contracts. Use the Wiki for owner-oriented architecture overviews, feature terminology, FAQs, troubleshooting narratives, and historical decisions that do not need to ship atomically with code.
 
 Do not create a new Markdown file just because a topic needs notes. Extend the existing canonical document when one exists. New root-level Markdown files are exceptional and must be added deliberately to the documentation validation allowlist.
 
@@ -14,6 +14,8 @@ ComicPile deploys production from `main` on Vercel. The frontend is a static Vit
 
 Remote Redis caching is governed by the active cache implementation. Documentation about caching must describe the current code rather than older provider experiments.
 
+What’s New is backed by the release API and Neon release ledger. A dedicated post-merge release writer publishes and reconciles user-facing release notes. `docs/changelog.md` and `docs/changelog.d/` are frozen historical migration sources retained only for provenance; they are not runtime inputs or pull-request requirements.
+
 ## Start here
 
 - [Project README](../README.md): project overview and local-development entry point.
@@ -21,7 +23,8 @@ Remote Redis caching is governed by the active cache implementation. Documentati
 - [Autonomous factory policy](AUTONOMOUS_FACTORY_POLICY.md): canonical autonomous delivery lifecycle and merge policy.
 - [Issue execution protocol](ISSUE_EXECUTION_PROTOCOL.md): issue ownership, implementation, validation, and closure procedure.
 - [Factory GitHub visibility](FACTORY_GITHUB_VISIBILITY.md): canonical factory labels and GitHub visibility rules.
-- [Product changelog](changelog.md): frozen historical archive used by the in-app What's New surface together with `docs/changelog.d/` fragments.
+- [Historical changelog](changelog.md): frozen pre-release-ledger source retained for provenance and auditability.
+- [Release writer](RELEASE_WRITER.md): post-merge publication and reconciliation contract for the database release ledger.
 - [API documentation](API.md): REST API contracts and examples.
 - [React architecture](REACT_ARCHITECTURE.md): frontend architecture and build structure.
 - [Database save/load](DATABASE_SAVE_LOAD.md): backup, import/export, and recovery procedures.
@@ -42,7 +45,7 @@ The migration replaces several competing or obsolete entry points with one repos
 | Markdown files had no exhaustive ownership record | Documentation CI renders the exhaustive Markdown inventory on demand without committing shared generated state | CI artifact |
 | Human-facing architecture and troubleshooting material competed with code-coupled contracts | `docs/WIKI_HANDOFF.md` defines the structured Wiki and links code-coupled topics back here | Wiki / Repository |
 
-The inventory generator remains available for audits through the Documentation workflow's `markdown-inventory` artifact. The rendered inventory is intentionally not committed: changelog fragments and other Markdown files are created concurrently, and a tracked generated inventory would turn unrelated pull requests into conflicts over shared generated state.
+The inventory generator remains available for audits through the Documentation workflow's `markdown-inventory` artifact. The rendered inventory is intentionally not committed: Markdown files can still change concurrently, and a tracked generated inventory would turn unrelated pull requests into conflicts over shared generated state.
 
 ## Documentation maintenance
 

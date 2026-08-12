@@ -1,24 +1,7 @@
-# Changelog fragments
+# Historical changelog fragments
 
-User-facing pull requests add one Markdown fragment instead of editing `docs/changelog.md`.
+This directory is a **frozen migration archive**. Its Markdown files were source material for the historical release-ledger backfill and remain in Git only for provenance and auditability.
 
-Name each fragment `YYYY-MM-DD-<pr-number>.md`, for example:
+Do not add, repair, rename, or validate fragments for new pull requests. New user-facing release notes are created after merge by the dedicated release-writer workflow and stored in the database-backed release ledger consumed by What’s New.
 
-```markdown
-## 2026-08-06
-
-**Factory reliability**
-
-- Release notes now use merge-friendly fragments so parallel pull requests do not collide ([#883](https://github.com/JoshCLWren/comic-pile/pull/883)).
-```
-
-Rules:
-
-- One fragment per pull request.
-- The filename date must match the first heading.
-- The fragment must link its pull request.
-- Keep the entry user-facing and explain why the change matters.
-- Do not edit the historical `docs/changelog.md` archive for ordinary new work.
-- Use `Changelog: not user-facing` only for genuinely internal changes.
-
-The Vite changelog plugin validates and combines all fragments before the frozen archive, newest first, into the existing static `/changelog.md` asset.
+`docs/changelog.md` is likewise frozen historical source. Neither this directory nor that file is runtime truth, part of the frontend build, or an implementation merge gate.

@@ -14,7 +14,7 @@ SPEC.loader.exec_module(CHECKER)
 
 
 class AutonomousFactoryPolicyTests(unittest.TestCase):
-    """Verify backlog, changelog, review, merge, and Chromium policy invariants."""
+    """Verify backlog, release-note, review, merge, and Chromium policy invariants."""
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -95,7 +95,7 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
             self.validate(entrypoint=f"{self.entrypoint}\n{rule}\n")
 
     def test_current_sources_are_aligned(self) -> None:
-        """Accept the current V20 policy, protocol, and runtime prompts.
+        """Accept the current V21 policy, protocol, and runtime prompts.
 
         Returns:
             None.
@@ -104,12 +104,12 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
         CHECKER.validate_local_guidance()
 
     def test_version_and_backlog_goal_are_required(self) -> None:
-        """Require V20 and issue-backlog closure as the prime directive.
+        """Require V21 and issue-backlog closure as the prime directive.
 
         Returns:
             None.
         """
-        self.assert_policy_change_fails("Version: 20", "Version: 19")
+        self.assert_policy_change_fails("Version: 21", "Version: 20")
         self.assert_policy_change_fails(
             "Drive the open issue backlog to zero",
             "Keep existing pull requests busy",
@@ -167,31 +167,25 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
             "Any number of workers may own an issue",
         )
 
-    def test_user_facing_changelog_gate_is_required(self) -> None:
-        """Require isolated release-note fragments before readiness or merge.
+    def test_database_release_note_ownership_is_required(self) -> None:
+        """Require post-merge database release notes instead of implementation fragments.
 
         Returns:
             None.
         """
         self.assert_policy_change_fails(
-            "Every product, behavior, deployment, operational, or factory-tooling PR must update",
-            "Factory pull requests may skip release notes",
+            "Release notes are asynchronous post-merge infrastructure",
+            "Release notes are implementation merge gates",
         )
         self.assert_policy_change_fails(
-            "exactly one isolated Markdown fragment",
-            "one shared changelog edit",
-        )
-        self.assert_policy_change_fails(
-            "`docs/changelog.md` is the frozen historical archive",
-            "`docs/changelog.md` is rewritten by every PR",
-        )
-        self.assert_policy_change_fails(
-            "A missing required changelog entry is an actionable review defect",
-            "Changelog omissions do not block merge",
+            "Implementation workers must not create, repair, or require `docs/changelog.d` fragments",
+            "Implementation workers must create changelog fragments",
         )
         self.assert_runtime_rule_fails(
-            "Treat docs/changelog.md as part of the completion contract"
+            "Treat the generated changelog as part of the completion contract"
         )
+        self.assert_runtime_rule_fails("docs/changelog.d/YYYY-MM-DD-<pr-number>.md")
+        self.assert_runtime_rule_fails("Changelog: not user-facing")
 
     def test_review_feedback_gate_is_required(self) -> None:
         """Require current review threads and prevent silent override.
