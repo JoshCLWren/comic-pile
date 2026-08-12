@@ -14,6 +14,7 @@ HEARTBEAT_TIMEOUT="${FACTORY_HEARTBEAT_TIMEOUT:-60}"
 IDLE_SECONDS="${FACTORY_IDLE_SECONDS:-10}"
 FAILURE_BACKOFF_SECONDS="${FACTORY_FAILURE_BACKOFF_SECONDS:-0}"
 MAX_FAILURES="${FACTORY_MAX_FAILURES:-2}"
+MAX_SAME_ISSUE_ATTEMPTS="${FACTORY_MAX_SAME_ISSUE_ATTEMPTS:-2}"
 WAIT_FOR_SCOUT="${COMIC_PILE_FACTORY_WAIT_FOR_SCOUT:-0}"
 SCOUT_READY_FILE="${COMIC_PILE_FACTORY_SCOUT_READY_FILE:-$STATE_DIR/scout-initial-pass.done}"
 SCOUT_PID_FILE="${COMIC_PILE_FACTORY_SCOUT_PID_FILE:-}"
@@ -81,6 +82,502 @@ for command in git gh opencode flock tee grep date sleep stat tail touch setsid;
   command -v "$command" >/dev/null 2>&1 || die "required command not found: $command"
 done
 
+# ===========================================================================
+# DELIVERY LEDGER
+# ===========================================================================
+# The ledger is the single source of truth for what the factory owns.
+# Recovery operates on ledger records, not heuristic branch scanning.
+#
+# Format: TSV with header
+# issue	branch	head	attempts	progress_heads	last_progress_at	pr_number	state
+#
+# States: claiming -> implementing -> pushed -> pr_open -> merged -> released
+#
+# The outer flock($STATE_DIR/factory.lock) serializes all local factory
+# processes.  No finer-grained locking is needed today; if parallel local
+# workers are ever introduced, this TSV must gain per-ledger atomic CAS.
+# ===========================================================================
+LEDGER="$STATE_DIR/delivery-ledger.tsv"
+mkdir -p "$STATE_DIR"
+
+ledger_init() {
+  if [[ ! -f "$LEDGER" ]]; then
+    printf 'issue\tbranch\thead\tattempts\tprogress_heads\tlast_progress_at\tpr_number\tstate\n' > "$LEDGER"
+  fi
+}
+
+ledger_has_header() {
+  head -1 "$LEDGER" 2>/dev/null | grep -q '^issue'
+}
+
+if ! ledger_has_header; then
+  # Migrate old claimed-issues.txt if it exists
+  if [[ -f "$STATE_DIR/claimed-issues.txt" ]]; then
+    printf 'issue\tbranch\thead\tattempts\tprogress_heads\tlast_progress_at\tpr_number\tstate\n' > "$LEDGER"
+    while IFS= read -r issue; do
+      [[ -z "$issue" ]] && continue
+      printf '%s\t\t\t0\t\t\t\tclaiming\n' "$issue" >> "$LEDGER"
+    done < "$STATE_DIR/claimed-issues.txt"
+    mv "$STATE_DIR/claimed-issues.txt" "$STATE_DIR/claimed-issues.txt.bak"
+    printf '[ledger] Migrated claimed-issues.txt to delivery-ledger.tsv\n' >&2
+  fi
+fi
+ledger_init
+
+# Ledger helpers — field indices (1-based for awk)
+# 1=issue 2=branch 3=head 4=attempts 5=progress_heads 6=last_progress_at 7=pr_number 8=state
+ledger_get() {
+  local issue="$1"
+  awk -F'\t' -v issue="$issue" 'NR>1 && $1==issue' "$LEDGER"
+}
+
+ledger_get_field() {
+  local issue="$1" field="$2"
+  ledger_get "$issue" | awk -F'\t' -v f="$field" '{print $f}'
+}
+
+ledger_update() {
+  local issue="$1" field="$2" value="$3"
+  local tmp="$LEDGER.tmp"
+  awk -F'\t' -v issue="$issue" -v field="$field" -v value="$value" '
+    BEGIN {OFS="\t"}
+    NR==1 {print; next}
+    $1==issue {$(field)=value}
+    {print}
+  ' "$LEDGER" > "$tmp"
+  mv "$tmp" "$LEDGER"
+}
+
+ledger_append() {
+  local issue="$1" branch="$2" head="$3"
+  printf '%s\t%s\t%s\t0\t\t\t\tclaiming\n' "$issue" "$branch" "$head" >> "$LEDGER"
+}
+
+ledger_release() {
+  local issue="$1"
+  local tmp="$LEDGER.tmp"
+  awk -F'\t' -v issue="$issue" '$1!=issue || NR==1' "$LEDGER" > "$tmp"
+  mv "$tmp" "$LEDGER"
+}
+
+ledger_list_active() {
+  awk -F'\t' 'NR>1 && $8!="released" && $8!="merged"' "$LEDGER"
+}
+
+# ===========================================================================
+# CLAIM TRACKING — wrapper-owned, not prompt-owned
+# ===========================================================================
+# Returns 0 if issue is already claimed (active in ledger), 1 if not.
+is_claimed() {
+  local issue="$1"
+  local state
+  state="$(ledger_get_field "$issue" 8)"
+  [[ -n "$state" && "$state" != "released" && "$state" != "merged" ]]
+}
+
+# Returns 0 if this issue has been attempted too many times without progress.
+is_exhausted() {
+  local issue="$1"
+  local attempts
+  attempts="$(ledger_get_field "$issue" 4)"
+  attempts="${attempts:-0}"
+  ((attempts >= MAX_SAME_ISSUE_ATTEMPTS))
+}
+
+# Record that an attempt was made. If head changed, reset attempt counter.
+record_attempt() {
+  local issue="$1" new_head="$2"
+  local old_head
+  old_head="$(ledger_get_field "$issue" 3)"
+  local attempts
+  attempts="$(ledger_get_field "$issue" 4)"
+  attempts="${attempts:-0}"
+
+  if [[ "$new_head" != "$old_head" && -n "$old_head" ]]; then
+    # Progress was made — reset attempt counter
+    ledger_update "$issue" 4 1
+    ledger_update "$issue" 3 "$new_head"
+  else
+    # No progress — increment
+    ledger_update "$issue" 4 $((attempts + 1))
+  fi
+  ledger_update "$issue" 6 "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+
+# Post-run bookkeeping: scan log for issue claims and update the ledger.
+# Called after every successful heartbeat. Detects:
+# - PR creation (gh pr create) — update state to pr_open, record PR number
+# - Merge (gh pr merge) — update state to merged, release claim
+# - Branch pushes — record attempt
+post_run_bookkeeping() {
+  local log_file="$1"
+
+  # Detect PR creation and record PR number
+  while IFS= read -r line; do
+    local pr_num branch
+    pr_num="$(printf '%s' "$line" | grep -oP 'https://github\.com/.*?/pull/\K[0-9]+' | head -1)"
+    if [[ -n "$pr_num" ]]; then
+      # Find which branch this PR is for from the log context
+      branch="$(printf '%s' "$line" | grep -oP 'factory/\S+' | head -1)"
+      if [[ -n "$branch" ]]; then
+        local issue
+        issue="$(awk -F'\t' -v b="$branch" 'NR>1 && $2==b {print $1}' "$LEDGER" 2>/dev/null | head -1)"
+        if [[ -n "$issue" ]]; then
+          ledger_update "$issue" 7 "$pr_num"
+          ledger_update "$issue" 8 "pr_open"
+          printf '[bookkeeping] Issue #%s: PR #%s opened on branch %s\n' "$issue" "$pr_num" "$branch" >&2
+        fi
+      fi
+    fi
+  done < <(grep -E 'https://github\.com/.*/pull/[0-9]+' "$log_file" 2>/dev/null)
+
+  # Detect merges — release claims
+  while IFS= read -r line; do
+    local pr_num
+    pr_num="$(printf '%s' "$line" | grep -oP 'https://github\.com/.*?/pull/\K[0-9]+' | head -1)"
+    if [[ -n "$pr_num" ]]; then
+      local issue
+      issue="$(awk -F'\t' -v p="$pr_num" 'NR>1 && $7==p {print $1}' "$LEDGER" 2>/dev/null | head -1)"
+      if [[ -n "$issue" ]]; then
+        ledger_update "$issue" 8 "merged"
+        printf '[bookkeeping] Issue #%s: PR #%s merged — releasing claim\n' "$issue" "$pr_num" >&2
+      fi
+    fi
+  done < <(grep -iE '(merge|merged|successfully merged)' "$log_file" 2>/dev/null)
+
+  # Record attempts for any ledger branches that were pushed
+  while IFS=$'\t' read -r issue branch head _attempts _pa _lat _pr state; do
+    [[ -z "$branch" || -z "$head" ]] && continue
+    [[ "$state" == "released" || "$state" == "merged" ]] && continue
+    # Check if this branch appears in the log as pushed
+    if grep -qF "factory/$branch" "$log_file" 2>/dev/null || grep -qF "$branch" "$log_file" 2>/dev/null; then
+      local current_head
+      current_head="$(git -C "$SOURCE_REPO" rev-parse "$branch" 2>/dev/null || true)"
+      if [[ -n "$current_head" ]]; then
+        record_attempt "$issue" "$current_head"
+      fi
+    fi
+  done < <(awk -F'\t' 'NR>1' "$LEDGER" 2>/dev/null)
+}
+
+# ===========================================================================
+# RECOVERY — operates on ledger records + worktree inspection
+# ===========================================================================
+
+# Build set of branches checked out in other worktrees.
+# Returns short branch names (e.g. "main", "factory/foo") for exact matching.
+_checked_out_refs() {
+  git -C "$SOURCE_REPO" worktree list --porcelain 2>/dev/null \
+    | awk '/^branch /{sub("refs/heads/","",$2); print $2}' | sort -u
+}
+
+# Recover detached HEAD commits — create a recovery branch if HEAD is orphaned.
+recover_detached_head() {
+  local repo="$1"
+  local worktree="$2"
+  local head
+  head="$(git -C "$worktree" rev-parse HEAD 2>/dev/null)" || return 0
+
+  # Check if HEAD is reachable from any local or remote branch
+  local reachable=0
+  if git -C "$repo" branch --contains "$head" 2>/dev/null | grep -q .; then
+    reachable=1
+  fi
+  if git -C "$repo" branch -r --contains "$head" 2>/dev/null | grep -q .; then
+    reachable=1
+  fi
+
+  if ((reachable == 0)); then
+    # HEAD is orphaned — create a recovery branch (sanitize any special chars)
+    local recovery_ref="recovery/orphaned-$(date +%Y%m%d%H%M%S)-${head:0:8}"
+    printf '[recovery] Orphaned detached HEAD %s — creating %s\n' "${head:0:10}" "$recovery_ref" >&2
+    git -C "$repo" branch "$recovery_ref" "$head" 2>/dev/null || true
+    # Push it so it survives worktree reset
+    git -C "$repo" push -u origin "$recovery_ref" 2>/dev/null || \
+      printf '[recovery] WARNING: could not push %s\n' "$recovery_ref" >&2
+  fi
+}
+
+# Persist dirty worktree state — commit to a recovery branch, don't stash.
+persist_worktree_state() {
+  local repo="$1"
+  local worktree="$2"
+
+  # Check for any changes
+  local dirty=0
+  if ! git -C "$worktree" diff --quiet 2>/dev/null; then dirty=1; fi
+  if ! git -C "$worktree" diff --cached --quiet 2>/dev/null; then dirty=1; fi
+  if [[ -n "$(git -C "$worktree" status --porcelain 2>/dev/null)" ]]; then dirty=1; fi
+
+  if ((dirty == 0)); then
+    return 0
+  fi
+
+  local recovery_branch="recovery/dirty-$(date +%Y%m%d%H%M%S)"
+  printf '[recovery] Dirty worktree — committing to %s\n' "$recovery_branch" >&2
+
+  # Atomic: create AND switch to the recovery branch in one step.
+  # If we cannot switch the worktree, abort — we must not commit on a
+  # detached HEAD that may be overwritten by the next reset.
+  if ! git -C "$worktree" checkout -b "$recovery_branch" 2>/dev/null; then
+    printf '[recovery] FATAL: cannot create/switch to %s in worktree\n' "$recovery_branch" >&2
+    return 1
+  fi
+
+  git -C "$worktree" add -A 2>/dev/null
+  git -C "$worktree" commit -m "factory: recover interrupted work $(date -u +%Y-%m-%dT%H:%M:%SZ)" 2>/dev/null || true
+
+  # Push so it survives reset
+  git -C "$repo" push -u origin "$recovery_branch" 2>/dev/null || \
+    printf '[recovery] WARNING: could not push %s\n' "$recovery_branch" >&2
+
+  # Return to detached HEAD
+  git -C "$worktree" checkout --detach HEAD 2>/dev/null || true
+}
+
+# Push unpushed ledger branches.
+push_ledger_branches() {
+  local repo="$1"
+  local pushed=0
+
+  while IFS=$'\t' read -r issue branch head attempts _pa _lat _pr state; do
+    [[ -z "$branch" || -z "$head" ]] && continue
+    [[ "$state" == "released" || "$state" == "merged" ]] && continue
+
+    # Check if branch exists locally
+    if ! git -C "$repo" rev-parse --verify "refs/heads/$branch" >/dev/null 2>&1; then
+      printf '[recovery] Ledger branch %s does not exist locally; skipping.\n' "$branch" >&2
+      continue
+    fi
+
+    # Check if branch is ahead of remote
+    local ahead=0
+    if git -C "$repo" rev-parse --verify "origin/$branch" >/dev/null 2>&1; then
+      ahead="$(git -C "$repo" rev-list --count "origin/$branch..$branch" 2>/dev/null || printf 0)"
+    else
+      # No remote — count commits ahead of main
+      ahead="$(git -C "$repo" rev-list --count "origin/main..$branch" 2>/dev/null || printf 0)"
+    fi
+
+    if ((ahead > 0)); then
+      printf '[recovery] Pushing ledger branch %s (%d unpushed commit(s))\n' "$branch" "$ahead" >&2
+      if git -C "$repo" push -u origin "$branch" 2>&1; then
+        pushed=$((pushed + ahead))
+        # Update ledger head to the branch's actual current head
+        local new_head
+        new_head="$(git -C "$repo" rev-parse "$branch" 2>/dev/null)"
+        if [[ -n "$new_head" ]]; then
+          ledger_update "$issue" 3 "$new_head"
+        fi
+        ledger_update "$issue" 8 "pushed"
+      else
+        printf '[recovery] WARNING: push failed for %s\n' "$branch" >&2
+      fi
+    fi
+  done < <(awk -F'\t' 'NR>1' "$LEDGER" 2>/dev/null)
+
+  printf '[recovery] Pushed %d commit(s) from ledger branches.\n' "$pushed" >&2
+}
+
+# Delete empty factory branches not in ledger and not checked out elsewhere.
+# Only touches branches owned by the factory (factory/ prefix, or in the ledger).
+# Never renames or deletes human feature branches.
+cleanup_stale_branches() {
+  local repo="$1"
+  local checked_out
+  checked_out="$(_checked_out_refs)"
+
+  while IFS= read -r branch; do
+    [[ -z "$branch" ]] && continue
+    # Never touch main, release/*, or branches checked out elsewhere
+    [[ "$branch" == "main" || "$branch" == "master" ]] && continue
+    [[ "$branch" == release/* ]] && continue
+    [[ "$branch" == recovery/* ]] && continue
+    echo "$checked_out" | grep -qx "$branch" && continue
+
+    # Only touch factory-owned branches: factory/* prefix, or explicitly in the ledger
+    local is_factory=0
+    [[ "$branch" == factory/* ]] && is_factory=1
+    if awk -F'\t' -v b="$branch" 'NR>1 && $2==b' "$LEDGER" | grep -q .; then
+      is_factory=1
+    fi
+
+    if ((is_factory == 0)); then
+      continue  # Not factory-owned — never touch
+    fi
+
+    # Check if it has a remote or PR
+    if git -C "$repo" rev-parse --verify "origin/$branch" >/dev/null 2>&1; then
+      continue  # Has remote — don't touch
+    fi
+
+    # Check if it has unique commits
+    local ahead
+    ahead="$(git -C "$repo" rev-list --count "origin/main..$branch" 2>/dev/null || printf 0)"
+    if ((ahead > 0)); then
+      # Has commits but no remote — push to recovery namespace (sanitized name)
+      local safe_branch="${branch//\//-}"
+      local recovery="recovery/untracked-$(date +%Y%m%d%H%M%S)-${safe_branch}"
+      printf '[recovery] Factory branch %s has %d commit(s) — renaming to %s\n' "$branch" "$ahead" "$recovery" >&2
+      git -C "$repo" branch -m "$branch" "$recovery" 2>/dev/null || continue
+      git -C "$repo" push -u origin "$recovery" 2>/dev/null || \
+        printf '[recovery] WARNING: could not push %s\n' "$recovery" >&2
+    else
+      # Empty, no remote, not in ledger — safe to delete
+      printf '[recovery] Deleting empty factory branch %s\n' "$branch" >&2
+      git -C "$repo" branch -D "$branch" 2>/dev/null || true
+    fi
+  done < <(git -C "$repo" branch --format='%(refname:short)' 2>/dev/null)
+}
+
+# Full recovery pass — ledger-driven, worktree-aware.
+run_recovery() {
+  local repo="$1"
+  local worktree="$2"
+
+  printf '[recovery] Starting recovery pass...\n' >&2
+
+  # 1. Recover detached HEAD commits in the worktree
+  recover_detached_head "$repo" "$worktree"
+
+  # 2. Persist dirty worktree state
+  persist_worktree_state "$repo" "$worktree"
+
+  # 3. Push all unpushed ledger branches
+  push_ledger_branches "$repo"
+
+  # 4. Clean up stale non-ledger branches
+  cleanup_stale_branches "$repo"
+
+  printf '[recovery] Recovery pass complete.\n' >&2
+}
+
+# ===========================================================================
+# ASSERT NO UNPERSISTED WORK — reset is forbidden until this passes
+# ===========================================================================
+assert_no_unpersisted_work() {
+  local repo="$1"
+  local worktree="$2"
+  local failures=0
+
+  # 1. Worktree must be clean (no uncommitted, no untracked)
+  if [[ -n "$(git -C "$worktree" status --porcelain 2>/dev/null)" ]]; then
+    printf '[assert] FAIL: worktree has uncommitted/untracked files\n' >&2
+    git -C "$worktree" status --short >&2
+    failures=$((failures + 1))
+  fi
+
+  # 2. HEAD must be reachable from a durable ref
+  local head
+  head="$(git -C "$worktree" rev-parse HEAD 2>/dev/null)" || true
+  if [[ -n "$head" ]]; then
+    local reachable=0
+    if git -C "$repo" branch --contains "$head" 2>/dev/null | grep -q .; then
+      reachable=1
+    fi
+    if git -C "$repo" branch -r --contains "$head" 2>/dev/null | grep -q .; then
+      reachable=1
+    fi
+    if ((reachable == 0)); then
+      printf '[assert] FAIL: HEAD %s is not reachable from any branch\n' "${head:0:10}" >&2
+      failures=$((failures + 1))
+    fi
+  fi
+
+  # 3. Every active ledger entry must have its branch pushed
+  while IFS=$'\t' read -r issue branch head attempts _pa _lat _pr state; do
+    [[ -z "$branch" || -z "$head" ]] && continue
+    [[ "$state" == "released" || "$state" == "merged" ]] && continue
+
+    # Branch must exist locally
+    if ! git -C "$repo" rev-parse --verify "refs/heads/$branch" >/dev/null 2>&1; then
+      printf '[assert] FAIL: ledger branch %s does not exist locally\n' "$branch" >&2
+      failures=$((failures + 1))
+      continue
+    fi
+
+    # Branch must be pushed (remote head must equal or be ahead of local head)
+    local remote_head=""
+    if git -C "$repo" rev-parse --verify "origin/$branch" >/dev/null 2>&1; then
+      remote_head="$(git -C "$repo" rev-parse "origin/$branch" 2>/dev/null)"
+    fi
+    if [[ -z "$remote_head" ]]; then
+      printf '[assert] FAIL: ledger branch %s has no remote\n' "$branch" >&2
+      failures=$((failures + 1))
+    else
+      # Local head must be an ancestor of (or equal to) the remote head
+      # i.e. everything local is pushed
+      if ! git -C "$repo" merge-base --is-ancestor "$branch_head" "$remote_head" 2>/dev/null; then
+        local unpushed
+        unpushed="$(git -C "$repo" rev-list --count "origin/$branch..$branch" 2>/dev/null || printf 0)"
+        printf '[assert] FAIL: ledger branch %s has %d unpushed commit(s)\n' "$branch" "$unpushed" >&2
+        failures=$((failures + 1))
+      fi
+    fi
+
+    # Branch head must match ledger head (or be ahead of it)
+    local branch_head
+    branch_head="$(git -C "$repo" rev-parse "$branch" 2>/dev/null)"
+    if [[ -n "$branch_head" && "$branch_head" != "$head" ]]; then
+      # Check if branch contains the ledger head (branch moved forward)
+      if ! git -C "$repo" merge-base --is-ancestor "$head" "$branch" 2>/dev/null; then
+        printf '[assert] FAIL: ledger branch %s head %s does not contain expected %s\n' \
+          "$branch" "${branch_head:0:10}" "${head:0:10}" >&2
+        failures=$((failures + 1))
+      fi
+    fi
+  done < <(awk -F'\t' 'NR>1' "$LEDGER" 2>/dev/null)
+
+  if ((failures > 0)); then
+    printf '[assert] BLOCKED: %d unpersisted work item(s) found. Reset forbidden.\n' "$failures" >&2
+    return 1
+  fi
+
+  printf '[assert] PASS: all factory work is durable.\n' >&2
+  return 0
+}
+
+# ===========================================================================
+# IMMEDIATE RECOVERY ON ABNORMAL TERMINATION
+# ===========================================================================
+# Called when the watchdog kills the agent or the process exits non-zero.
+# Persists work right now rather than waiting for the next heartbeat.
+immediate_recovery() {
+  local repo="$1"
+  local worktree="$2"
+  local reason="$3"
+
+  printf '[immediate-recovery] Agent terminated (%s). Persisting work...\n' "$reason" >&2
+
+  recover_detached_head "$repo" "$worktree"
+  persist_worktree_state "$repo" "$worktree"
+
+  # Push any branches that are now ahead
+  while IFS=$'\t' read -r issue branch head attempts _pa _lat _pr state; do
+    [[ -z "$branch" ]] && continue
+    [[ "$state" == "released" || "$state" == "merged" ]] && continue
+
+    if git -C "$repo" rev-parse --verify "refs/heads/$branch" >/dev/null 2>&1; then
+      local ahead=0
+      if git -C "$repo" rev-parse --verify "origin/$branch" >/dev/null 2>&1; then
+        ahead="$(git -C "$repo" rev-list --count "origin/$branch..$branch" 2>/dev/null || printf 0)"
+      else
+        # No remote yet — count commits ahead of main
+        ahead="$(git -C "$repo" rev-list --count "origin/main..$branch" 2>/dev/null || printf 0)"
+      fi
+      if ((ahead > 0)); then
+        printf '[immediate-recovery] Pushing %s (%d commit(s))\n' "$branch" "$ahead" >&2
+        git -C "$repo" push -u origin "$branch" 2>/dev/null || true
+      fi
+    fi
+  done < <(awk -F'\t' 'NR>1' "$LEDGER" 2>/dev/null)
+
+  printf '[immediate-recovery] Done.\n' >&2
+}
+
+# ===========================================================================
+# PRE-FLIGHT
+# ===========================================================================
 git -C "$SOURCE_REPO" rev-parse --show-toplevel >/dev/null 2>&1 || die "not a Git repository: $SOURCE_REPO"
 gh auth status >/dev/null 2>&1 || die "GitHub CLI is not authenticated; run: gh auth login"
 
@@ -124,18 +621,38 @@ if ! git -C "$WORKTREE" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 fi
 
 mkdir -p "$WORKTREE/.opencode_logs" "$WORKTREE/.opencode_handoff"
-exec 9>"$WORKTREE/.comic-pile-factory.lock"
+
+# ===========================================================================
+# LOCK — shared state dir lock, not worktree lock
+# ===========================================================================
+exec 9>"$STATE_DIR/factory.lock"
 flock -n 9 || die "another local factory process already holds the factory lock"
 
-# Every heartbeat runs against a fresh origin/main checkout so merged factory
-# tooling and policy land before the next heartbeat selects work. Without this a
-# long-lived worktree silently goes stale after each merge to main.
-printf 'Refreshing factory worktree to latest origin/main...\n'
+# ===========================================================================
+# RECOVERY + ASSERT + RESET
+# ===========================================================================
+# Sequence must be atomic: fetch -> recover -> assert -> reset -> run agent.
+# The lock is held throughout.
+printf 'Fetching latest origin...\n'
 git -C "$SOURCE_REPO" fetch --prune origin
+
+printf 'Running recovery pass...\n'
+run_recovery "$SOURCE_REPO" "$WORKTREE"
+
+printf 'Asserting no unpersisted work...\n'
+if ! assert_no_unpersisted_work "$SOURCE_REPO" "$WORKTREE"; then
+  die "Cannot reset: unpersisted factory work exists. Fix manually or run recovery."
+fi
+
+printf 'Refreshing factory worktree to latest origin/main...\n'
 git -C "$WORKTREE" switch -f --detach origin/main
 printf 'Factory worktree is now at %s (%s).\n' \
-  "$(git -C "$WORKTREE" rev-parse --short origin/main)" "$(git -C "$WORKTREE" log -1 --format='%s' origin/main)"
+  "$(git -C "$WORKTREE" rev-parse --short origin/main)" \
+  "$(git -C "$WORKTREE" log -1 --format='%s' origin/main)"
 
+# ===========================================================================
+# FACTORY PROMPT
+# ===========================================================================
 FACTORY_PROMPT="$(cat <<'PROMPT'
 Act as one high-ownership local factory heartbeat for JoshCLWren/comic-pile.
 Durable worker ID: `__WORKER_ID__`.
@@ -224,8 +741,30 @@ work if the issue did not truthfully close.
 
 WORK LOOP
 `inspect issue -> claim -> implement closure-critical behavior -> focused test -> commit ->
-push -> inspect exact SHA and CI -> inspect all review feedback -> repair -> revalidate ->
-merge when gated -> verify issue closure`
+push -> open/update PR -> inspect exact SHA and CI -> inspect all review feedback -> repair ->
+revalidate -> merge when gated -> verify issue closure`
+
+**DELIVERY INVARIANTS — enforced by the wrapper, not just prompt instructions:**
+
+1. **PUSH BEFORE ADVANCE.** After every `git commit`, immediately `git push` to a
+   named branch. The wrapper's recovery pass will push orphaned work on the NEXT
+   heartbeat, but if you commit and then reset without pushing, the recovery has
+   extra work and you risk losing uncommitted changes.
+
+2. **NO PLANNING-ONLY SUCCESS.** Writing `docs/issue-plans/...` does not count as
+   implementation progress. A plan without code commits is a failed heartbeat.
+
+3. **OPEN A PR EVERY TIME YOU PUSH.** After pushing a branch, immediately create or
+   update a PR with `gh pr create` or `gh pr edit`. A branch without a PR is invisible
+   to other factories and to Josh.
+
+4. **BRANCH HYGIENE.** Every commit must land on a named branch (e.g.,
+   `factory/<issue>-<slug>`). Never commit to a detached HEAD. Never leave empty
+   branches behind.
+
+5. **RESUME, DON'T RECREATE.** If you previously worked on an issue, resume the
+   same branch. Do not create a fresh branch for the same issue. The wrapper tracks
+   claims in the delivery ledger and will not let you exceed the attempt limit.
 
 A normal heartbeat while executable work exists must push substantive code/tests/migration,
 repair a blocking defect/conflict/review finding, open a coherent non-draft implementation
@@ -317,9 +856,10 @@ PROMPT
 FACTORY_PROMPT="${FACTORY_PROMPT//__WORKER_ID__/$WORKER_ID}"
 FACTORY_PROMPT="${FACTORY_PROMPT//__MODEL_ID__/$MODEL}"
 
-printf 'ComicPile local factory v21 (database release ledger)\n'
+printf 'ComicPile local factory v22 (delivery-ledger)\n'
 printf '  Source repo: %s\n' "$SOURCE_REPO"
 printf '  Worktree:    %s\n' "$WORKTREE"
+printf '  Ledger:      %s\n' "$LEDGER"
 printf '  Model:       %s\n' "$MODEL"
 printf '  Agent:       %s\n' "${AGENT:-<default>}"
 printf '  Mode:        %s\n' "$MODE"
@@ -327,11 +867,13 @@ printf '  Run once:    %s\n' "$([[ "$RUN_ONCE" == "1" ]] && printf yes || printf
 printf '  Worker ID:   %s\n' "$WORKER_ID"
 
 report_counts() {
-  local open_prs open_issues pending_campaign
+  local open_prs open_issues pending_campaign active_claims
   open_prs="$(gh pr list --repo JoshCLWren/comic-pile --state open --limit 1000 --json number --jq 'length' 2>/dev/null || printf '?')"
   open_issues="$(gh issue list --repo JoshCLWren/comic-pile --state open --limit 1000 --json number --jq 'length' 2>/dev/null || printf '?')"
   pending_campaign="$(gh issue list --repo JoshCLWren/comic-pile --state open --limit 1000 --label ralph-task --label ralph-status:pending --json number --jq 'length' 2>/dev/null || printf '?')"
-  printf '  GitHub queue: %s open PR(s), %s open issue(s), %s pending ralph task(s)\n' "$open_prs" "$open_issues" "$pending_campaign"
+  active_claims="$(awk -F'\t' 'NR>1 && $8!="released" && $8!="merged"' "$LEDGER" 2>/dev/null | wc -l)"
+  printf '  GitHub queue: %s open PR(s), %s open issue(s), %s pending, %s ledger claim(s)\n' \
+    "$open_prs" "$open_issues" "$pending_campaign" "$active_claims"
 }
 
 report_counts
@@ -349,8 +891,10 @@ while true; do
   [[ "$USE_AUTO" == "1" ]] && opencode_args+=(--auto)
 
   hb_file="$STATE_DIR/heartbeats/factory_heartbeat_${heartbeat}.hb"
+  watchdog_kill_file="$STATE_DIR/heartbeats/watchdog_kill_${heartbeat}"
   mkdir -p "$STATE_DIR/heartbeats"
   touch "$hb_file"
+  rm -f "$watchdog_kill_file"
 
   set +e
   setsid bash -c '
@@ -370,11 +914,13 @@ while true; do
         kill -TERM -- "-$run_pid" 2>/dev/null || kill -TERM "$run_pid" 2>/dev/null || true
         sleep 1
         kill -KILL -- "-$run_pid" 2>/dev/null || kill -KILL "$run_pid" 2>/dev/null || true
+        touch "$watchdog_kill_file"
         break
       fi
       if ((age > HEARTBEAT_TIMEOUT)); then
         printf 'WATCHDOG: killing heartbeat %d run %s because no output arrived for %ss\n' "$heartbeat" "$run_pid" "$age" >&2
         kill -9 -- "-$run_pid" 2>/dev/null || kill -9 "$run_pid" 2>/dev/null || true
+        touch "$watchdog_kill_file"
         break
       fi
       sleep 1
@@ -384,7 +930,23 @@ while true; do
   wait "$run_pid"
   opencode_status=$?
   kill "$watchdog_pid" 2>/dev/null || true
+  watchdog_killed=0
+  [[ -f "$watchdog_kill_file" ]] && watchdog_killed=1
+  rm -f "$watchdog_kill_file"
   set -e
+
+  # =========================================================================
+  # POST-RUN: immediate recovery if abnormal termination
+  # =========================================================================
+  if ((opencode_status != 0)) || ((watchdog_killed == 1)); then
+    reason="exit=$opencode_status"
+    ((watchdog_killed == 1)) && reason="watchdog-kill"
+    immediate_recovery "$SOURCE_REPO" "$WORKTREE" "$reason"
+    # Verify durability after recovery — hard-fail if persistence failed
+    if ! assert_no_unpersisted_work "$SOURCE_REPO" "$WORKTREE"; then
+      die "IMMEDIATE RECOVERY FAILED: cannot make work durable. Stopping rotation."
+    fi
+  fi
 
   if ((opencode_status == 0)); then
     if ! "$MANIFEST_HELPER" record "$MODEL" "$STATE_DIR" >/dev/null 2>&1; then
@@ -394,6 +956,7 @@ while true; do
       sleep "$FAILURE_BACKOFF_SECONDS"
       continue
     fi
+    post_run_bookkeeping "$log_file"
   fi
 
   if ((opencode_status != 0)); then
