@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
@@ -170,7 +170,8 @@ it('explains automatic and manual die modes on mobile', async () => {
   expect(dieControl).toHaveTextContent('Auto')
   await user.click(dieControl)
   expect(screen.getByText(/automatic mode is active at d6/i)).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: /^auto$/i })).toBeInTheDocument()
+  const dieModal = screen.getByRole('heading', { name: 'Select Die' }).closest('section')!
+  expect(within(dieModal).getByRole('button', { name: /^auto$/i })).toBeInTheDocument()
 })
 
 it('shows a retry action when bootstrap loading fails', async () => {
