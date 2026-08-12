@@ -43,7 +43,7 @@ test.describe('Mobile navigation and Roll controls (#1091)', () => {
     await page.getByRole('button', { name: 'Pick manually' }).click();
     await expect(page.getByRole('dialog', { name: 'Pick manually' })).toBeVisible();
     await expect(page.getByText('Choose the eligible thread you want to read next.')).toBeVisible();
-    await page.getByRole('button', { name: 'Close' }).click();
+    await page.getByRole('button', { name: 'Close modal' }).click();
 
     await page.getByRole('button', { name: /current die d\d+, automatic mode/i }).click();
     await expect(page.getByText(/Automatic mode is active at d\d+/)).toBeVisible();
