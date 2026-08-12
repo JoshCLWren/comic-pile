@@ -95,7 +95,7 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
             self.validate(entrypoint=f"{self.entrypoint}\n{rule}\n")
 
     def test_current_sources_are_aligned(self) -> None:
-        """Accept the current V19 policy, protocol, and runtime prompts.
+        """Accept the current V20 policy, protocol, and runtime prompts.
 
         Returns:
             None.
@@ -104,12 +104,12 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
         CHECKER.validate_local_guidance()
 
     def test_version_and_backlog_goal_are_required(self) -> None:
-        """Require V19 and issue-backlog closure as the prime directive.
+        """Require V20 and issue-backlog closure as the prime directive.
 
         Returns:
             None.
         """
-        self.assert_policy_change_fails("Version: 19", "Version: 18")
+        self.assert_policy_change_fails("Version: 20", "Version: 19")
         self.assert_policy_change_fails(
             "Drive the open issue backlog to zero",
             "Keep existing pull requests busy",
@@ -313,6 +313,21 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
         self.assert_policy_change_fails(
             "one full label-set replacement",
             "several label mutations",
+        )
+
+    def test_external_heartbeat_cannot_count_as_progress(self) -> None:
+        """Require watchdog telemetry without weakening substantive outcomes.
+
+        Returns:
+            None.
+        """
+        self.assert_policy_change_fails(
+            "Heartbeat telemetry never counts as substantive progress",
+            "Heartbeat telemetry satisfies a scheduled run",
+        )
+        self.assert_policy_change_fails(
+            "registry issue #1093",
+            "an unspecified registry",
         )
 
     def test_runtime_rejects_hook_bypass_and_failed_test_commits(self) -> None:
