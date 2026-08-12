@@ -46,6 +46,9 @@ class RollBootstrapThread(BaseModel):
     id: int
     title: str
     format: str
+    issue_id: int | None = None
+    issue_number: str | None = None
+    route_labels: list[str] = Field(default_factory=list)
     last_activity_at: str | None = None
 
 
