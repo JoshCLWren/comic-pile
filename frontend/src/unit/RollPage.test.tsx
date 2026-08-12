@@ -170,7 +170,7 @@ it('explains automatic and manual die modes on mobile', async () => {
   expect(dieControl).toHaveTextContent('Auto')
   await user.click(dieControl)
   expect(screen.getByText(/automatic mode is active at d6/i)).toBeInTheDocument()
-  const dieModal = screen.getByRole('heading', { name: 'Select Die' }).closest('section')!
+  const dieModal = screen.getByRole('dialog', { name: 'Select Die' })
   expect(within(dieModal).getByRole('button', { name: /^auto$/i })).toBeInTheDocument()
 })
 
