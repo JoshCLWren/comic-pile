@@ -34,6 +34,11 @@ jobs:
               ["chatgpt-factory-3", { name: "Starman", slot: ":04" }],
               ["chatgpt-factory-4", { name: "Mister Miracle", slot: ":16" }],
               ["chatgpt-factory-5", { name: "Death's Head", slot: ":28" }],
+              ["opencode-nvidia-factory-6", { name: "NVIDIA 6", slot: ":07", staleMinutes: 90, runningMinutes: 65 }],
+              ["opencode-nvidia-factory-7", { name: "NVIDIA 7", slot: ":19", staleMinutes: 90, runningMinutes: 65 }],
+              ["opencode-nvidia-factory-8", { name: "NVIDIA 8", slot: ":31", staleMinutes: 90, runningMinutes: 65 }],
+              ["opencode-nvidia-factory-9", { name: "NVIDIA 9", slot: ":43", staleMinutes: 90, runningMinutes: 65 }],
+              ["opencode-nvidia-factory-10", { name: "NVIDIA 10", slot: ":55", staleMinutes: 90, runningMinutes: 65 }],
             ]);
             const marker = "<!-- factory-heartbeat-alert:v1 -->";
             const now = new Date();
@@ -70,9 +75,11 @@ jobs:
                 (now - new Date(comment.updated_at)) / 60000,
               );
               const running = /^Outcome:\s*running\s*$/im.test(comment.body ?? "");
+              const workerStaleMinutes = metadata.staleMinutes ?? staleMinutes;
+              const workerRunningMinutes = metadata.runningMinutes ?? runningMinutes;
               const unhealthy =
-                ageMinutes > staleMinutes ||
-                (running && ageMinutes > runningMinutes);
+                ageMinutes > workerStaleMinutes ||
+                (running && ageMinutes > workerRunningMinutes);
               const status = unhealthy
                 ? running
                   ? "🔴 stuck running"
@@ -98,7 +105,7 @@ jobs:
               "",
               stale.length
                 ? "The external watchdog detected missing or stuck factory heartbeats."
-                : "All five scheduled factories are reporting normally.",
+                : "All ten scheduled factories are reporting normally.",
               "",
               "| Worker | Call sign | Slot (America/Chicago) | Age | Status |",
               "|---|---|---:|---:|---|",
@@ -108,7 +115,7 @@ jobs:
               `Checked: ${now.toISOString()}`,
               "",
               stale.length
-                ? "Open ChatGPT Scheduled to determine whether the task paused, exhausted usage, or needs action. Do not assign this alert to a factory."
+                ? "Check ChatGPT Scheduled for factories 1-5 and GitHub Actions for NVIDIA factories 6-10. Do not assign this alert to a factory."
                 : "This alert closed automatically after every worker recovered.",
             ].join("\n");
 
@@ -158,11 +165,11 @@ jobs:
               });
               await core.summary
                 .addHeading("Factory heartbeat recovery")
-                .addRaw("All five factories are reporting normally.")
+                .addRaw("All ten factories are reporting normally.")
                 .write();
             } else {
               await core.summary
                 .addHeading("Factory heartbeats healthy")
-                .addRaw("All five factories are reporting normally.")
+                .addRaw("All ten factories are reporting normally.")
                 .write();
             }
