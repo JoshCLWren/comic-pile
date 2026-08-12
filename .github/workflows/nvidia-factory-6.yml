@@ -41,6 +41,12 @@ jobs:
           git config user.name "opencode-nvidia-factory-6[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      - name: Install OpenCode CLI
+        run: |
+          curl -fsSL https://opencode.ai/install | bash
+          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+          "$HOME/.opencode/bin/opencode" --version
+
       - name: Install pinned FCM discovery CLI
         run: npm install --global --ignore-scripts free-coding-models@0.5.69
 
@@ -137,16 +143,22 @@ jobs:
 
       - name: Run OpenCode NVIDIA factory
         if: steps.target.outputs.has_target == 'true'
-        uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
-          PROMPT: >-
-            You are OpenCode NVIDIA Factory 6 for JoshCLWren/comic-pile. Durable worker ID: opencode-nvidia-factory-6. Your assigned target is ${{ steps.target.outputs.mode }} #${{ steps.target.outputs.number }}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Work only on this assigned target. If it is an issue, implement its full closure-critical acceptance contract with code and focused tests. If it is a PR, inspect current CI and actionable review feedback and repair only what is needed to finish it. Product bugs outrank test plumbing, docs, changelog work, CI cosmetics, and optional cleanup. Edit the checked-out branch and run focused validation. Do not merely summarize. Do not merge, enable auto-merge, push main, touch production databases, or alter automation schedules.
-        with:
-          model: ${{ steps.model.outputs.model }}
-          agent: build
-          use_github_token: true
+          MODEL: ${{ steps.model.outputs.model }}
+          MODE: ${{ steps.target.outputs.mode }}
+          NUMBER: ${{ steps.target.outputs.number }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ "$MODE" == "pr" ]]; then
+            target="pull request #${NUMBER}"
+            mission="Resume this Factory 6 PR. Inspect current CI and actionable review feedback, repair only closure-critical defects, and run focused validation."
+          else
+            target="issue #${NUMBER}"
+            mission="Implement the full closure-critical acceptance contract for this issue with code and focused tests."
+          fi
+          prompt="You are OpenCode NVIDIA Factory 6 for JoshCLWren/comic-pile. Durable worker ID: ${FACTORY_WORKER_ID}. Model: ${MODEL}. Assigned target: ${target}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. ${mission} Work only on the assigned target. Product bugs outrank test plumbing, docs, changelog work, CI cosmetics, and optional cleanup. Edit the checked-out branch and run focused validation. Do not commit or push; the workflow will persist your changes. Do not merely summarize. Do not merge, enable auto-merge, push main, touch production databases, or alter automation schedules."
+          opencode run -m "$MODEL" --agent build --auto --dir "$GITHUB_WORKSPACE" --title "ComicPile NVIDIA Factory 6" "$prompt" | tee /tmp/opencode-factory.log
 
       - name: Persist implementation and open PR
         if: steps.target.outputs.has_target == 'true'
@@ -162,10 +174,21 @@ jobs:
             git add -A
             git commit -m "factory: advance #${NUMBER} with NVIDIA OpenCode"
           fi
+
+          if [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]]; then
+            if [[ "$MODE" == "issue" ]]; then
+              labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${NUMBER}/labels?per_page=100" --jq '[.[].name]')"
+              target_labels="$(jq -c 'map(select((test("^factory:(building|review|changes-requested|ci|ready|blocked)$")|not) and (test("^factory:(unowned|local|[1-6])$")|not) and . != "factory")) + ["factory","factory:unowned","factory:blocked"] | unique' <<< "$labels")"
+              gh api --method PUT "repos/${GITHUB_REPOSITORY}/issues/${NUMBER}/labels" --input - <<< "{\"labels\":${target_labels}}" >/dev/null
+            fi
+            echo "Factory produced no branch changes"
+            exit 0
+          fi
+
           git push --set-upstream origin "$BRANCH"
           if [[ "$MODE" == "issue" ]]; then
             pr_number="$(gh pr list --state open --head "$BRANCH" --json number --jq '.[0].number // empty')"
-            if [[ -z "$pr_number" && "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]]; then
+            if [[ -z "$pr_number" ]]; then
               title="$(gh issue view "$NUMBER" --json title --jq .title)"
               gh pr create --base main --head "$BRANCH" --title "$title" --body "Implements #${NUMBER}.\n\nModel: ${MODEL}\nWorker: ${FACTORY_WORKER_ID}\n\nProduced by OpenCode NVIDIA Factory 6. Normal merge gates still apply."
             fi
