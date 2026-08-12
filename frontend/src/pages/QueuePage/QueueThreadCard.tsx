@@ -72,12 +72,15 @@ export default function QueueThreadCard({
   const resolvedCrossoverGroupsLoading = crossoverGroupsLoading ?? fallbackCrossoverGroups.isPending
   const resolvedCrossoverGroupsError = crossoverGroupsError ?? Boolean(fallbackCrossoverGroups.error)
 
-  const isInteractiveTarget = (target: EventTarget | null) =>
-    target instanceof Element
-    && target.closest('button, a, input, select, textarea, [role="button"], [role="link"]')
+  const isInteractiveTarget = (target: EventTarget | null, card: HTMLDivElement) => {
+    const interactive = target instanceof Element
+      ? target.closest('button, a, input, select, textarea, [role="button"], [role="link"]')
+      : null
+    return interactive !== null && interactive !== card
+  }
 
   const handleCardClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (isInteractiveTarget(event.target)) {
+    if (isInteractiveTarget(event.target, event.currentTarget)) {
       return
     }
     onCardClick()
