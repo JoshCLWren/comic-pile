@@ -16,13 +16,6 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from app.database import AsyncSessionLocal  # noqa: E402
-from app.services.release_import import (  # noqa: E402
-    audit_changelog_corpus,
-    import_changelog_report,
-    reconcile_changelog_report,
-)
-
 
 def _parser() -> argparse.ArgumentParser:
     """Build the command-line parser with dry-run as the safe default."""
@@ -43,6 +36,13 @@ def _parser() -> argparse.ArgumentParser:
 
 async def _run(repository_root: Path, *, write: bool) -> int:
     """Execute one dry-run or write/reconciliation pass."""
+    from app.database import AsyncSessionLocal
+    from app.services.release_import import (
+        audit_changelog_corpus,
+        import_changelog_report,
+        reconcile_changelog_report,
+    )
+
     audit = audit_changelog_corpus(repository_root)
     print(json.dumps({"phase": "audit", **audit.as_dict()}, indent=2, sort_keys=True))
     if not write:
