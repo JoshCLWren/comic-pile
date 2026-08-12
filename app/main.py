@@ -200,8 +200,8 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     # API route prefix convention:
     # - Legacy resources remain available under /api/* as compatibility aliases.
     # - Retained client resources migrate to the versioned /api/v1/* surface.
-    # - /api/v1/auth/*, /api/v1/sessions/*, /api/v1/roll/*, and /api/v1/rate/*
-    #   are explicit aliases while maintained callers migrate to v1.
+    # - Retained auth, session, snooze, undo, roll, and rating resources have
+    #   explicit v1 aliases while legacy paths remain compatibility surfaces.
     # - Non-production tooling routes (debug, test) are also mounted under
     #   bare /api/* but only in non-production/test environments — they are
     #   intentional exceptions to the versioning rule, not client APIs.
@@ -226,7 +226,9 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(session.router, prefix="/api/sessions", tags=["session"])
     app.include_router(session.router, prefix="/api/v1/sessions", tags=["session"])
     app.include_router(snooze.router, prefix="/api/snooze", tags=["snooze"])
+    app.include_router(snooze.router, prefix="/api/v1/snooze", tags=["snooze"])
     app.include_router(undo.router, prefix="/api/undo", tags=["undo"])
+    app.include_router(undo.router, prefix="/api/v1/undo", tags=["undo"])
     app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
     if os.getenv("TEST_ENVIRONMENT") == "true":
         app.include_router(test_helpers.router, prefix="/api", tags=["test"])
