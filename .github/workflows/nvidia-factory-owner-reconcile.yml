@@ -1,0 +1,38 @@
+name: NVIDIA Factory Owner Reconcile
+
+on:
+  workflow_run:
+    workflows: [opencode]
+    types: [completed]
+
+permissions:
+  pull-requests: read
+  issues: write
+
+jobs:
+  reconcile:
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Restore NVIDIA owner from branch identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          pr="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" --jq '.pull_requests[0].number // empty')"
+          [[ -n "$pr" ]] || exit 0
+          branch="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr}" --jq .head.ref)"
+          if [[ "$branch" =~ ^factory/([6-9]|10)- ]]; then
+            worker="${BASH_REMATCH[1]}"
+          else
+            exit 0
+          fi
+          labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${pr}/labels?per_page=100" --jq '[.[].name]')"
+          stage="$(jq -r '[.[] | select(test("^factory:(building|review|changes-requested|ci|ready|blocked)$"))] | first // "factory:review"' <<< "$labels")"
+          target="$(jq -c --arg owner "factory:${worker}" --arg stage "$stage" '
+            map(select((test("^factory:(building|review|changes-requested|ci|ready|blocked)$")|not) and (test("^factory:(unowned|local|([1-9]|10))$")|not) and . != "factory"))
+            + ["factory", $owner, $stage] | unique' <<< "$labels")"
+          gh api --method PUT "repos/${GITHUB_REPOSITORY}/issues/${pr}/labels" --input - <<< "{\"labels\":${target}}" >/dev/null
+          echo "Restored factory:${worker} on PR #${pr} with ${stage}"
