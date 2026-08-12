@@ -288,12 +288,14 @@ recover_detached_head() {
   fi
 
   if ((reachable == 0)); then
-    # HEAD is orphaned — create a recovery branch (sanitize any special chars)
+    # HEAD is orphaned — create a recovery branch in the worktree where the commit exists
     local recovery_ref="recovery/orphaned-$(date +%Y%m%d%H%M%S)-${head:0:8}"
     printf '[recovery] Orphaned detached HEAD %s — creating %s\n' "${head:0:10}" "$recovery_ref" >&2
-    git -C "$repo" branch "$recovery_ref" "$head" 2>/dev/null || true
+    git -C "$worktree" branch "$recovery_ref" "$head" 2>/dev/null || \
+      git -C "$repo" branch "$recovery_ref" "$head" 2>/dev/null || true
     # Push it so it survives worktree reset
     git -C "$repo" push -u origin "$recovery_ref" 2>/dev/null || \
+      git -C "$worktree" push -u origin "$recovery_ref" 2>/dev/null || \
       printf '[recovery] WARNING: could not push %s\n' "$recovery_ref" >&2
   fi
 }
