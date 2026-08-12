@@ -1,6 +1,13 @@
 name: NVIDIA Factory Fleet 6-10
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/nvidia-factory-6.yml'
+      - '.github/scripts/nvidia-factory-worker.sh'
+      - '.github/workflows/nvidia-factory-owner-reconcile.yml'
+      - '.github/workflows/factory-heartbeat-watchdog.yml'
   schedule:
     - cron: "7 * * * *"
     - cron: "19 * * * *"
@@ -28,7 +35,30 @@ permissions:
   checks: read
 
 jobs:
+  bootstrap:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Create and verify all durable fleet owner labels
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for worker in 6 7 8 9 10; do
+            if ! gh api "repos/${GITHUB_REPOSITORY}/labels/factory%3A${worker}" >/dev/null 2>&1; then
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" \
+                -f name="factory:${worker}" \
+                -f color='5319e7' \
+                -f description="Owned by OpenCode NVIDIA Factory ${worker}" >/dev/null
+              echo "Created factory:${worker}"
+            fi
+            gh api "repos/${GITHUB_REPOSITORY}/labels/factory%3A${worker}" --jq '.name'
+          done
+          echo 'NVIDIA fleet ownership labels 6-10 are visible.'
+
   factory:
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 58
     env:
@@ -58,6 +88,39 @@ jobs:
           fi
           echo "worker=$worker" >> "$GITHUB_OUTPUT"
           echo "Factory $worker selected"
+
+      - name: Bootstrap fleet owner labels
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for worker in 6 7 8 9 10; do
+            if ! gh api "repos/${GITHUB_REPOSITORY}/labels/factory%3A${worker}" >/dev/null 2>&1; then
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" \
+                -f name="factory:${worker}" \
+                -f color='5319e7' \
+                -f description="Owned by OpenCode NVIDIA Factory ${worker}" >/dev/null
+              echo "Created factory:${worker}"
+            fi
+          done
+
+      - name: Report running heartbeat
+        env:
+          WORKER: ${{ steps.worker.outputs.worker }}
+          SCHEDULE: ${{ github.event.schedule }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          marker="<!-- factory-heartbeat:v1 worker=opencode-nvidia-factory-${WORKER} -->"
+          now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          body="$(printf '%s\nWorker: opencode-nvidia-factory-%s\nSlot: %s\nOutcome: running\nUpdated: %s\nRun: %s' \
+            "$marker" "$WORKER" "${SCHEDULE:-dispatch}" "$now" "$GITHUB_RUN_ID")"
+          comment_id="$(gh api "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
+            | jq -r --arg marker "$marker" '[.[] | select(.body | contains($marker)) | .id] | last // empty')"
+          if [[ -n "$comment_id" ]]; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$body" >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" -f body="$body" >/dev/null
+          fi
 
       - name: Checkout main
         uses: actions/checkout@v6
@@ -120,3 +183,25 @@ jobs:
           WORKER: ${{ steps.worker.outputs.worker }}
           MODEL: ${{ steps.model.outputs.model }}
         run: bash .github/scripts/nvidia-factory-worker.sh "$WORKER" "$MODEL"
+
+      - name: Report terminal heartbeat
+        if: always()
+        env:
+          WORKER: ${{ steps.worker.outputs.worker }}
+          SCHEDULE: ${{ github.event.schedule }}
+          OUTCOME: ${{ job.status }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ -n "${WORKER:-}" ]] || exit 0
+          marker="<!-- factory-heartbeat:v1 worker=opencode-nvidia-factory-${WORKER} -->"
+          now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          body="$(printf '%s\nWorker: opencode-nvidia-factory-%s\nSlot: %s\nOutcome: %s\nUpdated: %s\nRun: %s' \
+            "$marker" "$WORKER" "${SCHEDULE:-dispatch}" "$OUTCOME" "$now" "$GITHUB_RUN_ID")"
+          comment_id="$(gh api "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
+            | jq -r --arg marker "$marker" '[.[] | select(.body | contains($marker)) | .id] | last // empty')"
+          if [[ -n "$comment_id" ]]; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$body" >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" -f body="$body" >/dev/null
+          fi

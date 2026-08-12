@@ -30,16 +30,26 @@ replace_labels() {
   gh api --method PUT "repos/${GITHUB_REPOSITORY}/issues/${number}/labels" --input - <<< "{\"labels\":${target}}" >/dev/null
 }
 
-ensure_label() {
-  if ! gh api "repos/${GITHUB_REPOSITORY}/labels/factory%3A${WORKER}" >/dev/null 2>&1; then
-    gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" \
-      -f name="$OWNER" -f color='5319e7' -f description="Owned by OpenCode NVIDIA Factory ${WORKER}" >/dev/null
-  fi
+ensure_fleet_labels() {
+  local worker label
+  for worker in 6 7 8 9 10; do
+    label="factory:${worker}"
+    if ! gh api "repos/${GITHUB_REPOSITORY}/labels/factory%3A${worker}" >/dev/null 2>&1; then
+      gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" \
+        -f name="$label" -f color='5319e7' -f description="Owned by OpenCode NVIDIA Factory ${worker}" >/dev/null
+      log "created ${label}"
+    fi
+  done
 }
 
 choose_existing_pr() {
   gh pr list --state open --limit 200 --json number,headRefName,updatedAt | jq -r --arg prefix "factory/${WORKER}-" '
     map(select(.headRefName | startswith($prefix))) | sort_by(.updatedAt) | .[].number'
+}
+
+choose_unowned_pr() {
+  gh pr list --state open --limit 200 --label 'factory:unowned' --json number,isDraft,updatedAt | jq -r '
+    map(select(.isDraft == false)) | sort_by(.updatedAt) | .[].number'
 }
 
 choose_issue() {
@@ -63,6 +73,27 @@ claim_issue() {
     map(select((test($owner_re)|not) and (test($stage_re)|not) and . != "factory"))
     + ["factory", $owner, "factory:building"] | unique' <<< "$labels")"
   gh api --method PUT "repos/${GITHUB_REPOSITORY}/issues/${number}/labels" --input - <<< "{\"labels\":${target}}" >/dev/null
+}
+
+claim_unowned_pr() {
+  local number="$1" labels owner_count
+  labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
+  jq -e 'index("factory:unowned") != null' >/dev/null <<< "$labels" || return 1
+  owner_count="$(jq -r --arg owner_re "$OWNER_RE" '[.[] | select(test($owner_re) and . != "factory:unowned")] | length' <<< "$labels")"
+  [[ "$owner_count" == "0" ]] || return 1
+
+  replace_labels "$number" "$OWNER" 'factory:review'
+
+  # Verify we still own it after the write. Staggering makes races unlikely, but
+  # this prevents two workers from proceeding if another worker won a late race.
+  labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
+  jq -e --arg owner "$OWNER" 'index($owner) != null' >/dev/null <<< "$labels" || return 1
+
+  # Branch identity cannot encode the adopting worker for an existing PR. Leave a
+  # durable marker so the post-review reconciler can restore ownership if another
+  # workflow rewrites factory labels.
+  gh issue comment "$number" --body "<!-- nvidia-factory-owner:${WORKER} -->\nFactory ${WORKER} adopted this previously unowned PR for the next actionable step." >/dev/null
+  return 0
 }
 
 checkout_target() {
@@ -146,7 +177,9 @@ persist_pr_changes() {
   return 0
 }
 
-ensure_label
+# Bootstrap all five durable owner labels immediately. Visibility should not wait
+# for four separate future schedule slots to happen to execute successfully.
+ensure_fleet_labels
 log "starting with model ${MODEL}; budget ${BUDGET_SECONDS}s"
 
 while (( $(remaining) > 480 )); do
@@ -162,6 +195,23 @@ while (( $(remaining) > 480 )); do
     BRANCH="$(gh pr view "$NUMBER" --json headRefName --jq .headRefName)"
     break
   done < <(choose_existing_pr)
+
+  # Existing unowned PRs are executable work too. Adopt them before opening fresh
+  # issue branches so the fleet drains stranded review/CI work instead of piling
+  # new PRs on top of it.
+  if [[ -z "$NUMBER" ]]; then
+    while IFS= read -r candidate; do
+      [[ -n "$candidate" ]] || continue
+      contains_skip_pr "$candidate" && continue
+      if claim_unowned_pr "$candidate"; then
+        NUMBER="$candidate"
+        MODE='pr'
+        BRANCH="$(gh pr view "$NUMBER" --json headRefName --jq .headRefName)"
+        log "adopted unowned PR #${NUMBER} on ${BRANCH}"
+        break
+      fi
+    done < <(choose_unowned_pr)
+  fi
 
   if [[ -z "$NUMBER" ]]; then
     for selector in 'user-reported bug' 'bug' 'ralph-task'; do
