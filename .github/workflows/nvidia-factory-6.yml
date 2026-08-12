@@ -59,6 +59,20 @@ jobs:
           echo "worker=$worker" >> "$GITHUB_OUTPUT"
           echo "Factory $worker selected"
 
+      - name: Bootstrap fleet owner labels
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for worker in 6 7 8 9 10; do
+            if ! gh api "repos/${GITHUB_REPOSITORY}/labels/factory%3A${worker}" >/dev/null 2>&1; then
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" \
+                -f name="factory:${worker}" \
+                -f color='5319e7' \
+                -f description="Owned by OpenCode NVIDIA Factory ${worker}" >/dev/null
+              echo "Created factory:${worker}"
+            fi
+          done
+
       - name: Checkout main
         uses: actions/checkout@v6
         with:
