@@ -891,7 +891,7 @@ export default function RollPage() {
           </form>
         </Modal>
 
-        <Modal isOpen={isDieModalOpen} title="Choose die" onClose={() => setIsDieModalOpen(false)}>
+        <Modal isOpen={isDieModalOpen} title="Select Die" onClose={() => setIsDieModalOpen(false)}>
           <p className="mb-3 text-xs text-stone-400">
             {bootstrap.manual_die
               ? `Manual mode is active at d${bootstrap.manual_die}. Choose another die or return to automatic mode.`
@@ -908,7 +908,7 @@ export default function RollPage() {
             <button onClick={async () => { await handleClearManualDie(); setIsDieModalOpen(false) }}
               disabled={clearManualDieMutation.isPending}
               className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${bootstrap.manual_die ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
-              Use automatic
+              Auto
             </button>
           </div>
         </Modal>
