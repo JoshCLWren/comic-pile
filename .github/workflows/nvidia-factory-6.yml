@@ -4,6 +4,10 @@ on:
   schedule:
     - cron: "37 */2 * * *"
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/nvidia-factory-6.yml
 
 concurrency:
   group: nvidia-factory-6
@@ -57,11 +61,7 @@ jobs:
             echo "Probing $candidate"
             provider_model="${candidate#nvidia/}"
             request="$(jq -nc --arg model "$provider_model" '{model:$model,messages:[{role:"user",content:"Reply with exactly: FCM_NVIDIA_MODEL_OK"}],max_tokens:32}')"
-            response="$(curl --silent --show-error --fail-with-body \
-              --header "Authorization: Bearer $NVIDIA_API_KEY" \
-              --header 'Content-Type: application/json' \
-              --data "$request" \
-              https://integrate.api.nvidia.com/v1/chat/completions || true)"
+            response="$(curl --silent --show-error --fail-with-body --header "Authorization: Bearer $NVIDIA_API_KEY" --header 'Content-Type: application/json' --data "$request" https://integrate.api.nvidia.com/v1/chat/completions || true)"
             if jq -e '.choices[0].message.content | strings | contains("FCM_NVIDIA_MODEL_OK")' >/dev/null 2>&1 <<< "$response"; then
               selected_model="$candidate"
               break
@@ -77,10 +77,7 @@ jobs:
       - name: Ensure Factory 6 label exists
         run: |
           if ! gh api "repos/${GITHUB_REPOSITORY}/labels/factory%3A6" >/dev/null 2>&1; then
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" \
-              -f name='factory:6' \
-              -f color='5319e7' \
-              -f description='Owned by OpenCode NVIDIA Factory 6' >/dev/null
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" -f name='factory:6' -f color='5319e7' -f description='Owned by OpenCode NVIDIA Factory 6' >/dev/null
           fi
 
       - name: Select and claim product work
@@ -90,7 +87,6 @@ jobs:
           set -Eeuo pipefail
           owner_re='^factory:(unowned|local|[1-6])$'
           stage_re='^factory:(building|review|changes-requested|ci|ready|blocked)$'
-
           existing_pr="$(gh pr list --state open --label "$FACTORY_OWNER" --limit 100 --json number,headRefName,updatedAt | jq 'sort_by(.updatedAt) | first // empty')"
           if [[ -n "$existing_pr" ]]; then
             echo "mode=pr" >> "$GITHUB_OUTPUT"
@@ -99,17 +95,12 @@ jobs:
             echo "has_target=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-
           choose_issue() {
             local labels=("$@")
             local args=(issue list --state open --limit 200 --json number,labels,createdAt)
             for label in "${labels[@]}"; do args+=(--label "$label"); done
-            gh "${args[@]}" | jq -r --arg owner_re "$owner_re" '
-              map(select(.number != 679))
-              | map(select((([.labels[].name | select(test($owner_re))] | length) == 0) or (([.labels[].name | select(. == "factory:unowned")] | length) == 1)))
-              | sort_by(.createdAt) | reverse | first | .number // empty'
+            gh "${args[@]}" | jq -r --arg owner_re "$owner_re" 'map(select(.number != 679)) | map(select((([.labels[].name | select(test($owner_re))] | length) == 0) or (([.labels[].name | select(. == "factory:unowned")] | length) == 1))) | sort_by(.createdAt) | reverse | first | .number // empty'
           }
-
           number="$(choose_issue user-reported bug)"
           [[ -n "$number" ]] || number="$(choose_issue bug)"
           [[ -n "$number" ]] || number="$(choose_issue)"
@@ -118,7 +109,6 @@ jobs:
             echo "has_target=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-
           labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
           if jq -e --arg owner_re "$owner_re" '[.[] | select(test($owner_re) and . != "factory:unowned")] | length > 0' >/dev/null <<< "$labels"; then
             echo "Issue #$number was claimed during selection"
@@ -127,7 +117,6 @@ jobs:
           fi
           target_labels="$(jq -c --arg owner_re "$owner_re" --arg stage_re "$stage_re" 'map(select((test($owner_re)|not) and (test($stage_re)|not) and . != "factory")) + ["factory","factory:6","factory:building"] | unique' <<< "$labels")"
           gh api --method PUT "repos/${GITHUB_REPOSITORY}/issues/${number}/labels" --input - <<< "{\"labels\":${target_labels}}" >/dev/null
-
           echo "mode=issue" >> "$GITHUB_OUTPUT"
           echo "number=$number" >> "$GITHUB_OUTPUT"
           echo "branch=factory/6-${number}-nvidia" >> "$GITHUB_OUTPUT"
@@ -184,7 +173,6 @@ jobs:
             git commit -m "factory: advance #${NUMBER} with NVIDIA OpenCode"
           fi
           git push --set-upstream origin "$BRANCH"
-
           if [[ "$MODE" == "issue" ]]; then
             pr_number="$(gh pr list --state open --head "$BRANCH" --json number --jq '.[0].number // empty')"
             if [[ -z "$pr_number" && "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]]; then
