@@ -8,7 +8,7 @@ export const protectedRollMutationApi = {
   rate: (data: RatePayload): Promise<Thread> =>
     api.post<Thread, RatePayload>('/v1/rate/', data, RECOVERY_CONFIG),
   snooze: (): Promise<void> =>
-    api.post<void>('/snooze/', undefined, RECOVERY_CONFIG),
+    api.post<void>('/v1/snooze/', undefined, RECOVERY_CONFIG),
   bootstrap: (): Promise<RollBootstrapResponse> =>
     api.get<RollBootstrapResponse>('/v1/roll/bootstrap', RECOVERY_CONFIG),
 }
