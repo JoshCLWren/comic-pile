@@ -9,9 +9,14 @@ type ReleaseDay = {
   releases: Release[]
 }
 
+type ReleaseRequest = {
+  offset: number
+  replace: boolean
+}
+
 function releasedAtTimestamp(release: Release) {
   const parsed = Date.parse(release.released_at)
-  return Number.isNaN(parsed) ? 0 : parsed
+  return Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed
 }
 
 export function sortReleasesNewestFirst(releases: Release[]): Release[] {
@@ -89,6 +94,7 @@ export default function WhatsNewPage() {
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [failedRequest, setFailedRequest] = useState<ReleaseRequest | null>(null)
   const days = useMemo(() => groupReleasesByDay(releases), [releases])
   const hasMore = releases.length < total
 
@@ -101,7 +107,9 @@ export default function WhatsNewPage() {
       const response = await releasesApi.list(RELEASE_PAGE_SIZE, offset)
       setReleases(current => replace ? response.releases : [...current, ...response.releases])
       setTotal(response.total)
+      setFailedRequest(null)
     } catch (loadError) {
+      setFailedRequest({ offset, replace })
       setError(
         loadError instanceof Error
           ? loadError.message
@@ -116,6 +124,11 @@ export default function WhatsNewPage() {
   useEffect(() => {
     void load(0, true)
   }, [load])
+
+  const retry = () => {
+    const request = failedRequest ?? { offset: 0, replace: true }
+    void load(request.offset, request.replace)
+  }
 
   return (
     <section aria-labelledby="whats-new-title" className="mx-auto max-w-3xl pb-8">
@@ -149,7 +162,7 @@ export default function WhatsNewPage() {
           <p className="mt-2 text-sm text-red-100/80">{error}</p>
           <button
             type="button"
-            onClick={() => void load(releases.length === 0 ? 0 : releases.length, releases.length === 0)}
+            onClick={retry}
             className="mt-4 min-h-11 rounded-lg bg-amber-400 px-4 py-2 font-bold text-stone-950"
           >
             Try again
