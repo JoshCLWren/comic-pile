@@ -128,11 +128,11 @@ describe('ContinuityPlannerPage', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('Fourth World')).toBeVisible()
+    expect(await screen.findByRole('button', { name: 'Remove Fourth World' })).toBeVisible()
     await user.click(screen.getByRole('button', { name: 'Remove Fourth World' }))
     expect(screen.getByText('Unsaved changes')).toBeVisible()
     await user.click(screen.getByRole('button', { name: 'Cancel changes' }))
-    expect(screen.getByText('Fourth World')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Remove Fourth World' })).toBeVisible()
     expect(mocks.update).not.toHaveBeenCalled()
   })
 })
