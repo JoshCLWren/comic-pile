@@ -104,4 +104,93 @@ describe('ReadingRouteExplanation', () => {
     expect(screen.getByText('Currently readable')).toBeVisible()
     expect(screen.getByText(/no unresolved hard prerequisite/i)).toBeVisible()
   })
+
+
+  it('covers unavailable identity, loading, and retryable readiness states', async () => {
+    const { rerender } = render(
+      <ReadingRouteExplanation
+        isOpen
+        issueId={null}
+        issueLabel="Unknown issue"
+        readingOrders={[]}
+        connectedThreads={[]}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(screen.getByText(/identity is unavailable/i)).toBeVisible()
+
+    mocks.useContinuityReadiness.mockReturnValue({
+      readiness: null,
+      isLoading: true,
+      error: null,
+      refetch,
+    })
+    rerender(
+      <ReadingRouteExplanation
+        isOpen
+        issueId={7}
+        issueLabel="Avengers #7"
+        readingOrders={[]}
+        connectedThreads={[]}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole('status')).toHaveTextContent(/checking authoritative readiness/i)
+
+    mocks.useContinuityReadiness.mockReturnValue({
+      readiness: null,
+      isLoading: false,
+      error: new Error('offline'),
+      refetch,
+    })
+    rerender(
+      <ReadingRouteExplanation
+        isOpen
+        issueId={7}
+        issueLabel="Avengers #7"
+        readingOrders={[]}
+        connectedThreads={[]}
+        onClose={vi.fn()}
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: /retry readiness/i }))
+    expect(refetch).toHaveBeenCalledOnce()
+  })
+
+  it('explains incomplete server details and zero-length route progress', () => {
+    mocks.useContinuityReadiness.mockReturnValue({
+      readiness: { node_type: 'issue', node_id: 7, is_readable: false, evaluated_issue_id: 7, blockers: [] },
+      isLoading: false,
+      error: null,
+      refetch,
+    })
+    render(
+      <ReadingRouteExplanation
+        isOpen
+        issueId={7}
+        issueLabel="Avengers #7"
+        readingOrders={[{ id: 3, name: 'Empty route', completed_items: 0, total_items: 0 } as ReadingOrder]}
+        connectedThreads={[]}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(screen.getByText(/blocked without returning prerequisite details/i)).toBeVisible()
+    expect(screen.getByText(/0 of 0 complete · 0%/i)).toBeVisible()
+  })
+
+  it('does not render or lock scrolling while closed', () => {
+    document.body.style.overflow = 'auto'
+    render(
+      <ReadingRouteExplanation
+        isOpen={false}
+        issueId={7}
+        issueLabel="Avengers #7"
+        readingOrders={routes}
+        connectedThreads={connections}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(document.body.style.overflow).toBe('auto')
+  })
 })
