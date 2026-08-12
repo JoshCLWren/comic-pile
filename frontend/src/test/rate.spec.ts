@@ -27,6 +27,31 @@ test.describe('Rate Thread Feature', () => {
     await authenticatedWithThreadsPage.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 10000 });
   });
 
+
+  test('keeps readiness, rating, and actions usable above mobile navigation', async ({ authenticatedWithThreadsPage }) => {
+    const page = authenticatedWithThreadsPage;
+    await page.setViewportSize({ width: 430, height: 932 });
+
+    await expect(page.getByRole('heading', { name: /Ready to read|Readiness unavailable|Readiness could not be verified/ })).toBeVisible();
+    await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible();
+    await expect(page.locator('[data-roll-pool]')).toHaveCount(0);
+
+    const actions = page.getByTestId('rating-actions');
+    const navigation = page.getByRole('navigation', { name: 'Main navigation' });
+    await expect(actions).toBeVisible();
+    await expect(navigation).toBeVisible();
+
+    const primaryAction = page.getByRole('button', { name: /Mark read & (save|complete)/ });
+    await expect(primaryAction).toBeVisible();
+    const [buttonBox, navigationBox] = await Promise.all([
+      primaryAction.boundingBox(),
+      navigation.boundingBox(),
+    ]);
+    expect(buttonBox).not.toBeNull();
+    expect(navigationBox).not.toBeNull();
+    expect(buttonBox!.y + buttonBox!.height).toBeLessThanOrEqual(navigationBox!.y);
+  });
+
   test('should display rating input on inline rating view', async ({ authenticatedWithThreadsPage }) => {
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible();
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.submitButton)).toBeVisible();

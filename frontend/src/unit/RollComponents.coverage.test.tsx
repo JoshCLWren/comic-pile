@@ -115,14 +115,14 @@ describe('RatingView', () => {
     const onUpdateRating = vi.fn(); const onSubmitRating = vi.fn(); const onSnooze = vi.fn(); const onCancel = vi.fn(); const onRefreshThread = vi.fn()
     const user = userEvent.setup()
     render(<RatingView activeRatingThread={{ ...thread, id: 1, issue_number: '2', next_issue_number: '3', reading_progress: 'in_progress' } as never} currentDie={20} rolledResult={19} rating={5} predictedDie={6} hasValidRolledResult poolSize={6} errorMessage="Problem" rateIsPending={false} snoozeIsPending={false} dismissIsPending={false} readingOrders={[]} connectedThreads={[{ thread_id: 2, title: 'Other', connection_type: 'blocks', dependency_id: 1 }]} onUpdateRating={onUpdateRating} onSubmitRating={onSubmitRating} onSnooze={onSnooze} onCancel={onCancel} onRefreshThread={onRefreshThread} />)
-    expect(screen.getByText(/You rolled a 19/)).toBeInTheDocument()
-    expect(screen.getByText(/pool size: 6/)).toBeInTheDocument()
+    expect(screen.getByText(/Rolled 19 on d20/)).toBeInTheDocument()
+    expect(screen.getByText(/6 eligible/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /correct issue number/i }))
     await user.click(screen.getByRole('button', { name: /close correction/i }))
     const rating = screen.getByRole('slider')
     fireEvent.change(rating, { target: { value: '3' } })
     expect(onUpdateRating).toHaveBeenCalledWith('3')
-    await user.click(screen.getByRole('button', { name: /save & continue/i }))
+    await user.click(screen.getByRole('button', { name: /mark read & save/i }))
     await user.click(screen.getByRole('button', { name: /snooze/i }))
     expect(onSubmitRating).toHaveBeenCalled()
     expect(onSnooze).toHaveBeenCalled()
@@ -138,8 +138,8 @@ describe('RatingView', () => {
     await user.click(screen.getByRole('button', { name: 'Correct successfully' }))
     expect(callbacks.onRefreshThread).toHaveBeenCalled()
     fireEvent.change(screen.getByRole('slider'), { target: { value: '2' } })
-    await user.click(screen.getByRole('button', { name: 'Snoozing...' }))
-    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    await user.click(screen.getByRole('button', { name: 'Snoozing…' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel roll' }))
   })
 
   it('renders safe fallbacks for missing thread metadata and populated reading-order details', () => {
@@ -163,9 +163,9 @@ describe('RatingView', () => {
       onCancel={vi.fn()}
       onRefreshThread={vi.fn()}
     />)
-    expect(screen.getByText('Loading...')).toBeInTheDocument()
-    expect(screen.getByText('A description')).toBeInTheDocument()
-    expect(screen.getByText('0 issues left')).toBeInTheDocument()
+    expect(screen.getByText('Loading…')).toBeInTheDocument()
+    expect(screen.getByText('Main order')).toBeInTheDocument()
+    expect(screen.getByText('0 left')).toBeInTheDocument()
   })
 
   it('renders alternate rating, progress, and order boundaries', async () => {
@@ -187,9 +187,9 @@ describe('RatingView', () => {
       connectedThreads={[{ thread_id: 2, title: 'Only connection', connection_type: 'blocks', dependency_id: 2 }]}
       {...callbacks}
     />)
-    expect(screen.getByText('Comic')).toBeInTheDocument()
-    expect(screen.getByText(/Excellent!/)).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Save & Continue' }))
+    expect(screen.getByText('Saga')).toBeInTheDocument()
+    expect(screen.getByText('Die stays the same')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Mark read & save' }))
     expect(callbacks.onSubmitRating).toHaveBeenCalledWith(false)
   })
 
@@ -221,6 +221,6 @@ describe('RatingView', () => {
     // L135 `connectedThreads.length !== 1 ? 's' : ''` is evaluated when building the Tooltip content prop;
     // L139 `i > 0 && ', '` renders the separator between the two connected thread titles.
     expect(screen.getByText('Alpha')).toBeInTheDocument()
-    expect(screen.getByText(', Beta')).toBeInTheDocument()
+    expect(screen.getByText('Beta')).toBeInTheDocument()
   })
 })

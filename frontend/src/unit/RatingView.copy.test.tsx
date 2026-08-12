@@ -11,6 +11,14 @@ vi.mock('../components/IssueCorrectionDialog', () => ({ default: () => null }))
 vi.mock('../pages/RollPage/components/ReadingOrderGroups', () => ({
   ReadingOrderGroups: () => null,
 }))
+vi.mock('../hooks/useContinuityReadiness', () => ({
+  useContinuityReadiness: () => ({
+    readiness: null,
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+}))
 
 const callbacks = {
   onUpdateRating: vi.fn(),
@@ -72,6 +80,6 @@ describe('RatingView copy comic reference', () => {
     renderRatingView()
     await user.click(screen.getByRole('button', { name: 'Copy Ultimate X-Men 12' }))
 
-    expect(screen.getByText('Copy failed')).toBeInTheDocument()
+    expect(screen.getByText(/Copy failed/)).toBeInTheDocument()
   })
 })
