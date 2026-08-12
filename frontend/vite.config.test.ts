@@ -50,6 +50,15 @@ describe('renderChangelog', () => {
     expect(rendered.indexOf('Added fragments')).toBeLessThan(rendered.indexOf('Older change'))
   })
 
+  it('accepts descriptive Markdown text for the expected pull request link', () => {
+    const paths = createFixture({
+      '2026-08-12-1103.md':
+        '## 2026-08-12\n\n**Reliability**\n\n- [PR #1103](https://github.com/JoshCLWren/comic-pile/pull/1103) restores rating recovery coverage.\n',
+    })
+
+    expect(() => renderChangelog(paths)).not.toThrow()
+  })
+
   it('rejects malformed filenames', () => {
     const paths = createFixture({
       'release-note.md':
@@ -88,6 +97,17 @@ describe('renderChangelog', () => {
     })
 
     expect(() => renderChangelog(paths)).toThrow('must start with ## 2026-08-06')
+  })
+
+  it('rejects a Markdown link targeting the wrong pull request', () => {
+    const paths = createFixture({
+      '2026-08-06-882.md':
+        '## 2026-08-06\n\n**Factory reliability**\n\n- Wrong PR ([PR #881](https://github.com/JoshCLWren/comic-pile/pull/881)).\n',
+    })
+
+    expect(() => renderChangelog(paths)).toThrow(
+      'must link https://github.com/JoshCLWren/comic-pile/pull/882',
+    )
   })
 })
 
