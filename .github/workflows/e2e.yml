@@ -1,0 +1,5 @@
+chromium: true
+# Maintained Chromium Playwright E2E suite configuration
+# Disable Firefox/WebKit for required gate
+firefox: false
+webkit: false
