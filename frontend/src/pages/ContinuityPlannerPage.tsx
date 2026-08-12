@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useState } from 'react'
 import axios from 'axios'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
@@ -13,6 +13,7 @@ import type { Issue, Thread } from '../types'
 
 const LAST_PLAN_KEY = 'comic-pile:last-continuity-plan'
 const LANE_ID = 'main'
+const DEFAULT_PLAN_NAME = 'My reading plan'
 
 interface PlannerNode extends ContinuityPlanNode {
   label: string
@@ -84,7 +85,7 @@ export default function ContinuityPlannerPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const planId = id ? Number(id) : null
-  const [name, setName] = useState('My reading plan')
+  const [name, setName] = useState(DEFAULT_PLAN_NAME)
   const [nodes, setNodes] = useState<PlannerNode[]>([])
   const [savedName, setSavedName] = useState('')
   const [savedNodes, setSavedNodes] = useState<PlannerNode[]>([])
@@ -127,7 +128,7 @@ export default function ContinuityPlannerPage() {
         setThreads(loadedThreads)
         setGroups(loadedGroups)
         if (!planId) {
-          setSavedName(name)
+          setSavedName(DEFAULT_PLAN_NAME)
           return
         }
         const plan = await continuityPlansApi.get(planId)
@@ -234,7 +235,7 @@ export default function ContinuityPlannerPage() {
   }
 
   const cancel = () => {
-    setName(savedName || 'My reading plan')
+    setName(savedName || DEFAULT_PLAN_NAME)
     setNodes(savedNodes)
     setSaveError(null)
   }
