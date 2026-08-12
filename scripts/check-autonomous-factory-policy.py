@@ -15,53 +15,25 @@ LEGACY_PIPELINE = ROOT / "scripts/opencode_pipeline.sh"
 
 
 def require(text: str, needle: str, source: Path) -> None:
-    """Require one invariant string in a policy source.
-
-    Args:
-        text: Complete source text to inspect.
-        needle: Required invariant text.
-        source: Source path used in the failure message.
-
-    Returns:
-        None.
-    """
+    """Require one invariant string in a policy source."""
     if needle not in text:
         raise SystemExit(f"{source}: missing required policy text: {needle!r}")
 
 
 def forbid(text: str, needle: str, source: Path) -> None:
-    """Reject one known contradictory policy string.
-
-    Args:
-        text: Complete source text to inspect.
-        needle: Forbidden contradictory text.
-        source: Source path used in the failure message.
-
-    Returns:
-        None.
-    """
+    """Reject one known contradictory policy string."""
     if needle in text:
         raise SystemExit(f"{source}: forbidden policy drift found: {needle!r}")
 
 
 def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
-    """Validate all factory control-plane texts against canonical invariants.
-
-    Args:
-        policy: Canonical autonomous factory policy text.
-        protocol: GitHub issue execution protocol text.
-        entrypoint: Combined local factory wrappers and scheduled prompt text.
-
-    Returns:
-        None.
-    """
+    """Validate all factory control-plane texts against canonical invariants."""
     for needle in (
-        "Version: 20",
-        "Every product, behavior, deployment, operational, or factory-tooling PR must update",
-        "exactly one isolated Markdown fragment",
-        "`docs/changelog.md` is the frozen historical archive",
-        "Changelog: not user-facing",
-        "A missing required changelog entry is an actionable review defect",
+        "Version: 21",
+        "## Release-note ownership",
+        "Release notes are asynchronous post-merge infrastructure",
+        "Implementation workers must not create, repair, or require `docs/changelog.d` fragments",
+        "not runtime truth",
         "Drive the open issue backlog to zero",
         "An empty or blocked ordinary backlog is never an idle condition",
         "If no ordinary executable issue can be selected, do not declare the factory idle.",
@@ -111,6 +83,10 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         require(policy, marker, POLICY)
 
     for obsolete in (
+        "## User-facing changelog gate",
+        "exactly one isolated Markdown fragment",
+        "A missing required changelog entry is an actionable review defect",
+        "Changelog: not user-facing",
         "HONEST STAGE FAST PATH",
         "Planning PRs are encouraged",
         "Always split large PRs into stages",
@@ -150,9 +126,8 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
     for needle in (
         "docs/AUTONOMOUS_FACTORY_POLICY.md",
         "Drive the open issue backlog to zero",
-        "Treat the generated changelog as part of the completion contract",
-        "docs/changelog.d/YYYY-MM-DD-<pr-number>.md",
-        "Changelog: not user-facing",
+        "Release notes are post-merge infrastructure",
+        "database-backed release ledger",
         "newest unclaimed open issue labeled both `user-reported` and `bug`",
         "reproducible E2E-discovered",
         "fewer than four substantive implementation PRs",
@@ -175,6 +150,9 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         require(entrypoint, needle, ENTRYPOINT)
 
     for obsolete in (
+        "Treat the generated changelog as part of the completion contract",
+        "docs/changelog.d/YYYY-MM-DD-<pr-number>.md",
+        "Changelog: not user-facing",
         "open a truthful draft PR",
         "mark a draft ready when",
         "HONEST STAGE FAST PATH",
@@ -197,17 +175,15 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
 
 
 def validate_local_guidance() -> None:
-    """Validate every local and scheduled factory entry point independently.
-
-    Returns:
-        None.
-    """
+    """Validate every local and scheduled factory entry point independently."""
     for source in (SCHEDULED_PROMPT, HEARTBEAT_ENTRYPOINT, NEXT_TASK_PROMPT, ISSUE_SKILL):
         text = source.read_text(encoding="utf-8")
         require(text, "factory-resume:v1", source)
 
     scheduled = SCHEDULED_PROMPT.read_text(encoding="utf-8")
-    require(scheduled, "Version: 20", SCHEDULED_PROMPT)
+    require(scheduled, "Version: 21", SCHEDULED_PROMPT)
+    require(scheduled, "FACTORY POLICY V21", SCHEDULED_PROMPT)
+    require(scheduled, "Release notes are post-merge infrastructure", SCHEDULED_PROMPT)
     require(scheduled, "one full atomic label-set replacement", SCHEDULED_PROMPT)
     require(scheduled, "At the start of every scheduled run", SCHEDULED_PROMPT)
     require(scheduled, "Heartbeat telemetry never counts as substantive progress", SCHEDULED_PROMPT)
@@ -225,11 +201,7 @@ def validate_local_guidance() -> None:
 
 
 def read_entrypoint_text() -> str:
-    """Read local orchestration prompts and the scheduled ChatGPT prompt template.
-
-    Returns:
-        The combined wrapper, heartbeat, and scheduled prompt source text.
-    """
+    """Read local orchestration prompts and the scheduled ChatGPT prompt template."""
     return "\n".join(
         (
             ENTRYPOINT.read_text(encoding="utf-8"),
@@ -240,11 +212,7 @@ def read_entrypoint_text() -> str:
 
 
 def main() -> None:
-    """Read checked-in policy sources and validate their alignment.
-
-    Returns:
-        None.
-    """
+    """Read checked-in policy sources and validate their alignment."""
     validate_texts(
         POLICY.read_text(encoding="utf-8"),
         PROTOCOL.read_text(encoding="utf-8"),
