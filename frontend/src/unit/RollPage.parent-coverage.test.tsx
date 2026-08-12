@@ -312,7 +312,7 @@ describe('RollPage parent handlers', () => {
     bootstrapData.stale_thread_count = 1
     render(<RollPage />)
     expect(screen.getByText('offset active')).toBeInTheDocument()
-    await userEvent.setup().click(screen.getAllByRole('button', { name: 'd6' })[1]!)
+    await userEvent.setup().click(screen.getByRole('button', { name: /current die d6, (?:automatic|manual) mode/i }))
     expect(screen.getByRole('heading', { name: 'Select Die' })).toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: 'close modal' }))
     expect(screen.getByRole('button', { name: 'read stale' })).toBeInTheDocument()
@@ -995,12 +995,12 @@ describe('RollPage parent handlers', () => {
 
   it('selects a die and clears manual die from the mobile die modal', async () => {
     render(<RollPage />)
-    await userEvent.setup().click(screen.getAllByRole('button', { name: 'd6' })[1]!)
+    await userEvent.setup().click(screen.getByRole('button', { name: /current die d6, (?:automatic|manual) mode/i }))
     const autoModal = screen.getByRole('heading', { name: 'Select Die' }).closest('section')!
     await userEvent.setup().click(within(autoModal).getByRole('button', { name: 'Auto' }))
     expect(spies.clearDie).toHaveBeenCalled()
 
-    await userEvent.setup().click(screen.getAllByRole('button', { name: 'd6' })[1]!)
+    await userEvent.setup().click(screen.getByRole('button', { name: /current die d6, (?:automatic|manual) mode/i }))
     const dieModal = screen.getByRole('heading', { name: 'Select Die' }).closest('section')!
     await userEvent.setup().click(within(dieModal).getByRole('button', { name: 'd4' }))
     expect(spies.setDie).toHaveBeenCalledWith(4)
@@ -1029,7 +1029,7 @@ describe('RollPage parent handlers', () => {
     render(<RollPage />)
     expect(screen.getByRole('button', { name: 'Auto' })).toHaveAttribute('title', 'Exit manual mode (currently d4)')
 
-    await userEvent.setup().click(screen.getAllByRole('button', { name: 'd6' })[1]!)
+    await userEvent.setup().click(screen.getByRole('button', { name: /current die d6, (?:automatic|manual) mode/i }))
     const modal = screen.getByRole('heading', { name: 'Select Die' }).closest('section')!
     spies.setDie.mockRejectedValueOnce(new Error('die failed'))
     await userEvent.setup().click(within(modal).getByRole('button', { name: 'd4' }))
