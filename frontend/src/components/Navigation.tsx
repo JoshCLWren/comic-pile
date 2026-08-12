@@ -72,7 +72,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
 
   const isActive = (path: string) => location.pathname === path
   const isMoreRoute = ['/continuity-plans', '/whats-new', '/help', '/glossary'].some((path) =>
-    location.pathname === path,
+    location.pathname === path || location.pathname.startsWith(`${path}/`),
   )
 
   const handleLogout = async () => {
