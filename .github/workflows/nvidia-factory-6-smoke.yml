@@ -1,0 +1,51 @@
+name: NVIDIA Factory 6 runtime smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/nvidia-factory-6-smoke.yml
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install pinned FCM discovery CLI
+        run: npm install --global --ignore-scripts free-coding-models@0.5.69
+      - name: Select healthy NVIDIA model
+        id: model
+        env:
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+        run: |
+          fcm_output="$(free-coding-models --json --origin nvidia --hide-unconfigured --best --no-telemetry)"
+          candidates="$(printf '%s\n' "$fcm_output" | python scripts/select_fcm_nvidia_model.py)"
+          selected_model=""
+          while IFS= read -r candidate; do
+            [[ -n "$candidate" ]] || continue
+            provider_model="${candidate#nvidia/}"
+            request="$(jq -nc --arg model "$provider_model" '{model:$model,messages:[{role:"user",content:"Reply with exactly: FCM_NVIDIA_MODEL_OK"}],max_tokens:32}')"
+            response="$(curl --silent --show-error --fail-with-body --header "Authorization: Bearer $NVIDIA_API_KEY" --header 'Content-Type: application/json' --data "$request" https://integrate.api.nvidia.com/v1/chat/completions || true)"
+            if jq -e '.choices[0].message.content | strings | contains("FCM_NVIDIA_MODEL_OK")' >/dev/null 2>&1 <<< "$response"; then
+              selected_model="$candidate"
+              break
+            fi
+          done <<< "$candidates"
+          [[ -n "$selected_model" ]] || { echo 'No healthy NVIDIA model' >&2; exit 1; }
+          echo "model=$selected_model" >> "$GITHUB_OUTPUT"
+      - name: Exercise pinned OpenCode action
+        uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a
+        env:
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          PROMPT: >-
+            This is a runtime smoke test. Create a file named .factory6-smoke in the repository workspace containing exactly FACTORY6_SMOKE_OK followed by a newline. Do not change any other file. Do not commit, push, comment, or call GitHub APIs.
+        with:
+          model: ${{ steps.model.outputs.model }}
+          agent: build
+          use_github_token: false
+      - name: Verify workspace mutation
+        run: test "$(cat .factory6-smoke)" = "FACTORY6_SMOKE_OK"
