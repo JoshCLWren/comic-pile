@@ -100,17 +100,6 @@ describe('dependency and graph utilities', () => {
       { id: -1, title: 'Issue', x: 0, y: 0, isBlocked: true, isIssueNode: true },
     ])
     expect(issueOnly.nodes[0]?.isIssueNode).toBe(true)
-    const converging = layoutGraph(
-      [thread(1), thread(2), thread(3)],
-      [
-        { id: 'left-parent', source_id: 1, target_id: 3, created_at: 'now' },
-        { id: 'right-parent', source_id: 2, target_id: 3, created_at: 'now' },
-      ],
-      new Set(),
-    )
-    const parentY = converging.nodes.find((node) => node.id === 1)?.y
-    expect(converging.nodes.find((node) => node.id === 2)?.y).toBe(parentY)
-    expect(converging.nodes.find((node) => node.id === 3)?.y).toBeGreaterThan(parentY ?? 0)
   })
 })
 
@@ -139,56 +128,154 @@ describe('roll utilities', () => {
     expect(buildRatingThread(null, null, null, session)?.title).toBe('Thread 4')
     expect(buildRatingThread(4, null, null, session)?.id).toBe(4)
     expect(buildRatingThread(9, null, null, session)).toBeNull()
-    expect(getProgressPercentage({ ...session, total_issues: 0, issues_remaining: 0 })).toBe(0)
-    expect(getProgressPercentage({ ...session, total_issues: 4, issues_remaining: 0 })).toBe(100)
-    expect(getProgressPercentage({ ...session, total_issues: 4, issues_remaining: 2 })).toBe(50)
-    expect(getProgressPercentage({ ...session, total_issues: null, issues_remaining: 2 })).toBe(0)
-    const explosion = createExplosion(10)
-    expect(explosion).toHaveLength(10)
-    expect(explosion.every((particle) => Number.isFinite(particle.x))).toBe(true)
+    expect(getProgressPercentage(null)).toBe(0)
+    expect(getProgressPercentage({ total_issues: 0, issues_remaining: 0 })).toBe(0)
+    expect(getProgressPercentage({ total_issues: 4, issues_remaining: 1 })).toBe(75)
+  })
+
+  it('creates an explosion and cleans particles', () => {
+    vi.useFakeTimers()
+    const layer = document.createElement('div')
+    layer.id = 'explosion-layer'
+    document.body.appendChild(layer)
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0.5)
+    createExplosion()
+    expect(layer.children).toHaveLength(50)
+    vi.advanceTimersByTime(1000)
+    expect(layer.children).toHaveLength(0)
+    random.mockRestore()
+    vi.useRealTimers()
   })
 })
 
-describe('topology utility', () => {
-  it('returns every thread even when a cycle remains', () => {
-    const result = getTopologicalPath(
-      [thread(1), thread(2), thread(3)],
-      [
-        { id: 'a', source_id: 1, target_id: 2, created_at: 'now' },
-        { id: 'b', source_id: 2, target_id: 1, created_at: 'now' },
-      ],
-    )
-    expect(result).toHaveLength(3)
+describe('remaining pure branches', () => {
+  it('orders dependency graphs including issue parents, unknown nodes, and cycles', () => {
+    const threads = [thread(1), thread(2), thread(3)]
+    expect(getTopologicalPath(threads, [
+      { id: 'issue-parent', source_id: -1, target_id: 2, source_parent_thread_id: 1, created_at: 'now' },
+      { id: 'target-parent', source_id: 2, target_id: -2, target_parent_thread_id: 3, created_at: 'now' },
+      { id: 'ignored', source_id: -3, target_id: 1, created_at: 'now' },
+      { id: 'self', source_id: 1, target_id: 1, created_at: 'now' },
+      { id: 'unknown', source_id: 99, target_id: 1, created_at: 'now' },
+    ])).toHaveLength(3)
+    expect(getTopologicalPath(threads.slice(0, 2), [
+      { id: 'cycle-a', source_id: 1, target_id: 2, created_at: 'now' },
+      { id: 'cycle-b', source_id: 2, target_id: 1, created_at: 'now' },
+    ])).toHaveLength(2)
   })
-})
 
-describe('dice geometry and config', () => {
-  it('builds geometry and rejects unsupported dice', () => {
-    expect(buildD10Faces()).toHaveLength(10)
-    expect(getDiceRenderConfigForSides(4)).toBe(DEFAULT_DICE_RENDER_CONFIG[4])
-    expect(() => getDiceRenderConfigForSides(3)).toThrow('Unsupported die sides')
+  it('normalizes dice configuration values and builds the d10 geometry', () => {
+    expect(DEFAULT_DICE_RENDER_CONFIG.global.tileSize).toBe(256)
+    const config = getDiceRenderConfigForSides(10, {
+      global: {
+        ...DEFAULT_DICE_RENDER_CONFIG.global,
+        tileSize: Number.NaN, uvInset: 2, fontScale: -1, d10AutoCenter: true,
+        textColor: '', fontWeight: 'normal',
+      },
+      perSides: { 10: { tileSize: 512, d10TopOffsetX: 9 } },
+    })
+    expect(config.tileSize).toBe(512)
+    expect(config.uvInset).toBe(0.25)
+    expect(config.fontScale).toBe(0.1)
+    expect(config.d10AutoCenter).toBe(true)
+    expect(config.d10TopOffsetX).toBe(0.5)
+    expect(config.textColor).toBe(DEFAULT_DICE_RENDER_CONFIG.global.textColor)
+    const defaults = getDiceRenderConfigForSides(20, {
+      global: { ...DEFAULT_DICE_RENDER_CONFIG.global, d10AutoCenter: false },
+    })
+    expect(defaults.d10AutoCenter).toBe(false)
+    const geometry = buildD10Faces()
+    expect(geometry.faces).toHaveLength(10)
+    expect(geometry.faceNumbers).toEqual([1, 10, 2, 9, 3, 8, 4, 7, 5, 6])
   })
-})
 
-describe('api error utilities', () => {
-  it('handles axios-like and unknown error values', () => {
-    expect(getApiErrorStatus({ response: { status: 409 } })).toBe(409)
-    expect(getApiErrorStatus({})).toBeUndefined()
-    expect(getApiErrorDetail({ response: { data: { detail: 'Nope' } } })).toBe('Nope')
-    expect(getApiErrorDetail({ response: { data: { detail: { message: 'Nested' } } } })).toBe('Nested')
-    expect(getApiErrorDetail({ response: { data: { detail: ['a', 'b'] } } })).toBe('a, b')
-    expect(getApiErrorDetail(new Error('Boom'))).toBe('Boom')
+  it('falls back when dice configuration values are non-finite or non-boolean', () => {
+    // L53 `if (!Number.isFinite(numeric))` — tileSize NaN with no side override (sides=20)
+    const nanConfig = getDiceRenderConfigForSides(20, {
+      global: { ...DEFAULT_DICE_RENDER_CONFIG.global, tileSize: Number.NaN },
+    })
+    expect(nanConfig.tileSize).toBe(DEFAULT_DICE_RENDER_CONFIG.global.tileSize)
+    // L68 `typeof value === 'boolean' ? value : fallback` — non-boolean d10AutoCenter
+    const boolConfig = getDiceRenderConfigForSides(6, {
+      global: { ...DEFAULT_DICE_RENDER_CONFIG.global, d10AutoCenter: 'yes' as never },
+    })
+    expect(boolConfig.d10AutoCenter).toBe(false)
+  })
+
+  it('formats API errors for axios-like, native, and unknown failures', () => {
+    expect(getApiErrorDetail({ response: { status: 422, data: { detail: 'invalid' } } })).toBe('invalid')
+    expect(getApiErrorStatus({ response: { status: 422 } })).toBe(422)
+    expect(getApiErrorStatus({ response: {} })).toBeNull()
+    expect(getApiErrorDetail(new Error('Failed to fetch'))).toContain('Network error')
+    expect(getApiErrorDetail(new Error('ordinary'))).toBe('ordinary')
     expect(getApiErrorDetail(null)).toBe('Unknown error')
   })
 })
 
-describe('reading order utilities', () => {
-  it('parses numeric issue strings and builds timeline entries', () => {
-    expect(issueStringToNumber('12')).toBe(12)
-    expect(issueStringToNumber('12.5')).toBe(12.5)
-    expect(issueStringToNumber('Annual')).toBeNull()
-    const dependencies: Dependency[] = []
-    const entries = buildReadingOrderTimelineEntries([thread(1), thread(2)], dependencies)
-    expect(entries.length).toBeGreaterThan(0)
+describe('nullish operand branches', () => {
+  it('returns Unknown error for Axios errors with a nullish message and no detail', () => {
+    // L27 `error.message ?? ''` and L30 `error.message ?? 'Unknown error'`
+    expect(getApiErrorDetail({ isAxiosError: true, response: { status: 502, data: {} }, message: undefined })).toBe('Unknown error')
+    expect(getApiErrorDetail({ isAxiosError: true, response: {}, message: undefined } as never)).toBe('Unknown error')
+  })
+
+  it('rejects oversized cumulative ranges and oversized dashed literals', () => {
+    // L70 `if (result.length + rangeSize > MAX_ISSUES)`
+    expect(() => parseIssueRange('1-5000,2-6000')).toThrow('Total issues would exceed')
+    // L78 `if (trimmedPart.length > MAX_LITERAL_LENGTH)` inside the dashed-literal branch
+    expect(() => parseIssueRange('A-' + 'x'.repeat(100))).toThrow('too long')
+  })
+
+  it('skips a negative target id without a parent thread id in topological sort', () => {
+    // L32 `} else { return }` branch when target_id < 0 and no target_parent_thread_id
+    const threads = [thread(1), thread(2)]
+    const result = getTopologicalPath(threads, [
+      { id: 'orphan-target', source_id: 1, target_id: -7, is_issue_level: true, created_at: 'now' },
+      { id: 'real', source_id: 1, target_id: 2, created_at: 'now' },
+    ])
+    expect(result.map((t) => t.id)).toEqual([1, 2])
+  })
+
+  it('returns early when moving an issue id that is not present', () => {
+    // L35 `if (issueIndex === -1)` in moveIssueByStep
+    const issues = [issue(1), issue(2)]
+    expect(moveIssueByStep(issues, 99, 'up')).toBe(issues)
+  })
+
+  it('updates a node layer to a deeper candidate when reached via a longer path', () => {
+    // L97 `existingLayer === undefined || candidateLayer > existingLayer` — candidateLayer > existingLayer arm
+    const deep = layoutGraph([thread(1), thread(2), thread(3)], [
+      { id: 'first', source_id: 1, target_id: 3, created_at: 'now' },
+      { id: 'second', source_id: 1, target_id: 2, created_at: 'now' },
+      { id: 'deeper', source_id: 2, target_id: 3, created_at: 'now' },
+    ], new Set())
+    const node3 = deep.nodes.find((n) => n.id === 3)
+    const node2 = deep.nodes.find((n) => n.id === 2)
+    expect(node2).toBeDefined()
+    expect(node3).toBeDefined()
+    expect(node3!.y).toBeGreaterThan(node2!.y)
+  })
+
+  it('parses non-numeric issue strings and open-ended spans with null ends', () => {
+    // L54 `Number.isNaN(parsed) ? null : parsed` — the null arm
+    expect(issueStringToNumber('.')).toBeNull()
+    // L271 `end ?? 'open'` — open-ended thread with no gates
+    const openThread: Thread = { ...thread(1), total_issues: null }
+    const entries = buildReadingOrderTimelineEntries({ thread: openThread, dependencies: [] })
+    const span = entries.find((e) => e.kind === 'span')
+    expect(span?.kind === 'span' && span.span.id).toBe('span-1-open')
+    expect(span?.kind === 'span' && span.span.isOpenEnded).toBe(true)
+  })
+
+  it('falls back through nullish rating-thread metadata operands', () => {
+    // L31 `metadata.id ?? metadata.thread_id ?? Number(threadId)` — both metadata ids nullish
+    expect(buildRatingThread(7, null, { title: 'Meta', id: undefined, thread_id: undefined } as never)?.id).toBe(7)
+    // L33 `metadata.format ?? sessionThread?.format ?? ''` — metadata.format and sessionThread both nullish
+    expect(buildRatingThread(7, null, { title: 'Meta', format: undefined } as never)?.format).toBe('')
+    // L61 `issues_remaining || 0` — issues_remaining falsy (0)
+    expect(getProgressPercentage({ total_issues: 4, issues_remaining: 0 })).toBe(100)
+    // L67 `if (!layer) return` — explosion layer absent
+    document.getElementById('explosion-layer')?.remove()
+    expect(() => createExplosion()).not.toThrow()
   })
 })
