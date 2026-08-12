@@ -56,7 +56,7 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         None.
     """
     for needle in (
-        "Version: 19",
+        "Version: 20",
         "Every product, behavior, deployment, operational, or factory-tooling PR must update",
         "exactly one isolated Markdown fragment",
         "`docs/changelog.md` is the frozen historical archive",
@@ -90,6 +90,8 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "<!-- factory-resume:v1 -->",
         "one full label-set replacement",
         "Never implement a transition as separate remove-then-add calls",
+        "Heartbeat telemetry never counts as substantive progress",
+        "registry issue #1093",
     ):
         require(policy, needle, POLICY)
 
@@ -205,8 +207,10 @@ def validate_local_guidance() -> None:
         require(text, "factory-resume:v1", source)
 
     scheduled = SCHEDULED_PROMPT.read_text(encoding="utf-8")
-    require(scheduled, "Version: 19", SCHEDULED_PROMPT)
+    require(scheduled, "Version: 20", SCHEDULED_PROMPT)
     require(scheduled, "one full atomic label-set replacement", SCHEDULED_PROMPT)
+    require(scheduled, "At the start of every scheduled run", SCHEDULED_PROMPT)
+    require(scheduled, "Heartbeat telemetry never counts as substantive progress", SCHEDULED_PROMPT)
 
     next_task = NEXT_TASK_PROMPT.read_text(encoding="utf-8")
     require(next_task, "only\n  after the PR merges", NEXT_TASK_PROMPT)
