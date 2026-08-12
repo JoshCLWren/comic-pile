@@ -47,3 +47,37 @@ The current factories authenticate as `JoshCLWren`, and their pull requests are 
 CodeRabbit currently submits `COMMENTED` reviews even when it reports actionable comments. The visibility workflow therefore maps a CodeRabbit review body reporting one or more actionable comments to `factory:changes-requested`, while preserving GitHub's real formal review state.
 
 If factory pull requests later use a separate GitHub App or machine-user identity, independent reviewers should submit formal `APPROVE` or `REQUEST_CHANGES` reviews. At that point the built-in review filters can become a stronger first-class view. Do not add a required-approval branch rule until a reliable independent reviewer identity exists, because the present single-account setup would deadlock factory-authored pull requests.
+
+## External heartbeat watchdog
+
+Registry issue [#1093](https://github.com/JoshCLWren/comic-pile/issues/1093) is operational telemetry, not executable backlog work. Factories must never claim, implement, label, or close the registry or the watchdog's alert issue.
+
+Each scheduled factory owns one permanent registry comment:
+
+| Worker | Call sign | Slot (America/Chicago) | Comment ID |
+|---|---|---:|---:|
+| `chatgpt-factory-1` | Nova | `:40` | `5260477681` |
+| `chatgpt-factory-2` | Booster Gold | `:52` | `5260477944` |
+| `chatgpt-factory-3` | Starman | `:04` | `5260478160` |
+| `chatgpt-factory-4` | Mister Miracle | `:16` | `5260478414` |
+| `chatgpt-factory-5` | Death's Head | `:28` | `5260478724` |
+
+At run start, replace only the assigned comment with:
+
+```text
+<!-- factory-heartbeat:v1 worker=<WORKER_ID> -->
+## 🏭 Factory <WORKER_NUMBER> · <CALL_SIGN>
+Scheduled slot: `<SLOT>` America/Chicago
+Last run started: `<current UTC timestamp>`
+Last run completed: `<previous completion timestamp or not yet reported>`
+Worked on: selecting work
+Outcome: running
+Updated by: `<WORKER_ID>`
+```
+
+At run end, replace the same comment again, preserving the start timestamp and recording the current UTC completion timestamp, actual PR or issue, and truthful outcome. Do not create additional heartbeat comments.
+
+The independent `.github/workflows/factory-heartbeat-watchdog.yml` workflow checks every 15 minutes. It reports a worker after 135 minutes without an update or after 90 minutes continuously marked `Outcome: running`. It maintains at most one alert issue and closes that alert when all five workers recover.
+
+Heartbeat writes are mandatory telemetry but never substantive factory progress. They do not satisfy a heartbeat outcome, outrank delivery work, extend a lease, justify ending a run, or excuse a missing implementation. If the update fails, retry once through another available GitHub path, preserve the telemetry failure in the user-visible update when material, and continue delivery.
+
