@@ -132,8 +132,7 @@ describe('RollPage bootstrap modal coverage', () => {
     await user.click(screen.getByRole('button', { name: 'close modal' }))
     expect(screen.queryByRole('heading', { name: 'Pick manually' })).not.toBeInTheDocument()
 
-    const d6Buttons = screen.getAllByRole('button', { name: 'd6' })
-    await user.click(d6Buttons[d6Buttons.length - 1]!)
+    await user.click(screen.getByRole('button', { name: /current die d6, manual mode/i }))
     expect(screen.getByRole('heading', { name: 'Select Die' })).toBeInTheDocument()
     const d8Buttons = screen.getAllByRole('button', { name: 'd8' })
     await user.click(d8Buttons[d8Buttons.length - 1]!)
