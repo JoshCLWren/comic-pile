@@ -95,7 +95,7 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
             self.validate(entrypoint=f"{self.entrypoint}\n{rule}\n")
 
     def test_current_sources_are_aligned(self) -> None:
-        """Accept the current V21 policy, protocol, and runtime prompts.
+        """Accept the current V22 policy, protocol, and runtime prompts.
 
         Returns:
             None.
@@ -104,12 +104,12 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
         CHECKER.validate_local_guidance()
 
     def test_version_and_backlog_goal_are_required(self) -> None:
-        """Require V21 and issue-backlog closure as the prime directive.
+        """Require V22 and issue-backlog closure as the prime directive.
 
         Returns:
             None.
         """
-        self.assert_policy_change_fails("Version: 21", "Version: 20")
+        self.assert_policy_change_fails("Version: 22", "Version: 21")
         self.assert_policy_change_fails(
             "Drive the open issue backlog to zero",
             "Keep existing pull requests busy",
@@ -134,7 +134,7 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
             "Blocked work may pause the worker.",
         )
         mutated = self.entrypoint.replace(
-            "Never treat an empty or blocked backlog as a reason to idle, pause, disable yourself, or stop checking.",
+            "Never treat an empty or blocked backlog as a reason to self-pause or self-disable.",
             "A blocked backlog may stop the worker.",
         )
         self.assertNotEqual(mutated, self.entrypoint)
@@ -148,7 +148,7 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
             None.
         """
         self.assert_policy_change_fails(
-            "The newest unclaimed open issue labeled both `user-reported` and `bug`.",
+            "The highest-priority unclaimed open issue labeled both `user-reported` and `bug`",
             "Any existing pull request.",
         )
 
