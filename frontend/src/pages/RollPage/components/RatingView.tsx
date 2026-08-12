@@ -9,6 +9,12 @@ import { ComicVineIssueCard } from './ComicVineIssueCard'
 import { ContinuityReadinessSummary } from './ContinuityReadinessSummary'
 import { ReadingOrderGroups } from './ReadingOrderGroups'
 
+function getDieDirection(currentDie: number, predictedDie: number): string {
+  if (predictedDie < currentDie) return 'More focused next roll'
+  if (predictedDie > currentDie) return 'More variety next roll'
+  return 'Die stays the same'
+}
+
 interface RatingViewProps {
   activeRatingThread: RatingThread | null
   currentDie: number
@@ -58,7 +64,7 @@ export function RatingView({
   const totalIssues = activeRatingThread?.total_issues ?? null
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
   const progress = getProgressPercentage(activeRatingThread)
-  const dieDirection = predictedDie < currentDie ? 'More focused next roll' : predictedDie > currentDie ? 'More variety next roll' : 'Die stays the same'
+  const dieDirection = getDieDirection(currentDie, predictedDie)
 
   async function handleCopyComicReference() {
     if (!activeRatingThread?.title || issueNumber == null) return
@@ -114,6 +120,11 @@ export function RatingView({
               </div>
             ) : null}
           </div>
+          {copyStatus === 'failed' ? (
+            <p className="mt-2 text-[10px] font-bold text-rose-400" role="status">
+              Copy failed. Use Retry copy to try again.
+            </p>
+          ) : null}
 
           <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-bold text-stone-500">
             {totalIssues && issueNumber != null ? (
@@ -210,6 +221,7 @@ export function RatingView({
           value={rating}
           className="h-4 w-full"
           aria-label="Rating from 0.5 to 5.0 in steps of 0.5"
+          aria-describedby="rating-value queue-effect"
           onChange={(event) => onUpdateRating(event.target.value)}
         />
         <p id="queue-effect" className="text-[11px] font-bold leading-relaxed text-stone-400">
@@ -231,6 +243,11 @@ export function RatingView({
         className="rating-actions sticky bottom-0 -mx-3 space-y-2 border-t border-white/10 bg-[#1a1410]/95 px-3 pt-3 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] backdrop-blur md:static md:-mx-4 md:px-4 md:pb-3"
         data-testid="rating-actions"
       >
+        {errorMessage ? (
+          <div id="error-message" className="text-center text-[10px] font-bold text-rose-500" role="alert">
+            {errorMessage}
+          </div>
+        ) : null}
         <button
           type="button"
           onClick={() => onSubmitRating(false)}
@@ -259,12 +276,6 @@ export function RatingView({
           </button>
         </div>
       </div>
-
-      {errorMessage ? (
-        <div id="error-message" className="text-center text-[10px] font-bold text-rose-500" role="alert">
-          {errorMessage}
-        </div>
-      ) : null}
 
       <ComicVineIssueCard issueId={issueId} />
 
