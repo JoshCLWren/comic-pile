@@ -1,4 +1,4 @@
-"""Tests for the API route prefix convention and the sessions alias (issue #376).
+"""Tests for retained legacy and canonical API route aliases.
 
 The API exposes a legacy surface (/api/*) and a versioned surface (/api/v1/*).
 /api/v1/sessions/current/ is an explicit backwards-compat alias of
@@ -47,6 +47,29 @@ async def test_api_v1_alias_session_endpoint_matches_legacy(auth_client: AsyncCl
     else:
         assert resp_v1.text == resp_legacy.text
 
+
+
+def test_v1_snooze_and_undo_aliases_match_legacy_route_methods() -> None:
+    """Canonical aliases reuse the same snooze and undo handler contracts."""
+    app = create_app(serve_frontend=False)
+    methods_by_path = {
+        route.path: frozenset(route.methods or set())
+        for route in app.routes
+        if getattr(route, "path", None)
+    }
+
+    alias_pairs = (
+        ("/api/snooze/", "/api/v1/snooze/"),
+        ("/api/snooze/{thread_id}/unsnooze", "/api/v1/snooze/{thread_id}/unsnooze"),
+        (
+            "/api/undo/{session_id}/undo/{snapshot_id}",
+            "/api/v1/undo/{session_id}/undo/{snapshot_id}",
+        ),
+        ("/api/undo/{session_id}/snapshots", "/api/v1/undo/{session_id}/snapshots"),
+    )
+    for legacy_path, canonical_path in alias_pairs:
+        assert canonical_path in methods_by_path
+        assert methods_by_path[canonical_path] == methods_by_path[legacy_path]
 
 def test_no_new_bare_api_client_routes() -> None:
     """Regression guard: no client-facing routes under bare /api/* (non-v1)."""
