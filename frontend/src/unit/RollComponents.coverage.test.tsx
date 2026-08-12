@@ -76,8 +76,8 @@ describe('ThreadPool', () => {
       shuffleIsPending
       {...actions}
     /></MemoryRouter>)
-    expect(screen.getByText('Saga')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Shuffle' })).toBeDisabled()
+    expect(screen.queryByText('Saga')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Shuffle queue' })).not.toBeInTheDocument()
     expect(screen.queryByText(/hidden \(blocked/)).not.toBeInTheDocument()
   })
 
