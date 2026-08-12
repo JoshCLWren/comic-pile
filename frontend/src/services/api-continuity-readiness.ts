@@ -8,7 +8,7 @@ export interface ContinuityBlocker {
   source_id: number
   source_label: string
   satisfaction_type: string
-  satisfied: false
+  satisfied: boolean
   causing_issue_ids: number[]
   causing_member_issue_ids: number[]
   note: string | null
@@ -23,7 +23,7 @@ export interface ContinuityReadinessResponse {
 }
 
 export const continuityReadinessApi = {
-  get: (
+  evaluate: (
     nodeType: ContinuityReadinessNodeType,
     nodeId: number,
   ): Promise<ContinuityReadinessResponse> =>
