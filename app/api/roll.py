@@ -18,7 +18,7 @@ from app.auth import get_current_user
 
 from app.database import get_db
 from app.middleware import limiter
-from app.models import Event, Thread
+from app.models import Event, Issue, Thread
 from app.models.user import User
 from app.roll_recovery import build_roll_recovery
 from app.schemas import (
@@ -396,7 +396,14 @@ async def roll_bootstrap(
     )
 
     pool_query = (
-        select(Thread.id, Thread.title, Thread.format)
+        select(
+            Thread.id,
+            Thread.title,
+            Thread.format,
+            Thread.next_unread_issue_id.label("issue_id"),
+            Issue.issue_number,
+        )
+        .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
         .where(Thread.queue_position >= 1)
@@ -411,7 +418,13 @@ async def roll_bootstrap(
 
     pool_result = await db.execute(pool_query)
     roll_pool = [
-        RollBootstrapThread(id=row.id, title=row.title, format=row.format)
+        RollBootstrapThread(
+            id=row.id,
+            title=row.title,
+            format=row.format,
+            issue_id=row.issue_id,
+            issue_number=row.issue_number,
+        )
         for row in pool_result.all()
     ]
 
