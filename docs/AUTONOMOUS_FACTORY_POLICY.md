@@ -1,6 +1,6 @@
 # ComicPile Autonomous Factory Policy
 
-Version: 20
+Version: 21
 
 This is the canonical policy for every scheduled ChatGPT worker, the local OpenCode factory, and interactive factory repair sessions.
 
@@ -79,15 +79,13 @@ After work becomes blocked, merge-gated, or dependent on a human-only decision, 
 
 If no ordinary executable issue can be selected, do not declare the factory idle. Enter the backlog-zero Chromium phase and work #679 instead.
 
-## User-facing changelog gate
+## Release-note ownership
 
-Every product, behavior, deployment, operational, or factory-tooling PR must update the generated user-facing changelog before it can receive a pass verdict, ready marker, merge-gated marker, or merge. Do that by adding exactly one isolated Markdown fragment at `docs/changelog.d/YYYY-MM-DD-<pr-number>.md`. The filename date must match the fragment's first `## YYYY-MM-DD` heading, the fragment must link the actual PR, and the text must describe what changed and why it matters under a user-recognizable feature area.
+Release notes are asynchronous post-merge infrastructure, not an implementation merge gate. The dedicated release-writer workflow inspects merged pull requests and publishes user-facing changes to the database-backed release ledger. Reconciliation owns missed or retried release records.
 
-`docs/changelog.md` is the frozen historical archive. Ordinary new work must not rewrite, prepend, or backfill that shared file. The Vite build validates all fragments, rejects malformed filenames and duplicate PR entries, sorts them deterministically newest-first, and assembles them before the archive into the static `/changelog.md` asset used by What’s New.
+Implementation workers must not create, repair, or require `docs/changelog.d` fragments, must not edit `docs/changelog.md` as routine delivery work, and must not block a product PR because release-note publication is delayed. A genuine release-writer or release-ledger defect may become its own executable issue, but fixing that infrastructure must not reintroduce Markdown release-note work into unrelated implementation branches.
 
-A documentation-only, test-only, generated-artifact-only, or strictly internal refactor PR may omit a fragment only when its PR body explicitly states `Changelog: not user-facing` and the worker verifies that the change has no user, operator, deployment, or factory behavior impact. A missing required changelog entry is an actionable review defect and blocks readiness and merge.
-
-Each worker owns only its PR's fragment. Never make one PR repair release-note fragments for unrelated merged work merely to satisfy its own merge gate. Missing historical release notes should become focused follow-up work rather than reintroducing a shared-file collision.
+`docs/changelog.md` and the existing files under `docs/changelog.d/` are frozen historical source retained only for provenance and auditability. They are not runtime truth, are not assembled by the frontend build, and ordinary new work must not append to them.
 
 ## Review-feedback gate
 
