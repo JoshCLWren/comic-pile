@@ -72,10 +72,22 @@ export default function QueueThreadCard({
   const resolvedCrossoverGroupsLoading = crossoverGroupsLoading ?? fallbackCrossoverGroups.isPending
   const resolvedCrossoverGroupsError = crossoverGroupsError ?? Boolean(fallbackCrossoverGroups.error)
 
+  const handleCardClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target
+    if (
+      target instanceof Element
+      && target.closest('button, a, input, select, textarea, [role="button"], [role="link"]')
+    ) {
+      return
+    }
+    onCardClick()
+  }
+
   return (
     <div
       data-testid="queue-thread-item"
-      className={`queue-thread-card glass-card h-full p-3 md:p-4 space-y-2 md:space-y-3 group transition-all hover:border-white/20 ${isDragOver ? 'border-amber-400/60' : ''} ${isBlocked ? 'border-red-400/30 bg-red-500/5' : ''}`}
+      className={`queue-thread-card glass-card h-full p-3 md:p-4 space-y-2 md:space-y-3 group cursor-pointer transition-all hover:border-white/20 ${isDragOver ? 'border-amber-400/60' : ''} ${isBlocked ? 'border-red-400/30 bg-red-500/5' : ''}`}
+      onClick={handleCardClick}
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
