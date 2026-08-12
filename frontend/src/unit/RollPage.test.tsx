@@ -153,13 +153,24 @@ it('loads every active override page only after the modal opens', async () => {
   render(<RollPage />)
   expect(threadsApi.list).not.toHaveBeenCalled()
 
-  await user.click(screen.getByRole('button', { name: /override/i }))
+  await user.click(screen.getByRole('button', { name: /pick manually/i }))
 
   await waitFor(() => expect(threadsApi.list).toHaveBeenCalledTimes(2))
   expect(threadsApi.list).toHaveBeenNthCalledWith(1, { page_size: 200 }, undefined)
   expect(threadsApi.list).toHaveBeenNthCalledWith(2, { page_size: 200 }, 'page-2')
   expect(await screen.findByRole('option', { name: 'First Choice (Comic)' })).toBeInTheDocument()
   expect(await screen.findByRole('option', { name: 'Second Choice (Comic)' })).toBeInTheDocument()
+})
+
+it('explains automatic and manual die modes on mobile', async () => {
+  const user = userEvent.setup()
+  render(<RollPage />)
+
+  const dieControl = screen.getByRole('button', { name: /current die d6, automatic mode/i })
+  expect(dieControl).toHaveTextContent('Auto')
+  await user.click(dieControl)
+  expect(screen.getByText(/automatic mode is active at d6/i)).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /use automatic/i })).toBeInTheDocument()
 })
 
 it('shows a retry action when bootstrap loading fails', async () => {
