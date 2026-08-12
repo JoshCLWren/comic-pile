@@ -771,7 +771,7 @@ export default function RollPage() {
             </div>
           </div>
           <Tooltip content="Pick a specific eligible thread for the next result.">
-            <button type="button" onClick={() => { setOverrideThreads(null); setIsOverrideOpen(true) }} className="px-2 md:px-3 py-1.5 md:py-2 bg-white/5 border border-white/10 text-stone-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all">
+            <button type="button" onClick={() => { setOverrideThreads(null); setIsOverrideOpen(true) }} className="min-h-11 px-2 md:px-3 py-1.5 md:py-2 bg-white/5 border border-white/10 text-stone-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all">
               Pick manually
             </button>
           </Tooltip>
