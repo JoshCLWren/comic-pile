@@ -80,6 +80,6 @@ describe('RatingView copy comic reference', () => {
     renderRatingView()
     await user.click(screen.getByRole('button', { name: 'Copy Ultimate X-Men 12' }))
 
-    expect(screen.getByText('Copy failed')).toBeInTheDocument()
+    expect(screen.getByText(/Copy failed/)).toBeInTheDocument()
   })
 })
