@@ -20,10 +20,36 @@ vi.mock('../components/MarqueeTitle', () => ({
 }))
 
 vi.mock('../components/PositionMenu', () => ({
-  default: ({ onDependencies }: { onDependencies: () => void }) => (
-    <button type="button" data-testid="mock-position-menu" onClick={onDependencies}>
-      Position Menu
-    </button>
+  default: ({ 
+    onDependencies, 
+    onMoveToFront, 
+    onMoveToBack, 
+    onEdit, 
+    onDelete 
+  }: { 
+    onDependencies: () => void; 
+    onMoveToFront: () => void; 
+    onMoveToBack: () => void; 
+    onEdit: () => void; 
+    onDelete: () => void 
+  }) => (
+    <div data-testid="mock-position-menu">
+      <button type="button" data-testid="mock-position-move-to-front" onClick={onMoveToFront}>
+        Move to Front
+      </button>
+      <button type="button" data-testid="mock-position-move-to-back" onClick={onMoveToBack}>
+        Move to Back
+      </button>
+      <button type="button" data-testid="mock-position-edit" onClick={onEdit}>
+        Edit
+      </button>
+      <button type="button" data-testid="mock-position-dependencies" onClick={onDependencies}>
+        Dependencies
+      </button>
+      <button type="button" data-testid="mock-position-delete" onClick={onDelete}>
+        Delete
+      </button>
+    </div>
   ),
 }))
 
@@ -124,17 +150,17 @@ describe('QueueThreadCard', () => {
     expect(onCardClick).toHaveBeenCalledTimes(2)
   })
 
-  it('uses the shared action menu for dependency management without opening details', async () => {
-    const user = userEvent.setup()
-    const onDependencies = vi.fn()
-    const onCardClick = vi.fn()
-    renderCard(createMockThread(), { onDependencies, onCardClick })
+    it('uses the shared action menu for dependency management without opening details', async () => {
+      const user = userEvent.setup()
+      const onDependencies = vi.fn()
+      const onCardClick = vi.fn()
+      renderCard(createMockThread(), { onDependencies, onCardClick })
 
-    await user.click(screen.getByTestId('mock-position-menu'))
+      await user.click(screen.getByTestId('mock-position-dependencies'))
 
-    expect(onDependencies).toHaveBeenCalledTimes(1)
-    expect(onCardClick).not.toHaveBeenCalled()
-  })
+      expect(onDependencies).toHaveBeenCalledTimes(1)
+      expect(onCardClick).not.toHaveBeenCalled()
+    })
 
   it('does not treat shared action-menu keyboard activation as card activation', () => {
     const onCardClick = vi.fn()
@@ -273,7 +299,207 @@ describe('QueueThreadCard', () => {
     expect(callbacks.onDragEnd).toHaveBeenCalled()
     expect(callbacks.onDragOver).toHaveBeenCalled()
     expect(callbacks.onDrop).toHaveBeenCalled()
-    await user.click(screen.getByTestId('mock-position-menu'))
+    await user.click(screen.getByTestId('mock-position-dependencies'))
     expect(callbacks.onDependencies).toHaveBeenCalledTimes(2)
+    })
+    
+    it('exercises PositionMenu descendants and confirms onCardClick is not invoked', async () => {
+      const user = userEvent.setup()
+      const onCardClick = vi.fn()
+      const onDependencies = vi.fn()
+      const onMoveToFront = vi.fn()
+      const onMoveToBack = vi.fn()
+      const onEdit = vi.fn()
+      const onDelete = vi.fn()
+      
+      renderCard(createMockThread(), { onCardClick, onDependencies, onMoveToFront, onMoveToBack, onEdit, onDelete })
+
+      // Test PositionMenu buttons using specific testids
+      const moveToFrontBtn = screen.getByTestId('mock-position-move-to-front')
+      const moveToBackBtn = screen.getByTestId('mock-position-move-to-back')
+      const editBtn = screen.getByTestId('mock-position-edit')
+      const dependenciesBtn = screen.getByTestId('mock-position-dependencies')
+      const deleteBtn = screen.getByTestId('mock-position-delete')
+      
+      // Test Move to Front
+      await user.click(moveToFrontBtn)
+      expect(onMoveToFront).toHaveBeenCalledTimes(1)
+      expect(onCardClick).not.toHaveBeenCalled()
+      
+      // Reset mocks
+      vi.clearAllMocks()
+      
+      // Test Move to Back
+      await user.click(moveToBackBtn)
+      expect(onMoveToBack).toHaveBeenCalledTimes(1)
+      expect(onCardClick).not.toHaveBeenCalled()
+      
+      // Reset mocks
+      vi.clearAllMocks()
+      
+      // Test Edit
+      await user.click(editBtn)
+      expect(onEdit).toHaveBeenCalledTimes(1)
+      expect(onCardClick).not.toHaveBeenCalled()
+      
+      // Reset mocks
+      vi.clearAllMocks()
+      
+      // Test Dependencies
+      await user.click(dependenciesBtn)
+      expect(onDependencies).toHaveBeenCalledTimes(1)
+      expect(onCardClick).not.toHaveBeenCalled()
+      
+      // Reset mocks
+      vi.clearAllMocks()
+      
+      // Test Delete
+      await user.click(deleteBtn)
+      expect(onDelete).toHaveBeenCalledTimes(1)
+      expect(onCardClick).not.toHaveBeenCalled()
+    })
+    
+    it('exercises QueueThreadActions descendants and confirms onCardClick is not invoked', async () => {
+      const user = userEvent.setup()
+      const onCardClick = vi.fn()
+      const onRead = vi.fn()
+      const onOpenThread = vi.fn()
+      const onSnooze = vi.fn()
+      const onActionDelete = vi.fn()
+      
+      renderCard(createMockThread(), { 
+        onCardClick, 
+        onRead, 
+        onOpenThread, 
+        onSnooze, 
+        onActionDelete,
+        snoozeLabel: 'Snooze',
+        snoozeIcon: ''
+      })
+      
+      // Get the QueueThreadActions container (it has aria-label="Actions for Test Thread")
+      const actionsContainer = screen.getByRole('group', { name: /Actions for Test Thread/i })
+      
+      // Test QueueThreadActions buttons within the container using label text
+      const readButton = actionsContainer.querySelector('button[aria-label="Read"]')
+      const editButton = actionsContainer.querySelector('button[aria-label="Edit"]') // This is actually for opening thread
+      const snoozeButton = actionsContainer.querySelector('button[aria-label="Snooze"]')
+      const deleteButton = actionsContainer.querySelector('button[aria-label="Delete"]')
+      
+      // Test Read
+      await user.click(readButton as HTMLElement)
+      expect(onRead).toHaveBeenCalledTimes(1)
+      expect(onCardClick).not.toHaveBeenCalled()
+      
+      // Reset mocks
+      vi.clearAllMocks()
+      
+      // Test Open Thread (bound to Edit button in QueueThreadActions)
+      await user.click(editButton as HTMLElement)
+      expect(onOpenThread).toHaveBeenCalledTimes(1)
+      expect(onCardClick).not.toHaveBeenCalled()
+      
+      // Reset mocks
+      vi.clearAllMocks()
+      
+      // Test Snooze
+      await user.click(snoozeButton as HTMLElement)
+      expect(onSnooze).toHaveBeenCalledTimes(1)
+      expect(onCardClick).not.toHaveBeenCalled()
+      
+      // Reset mocks
+      vi.clearAllMocks()
+      
+      // Test Delete Action (bound to Delete button in QueueThreadActions)
+      await user.click(deleteButton as HTMLElement)
+      expect(onActionDelete).toHaveBeenCalledTimes(1)
+      expect(onCardClick).not.toHaveBeenCalled()
+    })
+    
+    it('exercises CrossoverTags links and confirms onCardClick is not invoked', async () => {
+      const user = userEvent.setup()
+      const onCardClick = vi.fn()
+      
+      renderCard(createMockThread({ 
+        id: 1, 
+        title: 'Test Thread with Crossovers' 
+      }), { 
+        onCardClick,
+        crossoverGroups: [
+          { id: 11, name: 'Rotworld' },
+          { id: 12, name: 'Night of the Owls' },
+        ]
+      })
+
+      // Test CrossoverTags links
+      const rotworldLink = screen.getByRole('link', { name: 'Rotworld' })
+      const nightOfOwlsLink = screen.getByRole('link', { name: 'Night of the Owls' })
+      
+      // Test Rotworld link
+      await user.click(rotworldLink)
+      expect(onCardClick).not.toHaveBeenCalled()
+      
+      // Test Night of the Owls link
+      await user.click(nightOfOwlsLink)
+      expect(onCardClick).not.toHaveBeenCalled()
+    })
+    
+    it('exercises drag handle and confirms onCardClick is not invoked', async () => {
+      const user = userEvent.setup()
+      const onCardClick = vi.fn()
+      const onDragStart = vi.fn()
+      const onDragEnd = vi.fn()
+      const onDragOver = vi.fn()
+      const onDrop = vi.fn()
+      
+      renderCard(createMockThread(), { 
+        onCardClick, 
+        onDragStart, 
+        onDragEnd, 
+        onDragOver, 
+        onDrop 
+      })
+
+      // Test drag handle
+      const dragHandle = screen.getByRole('button', { name: /Drag to reorder/i })
+      
+      await user.click(dragHandle)
+      expect(onCardClick).not.toHaveBeenCalled()
+      
+      // Simulate drag events
+      fireEvent.dragStart(dragHandle)
+      expect(onDragStart).toHaveBeenCalledTimes(1)
+      fireEvent.dragEnd(dragHandle)
+      
+      const threadCard = screen.getByTestId('queue-thread-item')
+      fireEvent.dragOver(threadCard)
+      fireEvent.drop(threadCard)
+      
+      expect(onDragOver).toHaveBeenCalledTimes(1)
+      expect(onDrop).toHaveBeenCalledTimes(1)
+      expect(onCardClick).not.toHaveBeenCalled()
+    })
+    
+    it('exercises blocked dependency button and confirms onCardClick is not invoked', async () => {
+      const user = userEvent.setup()
+      const onCardClick = vi.fn()
+      const onDependencies = vi.fn()
+      
+      renderCard(createMockThread({ 
+        id: 1, 
+        title: 'Blocked Test Thread' 
+      }), { 
+        onCardClick, 
+        onDependencies,
+        isBlocked: true,
+        blockingReasons: ['Blocked by: Prequel Thread']
+      })
+
+      // Test blocked dependency button
+      const blockedButton = screen.getByRole('button', { name: /View dependencies for Blocked Test Thread/ })
+      
+      await user.click(blockedButton)
+      expect(onDependencies).toHaveBeenCalledTimes(1)
+      expect(onCardClick).not.toHaveBeenCalled()
+    })
   })
-})
