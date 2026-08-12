@@ -90,6 +90,7 @@ describe('ContinuityPlannerPage', () => {
     await user.clear(await screen.findByLabelText('Plan name'))
     await user.type(screen.getByLabelText('Plan name'), 'Kirby lane')
     await user.click(screen.getByRole('option', { name: /Mister Miracle/i }))
+    await screen.findByRole('option', { name: /Annual 1/i })
     await user.selectOptions(screen.getByLabelText('Issue'), '40')
     await user.click(screen.getByRole('button', { name: 'Add issue' }))
     await user.selectOptions(screen.getByLabelText('Crossover'), '8')
