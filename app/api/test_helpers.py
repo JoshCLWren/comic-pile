@@ -1,7 +1,7 @@
 """Test API endpoints for E2E testing."""
 
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -42,8 +42,6 @@ async def expire_current_session(
             detail="This endpoint is only available in test environment",
         )
 
-    cutoff_time = datetime.now(UTC) - timedelta(hours=24)
-
     session_result = await db.execute(
         select(SessionModel)
         .where(SessionModel.user_id == current_user.id)
@@ -57,7 +55,7 @@ async def expire_current_session(
             detail="No active session found",
         )
 
-    session.started_at = cutoff_time
+    session.ended_at = datetime.now(UTC)
     await db.commit()
 
     return {"status": "success", "message": "Session expired"}
