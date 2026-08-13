@@ -1,6 +1,6 @@
 # ComicPile Autonomous Factory Policy
 
-Version: 21
+Version: 22
 
 This is the canonical policy for every scheduled ChatGPT worker, the local OpenCode factory, and interactive factory repair sessions.
 
@@ -23,7 +23,7 @@ The factory follows this permanent cycle:
 
 An empty or blocked ordinary backlog is never an idle condition and never a reason to stop the factory. A worker must not pause, disable, suspend, or otherwise mutate its own schedule because work is blocked or exhausted. Only Josh, or an interactive session acting on Josh's direct instruction, may pause or disable a factory. Scheduled workers remain enabled and continue checking on schedule.
 
-User-reported bugs remain first within the bug queue. Reproducible E2E-discovered bugs come next, then ordinary executable issues. Preserve `user-reported` only for defects actually reported by a user.
+User-reported product bugs are the first delivery queue. Reproducible E2E-discovered product bugs come after them, then ordinary executable product issues. Preserve `user-reported` only for defects actually reported by a user.
 
 Firefox and WebKit are optional diagnostics for browser-specific investigations. They are not required factory release coverage and must not delay issue closure, merges, or backlog draining.
 
@@ -31,16 +31,27 @@ Firefox and WebKit are optional diagnostics for browser-specific investigations.
 
 Choose work in this order:
 
-1. A branch-caused failing check, merge conflict, or actionable review defect that prevents an active implementation PR from becoming mergeable.
-2. The newest unclaimed open issue labeled both `user-reported` and `bug`.
-3. The highest-priority unclaimed reproducible E2E-discovered `bug` issue.
-4. The highest-value unclaimed executable issue, honoring explicit priority and dependencies, while deferring #679 until every other executable issue is closed.
-5. Additional work on an existing PR only when required to complete its issue contract or make the PR mergeable.
-6. Factory maintenance only when factory behavior blocks issue delivery.
+1. The highest-priority unclaimed open issue labeled both `user-reported` and `bug`; within equal priority, choose the newest report first.
+2. A branch-caused failing check, merge conflict, or actionable review defect only when the affected PR directly delivers an equal-or-higher-priority user-reported/product bug or clearing the blocker can immediately finish or merge that product fix.
+3. Other branch-caused failing checks, conflicts, or actionable review defects that prevent substantive product-delivery PRs from becoming mergeable.
+4. The highest-priority unclaimed reproducible E2E-discovered product `bug` issue.
+5. The highest-value unclaimed executable product issue, honoring explicit priority and dependencies. `#679` becomes eligible when all remaining ordinary executable product work is owned, blocked, or dependency-gated.
+6. Additional work on an existing PR only when required to complete its issue contract or make the PR mergeable.
+7. Factory, CI, test, or E2E infrastructure only when it directly blocks product delivery.
+
+Test-only defects, stale selectors, optional validation, E2E plumbing, docs, release-note work, CI cosmetics, metadata cleanup, and evidence polishing never outrank an executable user-reported or product bug unless that infrastructure directly blocks safe validation or merge of the same higher-priority product fix.
 
 A green, ready, review-passed, or merge-gated PR is excluded from ordinary work selection. It may be selected only for one final exact-head gate check and merge action.
 
-Optional tests, cleanup, metadata edits, wording changes, evidence polishing, PR-body edits, architectural debate, or another minor slice do not outrank a coherent implementation for an unclaimed executable issue.
+Optional tests, cleanup, metadata edits, wording changes, evidence polishing, PR-body edits, architectural debate, or another minor slice do not outrank a coherent implementation for an unclaimed executable product issue.
+
+## Work-session utilization
+
+A scheduled heartbeat is a bounded work session, not a one-ticket punch.
+
+After every substantive fix, opened PR, merge, completed issue, or valid blocker, immediately rerun selection and continue the next highest-priority executable work in the same scheduled run. Reaching one valid heartbeat outcome is a minimum success threshold, not a stop condition.
+
+Do not end a run merely because CI or review is pending, because the current item became blocked, or because one issue reached a handoff state. Preserve or release ownership as appropriate, then select the next executable item. Continue until the runtime or tool budget makes further safe substantive work impossible. If ordinary executable work is truly exhausted, enter #679 instead of stopping.
 
 ## Concurrency and throughput floor
 
@@ -60,6 +71,7 @@ A substantive implementation PR changes product behavior, correctness, performan
 - Do not create replacement PRs merely because `main` advanced. Replay only when the prior PR is genuinely non-mergeable and substantial implementation would otherwise be lost.
 - Waiting for CI, review, a merge, a safer runtime, or external availability is not a global stop condition while other executable work exists.
 - Do not debate an already documented actionable finding across repeated heartbeats. Fix it, rebut it once with evidence, or preserve a real blocker and move on.
+- Test-only and factory-maintenance work must not become a refuge from higher-priority product bugs.
 
 ## Full-contract implementation
 
@@ -76,6 +88,8 @@ Repeat until the selected issue reaches closure or a valid blocker:
 `inspect contract -> implement closure-critical behavior -> focused validation -> commit -> push -> inspect exact SHA -> account for all review feedback -> repair blockers -> verify merge gates -> merge when eligible -> verify issue closure`
 
 After work becomes blocked, merge-gated, or dependent on a human-only decision, preserve durable context and return to selection rather than polishing indefinitely.
+
+After any issue or PR reaches a stable outcome, return to selection again and continue the same scheduled work session while runtime remains.
 
 If no ordinary executable issue can be selected, do not declare the factory idle. Enter the backlog-zero Chromium phase and work #679 instead.
 
@@ -129,15 +143,17 @@ A normal heartbeat must accomplish at least one of these while executable issues
 - create evidence-backed bug issues from reproducible Chromium E2E failures during the backlog-zero phase;
 - repair factory behavior that is directly blocking issue delivery.
 
+These are minimum substantive outcomes, not reasons to stop a run. After achieving one, continue the work-session loop while safe runtime remains.
+
 Comments, labels, claims, reviews, PR-body edits, ready markers, help text, speculative plans, and optional test additions alone are not sufficient.
 
 When ordinary executable work is exhausted, entering #679 and the Chromium E2E bug-harvesting cycle is the required heartbeat outcome. `idle`, self-pausing, and self-disabling are invalid substitutes.
 
 ## Backlog-zero Chromium phase
 
-Issue #679 is excluded from ordinary executable-backlog selection while any other executable issue remains open, unless disabled Chromium coverage itself blocks safe delivery.
+Issue #679 is excluded from ordinary executable-backlog selection while any other executable product issue remains open, unless disabled Chromium coverage itself blocks safe delivery.
 
-When no other executable delivery work remains, including when all remaining ordinary work is owned, blocked, or dependency-gated:
+`#679` becomes eligible when all remaining ordinary executable product work is owned, blocked, or dependency-gated. At that point:
 
 1. prioritize #679 and restore the maintained Chromium Playwright CI suite;
 2. merge that restoration only after the normal exact-head gates pass;
@@ -148,7 +164,7 @@ When no other executable delivery work remains, including when all remaining ord
 
 Firefox and WebKit may be run manually when a browser-specific defect warrants them. They are not backlog-zero completion gates.
 
-Infrastructure failures that do not demonstrate product defects should be repaired as E2E infrastructure work rather than mislabeled as product bugs.
+Infrastructure failures that do not demonstrate product defects should be repaired as E2E infrastructure work rather than mislabeled as product bugs, and only when no higher-priority product delivery work is executable or the infrastructure blocks that delivery.
 
 ## Ownership and blocked work
 
@@ -163,6 +179,10 @@ When owned work cannot safely advance now:
 5. return when the blocker changes.
 
 Blocked work never authorizes a worker to pause or disable itself.
+
+When Josh or an interactive session acting on his direct instruction pauses or disables a scheduled worker, that interactive session must release the paused worker's open issue and PR claims to `factory:unowned` while preserving the truthful workflow-stage label and current resume packet. A paused worker must never strand executable work behind its owner label. Scheduled workers must not infer that another worker is paused solely from a missed heartbeat; explicit ownership release is the handoff signal.
+
+For an interactive pause, reconcile each target atomically, preserve unrelated labels and the current resume packet, replace the owner with `factory:unowned`, and keep exactly one truthful stage. Unfinished implementation changes the issue to `ralph-status:pending`, `factory`, `factory:building`, `factory:unowned`; an existing PR keeps `factory`, `factory:building`, `factory:unowned`. CI-pending work keeps issue `ralph-status:validation` and PR `factory:ci`, both with `factory` and `factory:unowned`. Ready work keeps issue `ralph-status:in-review` and PR `factory:ready`, both with `factory` and `factory:unowned`. A PR-level blocker uses `factory`, `factory:blocked`, `factory:unowned`, while an issue-only blocker keeps the issue at `ralph-status:blocked`, `factory`, `factory:blocked`, `factory:unowned` and preserves the PR's truthful stage with `factory:unowned`.
 
 ## Mandatory label state machine
 
@@ -215,6 +235,7 @@ Rules:
 - Never manufacture evidence or claim commands ran when they did not.
 - Never mutate factory schedules or topology. Only Josh or an interactive session acting on Josh's direct instruction may do so.
 - Never pause, disable, suspend, or stop a scheduled factory because the ordinary backlog is blocked or empty. Keep the schedule enabled and switch to #679/E2E work.
+- When an interactive session pauses or disables a worker on Josh's instruction, release that worker's open claims before treating the pause as complete.
 
 ## Closure truth
 
@@ -274,10 +295,6 @@ Review leases last 45 minutes. Repair and implementation leases last 60 minutes 
 
 Scheduled ChatGPT workers must update their assigned permanent comment on registry issue #1093 at the start and completion of every run, following `docs/FACTORY_GITHUB_VISIBILITY.md`. The registry and the watchdog's alert issue are operational telemetry, not executable backlog work. Workers must never claim, implement, label, or close them.
 
-A start update records current UTC and `Outcome: running`. A completion update preserves the start time and records current UTC, the actual work item, and truthful outcome. If an update fails, retry once through another available GitHub path and continue delivery; telemetry failure is not authority to stop.
+A start update records current UTC and `Outcome: running`. A completion update preserves the start time and records current UTC, the actual work item or items, and truthful outcome. If an update fails, retry once through another available GitHub path and continue delivery; telemetry failure is not authority to stop.
 
 Heartbeat telemetry never counts as substantive progress, never satisfies a valid heartbeat outcome, never outranks executable product work, never extends a lease, and never justifies ending a run. The external watchdog may report missing or stuck heartbeats, but only Josh or an interactive session acting on his direct instruction may change a scheduled task.
-
-## Communication
-
-Report meaningful issue-level outcomes. State the selected issue, substantive change, evidence, merge result when applicable, and exact blocker. Do not celebrate activity for its own sake.
