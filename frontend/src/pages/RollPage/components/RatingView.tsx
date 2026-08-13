@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import IssueCorrectionDialog from '../../../components/IssueCorrectionDialog'
+import ContinuityCorrectionDialog from '../../../components/ContinuityCorrectionDialog'
 import Tooltip from '../../../components/Tooltip'
 import type { ReadingOrder } from '../../../services/api-reading-orders'
 import type { ConnectedThreadInfo } from '../../../types'
@@ -320,6 +321,22 @@ export function RatingView({
           onClose={() => setIsCorrectionDialogOpen(false)}
           onSuccess={() => {
             setIsCorrectionDialogOpen(false)
+            onRefreshThread()
+          }}
+        />
+      ) : null}
+
+      {activeRatingThread ? (
+        <ContinuityCorrectionDialog
+          isOpen={isContinuityDialogOpen}
+          threadId={activeRatingThread.id}
+          issueId={issueId}
+          issueNumber={issueNumber}
+          threadTitle={activeRatingThread.title}
+          connectedThreads={connectedThreads}
+          onClose={() => setIsContinuityDialogOpen(false)}
+          onSuccess={() => {
+            setIsContinuityDialogOpen(false)
             onRefreshThread()
           }}
         />

@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback } from 'react'
-import { dependencyGroupsApi, type DependencyGroup } from '../services/api-dependency-groups'
-import { getApiErrorDetail } from '../utils/apiError'
+import { useEffect, useState } from 'react'
+import Modal from './Modal'
 import {
-  ContinuityThreadSelector,
-  ContinuityIssueSelector,
-  type SelectedComic,
-} from './continuity/ComicSelectors'
+  dependencyGroupsApi,
+  type DependencyGroup,
+} from '../services/api-dependency-groups'
+import { threadsApi } from '../services/api'
+import { getApiErrorDetail } from '../utils/apiError'
+import type { ConnectedThreadInfo, Thread } from '../types'
 
 interface ContinuityCorrectionDialogProps {
   isOpen: boolean
@@ -13,9 +14,16 @@ interface ContinuityCorrectionDialogProps {
   issueId: number | null | undefined
   issueNumber: string | null | undefined
   threadTitle: string
-  connectedThreads: any[]
+  connectedThreads: ConnectedThreadInfo[]
   onClose: () => void
   onSuccess: () => void
+}
+
+type CrossoverMode = 'none' | 'existing' | 'new'
+
+interface ResolvedThread {
+  id: number
+  title: string
 }
 
 export default function ContinuityCorrectionDialog({
@@ -28,134 +36,268 @@ export default function ContinuityCorrectionDialog({
   onClose,
   onSuccess,
 }: ContinuityCorrectionDialogProps) {
-  const [isLoadingThreads, setIsLoadingThreads] = useState(false)
-  const [threads, setThreads] = useState<any[]>([])
-  const [selectedThread, setSelectedThread] = useState<any>(null)
-  const [selectedIssue, setSelectedIssue] = useState<any>(null)
+  const [mode, setMode] = useState<CrossoverMode>('none')
+  const [groups, setGroups] = useState<DependencyGroup[]>([])
+  const [isLoadingGroups, setIsLoadingGroups] = useState(false)
+  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null)
+  const [newName, setNewName] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<string | null>(null)
-  const [mode, setMode] = useState<'none' | 'existing' | 'new'>('none')
-  const [groups, setGroups] = useState<DependencyGroup[]>([])
-  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null)
-  const [newName, setNewName] = useState('')
+  const [resolvedConnected, setResolvedConnected] = useState<ResolvedThread[]>([])
+  const [connectedThreadsError, setConnectedThreadsError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (isOpen) {
-      fetchThreads()
-    }
-  }, [isOpen])
-
-  async function fetchThreads() {
-    setIsLoadingThreads(true)
-    try {
-      // Assuming there's a threadsApi.list() or similar. 
-      // I need to check where threads are listed.
-      // For now, I'll use a placeholder or check for existing API.
-    } catch (err) {
-      setError('Failed to load threads')
-    } finally {
-      setIsLoadingThreads(false)
-    }
-  }
-
-  async function handleSaveCrossover() {
-    setIsSaving(true)
+    if (!isOpen) return
+    setMode('none')
+    setSelectedGroupId(null)
+    setNewName('')
     setError(null)
     setResult(null)
+    setResolvedConnected([])
+    setConnectedThreadsError(null)
+
+    let isCurrent = true
+
+    async function loadGroups() {
+      setIsLoadingGroups(true)
+      try {
+        const loadedGroups = await dependencyGroupsApi.list()
+        if (!isCurrent) return
+        setGroups(loadedGroups)
+      } catch (loadError: unknown) {
+        if (!isCurrent) return
+        setGroups([])
+        setError(getApiErrorDetail(loadError))
+      } finally {
+        if (isCurrent) setIsLoadingGroups(false)
+      }
+    }
+
+    async function resolveConnectedThreads() {
+      if (connectedThreads.length === 0) return
+
+      const resolved = await Promise.all(
+        connectedThreads.map(async (connected): Promise<ResolvedThread | null> => {
+          try {
+            const thread: Thread = await threadsApi.get(connected.thread_id)
+            return { id: thread.id, title: thread.title }
+          } catch {
+            return { id: connected.thread_id, title: connected.title }
+          }
+        }),
+      )
+      if (!isCurrent) return
+      const filtered = resolved.filter((entry): entry is ResolvedThread => entry !== null)
+      setResolvedConnected(filtered)
+    }
+
+    void loadGroups()
+    void resolveConnectedThreads()
+
+    return () => {
+      isCurrent = false
+    }
+  }, [isOpen, connectedThreads, threadId])
+
+  const canSaveCurrentIssue = issueId != null
+  const canSaveConnected = resolvedConnected.length > 0
+  const hasSomethingToAdd = canSaveCurrentIssue || canSaveConnected
+
+  async function handleSaveMemberships() {
+    setError(null)
+    setResult(null)
+
+    if (mode === 'existing' && selectedGroupId == null) {
+      setError('Select an existing crossover.')
+      return
+    }
+    const normalizedName = newName.trim()
+    if (mode === 'new' && !normalizedName) {
+      setError('Enter a crossover name.')
+      return
+    }
+
+    setIsSaving(true)
+
+    const addedLabels: string[] = []
+    let createdGroup: DependencyGroup | null = null
+
     try {
-      let group: DependencyGroup | null = null
+      let targetGroup: DependencyGroup
       if (mode === 'new') {
-        if (!newName.trim()) throw new Error('Enter a crossover name')
-        group = await dependencyGroupsApi.create(newName.trim())
-      } else if (mode === 'existing') {
-        if (!selectedGroupId) throw new Error('Select an existing crossover')
-        group = await dependencyGroupsApi.get(selectedGroupId)
+        targetGroup = await dependencyGroupsApi.create(normalizedName)
+        createdGroup = targetGroup
       } else {
-        throw new Error('Select a crossover mode')
+        const existing = groups.find((candidate) => candidate.id === selectedGroupId)
+        targetGroup = existing ?? (await dependencyGroupsApi.get(selectedGroupId as number))
       }
 
-      if (issueId) {
-        await dependencyGroupsApi.addMember(group!.id, { issue_id: issueId })
+      if (canSaveCurrentIssue) {
+        await dependencyGroupsApi.addMember(targetGroup.id, { issue_id: issueId as number })
+        addedLabels.push(`issue ${issueNumber ?? '?'}`)
       }
-      
-      setResult(`Added to ${group?.name}`)
+      for (const connected of resolvedConnected) {
+        await dependencyGroupsApi.addMember(targetGroup.id, { thread_id: connected.id })
+        addedLabels.push(connected.title)
+      }
+
+      setResult(`${addedLabels.join(', ')} added to ${targetGroup.name}.`)
       onSuccess()
-    } catch (err) {
-      setError(getApiErrorDetail(err))
+    } catch (saveError: unknown) {
+      const detail = getApiErrorDetail(saveError)
+      if (createdGroup) {
+        setError(`Created ${createdGroup.name}, but membership failed: ${detail}`)
+      } else {
+        setError(detail)
+      }
     } finally {
       setIsSaving(false)
     }
   }
 
-  if (!isOpen) return null
-
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="relative w-full max-w-lg glass-card p-6" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start justify-between gap-4 pb-4">
-          <h2 className="text-xl font-black tracking-tight text-stone-200 uppercase">Correct Continuity</h2>
-          <button onClick={onClose} className="text-stone-500 hover:text-stone-300 text-2xl">&times;</button>
-        </div>
-        
-        <div className="space-y-6">
-          <div className="p-4 rounded-xl border border-white/10 bg-white/5">
-            <p className="text-xs font-bold text-stone-500 uppercase mb-2">Current Comic</p>
-            <p className="text-sm text-stone-200">{threadTitle} #{issueNumber}</p>
-          </div>
+    <Modal
+      isOpen={isOpen}
+      title="Correct Continuity"
+      onClose={onClose}
+      data-testid="continuity-correction-dialog"
+      overlayClassName="bg-black/70 backdrop-blur-sm"
+    >
+      <section aria-labelledby="continuity-current-heading" className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+        <h3 id="continuity-current-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
+          Current Comic
+        </h3>
+        <p className="mt-1 text-sm text-stone-200">
+          {threadTitle}
+          {issueNumber != null ? <span className="text-amber-400"> #{issueNumber}</span> : null}
+        </p>
+      </section>
 
-          <div className="space-y-4">
-            <p className="text-xs font-bold text-stone-500 uppercase">Crossover Membership</p>
-            <div className="flex gap-2">
-              {(['none', 'existing', 'new'] as const).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setMode(m)}
-                  className={`flex-1 py-2 text-xs font-bold uppercase rounded-lg border transition-colors ${
-                    mode === m ? 'bg-amber-600/20 border-amber-600 text-amber-200' : 'bg-white/5 border-white/10 text-stone-400'
-                  }`}
+      {connectedThreads.length > 0 ? (
+        <section aria-labelledby="continuity-connections-heading" className="rounded-2xl border border-blue-800/30 bg-blue-950/15 p-3">
+          <h3 id="continuity-connections-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-400">
+            Verified connections
+          </h3>
+          {connectedThreadsError ? (
+            <p className="mt-2 text-[11px] text-rose-300" role="alert">
+              Could not load connection details: {connectedThreadsError}
+            </p>
+          ) : resolvedConnected.length === 0 ? (
+            <p className="mt-2 text-[11px] text-stone-400" role="status">
+              Resolving connected series…
+            </p>
+          ) : (
+            <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Connected threads">
+              {resolvedConnected.map((connected) => (
+                <li
+                  key={connected.id}
+                  className="rounded-full border border-blue-800/40 bg-blue-900/20 px-2.5 py-1 text-[10px] font-bold text-blue-200"
                 >
-                  {m === 'none' ? 'None' : m === 'existing' ? 'Existing' : 'Create New'}
-                </button>
+                  {connected.title}
+                </li>
               ))}
-            </div>
+            </ul>
+          )}
+          <p className="mt-2 text-[10px] font-bold text-stone-500">
+            These will be added to the chosen crossover without re-searching.
+          </p>
+        </section>
+      ) : null}
 
-            {mode === 'existing' && (
-              <select 
-                value={selectedGroupId ?? ''} 
-                onChange={(e) => setSelectedGroupId(Number(e.target.value) || null)}
-                className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-stone-300"
-              >
-                <option value="">Select crossover...</option>
-                {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-              </select>
-            )}
-
-            {mode === 'new' && (
-              <input 
-                value={newName} 
-                onChange={(e) => setNewName(e.target.value)} 
-                placeholder="Crossover name..."
-                className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-stone-300"
-              />
-            )}
-          </div>
-
-          {error && <p className="text-xs text-red-400">{error}</p>}
-          {result && <p className="text-xs text-green-400">{result}</p>}
-
-          <div className="flex gap-3">
-            <button onClick={onClose} className="flex-1 py-3 bg-white/5 border border-white/10 rounded-xl text-sm font-black uppercase text-stone-300">Cancel</button>
-            <button 
-              onClick={handleSaveCrossover} 
-              disabled={isSaving}
-              className="flex-1 py-3 bg-amber-600/20 border border-amber-600/50 rounded-xl text-sm font-black uppercase text-amber-200 disabled:opacity-50"
+      <fieldset className="space-y-3" disabled={isSaving}>
+        <legend className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">Crossover membership</legend>
+        <div className="flex gap-2">
+          {(['none', 'existing', 'new'] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setMode(option)}
+              className={`flex-1 rounded-lg border py-2 text-[10px] font-black uppercase tracking-wider transition-colors ${
+                mode === option
+                  ? 'border-amber-600 bg-amber-600/20 text-amber-200'
+                  : 'border-white/10 bg-white/5 text-stone-400'
+              }`}
+              aria-pressed={mode === option}
             >
-              {isSaving ? 'Saving...' : 'Save Changes'}
+              {option === 'none' ? 'Skip' : option === 'existing' ? 'Existing' : 'Create New'}
             </button>
-          </div>
+          ))}
         </div>
+
+        {mode === 'existing' ? (
+          <label className="block">
+            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">Existing crossover</span>
+            <select
+              value={selectedGroupId ?? ''}
+              onChange={(event) => setSelectedGroupId(event.target.value ? Number(event.target.value) : null)}
+              className="mt-1 w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-stone-300 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 disabled:opacity-50"
+              disabled={isLoadingGroups || isSaving}
+            >
+              <option value="">{isLoadingGroups ? 'Loading crossovers…' : 'Select a crossover'}</option>
+              {groups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+
+        {mode === 'new' ? (
+          <label className="block">
+            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">Crossover name</span>
+            <input
+              type="text"
+              value={newName}
+              onChange={(event) => setNewName(event.target.value)}
+              maxLength={200}
+              placeholder="e.g. Ultimate Universe"
+              className="mt-1 w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-stone-300 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 disabled:opacity-50"
+              disabled={isSaving}
+            />
+          </label>
+        ) : null}
+
+        <p className="text-[11px] font-bold text-stone-500">
+          {canSaveCurrentIssue
+            ? `Adds issue ${issueNumber ?? '?'} to the chosen crossover.`
+            : 'No specific issue is available to add.'}
+          {canSaveConnected ? ' Connected series will also be added.' : null}
+        </p>
+      </fieldset>
+
+      {error ? (
+        <p className="text-[11px] text-rose-300" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {result ? (
+        <p className="text-[11px] text-emerald-300" role="status">
+          {result}
+        </p>
+      ) : null}
+
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-xs font-black uppercase tracking-wider text-stone-300 transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-amber-500"
+          disabled={isSaving}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={handleSaveMemberships}
+          className="flex-1 rounded-xl border border-amber-600/50 bg-amber-600/20 py-3 text-xs font-black uppercase tracking-wider text-amber-200 transition hover:bg-amber-600/30 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
+          disabled={isSaving || !hasSomethingToAdd}
+        >
+          {isSaving ? 'Saving…' : 'Save Changes'}
+        </button>
       </div>
-    </div>
+    </Modal>
   )
 }
+
+export type { ContinuityCorrectionDialogProps }
