@@ -5,7 +5,7 @@ import json
 import os
 import sys
 from contextlib import redirect_stderr, redirect_stdout
-from unittest.mock import patch, Mock
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -15,14 +15,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 import release_writer
 
 
-def _capture_stderr(func, *args, **kwargs):
-    """Capture stderr from a function call that raises SystemExit."""
+def _capture_stderr(func, *args, **kwargs) -> str:
+    """Capture stderr from a function call that exits unsuccessfully."""
     f = io.StringIO()
     with redirect_stderr(f):
         try:
             func(*args, **kwargs)
-        except SystemExit:
-            pass
+        except SystemExit as exc:
+            assert exc.code == 2
+        else:
+            pytest.fail("Expected SystemExit with exit code 2")
     return f.getvalue()
 
 
@@ -37,31 +39,66 @@ def _capture_stdout(func, *args, **kwargs):
 class TestReleaseWriterValidation:
     """Test release-writer input validation."""
 
-    def test_publish_requires_valid_json(self):
-        """Invalid JSON should be rejected."""
+    def test_publish_requires_valid_json(self) -> None:
+        """Invalid JSON should be rejected.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         stderr = _capture_stderr(release_writer._validate_release, "not valid json")
         assert "invalid release JSON" in stderr
 
-    def test_publish_requires_object(self):
-        """Payload must be a JSON object."""
+    def test_publish_requires_object(self) -> None:
+        """Payload must be a JSON object.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         stderr = _capture_stderr(release_writer._validate_release, '"just a string"')
         assert "release payload must be an object" in stderr
 
-    def test_publish_requires_all_fields(self):
-        """All required fields must be present."""
+    def test_publish_requires_all_fields(self) -> None:
+        """All required fields must be present.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         payload = {"source_repository": "test/repo"}
         stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
         assert "missing release fields" in stderr
 
-    def test_publish_rejects_unsupported_fields(self):
-        """Unknown fields should be rejected."""
+    def test_publish_rejects_unsupported_fields(self) -> None:
+        """Unknown fields should be rejected.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         payload = _valid_payload()
         payload["unknown_field"] = "value"
         stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
         assert "unsupported fields" in stderr
 
-    def test_publish_validates_source_repository(self):
-        """source_repository must be 1-255 characters."""
+    def test_publish_validates_source_repository(self) -> None:
+        """source_repository must be 1-255 characters.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         payload = _valid_payload()
         payload["source_repository"] = ""
         stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
@@ -71,8 +108,15 @@ class TestReleaseWriterValidation:
         stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
         assert "source_repository must be 1..255 characters" in stderr
 
-    def test_publish_validates_source_pr_number(self):
-        """source_pr_number must be positive integer."""
+    def test_publish_validates_source_pr_number(self) -> None:
+        """source_pr_number must be positive integer.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         payload = _valid_payload()
         payload["source_pr_number"] = 0
         stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
@@ -86,8 +130,15 @@ class TestReleaseWriterValidation:
         stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
         assert "source_pr_number must be a positive integer" in stderr
 
-    def test_publish_validates_source_merge_sha(self):
-        """source_merge_sha must be 7-64 characters."""
+    def test_publish_validates_source_merge_sha(self) -> None:
+        """source_merge_sha must be 7-64 characters.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         payload = _valid_payload()
         payload["source_merge_sha"] = "short"
         stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
@@ -97,8 +148,15 @@ class TestReleaseWriterValidation:
         stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
         assert "source_merge_sha must be 7..64 characters" in stderr
 
-    def test_publish_validates_timestamps(self):
-        """Timestamps must be valid ISO-8601."""
+    def test_publish_validates_timestamps(self) -> None:
+        """Timestamps must be valid ISO-8601.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         payload = _valid_payload()
         payload["merged_at"] = "not a timestamp"
         stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
@@ -109,8 +167,15 @@ class TestReleaseWriterValidation:
         stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
         assert "released_at must be a valid ISO-8601 timestamp" in stderr
 
-    def test_publish_validates_string_fields(self):
-        """String fields must be non-empty and within length limits."""
+    def test_publish_validates_string_fields(self) -> None:
+        """String fields must be non-empty and within length limits.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         payload = _valid_payload()
         payload["category"] = ""
         stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
@@ -134,36 +199,71 @@ class TestReleaseWriterValidation:
         stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
         assert "summary must be non-empty and at most 1200 characters" in stderr
 
-    def test_publish_validates_body(self):
-        """Body must be null or <= 6000 characters."""
+    def test_publish_validates_body(self) -> None:
+        """Body must be null or <= 6000 characters.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         payload = _valid_payload()
         payload["body"] = "a" * 6001
         stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
         assert "body must be null or at most 6000 characters" in stderr
 
-    def test_publish_validates_visibility(self):
-        """Visibility must be public or internal."""
+    def test_publish_validates_visibility(self) -> None:
+        """Visibility must be public or internal.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         payload = _valid_payload()
         payload["visibility"] = "private"
         stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
         assert "unsupported visibility" in stderr
 
-    def test_publish_validates_status(self):
-        """Status must be draft, published, or retracted."""
+    def test_publish_validates_status(self) -> None:
+        """Status must be draft, published, or retracted.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         payload = _valid_payload()
         payload["status"] = "archived"
         stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
         assert "unsupported status" in stderr
 
-    def test_publish_validates_provenance_json(self):
-        """provenance_json must be an object."""
+    def test_publish_validates_provenance_json(self) -> None:
+        """provenance_json must be an object.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         payload = _valid_payload()
         payload["provenance_json"] = "not an object"
         stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
         assert "provenance_json must be an object" in stderr
 
-    def test_publish_accepts_valid_payload(self):
-        """A fully valid payload should pass validation and return normalized payload."""
+    def test_publish_accepts_valid_payload(self) -> None:
+        """A fully valid payload should pass validation and return normalized payload.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         payload = _valid_payload()
         result = release_writer._validate_release(json.dumps(payload))
         assert result["source_repository"] == "JoshCLWren/comic-pile"
@@ -174,8 +274,15 @@ class TestReleaseWriterValidation:
         assert result["sort_order"] == 0
         assert result["provenance_json"] == {"source": "github"}
 
-    def test_publish_sets_defaults(self):
-        """Optional fields should get default values."""
+    def test_publish_sets_defaults(self) -> None:
+        """Optional fields should get default values.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         payload = _valid_payload()
         # Remove optional fields
         for field in ("body", "visibility", "status", "sort_order", "provenance_json"):
@@ -191,15 +298,29 @@ class TestReleaseWriterValidation:
 class TestReleaseWriterCheck:
     """Test the check command for reconciliation."""
 
-    def test_check_validates_pr_number(self):
-        """PR number must be an integer."""
+    def test_check_validates_pr_number(self) -> None:
+        """PR number must be an integer.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         with patch.object(release_writer, "_request") as mock_request:
             mock_request.return_value = {"exists": False, "release": None}
             stderr = _capture_stderr(release_writer._check, "repo", "not-a-number", "abcdef1234567890")
             assert "PR number must be an integer" in stderr
 
-    def test_check_calls_api(self):
-        """Check should call the reconciliation endpoint."""
+    def test_check_calls_api(self) -> None:
+        """Check should call the reconciliation endpoint.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         with patch.object(release_writer, "_request") as mock_request:
             mock_request.return_value = {"exists": True, "release": {"id": 42}}
             with patch.object(release_writer, "_api_base", return_value="http://test/api"):
@@ -216,14 +337,28 @@ class TestReleaseWriterCheck:
 class TestReleaseWriterSkip:
     """Test the skip command for internal changes."""
 
-    def test_skip_requires_fields(self):
-        """Skip payload needs required fields."""
+    def test_skip_requires_fields(self) -> None:
+        """Skip payload needs required fields.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         payload = {"source_repository": "test/repo"}
         stderr = _capture_stderr(release_writer._skip, json.dumps(payload))
         assert "skip payload is missing required fields" in stderr
 
-    def test_skip_validates_timestamp(self):
-        """Skip requires valid merged_at timestamp."""
+    def test_skip_validates_timestamp(self) -> None:
+        """Skip requires valid merged_at timestamp.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         payload = {
             "source_repository": "test/repo",
             "source_pr_number": 1,
@@ -234,8 +369,15 @@ class TestReleaseWriterSkip:
         stderr = _capture_stderr(release_writer._skip, json.dumps(payload))
         assert "merged_at must be a valid ISO-8601 timestamp" in stderr
 
-    def test_skip_validates_reason(self):
-        """Skip requires non-empty reason <= 500 chars."""
+    def test_skip_validates_reason(self) -> None:
+        """Skip requires non-empty reason <= 500 chars.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         payload = {
             "source_repository": "test/repo",
             "source_pr_number": 1,
@@ -250,8 +392,15 @@ class TestReleaseWriterSkip:
         stderr = _capture_stderr(release_writer._skip, json.dumps(payload))
         assert "skip reason must be non-empty and at most 500 characters" in stderr
 
-    def test_skip_outputs_classification(self):
-        """Skip should output machine-readable classification."""
+    def test_skip_outputs_classification(self) -> None:
+        """Skip should output machine-readable classification.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         payload = {
             "source_repository": "test/repo",
             "source_pr_number": 1,
@@ -270,8 +419,15 @@ class TestReleaseWriterSkip:
 class TestReleaseWriterRequest:
     """Test the _request function."""
 
-    def test_request_builds_correct_headers(self):
-        """Request should include the auth token in headers."""
+    def test_request_builds_correct_headers(self) -> None:
+        """Request should include the auth token in headers.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         with patch("release_writer.urllib.request.urlopen") as mock_urlopen:
             mock_response = Mock()
             mock_response.read.return_value = json.dumps({"id": 1}).encode()
@@ -286,13 +442,20 @@ class TestReleaseWriterRequest:
             call_args = mock_urlopen.call_args
             request = call_args[0][0]
             assert request.get_method() == "PUT"
-            assert request.headers["X-Release-Writer-Token"] == "secret-token"
-            assert request.headers["Content-Type"] == "application/json"
+            assert request.get_header("X-release-writer-token") == "secret-token"
+            assert request.get_header("Content-type") == "application/json"
             assert "secret-token" not in request.full_url
             assert "secret-token" not in request.data.decode()
 
-    def test_request_handles_http_error(self):
-        """HTTP errors should be caught and formatted."""
+    def test_request_handles_http_error(self) -> None:
+        """HTTP errors should be caught and formatted.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         import urllib.error
 
         with patch("release_writer.urllib.request.urlopen") as mock_urlopen:
@@ -310,8 +473,15 @@ class TestReleaseWriterRequest:
                     stderr = _capture_stderr(release_writer._request, "PUT", "http://test/api/", {"test": "data"})
             assert "release API returned HTTP 409" in stderr
 
-    def test_request_handles_url_error(self):
-        """URL errors (connection refused, etc.) should be caught."""
+    def test_request_handles_url_error(self) -> None:
+        """URL errors (connection refused, etc.) should be caught.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         import urllib.error
 
         with patch("release_writer.urllib.request.urlopen") as mock_urlopen:
@@ -327,14 +497,28 @@ class TestReleaseWriterRequest:
 class TestReleaseWriterEnvironment:
     """Test environment variable handling."""
 
-    def test_missing_api_url(self):
-        """Missing RELEASE_API_URL should fail."""
+    def test_missing_api_url(self) -> None:
+        """Missing RELEASE_API_URL should fail.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         with patch.dict(os.environ, {"RELEASE_API_URL": "", "RELEASE_WRITER_TOKEN": "token"}, clear=True):
             stderr = _capture_stderr(release_writer._api_base)
             assert "RELEASE_API_URL is required" in stderr
 
-    def test_missing_token(self):
-        """Missing RELEASE_WRITER_TOKEN should fail."""
+    def test_missing_token(self) -> None:
+        """Missing RELEASE_WRITER_TOKEN should fail.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         with patch.dict(os.environ, {"RELEASE_API_URL": "http://test/api", "RELEASE_WRITER_TOKEN": ""}, clear=True):
             stderr = _capture_stderr(release_writer._token)
             assert "RELEASE_WRITER_TOKEN is required" in stderr
