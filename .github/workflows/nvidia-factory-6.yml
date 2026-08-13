@@ -1,4 +1,4 @@
-name: NVIDIA Factory Fleet 6-10
+name: NVIDIA Factory Fleet 6-15
 
 on:
   push:
@@ -9,10 +9,15 @@ on:
       - '.github/workflows/nvidia-factory-owner-reconcile.yml'
       - '.github/workflows/factory-heartbeat-watchdog.yml'
   schedule:
+    - cron: "1 * * * *"
     - cron: "7 * * * *"
+    - cron: "13 * * * *"
     - cron: "19 * * * *"
+    - cron: "25 * * * *"
     - cron: "31 * * * *"
+    - cron: "37 * * * *"
     - cron: "43 * * * *"
+    - cron: "49 * * * *"
     - cron: "55 * * * *"
   workflow_dispatch:
     inputs:
@@ -21,7 +26,7 @@ on:
         required: true
         default: "6"
         type: choice
-        options: ["6", "7", "8", "9", "10"]
+        options: ["6", "7", "8", "9", "10", "11", "12", "13", "14", "15"]
 
 concurrency:
   group: nvidia-factory-${{ github.event.schedule || inputs.worker || github.run_id }}
@@ -45,7 +50,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          for worker in 6 7 8 9 10; do
+          for worker in {6..15}; do
             if ! gh api "repos/${GITHUB_REPOSITORY}/labels/factory%3A${worker}" >/dev/null 2>&1; then
               gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" \
                 -f name="factory:${worker}" \
@@ -55,16 +60,16 @@ jobs:
             fi
             gh api "repos/${GITHUB_REPOSITORY}/labels/factory%3A${worker}" --jq '.name'
           done
-          echo 'NVIDIA fleet ownership labels 6-10 are visible.'
+          echo 'NVIDIA fleet ownership labels 6-15 are visible.'
 
   factory:
     if: github.event_name != 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 58
+    timeout-minutes: 116
     env:
       GH_TOKEN: ${{ github.token }}
       NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
-      FACTORY_BUDGET_SECONDS: "3000"
+      FACTORY_BUDGET_SECONDS: "6000"
     steps:
       - name: Resolve durable worker
         id: worker
@@ -83,6 +88,11 @@ jobs:
               "31 * * * *") worker=8 ;;
               "43 * * * *") worker=9 ;;
               "55 * * * *") worker=10 ;;
+              "1 * * * *") worker=11 ;;
+              "13 * * * *") worker=12 ;;
+              "25 * * * *") worker=13 ;;
+              "37 * * * *") worker=14 ;;
+              "49 * * * *") worker=15 ;;
               *) echo "Unknown schedule: $SCHEDULE" >&2; exit 1 ;;
             esac
           fi
@@ -93,7 +103,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          for worker in 6 7 8 9 10; do
+          for worker in {6..15}; do
             if ! gh api "repos/${GITHUB_REPOSITORY}/labels/factory%3A${worker}" >/dev/null 2>&1; then
               gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" \
                 -f name="factory:${worker}" \
@@ -165,7 +175,7 @@ jobs:
             echo "Factory ${WORKER} probing ${candidate}"
             provider_model="${candidate#nvidia/}"
             request="$(jq -nc --arg model "$provider_model" '{model:$model,messages:[{role:"user",content:"Reply with exactly: FCM_NVIDIA_MODEL_OK"}],max_tokens:32}')"
-            response="$(curl --silent --show-error --fail-with-body --header "Authorization: Bearer $NVIDIA_API_KEY" --header 'Content-Type: application/json' --data "$request" https://integrate.api.nvidia.com/v1/chat/completions || true)"
+            response="$(curl --silent --show-error --fail-with-body --connect-timeout 5 --max-time 20 --header "Authorization: Bearer $NVIDIA_API_KEY" --header 'Content-Type: application/json' --data "$request" https://integrate.api.nvidia.com/v1/chat/completions || true)"
             if jq -e '.choices[0].message.content | strings | contains("FCM_NVIDIA_MODEL_OK")' >/dev/null 2>&1 <<< "$response"; then
               selected_model="$candidate"
               break
