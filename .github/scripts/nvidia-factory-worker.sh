@@ -6,17 +6,25 @@ MODEL="${2:?model required}"
 OWNER="factory:${WORKER}"
 WORKER_ID="opencode-nvidia-factory-${WORKER}"
 BUDGET_SECONDS="${FACTORY_BUDGET_SECONDS:-3000}"
+MAX_AGENT_ATTEMPTS="${NVIDIA_AGENT_MAX_ATTEMPTS:-2}"
+TRANSIENT_BACKOFF_SECONDS="${NVIDIA_TRANSIENT_BACKOFF_SECONDS:-20}"
 STARTED="$(date +%s)"
 DEADLINE=$((STARTED + BUDGET_SECONDS))
 OWNER_RE='^factory:(unowned|local|([1-9]|10))$'
 STAGE_RE='^factory:(building|review|changes-requested|ci|ready|blocked)$'
 SKIP_PRS=()
+COOLED_MODELS=()
 
 log() { printf '[factory:%s] %s\n' "$WORKER" "$*"; }
 remaining() { echo $((DEADLINE - $(date +%s))); }
 contains_skip_pr() {
   local needle="$1" item
   for item in "${SKIP_PRS[@]:-}"; do [[ "$item" == "$needle" ]] && return 0; done
+  return 1
+}
+contains_cooled_model() {
+  local needle="$1" item
+  for item in "${COOLED_MODELS[@]:-}"; do [[ "$item" == "$needle" ]] && return 0; done
   return 1
 }
 
@@ -133,6 +141,53 @@ machine_merge_gates_pass() {
   current_head_review_blockers "$pr" "$head" || return 1
 }
 
+is_transient_agent_failure() {
+  local status="$1"
+  [[ "$status" == "124" ]] && return 0
+  grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "/tmp/opencode-factory-${WORKER}.log"
+}
+
+probe_nvidia_model() {
+  local candidate="$1" provider_model request response http_code
+  provider_model="${candidate#nvidia/}"
+  request="$(jq -nc --arg model "$provider_model" '{model:$model,messages:[{role:"user",content:"Reply with exactly: FCM_NVIDIA_MODEL_OK"}],max_tokens:32}')"
+  response="$(mktemp)"
+  http_code="$(curl --silent --show-error --output "$response" --write-out '%{http_code}' \
+    --header "Authorization: Bearer $NVIDIA_API_KEY" \
+    --header 'Content-Type: application/json' \
+    --data "$request" https://integrate.api.nvidia.com/v1/chat/completions || true)"
+  if [[ "$http_code" =~ ^2[0-9][0-9]$ ]] && jq -e '.choices[0].message.content | strings | contains("FCM_NVIDIA_MODEL_OK")' >/dev/null 2>&1 <"$response"; then
+    rm -f "$response"
+    return 0
+  fi
+  rm -f "$response"
+  return 1
+}
+
+rotate_model() {
+  local fcm_output candidate start idx offset
+  local candidates=()
+  if ! fcm_output="$(free-coding-models --json --origin nvidia --hide-unconfigured --best --no-telemetry 2>/dev/null)"; then
+    return 1
+  fi
+  mapfile -t candidates < <(printf '%s\n' "$fcm_output" | python scripts/select_fcm_nvidia_model.py | sed '/^$/d')
+  ((${#candidates[@]} > 0)) || return 1
+  start=$(( (WORKER - 6 + 1) % ${#candidates[@]} ))
+  for ((offset=0; offset<${#candidates[@]}; offset++)); do
+    idx=$(( (start + offset) % ${#candidates[@]} ))
+    candidate="${candidates[$idx]}"
+    [[ "$candidate" == "$MODEL" ]] && continue
+    contains_cooled_model "$candidate" && continue
+    log "probing alternate model ${candidate} after transient failure"
+    if probe_nvidia_model "$candidate"; then
+      MODEL="$candidate"
+      log "rotated to healthy model ${MODEL}"
+      return 0
+    fi
+  done
+  return 1
+}
+
 run_agent() {
   local mode="$1" number="$2" timeout_seconds="$3"
   local target mission prompt status=0
@@ -144,10 +199,8 @@ run_agent() {
     mission="Implement the full closure-critical acceptance contract for this issue with code and focused tests. Do not stop at planning or optional polish."
   fi
   prompt="You are OpenCode NVIDIA Factory ${WORKER} for JoshCLWren/comic-pile. Durable worker ID: ${WORKER_ID}. Model: ${MODEL}. Assigned target: ${target}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, docs/CHATGPT_FACTORY_PROMPT.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Josh directly requires product-first V22 behavior: user-reported product bugs outrank unrelated CI/E2E/test plumbing, and a run is a work session rather than a one-ticket punch. ${mission} Work only on the assigned target during this agent invocation. Edit the checked-out branch, run focused validation, and use gh/GitHub when needed for review context. Do not commit or push; the wrapper persists changes. Do not enable auto-merge, push main, touch production databases, or alter automation schedules."
-  set +e
   timeout --signal=TERM --kill-after=30s "${timeout_seconds}s" opencode run -m "$MODEL" --agent build --auto --dir "$GITHUB_WORKSPACE" --title "ComicPile NVIDIA Factory ${WORKER}" "$prompt" | tee "/tmp/opencode-factory-${WORKER}.log"
   status=${PIPESTATUS[0]}
-  set -e
   return "$status"
 }
 
@@ -240,16 +293,64 @@ while (( $(remaining) > 480 )); do
   (( agent_timeout > 1500 )) && agent_timeout=1500
   (( agent_timeout < 300 )) && break
 
-  set +e
-  run_agent "$MODE" "$NUMBER" "$agent_timeout"
-  agent_status=$?
-  set -e
-  log "agent exit status ${agent_status} for ${MODE} #${NUMBER}"
+  agent_attempt=1
+  agent_status=0
+  transient_failure=0
+  while :; do
+    set +e
+    run_agent "$MODE" "$NUMBER" "$agent_timeout"
+    agent_status=$?
+    set -e
+    log "agent exit status ${agent_status} for ${MODE} #${NUMBER} on ${MODEL}"
+
+    if (( agent_status == 0 )); then
+      transient_failure=0
+      break
+    fi
+    if ! is_transient_agent_failure "$agent_status"; then
+      transient_failure=0
+      break
+    fi
+
+    transient_failure=1
+    log "transient NVIDIA/OpenCode interruption on ${MODEL}; preserving this target instead of failing the heartbeat"
+
+    # A timeout after useful edits is productive partial work. Let the normal
+    # persistence path checkpoint it rather than throwing the work away or
+    # handing a half-edited tree to another model.
+    if [[ -n "$(git status --porcelain)" ]]; then
+      log 'transient interruption left edits in the worktree; checkpointing them before selecting more work'
+      break
+    fi
+
+    (( agent_attempt < MAX_AGENT_ATTEMPTS )) || break
+    (( $(remaining) > 600 )) || break
+
+    COOLED_MODELS+=("$MODEL")
+    sleep_for="$TRANSIENT_BACKOFF_SECONDS"
+    max_sleep=$(( $(remaining) - 540 ))
+    (( sleep_for > max_sleep )) && sleep_for="$max_sleep"
+    (( sleep_for > 0 )) && sleep "$sleep_for"
+
+    if ! rotate_model; then
+      log 'no alternate NVIDIA model became healthy during this recovery window'
+      break
+    fi
+
+    agent_attempt=$((agent_attempt + 1))
+    available="$(remaining)"
+    agent_timeout=$((available - 240))
+    (( agent_timeout > 1500 )) && agent_timeout=1500
+    (( agent_timeout >= 300 )) || break
+  done
 
   if [[ "$MODE" == 'issue' ]]; then
     if pr="$(persist_issue_pr "$NUMBER" "$BRANCH")"; then
       log "opened/updated PR #${pr} for issue #${NUMBER}"
       SKIP_PRS+=("$pr")
+    elif (( transient_failure == 1 )); then
+      log "issue #${NUMBER} produced no changes because of a transient provider/runtime interruption; releasing without marking the issue blocked"
+      replace_labels "$NUMBER" 'factory:unowned' 'factory:building'
     else
       log "issue #${NUMBER} produced no changes; releasing as blocked/unowned"
       replace_labels "$NUMBER" 'factory:unowned' 'factory:blocked'
@@ -275,7 +376,11 @@ while (( $(remaining) > 480 )); do
     continue
   fi
 
-  log "PR #${NUMBER} is not merge-eligible now; releasing this cycle and selecting other work"
+  if (( transient_failure == 1 )); then
+    log "PR #${NUMBER} was interrupted transiently with no persisted edits; preserving ownership state and selecting other work"
+  else
+    log "PR #${NUMBER} is not merge-eligible now; releasing this cycle and selecting other work"
+  fi
   SKIP_PRS+=("$NUMBER")
 done
 
