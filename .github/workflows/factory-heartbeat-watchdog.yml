@@ -44,6 +44,7 @@ jobs:
               ["opencode-nvidia-factory-13", { name: "NVIDIA 13", slot: ":25", staleMinutes: 150, runningMinutes: 125 }],
               ["opencode-nvidia-factory-14", { name: "NVIDIA 14", slot: ":37", staleMinutes: 150, runningMinutes: 125 }],
               ["opencode-nvidia-factory-15", { name: "NVIDIA 15", slot: ":49", staleMinutes: 150, runningMinutes: 125 }],
+              ["opencode-omniroute-factory-16", { name: "Multiple Man", slot: "dispatch-only", staleMinutes: 10080, runningMinutes: 125 }],
             ]);
             const marker = "<!-- factory-heartbeat-alert:v1 -->";
             const now = new Date();
@@ -110,7 +111,7 @@ jobs:
               "",
               stale.length
                 ? "The external watchdog detected missing or stuck factory heartbeats."
-                : "All fifteen scheduled factories are reporting normally.",
+                : "All configured factories are reporting normally.",
               "",
               "| Worker | Call sign | Slot (America/Chicago) | Age | Status |",
               "|---|---|---:|---:|---|",
@@ -120,7 +121,7 @@ jobs:
               `Checked: ${now.toISOString()}`,
               "",
               stale.length
-                ? "Check ChatGPT Scheduled for factories 1-5 and GitHub Actions for NVIDIA factories 6-15. Do not assign this alert to a factory."
+                ? "Check ChatGPT Scheduled for factories 1-5 and GitHub Actions for external factories 6-16. Do not assign this alert to a factory."
                 : "This alert closed automatically after every worker recovered.",
             ].join("\n");
 
