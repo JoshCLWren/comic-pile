@@ -235,8 +235,21 @@ jobs:
               continue
             fi
 
-            selected_upstream="$(jq -r '.model // empty' "$RUNNER_TEMP/omniroute-probe.json")"
-            echo "Direct OmniRoute response succeeded for ${candidate}; upstream reported model=${selected_upstream:-not-reported}"
+            if grep -q '^data:' "$RUNNER_TEMP/omniroute-probe.json"; then
+              if ! grep -q '"content":' "$RUNNER_TEMP/omniroute-probe.json"; then
+                echo "Rejected ${candidate}: successful SSE response contained no assistant content"
+                continue
+              fi
+              selected_upstream="$(sed -n 's/.*"model":"\([^"]*\)".*/\1/p' "$RUNNER_TEMP/omniroute-probe.json" | head -1)"
+            else
+              if ! jq -e '.choices[0].message.content | strings | length > 0' \
+                "$RUNNER_TEMP/omniroute-probe.json" >/dev/null 2>&1; then
+                echo "Rejected ${candidate}: successful JSON response contained no assistant content"
+                continue
+              fi
+              selected_upstream="$(jq -r '.model // empty' "$RUNNER_TEMP/omniroute-probe.json" 2>/dev/null || true)"
+            fi
+            echo "Direct OmniRoute assistant response succeeded for ${candidate}; upstream reported model=${selected_upstream:-not-reported}"
 
             mkdir -p "$HOME/.config/opencode"
             jq -n --arg model "$candidate" --arg key "$gateway_key" '{
