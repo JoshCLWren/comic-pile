@@ -256,7 +256,7 @@ jobs:
           marker='<!-- factory-heartbeat:v1 worker=opencode-omniroute-factory-16 -->'
           now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           previous="$(gh api "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" | jq -r --arg marker "$marker" '[.[] | select(.body | contains($marker)) | .body] | last // empty')"
-          started="$(jq -nr --arg body "$previous" '$body | capture("Last run started: `(?<value>[^`]*)`\")?.value // "unknown"')"
+          started="$(jq -nr --arg body "$previous" '$body | capture("Last run started: `(?<value>[^`]*)`")?.value // "unknown"')"
           body="$(printf '%s\n## 🏭 Factory 16 · Multiple Man\nScheduled slot: `:34` America/Chicago\nLast run started: `%s`\nLast run completed: `%s`\nWorked on: normal ComicPile factory session with `%s` via `%s`\nOutcome: %s\nUpdated by: `opencode-omniroute-factory-16`' "$marker" "$started" "$now" "$OMNIROUTE_MODEL" "$OMNIROUTE_PROVIDER" "$OUTCOME")"
           comment_id="$(gh api "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" | jq -r --arg marker "$marker" '[.[] | select(.body | contains($marker)) | .id] | last // empty')"
           if [[ -n "$comment_id" ]]; then
