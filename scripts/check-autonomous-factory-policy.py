@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Fail when autonomous factory policy files drift on critical invariants."""
 
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,7 +26,12 @@ def require(text: str, needle: str, source: Path) -> None:
     Returns:
         None.
     """
-    if needle not in text:
+    if needle in {"Version: 22", "FACTORY POLICY V22"}:
+        pattern = rf"(?<![A-Za-z0-9]){re.escape(needle)}(?![A-Za-z0-9])"
+        present = re.search(pattern, text) is not None
+    else:
+        present = needle in text
+    if not present:
         raise SystemExit(f"{source}: missing required policy text: {needle!r}")
 
 
@@ -42,6 +48,23 @@ def forbid(text: str, needle: str, source: Path) -> None:
     """
     if needle in text:
         raise SystemExit(f"{source}: forbidden policy drift found: {needle!r}")
+
+
+def forbid_marker(text: str, marker: str, source: Path) -> None:
+    """Reject a complete version marker without substring false positives."""
+    pattern = rf"(?<![A-Za-z0-9]){re.escape(marker)}(?![A-Za-z0-9])"
+    if re.search(pattern, text):
+        raise SystemExit(f"{source}: forbidden policy marker found: {marker!r}")
+
+
+def require_order(text: str, before: str, after: str, source: Path) -> None:
+    """Require two policy phrases to appear in their canonical order."""
+    before_index = text.find(before)
+    after_index = text.find(after)
+    if before_index < 0 or after_index < 0 or before_index >= after_index:
+        raise SystemExit(
+            f"{source}: policy order requires {before!r} before {after!r}"
+        )
 
 
 def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
@@ -92,6 +115,16 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "registry issue #1093",
     ):
         require(policy, needle, POLICY)
+
+    forbid_marker(policy, "Version: 21", POLICY)
+    forbid_marker(policy, "Version: 220", POLICY)
+    require_order(
+        policy,
+        "The highest-priority unclaimed open issue labeled both `user-reported` and `bug`",
+        "The highest-priority unclaimed reproducible E2E-discovered product `bug` issue",
+        POLICY,
+    )
+    require(policy, "within equal priority, choose the newest report first", POLICY)
 
     for marker in (
         "comic-pile-factory-implement-claim-v3",
@@ -169,12 +202,20 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "Firefox and WebKit are optional diagnostics",
         "Never create or convert a draft PR unless Josh explicitly",
         "Never treat an empty or blocked backlog as a reason to self-pause or self-disable.",
-        "Only Josh may pause or disable this factory.",
+        "Only Josh, or an interactive session acting on Josh's direct instruction, may pause or disable this factory.",
         "comic-pile-factory-review-claim-v2",
         "comic-pile-factory-fix-claim-v3",
         "comic-pile-factory-ready-v2",
     ):
         require(entrypoint, needle, ENTRYPOINT)
+
+    require_order(
+        entrypoint,
+        "newest unclaimed open issue labeled both `user-reported` and `bug`",
+        "reproducible E2E-discovered",
+        ENTRYPOINT,
+    )
+    require(entrypoint, "newest first within equal priority", ENTRYPOINT)
 
     for obsolete in (
         "Treat the generated changelog as part of the completion contract",
@@ -214,6 +255,10 @@ def validate_local_guidance() -> None:
     scheduled = SCHEDULED_PROMPT.read_text(encoding="utf-8")
     require(scheduled, "Version: 22", SCHEDULED_PROMPT)
     require(scheduled, "FACTORY POLICY V22", SCHEDULED_PROMPT)
+    forbid_marker(scheduled, "Version: 21", SCHEDULED_PROMPT)
+    forbid_marker(scheduled, "Version: 220", SCHEDULED_PROMPT)
+    forbid_marker(scheduled, "FACTORY POLICY V21", SCHEDULED_PROMPT)
+    forbid_marker(scheduled, "FACTORY POLICY V220", SCHEDULED_PROMPT)
     require(scheduled, "Release notes are post-merge infrastructure", SCHEDULED_PROMPT)
     require(scheduled, "one full atomic label-set replacement", SCHEDULED_PROMPT)
     require(scheduled, "At the start of every scheduled run", SCHEDULED_PROMPT)
