@@ -20,8 +20,13 @@ dependency.router.include_router(dependency_group_batch.router)
 dependency.router.include_router(continuity_rule.router)
 dependency.router.include_router(continuity_plan.router)
 dependency.router.include_router(continuity_readiness.router)
-dependency.router.include_router(roll_recovery_switch.router, prefix="/roll"
-roll.router, prefix="/roll"
+dependency.router.include_router(
+    roll_recovery_switch.router,
+    prefix="/roll"
+)
+dependency.router.include_router(
+    roll.router,
+    prefix="/roll"
 )
 dependency.router.include_router(releases.router, prefix="/releases")
 
