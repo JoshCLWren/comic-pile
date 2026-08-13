@@ -7,6 +7,7 @@ on:
       - '.github/scripts/omniroute-factory-worker.sh'
       - '.github/scripts/nvidia-factory-worker.sh'
       - '.github/workflows/nvidia-factory-owner-reconcile.yml'
+      - '.github/workflows/factory-heartbeat-watchdog.yml'
   schedule:
     - cron: '34 * * * *'
   workflow_dispatch:
@@ -28,13 +29,14 @@ env:
   OMNIROUTE_IMAGE: 'diegosouzapw/omniroute:3.8.49'
   OMNIROUTE_PROVIDER: 'pollinations'
   OMNIROUTE_MODEL: 'pol/qwen-coder'
+  OPENCODE_VERSION: '1.18.18'
+  OPENCODE_LINUX_X64_SHA256: '0cddc222418b8553669905a8980c0cda7088f00da24d83d6ac76b01c9fdb2aaf'
 
 jobs:
   gateway-and-factory:
     runs-on: ubuntu-latest
     timeout-minutes: 116
     env:
-      GH_TOKEN: ${{ github.token }}
       FACTORY_BUDGET_SECONDS: '6000'
     steps:
       - name: Checkout
@@ -49,12 +51,21 @@ jobs:
           git config user.name 'opencode-omniroute-factory-16[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
-      - name: Install OpenCode
+      - name: Install pinned OpenCode release
         shell: bash
         run: |
           set -Eeuo pipefail
-          curl -fsSL https://opencode.ai/install | bash
-          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+          archive="$RUNNER_TEMP/opencode-linux-x64.tar.gz"
+          bin_dir="$RUNNER_TEMP/opencode-bin"
+          curl -fsSL \
+            "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-x64.tar.gz" \
+            -o "$archive"
+          printf '%s  %s\n' "$OPENCODE_LINUX_X64_SHA256" "$archive" | sha256sum --check -
+          mkdir -p "$bin_dir"
+          tar -xzf "$archive" -C "$bin_dir"
+          test -x "$bin_dir/opencode"
+          echo "$bin_dir" >> "$GITHUB_PATH"
+          "$bin_dir/opencode" --version
 
       - name: Assert pinned non-NVIDIA factory configuration
         shell: bash
@@ -103,6 +114,7 @@ jobs:
           set -Eeuo pipefail
           echo "Starting ${OMNIROUTE_IMAGE} for provider=${OMNIROUTE_PROVIDER} model=${OMNIROUTE_MODEL}"
           docker pull "$OMNIROUTE_IMAGE"
+          echo "Resolved OmniRoute image: $(docker image inspect "$OMNIROUTE_IMAGE" --format '{{index .RepoDigests 0}}')"
           docker volume create omniroute-factory-16-data >/dev/null
           docker run -d \
             --name omniroute-factory-16 \
@@ -208,6 +220,8 @@ jobs:
 
       - name: Report running heartbeat
         if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -224,6 +238,8 @@ jobs:
 
       - name: Run normal OmniRoute factory session
         if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -232,6 +248,7 @@ jobs:
       - name: Report terminal heartbeat
         if: always() && github.event_name != 'pull_request'
         env:
+          GH_TOKEN: ${{ github.token }}
           OUTCOME: ${{ job.status }}
         shell: bash
         run: |
@@ -239,7 +256,7 @@ jobs:
           marker='<!-- factory-heartbeat:v1 worker=opencode-omniroute-factory-16 -->'
           now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           previous="$(gh api "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" | jq -r --arg marker "$marker" '[.[] | select(.body | contains($marker)) | .body] | last // empty')"
-          started="$(jq -nr --arg body "$previous" '$body | capture("Last run started: `(?<value>[^`]*)`")?.value // "unknown"')"
+          started="$(jq -nr --arg body "$previous" '$body | capture("Last run started: `(?<value>[^`]*)`\")?.value // "unknown"')"
           body="$(printf '%s\n## 🏭 Factory 16 · Multiple Man\nScheduled slot: `:34` America/Chicago\nLast run started: `%s`\nLast run completed: `%s`\nWorked on: normal ComicPile factory session with `%s` via `%s`\nOutcome: %s\nUpdated by: `opencode-omniroute-factory-16`' "$marker" "$started" "$now" "$OMNIROUTE_MODEL" "$OMNIROUTE_PROVIDER" "$OUTCOME")"
           comment_id="$(gh api "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" | jq -r --arg marker "$marker" '[.[] | select(.body | contains($marker)) | .id] | last // empty')"
           if [[ -n "$comment_id" ]]; then
