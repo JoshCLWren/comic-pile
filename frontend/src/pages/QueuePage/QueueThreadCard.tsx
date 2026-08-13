@@ -72,10 +72,37 @@ export default function QueueThreadCard({
   const resolvedCrossoverGroupsLoading = crossoverGroupsLoading ?? fallbackCrossoverGroups.isPending
   const resolvedCrossoverGroupsError = crossoverGroupsError ?? Boolean(fallbackCrossoverGroups.error)
 
+  const isInteractiveTarget = (target: EventTarget | null, card: HTMLDivElement) => {
+    const interactive = target instanceof Element
+      ? target.closest('button, a, input, select, textarea, [role="button"], [role="link"]')
+      : null
+    return interactive !== null && interactive !== card
+  }
+
+  const handleCardClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (isInteractiveTarget(event.target, event.currentTarget)) {
+      return
+    }
+    onCardClick()
+  }
+
+  const handleCardKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) {
+      return
+    }
+    event.preventDefault()
+    onCardClick()
+  }
+
   return (
     <div
       data-testid="queue-thread-item"
-      className={`queue-thread-card glass-card h-full p-3 md:p-4 space-y-2 md:space-y-3 group transition-all hover:border-white/20 ${isDragOver ? 'border-amber-400/60' : ''} ${isBlocked ? 'border-red-400/30 bg-red-500/5' : ''}`}
+      className={`queue-thread-card glass-card h-full p-3 md:p-4 space-y-2 md:space-y-3 group cursor-pointer transition-all hover:border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${isDragOver ? 'border-amber-400/60' : ''} ${isBlocked ? 'border-red-400/30 bg-red-500/5' : ''}`}
+      role="link"
+      tabIndex={0}
+      aria-label={`Open ${thread.title} details`}
+      onClick={handleCardClick}
+      onKeyDown={handleCardKeyDown}
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
