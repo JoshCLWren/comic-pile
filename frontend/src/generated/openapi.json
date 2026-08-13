@@ -2912,6 +2912,28 @@
             "title": "Id",
             "type": "integer"
           },
+          "issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Id"
+          },
+          "issue_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Number"
+          },
           "last_activity_at": {
             "anyOf": [
               {
@@ -2922,6 +2944,13 @@
               }
             ],
             "title": "Last Activity At"
+          },
+          "route_labels": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Route Labels",
+            "type": "array"
           },
           "title": {
             "title": "Title",

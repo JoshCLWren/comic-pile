@@ -4560,8 +4560,14 @@ export interface components {
             format: string;
             /** Id */
             id: number;
+            /** Issue Id */
+            issue_id?: number | null;
+            /** Issue Number */
+            issue_number?: string | null;
             /** Last Activity At */
             last_activity_at?: string | null;
+            /** Route Labels */
+            route_labels?: string[];
             /** Title */
             title: string;
         };
