@@ -39,7 +39,7 @@ jobs:
           labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${pr}/labels?per_page=100" --jq '[.[].name]')"
           stage="$(jq -r '[.[] | select(test("^factory:(building|review|changes-requested|ci|ready|blocked)$"))] | first // "factory:review"' <<< "$labels")"
           target="$(jq -c --arg owner "factory:${worker}" --arg stage "$stage" '
-            map(select((test("^factory:(building|review|changes-requested|ci|ready|blocked)$")|not) and (test("^factory:(unowned|local|([1-9]|1[0-5]))$")|not) and . != "factory"))
+            map(select((test("^factory:(building|review|changes-requested|ci|ready|blocked)$")|not) and (test("^factory:(unowned|local|([1-9]|1[0-6]))$")|not) and . != "factory"))
             + ["factory", $owner, $stage] | unique' <<< "$labels")"
           gh api --method PUT "repos/${GITHUB_REPOSITORY}/issues/${pr}/labels" --input - <<< "{\"labels\":${target}}" >/dev/null
           echo "Restored factory:${worker} on PR #${pr} with ${stage}"

@@ -1,30 +1,34 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-WORKER="${1:?worker number required}"
-MODEL="${2:?model required}"
+WORKER="${FACTORY_WORKER:-16}"
+CALL_SIGN="${FACTORY_CALL_SIGN:-Multiple Man}"
+MODEL="${OMNIROUTE_MODEL:?OMNIROUTE_MODEL is required}"
+PROVIDER="${OMNIROUTE_PROVIDER:?OMNIROUTE_PROVIDER is required}"
 OWNER="factory:${WORKER}"
-WORKER_ID="opencode-nvidia-factory-${WORKER}"
+WORKER_ID="opencode-omniroute-factory-${WORKER}"
 BUDGET_SECONDS="${FACTORY_BUDGET_SECONDS:-6000}"
-MAX_AGENT_ATTEMPTS="${NVIDIA_AGENT_MAX_ATTEMPTS:-2}"
-TRANSIENT_BACKOFF_SECONDS="${NVIDIA_TRANSIENT_BACKOFF_SECONDS:-20}"
+MAX_AGENT_ATTEMPTS="${OMNIROUTE_AGENT_MAX_ATTEMPTS:-2}"
+TRANSIENT_BACKOFF_SECONDS="${OMNIROUTE_TRANSIENT_BACKOFF_SECONDS:-20}"
 STARTED="$(date +%s)"
 DEADLINE=$((STARTED + BUDGET_SECONDS))
 OWNER_RE='^factory:(unowned|local|([1-9]|1[0-6]))$'
 STAGE_RE='^factory:(building|review|changes-requested|ci|ready|blocked)$'
 SKIP_PRS=()
-COOLED_MODELS=()
+MODE="run"
 
-log() { printf '[factory:%s] %s\n' "$WORKER" "$*"; }
+if [[ "${1:-}" == "--smoke" ]]; then
+  MODE="smoke"
+elif (($#)); then
+  echo "usage: $0 [--smoke]" >&2
+  exit 2
+fi
+
+log() { printf '[factory:%s][omniroute:%s][model:%s] %s\n' "$WORKER" "$PROVIDER" "$MODEL" "$*"; }
 remaining() { echo $((DEADLINE - $(date +%s))); }
 contains_skip_pr() {
   local needle="$1" item
   for item in "${SKIP_PRS[@]:-}"; do [[ "$item" == "$needle" ]] && return 0; done
-  return 1
-}
-contains_cooled_model() {
-  local needle="$1" item
-  for item in "${COOLED_MODELS[@]:-}"; do [[ "$item" == "$needle" ]] && return 0; done
   return 1
 }
 
@@ -38,16 +42,13 @@ replace_labels() {
   gh api --method PUT "repos/${GITHUB_REPOSITORY}/issues/${number}/labels" --input - <<< "{\"labels\":${target}}" >/dev/null
 }
 
-ensure_fleet_labels() {
-  local worker label
-  for worker in {6..15}; do
-    label="factory:${worker}"
-    if ! gh api "repos/${GITHUB_REPOSITORY}/labels/factory%3A${worker}" >/dev/null 2>&1; then
-      gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" \
-        -f name="$label" -f color='5319e7' -f description="Owned by OpenCode NVIDIA Factory ${worker}" >/dev/null
-      log "created ${label}"
-    fi
-  done
+ensure_owner_label() {
+  if ! gh api "repos/${GITHUB_REPOSITORY}/labels/factory%3A${WORKER}" >/dev/null 2>&1; then
+    gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" \
+      -f name="$OWNER" -f color='5319e7' \
+      -f description="Owned by OmniRoute Factory ${WORKER} · ${CALL_SIGN}" >/dev/null
+    log "created ${OWNER}"
+  fi
 }
 
 choose_existing_pr() {
@@ -71,6 +72,13 @@ choose_issue() {
     | sort_by(.createdAt) | reverse | .[].number'
 }
 
+choose_backlog_zero_issue() {
+  gh issue view 679 --json state,labels 2>/dev/null | jq -r --arg owner_re "$OWNER_RE" '
+    select(.state == "OPEN")
+    | select((([.labels[].name | select(test($owner_re) and . != "factory:unowned")] | length) == 0))
+    | "679"' || true
+}
+
 claim_issue() {
   local number="$1" labels target
   labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
@@ -89,14 +97,10 @@ claim_unowned_pr() {
   jq -e 'index("factory:unowned") != null' >/dev/null <<< "$labels" || return 1
   owner_count="$(jq -r --arg owner_re "$OWNER_RE" '[.[] | select(test($owner_re) and . != "factory:unowned")] | length' <<< "$labels")"
   [[ "$owner_count" == "0" ]] || return 1
-
   replace_labels "$number" "$OWNER" 'factory:review'
-
   labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
   jq -e --arg owner "$OWNER" 'index($owner) != null' >/dev/null <<< "$labels" || return 1
-
-  gh issue comment "$number" --body "<!-- nvidia-factory-owner:${WORKER} -->\nFactory ${WORKER} adopted this previously unowned PR for the next actionable step." >/dev/null
-  return 0
+  gh issue comment "$number" --body "$(printf '<!-- omniroute-factory-owner:%s -->\nFactory %s · %s adopted this unowned PR using %s through OmniRoute.\n' "$WORKER" "$WORKER" "$CALL_SIGN" "$MODEL")" >/dev/null
 }
 
 checkout_target() {
@@ -142,48 +146,6 @@ is_transient_agent_failure() {
   grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "/tmp/opencode-factory-${WORKER}.log"
 }
 
-probe_nvidia_model() {
-  local candidate="$1" provider_model request response http_code
-  provider_model="${candidate#nvidia/}"
-  request="$(jq -nc --arg model "$provider_model" '{model:$model,messages:[{role:"user",content:"Reply with exactly: FCM_NVIDIA_MODEL_OK"}],max_tokens:32}')"
-  response="$(mktemp)"
-  http_code="$(curl --silent --show-error --output "$response" --write-out '%{http_code}' \
-    --connect-timeout 5 --max-time 20 \
-    --header "Authorization: Bearer $NVIDIA_API_KEY" \
-    --header 'Content-Type: application/json' \
-    --data "$request" https://integrate.api.nvidia.com/v1/chat/completions || true)"
-  if [[ "$http_code" =~ ^2[0-9][0-9]$ ]] && jq -e '.choices[0].message.content | strings | contains("FCM_NVIDIA_MODEL_OK")' >/dev/null 2>&1 <"$response"; then
-    rm -f "$response"
-    return 0
-  fi
-  rm -f "$response"
-  return 1
-}
-
-rotate_model() {
-  local fcm_output candidate start idx offset
-  local candidates=()
-  if ! fcm_output="$(free-coding-models --json --origin nvidia --hide-unconfigured --best --no-telemetry 2>/dev/null)"; then
-    return 1
-  fi
-  mapfile -t candidates < <(printf '%s\n' "$fcm_output" | python scripts/select_fcm_nvidia_model.py | sed '/^$/d')
-  ((${#candidates[@]} > 0)) || return 1
-  start=$(( (WORKER - 6 + 1) % ${#candidates[@]} ))
-  for ((offset=0; offset<${#candidates[@]}; offset++)); do
-    idx=$(( (start + offset) % ${#candidates[@]} ))
-    candidate="${candidates[$idx]}"
-    [[ "$candidate" == "$MODEL" ]] && continue
-    contains_cooled_model "$candidate" && continue
-    log "probing alternate model ${candidate} after transient failure"
-    if probe_nvidia_model "$candidate"; then
-      MODEL="$candidate"
-      log "rotated to healthy model ${MODEL}"
-      return 0
-    fi
-  done
-  return 1
-}
-
 run_agent() {
   local mode="$1" number="$2" timeout_seconds="$3"
   local target mission prompt status=0
@@ -194,22 +156,46 @@ run_agent() {
     target="issue #${number}"
     mission="Implement the full closure-critical acceptance contract for this issue with code and focused tests. Do not stop at planning or optional polish."
   fi
-  prompt="You are OpenCode NVIDIA Factory ${WORKER} for JoshCLWren/comic-pile. Durable worker ID: ${WORKER_ID}. Model: ${MODEL}. Assigned target: ${target}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, docs/CHATGPT_FACTORY_PROMPT.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Josh directly requires product-first V22 behavior: user-reported product bugs outrank unrelated CI/E2E/test plumbing, and a run is a work session rather than a one-ticket punch. ${mission} Work only on the assigned target during this agent invocation. Edit the checked-out branch, run focused validation, and use gh/GitHub when needed for review context. Do not commit or push; the wrapper persists changes. Do not enable auto-merge, push main, touch production databases, or alter automation schedules."
-  timeout --signal=TERM --kill-after=30s "${timeout_seconds}s" opencode run -m "$MODEL" --agent build --auto --dir "$GITHUB_WORKSPACE" --title "ComicPile NVIDIA Factory ${WORKER}" "$prompt" 2>&1 | tee "/tmp/opencode-factory-${WORKER}.log"
+  prompt="You are OpenCode OmniRoute Factory ${WORKER} · ${CALL_SIGN} for JoshCLWren/comic-pile. Durable worker ID: ${WORKER_ID}. Pinned model: ${MODEL}. OmniRoute provider: ${PROVIDER}. Assigned target: ${target}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, docs/CHATGPT_FACTORY_PROMPT.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Follow normal ComicPile product-first factory policy and ownership rules. ${mission} Work only on the assigned target during this agent invocation. Edit the checked-out branch, run focused validation, and use gh/GitHub when needed for review context. Do not commit or push; the wrapper persists changes. Do not switch models or providers. Do not enable auto-merge, push main, touch production databases, or alter automation schedules."
+  timeout --signal=TERM --kill-after=30s "${timeout_seconds}s" \
+    opencode run -m "omniroute/${MODEL}" --agent build --auto --dir "$GITHUB_WORKSPACE" \
+    --title "ComicPile OmniRoute Factory ${WORKER} · ${CALL_SIGN}" "$prompt" \
+    2>&1 | tee "/tmp/opencode-factory-${WORKER}.log"
   status=${PIPESTATUS[0]}
   return "$status"
 }
 
+smoke_agent() {
+  local before after status
+  before="$(git status --porcelain)"
+  [[ -z "$before" ]] || { log 'smoke requires a clean worktree'; return 1; }
+  set +e
+  timeout --signal=TERM --kill-after=10s 180s \
+    opencode run -m "omniroute/${MODEL}" --agent build --dir "$GITHUB_WORKSPACE" \
+    --title "ComicPile OmniRoute Factory ${WORKER} smoke" \
+    'Reply with exactly OMNIROUTE_OPENCODE_OK. Do not edit files, run commands, or use tools.' \
+    2>&1 | tee "/tmp/opencode-factory-${WORKER}.log"
+  status=${PIPESTATUS[0]}
+  set -e
+  (( status == 0 )) || return "$status"
+  grep -q 'OMNIROUTE_OPENCODE_OK' "/tmp/opencode-factory-${WORKER}.log"
+  after="$(git status --porcelain)"
+  [[ -z "$after" ]] || { log 'OpenCode smoke modified the worktree'; return 1; }
+  log 'OpenCode smoke succeeded without modifying the worktree'
+}
+
 persist_issue_pr() {
-  local number="$1" branch="$2" pr title
-  if [[ -z "$(git status --porcelain)" ]]; then return 1; fi
+  local number="$1" branch="$2" pr title body
+  [[ -n "$(git status --porcelain)" ]] || return 1
   git add -A
-  git commit -m "factory: advance #${number} with NVIDIA OpenCode"
+  git commit -m "factory: advance #${number} with OmniRoute"
   git push --set-upstream origin "$branch"
   pr="$(gh pr list --state open --head "$branch" --json number --jq '.[0].number // empty')"
   if [[ -z "$pr" ]]; then
     title="$(gh issue view "$number" --json title --jq .title)"
-    gh pr create --base main --head "$branch" --title "$title" --body "Closes #${number}.\n\nModel: ${MODEL}\nWorker: ${WORKER_ID}\n\nProduced by OpenCode NVIDIA Factory ${WORKER}. Normal exact-head factory merge gates apply." >/tmp/factory-pr-url
+    body="$(printf 'Closes #%s.\n\nModel: %s\nProvider: %s\nWorker: %s\n\nProduced by Factory %s · %s through OmniRoute. Normal ComicPile exact-head factory merge gates apply.\n' "$number" "$MODEL" "$PROVIDER" "$WORKER_ID" "$WORKER" "$CALL_SIGN")"
+    gh pr create --base main --head "$branch" --title "$title" \
+      --body "$body" >/tmp/factory-pr-url
     pr="$(gh pr list --state open --head "$branch" --json number --jq '.[0].number')"
   fi
   replace_labels "$pr" "$OWNER" 'factory:review'
@@ -218,21 +204,23 @@ persist_issue_pr() {
 
 persist_pr_changes() {
   local pr="$1" branch="$2"
-  if [[ -z "$(git status --porcelain)" ]]; then return 1; fi
+  [[ -n "$(git status --porcelain)" ]] || return 1
   git add -A
-  git commit -m "factory: advance PR #${pr} with NVIDIA OpenCode"
+  git commit -m "factory: advance PR #${pr} with OmniRoute"
   git push origin "$branch"
   replace_labels "$pr" "$OWNER" 'factory:review'
-  return 0
 }
 
-# Bootstrap all ten durable owner labels immediately. Visibility should not wait
-# for future schedule slots to happen to execute successfully.
-ensure_fleet_labels
-log "starting with model ${MODEL}; budget ${BUDGET_SECONDS}s"
+if [[ "$MODE" == "smoke" ]]; then
+  smoke_agent
+  exit 0
+fi
+
+ensure_owner_label
+log "starting normal factory session; budget ${BUDGET_SECONDS}s"
 
 while (( $(remaining) > 480 )); do
-  MODE=''
+  TARGET_MODE=''
   NUMBER=''
   BRANCH=''
 
@@ -240,7 +228,7 @@ while (( $(remaining) > 480 )); do
     [[ -n "$candidate" ]] || continue
     contains_skip_pr "$candidate" && continue
     NUMBER="$candidate"
-    MODE='pr'
+    TARGET_MODE='pr'
     BRANCH="$(gh pr view "$NUMBER" --json headRefName --jq .headRefName)"
     break
   done < <(choose_existing_pr)
@@ -251,7 +239,7 @@ while (( $(remaining) > 480 )); do
       contains_skip_pr "$candidate" && continue
       if claim_unowned_pr "$candidate"; then
         NUMBER="$candidate"
-        MODE='pr'
+        TARGET_MODE='pr'
         BRANCH="$(gh pr view "$NUMBER" --json headRefName --jq .headRefName)"
         log "adopted unowned PR #${NUMBER} on ${BRANCH}"
         break
@@ -266,8 +254,8 @@ while (( $(remaining) > 480 )); do
         [[ -n "$candidate" ]] || continue
         if claim_issue "$candidate"; then
           NUMBER="$candidate"
-          MODE='issue'
-          BRANCH="factory/${WORKER}-${NUMBER}-nvidia"
+          TARGET_MODE='issue'
+          BRANCH="factory/${WORKER}-${NUMBER}-omniroute"
           break 2
         fi
       done < <(choose_issue "${labels[@]}")
@@ -275,12 +263,21 @@ while (( $(remaining) > 480 )); do
   fi
 
   if [[ -z "$NUMBER" ]]; then
-    log 'no unclaimed executable product work found; ending this session cleanly'
+    candidate="$(choose_backlog_zero_issue)"
+    if [[ -n "$candidate" ]] && claim_issue "$candidate"; then
+      NUMBER="$candidate"
+      TARGET_MODE='issue'
+      BRANCH="factory/${WORKER}-${NUMBER}-omniroute"
+      log 'ordinary executable work is exhausted; entering backlog-zero Chromium work #679'
+    fi
+  fi
+
+  if [[ -z "$NUMBER" ]]; then
+    log 'no claimable normal work or backlog-zero work found; ending this bounded session'
     break
   fi
 
-  checkout_target "$MODE" "$NUMBER" "$BRANCH"
-  before="$(git rev-parse HEAD)"
+  checkout_target "$TARGET_MODE" "$NUMBER" "$BRANCH"
   available="$(remaining)"
   agent_timeout=$((available - 240))
   (( agent_timeout > 3000 )) && agent_timeout=3000
@@ -291,11 +288,10 @@ while (( $(remaining) > 480 )); do
   transient_failure=0
   while :; do
     set +e
-    run_agent "$MODE" "$NUMBER" "$agent_timeout"
+    run_agent "$TARGET_MODE" "$NUMBER" "$agent_timeout"
     agent_status=$?
     set -e
-    log "agent exit status ${agent_status} for ${MODE} #${NUMBER} on ${MODEL}"
-
+    log "agent exit status ${agent_status} for ${TARGET_MODE} #${NUMBER}"
     if (( agent_status == 0 )); then
       transient_failure=0
       break
@@ -304,29 +300,15 @@ while (( $(remaining) > 480 )); do
       transient_failure=0
       break
     fi
-
     transient_failure=1
-    log "transient NVIDIA/OpenCode interruption on ${MODEL}; preserving this target instead of failing the heartbeat"
-
-    if [[ -n "$(git status --porcelain)" ]]; then
-      log 'transient interruption left edits in the worktree; checkpointing them before selecting more work'
-      break
-    fi
-
+    log 'transient OmniRoute/upstream interruption; retaining the pinned model and retrying only if budget permits'
+    [[ -z "$(git status --porcelain)" ]] || break
     (( agent_attempt < MAX_AGENT_ATTEMPTS )) || break
     (( $(remaining) > 600 )) || break
-
-    COOLED_MODELS+=("$MODEL")
     sleep_for="$TRANSIENT_BACKOFF_SECONDS"
     max_sleep=$(( $(remaining) - 540 ))
     (( sleep_for > max_sleep )) && sleep_for="$max_sleep"
     (( sleep_for > 0 )) && sleep "$sleep_for"
-
-    if ! rotate_model; then
-      log 'no alternate NVIDIA model became healthy during this recovery window'
-      break
-    fi
-
     agent_attempt=$((agent_attempt + 1))
     available="$(remaining)"
     agent_timeout=$((available - 240))
@@ -334,12 +316,12 @@ while (( $(remaining) > 480 )); do
     (( agent_timeout >= 300 )) || break
   done
 
-  if [[ "$MODE" == 'issue' ]]; then
+  if [[ "$TARGET_MODE" == 'issue' ]]; then
     if pr="$(persist_issue_pr "$NUMBER" "$BRANCH")"; then
       log "opened/updated PR #${pr} for issue #${NUMBER}"
       SKIP_PRS+=("$pr")
     elif (( transient_failure == 1 )); then
-      log "issue #${NUMBER} produced no changes because of a transient provider/runtime interruption; releasing without marking the issue blocked"
+      log "issue #${NUMBER} made no edits because the pinned route was temporarily unavailable; releasing without a false blocker"
       replace_labels "$NUMBER" 'factory:unowned' 'factory:building'
     else
       log "issue #${NUMBER} produced no changes; releasing as blocked/unowned"
@@ -349,7 +331,7 @@ while (( $(remaining) > 480 )); do
   fi
 
   if persist_pr_changes "$NUMBER" "$BRANCH"; then
-    log "pushed repairs to PR #${NUMBER}; review/CI must refresh"
+    log "pushed repairs to PR #${NUMBER}; review and CI must refresh"
     SKIP_PRS+=("$NUMBER")
     continue
   fi
@@ -358,18 +340,21 @@ while (( $(remaining) > 480 )); do
   if grep -q 'FACTORY_GATE_READY' "/tmp/opencode-factory-${WORKER}.log" && machine_merge_gates_pass "$NUMBER" "$current"; then
     log "all exact-head gates passed for PR #${NUMBER}; merging ${current}"
     gh pr merge "$NUMBER" --merge --match-head-commit "$current" --delete-branch
-    issue_number="$(sed -nE "s#^factory/${WORKER}-([0-9]+)-nvidia$#\\1#p" <<< "$BRANCH")"
+    issue_number="$(sed -nE "s#^factory/${WORKER}-([0-9]+)-omniroute$#\\1#p" <<< "$BRANCH")"
     if [[ -n "$issue_number" ]]; then
       state="$(gh issue view "$issue_number" --json state --jq .state 2>/dev/null || true)"
-      if [[ "$state" == 'OPEN' ]]; then gh issue close "$issue_number" --reason completed --comment "Closed after Factory ${WORKER} merged PR #${NUMBER} through the exact-head gates."; fi
+      if [[ "$state" == 'OPEN' ]]; then
+        gh issue close "$issue_number" --reason completed \
+          --comment "Closed after Factory ${WORKER} · ${CALL_SIGN} merged PR #${NUMBER} through the normal exact-head gates."
+      fi
     fi
     continue
   fi
 
   if (( transient_failure == 1 )); then
-    log "PR #${NUMBER} was interrupted transiently with no persisted edits; preserving ownership state and selecting other work"
+    log "PR #${NUMBER} was interrupted transiently with no persisted edits; selecting other work"
   else
-    log "PR #${NUMBER} is not merge-eligible now; releasing this cycle and selecting other work"
+    log "PR #${NUMBER} is not merge-eligible now; selecting other work"
   fi
   SKIP_PRS+=("$NUMBER")
 done

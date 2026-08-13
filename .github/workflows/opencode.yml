@@ -57,12 +57,12 @@ jobs:
             "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels?per_page=100" \
             --jq '[.[].name]')"
           owner="$(jq -r '
-            map(select(test("^factory:(unowned|local|[1-6])$"))) | first // "factory:unowned"
+            map(select(test("^factory:(unowned|local|([1-9]|1[0-6]))$"))) | first // "factory:unowned"
           ' <<< "$current_labels")"
           target_labels="$(jq -c --arg owner "$owner" '
             map(select(
               (test("^factory:(building|review|changes-requested|ci|ready|blocked)$") | not) and
-              (test("^factory:(unowned|local|[1-6])$") | not) and
+              (test("^factory:(unowned|local|([1-9]|1[0-6]))$") | not) and
               . != "factory"
             )) + ["factory", $owner, "factory:review"] | unique
           ' <<< "$current_labels")"
@@ -157,12 +157,12 @@ jobs:
             "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels?per_page=100" \
             --jq '[.[].name]')"
           owner="$(jq -r '
-            map(select(test("^factory:(unowned|local|[1-6])$"))) | first // "factory:unowned"
+            map(select(test("^factory:(unowned|local|([1-9]|1[0-6]))$"))) | first // "factory:unowned"
           ' <<< "$current_labels")"
           target_labels="$(jq -c --arg owner "$owner" --arg stage "$target_stage" '
             map(select(
               (test("^factory:(building|review|changes-requested|ci|ready|blocked)$") | not) and
-              (test("^factory:(unowned|local|[1-6])$") | not) and
+              (test("^factory:(unowned|local|([1-9]|1[0-6]))$") | not) and
               . != "factory"
             )) + ["factory", $owner, $stage] | unique
           ' <<< "$current_labels")"
