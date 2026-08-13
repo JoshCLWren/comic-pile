@@ -63,7 +63,7 @@ class ReadingOrderItem(Base):
             thread_id=plan_node.ref_id,
             position=plan_node.position,
             issue_number=plan_node.issue_number,
-        )    """A single entry in a reading order, linking a thread at a specific position."""
+    """A single entry in a reading order, linking a thread at a specific position."""
 
     __tablename__ = "reading_order_items"
 
