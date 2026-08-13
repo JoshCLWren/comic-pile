@@ -40,13 +40,13 @@ describe('ContinuityReadinessSummary', () => {
     expect(refetch).toHaveBeenCalledOnce()
   })
 
-  it('renders readable, blocked, and unexplained blocked states', () => {
+  it('hides successful readiness while preserving blocked states', () => {
     mocks.useContinuityReadiness.mockReturnValue({
       readiness: { node_type: 'issue', node_id: 7, is_readable: true, evaluated_issue_id: 7, blockers: [] },
       isLoading: false, error: null, refetch,
     })
     const { rerender } = render(<ContinuityReadinessSummary issueId={7} />)
-    expect(screen.getByRole('heading', { name: 'Ready to read' })).toBeVisible()
+    expect(screen.queryByRole('heading', { name: 'Ready to read' })).not.toBeInTheDocument()
 
     mocks.useContinuityReadiness.mockReturnValue({
       readiness: {
