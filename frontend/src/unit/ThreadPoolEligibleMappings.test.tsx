@@ -46,11 +46,22 @@ describe('ThreadPool eligible mappings', () => {
     expect(screen.getByText('Eligible now · 1')).toBeVisible()
     expect(screen.getByText('Issue 12')).toBeVisible()
     expect(screen.getByRole('button', {
-      name: /Die face 1: issue 12, Amazing Adventures, routes Secret War/i,
+      name: /Die face 1: Amazing Adventures, issue 12, routes Secret War/i,
     })).toBeVisible()
     expect(screen.getByRole('button', { name: 'Shuffle queue' })).toHaveAccessibleDescription(
       /complete active queue/i,
     )
+
+    const dieFace = screen.getByRole('button', { name: /Die face 1: Amazing Adventures/i })
+    const titleText = dieFace.querySelector('p:nth-of-type(1)')
+    const issueText = dieFace.querySelector('p:nth-of-type(2)')
+    expect(titleText?.textContent).toBe('Amazing Adventures')
+    expect(issueText?.textContent).toBe('Issue 12')
+    expect(
+      titleText && issueText
+        ? titleText.compareDocumentPosition(issueText) & Node.DOCUMENT_POSITION_FOLLOWING
+        : 0,
+    ).toBeTruthy()
   })
 
   it('omits eligible mappings while rating', () => {

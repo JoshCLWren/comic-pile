@@ -11,7 +11,7 @@ test.describe('Eligible Roll pool mappings (#1089)', () => {
     const pool = page.getByLabel(/Eligible now, \d+ mapped results?/i);
     await expect(pool).toBeVisible();
 
-    const mappings = pool.getByRole('button', { name: /Die face \d+: issue \d+,/i });
+    const mappings = pool.getByRole('button', { name: /Die face \d+: .+, issue \d+,/i });
     await expect(mappings).toHaveCount(3);
     await expect(mappings.first()).toBeVisible();
 
@@ -20,6 +20,6 @@ test.describe('Eligible Roll pool mappings (#1089)', () => {
     await shuffle.click();
 
     await expect(page.getByLabel(/Eligible now, \d+ mapped results?/i)).toBeVisible();
-    await expect(page.getByRole('button', { name: /Die face 1: issue \d+,/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Die face 1: .+, issue \d+,/i })).toBeVisible();
   });
 });
