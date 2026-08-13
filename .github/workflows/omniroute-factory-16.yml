@@ -140,25 +140,50 @@ jobs:
           echo 'OmniRoute did not become healthy' >&2
           exit 1
 
-      - name: Create ephemeral OmniRoute gateway key
+      - name: Configure pinned free provider and gateway key
         shell: bash
         run: |
           set -Eeuo pipefail
+          cookies="$RUNNER_TEMP/omniroute-cookies"
           initial_password="$(cat "$RUNNER_TEMP/omniroute-initial-password")"
           login_body="$(jq -nc --arg password "$initial_password" '{password:$password}')"
           curl --silent --show-error --fail-with-body \
             --connect-timeout 5 --max-time 30 \
-            --cookie-jar "$RUNNER_TEMP/omniroute-cookies" \
+            --cookie-jar "$cookies" \
             --header 'Content-Type: application/json' \
             --data "$login_body" \
             http://127.0.0.1:20128/api/auth/login >/dev/null
-          response="$(curl --silent --show-error --fail-with-body \
+
+          provider_body="$(jq -nc --arg provider "$OMNIROUTE_PROVIDER" \
+            '{provider:$provider,name:"Factory 16 Free Route",priority:1,testStatus:"active"}')"
+          provider_response="$(curl --silent --show-error --fail-with-body \
             --connect-timeout 5 --max-time 30 \
-            --cookie "$RUNNER_TEMP/omniroute-cookies" \
+            --cookie "$cookies" \
+            --header 'Content-Type: application/json' \
+            --data "$provider_body" \
+            http://127.0.0.1:20128/api/providers)"
+          jq -e --arg provider "$OMNIROUTE_PROVIDER" \
+            '.connection.provider == $provider and .connection.isActive != false' \
+            >/dev/null <<< "$provider_response"
+          connection_id="$(jq -r '.connection.id // empty' <<< "$provider_response")"
+          [[ -n "$connection_id" ]] || { echo 'OmniRoute did not create the provider connection' >&2; exit 1; }
+          echo "Configured OmniRoute provider=${OMNIROUTE_PROVIDER} connection=${connection_id}"
+
+          providers_response="$(curl --silent --show-error --fail-with-body \
+            --connect-timeout 5 --max-time 30 \
+            --cookie "$cookies" \
+            http://127.0.0.1:20128/api/providers)"
+          jq -e --arg provider "$OMNIROUTE_PROVIDER" \
+            '.connections[]? | select(.provider == $provider and .isActive != false)' \
+            >/dev/null <<< "$providers_response"
+
+          key_response="$(curl --silent --show-error --fail-with-body \
+            --connect-timeout 5 --max-time 30 \
+            --cookie "$cookies" \
             --header 'Content-Type: application/json' \
             --data '{"name":"Factory 16 Runtime","noLog":true}' \
             http://127.0.0.1:20128/api/keys)"
-          key="$(jq -r '.key // empty' <<< "$response")"
+          key="$(jq -r '.key // empty' <<< "$key_response")"
           [[ "$key" == sk-* ]] || { echo 'OmniRoute did not return a gateway key' >&2; exit 1; }
           echo "::add-mask::$key"
           printf '%s' "$key" > "$RUNNER_TEMP/omniroute-gateway-key"
@@ -169,16 +194,27 @@ jobs:
         run: |
           set -Eeuo pipefail
           gateway_key="$(cat "$RUNNER_TEMP/omniroute-gateway-key")"
-          curl --silent --show-error --fail-with-body \
-            --connect-timeout 5 --max-time 30 \
-            --header "Authorization: Bearer $gateway_key" \
-            http://127.0.0.1:20128/v1/models > "$RUNNER_TEMP/omniroute-models.json"
-          jq -e --arg model "$OMNIROUTE_MODEL" '.data[]?.id | select(. == $model)' \
-            "$RUNNER_TEMP/omniroute-models.json" >/dev/null || {
-              echo "Pinned model ${OMNIROUTE_MODEL} is not exposed by OmniRoute" >&2
-              exit 1
-            }
+          model_found=0
+          for _ in {1..15}; do
+            curl --silent --show-error --fail-with-body \
+              --connect-timeout 5 --max-time 30 \
+              --header "Authorization: Bearer $gateway_key" \
+              http://127.0.0.1:20128/v1/models > "$RUNNER_TEMP/omniroute-models.json"
+            if jq -e --arg model "$OMNIROUTE_MODEL" \
+              '.data[]?.id | select(. == $model)' \
+              "$RUNNER_TEMP/omniroute-models.json" >/dev/null; then
+              model_found=1
+              break
+            fi
+            sleep 2
+          done
+          [[ "$model_found" == '1' ]] || {
+            echo "Pinned model ${OMNIROUTE_MODEL} is not exposed by OmniRoute after configuring ${OMNIROUTE_PROVIDER}" >&2
+            jq -r '.data[]?.id' "$RUNNER_TEMP/omniroute-models.json" | grep -E '^(pol|pollinations)/' || true
+            exit 1
+          }
           echo "OmniRoute exposes pinned provider=${OMNIROUTE_PROVIDER} model=${OMNIROUTE_MODEL}"
+
           request="$(jq -nc --arg model "$OMNIROUTE_MODEL" \
             '{model:$model,messages:[{role:"user",content:"Reply with exactly: OMNIROUTE_FACTORY_OK"}],max_tokens:64}')"
           response="$(curl --silent --show-error --fail-with-body \
@@ -187,9 +223,11 @@ jobs:
             --header 'Content-Type: application/json' \
             --data "$request" \
             http://127.0.0.1:20128/v1/chat/completions)"
-          jq -e '.choices[0].message.content | strings | contains("OMNIROUTE_FACTORY_OK")' >/dev/null <<< "$response"
+          content="$(jq -r '.choices[0].message.content // empty' <<< "$response")"
+          [[ -n "$content" ]] || { echo 'OmniRoute returned no assistant content' >&2; exit 1; }
           upstream_model="$(jq -r '.model // empty' <<< "$response")"
-          echo "Direct OmniRoute completion succeeded for ${OMNIROUTE_MODEL}; upstream reported model=${upstream_model:-not-reported}"
+          printf 'Direct OmniRoute completion succeeded for %s; upstream reported model=%s; assistant=%q\n' \
+            "$OMNIROUTE_MODEL" "${upstream_model:-not-reported}" "${content:0:160}"
 
       - name: Configure OpenCode through pinned OmniRoute route
         shell: bash
@@ -210,6 +248,7 @@ jobs:
               }
             }
           }' > "$HOME/.config/opencode/opencode.json"
+          chmod 600 "$HOME/.config/opencode/opencode.json"
           echo "OpenCode configured for omniroute/${OMNIROUTE_MODEL} via localhost:20128/v1"
 
       - name: Prove actual Factory 16 worker traverses OmniRoute
