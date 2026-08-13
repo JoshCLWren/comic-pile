@@ -1,10 +1,11 @@
+const WORKER_OWNER_LABELS = Array.from({ length: 16 }, (_, index) => `factory:${index + 1}`);
+
 const DEFINITIONS = {
   factory: ['5319E7', 'Work owned or produced by an autonomous ComicPile factory'],
-  'factory:1': ['0366D6', 'Current next-action owner is ComicPile Factory 1'],
-  'factory:2': ['0366D6', 'Current next-action owner is ComicPile Factory 2'],
-  'factory:3': ['0366D6', 'Current next-action owner is ComicPile Factory 3'],
-  'factory:4': ['0366D6', 'Current next-action owner is ComicPile Factory 4'],
-  'factory:5': ['0366D6', 'Current next-action owner is ComicPile Factory 5'],
+  ...Object.fromEntries(WORKER_OWNER_LABELS.map((name, index) => [
+    name,
+    ['0366D6', `Current next-action owner is ComicPile Factory ${index + 1}`],
+  ])),
   'factory:local': ['0366D6', 'Current next-action owner is the local OpenCode factory'],
   'factory:unowned': ['BFDADC', 'Factory work has no current next-action owner'],
   'factory:building': ['FBCA04', 'A factory is actively implementing or repairing this work'],
@@ -16,11 +17,7 @@ const DEFINITIONS = {
 };
 
 const OWNER_LABELS = [
-  'factory:1',
-  'factory:2',
-  'factory:3',
-  'factory:4',
-  'factory:5',
+  ...WORKER_OWNER_LABELS,
   'factory:local',
   'factory:unowned',
 ];
@@ -221,8 +218,16 @@ async function reconcile({ github, context }) {
     );
     if (!isFactory) return;
 
+    const current = await currentLabels(github, context, pullRequest.number);
+    const externalOwner = WORKER_OWNER_LABELS
+      .slice(5)
+      .find(label => current.has(label));
+
     await reconcileLabels(github, context, pullRequest.number, {
-      owner: await ownerFromLinkedIssue(github, context, pullRequest),
+      // External workers write their durable PR owner before review workflows
+      // refresh visibility. Preserve that stronger PR-local signal even when the
+      // linked issue has since been released for other work.
+      owner: externalOwner || await ownerFromLinkedIssue(github, context, pullRequest),
       stage: 'factory:review',
     });
     return;

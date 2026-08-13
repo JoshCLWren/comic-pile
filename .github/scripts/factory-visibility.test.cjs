@@ -139,3 +139,52 @@ test('PR synchronize events refresh owner and stage from the linked issue', asyn
   assert.ok(!calls[0].labels.includes('factory:5'));
   assert.ok(!calls[0].labels.includes('factory:building'));
 });
+
+
+test('PR refresh preserves one external owner after the linked issue is released', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: [
+      'bug',
+      'factory',
+      'factory:13',
+      'factory:unowned',
+      'factory:review',
+    ],
+    comments: [{
+      author_association: 'OWNER',
+      body: '<!-- comic-pile-factory-claim-released-v3:issue-1149:chatgpt-factory-2:123 -->',
+      created_at: '2026-08-13T06:00:00Z',
+      user: { login: 'JoshCLWren' },
+    }],
+    setLabels: async input => calls.push(input),
+  });
+
+  await reconcile({
+    github,
+    context: contextFor('pull_request_target', {
+      action: 'synchronize',
+      repository: { full_name: 'JoshCLWren/comic-pile' },
+      pull_request: {
+        body: 'Closes #1149',
+        head: {
+          ref: 'factory/1149-omniroute',
+          repo: { full_name: 'JoshCLWren/comic-pile' },
+        },
+        labels: [
+          { name: 'factory' },
+          { name: 'factory:13' },
+          { name: 'factory:unowned' },
+        ],
+        number: 1155,
+      },
+    }),
+  });
+
+  assert.equal(calls.length, 1);
+  const owners = calls[0].labels.filter(label => (
+    /^factory:(?:unowned|local|[1-9]|1[0-6])$/.test(label)
+  ));
+  assert.deepEqual(owners, ['factory:13']);
+  assert.ok(calls[0].labels.includes('factory:review'));
+});
