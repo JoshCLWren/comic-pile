@@ -103,23 +103,30 @@ describe('WhatsNewPage', () => {
     expect(await screen.findByText('No release notes have been published yet.')).toBeInTheDocument()
   })
 
-  it('renders structured public fields without exposing PR or provenance metadata', async () => {
-    api.list.mockResolvedValue({
-      releases: [release({ source_pr_number: 1096, provenance_json: { importer: 'release-import-v1' } })],
-      total: 1,
-      limit: RELEASE_PAGE_SIZE,
-      offset: 0,
-    })
-
-    render(<WhatsNewPage />)
-
-    expect(await screen.findByText('Queue cards open details')).toBeInTheDocument()
-    expect(screen.getByText('Queue')).toBeInTheDocument()
-    expect(screen.getByText('Selecting a Queue card now opens its thread details reliably.')).toBeInTheDocument()
-    expect(screen.getByText('1 update published this day.')).toBeInTheDocument()
-    expect(screen.queryByText(/1096/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/release-import-v1/)).not.toBeInTheDocument()
+it('renders structured public fields without exposing PR or provenance metadata', async () => {
+  api.list.mockResolvedValue({
+    releases: [
+      release({
+        id: 10,
+        title: 'PR backed release',
+        category: 'Roll',
+        summary: 'PR-backed summary.',
+      }),
+    ],
+    total: 1,
+    limit: RELEASE_PAGE_SIZE,
+    offset: 0,
   })
+
+  render(<WhatsNewPage />)
+
+  expect(await screen.findByText('PR backed release')).toBeInTheDocument()
+  expect(screen.getByText('Roll')).toBeInTheDocument()
+  expect(screen.getByText('PR-backed summary.')).toBeInTheDocument()
+  expect(screen.getByText('1 update published this day.')).toBeInTheDocument()
+  expect(screen.queryByText(/1096/)).not.toBeInTheDocument()
+  expect(screen.queryByText(/release-import-v1/)).not.toBeInTheDocument()
+})
 
   it('renders the plural day summary for multiple same-day releases', async () => {
     api.list.mockResolvedValue({
