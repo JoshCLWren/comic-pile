@@ -50,10 +50,13 @@ test('shows flowchart toggle after creating a dependency', async ({ authenticate
 
     // Search and add a dependency
     await authenticatedPage.fill('input#search-prereq-thread', 'Flowchart Source')
-    await authenticatedPage.waitForSelector('button:has-text("Flowchart Source")', {
-      state: 'visible',
+    const dependencyDialog = authenticatedPage.locator('#comic-pile-overlay-root-dialog')
+    const sourceResult = dependencyDialog.getByRole('button', {
+      name: 'Flowchart Source (Comics)',
+      exact: true,
     })
-    await authenticatedPage.click('button:has-text("Flowchart Source")')
+    await expect(sourceResult).toBeVisible()
+    await sourceResult.click()
 
     // Register response wait before clicking to avoid missing fast responses
     await Promise.all([
@@ -63,7 +66,7 @@ test('shows flowchart toggle after creating a dependency', async ({ authenticate
           response.request().method() === 'POST' &&
           response.status() < 300,
       ),
-      authenticatedPage.click('button:has-text("Block")'),
+      dependencyDialog.getByRole('button', { name: 'Block', exact: true }).click(),
     ])
 
     // The flowchart toggle button should appear
