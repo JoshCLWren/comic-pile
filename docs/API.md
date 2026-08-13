@@ -20,23 +20,15 @@ FastAPI automatically generates interactive API documentation:
 
 The API uses a **partial versioning** strategy with two surfaces:
 
-- **`/api/*`** — the legacy surface, used by the original resources: threads,
-  roll, queue, rate, snooze, undo, auth, admin, analytics, bug-reports, and
-  sessions.
-- **`/api/v1/*`** — the versioned surface, used by newer resources:
-  dependencies, issues, and reading-orders.
+- **`/api/*`** — the legacy surface, used by original resources. Most maintained client resources have migrated to the versioned surface.
+- **`/api/v1/*`** — the canonical versioned surface. All new client resources must be added here.
 
-`/api/v1/sessions/*` is an explicit, tested backwards-compatibility alias of
-`/api/sessions/*` (see `tests/test_route_versioning.py`, originally issue #376)
-so session consumers can transition onto the versioned surface without breaking
-existing clients.
+Legacy paths (e.g., `/api/threads/*`, `/api/roll/*`, `/api/sessions/*`, `/api/rate/*`, `/api/snooze/*`, `/api/undo/*`) are retained as explicit, tested backwards-compatibility aliases. Maintained first-party consumers should use the `/api/v1/*` equivalents.
 
 **Convention for new endpoints:** add new client resources under `/api/v1/*`;
 do not introduce new bare `/api/*` routes. Non-production tooling routes
 (`debug`, `test`) are mounted under bare `/api/*` but only in non-production or
 test environments — they are intentional exceptions, not client APIs.
-Migrating the remaining legacy resources onto `/api/v1/*` is tracked as
-deferred work (see `TECH_DEBT.md`).
 
 ---
 
