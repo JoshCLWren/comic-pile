@@ -35,7 +35,7 @@ Choose work in this order:
 2. A branch-caused failing check, merge conflict, or actionable review defect only when the affected PR directly delivers an equal-or-higher-priority user-reported/product bug or clearing the blocker can immediately finish or merge that product fix.
 3. Other branch-caused failing checks, conflicts, or actionable review defects that prevent substantive product-delivery PRs from becoming mergeable.
 4. The highest-priority unclaimed reproducible E2E-discovered product `bug` issue.
-5. The highest-value unclaimed executable product issue, honoring explicit priority and dependencies, while deferring #679 until every other executable product issue is closed.
+5. The highest-value unclaimed executable product issue, honoring explicit priority and dependencies. `#679` becomes eligible when all remaining ordinary executable product work is owned, blocked, or dependency-gated.
 6. Additional work on an existing PR only when required to complete its issue contract or make the PR mergeable.
 7. Factory, CI, test, or E2E infrastructure only when it directly blocks product delivery.
 
@@ -153,7 +153,7 @@ When ordinary executable work is exhausted, entering #679 and the Chromium E2E b
 
 Issue #679 is excluded from ordinary executable-backlog selection while any other executable product issue remains open, unless disabled Chromium coverage itself blocks safe delivery.
 
-When no other executable delivery work remains, including when all remaining ordinary work is owned, blocked, or dependency-gated:
+`#679` becomes eligible when all remaining ordinary executable product work is owned, blocked, or dependency-gated. At that point:
 
 1. prioritize #679 and restore the maintained Chromium Playwright CI suite;
 2. merge that restoration only after the normal exact-head gates pass;
@@ -181,6 +181,8 @@ When owned work cannot safely advance now:
 Blocked work never authorizes a worker to pause or disable itself.
 
 When Josh or an interactive session acting on his direct instruction pauses or disables a scheduled worker, that interactive session must release the paused worker's open issue and PR claims to `factory:unowned` while preserving the truthful workflow-stage label and current resume packet. A paused worker must never strand executable work behind its owner label. Scheduled workers must not infer that another worker is paused solely from a missed heartbeat; explicit ownership release is the handoff signal.
+
+For an interactive pause, reconcile each target atomically, preserve unrelated labels and the current resume packet, replace the owner with `factory:unowned`, and keep exactly one truthful stage. Unfinished implementation changes the issue to `ralph-status:pending`, `factory`, `factory:building`, `factory:unowned`; an existing PR keeps `factory`, `factory:building`, `factory:unowned`. CI-pending work keeps issue `ralph-status:validation` and PR `factory:ci`, both with `factory` and `factory:unowned`. Ready work keeps issue `ralph-status:in-review` and PR `factory:ready`, both with `factory` and `factory:unowned`. A PR-level blocker uses `factory`, `factory:blocked`, `factory:unowned`, while an issue-only blocker keeps the issue at `ralph-status:blocked`, `factory`, `factory:blocked`, `factory:unowned` and preserves the PR's truthful stage with `factory:unowned`.
 
 ## Mandatory label state machine
 
