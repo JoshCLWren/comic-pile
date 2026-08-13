@@ -98,7 +98,7 @@ describe('WhatsNewPage', () => {
 
   it('renders structured public fields without exposing PR or provenance metadata', async () => {
     api.list.mockResolvedValue({
-      releases: [release({ id: 10, title: 'PR release' })],
+      releases: [release({ id: 10 })],
       total: 1,
       limit: RELEASE_PAGE_SIZE,
       offset: 0,
