@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import type { Thread } from '../types'
 import axios from 'axios'
 import { migrationApi } from '../services/api'
+import OverlayPortal from './OverlayPortal'
 import './MigrationDialog.css'
 
 interface MigrationDialogProps {
@@ -151,8 +152,9 @@ export default function MigrationDialog({ thread, onComplete, onSkip, onClose }:
   }
 
   return (
-    <div
-      className="migration-dialog__overlay"
+    <OverlayPortal layer="dialog">
+      <div
+        className="migration-dialog__overlay"
       onClick={handleBackdropClick}
       role="dialog"
       aria-modal="true"
@@ -281,7 +283,8 @@ export default function MigrationDialog({ thread, onComplete, onSkip, onClose }:
             </div>
           </div>
         )}
+        </div>
       </div>
-    </div>
+    </OverlayPortal>
   )
 }
