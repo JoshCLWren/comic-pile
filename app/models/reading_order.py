@@ -23,8 +23,47 @@ class ReadingOrder(Base):
     )
 
 
+@hybrid_router
+
 class ReadingOrderItem(Base):
-    """A single entry in a reading order, linking a thread at a specific position."""
+    @hybrid_router
+    def project_from_plan(self, plan_node: ContinuityPlanNode) -> 'ReadingOrderItem':
+        """
+        Create a reading order item from a continuity plan node.
+        """
+        return ReadingOrderItem(
+            thread_id=plan_node.ref_id,
+            position=plan_node.position,
+            issue_number=plan_node.issue_number,
+        )
+
+    @hybrid_router
+    def apply_to_order(self, reading_order: 'ReadingOrder') -> None:
+        """
+        Add this item to a reading order, handling duplicates and ordering.
+        """
+        existing = (self.session
+                   .query(ReadingOrderItem)
+                   .filter(ReadingOrderItem.thread_id == self.thread_id,
+                           ReadingOrderItem.reading_order_id == reading_order.id)
+                   .first())
+        if existing:
+            existing.position = self.position
+            return
+        reading_order.items.append(self)
+        # Reorder items to maintain sequence integrity
+        reading_orderitems = sorted(reading_order.items, key=lambda item: item.position)
+        for idx, item in enumerate(reading_orderitems):
+            item.position = idx + 1    @hybrid_router
+    def project_from_plan(self, plan_node: ContinuityPlanNode) -> 'ReadingOrderItem':
+        """
+        Create a reading order item from a continuity plan node.
+        """
+        return ReadingOrderItem(
+            thread_id=plan_node.ref_id,
+            position=plan_node.position,
+            issue_number=plan_node.issue_number,
+        )    """A single entry in a reading order, linking a thread at a specific position."""
 
     __tablename__ = "reading_order_items"
 
