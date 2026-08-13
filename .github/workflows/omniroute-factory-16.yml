@@ -8,13 +8,14 @@ on:
       - '.github/scripts/nvidia-factory-worker.sh'
       - '.github/workflows/nvidia-factory-owner-reconcile.yml'
       - '.github/workflows/factory-heartbeat-watchdog.yml'
+      - '.github/workflows/opencode.yml'
   schedule:
     - cron: '34 * * * *'
   workflow_dispatch:
 
 concurrency:
   group: omniroute-factory-16-${{ github.event.pull_request.number || 'autonomous' }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: write
@@ -26,9 +27,15 @@ permissions:
 env:
   FACTORY_WORKER: '16'
   FACTORY_CALL_SIGN: 'Multiple Man'
-  OMNIROUTE_IMAGE: 'diegosouzapw/omniroute:3.8.49'
-  OMNIROUTE_PROVIDER: 'pollinations'
-  OMNIROUTE_MODEL: 'pol/qwen-coder'
+  OMNIROUTE_IMAGE: 'diegosouzapw/omniroute:3.8.49@sha256:92c768c56e2de32c51a0621ef182835018b00b288c9bb235c5c5e4514658c1a1'
+  OMNIROUTE_PROVIDER: 'opencode'
+  OMNIROUTE_CANDIDATES: |-
+    oc/north-mini-code-free
+    oc/nemotron-3-ultra-free
+    oc/mimo-v2.5-free
+    oc/hy3-free
+    oc/deepseek-v4-flash-free
+    oc/big-pickle
   OPENCODE_VERSION: '1.18.18'
   OPENCODE_LINUX_X64_SHA256: '0cddc222418b8553669905a8980c0cda7088f00da24d83d6ac76b01c9fdb2aaf'
 
@@ -67,19 +74,23 @@ jobs:
           echo "$bin_dir" >> "$GITHUB_PATH"
           "$bin_dir/opencode" --version
 
-      - name: Assert pinned non-NVIDIA factory configuration
+      - name: Assert non-NVIDIA Factory 16 configuration
         shell: bash
         run: |
           set -Eeuo pipefail
           [[ "$OMNIROUTE_PROVIDER" != 'nvidia' ]]
-          [[ "$OMNIROUTE_MODEL" != nvidia/* ]]
           if grep -En '[N]VIDIA_API_KEY|[f]ree-coding-models|[s]elect_fcm_nvidia_model|--origin[[:space:]]+nvidia' \
             .github/workflows/omniroute-factory-16.yml \
             .github/scripts/omniroute-factory-worker.sh; then
             echo 'Factory 16 contains NVIDIA-specific configuration' >&2
             exit 1
           fi
-          echo "Factory 16 pinned route: provider=${OMNIROUTE_PROVIDER} model=${OMNIROUTE_MODEL}"
+          while IFS= read -r candidate; do
+            [[ -z "$candidate" ]] && continue
+            [[ "$candidate" != nvidia/* ]] || { echo "NVIDIA candidate is forbidden: $candidate" >&2; exit 1; }
+          done <<< "$OMNIROUTE_CANDIDATES"
+          echo 'Factory 16 candidate pool is explicitly non-NVIDIA:'
+          printf '%s\n' "$OMNIROUTE_CANDIDATES"
 
       - name: Create ephemeral OmniRoute runtime secrets
         shell: bash
@@ -104,6 +115,10 @@ jobs:
             printf 'DATA_DIR=/app/data\n'
             printf 'OMNIROUTE_NO_UPDATE_NOTIFIER=1\n'
             printf 'AUTH_COOKIE_SECURE=false\n'
+            printf 'OPENCODE_SYNTHESIZE_CLI_HEADERS=true\n'
+            printf 'OPENCODE_USER_AGENT=opencode/%s\n' "$OPENCODE_VERSION"
+            printf 'OPENCODE_CLIENT=cli\n'
+            printf 'OPENCODE_PROJECT=comic-pile-factory-16\n'
           } > "$runtime_env"
           printf '%s' "$initial_password" > "$RUNNER_TEMP/omniroute-initial-password"
           chmod 600 "$runtime_env" "$RUNNER_TEMP/omniroute-initial-password"
@@ -112,7 +127,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          echo "Starting ${OMNIROUTE_IMAGE} for provider=${OMNIROUTE_PROVIDER} model=${OMNIROUTE_MODEL}"
+          echo "Starting ${OMNIROUTE_IMAGE} for provider=${OMNIROUTE_PROVIDER}"
           docker pull "$OMNIROUTE_IMAGE"
           echo "Resolved OmniRoute image: $(docker image inspect "$OMNIROUTE_IMAGE" --format '{{index .RepoDigests 0}}')"
           docker volume create omniroute-factory-16-data >/dev/null
@@ -133,6 +148,7 @@ jobs:
               --connect-timeout 1 --max-time 3 http://127.0.0.1:20128/api/monitoring/health || true)"
             if [[ "$code" == '200' ]]; then
               echo 'OmniRoute health endpoint returned HTTP 200'
+              cat "$RUNNER_TEMP/omniroute-health.json"
               exit 0
             fi
             sleep 1
@@ -140,7 +156,7 @@ jobs:
           echo 'OmniRoute did not become healthy' >&2
           exit 1
 
-      - name: Configure pinned free provider and gateway key
+      - name: Configure free provider and gateway key
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -169,14 +185,6 @@ jobs:
           [[ -n "$connection_id" ]] || { echo 'OmniRoute did not create the provider connection' >&2; exit 1; }
           echo "Configured OmniRoute provider=${OMNIROUTE_PROVIDER} connection=${connection_id}"
 
-          providers_response="$(curl --silent --show-error --fail-with-body \
-            --connect-timeout 5 --max-time 30 \
-            --cookie "$cookies" \
-            http://127.0.0.1:20128/api/providers)"
-          jq -e --arg provider "$OMNIROUTE_PROVIDER" \
-            '.connections[]? | select(.provider == $provider and .isActive != false)' \
-            >/dev/null <<< "$providers_response"
-
           key_response="$(curl --silent --show-error --fail-with-body \
             --connect-timeout 5 --max-time 30 \
             --cookie "$cookies" \
@@ -189,51 +197,69 @@ jobs:
           printf '%s' "$key" > "$RUNNER_TEMP/omniroute-gateway-key"
           chmod 600 "$RUNNER_TEMP/omniroute-gateway-key"
 
-      - name: Prove pinned free model and direct OmniRoute completion
+      - name: Round-robin free models until one works
+        id: free_model
         shell: bash
         run: |
           set -Eeuo pipefail
           gateway_key="$(cat "$RUNNER_TEMP/omniroute-gateway-key")"
-          model_found=0
-          for _ in {1..15}; do
-            curl --silent --show-error --fail-with-body \
-              --connect-timeout 5 --max-time 30 \
-              --header "Authorization: Bearer $gateway_key" \
-              http://127.0.0.1:20128/v1/models > "$RUNNER_TEMP/omniroute-models.json"
-            if jq -e --arg model "$OMNIROUTE_MODEL" \
-              '.data[]?.id | select(. == $model)' \
+          curl --silent --show-error --fail-with-body \
+            --connect-timeout 5 --max-time 30 \
+            --header "Authorization: Bearer $gateway_key" \
+            http://127.0.0.1:20128/v1/models > "$RUNNER_TEMP/omniroute-models.json"
+
+          selected=''
+          selected_upstream=''
+          while IFS= read -r candidate; do
+            candidate="${candidate//$'\r'/}"
+            [[ -n "$candidate" ]] || continue
+            if ! jq -e --arg model "$candidate" '.data[]?.id | select(. == $model)' \
               "$RUNNER_TEMP/omniroute-models.json" >/dev/null; then
-              model_found=1
+              echo "Skipping ${candidate}: not exposed by OmniRoute"
+              continue
+            fi
+
+            echo "Probing ${candidate} through OmniRoute"
+            request="$(jq -nc --arg model "$candidate" \
+              '{model:$model,messages:[{role:"user",content:"Reply with exactly: OMNIROUTE_FACTORY_OK"}],max_tokens:64}')"
+            code="$(curl --silent --show-error \
+              --connect-timeout 5 --max-time 120 \
+              --output "$RUNNER_TEMP/omniroute-probe.json" \
+              --write-out '%{http_code}' \
+              --header "Authorization: Bearer $gateway_key" \
+              --header 'Content-Type: application/json' \
+              --data "$request" \
+              http://127.0.0.1:20128/v1/chat/completions || true)"
+            if [[ "$code" =~ ^2 ]] && jq -e \
+              '.choices[0].message.content | strings | contains("OMNIROUTE_FACTORY_OK")' \
+              "$RUNNER_TEMP/omniroute-probe.json" >/dev/null 2>&1; then
+              selected="$candidate"
+              selected_upstream="$(jq -r '.model // empty' "$RUNNER_TEMP/omniroute-probe.json")"
               break
             fi
-            sleep 2
-          done
-          [[ "$model_found" == '1' ]] || {
-            echo "Pinned model ${OMNIROUTE_MODEL} is not exposed by OmniRoute after configuring ${OMNIROUTE_PROVIDER}" >&2
-            jq -r '.data[]?.id' "$RUNNER_TEMP/omniroute-models.json" | grep -E '^(pol|pollinations)/' || true
+            error_preview="$(jq -r '.error.message // .message // empty' "$RUNNER_TEMP/omniroute-probe.json" 2>/dev/null | head -c 240 || true)"
+            echo "Rejected ${candidate}: HTTP ${code}${error_preview:+ - ${error_preview}}"
+          done <<< "$OMNIROUTE_CANDIDATES"
+
+          if [[ -z "$selected" ]]; then
+            echo 'No configured free candidate produced a valid assistant response.' >&2
+            echo 'Available OpenCode free models exposed by OmniRoute:' >&2
+            jq -r '.data[]?.id' "$RUNNER_TEMP/omniroute-models.json" | grep '^oc/' >&2 || true
             exit 1
-          }
-          echo "OmniRoute exposes pinned provider=${OMNIROUTE_PROVIDER} model=${OMNIROUTE_MODEL}"
+          fi
 
-          request="$(jq -nc --arg model "$OMNIROUTE_MODEL" \
-            '{model:$model,messages:[{role:"user",content:"Reply with exactly: OMNIROUTE_FACTORY_OK"}],max_tokens:64}')"
-          response="$(curl --silent --show-error --fail-with-body \
-            --connect-timeout 5 --max-time 120 \
-            --header "Authorization: Bearer $gateway_key" \
-            --header 'Content-Type: application/json' \
-            --data "$request" \
-            http://127.0.0.1:20128/v1/chat/completions)"
-          content="$(jq -r '.choices[0].message.content // empty' <<< "$response")"
-          [[ -n "$content" ]] || { echo 'OmniRoute returned no assistant content' >&2; exit 1; }
-          upstream_model="$(jq -r '.model // empty' <<< "$response")"
-          printf 'Direct OmniRoute completion succeeded for %s; upstream reported model=%s; assistant=%q\n' \
-            "$OMNIROUTE_MODEL" "${upstream_model:-not-reported}" "${content:0:160}"
+          echo "Factory 16 selected working model: ${selected}"
+          echo "Direct OmniRoute completion succeeded; upstream reported model=${selected_upstream:-not-reported}"
+          echo "OMNIROUTE_MODEL=${selected}" >> "$GITHUB_ENV"
+          echo "model=${selected}" >> "$GITHUB_OUTPUT"
+          printf '%s' "$selected" > "$RUNNER_TEMP/omniroute-selected-model"
 
-      - name: Configure OpenCode through pinned OmniRoute route
+      - name: Configure OpenCode through selected OmniRoute route
         shell: bash
         run: |
           set -Eeuo pipefail
           gateway_key="$(cat "$RUNNER_TEMP/omniroute-gateway-key")"
+          [[ -n "${OMNIROUTE_MODEL:-}" ]] || { echo 'No selected OmniRoute model' >&2; exit 1; }
           mkdir -p "$HOME/.config/opencode"
           jq -n --arg model "$OMNIROUTE_MODEL" --arg key "$gateway_key" '{
             provider: {
@@ -255,6 +281,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          echo "Factory 16 exact model proof: provider=${OMNIROUTE_PROVIDER} model=${OMNIROUTE_MODEL}"
           bash .github/scripts/omniroute-factory-worker.sh --smoke
 
       - name: Report running heartbeat
@@ -296,7 +323,8 @@ jobs:
           now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           previous="$(gh api "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" | jq -r --arg marker "$marker" '[.[] | select(.body | contains($marker)) | .body] | last // empty')"
           started="$(jq -nr --arg body "$previous" '$body | capture("Last run started: `(?<value>[^`]*)`")?.value // "unknown"')"
-          body="$(printf '%s\n## 🏭 Factory 16 · Multiple Man\nScheduled slot: `:34` America/Chicago\nLast run started: `%s`\nLast run completed: `%s`\nWorked on: normal ComicPile factory session with `%s` via `%s`\nOutcome: %s\nUpdated by: `opencode-omniroute-factory-16`' "$marker" "$started" "$now" "$OMNIROUTE_MODEL" "$OMNIROUTE_PROVIDER" "$OUTCOME")"
+          model="${OMNIROUTE_MODEL:-not-selected}"
+          body="$(printf '%s\n## 🏭 Factory 16 · Multiple Man\nScheduled slot: `:34` America/Chicago\nLast run started: `%s`\nLast run completed: `%s`\nWorked on: normal ComicPile factory session with `%s` via `%s`\nOutcome: %s\nUpdated by: `opencode-omniroute-factory-16`' "$marker" "$started" "$now" "$model" "$OMNIROUTE_PROVIDER" "$OUTCOME")"
           comment_id="$(gh api "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" | jq -r --arg marker "$marker" '[.[] | select(.body | contains($marker)) | .id] | last // empty')"
           if [[ -n "$comment_id" ]]; then
             gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$body" >/dev/null
@@ -308,11 +336,13 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          docker logs omniroute-factory-16 --tail 200 2>&1 || true
+          docker logs omniroute-factory-16 --tail 240 2>&1 || true
           echo 'Last health response:'
           cat "$RUNNER_TEMP/omniroute-health.json" 2>/dev/null || true
+          echo 'Last model probe:'
+          cat "$RUNNER_TEMP/omniroute-probe.json" 2>/dev/null || true
           echo 'OpenCode smoke/session output:'
-          tail -n 160 "/tmp/opencode-factory-${FACTORY_WORKER}.log" 2>/dev/null || true
+          tail -n 200 "/tmp/opencode-factory-${FACTORY_WORKER}.log" 2>/dev/null || true
 
       - name: Cleanup OmniRoute runtime
         if: always()
@@ -325,4 +355,6 @@ jobs:
             "$RUNNER_TEMP/omniroute-initial-password" \
             "$RUNNER_TEMP/omniroute-cookies" \
             "$RUNNER_TEMP/omniroute-gateway-key" \
-            "$RUNNER_TEMP/omniroute-models.json"
+            "$RUNNER_TEMP/omniroute-models.json" \
+            "$RUNNER_TEMP/omniroute-probe.json" \
+            "$RUNNER_TEMP/omniroute-selected-model"
