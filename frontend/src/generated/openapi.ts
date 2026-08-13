@@ -2599,6 +2599,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/snooze/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Snooze Thread
+         * @description Snooze the pending thread, demote it in the queue, and step the die up.
+         *
+         *     This endpoint:
+         *     1. Gets the current session (must exist with a pending_thread_id)
+         *     2. Moves the pending thread beyond the widened roll range
+         *     3. Adds the pending_thread_id to snoozed_thread_ids
+         *     4. Steps the die UP (wider pool) using dice ladder logic
+         *     5. Records a "snooze" event
+         *     6. Clears pending_thread_id
+         *     7. Returns the updated session
+         *
+         *     Args:
+         *         request: FastAPI request object for rate limiting.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         SessionResponse containing the updated session with snoozed_thread_ids,
+         *         cleared pending_thread_id, and current die state.
+         *
+         *     Raises:
+         *         HTTPException: If no active session exists or no pending thread to snooze.
+         */
+        post: operations["snooze_thread_api_v1_snooze__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/snooze/{thread_id}/unsnooze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unsnooze Thread
+         * @description Remove thread from snoozed list.
+         */
+        post: operations["unsnooze_thread_api_v1_snooze__thread_id__unsnooze_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/": {
         parameters: {
             query?: never;
@@ -3246,6 +3307,69 @@ export interface paths {
          * @description Return blocked status and human-readable blocking reasons for multiple threads.
          */
         post: operations["get_threads_blocking_info_api_v1_threads_getBlockingInfo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/undo/{session_id}/snapshots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Session Snapshots
+         * @description List all snapshots for a session.
+         *
+         *     Args:
+         *         session_id: Session whose snapshots should be listed.
+         *         current_user: Authenticated user.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         Snapshot metadata in reverse chronological order.
+         *
+         *     Raises:
+         *         HTTPException: If the session is not owned by the current user.
+         */
+        get: operations["list_session_snapshots_api_v1_undo__session_id__snapshots_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/undo/{session_id}/undo/{snapshot_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo To Snapshot
+         * @description Undo session state to a snapshot with deadlock retry handling.
+         *
+         *     Args:
+         *         session_id: Session to restore.
+         *         snapshot_id: Snapshot to restore.
+         *         current_user: Authenticated user.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         Restored session response.
+         *
+         *     Raises:
+         *         RuntimeError: If all deadlock retries fail.
+         */
+        post: operations["undo_to_snapshot_api_v1_undo__session_id__undo__snapshot_id__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8142,6 +8266,57 @@ export interface operations {
             };
         };
     };
+    snooze_thread_api_v1_snooze__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionResponse"];
+                };
+            };
+        };
+    };
+    unsnooze_thread_api_v1_snooze__thread_id__unsnooze_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_threads_api_v1_threads__get: {
         parameters: {
             query?: {
@@ -8919,6 +9094,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BatchBlockingExplanationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_session_snapshots_api_v1_undo__session_id__snapshots_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undo_to_snapshot_api_v1_undo__session_id__undo__snapshot_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: number;
+                snapshot_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionResponse"];
                 };
             };
             /** @description Validation Error */

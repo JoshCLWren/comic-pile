@@ -157,12 +157,12 @@ def summarize(samples: list[Sample]) -> dict[str, Any]:
 
 def _build_endpoints(page_size: int, later_page_token: str | None) -> list[str]:
     endpoints = [
-        "/api/sessions/current/",
-        f"/api/sessions/?{urlencode({'page_size': page_size})}",
+        "/api/v1/sessions/current/",
+        f"/api/v1/sessions/?{urlencode({'page_size': page_size})}",
     ]
     if later_page_token:
         endpoints.append(
-            f"/api/sessions/?{urlencode({'page_size': page_size, 'page_token': later_page_token})}"
+            f"/api/v1/sessions/?{urlencode({'page_size': page_size, 'page_token': later_page_token})}"
         )
     return endpoints
 

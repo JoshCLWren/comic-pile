@@ -50,7 +50,7 @@ it('uses canonical v1 Roll and rating paths for maintained callers', async () =>
   expect(apiMock.get).toHaveBeenCalledWith('/v1/roll/bootstrap')
 })
 
-it('keeps auth-recovery Roll mutations on v1 while snooze remains on its own migration track', async () => {
+it('keeps auth-recovery Roll mutations on canonical v1 paths', async () => {
   await protectedRollMutationApi.rate({ thread_id: 9, rating: 3 })
   await protectedRollMutationApi.bootstrap()
   await protectedRollMutationApi.snooze()
@@ -61,5 +61,5 @@ it('keeps auth-recovery Roll mutations on v1 while snooze remains on its own mig
     { skipAuthRedirect: true },
   )
   expect(apiMock.get).toHaveBeenCalledWith('/v1/roll/bootstrap', { skipAuthRedirect: true })
-  expect(apiMock.post).toHaveBeenCalledWith('/snooze/', undefined, { skipAuthRedirect: true })
+  expect(apiMock.post).toHaveBeenCalledWith('/v1/snooze/', undefined, { skipAuthRedirect: true })
 })

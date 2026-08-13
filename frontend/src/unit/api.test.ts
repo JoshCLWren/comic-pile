@@ -140,6 +140,31 @@ it('calls every remaining API resource endpoint', async () => {
   expect(post).toHaveBeenCalledWith('/bug-reports/', { title: 'Bug', description: 'Description', diagnostics: {} })
 })
 
+
+it('uses canonical v1 paths for session, snooze, and undo resources', async () => {
+  await sessionApi.list()
+  await sessionApi.get(7)
+  await sessionApi.getCurrent()
+  await sessionApi.getDetails(7)
+  await sessionApi.getSnapshots(7)
+  await sessionApi.restoreSessionStart(7)
+  await snoozeApi.snooze()
+  await snoozeApi.unsnooze(9)
+  await undoApi.undo(7, 3)
+  await undoApi.listSnapshots(7)
+
+  expect(get).toHaveBeenCalledWith('/v1/sessions/', { params: undefined })
+  expect(get).toHaveBeenCalledWith('/v1/sessions/7')
+  expect(get).toHaveBeenCalledWith('/v1/sessions/current/')
+  expect(get).toHaveBeenCalledWith('/v1/sessions/7/details')
+  expect(get).toHaveBeenCalledWith('/v1/sessions/7/snapshots')
+  expect(post).toHaveBeenCalledWith('/v1/sessions/7/restore-session-start')
+  expect(post).toHaveBeenCalledWith('/v1/snooze/')
+  expect(post).toHaveBeenCalledWith('/v1/snooze/9/unsnooze')
+  expect(post).toHaveBeenCalledWith('/v1/undo/7/undo/3')
+  expect(get).toHaveBeenCalledWith('/v1/undo/7/snapshots')
+})
+
 it('adds auth and csrf headers to mutating requests', async () => {
   setAccessToken('access-token')
   document.cookie = 'csrf_token=cookie-token; path=/'
@@ -167,7 +192,7 @@ it('handles request defaults and issue dependency payloads', async () => {
     source_type: 'issue', source_id: 8, target_type: 'issue', target_id: 9,
   })
   await sessionApi.list()
-  expect(get).toHaveBeenCalledWith('/sessions/', { params: undefined })
+  expect(get).toHaveBeenCalledWith('/v1/sessions/', { params: undefined })
 })
 
 it('handles missing request URLs and cookies while sharing csrf bootstrap work', async () => {
