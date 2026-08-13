@@ -8,6 +8,7 @@ import type { RatingThread } from '../types'
 import { ComicVineIssueCard } from './ComicVineIssueCard'
 import { ContinuityReadinessSummary } from './ContinuityReadinessSummary'
 import { ReadingOrderGroups } from './ReadingOrderGroups'
+import { ReadingRouteExplanation } from './ReadingRouteExplanation'
 
 function getDieDirection(currentDie: number, predictedDie: number): string {
   if (predictedDie < currentDie) return 'More focused next roll'
@@ -57,6 +58,7 @@ export function RatingView({
   onRefreshThread,
 }: RatingViewProps) {
   const [isCorrectionDialogOpen, setIsCorrectionDialogOpen] = useState(false)
+  const [isRouteExplanationOpen, setIsRouteExplanationOpen] = useState(false)
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
   const threadTitle = activeRatingThread?.title ?? 'Loading…'
   const issueNumber = activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number ?? null
@@ -186,7 +188,17 @@ export function RatingView({
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10" aria-hidden="true">
                     <div className="h-full rounded-full bg-amber-600" style={{ width: `${routeProgress}%` }} />
                   </div>
-                  <p className="mt-1 text-[10px] font-bold text-stone-500">{routeProgress}% complete</p>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-bold text-stone-500">{routeProgress}% complete</p>
+                    <button
+                      type="button"
+                      onClick={() => setIsRouteExplanationOpen(true)}
+                      className="min-h-11 rounded-lg border border-amber-700/40 bg-amber-900/15 px-3 text-[10px] font-black text-amber-200 focus:ring-2 focus:ring-amber-500"
+                      aria-label={`Explain why ${threadTitle} ${issueNumber != null ? `#${issueNumber}` : ''} is next in ${order.name}`}
+                    >
+                      Explain route
+                    </button>
+                  </div>
                 </article>
               )
             })}
@@ -278,6 +290,15 @@ export function RatingView({
       </div>
 
       <ComicVineIssueCard issueId={issueId} />
+
+      <ReadingRouteExplanation
+        isOpen={isRouteExplanationOpen}
+        issueId={issueId}
+        issueLabel={`${threadTitle}${issueNumber != null ? ` #${issueNumber}` : ''}`}
+        readingOrders={readingOrders}
+        connectedThreads={connectedThreads}
+        onClose={() => setIsRouteExplanationOpen(false)}
+      />
 
       {activeRatingThread ? (
         <IssueCorrectionDialog
