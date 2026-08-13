@@ -62,9 +62,9 @@ describe('release ordering helpers', () => {
 
   it('groups historical and PR-backed releases by localized release day', () => {
     const days = groupReleasesByDay([
-      release({ id: 3, source_pr_number: 1096, released_at: '2026-08-11T20:00:00Z' }),
-      release({ id: 2, source_pr_number: null, released_at: '2026-08-11T10:00:00Z' }),
-      release({ id: 1, source_pr_number: null, released_at: '2026-08-10T20:00:00Z' }),
+      release({ id: 3, released_at: '2026-08-11T20:00:00Z' }),
+      release({ id: 2, released_at: '2026-08-11T10:00:00Z' }),
+      release({ id: 1, released_at: '2026-08-10T20:00:00Z' }),
     ], 'UTC')
 
     expect(days).toHaveLength(2)
