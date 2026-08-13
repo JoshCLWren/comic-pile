@@ -10,15 +10,10 @@ import { DICE_LADDER } from '../../components/diceLadder'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import {
-  useClearManualDie,
   useDismissPending,
   useOverrideRoll,
   useRoll,
-  useSetDie,
 } from '../../hooks/useRoll'
-import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
-import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../../hooks/useQueue'
-import { useRate } from '../../hooks'
 import { threadsApi, dependenciesApi } from '../../services/api'
 import { readingOrdersApi } from '../../services/api-reading-orders'
 import { getApiErrorStatus, getApiErrorDetail } from '../../utils/apiError'
@@ -30,10 +25,14 @@ import type { RatingThread, ThreadMetadata } from './types'
 import {
   RATING_THRESHOLD,
   createExplosion,
-  buildRatingThread,
 } from './utils'
 import { RatingView } from './components/RatingView'
 import { ThreadPool } from './components/ThreadPool'
+import { useRollSession } from './features/useRollSession'
+import { useRollRating } from './features/useRollRating'
+import { useRollSnooze } from './features/useRollSnooze'
+import { useRollRecovery } from './features/useRollRecovery'
+import { useRollModals } from './features/useRollModals'
 
 export default function RollPage() {
   const state = useRollPageState()
@@ -67,31 +66,50 @@ export default function RollPage() {
     rollTimeoutRef,
   } = state
 
+  const {
+    bootstrap,
+    refetchBootstrap,
+    isBootstrapLoading,
+    isBootstrapError,
+    bootstrapError,
+    handleSetDie,
+    handleClearManualDie,
+    recoverPendingRollConflict,
+    setDieMutation,
+    clearManualDieMutation,
+    rollMutation,
+  } = useRollSession(state)
+
+  const {
+    enterRatingView,
+    updateRatingUI,
+    handleSubmitRating,
+    handleRefreshThread,
+    rateMutation,
+  } = useRollRating(state, bootstrap, refetchBootstrap)
+
+  const {
+    handleUnsnooze,
+    handleShufflePool,
+    handleQueueAction,
+    snoozeMutation,
+    unsnoozeMutation,
+    moveToFrontMutation,
+    moveToBackMutation,
+    shuffleQueueMutation,
+  } = useRollSnooze(state, refetchBootstrap)
+
+  const {
+    handleReadStale,
+  } = useRollRecovery(state, enterRatingView)
+
+  const {
+    handleThreadClick,
+    handleToggleBlocked,
+  } = useRollModals(state)
+
   const [readingOrders, setReadingOrders] = useState<import('../../services/api-reading-orders').ReadingOrder[]>([])
   const [connectedThreads, setConnectedThreads] = useState<ConnectedThreadInfo[]>([])
-
-  const { data: bootstrap, refetch: refetchBootstrap, isPending: isBootstrapLoading, isError: isBootstrapError, error: bootstrapError } = useRollBootstrap()
-  const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
-  const navigate = useNavigate()
-
-  useEffect(() => {
-    if (isBootstrapError && bootstrapError) {
-      const status = getApiErrorStatus(bootstrapError)
-      if (status === 401) navigate('/login')
-    }
-  }, [isBootstrapError, bootstrapError, navigate])
-
-  const setDieMutation = useSetDie()
-  const clearManualDieMutation = useClearManualDie()
-  const rollMutation = useRoll()
-  const dismissPendingMutation = useDismissPending()
-  const overrideMutation = useOverrideRoll()
-  const snoozeMutation = useSnooze()
-  const unsnoozeMutation = useUnsnooze()
-  const moveToFrontMutation = useMoveToFront()
-  const moveToBackMutation = useMoveToBack()
-  const shuffleQueueMutation = useShuffleQueue()
-  const rateMutation = useRate()
 
   async function handleUnsnooze(threadId: number) {
     try {
