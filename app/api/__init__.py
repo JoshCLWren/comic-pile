@@ -11,6 +11,7 @@ from app.api import health as health
 from app.api import issue_dependency_batch as issue_dependency_batch
 from app.api import releases as releases
 from app.api import roll_recovery_switch as roll_recovery_switch
+from app.api import roll as roll
 
 analytics.router.include_router(health.router)
 dependency.router.include_router(issue_dependency_batch.router)
@@ -19,7 +20,9 @@ dependency.router.include_router(dependency_group_batch.router)
 dependency.router.include_router(continuity_rule.router)
 dependency.router.include_router(continuity_plan.router)
 dependency.router.include_router(continuity_readiness.router)
-dependency.router.include_router(roll_recovery_switch.router, prefix="/roll")
+dependency.router.include_router(roll_recovery_switch.router, prefix="/roll"
+roll.router, prefix="/roll"
+)
 dependency.router.include_router(releases.router, prefix="/releases")
 
 __all__ = [
