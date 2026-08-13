@@ -5,6 +5,8 @@ on:
     paths:
       - '.github/workflows/omniroute-factory-16.yml'
       - '.github/scripts/omniroute-factory-worker.sh'
+      - '.github/scripts/nvidia-factory-worker.sh'
+      - '.github/workflows/nvidia-factory-owner-reconcile.yml'
   schedule:
     - cron: '34 * * * *'
   workflow_dispatch:
@@ -24,6 +26,8 @@ env:
   FACTORY_WORKER: '16'
   FACTORY_CALL_SIGN: 'Multiple Man'
   OMNIROUTE_IMAGE: 'diegosouzapw/omniroute:3.8.49'
+  OMNIROUTE_PROVIDER: 'pollinations'
+  OMNIROUTE_MODEL: 'pol/qwen-coder'
 
 jobs:
   gateway-and-factory:
@@ -39,40 +43,34 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Use supported Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-
       - name: Configure git identity
         if: github.event_name != 'pull_request'
         run: |
           git config user.name 'opencode-omniroute-factory-16[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
-      - name: Install OpenCode and model selector
+      - name: Install OpenCode
+        shell: bash
         run: |
           set -Eeuo pipefail
           curl -fsSL https://opencode.ai/install | bash
           echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
-          npm install --global free-coding-models@0.5.69
 
-      - name: Select NVIDIA seed model
-        env:
-          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+      - name: Assert pinned non-NVIDIA factory configuration
         shell: bash
         run: |
           set -Eeuo pipefail
-          [[ -n "${NVIDIA_API_KEY:-}" ]] || { echo 'NVIDIA_API_KEY is required' >&2; exit 1; }
-          fcm_output="$(free-coding-models --json --origin nvidia --hide-unconfigured --best --no-telemetry)"
-          selected="$(printf '%s\n' "$fcm_output" | python scripts/select_fcm_nvidia_model.py | sed '/^$/d' | head -n1)"
-          [[ -n "$selected" ]] || { echo 'No NVIDIA model candidate available' >&2; exit 1; }
-          printf '%s' "${selected#nvidia/}" > "$RUNNER_TEMP/omniroute-seed-model"
-          echo "Selected an NVIDIA seed model for OmniRoute routing"
+          [[ "$OMNIROUTE_PROVIDER" != 'nvidia' ]]
+          [[ "$OMNIROUTE_MODEL" != nvidia/* ]]
+          if grep -En '[N]VIDIA_API_KEY|[f]ree-coding-models|[s]elect_fcm_nvidia_model|--origin[[:space:]]+nvidia' \
+            .github/workflows/omniroute-factory-16.yml \
+            .github/scripts/omniroute-factory-worker.sh; then
+            echo 'Factory 16 contains NVIDIA-specific configuration' >&2
+            exit 1
+          fi
+          echo "Factory 16 pinned route: provider=${OMNIROUTE_PROVIDER} model=${OMNIROUTE_MODEL}"
 
       - name: Create ephemeral OmniRoute runtime secrets
-        env:
-          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -82,7 +80,7 @@ jobs:
           initial_password="$(openssl rand -hex 24)"
           storage_key="$(openssl rand -hex 32)"
           ws_secret="$(openssl rand -base64 32 | tr -d '\n')"
-          for secret in "$jwt_secret" "$api_key_secret" "$initial_password" "$storage_key" "$ws_secret" "$NVIDIA_API_KEY"; do
+          for secret in "$jwt_secret" "$api_key_secret" "$initial_password" "$storage_key" "$ws_secret"; do
             echo "::add-mask::$secret"
           done
           {
@@ -92,7 +90,6 @@ jobs:
             printf 'STORAGE_ENCRYPTION_KEY=%s\n' "$storage_key"
             printf 'STORAGE_ENCRYPTION_KEY_VERSION=v1\n'
             printf 'OMNIROUTE_WS_BRIDGE_SECRET=%s\n' "$ws_secret"
-            printf 'NVIDIA_API_KEY=%s\n' "$NVIDIA_API_KEY"
             printf 'DATA_DIR=/app/data\n'
             printf 'OMNIROUTE_NO_UPDATE_NOTIFIER=1\n'
             printf 'AUTH_COOKIE_SECURE=false\n'
@@ -104,6 +101,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          echo "Starting ${OMNIROUTE_IMAGE} for provider=${OMNIROUTE_PROVIDER} model=${OMNIROUTE_MODEL}"
           docker pull "$OMNIROUTE_IMAGE"
           docker volume create omniroute-factory-16-data >/dev/null
           docker run -d \
@@ -154,45 +152,40 @@ jobs:
           printf '%s' "$key" > "$RUNNER_TEMP/omniroute-gateway-key"
           chmod 600 "$RUNNER_TEMP/omniroute-gateway-key"
 
-      - name: Prove NVIDIA provider and direct routed completion
+      - name: Prove pinned free model and direct OmniRoute completion
         shell: bash
         run: |
           set -Eeuo pipefail
           gateway_key="$(cat "$RUNNER_TEMP/omniroute-gateway-key")"
-          seed_model="$(cat "$RUNNER_TEMP/omniroute-seed-model")"
           curl --silent --show-error --fail-with-body \
             --connect-timeout 5 --max-time 30 \
             --header "Authorization: Bearer $gateway_key" \
             http://127.0.0.1:20128/v1/models > "$RUNNER_TEMP/omniroute-models.json"
-          routed_model="$(jq -r --arg seed "$seed_model" '
-            [ .data[]?.id | select(startswith("nvidia/")) ] as $nvidia
-            | ($nvidia | map(select(endswith("/" + $seed) or . == ("nvidia/" + $seed))) | first)
-              // ($nvidia | first)
-              // empty
-          ' "$RUNNER_TEMP/omniroute-models.json")"
-          [[ -n "$routed_model" ]] || {
-            echo 'No NVIDIA models were exposed through the authenticated OmniRoute gateway' >&2
-            exit 1
-          }
-          request="$(jq -nc --arg model "$routed_model" '{model:$model,messages:[{role:"user",content:"Reply with exactly: OMNIROUTE_FACTORY_OK"}],max_tokens:32}')"
+          jq -e --arg model "$OMNIROUTE_MODEL" '.data[]?.id | select(. == $model)' \
+            "$RUNNER_TEMP/omniroute-models.json" >/dev/null || {
+              echo "Pinned model ${OMNIROUTE_MODEL} is not exposed by OmniRoute" >&2
+              exit 1
+            }
+          echo "OmniRoute exposes pinned provider=${OMNIROUTE_PROVIDER} model=${OMNIROUTE_MODEL}"
+          request="$(jq -nc --arg model "$OMNIROUTE_MODEL" \
+            '{model:$model,messages:[{role:"user",content:"Reply with exactly: OMNIROUTE_FACTORY_OK"}],max_tokens:64}')"
           response="$(curl --silent --show-error --fail-with-body \
-            --connect-timeout 5 --max-time 90 \
+            --connect-timeout 5 --max-time 120 \
             --header "Authorization: Bearer $gateway_key" \
             --header 'Content-Type: application/json' \
             --data "$request" \
             http://127.0.0.1:20128/v1/chat/completions)"
           jq -e '.choices[0].message.content | strings | contains("OMNIROUTE_FACTORY_OK")' >/dev/null <<< "$response"
-          printf '%s' "$routed_model" > "$RUNNER_TEMP/omniroute-routed-model"
-          echo "Direct completion succeeded through OmniRoute and the NVIDIA provider"
+          upstream_model="$(jq -r '.model // empty' <<< "$response")"
+          echo "Direct OmniRoute completion succeeded for ${OMNIROUTE_MODEL}; upstream reported model=${upstream_model:-not-reported}"
 
-      - name: Configure OpenCode through OmniRoute
+      - name: Configure OpenCode through pinned OmniRoute route
         shell: bash
         run: |
           set -Eeuo pipefail
-          routed_model="$(cat "$RUNNER_TEMP/omniroute-routed-model")"
           gateway_key="$(cat "$RUNNER_TEMP/omniroute-gateway-key")"
           mkdir -p "$HOME/.config/opencode"
-          jq -n --arg model "$routed_model" --arg key "$gateway_key" '{
+          jq -n --arg model "$OMNIROUTE_MODEL" --arg key "$gateway_key" '{
             provider: {
               omniroute: {
                 npm: "@ai-sdk/openai-compatible",
@@ -205,29 +198,13 @@ jobs:
               }
             }
           }' > "$HOME/.config/opencode/opencode.json"
+          echo "OpenCode configured for omniroute/${OMNIROUTE_MODEL} via localhost:20128/v1"
 
-      - name: Prove OpenCode traverses OmniRoute
+      - name: Prove actual Factory 16 worker traverses OmniRoute
         shell: bash
         run: |
           set -Eeuo pipefail
-          routed_model="$(cat "$RUNNER_TEMP/omniroute-routed-model")"
-          timeout 120s opencode run -m "omniroute/$routed_model" --agent build --dir "$GITHUB_WORKSPACE" \
-            --title 'OmniRoute Factory 16 smoke' \
-            'Reply with exactly OMNIROUTE_OPENCODE_OK. Do not edit files.' \
-            2>&1 | tee "$RUNNER_TEMP/omniroute-opencode-smoke.log"
-          grep -q 'OMNIROUTE_OPENCODE_OK' "$RUNNER_TEMP/omniroute-opencode-smoke.log"
-          test -z "$(git status --porcelain)"
-
-      - name: Ensure isolated experiment lane label
-        if: github.event_name != 'pull_request'
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          if ! gh api "repos/${GITHUB_REPOSITORY}/labels/omniroute-experiment" >/dev/null 2>&1; then
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" \
-              -f name='omniroute-experiment' -f color='6f42c1' \
-              -f description='Explicit opt-in work lane for OmniRoute Factory 16' >/dev/null
-          fi
+          bash .github/scripts/omniroute-factory-worker.sh --smoke
 
       - name: Report running heartbeat
         if: github.event_name != 'pull_request'
@@ -236,7 +213,8 @@ jobs:
           set -Eeuo pipefail
           marker='<!-- factory-heartbeat:v1 worker=opencode-omniroute-factory-16 -->'
           now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          body="$(printf '%s\n## 🏭 Factory 16 · Multiple Man\nScheduled slot: `:34` America/Chicago\nLast run started: `%s`\nWorked on: isolated OmniRoute experiment lane\nOutcome: running\nUpdated by: `opencode-omniroute-factory-16`' "$marker" "$now")"
+          previous_completed="$(gh api "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" | jq -r --arg marker "$marker" '[.[] | select(.body | contains($marker)) | .body | capture("Last run completed: `(?<value>[^`]*)`")?.value] | map(select(. != null)) | last // "not yet reported"')"
+          body="$(printf '%s\n## 🏭 Factory 16 · Multiple Man\nScheduled slot: `:34` America/Chicago\nLast run started: `%s`\nLast run completed: `%s`\nWorked on: selecting normal ComicPile work with `%s` via `%s`\nOutcome: running\nUpdated by: `opencode-omniroute-factory-16`' "$marker" "$now" "$previous_completed" "$OMNIROUTE_MODEL" "$OMNIROUTE_PROVIDER")"
           comment_id="$(gh api "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" | jq -r --arg marker "$marker" '[.[] | select(.body | contains($marker)) | .id] | last // empty')"
           if [[ -n "$comment_id" ]]; then
             gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$body" >/dev/null
@@ -244,13 +222,12 @@ jobs:
             gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" -f body="$body" >/dev/null
           fi
 
-      - name: Run isolated OmniRoute factory session
+      - name: Run normal OmniRoute factory session
         if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -Eeuo pipefail
-          routed_model="$(cat "$RUNNER_TEMP/omniroute-routed-model")"
-          bash .github/scripts/omniroute-factory-worker.sh "$routed_model"
+          bash .github/scripts/omniroute-factory-worker.sh
 
       - name: Report terminal heartbeat
         if: always() && github.event_name != 'pull_request'
@@ -261,7 +238,9 @@ jobs:
           set -Eeuo pipefail
           marker='<!-- factory-heartbeat:v1 worker=opencode-omniroute-factory-16 -->'
           now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          body="$(printf '%s\n## 🏭 Factory 16 · Multiple Man\nScheduled slot: `:34` America/Chicago\nLast run completed: `%s`\nWorked on: isolated OmniRoute experiment lane\nOutcome: %s\nUpdated by: `opencode-omniroute-factory-16`' "$marker" "$now" "$OUTCOME")"
+          previous="$(gh api "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" | jq -r --arg marker "$marker" '[.[] | select(.body | contains($marker)) | .body] | last // empty')"
+          started="$(jq -nr --arg body "$previous" '$body | capture("Last run started: `(?<value>[^`]*)`")?.value // "unknown"')"
+          body="$(printf '%s\n## 🏭 Factory 16 · Multiple Man\nScheduled slot: `:34` America/Chicago\nLast run started: `%s`\nLast run completed: `%s`\nWorked on: normal ComicPile factory session with `%s` via `%s`\nOutcome: %s\nUpdated by: `opencode-omniroute-factory-16`' "$marker" "$started" "$now" "$OMNIROUTE_MODEL" "$OMNIROUTE_PROVIDER" "$OUTCOME")"
           comment_id="$(gh api "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" | jq -r --arg marker "$marker" '[.[] | select(.body | contains($marker)) | .id] | last // empty')"
           if [[ -n "$comment_id" ]]; then
             gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$body" >/dev/null
@@ -276,8 +255,8 @@ jobs:
           docker logs omniroute-factory-16 --tail 200 2>&1 || true
           echo 'Last health response:'
           cat "$RUNNER_TEMP/omniroute-health.json" 2>/dev/null || true
-          echo 'OpenCode smoke output:'
-          tail -n 120 "$RUNNER_TEMP/omniroute-opencode-smoke.log" 2>/dev/null || true
+          echo 'OpenCode smoke/session output:'
+          tail -n 160 "/tmp/opencode-factory-${FACTORY_WORKER}.log" 2>/dev/null || true
 
       - name: Cleanup OmniRoute runtime
         if: always()
@@ -289,4 +268,5 @@ jobs:
             "$RUNNER_TEMP/omniroute-runtime.env" \
             "$RUNNER_TEMP/omniroute-initial-password" \
             "$RUNNER_TEMP/omniroute-cookies" \
-            "$RUNNER_TEMP/omniroute-gateway-key"
+            "$RUNNER_TEMP/omniroute-gateway-key" \
+            "$RUNNER_TEMP/omniroute-models.json"
