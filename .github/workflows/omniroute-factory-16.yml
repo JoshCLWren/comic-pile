@@ -62,11 +62,14 @@ jobs:
         run: |
           set -Eeuo pipefail
           allowed_scripts='omniroute,better-sqlite3,wreq-js,keytar,tls-client-node,onnxruntime-node,sharp,core-js,@parcel/watcher,@swc/core,protobufjs,koffi,esbuild'
+          npm config set allow-scripts="$allowed_scripts" --location=user
           npm install --global --allow-scripts="$allowed_scripts" omniroute@3.8.49 free-coding-models@0.5.69
           global_root="$(npm root --global)"
+          dist_dir="$global_root/omniroute/dist"
+          (cd "$dist_dir" && npm rebuild better-sqlite3 wreq-js)
           node "$global_root/omniroute/scripts/build/postinstall.mjs"
-          sqlite_binary="$global_root/omniroute/dist/node_modules/better-sqlite3/build/Release/better_sqlite3.node"
-          [[ -f "$sqlite_binary" ]] || { echo "OmniRoute better-sqlite3 binary is missing after approved install scripts" >&2; exit 1; }
+          sqlite_binary="$dist_dir/node_modules/better-sqlite3/build/Release/better_sqlite3.node"
+          [[ -f "$sqlite_binary" ]] || { echo "OmniRoute better-sqlite3 binary is missing after approved rebuild" >&2; exit 1; }
           bash .github/scripts/patch-omniroute-setup.sh
 
       - name: Verify OmniRoute version
