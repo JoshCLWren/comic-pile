@@ -30,7 +30,6 @@ env:
   OMNIROUTE_IMAGE: 'diegosouzapw/omniroute:3.8.49@sha256:92c768c56e2de32c51a0621ef182835018b00b288c9bb235c5c5e4514658c1a1'
   OMNIROUTE_PROVIDER: 'opencode'
   OMNIROUTE_CANDIDATES: |-
-    oc/nemotron-3-ultra-free
     oc/mimo-v2.5-free
     oc/hy3-free
     oc/deepseek-v4-flash-free
@@ -87,6 +86,7 @@ jobs:
           while IFS= read -r candidate; do
             [[ -z "$candidate" ]] && continue
             [[ "$candidate" != nvidia/* ]] || { echo "NVIDIA candidate is forbidden: $candidate" >&2; exit 1; }
+            [[ "$candidate" != *nemotron* ]] || { echo "NVIDIA model family is forbidden for Factory 16: $candidate" >&2; exit 1; }
           done <<< "$OMNIROUTE_CANDIDATES"
           echo 'Factory 16 candidate pool is explicitly non-NVIDIA:'
           printf '%s\n' "$OMNIROUTE_CANDIDATES"
