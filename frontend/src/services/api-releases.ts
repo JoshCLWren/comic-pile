@@ -1,7 +1,7 @@
 import type { components } from '../generated/openapi'
 import api from './api'
 
-export type Release = components['schemas']['ReleaseResponse']
+export type Release = components['schemas']['PublicReleaseResponse']
 export type ReleaseListResponse = components['schemas']['ReleaseListResponse']
 
 export const releasesApi = {
