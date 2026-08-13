@@ -3,16 +3,12 @@
 import io
 import json
 import os
-import sys
 from contextlib import redirect_stderr, redirect_stdout
 from unittest.mock import Mock, patch
 
 import pytest
 
-# Add scripts to path so we can import release_writer
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-
-import release_writer
+from scripts import release_writer
 
 
 def _capture_stderr(func, *args, **kwargs) -> str:
@@ -428,7 +424,7 @@ class TestReleaseWriterRequest:
         Returns:
             None.
         """
-        with patch("release_writer.urllib.request.urlopen") as mock_urlopen:
+        with patch("scripts.release_writer.urllib.request.urlopen") as mock_urlopen:
             mock_response = Mock()
             mock_response.read.return_value = json.dumps({"id": 1}).encode()
             mock_response.__enter__ = Mock(return_value=mock_response)
@@ -458,7 +454,7 @@ class TestReleaseWriterRequest:
         """
         import urllib.error
 
-        with patch("release_writer.urllib.request.urlopen") as mock_urlopen:
+        with patch("scripts.release_writer.urllib.request.urlopen") as mock_urlopen:
             http_error = urllib.error.HTTPError(
                 url="http://test/api/",
                 code=409,
@@ -484,7 +480,7 @@ class TestReleaseWriterRequest:
         """
         import urllib.error
 
-        with patch("release_writer.urllib.request.urlopen") as mock_urlopen:
+        with patch("scripts.release_writer.urllib.request.urlopen") as mock_urlopen:
             url_error = urllib.error.URLError(reason="Connection refused")
             mock_urlopen.side_effect = url_error
 
