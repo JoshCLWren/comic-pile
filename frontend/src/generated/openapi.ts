@@ -4383,6 +4383,39 @@ export interface components {
             new_position: number;
         };
         /**
+         * PublicReleaseResponse
+         * @description One release ledger record returned by public-facing endpoints.
+         */
+        PublicReleaseResponse: {
+            /** Body */
+            body: string | null;
+            /** Category */
+            category: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /**
+             * Released At
+             * Format: date-time
+             */
+            released_at: string;
+            /** Sort Order */
+            sort_order: number;
+            /** Summary */
+            summary: string;
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
          * QueueThreadListItem
          * @description Schema for a single thread in the list/queue view.
          *
@@ -4523,13 +4556,13 @@ export interface components {
             /** Offset */
             offset: number;
             /** Releases */
-            releases: components["schemas"]["ReleaseResponse"][];
+            releases: components["schemas"]["PublicReleaseResponse"][];
             /** Total */
             total: number;
         };
         /**
          * ReleaseResponse
-         * @description One release ledger record returned by public-facing endpoints.
+         * @description One complete release ledger record returned to trusted automation.
          */
         ReleaseResponse: {
             /** Body */
@@ -4543,6 +4576,12 @@ export interface components {
             created_at: string;
             /** Id */
             id: number;
+            /** Merged At */
+            merged_at: string | null;
+            /** Provenance Json */
+            provenance_json: {
+                [key: string]: unknown;
+            };
             /**
              * Released At
              * Format: date-time
@@ -4550,6 +4589,17 @@ export interface components {
             released_at: string;
             /** Sort Order */
             sort_order: number;
+            /** Source Merge Sha */
+            source_merge_sha: string | null;
+            /** Source Pr Number */
+            source_pr_number: number | null;
+            /** Source Repository */
+            source_repository: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "published" | "retracted";
             /** Summary */
             summary: string;
             /** Title */
@@ -4559,6 +4609,11 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /**
+             * Visibility
+             * @enum {string}
+             */
+            visibility: "public" | "internal";
         };
         /**
          * ReleaseSourceResponse
@@ -7864,7 +7919,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReleaseResponse"];
+                    "application/json": components["schemas"]["PublicReleaseResponse"];
                 };
             };
             /** @description Validation Error */
