@@ -6,6 +6,7 @@ on:
       - '.github/workflows/omniroute-factory-16.yml'
       - '.github/workflows/omniroute-smoke.yml'
       - '.github/scripts/omniroute-factory-worker.sh'
+      - '.github/scripts/patch-omniroute-setup.sh'
   schedule:
     - cron: '34 * * * *'
   workflow_dispatch:
@@ -57,7 +58,9 @@ jobs:
           echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
 
       - name: Install OmniRoute and model discovery
-        run: npm install --global omniroute@3.8.49 free-coding-models@0.5.69
+        run: |
+          npm install --global omniroute@3.8.49 free-coding-models@0.5.69
+          bash .github/scripts/patch-omniroute-setup.sh
 
       - name: Verify OmniRoute version
         run: test "$(omniroute --version)" = '3.8.49'
