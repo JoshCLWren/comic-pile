@@ -22,7 +22,7 @@ _DATABASE_SCHEMES = {
     "postgresql",
     "postgresql+asyncpg",
     "postgresql+psycopg",
-    "postgresql+psycopg2",
+    "postgresql+asyncpg",
     "redis",
     "rediss",
 }
