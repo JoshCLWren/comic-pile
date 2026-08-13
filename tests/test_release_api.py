@@ -170,14 +170,17 @@ async def test_public_release_list_filters_and_orders(
     assert response.status_code == 200
     body = response.json()
     assert body["total"] == 3
-    assert [item["source_pr_number"] for item in body["releases"]] == [1207, 1206]
+    assert [item["title"] for item in body["releases"]] == ["Release 1207", "Release 1206"]
+    assert all("source_pr_number" not in item for item in body["releases"])
+    assert all("source_merge_sha" not in item for item in body["releases"])
+    assert all("provenance_json" not in item for item in body["releases"])
 
     second_page = await auth_client.get(
         "/api/v1/releases/",
         params={"limit": 2, "offset": 2},
     )
     assert second_page.status_code == 200
-    assert [item["source_pr_number"] for item in second_page.json()["releases"]] == [1205]
+    assert [item["title"] for item in second_page.json()["releases"]] == ["Release 1205"]
 
 
 def _release_payload(*, pr_number: int, merge_sha: str) -> dict[str, object]:

@@ -19,19 +19,12 @@ const api = vi.mocked(releasesApi)
 function release(overrides: Partial<Release> = {}): Release {
   return {
     id: 1,
-    source_repository: 'JoshCLWren/comic-pile',
-    source_pr_number: null,
-    source_merge_sha: null,
-    merged_at: null,
     released_at: '2026-08-11T20:00:00Z',
     category: 'Queue',
     title: 'Queue cards open details',
     summary: 'Selecting a Queue card now opens its thread details reliably.',
     body: null,
-    visibility: 'public',
-    status: 'published',
     sort_order: 0,
-    provenance_json: {},
     created_at: '2026-08-11T20:00:00Z',
     updated_at: '2026-08-11T20:00:00Z',
     ...overrides,
@@ -69,9 +62,9 @@ describe('release ordering helpers', () => {
 
   it('groups historical and PR-backed releases by localized release day', () => {
     const days = groupReleasesByDay([
-      release({ id: 3, source_pr_number: 1096, released_at: '2026-08-11T20:00:00Z' }),
-      release({ id: 2, source_pr_number: null, released_at: '2026-08-11T10:00:00Z' }),
-      release({ id: 1, source_pr_number: null, released_at: '2026-08-10T20:00:00Z' }),
+      release({ id: 3, released_at: '2026-08-11T20:00:00Z' }),
+      release({ id: 2, released_at: '2026-08-11T10:00:00Z' }),
+      release({ id: 1, released_at: '2026-08-10T20:00:00Z' }),
     ], 'UTC')
 
     expect(days).toHaveLength(2)
@@ -105,7 +98,7 @@ describe('WhatsNewPage', () => {
 
   it('renders structured public fields without exposing PR or provenance metadata', async () => {
     api.list.mockResolvedValue({
-      releases: [release({ source_pr_number: 1096, provenance_json: { importer: 'release-import-v1' } })],
+      releases: [release({ id: 10 })],
       total: 1,
       limit: RELEASE_PAGE_SIZE,
       offset: 0,

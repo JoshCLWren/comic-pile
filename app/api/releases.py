@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.schemas.release import (
+    PublicReleaseResponse,
     ReleaseListResponse,
     ReleaseResponse,
     ReleaseSourceResponse,
@@ -125,13 +126,13 @@ async def list_releases(
 
 @router.get(
     "/{release_id}",
-    response_model=ReleaseResponse,
+    response_model=PublicReleaseResponse,
     description="Fetch one public published release.",
 )
 async def get_release(
     release_id: int,
     db: AsyncSession = Depends(get_db),
-) -> ReleaseResponse:
+) -> PublicReleaseResponse:
     """Fetch one public published release.
 
     Args:
@@ -147,7 +148,7 @@ async def get_release(
     release = await get_published_release(db, release_id)
     if release is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Release not found")
-    return ReleaseResponse.model_validate(release)
+    return PublicReleaseResponse.model_validate(release)
 
 
 @router.put(

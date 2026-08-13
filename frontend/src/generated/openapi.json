@@ -2175,6 +2175,70 @@
         "title": "PositionRequest",
         "type": "object"
       },
+      "PublicReleaseResponse": {
+        "description": "One release ledger record returned by public-facing endpoints.",
+        "properties": {
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "released_at": {
+            "format": "date-time",
+            "title": "Released At",
+            "type": "string"
+          },
+          "sort_order": {
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "released_at",
+          "category",
+          "title",
+          "summary",
+          "body",
+          "sort_order",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "PublicReleaseResponse",
+        "type": "object"
+      },
       "QueueThreadListItem": {
         "description": "Schema for a single thread in the list/queue view.\n\nA deliberate subset of ThreadResponse. The list view does not need\ndetail-only fields like last_rating, is_test, or reading_progress,\nwhich reduces payload size for large lists.",
         "properties": {
@@ -2477,7 +2541,7 @@
           },
           "releases": {
             "items": {
-              "$ref": "#/components/schemas/ReleaseResponse"
+              "$ref": "#/components/schemas/PublicReleaseResponse"
             },
             "title": "Releases",
             "type": "array"
@@ -2497,7 +2561,7 @@
         "type": "object"
       },
       "ReleaseResponse": {
-        "description": "One release ledger record returned by the API.",
+        "description": "One complete release ledger record returned to trusted automation.",
         "properties": {
           "body": {
             "anyOf": [
@@ -8512,7 +8576,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReleaseResponse"
+                  "$ref": "#/components/schemas/PublicReleaseResponse"
                 }
               }
             },

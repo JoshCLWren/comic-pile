@@ -4383,6 +4383,39 @@ export interface components {
             new_position: number;
         };
         /**
+         * PublicReleaseResponse
+         * @description One release ledger record returned by public-facing endpoints.
+         */
+        PublicReleaseResponse: {
+            /** Body */
+            body: string | null;
+            /** Category */
+            category: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /**
+             * Released At
+             * Format: date-time
+             */
+            released_at: string;
+            /** Sort Order */
+            sort_order: number;
+            /** Summary */
+            summary: string;
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
          * QueueThreadListItem
          * @description Schema for a single thread in the list/queue view.
          *
@@ -4523,13 +4556,13 @@ export interface components {
             /** Offset */
             offset: number;
             /** Releases */
-            releases: components["schemas"]["ReleaseResponse"][];
+            releases: components["schemas"]["PublicReleaseResponse"][];
             /** Total */
             total: number;
         };
         /**
          * ReleaseResponse
-         * @description One release ledger record returned by the API.
+         * @description One complete release ledger record returned to trusted automation.
          */
         ReleaseResponse: {
             /** Body */
@@ -7886,7 +7919,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReleaseResponse"];
+                    "application/json": components["schemas"]["PublicReleaseResponse"];
                 };
             };
             /** @description Validation Error */
