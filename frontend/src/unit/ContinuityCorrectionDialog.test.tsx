@@ -1,7 +1,9 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import ContinuityCorrectionDialog from '../components/ContinuityCorrectionDialog'
+import ContinuityCorrectionDialog, {
+  type ContinuityCorrectionDialogProps,
+} from '../components/ContinuityCorrectionDialog'
 import { dependencyGroupsApi } from '../services/api-dependency-groups'
 import { threadsApi } from '../services/api'
 import type { ConnectedThreadInfo } from '../types'
@@ -41,7 +43,7 @@ const connectedThread = (overrides: Partial<ConnectedThreadInfo>): ConnectedThre
   ...overrides,
 })
 
-const baseProps = {
+const baseProps: ContinuityCorrectionDialogProps = {
   isOpen: true,
   threadId: 1,
   issueId: 42,
@@ -52,7 +54,7 @@ const baseProps = {
   onSuccess: vi.fn(),
 }
 
-const renderDialog = (props: Partial<typeof baseProps> = {}) => {
+const renderDialog = (props: Partial<ContinuityCorrectionDialogProps> = {}) => {
   const merged = { ...baseProps, ...props, onClose: props.onClose ?? vi.fn(), onSuccess: props.onSuccess ?? vi.fn() }
   const user = userEvent.setup()
   render(<ContinuityCorrectionDialog {...merged} />)
