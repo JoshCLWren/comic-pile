@@ -57,9 +57,13 @@ jobs:
           curl -fsSL https://opencode.ai/install | bash
           echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
 
-      - name: Install OmniRoute and model discovery
+      - name: Install and repair OmniRoute
+        shell: bash
         run: |
+          set -Eeuo pipefail
           npm install --global omniroute@3.8.49 free-coding-models@0.5.69
+          global_root="$(npm root --global)"
+          node "$global_root/omniroute/scripts/build/postinstall.mjs"
           bash .github/scripts/patch-omniroute-setup.sh
 
       - name: Verify OmniRoute version
@@ -115,9 +119,12 @@ jobs:
           for _ in {1..120}; do
             code="$(curl --silent --output /tmp/omniroute-health.json --write-out '%{http_code}' \
               --connect-timeout 1 --max-time 3 http://localhost:20128/api/monitoring/health || true)"
-            if [[ "$code" =~ ^[1-5][0-9][0-9]$ ]]; then
-              echo "OmniRoute listener ready with health HTTP ${code}"
+            if [[ "$code" == '200' ]]; then
+              echo 'OmniRoute health endpoint is ready'
               exit 0
+            fi
+            if [[ "$code" =~ ^[1-5][0-9][0-9]$ ]]; then
+              echo "OmniRoute listener is up but health is HTTP ${code}; continuing startup probe"
             fi
             sleep 1
           done
