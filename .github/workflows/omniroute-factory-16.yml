@@ -30,7 +30,6 @@ env:
   OMNIROUTE_IMAGE: 'diegosouzapw/omniroute:3.8.49@sha256:92c768c56e2de32c51a0621ef182835018b00b288c9bb235c5c5e4514658c1a1'
   OMNIROUTE_PROVIDER: 'opencode'
   OMNIROUTE_CANDIDATES: |-
-    oc/north-mini-code-free
     oc/nemotron-3-ultra-free
     oc/mimo-v2.5-free
     oc/hy3-free
@@ -197,7 +196,7 @@ jobs:
           printf '%s' "$key" > "$RUNNER_TEMP/omniroute-gateway-key"
           chmod 600 "$RUNNER_TEMP/omniroute-gateway-key"
 
-      - name: Round-robin free models until one works
+      - name: Round-robin free models through OmniRoute and OpenCode
         id: free_model
         shell: bash
         run: |
@@ -221,7 +220,7 @@ jobs:
 
             echo "Probing ${candidate} through OmniRoute"
             request="$(jq -nc --arg model "$candidate" \
-              '{model:$model,messages:[{role:"user",content:"Reply with exactly: OMNIROUTE_FACTORY_OK"}],max_tokens:64}')"
+              '{model:$model,messages:[{role:"user",content:"Give a short assistant response confirming this route is alive."}],max_tokens:96}')"
             code="$(curl --silent --show-error \
               --connect-timeout 5 --max-time 120 \
               --output "$RUNNER_TEMP/omniroute-probe.json" \
@@ -230,59 +229,68 @@ jobs:
               --header 'Content-Type: application/json' \
               --data "$request" \
               http://127.0.0.1:20128/v1/chat/completions || true)"
-            if [[ "$code" =~ ^2 ]] && jq -e \
-              '.choices[0].message.content | strings | contains("OMNIROUTE_FACTORY_OK")' \
-              "$RUNNER_TEMP/omniroute-probe.json" >/dev/null 2>&1; then
+            if [[ ! "$code" =~ ^2 ]]; then
+              error_preview="$(jq -r '.error.message // .message // empty' "$RUNNER_TEMP/omniroute-probe.json" 2>/dev/null | head -c 240 || true)"
+              echo "Rejected ${candidate}: HTTP ${code}${error_preview:+ - ${error_preview}}"
+              continue
+            fi
+
+            selected_upstream="$(jq -r '.model // empty' "$RUNNER_TEMP/omniroute-probe.json")"
+            echo "Direct OmniRoute response succeeded for ${candidate}; upstream reported model=${selected_upstream:-not-reported}"
+
+            mkdir -p "$HOME/.config/opencode"
+            jq -n --arg model "$candidate" --arg key "$gateway_key" '{
+              provider: {
+                omniroute: {
+                  npm: "@ai-sdk/openai-compatible",
+                  name: "OmniRoute",
+                  options: {
+                    baseURL: "http://127.0.0.1:20128/v1",
+                    apiKey: $key
+                  },
+                  models: {($model): {name: $model}}
+                }
+              }
+            }' > "$HOME/.config/opencode/opencode.json"
+            chmod 600 "$HOME/.config/opencode/opencode.json"
+            echo "Testing actual Factory 16 worker with omniroute/${candidate}"
+
+            set +e
+            OMNIROUTE_MODEL="$candidate" bash .github/scripts/omniroute-factory-worker.sh --smoke
+            smoke_status=$?
+            set -e
+            if (( smoke_status == 0 )); then
               selected="$candidate"
-              selected_upstream="$(jq -r '.model // empty' "$RUNNER_TEMP/omniroute-probe.json")"
               break
             fi
-            error_preview="$(jq -r '.error.message // .message // empty' "$RUNNER_TEMP/omniroute-probe.json" 2>/dev/null | head -c 240 || true)"
-            echo "Rejected ${candidate}: HTTP ${code}${error_preview:+ - ${error_preview}}"
+
+            echo "Rejected ${candidate}: OpenCode/worker smoke exited ${smoke_status}"
+            if [[ -n "$(git status --porcelain)" ]]; then
+              echo "Candidate ${candidate} modified the ComicPile worktree during smoke; refusing to continue." >&2
+              exit 1
+            fi
           done <<< "$OMNIROUTE_CANDIDATES"
 
           if [[ -z "$selected" ]]; then
-            echo 'No configured free candidate produced a valid assistant response.' >&2
+            echo 'No configured free candidate passed both direct OmniRoute and actual OpenCode worker smoke.' >&2
             echo 'Available OpenCode free models exposed by OmniRoute:' >&2
             jq -r '.data[]?.id' "$RUNNER_TEMP/omniroute-models.json" | grep '^oc/' >&2 || true
             exit 1
           fi
 
           echo "Factory 16 selected working model: ${selected}"
-          echo "Direct OmniRoute completion succeeded; upstream reported model=${selected_upstream:-not-reported}"
+          echo "Factory 16 exact route proof: OmniRoute provider=${OMNIROUTE_PROVIDER} model=${selected}"
           echo "OMNIROUTE_MODEL=${selected}" >> "$GITHUB_ENV"
           echo "model=${selected}" >> "$GITHUB_OUTPUT"
           printf '%s' "$selected" > "$RUNNER_TEMP/omniroute-selected-model"
 
-      - name: Configure OpenCode through selected OmniRoute route
+      - name: Confirm selected model is locked for worker session
         shell: bash
         run: |
           set -Eeuo pipefail
-          gateway_key="$(cat "$RUNNER_TEMP/omniroute-gateway-key")"
-          [[ -n "${OMNIROUTE_MODEL:-}" ]] || { echo 'No selected OmniRoute model' >&2; exit 1; }
-          mkdir -p "$HOME/.config/opencode"
-          jq -n --arg model "$OMNIROUTE_MODEL" --arg key "$gateway_key" '{
-            provider: {
-              omniroute: {
-                npm: "@ai-sdk/openai-compatible",
-                name: "OmniRoute",
-                options: {
-                  baseURL: "http://127.0.0.1:20128/v1",
-                  apiKey: $key
-                },
-                models: {($model): {name: $model}}
-              }
-            }
-          }' > "$HOME/.config/opencode/opencode.json"
-          chmod 600 "$HOME/.config/opencode/opencode.json"
-          echo "OpenCode configured for omniroute/${OMNIROUTE_MODEL} via localhost:20128/v1"
-
-      - name: Prove actual Factory 16 worker traverses OmniRoute
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          echo "Factory 16 exact model proof: provider=${OMNIROUTE_PROVIDER} model=${OMNIROUTE_MODEL}"
-          bash .github/scripts/omniroute-factory-worker.sh --smoke
+          selected="$(cat "$RUNNER_TEMP/omniroute-selected-model")"
+          [[ "$selected" == "$OMNIROUTE_MODEL" ]]
+          echo "Factory 16 locked model for this session: ${OMNIROUTE_MODEL} via ${OMNIROUTE_PROVIDER}"
 
       - name: Report running heartbeat
         if: github.event_name != 'pull_request'
