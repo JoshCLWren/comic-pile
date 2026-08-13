@@ -5,12 +5,12 @@ WORKER="${1:?worker number required}"
 MODEL="${2:?model required}"
 OWNER="factory:${WORKER}"
 WORKER_ID="opencode-nvidia-factory-${WORKER}"
-BUDGET_SECONDS="${FACTORY_BUDGET_SECONDS:-3000}"
+BUDGET_SECONDS="${FACTORY_BUDGET_SECONDS:-6000}"
 MAX_AGENT_ATTEMPTS="${NVIDIA_AGENT_MAX_ATTEMPTS:-2}"
 TRANSIENT_BACKOFF_SECONDS="${NVIDIA_TRANSIENT_BACKOFF_SECONDS:-20}"
 STARTED="$(date +%s)"
 DEADLINE=$((STARTED + BUDGET_SECONDS))
-OWNER_RE='^factory:(unowned|local|([1-9]|10))$'
+OWNER_RE='^factory:(unowned|local|([1-9]|1[0-5]))$'
 STAGE_RE='^factory:(building|review|changes-requested|ci|ready|blocked)$'
 SKIP_PRS=()
 COOLED_MODELS=()
@@ -40,7 +40,7 @@ replace_labels() {
 
 ensure_fleet_labels() {
   local worker label
-  for worker in 6 7 8 9 10; do
+  for worker in {6..15}; do
     label="factory:${worker}"
     if ! gh api "repos/${GITHUB_REPOSITORY}/labels/factory%3A${worker}" >/dev/null 2>&1; then
       gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" \
@@ -92,14 +92,9 @@ claim_unowned_pr() {
 
   replace_labels "$number" "$OWNER" 'factory:review'
 
-  # Verify we still own it after the write. Staggering makes races unlikely, but
-  # this prevents two workers from proceeding if another worker won a late race.
   labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
   jq -e --arg owner "$OWNER" 'index($owner) != null' >/dev/null <<< "$labels" || return 1
 
-  # Branch identity cannot encode the adopting worker for an existing PR. Leave a
-  # durable marker so the post-review reconciler can restore ownership if another
-  # workflow rewrites factory labels.
   gh issue comment "$number" --body "<!-- nvidia-factory-owner:${WORKER} -->\nFactory ${WORKER} adopted this previously unowned PR for the next actionable step." >/dev/null
   return 0
 }
@@ -153,6 +148,7 @@ probe_nvidia_model() {
   request="$(jq -nc --arg model "$provider_model" '{model:$model,messages:[{role:"user",content:"Reply with exactly: FCM_NVIDIA_MODEL_OK"}],max_tokens:32}')"
   response="$(mktemp)"
   http_code="$(curl --silent --show-error --output "$response" --write-out '%{http_code}' \
+    --connect-timeout 5 --max-time 20 \
     --header "Authorization: Bearer $NVIDIA_API_KEY" \
     --header 'Content-Type: application/json' \
     --data "$request" https://integrate.api.nvidia.com/v1/chat/completions || true)"
@@ -199,7 +195,7 @@ run_agent() {
     mission="Implement the full closure-critical acceptance contract for this issue with code and focused tests. Do not stop at planning or optional polish."
   fi
   prompt="You are OpenCode NVIDIA Factory ${WORKER} for JoshCLWren/comic-pile. Durable worker ID: ${WORKER_ID}. Model: ${MODEL}. Assigned target: ${target}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, docs/CHATGPT_FACTORY_PROMPT.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Josh directly requires product-first V22 behavior: user-reported product bugs outrank unrelated CI/E2E/test plumbing, and a run is a work session rather than a one-ticket punch. ${mission} Work only on the assigned target during this agent invocation. Edit the checked-out branch, run focused validation, and use gh/GitHub when needed for review context. Do not commit or push; the wrapper persists changes. Do not enable auto-merge, push main, touch production databases, or alter automation schedules."
-  timeout --signal=TERM --kill-after=30s "${timeout_seconds}s" opencode run -m "$MODEL" --agent build --auto --dir "$GITHUB_WORKSPACE" --title "ComicPile NVIDIA Factory ${WORKER}" "$prompt" | tee "/tmp/opencode-factory-${WORKER}.log"
+  timeout --signal=TERM --kill-after=30s "${timeout_seconds}s" opencode run -m "$MODEL" --agent build --auto --dir "$GITHUB_WORKSPACE" --title "ComicPile NVIDIA Factory ${WORKER}" "$prompt" 2>&1 | tee "/tmp/opencode-factory-${WORKER}.log"
   status=${PIPESTATUS[0]}
   return "$status"
 }
@@ -230,8 +226,8 @@ persist_pr_changes() {
   return 0
 }
 
-# Bootstrap all five durable owner labels immediately. Visibility should not wait
-# for four separate future schedule slots to happen to execute successfully.
+# Bootstrap all ten durable owner labels immediately. Visibility should not wait
+# for future schedule slots to happen to execute successfully.
 ensure_fleet_labels
 log "starting with model ${MODEL}; budget ${BUDGET_SECONDS}s"
 
@@ -249,9 +245,6 @@ while (( $(remaining) > 480 )); do
     break
   done < <(choose_existing_pr)
 
-  # Existing unowned PRs are executable work too. Adopt them before opening fresh
-  # issue branches so the fleet drains stranded review/CI work instead of piling
-  # new PRs on top of it.
   if [[ -z "$NUMBER" ]]; then
     while IFS= read -r candidate; do
       [[ -n "$candidate" ]] || continue
@@ -290,7 +283,7 @@ while (( $(remaining) > 480 )); do
   before="$(git rev-parse HEAD)"
   available="$(remaining)"
   agent_timeout=$((available - 240))
-  (( agent_timeout > 1500 )) && agent_timeout=1500
+  (( agent_timeout > 3000 )) && agent_timeout=3000
   (( agent_timeout < 300 )) && break
 
   agent_attempt=1
@@ -315,9 +308,6 @@ while (( $(remaining) > 480 )); do
     transient_failure=1
     log "transient NVIDIA/OpenCode interruption on ${MODEL}; preserving this target instead of failing the heartbeat"
 
-    # A timeout after useful edits is productive partial work. Let the normal
-    # persistence path checkpoint it rather than throwing the work away or
-    # handing a half-edited tree to another model.
     if [[ -n "$(git status --porcelain)" ]]; then
       log 'transient interruption left edits in the worktree; checkpointing them before selecting more work'
       break
@@ -340,7 +330,7 @@ while (( $(remaining) > 480 )); do
     agent_attempt=$((agent_attempt + 1))
     available="$(remaining)"
     agent_timeout=$((available - 240))
-    (( agent_timeout > 1500 )) && agent_timeout=1500
+    (( agent_timeout > 3000 )) && agent_timeout=3000
     (( agent_timeout >= 300 )) || break
   done
 
