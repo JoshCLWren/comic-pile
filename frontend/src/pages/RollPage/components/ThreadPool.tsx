@@ -147,8 +147,8 @@ export function ThreadPool({
                   {index + 1}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className="truncate text-xs text-stone-400">{thread.title}</p>
-                  <p className="font-bold text-stone-200 truncate text-sm">
+                  <p className="font-bold text-stone-200 truncate text-sm">{thread.title}</p>
+                  <p className="truncate text-xs text-stone-400">
                     {thread.issue_number ? `Issue ${thread.issue_number}` : 'Next unread issue'}
                   </p>
                   <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mt-0.5">{thread.format}</p>
