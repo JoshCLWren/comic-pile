@@ -126,6 +126,10 @@ class TestReleaseWriterValidation:
         stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
         assert "source_pr_number must be a positive integer" in stderr
 
+        payload["source_pr_number"] = True
+        stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
+        assert "source_pr_number must be a positive integer" in stderr
+
     def test_publish_validates_source_merge_sha(self) -> None:
         """source_merge_sha must be 7-64 characters.
 
@@ -305,7 +309,9 @@ class TestReleaseWriterCheck:
         """
         with patch.object(release_writer, "_request") as mock_request:
             mock_request.return_value = {"exists": False, "release": None}
-            stderr = _capture_stderr(release_writer._check, "repo", "not-a-number", "abcdef1234567890")
+            stderr = _capture_stderr(
+                release_writer._check, "repo", "not-a-number", "abcdef1234567890"
+            )
             assert "PR number must be an integer" in stderr
 
     def test_check_calls_api(self) -> None:
@@ -466,7 +472,12 @@ class TestReleaseWriterRequest:
 
             with patch.object(release_writer, "_api_base", return_value="http://test/api"):
                 with patch.object(release_writer, "_token", return_value="secret-token"):
-                    stderr = _capture_stderr(release_writer._request, "PUT", "http://test/api/", {"test": "data"})
+                    stderr = _capture_stderr(
+                        release_writer._request,
+                        "PUT",
+                        "http://test/api/",
+                        {"test": "data"},
+                    )
             assert "release API returned HTTP 409" in stderr
 
     def test_request_handles_url_error(self) -> None:
@@ -486,7 +497,12 @@ class TestReleaseWriterRequest:
 
             with patch.object(release_writer, "_api_base", return_value="http://test/api"):
                 with patch.object(release_writer, "_token", return_value="secret-token"):
-                    stderr = _capture_stderr(release_writer._request, "PUT", "http://test/api/", {"test": "data"})
+                    stderr = _capture_stderr(
+                        release_writer._request,
+                        "PUT",
+                        "http://test/api/",
+                        {"test": "data"},
+                    )
             assert "release API request failed: Connection refused" in stderr
 
 
@@ -502,7 +518,11 @@ class TestReleaseWriterEnvironment:
         Returns:
             None.
         """
-        with patch.dict(os.environ, {"RELEASE_API_URL": "", "RELEASE_WRITER_TOKEN": "token"}, clear=True):
+        with patch.dict(
+            os.environ,
+            {"RELEASE_API_URL": "", "RELEASE_WRITER_TOKEN": "token"},
+            clear=True,
+        ):
             stderr = _capture_stderr(release_writer._api_base)
             assert "RELEASE_API_URL is required" in stderr
 
@@ -515,7 +535,11 @@ class TestReleaseWriterEnvironment:
         Returns:
             None.
         """
-        with patch.dict(os.environ, {"RELEASE_API_URL": "http://test/api", "RELEASE_WRITER_TOKEN": ""}, clear=True):
+        with patch.dict(
+            os.environ,
+            {"RELEASE_API_URL": "http://test/api", "RELEASE_WRITER_TOKEN": ""},
+            clear=True,
+        ):
             stderr = _capture_stderr(release_writer._token)
             assert "RELEASE_WRITER_TOKEN is required" in stderr
 
