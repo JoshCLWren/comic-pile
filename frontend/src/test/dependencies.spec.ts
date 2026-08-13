@@ -61,11 +61,14 @@ test.describe('Dependencies', () => {
     await clickThreadAction(targetCard, 'Manage dependencies')
 
     await authenticatedPage.fill('input#search-prereq-thread', 'Source')
-      await selectDependencySearchResult(authenticatedPage, 'Source Thread')
+    await selectDependencySearchResult(authenticatedPage, 'Source Thread')
 
     // Wait for issue dropdowns to load then click the issue-level block button
     await authenticatedPage.waitForSelector('#source-issue', { state: 'visible', timeout: 10000 })
-    await authenticatedPage.locator('#comic-pile-overlay-root-dialog').getByRole('button', { name: 'Block issue', exact: true }).click()
+    await authenticatedPage
+        .locator('#comic-pile-overlay-root-dialog')
+        .getByRole('button', { name: 'Block issue', exact: true })
+        .click()
 
     await authenticatedPage.waitForResponse(
       (response) => response.url().includes('/api/v1/dependencies/') && response.request().method() === 'POST' && response.status() < 300
@@ -302,7 +305,10 @@ test.describe('Dependencies', () => {
       await authenticatedPage.selectOption('#source-issue', { index: 2 })
       await authenticatedPage.selectOption('#target-issue', { index: 2 })
 
-      await authenticatedPage.locator('#comic-pile-overlay-root-dialog').getByRole('button', { name: 'Block issue', exact: true }).click()
+      await authenticatedPage
+        .locator('#comic-pile-overlay-root-dialog')
+        .getByRole('button', { name: 'Block issue', exact: true })
+        .click()
 
       await authenticatedPage.waitForResponse(
         (response) => response.url().includes('/api/v1/dependencies/') && response.request().method() === 'POST' && response.status() < 300
