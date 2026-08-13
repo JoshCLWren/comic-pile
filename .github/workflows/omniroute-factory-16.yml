@@ -87,9 +87,10 @@ jobs:
           JWT_SECRET="$(openssl rand -base64 48 | tr -d '\n')"
           API_KEY_SECRET="$(openssl rand -hex 32)"
           STORAGE_ENCRYPTION_KEY="$(openssl rand -hex 32)"
+          INITIAL_PASSWORD=''
           OMNIROUTE_NO_UPDATE_NOTIFIER=1
           OMNIROUTE_API_KEY="$NVIDIA_API_KEY"
-          export DATA_DIR JWT_SECRET API_KEY_SECRET STORAGE_ENCRYPTION_KEY OMNIROUTE_NO_UPDATE_NOTIFIER OMNIROUTE_API_KEY
+          export DATA_DIR JWT_SECRET API_KEY_SECRET STORAGE_ENCRYPTION_KEY INITIAL_PASSWORD OMNIROUTE_NO_UPDATE_NOTIFIER OMNIROUTE_API_KEY
           mkdir -p "$DATA_DIR"
           env_file="$RUNNER_TEMP/omniroute-env"
           {
@@ -97,6 +98,7 @@ jobs:
             printf 'export JWT_SECRET=%q\n' "$JWT_SECRET"
             printf 'export API_KEY_SECRET=%q\n' "$API_KEY_SECRET"
             printf 'export STORAGE_ENCRYPTION_KEY=%q\n' "$STORAGE_ENCRYPTION_KEY"
+            printf "export INITIAL_PASSWORD=''\n"
             printf 'export OMNIROUTE_NO_UPDATE_NOTIFIER=1\n'
           } > "$env_file"
           chmod 600 "$env_file"
@@ -110,13 +112,18 @@ jobs:
           source "$RUNNER_TEMP/omniroute-env"
           mkdir -p "$HOME/.cache"
           nohup omniroute serve --no-open --no-recovery --port 20128 >"$RUNNER_TEMP/omniroute.log" 2>&1 &
-          for _ in {1..90}; do
-            if curl -fsS http://127.0.0.1:20128/ >/dev/null 2>&1; then
+          for _ in {1..120}; do
+            code="$(curl --silent --output /tmp/omniroute-health.json --write-out '%{http_code}' \
+              --connect-timeout 1 --max-time 3 http://localhost:20128/api/monitoring/health || true)"
+            if [[ "$code" =~ ^[1-5][0-9][0-9]$ ]]; then
+              echo "OmniRoute listener ready with health HTTP ${code}"
               exit 0
             fi
             sleep 1
           done
           cat "$RUNNER_TEMP/omniroute.log" >&2 || true
+          echo 'Last health response:' >&2
+          cat /tmp/omniroute-health.json >&2 2>/dev/null || true
           exit 1
 
       - name: Create ephemeral OmniRoute gateway key
@@ -127,7 +134,7 @@ jobs:
           response="$(curl --silent --show-error --fail-with-body --connect-timeout 5 --max-time 30 \
             --header 'Content-Type: application/json' \
             --data '{"name":"Factory 16 Runtime","noLog":true}' \
-            http://127.0.0.1:20128/api/keys)"
+            http://localhost:20128/api/keys)"
           key="$(jq -r '.key // empty' <<< "$response")"
           [[ "$key" == sk-* ]] || { echo "$response" >&2; exit 1; }
           echo "::add-mask::$key"
@@ -143,14 +150,14 @@ jobs:
           set -Eeuo pipefail
           curl --silent --show-error --fail-with-body --connect-timeout 5 --max-time 30 \
             --header "Authorization: Bearer $OMNIROUTE_GATEWAY_KEY" \
-            http://127.0.0.1:20128/v1/models > /tmp/omniroute-models.json
+            http://localhost:20128/v1/models > /tmp/omniroute-models.json
           model="$(jq -r --arg needle "$PROVIDER_MODEL" '[.data[]?.id | select(contains($needle))][0] // empty' /tmp/omniroute-models.json)"
           [[ -n "$model" ]] || model="nvidia/$PROVIDER_MODEL"
           request="$(jq -nc --arg model "$model" '{model:$model,messages:[{role:"user",content:"Reply with exactly: OMNIROUTE_FACTORY_OK"}],max_tokens:32}')"
           response="$(curl --silent --show-error --fail-with-body --connect-timeout 5 --max-time 60 \
             --header "Authorization: Bearer $OMNIROUTE_GATEWAY_KEY" \
             --header 'Content-Type: application/json' --data "$request" \
-            http://127.0.0.1:20128/v1/chat/completions)"
+            http://localhost:20128/v1/chat/completions)"
           jq -e '.choices[0].message.content | strings | contains("OMNIROUTE_FACTORY_OK")' >/dev/null <<< "$response"
           echo "model=$model" >> "$GITHUB_OUTPUT"
 
@@ -167,7 +174,7 @@ jobs:
               omniroute: {
                 npm: "@ai-sdk/openai-compatible",
                 name: "OmniRoute",
-                options: {baseURL: "http://127.0.0.1:20128/v1", apiKey: $key},
+                options: {baseURL: "http://localhost:20128/v1", apiKey: $key},
                 models: {($model): {name: $model}}
               }
             }
