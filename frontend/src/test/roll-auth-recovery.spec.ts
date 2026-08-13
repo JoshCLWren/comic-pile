@@ -16,7 +16,7 @@ async function openPendingThread(page: import('@playwright/test').Page): Promise
 
 async function injectExpiredMutationOnce(
   page: import('@playwright/test').Page,
-  endpoint: '/api/v1/rate/' | '/api/snooze/',
+  endpoint: '/api/v1/rate/' | '/api/v1/snooze/',
 ): Promise<() => { attempts: number; committedAttempts: number }> {
   let attempts = 0;
   let committedAttempts = 0;
@@ -65,7 +65,7 @@ test.describe('Roll mutation authentication recovery', () => {
     authenticatedWithThreadsPage,
   }) => {
     await openPendingThread(authenticatedWithThreadsPage);
-    const getCounts = await injectExpiredMutationOnce(authenticatedWithThreadsPage, '/api/snooze/');
+    const getCounts = await injectExpiredMutationOnce(authenticatedWithThreadsPage, '/api/v1/snooze/');
 
     await authenticatedWithThreadsPage.click(SELECTORS.rate.snoozeButton);
 
