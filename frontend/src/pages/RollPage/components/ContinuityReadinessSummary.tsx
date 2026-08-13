@@ -62,24 +62,7 @@ export function ContinuityReadinessSummary({ issueId }: ContinuityReadinessSumma
     )
   }
 
-  if (readiness.is_readable) {
-    return (
-      <section
-        aria-labelledby="readiness-heading"
-        className="rounded-2xl border border-emerald-700/30 bg-emerald-950/20 p-3"
-      >
-        <div className="flex items-center gap-2">
-          <span aria-hidden="true" className="text-emerald-400">✓</span>
-          <h3 id="readiness-heading" className="text-xs font-black text-emerald-300">
-            Ready to read
-          </h3>
-        </div>
-        <p className="mt-1 text-[11px] leading-relaxed text-stone-400">
-          All known direct continuity prerequisites for this exact issue are satisfied.
-        </p>
-      </section>
-    )
-  }
+  if (readiness.is_readable) return null
 
   return (
     <section
