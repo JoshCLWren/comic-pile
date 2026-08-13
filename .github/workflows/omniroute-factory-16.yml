@@ -6,6 +6,8 @@ on:
       - '.github/workflows/omniroute-factory-16.yml'
       - '.github/workflows/omniroute-smoke.yml'
       - '.github/scripts/omniroute-factory-worker.sh'
+  schedule:
+    - cron: '34 * * * *'
   workflow_dispatch:
 
 concurrency:
@@ -24,21 +26,30 @@ env:
   FACTORY_CALL_SIGN: 'Multiple Man'
 
 jobs:
-  gateway-smoke:
+  gateway-and-factory:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 116
     env:
+      GH_TOKEN: ${{ github.token }}
       NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+      FACTORY_BUDGET_SECONDS: '6000'
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          persist-credentials: true
 
       - name: Use supported Node
         uses: actions/setup-node@v6
         with:
           node-version: '24'
+
+      - name: Configure git identity
+        if: github.event_name != 'pull_request'
+        run: |
+          git config user.name 'opencode-omniroute-factory-16[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
       - name: Install OpenCode
         run: |
@@ -145,6 +156,55 @@ jobs:
             'Reply with exactly OMNIROUTE_OPENCODE_OK. Do not edit files.' 2>&1 | tee /tmp/omniroute-opencode-smoke.log
           grep -q 'OMNIROUTE_OPENCODE_OK' /tmp/omniroute-opencode-smoke.log
           test -z "$(git status --porcelain)"
+
+      - name: Ensure isolated experiment lane label
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if ! gh api "repos/${GITHUB_REPOSITORY}/labels/omniroute-experiment" >/dev/null 2>&1; then
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" \
+              -f name='omniroute-experiment' -f color='6f42c1' \
+              -f description='Explicit opt-in work lane for OmniRoute Factory 16' >/dev/null
+          fi
+
+      - name: Report running heartbeat
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          marker='<!-- factory-heartbeat:v1 worker=opencode-omniroute-factory-16 -->'
+          now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          body="$(printf '%s\n## 🏭 Factory 16 · Multiple Man\nScheduled slot: `:34` America/Chicago\nLast run started: `%s`\nWorked on: isolated OmniRoute experiment lane\nOutcome: running\nUpdated by: `opencode-omniroute-factory-16`' "$marker" "$now")"
+          comment_id="$(gh api "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" | jq -r --arg marker "$marker" '[.[] | select(.body | contains($marker)) | .id] | last // empty')"
+          if [[ -n "$comment_id" ]]; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$body" >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" -f body="$body" >/dev/null
+          fi
+
+      - name: Run isolated OmniRoute factory session
+        if: github.event_name != 'pull_request'
+        env:
+          ROUTED_MODEL: ${{ steps.routed.outputs.model }}
+        run: bash .github/scripts/omniroute-factory-worker.sh "$ROUTED_MODEL"
+
+      - name: Report terminal heartbeat
+        if: always() && github.event_name != 'pull_request'
+        env:
+          OUTCOME: ${{ job.status }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          marker='<!-- factory-heartbeat:v1 worker=opencode-omniroute-factory-16 -->'
+          now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          body="$(printf '%s\n## 🏭 Factory 16 · Multiple Man\nScheduled slot: `:34` America/Chicago\nLast run completed: `%s`\nWorked on: isolated OmniRoute experiment lane\nOutcome: %s\nUpdated by: `opencode-omniroute-factory-16`' "$marker" "$now" "$OUTCOME")"
+          comment_id="$(gh api "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" | jq -r --arg marker "$marker" '[.[] | select(.body | contains($marker)) | .id] | last // empty')"
+          if [[ -n "$comment_id" ]]; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$body" >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" -f body="$body" >/dev/null
+          fi
 
       - name: Diagnostics
         if: failure()
