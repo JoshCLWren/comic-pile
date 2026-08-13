@@ -25,21 +25,21 @@ jobs:
           [[ -n "$pr" ]] || exit 0
           branch="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr}" --jq .head.ref)"
           worker=""
-          if [[ "$branch" =~ ^factory/([6-9]|10)- ]]; then
+          if [[ "$branch" =~ ^factory/([6-9]|1[0-5])- ]]; then
             worker="${BASH_REMATCH[1]}"
           else
             # Existing unowned PRs keep their original branch name when adopted.
             # The worker writes a durable marker comment so reconciliation can
             # restore ownership after the independent reviewer rewrites labels.
             worker="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${pr}/comments?per_page=100" \
-              --jq '[.[] | .body | capture("<!-- nvidia-factory-owner:(?<worker>([6-9]|10)) -->")?.worker] | map(select(. != null)) | last // empty' 2>/dev/null || true)"
+              --jq '[.[] | .body | capture("<!-- nvidia-factory-owner:(?<worker>([6-9]|1[0-5])) -->")?.worker] | map(select(. != null)) | last // empty' 2>/dev/null || true)"
           fi
-          [[ "$worker" =~ ^([6-9]|10)$ ]] || exit 0
+          [[ "$worker" =~ ^([6-9]|1[0-5])$ ]] || exit 0
 
           labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${pr}/labels?per_page=100" --jq '[.[].name]')"
           stage="$(jq -r '[.[] | select(test("^factory:(building|review|changes-requested|ci|ready|blocked)$"))] | first // "factory:review"' <<< "$labels")"
           target="$(jq -c --arg owner "factory:${worker}" --arg stage "$stage" '
-            map(select((test("^factory:(building|review|changes-requested|ci|ready|blocked)$")|not) and (test("^factory:(unowned|local|([1-9]|10))$")|not) and . != "factory"))
+            map(select((test("^factory:(building|review|changes-requested|ci|ready|blocked)$")|not) and (test("^factory:(unowned|local|([1-9]|1[0-5]))$")|not) and . != "factory"))
             + ["factory", $owner, $stage] | unique' <<< "$labels")"
           gh api --method PUT "repos/${GITHUB_REPOSITORY}/issues/${pr}/labels" --input - <<< "{\"labels\":${target}}" >/dev/null
           echo "Restored factory:${worker} on PR #${pr} with ${stage}"
