@@ -4529,7 +4529,7 @@ export interface components {
         };
         /**
          * ReleaseResponse
-         * @description One release ledger record returned by the API.
+         * @description One release ledger record returned by public-facing endpoints.
          */
         ReleaseResponse: {
             /** Body */
@@ -4543,12 +4543,6 @@ export interface components {
             created_at: string;
             /** Id */
             id: number;
-            /** Merged At */
-            merged_at: string | null;
-            /** Provenance Json */
-            provenance_json: {
-                [key: string]: unknown;
-            };
             /**
              * Released At
              * Format: date-time
@@ -4556,17 +4550,6 @@ export interface components {
             released_at: string;
             /** Sort Order */
             sort_order: number;
-            /** Source Merge Sha */
-            source_merge_sha: string | null;
-            /** Source Pr Number */
-            source_pr_number: number | null;
-            /** Source Repository */
-            source_repository: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "draft" | "published" | "retracted";
             /** Summary */
             summary: string;
             /** Title */
@@ -4576,11 +4559,6 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
-            /**
-             * Visibility
-             * @enum {string}
-             */
-            visibility: "public" | "internal";
         };
         /**
          * ReleaseSourceResponse
