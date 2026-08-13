@@ -45,6 +45,29 @@ class ReleaseUpsertRequest(BaseModel):
 
 
 class ReleaseResponse(BaseModel):
+    """One complete release ledger record returned to trusted automation."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    source_repository: str
+    source_pr_number: int | None
+    source_merge_sha: str | None
+    merged_at: datetime | None
+    released_at: datetime
+    category: str
+    title: str
+    summary: str
+    body: str | None
+    visibility: ReleaseVisibility
+    status: ReleaseStatus
+    sort_order: int
+    provenance_json: dict[str, object]
+    created_at: datetime
+    updated_at: datetime
+
+
+class PublicReleaseResponse(BaseModel):
     """One release ledger record returned by public-facing endpoints."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -63,7 +86,7 @@ class ReleaseResponse(BaseModel):
 class ReleaseListResponse(BaseModel):
     """Paginated published releases for What's New."""
 
-    releases: list[ReleaseResponse]
+    releases: list[PublicReleaseResponse]
     total: int
     limit: int
     offset: int
