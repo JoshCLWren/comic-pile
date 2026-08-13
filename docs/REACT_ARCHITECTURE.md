@@ -550,3 +550,5 @@ The axios interceptor in `services/api.ts` already handles 401 → token refresh
 - [React Router Documentation](https://reactrouter.com/)
 - [Comic Pile API Documentation](./API.md)
 - [AGENTS.md](../AGENTS.md) - Project guidelines and conventions
+- [Repository boundary decision](./REPO_BOUNDARY.md) - Why the frontend and API live in one repository
+- [Vercel deployment](./VERCEL_DEPLOYMENT.md) - Production deployment and the production-only `main` branch policy

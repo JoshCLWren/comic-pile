@@ -31,6 +31,10 @@ frame protection, content-type protection, referrer policy, and permissions poli
 revalidated so a new deployment is visible promptly. Vercel serves fingerprinted Vite assets from
 the static output boundary and can cache them independently.
 
+## Repository boundary
+
+Both the static frontend and the API function ship from the same `main` branch of one repository. The repository-boundary decision that justifies this single-repo, two-path deployment model is documented at [`docs/REPO_BOUNDARY.md`](REPO_BOUNDARY.md) and [`docs/architecture/repository-boundary-decision.md`](architecture/repository-boundary-decision.md).
+
 ## Local development
 
 Local development remains unchanged:

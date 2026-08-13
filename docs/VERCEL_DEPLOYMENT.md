@@ -22,4 +22,8 @@ After this change is merged:
 2. Merge a validated change to `main` and confirm that one Production deployment is created.
 3. Confirm the production alias still points to the successful `main` deployment.
 
-Do not add Preview credentials, Preview databases, Preview Redis instances, or Preview-specific runtime branches. Disposable service instances used by local development or GitHub Actions are separate from Vercel Preview and remain supported.
+Do not add Preview credentials, Preview databases, Preview Redis instances, or Preview-specific runtime branches. Disposable service instances used by local development or GitHub Actions are separate from Vercel Preview and remain supported. Vercel Preview environments are out of scope.
+
+## Repository boundary
+
+The repository-boundary decision that keeps the frontend and API in one source repository is documented at [`docs/REPO_BOUNDARY.md`](REPO_BOUNDARY.md) and [`docs/architecture/repository-boundary-decision.md`](architecture/repository-boundary-decision.md). The "production `main`-only, no Preview deployments" policy above is one half of that decision; the other half is the single-repository package boundary.

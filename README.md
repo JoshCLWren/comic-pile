@@ -30,7 +30,7 @@ Application database access is async PostgreSQL via `asyncpg` and SQLAlchemy `As
 
 ## Production
 
-Production deploys from `main` on Vercel. The frontend is static Vite output, API routes are served by FastAPI, and PostgreSQL is hosted by Neon. Vercel Preview environments are intentionally unsupported. Fly.io and Railway are not current deployment targets.
+Production deploys from `main` on Vercel. The frontend is static Vite output, API routes are served by FastAPI, and PostgreSQL is hosted by Neon. Vercel Preview environments are intentionally unsupported. Fly.io and Railway are not current deployment targets. The repository-boundary decision that keeps the frontend and API in one source repository is documented at [`docs/REPO_BOUNDARY.md`](docs/REPO_BOUNDARY.md) and [`docs/architecture/repository-boundary-decision.md`](docs/architecture/repository-boundary-decision.md).
 
 ## Repository map
 
