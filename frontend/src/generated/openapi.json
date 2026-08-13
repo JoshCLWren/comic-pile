@@ -2175,6 +2175,70 @@
         "title": "PositionRequest",
         "type": "object"
       },
+      "PublicReleaseResponse": {
+        "description": "One release ledger record returned by public-facing endpoints.",
+        "properties": {
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "released_at": {
+            "format": "date-time",
+            "title": "Released At",
+            "type": "string"
+          },
+          "sort_order": {
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "released_at",
+          "category",
+          "title",
+          "summary",
+          "body",
+          "sort_order",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "PublicReleaseResponse",
+        "type": "object"
+      },
       "QueueThreadListItem": {
         "description": "Schema for a single thread in the list/queue view.\n\nA deliberate subset of ThreadResponse. The list view does not need\ndetail-only fields like last_rating, is_test, or reading_progress,\nwhich reduces payload size for large lists.",
         "properties": {
@@ -2477,7 +2541,7 @@
           },
           "releases": {
             "items": {
-              "$ref": "#/components/schemas/ReleaseResponse"
+              "$ref": "#/components/schemas/PublicReleaseResponse"
             },
             "title": "Releases",
             "type": "array"
@@ -2497,7 +2561,7 @@
         "type": "object"
       },
       "ReleaseResponse": {
-        "description": "One release ledger record returned by public-facing endpoints.",
+        "description": "One complete release ledger record returned to trusted automation.",
         "properties": {
           "body": {
             "anyOf": [
@@ -2523,6 +2587,23 @@
             "title": "Id",
             "type": "integer"
           },
+          "merged_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merged At"
+          },
+          "provenance_json": {
+            "additionalProperties": true,
+            "title": "Provenance Json",
+            "type": "object"
+          },
           "released_at": {
             "format": "date-time",
             "title": "Released At",
@@ -2531,6 +2612,41 @@
           "sort_order": {
             "title": "Sort Order",
             "type": "integer"
+          },
+          "source_merge_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Merge Sha"
+          },
+          "source_pr_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Pr Number"
+          },
+          "source_repository": {
+            "title": "Source Repository",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "draft",
+              "published",
+              "retracted"
+            ],
+            "title": "Status",
+            "type": "string"
           },
           "summary": {
             "title": "Summary",
@@ -2544,16 +2660,31 @@
             "format": "date-time",
             "title": "Updated At",
             "type": "string"
+          },
+          "visibility": {
+            "enum": [
+              "public",
+              "internal"
+            ],
+            "title": "Visibility",
+            "type": "string"
           }
         },
         "required": [
           "id",
+          "source_repository",
+          "source_pr_number",
+          "source_merge_sha",
+          "merged_at",
           "released_at",
           "category",
           "title",
           "summary",
           "body",
+          "visibility",
+          "status",
           "sort_order",
+          "provenance_json",
           "created_at",
           "updated_at"
         ],
@@ -8445,7 +8576,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReleaseResponse"
+                  "$ref": "#/components/schemas/PublicReleaseResponse"
                 }
               }
             },
