@@ -28,6 +28,16 @@ async function markIssueNumbersRead(
   }
 }
 
+async function selectDependencySearchResult(page: Page, title: string): Promise<void> {
+  const result = page
+    .locator('#comic-pile-overlay-root-dialog')
+    .getByRole('button')
+    .filter({ hasText: title })
+  await expect(result).toHaveCount(1)
+  await expect(result).toBeVisible()
+  await result.click()
+}
+
 test.describe('Dependencies', () => {
   test('creates dependency from queue UI and shows blocked indicator', async ({ authenticatedPage }) => {
     await createThread(authenticatedPage, {
@@ -51,12 +61,14 @@ test.describe('Dependencies', () => {
     await clickThreadAction(targetCard, 'Manage dependencies')
 
     await authenticatedPage.fill('input#search-prereq-thread', 'Source')
-    await authenticatedPage.waitForSelector('button:has-text("Source Thread")', { state: 'visible' })
-    await authenticatedPage.click('button:has-text("Source Thread")')
+    await selectDependencySearchResult(authenticatedPage, 'Source Thread')
 
     // Wait for issue dropdowns to load then click the issue-level block button
     await authenticatedPage.waitForSelector('#source-issue', { state: 'visible', timeout: 10000 })
-    await authenticatedPage.click('button:has-text("Block issue")')
+    await authenticatedPage
+        .locator('#comic-pile-overlay-root-dialog')
+        .getByRole('button', { name: 'Block issue', exact: true })
+        .click()
 
     await authenticatedPage.waitForResponse(
       (response) => response.url().includes('/api/v1/dependencies/') && response.request().method() === 'POST' && response.status() < 300
@@ -183,8 +195,7 @@ test.describe('Dependencies', () => {
       await clickThreadAction(targetCard, 'Manage dependencies')
 
       await authenticatedPage.fill('input#search-prereq-thread', 'Prerequisite')
-      await authenticatedPage.waitForSelector('button:has-text("Prerequisite Comic")', { state: 'visible' })
-      await authenticatedPage.click('button:has-text("Prerequisite Comic")')
+      await selectDependencySearchResult(authenticatedPage, 'Prerequisite Comic')
 
       await expect(authenticatedPage.locator('#source-issue')).toBeVisible()
       await expect(authenticatedPage.locator('#target-issue')).toBeVisible()
@@ -212,8 +223,7 @@ test.describe('Dependencies', () => {
       await clickThreadAction(targetCard, 'Manage dependencies')
 
       await authenticatedPage.fill('input#search-prereq-thread', 'Source')
-      await authenticatedPage.waitForSelector('button:has-text("Source Series")', { state: 'visible' })
-      await authenticatedPage.click('button:has-text("Source Series")')
+      await selectDependencySearchResult(authenticatedPage, 'Source Series')
 
       await authenticatedPage.waitForSelector('#source-issue', { state: 'visible' })
       await authenticatedPage.waitForSelector('#target-issue', { state: 'visible' })
@@ -251,8 +261,7 @@ test.describe('Dependencies', () => {
       await clickThreadAction(targetCard, 'Manage dependencies')
 
       await authenticatedPage.fill('input#search-prereq-thread', 'Prequel')
-      await authenticatedPage.waitForSelector('button:has-text("Prequel Series")', { state: 'visible' })
-      await authenticatedPage.click('button:has-text("Prequel Series")')
+      await selectDependencySearchResult(authenticatedPage, 'Prequel Series')
 
       await authenticatedPage.waitForSelector('#source-issue', { state: 'visible', timeout: 5000 })
 
@@ -288,8 +297,7 @@ test.describe('Dependencies', () => {
       await clickThreadAction(targetCard, 'Manage dependencies')
 
       await authenticatedPage.fill('input#search-prereq-thread', 'Source')
-      await authenticatedPage.waitForSelector('button:has-text("Source Comic")', { state: 'visible' })
-      await authenticatedPage.click('button:has-text("Source Comic")')
+      await selectDependencySearchResult(authenticatedPage, 'Source Comic')
 
       await authenticatedPage.waitForSelector('#source-issue', { state: 'visible', timeout: 5000 })
       await authenticatedPage.waitForSelector('#target-issue', { state: 'visible', timeout: 5000 })
@@ -297,7 +305,10 @@ test.describe('Dependencies', () => {
       await authenticatedPage.selectOption('#source-issue', { index: 2 })
       await authenticatedPage.selectOption('#target-issue', { index: 2 })
 
-      await authenticatedPage.click('button:has-text("Block issue")')
+      await authenticatedPage
+        .locator('#comic-pile-overlay-root-dialog')
+        .getByRole('button', { name: 'Block issue', exact: true })
+        .click()
 
       await authenticatedPage.waitForResponse(
         (response) => response.url().includes('/api/v1/dependencies/') && response.request().method() === 'POST' && response.status() < 300
@@ -328,8 +339,7 @@ test.describe('Dependencies', () => {
       await clickThreadAction(targetCard, 'Manage dependencies')
 
       await authenticatedPage.fill('input#search-prereq-thread', 'Required')
-      await authenticatedPage.waitForSelector('button:has-text("Required Series")', { state: 'visible' })
-      await authenticatedPage.click('button:has-text("Required Series")')
+      await selectDependencySearchResult(authenticatedPage, 'Required Series')
 
       await authenticatedPage.waitForSelector('#source-issue', { state: 'visible', timeout: 5000 })
 
@@ -399,8 +409,7 @@ test.describe('Dependencies', () => {
       await clickThreadAction(targetCard, 'Manage dependencies')
 
       await authenticatedPage.fill('input#search-prereq-thread', 'Issue Source')
-      await authenticatedPage.waitForSelector('button:has-text("Issue Source")', { state: 'visible' })
-      await authenticatedPage.click('button:has-text("Issue Source")')
+      await selectDependencySearchResult(authenticatedPage, 'Issue Source')
 
       await authenticatedPage.waitForSelector('#source-issue', { state: 'visible', timeout: 5000 })
       await authenticatedPage.waitForSelector('#target-issue', { state: 'visible', timeout: 5000 })
@@ -436,8 +445,7 @@ test.describe('Dependencies', () => {
       await clickThreadAction(targetCard, 'Manage dependencies')
 
       await authenticatedPage.fill('input#search-prereq-thread', 'No Issues')
-      await authenticatedPage.waitForSelector('button:has-text("No Issues Source")', { state: 'visible' })
-      await authenticatedPage.click('button:has-text("No Issues Source")')
+      await selectDependencySearchResult(authenticatedPage, 'No Issues Source')
 
       await authenticatedPage.waitForSelector('#source-issue', { state: 'visible', timeout: 5000 })
       await authenticatedPage.waitForSelector('#target-issue', { state: 'visible', timeout: 5000 })
@@ -473,8 +481,7 @@ test.describe('Dependencies', () => {
       await clickThreadAction(targetCard, 'Manage dependencies')
 
       await authenticatedPage.fill('input#search-prereq-thread', 'All Read')
-      await authenticatedPage.waitForSelector('button:has-text("All Read Source")', { state: 'visible' })
-      await authenticatedPage.click('button:has-text("All Read Source")')
+      await selectDependencySearchResult(authenticatedPage, 'All Read Source')
 
       await authenticatedPage.waitForSelector('#source-issue', { state: 'visible', timeout: 5000 })
 
