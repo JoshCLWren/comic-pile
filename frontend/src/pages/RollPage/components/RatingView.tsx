@@ -341,6 +341,7 @@ export function RatingView({
           }}
         />
       ) : null}
+
     </div>
   )
 }

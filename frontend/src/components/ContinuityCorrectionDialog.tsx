@@ -77,19 +77,24 @@ export default function ContinuityCorrectionDialog({
     async function resolveConnectedThreads() {
       if (connectedThreads.length === 0) return
 
-      const resolved = await Promise.all(
-        connectedThreads.map(async (connected): Promise<ResolvedThread | null> => {
-          try {
-            const thread: Thread = await threadsApi.get(connected.thread_id)
-            return { id: thread.id, title: thread.title }
-          } catch {
-            return { id: connected.thread_id, title: connected.title }
-          }
-        }),
-      )
-      if (!isCurrent) return
-      const filtered = resolved.filter((entry): entry is ResolvedThread => entry !== null)
-      setResolvedConnected(filtered)
+      try {
+        const resolved = await Promise.all(
+          connectedThreads.map(async (connected): Promise<ResolvedThread | null> => {
+            try {
+              const thread: Thread = await threadsApi.get(connected.thread_id)
+              return { id: thread.id, title: thread.title }
+            } catch {
+              return { id: connected.thread_id, title: connected.title }
+            }
+          }),
+        )
+        if (!isCurrent) return
+        const filtered = resolved.filter((entry): entry is ResolvedThread => entry !== null)
+        setResolvedConnected(filtered)
+      } catch (err: unknown) {
+        if (!isCurrent) return
+        setConnectedThreadsError(getApiErrorDetail(err))
+      }
     }
 
     void loadGroups()
@@ -130,8 +135,12 @@ export default function ContinuityCorrectionDialog({
         createdGroup = targetGroup
       } else {
         const existing = groups.find((candidate) => candidate.id === selectedGroupId)
-        targetGroup = existing ?? (await dependencyGroupsApi.get(selectedGroupId as number))
+        if (!existing) {
+          throw new Error(`Crossover group ${selectedGroupId} not found.`)
+        }
+        targetGroup = existing
       }
+
 
       if (canSaveCurrentIssue) {
         await dependencyGroupsApi.addMember(targetGroup.id, { issue_id: issueId as number })
