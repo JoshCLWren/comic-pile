@@ -48,7 +48,7 @@ async def projection_client(async_db: AsyncSession) -> AsyncIterator[AsyncClient
     app.dependency_overrides.clear()
 
 
-def _make_thread(async_db: AsyncSession, *, user_id: int, title: str) -> Thread:
+async def _make_thread(async_db: AsyncSession, *, user_id: int, title: str) -> Thread:
     """Create and persist a minimal owned thread."""
     thread = Thread(
         title=title,
