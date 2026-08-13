@@ -444,7 +444,7 @@ async def get_roll_pool(
         query = query.where(Thread.id.not_in(snoozed_ids))
 
     query = query.where(Thread.is_blocked.is_(False))
-    query = query.order_by(Thread.queue_position)
+    query = query.order_by(Thread.queue_position, Thread.id)
 
     result = await db.execute(query)
     return list(result.scalars().all())
