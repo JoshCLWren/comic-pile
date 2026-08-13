@@ -59,7 +59,7 @@ class ReleaseUpsertRequest(BaseModel):
     provenance_json: dict[str, object] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def require_github_identity(self) -> ReleaseUpsertRequest:
+    def require_github_identity(self) -> "ReleaseUpsertRequest":
         """Require at least one stable source identity for retry-safe publication.
 
         Args:
