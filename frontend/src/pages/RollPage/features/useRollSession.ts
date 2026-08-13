@@ -7,9 +7,9 @@ import {
   useRoll,
   useSetDie,
 } from '../../hooks/useRoll'
-import { getApiErrorStatus, getApiErrorDetail } from '../../utils/apiError'
+import { getApiErrorDetail } from '../../utils/apiError'
 import { DICE_LADDER } from '../../components/diceLadder'
-import { useRollPageState, type RollPageStateSetters } from '../useRollPageState'
+import type { RollPageStateSetters } from '../useRollPageState'
 
 export function useRollSession(setters: RollPageStateSetters) {
   const {

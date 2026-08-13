@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { useRollPageState, type RollPageStateSetters } from '../useRollPageState'
+import type { RollPageStateSetters } from '../useRollPageState'
 
 export function useRollModals(setters: RollPageStateSetters) {
   const handleThreadClick = useCallback((thread: any) => {

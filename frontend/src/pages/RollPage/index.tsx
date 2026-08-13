@@ -7,8 +7,6 @@ import MigrationDialog from '../../components/MigrationDialog'
 import SimpleMigrationDialog from '../../components/SimpleMigrationDialog'
 import { useNavigate } from 'react-router-dom'
 import { DICE_LADDER } from '../../components/diceLadder'
-import { useRollBootstrap } from '../../hooks/useRollBootstrap'
-import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import {
   useDismissPending,
   useOverrideRoll,

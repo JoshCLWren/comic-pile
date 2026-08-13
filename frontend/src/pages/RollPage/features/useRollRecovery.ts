@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { threadsApi } from '../../services/api'
-import { useRollPageState, type RollPageStateSetters } from '../useRollPageState'
+import type { RollPageStateSetters } from '../useRollPageState'
 import type { RatingThread, ThreadMetadata } from '../types'
 
 export function useRollRecovery(setters: RollPageStateSetters, enterRatingView: (threadId: number | null, result: number | null, metadata: ThreadMetadata | null) => Promise<void>) {

@@ -1,9 +1,9 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback } from 'react'
 import { useRate } from '../../hooks'
-import { threadsApi, readingOrdersApi, dependenciesApi } from '../../services/api'
+import { readingOrdersApi, dependenciesApi } from '../../services/api'
 import { getApiErrorDetail } from '../../utils/apiError'
 import { DICE_LADDER, RATING_THRESHOLD, buildRatingThread, createExplosion } from '../utils'
-import { useRollPageState, type RollPageStateSetters } from '../useRollPageState'
+import type { RollPageStateSetters } from '../useRollPageState'
 import type { RatingThread, ThreadMetadata } from '../types'
 import type { Thread } from '../../types'
 
