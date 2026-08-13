@@ -114,7 +114,7 @@ def _validate_release(raw: str) -> dict[str, object]:
     if not isinstance(repository, str) or not (1 <= len(repository) <= 255):
         _fail("source_repository must be 1..255 characters")
     pr_number = payload["source_pr_number"]
-    if not isinstance(pr_number, int) or pr_number < 1:
+    if isinstance(pr_number, bool) or not isinstance(pr_number, int) or pr_number < 1:
         _fail("source_pr_number must be a positive integer")
     merge_sha = payload["source_merge_sha"]
     if not isinstance(merge_sha, str) or not (7 <= len(merge_sha) <= 64):
