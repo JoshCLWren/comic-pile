@@ -3,6 +3,7 @@
 import logging
 import os
 import secrets
+from app.middleware.performance import PerformanceMiddleware
 from pathlib import Path
 from typing import cast
 
@@ -36,6 +37,7 @@ from app.api import (
     test_helpers,
     thread,
     undo,
+    metrics,
 )
 from app.cache import cache
 from app.config import get_app_settings, get_database_settings, get_redis_settings
@@ -163,11 +165,14 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     )
 
     app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(PerformanceMiddleware)
 
     @app.middleware("http")
     async def csrf_middleware(request: Request, call_next):
         """Require a matching CSRF header and cookie on mutating API requests."""
-        if os.getenv("TEST_ENVIRONMENT") == "true":
+    if os.getenv("TEST_ENVIRONMENT") == "true":
+    app.include_router(metrics.router, prefix="/api", tags=["metrics"])
+
             return await call_next(request)
         if not is_csrf_protected_request(request.method, request.url.path):
             return await call_next(request)
@@ -411,8 +416,10 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
     @app.on_event("startup")
     async def startup_event():
+        from app.middleware.performance import compute_startup_duration
         """Initialize database and cache on application startup."""
         await init_database(app_settings.environment)
+        await compute_startup_duration()
 
         redis_settings = get_redis_settings()
         if redis_settings.is_configured:
