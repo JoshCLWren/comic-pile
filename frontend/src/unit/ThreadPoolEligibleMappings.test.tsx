@@ -57,6 +57,9 @@ describe('ThreadPool eligible mappings', () => {
     const issueText = dieFace.querySelector('p:nth-of-type(2)')
     expect(titleText?.textContent).toBe('Amazing Adventures')
     expect(issueText?.textContent).toBe('Issue 12')
+    expect(titleText).toHaveClass('font-bold', 'text-sm', 'text-stone-200')
+    expect(issueText).toHaveClass('text-xs', 'text-stone-400')
+    expect(issueText).not.toHaveClass('font-bold', 'text-sm')
     expect(
       titleText && issueText
         ? titleText.compareDocumentPosition(issueText) & Node.DOCUMENT_POSITION_FOLLOWING
