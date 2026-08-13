@@ -80,27 +80,33 @@ jobs:
         run: |
           set -Eeuo pipefail
           [[ -n "${NVIDIA_API_KEY:-}" ]] || { echo 'NVIDIA_API_KEY is required' >&2; exit 1; }
-          export DATA_DIR="$RUNNER_TEMP/omniroute"
-          export JWT_SECRET="$(openssl rand -base64 48 | tr -d '\n')"
-          export API_KEY_SECRET="$(openssl rand -hex 32)"
-          export STORAGE_ENCRYPTION_KEY="$(openssl rand -hex 32)"
-          export INITIAL_PASSWORD="$(openssl rand -base64 24 | tr -d '\n')"
-          export OMNIROUTE_NO_UPDATE_NOTIFIER=1
+          DATA_DIR="$RUNNER_TEMP/omniroute"
+          JWT_SECRET="$(openssl rand -base64 48 | tr -d '\n')"
+          API_KEY_SECRET="$(openssl rand -hex 32)"
+          STORAGE_ENCRYPTION_KEY="$(openssl rand -hex 32)"
+          INITIAL_PASSWORD="$(openssl rand -base64 24 | tr -d '\n')"
+          OMNIROUTE_NO_UPDATE_NOTIFIER=1
+          OMNIROUTE_API_KEY="$NVIDIA_API_KEY"
+          export DATA_DIR JWT_SECRET API_KEY_SECRET STORAGE_ENCRYPTION_KEY INITIAL_PASSWORD OMNIROUTE_NO_UPDATE_NOTIFIER OMNIROUTE_API_KEY
           mkdir -p "$DATA_DIR"
-          printf '%s\n' \
-            "DATA_DIR=$DATA_DIR" \
-            "JWT_SECRET=$JWT_SECRET" \
-            "API_KEY_SECRET=$API_KEY_SECRET" \
-            "STORAGE_ENCRYPTION_KEY=$STORAGE_ENCRYPTION_KEY" \
-            "INITIAL_PASSWORD=$INITIAL_PASSWORD" \
-            'OMNIROUTE_NO_UPDATE_NOTIFIER=1' >> "$GITHUB_ENV"
+          env_file="$RUNNER_TEMP/omniroute-env"
+          {
+            printf 'export DATA_DIR=%q\n' "$DATA_DIR"
+            printf 'export JWT_SECRET=%q\n' "$JWT_SECRET"
+            printf 'export API_KEY_SECRET=%q\n' "$API_KEY_SECRET"
+            printf 'export STORAGE_ENCRYPTION_KEY=%q\n' "$STORAGE_ENCRYPTION_KEY"
+            printf 'export INITIAL_PASSWORD=%q\n' "$INITIAL_PASSWORD"
+            printf 'export OMNIROUTE_NO_UPDATE_NOTIFIER=1\n'
+          } > "$env_file"
+          chmod 600 "$env_file"
           omniroute setup --add-provider --provider nvidia --provider-name 'Factory 16 NVIDIA' \
-            --api-key "$NVIDIA_API_KEY" --default-model "$PROVIDER_MODEL" --test-provider --non-interactive
+            --default-model "$PROVIDER_MODEL" --test-provider --non-interactive
 
       - name: Start OmniRoute
         shell: bash
         run: |
           set -Eeuo pipefail
+          source "$RUNNER_TEMP/omniroute-env"
           nohup omniroute serve --no-open --no-recovery --port 20128 >"$RUNNER_TEMP/omniroute.log" 2>&1 &
           for _ in {1..90}; do
             if curl -fsS http://127.0.0.1:20128/v1/models > /tmp/omniroute-models.json 2>/dev/null; then
