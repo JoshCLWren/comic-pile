@@ -100,7 +100,7 @@ claim_unowned_pr() {
   replace_labels "$number" "$OWNER" 'factory:review'
   labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
   jq -e --arg owner "$OWNER" 'index($owner) != null' >/dev/null <<< "$labels" || return 1
-  gh issue comment "$number" --body "<!-- omniroute-factory-owner:${WORKER} -->\nFactory ${WORKER} · ${CALL_SIGN} adopted this unowned PR using ${MODEL} through OmniRoute." >/dev/null
+  gh issue comment "$number" --body "$(printf '<!-- omniroute-factory-owner:%s -->\nFactory %s · %s adopted this unowned PR using %s through OmniRoute.\n' "$WORKER" "$WORKER" "$CALL_SIGN" "$MODEL")" >/dev/null
 }
 
 checkout_target() {
@@ -185,7 +185,7 @@ smoke_agent() {
 }
 
 persist_issue_pr() {
-  local number="$1" branch="$2" pr title
+  local number="$1" branch="$2" pr title body
   [[ -n "$(git status --porcelain)" ]] || return 1
   git add -A
   git commit -m "factory: advance #${number} with OmniRoute"
@@ -193,8 +193,9 @@ persist_issue_pr() {
   pr="$(gh pr list --state open --head "$branch" --json number --jq '.[0].number // empty')"
   if [[ -z "$pr" ]]; then
     title="$(gh issue view "$number" --json title --jq .title)"
+    body="$(printf 'Closes #%s.\n\nModel: %s\nProvider: %s\nWorker: %s\n\nProduced by Factory %s · %s through OmniRoute. Normal ComicPile exact-head factory merge gates apply.\n' "$number" "$MODEL" "$PROVIDER" "$WORKER_ID" "$WORKER" "$CALL_SIGN")"
     gh pr create --base main --head "$branch" --title "$title" \
-      --body "Closes #${number}.\n\nModel: ${MODEL}\nProvider: ${PROVIDER}\nWorker: ${WORKER_ID}\n\nProduced by Factory ${WORKER} · ${CALL_SIGN} through OmniRoute. Normal ComicPile exact-head factory merge gates apply." >/tmp/factory-pr-url
+      --body "$body" >/tmp/factory-pr-url
     pr="$(gh pr list --state open --head "$branch" --json number --jq '.[0].number')"
   fi
   replace_labels "$pr" "$OWNER" 'factory:review'
