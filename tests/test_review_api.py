@@ -36,4 +36,9 @@ async def test_reviews_are_absent_from_openapi(auth_client: AsyncClient) -> None
 
     assert response.status_code == 200
     paths = response.json()["paths"]
-    assert not any("reviews" in path.lower() for path in paths)
+    # Check for actual Reviews API paths (e.g., /api/v1/reviews/...), not
+    # incidental substrings like "preview" in other endpoints.
+    assert not any(
+        "/review" in path.lower().split("/")[3:] or path.lower().count("/review") > 1
+        for path in paths
+    )

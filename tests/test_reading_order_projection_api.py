@@ -37,7 +37,7 @@ async def projection_client(async_db: AsyncSession) -> AsyncIterator[AsyncClient
         yield async_db
 
     app.dependency_overrides[get_db] = _override_db
-    transport = ASGITransport(app=app)
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         csrf_token = generate_csrf_token()
         ac.cookies.set(CSRF_COOKIE_NAME, csrf_token)

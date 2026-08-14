@@ -146,7 +146,7 @@ def _flatten_plan(
     ``order`` as the primary key and ``position`` as the secondary key. The
     plan is intentionally not mutated - lanes/positions are read directly.
     """
-    lane_orders = {lane.id: lane.order for lane in plan.lanes_json}
+    lane_orders = {lane["id"]: lane["order"] for lane in plan.lanes_json}
     sorted_nodes = sorted(
         nodes,
         key=lambda node: (lane_orders.get(node.lane_id, 0), node.position, node.id),
