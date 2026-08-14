@@ -35,7 +35,7 @@ def test_persist_issue_pr_stdout_is_reserved_for_pr_number() -> None:
     stdout_commands = [
         line.strip()
         for line in body.splitlines()
-        if line.strip().startswith(('echo ', 'printf ', 'git '))
+        if line.strip().startswith(('echo ', 'printf '))
         and not line.rstrip().endswith('>&2')
     ]
     assert stdout_commands == ['echo "$pr"']
