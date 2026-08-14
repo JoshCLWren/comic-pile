@@ -1,7 +1,7 @@
-const OWNER_RE = /^factory:(?:unowned|local|[1-9]|[1-3][0-9]|4[0-7])$/;
+const OWNER_RE = /^factory:(?:unowned|local|[1-9][0-9]?)$/;
 const STAGE_RE = /^factory:(?:building|review|changes-requested|ci|ready|blocked)$/;
-const WORKER_BRANCH_RE = /^factory\/([1-9]|[1-3][0-9]|4[0-7])-/;
-const MARKER_RE = /<!-- (?:free-model-factory-owner|nvidia-factory-owner|omniroute-factory-owner):([1-9]|[1-3][0-9]|4[0-7]) -->/g;
+const WORKER_BRANCH_RE = /^factory\/([1-9][0-9]?)-/;
+const MARKER_RE = /<!-- (?:free-model-factory-owner|nvidia-factory-owner|omniroute-factory-owner):([1-9][0-9]?) -->/g;
 
 async function normalize({ github, context, core }) {
   const pullRequest = context.payload.pull_request;
@@ -37,7 +37,7 @@ async function normalize({ github, context, core }) {
     }
   }
   if (!worker) {
-    const numericOwners = names.filter(name => /^factory:(?:[1-9]|[1-3][0-9]|4[0-7])$/.test(name));
+    const numericOwners = names.filter(name => /^factory:[1-9][0-9]?$/.test(name));
     if (numericOwners.length === 1) worker = numericOwners[0].split(':')[1];
   }
   if (!worker) return;
