@@ -7,6 +7,7 @@ from types import TracebackType
 from unittest.mock import AsyncMock
 
 import pytest
+from typing import Any
 
 from app.cbl_ingest import CBLParseFailure
 from app.cbl_sync import CBLSyncSummary
@@ -27,7 +28,7 @@ class _FakeTransaction:
 
 
 class _FakeSession:
-    async def __aenter__(self) -> _FakeSession:
+    async def __aenter__(self) -> Any:
         return self
 
     async def __aexit__(

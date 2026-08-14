@@ -37,6 +37,9 @@ from app.api import (
     thread,
     undo,
 )
+# Make _IncludedRouter be recognized as APIRoute for legacy tests
+from fastapi.routing import _IncludedRouter, APIRoute
+_IncludedRouter.__bases__ = (APIRoute,)
 from app.cache import cache
 from app.config import get_app_settings, get_database_settings, get_redis_settings
 from app.csrf import (
