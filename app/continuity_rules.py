@@ -76,6 +76,9 @@ async def ensure_owned_continuity_rule_references(
     referenced_issue_ids = set(payload.selected_member_issue_ids)
     if payload.checkpoint_issue_id is not None:
         referenced_issue_ids.add(payload.checkpoint_issue_id)
+    for target in payload.convergence_targets:
+        if target.type == "issue":
+            referenced_issue_ids.add(target.id)
     if not referenced_issue_ids:
         return
 

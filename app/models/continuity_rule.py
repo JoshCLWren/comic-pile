@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import JSON, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -31,7 +31,7 @@ class ContinuityRule(Base):
     checkpoint_issue_id: Mapped[int | None] = mapped_column(
         ForeignKey("issues.id", ondelete="RESTRICT"), nullable=True
     )
-    convergence_targets: Mapped[list[str]] = mapped_column(
+    convergence_targets: Mapped[list[dict[str, object]] | None] = mapped_column(
         JSON, nullable=True
     )
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -65,9 +65,10 @@ class ContinuityRule(Base):
         ),
         CheckConstraint(
             "(satisfaction_type = 'checkpoint' AND checkpoint_issue_id IS NOT NULL) OR "
-            "(satisfaction_type <> 'checkpoint' AND checkpoint_issue_id IS NULL) "
-            "(satisfaction_type = 'converged' AND convergence_targets IS NOT NULL) OR "
-            "(satisfaction_type <> 'converged' AND convergence_targets IS NULL)",
+            "(satisfaction_type = 'converged' AND convergence_targets IS NOT NULL "
+            "AND convergence_targets::text <> 'null') OR "
+            "(satisfaction_type NOT IN ('checkpoint', 'converged') AND checkpoint_issue_id IS NULL "
+            "AND (convergence_targets IS NULL OR convergence_targets::text = 'null'))",
             name="ck_continuity_rule_checkpoint_shape",
         ),
         UniqueConstraint(

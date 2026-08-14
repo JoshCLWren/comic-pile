@@ -48,6 +48,10 @@ def _to_response(rule: ContinuityRule) -> ContinuityRuleResponse:
         target_id=rule.target_id,
         satisfaction_type=rule.satisfaction_type,
         checkpoint_issue_id=rule.checkpoint_issue_id,
+        convergence_targets=[
+            {"type": target["type"], "id": int(target["id"])}
+            for target in (rule.convergence_targets or [])
+        ],
         selected_member_issue_ids=sorted(member.issue_id for member in rule.selected_members),
         note=rule.note,
         created_at=rule.created_at,
@@ -247,6 +251,11 @@ async def create_continuity_rule(
         target_id=payload.target_id,
         satisfaction_type=payload.satisfaction_type,
         checkpoint_issue_id=payload.checkpoint_issue_id,
+        convergence_targets=[
+            {"type": target.type, "id": target.id}
+            for target in payload.convergence_targets
+        ]
+        or None,
         note=payload.note,
         selected_members=[
             ContinuityRuleSelectedMember(issue_id=issue_id)
@@ -312,6 +321,10 @@ async def update_continuity_rule(
     rule.target_id = payload.target_id
     rule.satisfaction_type = payload.satisfaction_type
     rule.checkpoint_issue_id = payload.checkpoint_issue_id
+    rule.convergence_targets = [
+        {"type": target.type, "id": target.id}
+        for target in payload.convergence_targets
+    ] or None
     rule.note = payload.note
     rule.selected_members = [
         ContinuityRuleSelectedMember(issue_id=issue_id)

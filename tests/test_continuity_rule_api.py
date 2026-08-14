@@ -240,3 +240,71 @@ async def test_continuity_mutations_invalidate_related_caches(monkeypatch: pytes
     await continuity_rule_api._invalidate_continuity_caches(42)
 
     invalidate.assert_awaited_once_with(42)
+
+
+@pytest.mark.asyncio
+async def test_converged_rule_crud_round_trips_targets(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A converged rule persists, returns, and removes its convergence targets."""
+    user = await get_or_create_user_async(async_db)
+    issues = [
+        await _make_issue(async_db, user_id=user.id, suffix=f"converged-{index}")
+        for index in range(2)
+    ]
+    target = await _make_issue(async_db, user_id=user.id, suffix="converged-target")
+    await async_db.commit()
+
+    payload = {
+        "source_type": "issue",
+        "source_id": issues[0].id,
+        "target_type": "issue",
+        "target_id": target.id,
+        "satisfaction_type": "converged",
+        "convergence_targets": [
+            {"type": "issue", "id": issues[0].id},
+            {"type": "issue", "id": issues[1].id},
+        ],
+    }
+    created = await auth_client.post("/api/v1/continuity-rules/", json=payload)
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["satisfaction_type"] == "converged"
+    assert body["convergence_targets"] == [
+        {"type": "issue", "id": issues[0].id},
+        {"type": "issue", "id": issues[1].id},
+    ]
+
+    fetched = await auth_client.get(f"/api/v1/continuity-rules/{body['id']}")
+    assert fetched.status_code == 200
+    assert fetched.json()["convergence_targets"] == body["convergence_targets"]
+
+    deleted = await auth_client.delete(f"/api/v1/continuity-rules/{body['id']}")
+    assert deleted.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_converged_rule_rejects_unowned_target(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Convergence targets must be owned by the authenticated user."""
+    user = await get_or_create_user_async(async_db)
+    source = await _make_issue(async_db, user_id=user.id, suffix="converged-foreign-source")
+    target = await _make_issue(async_db, user_id=user.id, suffix="converged-foreign-target")
+    other_user = User(username="converged-other", email="converged-other@example.com")
+    async_db.add(other_user)
+    await async_db.flush()
+    foreign_issue = await _make_issue(async_db, user_id=other_user.id, suffix="converged-foreign")
+    await async_db.commit()
+
+    payload = {
+        "source_type": "issue",
+        "source_id": source.id,
+        "target_type": "issue",
+        "target_id": target.id,
+        "satisfaction_type": "converged",
+        "convergence_targets": [{"type": "issue", "id": foreign_issue.id}],
+    }
+    response = await auth_client.post("/api/v1/continuity-rules/", json=payload)
+    assert response.status_code == 404
+

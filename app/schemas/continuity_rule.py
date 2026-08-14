@@ -13,7 +13,15 @@ ContinuitySatisfactionType = Literal[
     "all_members_read",
     "checkpoint",
     "selected_members_read",
+    "converged",
 ]
+
+
+class ConvergenceTarget(BaseModel):
+    """A single node a converged continuity rule waits for."""
+
+    type: ContinuityNodeType
+    id: int = Field(gt=0)
 
 
 class ContinuityRuleCreate(BaseModel):
@@ -25,6 +33,7 @@ class ContinuityRuleCreate(BaseModel):
     target_id: int = Field(gt=0)
     satisfaction_type: ContinuitySatisfactionType
     checkpoint_issue_id: int | None = Field(default=None, gt=0)
+    convergence_targets: list[ConvergenceTarget] = Field(default_factory=list, max_length=250)
     selected_member_issue_ids: list[int] = Field(default_factory=list, max_length=250)
     note: str | None = Field(default=None, max_length=500)
 
@@ -45,6 +54,11 @@ class ContinuityRuleCreate(BaseModel):
                 raise ValueError("checkpoint_issue_id is required for checkpoint rules")
         elif self.checkpoint_issue_id is not None:
             raise ValueError("checkpoint_issue_id is only valid for checkpoint rules")
+        if self.satisfaction_type == "converged":
+            if not self.convergence_targets:
+                raise ValueError("convergence_targets are required for converged rules")
+        elif self.convergence_targets:
+            raise ValueError("convergence_targets are only valid for converged rules")
         if self.satisfaction_type == "selected_members_read":
             if not self.selected_member_issue_ids:
                 raise ValueError("selected-member rules require at least one issue")
@@ -65,6 +79,7 @@ class ContinuityRuleResponse(BaseModel):
     target_id: int
     satisfaction_type: ContinuitySatisfactionType
     checkpoint_issue_id: int | None
+    convergence_targets: list[ConvergenceTarget]
     selected_member_issue_ids: list[int]
     note: str | None
     created_at: datetime

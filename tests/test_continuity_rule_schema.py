@@ -90,3 +90,28 @@ def test_self_rule_is_rejected() -> None:
             target_id=7,
             satisfaction_type="all_members_read",
         )
+
+
+def test_converged_requires_convergence_targets() -> None:
+    """Require convergence targets for converged satisfaction rules."""
+    with pytest.raises(ValidationError, match="convergence_targets are required"):
+        ContinuityRuleCreate(
+            source_type="issue",
+            source_id=1,
+            target_type="crossover",
+            target_id=2,
+            satisfaction_type="converged",
+        )
+
+
+def test_convergence_targets_rejected_for_other_policies() -> None:
+    """Reject convergence targets on non-converged policies."""
+    with pytest.raises(ValidationError, match="convergence_targets are only valid"):
+        ContinuityRuleCreate(
+            source_type="issue",
+            source_id=1,
+            target_type="issue",
+            target_id=2,
+            satisfaction_type="item_read",
+            convergence_targets=[{"type": "issue", "id": 3}],
+        )
