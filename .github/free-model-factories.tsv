@@ -6,7 +6,7 @@
 10	nvidia	nvidia/nemotron-3-ultra-550b-a55b	0	watchdog	Nemotron 3 Ultra
 11	nvidia	poolside/laguna-xs-2.1	15	watchdog	Laguna XS 2.1
 12	nvidia	openai/gpt-oss-120b	30	watchdog	GPT OSS 120B
-13	nvidia	mistralai/mistral-medium-3.5-128b	45	watchdog	Mistral Medium 3.5
+13	nvidia	mistralai/mistral-small-4-119b-2603	45	watchdog	Mistral Small 4 119B
 14	nvidia	minimaxai/minimax-m3	0	watchdog	MiniMax M3
 15	nvidia	mistralai/mistral-nemotron	15	watchdog	Mistral Nemotron
 16	nvidia	nvidia/nemotron-3-super-120b-a12b	30	watchdog	Nemotron 3 Super
@@ -32,11 +32,11 @@
 36	omniroute-opencode	oc/laguna-s-2.1-free	30	watchdog	OmniRoute Laguna S 2.1 Free
 37	omniroute-opencode	oc/hy3-free	45	watchdog	OmniRoute Tencent Hy3 Free
 38	omniroute-opencode	oc/nemotron-3.5-lightning-free	0	watchdog	OmniRoute Nemotron 3.5 Lightning Free
-39	zen	big-pickle	15	watchdog	OpenCode Big Pickle
-40	zen	deepseek-v4-flash-free	30	watchdog	OpenCode DeepSeek V4 Flash Free
-41	zen	mimo-v2.5-free	45	watchdog	OpenCode MiMo V2.5 Free
-42	zen	nemotron-3-ultra-free	0	watchdog	OpenCode Nemotron 3 Ultra Free
-43	zen	laguna-s-2.1-free	15	watchdog	OpenCode Laguna S 2.1 Free
-44	zen	hy3-free	30	watchdog	OpenCode Tencent Hy3 Free
-45	zen	nemotron-3.5-lightning-free	45	watchdog	OpenCode Nemotron 3.5 Lightning Free
-46	zen	ling-3.0-tiny-free	0	watchdog	OpenCode Ling 3.0 Tiny Free
+39	opencode-free	big-pickle	15	watchdog	OpenCode Big Pickle
+40	opencode-free	deepseek-v4-flash-free	30	watchdog	OpenCode DeepSeek V4 Flash Free
+41	opencode-free	mimo-v2.5-free	45	watchdog	OpenCode MiMo V2.5 Free
+42	opencode-free	nemotron-3-ultra-free	0	watchdog	OpenCode Nemotron 3 Ultra Free
+43	opencode-free	laguna-s-2.1-free	15	watchdog	OpenCode Laguna S 2.1 Free
+44	opencode-free	hy3-free	30	watchdog	OpenCode Tencent Hy3 Free
+45	opencode-free	nemotron-3.5-lightning-free	45	watchdog	OpenCode Nemotron 3.5 Lightning Free
+46	opencode-free	ling-3.0-tiny-free	0	watchdog	OpenCode Ling 3.0 Tiny Free
