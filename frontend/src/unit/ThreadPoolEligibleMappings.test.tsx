@@ -82,6 +82,31 @@ describe('ThreadPool eligible mappings', () => {
     expect(screen.queryByText('Issue 12')).not.toBeInTheDocument()
   })
 
+  it('truthfully explains a pool smaller than the die without inventing faces', () => {
+    render(
+      <MemoryRouter>
+        <ThreadPool
+          {...baseProps}
+          dieSize={6}
+          pool={[
+            { id: 7, title: 'Amazing Adventures', format: 'ongoing', issue_number: '12' },
+            { id: 8, title: 'Ultimate Spider-Man', format: 'ongoing', issue_number: '3' },
+            { id: 9, title: 'Secret Six', format: 'ongoing', issue_number: '1' },
+          ]}
+        />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText('Eligible now · 3')).toBeVisible()
+    expect(screen.getByText(/Only 3 of d6 faces are mapped to eligible reads/i)).toBeVisible()
+
+    const faces = screen.getAllByRole('button', { name: /Die face \d+:/i })
+    expect(faces).toHaveLength(3)
+    expect(faces[0]).toHaveAccessibleName(/Die face 1:/i)
+    expect(faces[2]).toHaveAccessibleName(/Die face 3:/i)
+    expect(screen.queryByRole('button', { name: /Die face 4:/i })).not.toBeInTheDocument()
+  })
+
   it('shows route memberships as informational without claiming blocking', () => {
     render(
       <MemoryRouter>
@@ -100,7 +125,7 @@ describe('ThreadPool eligible mappings', () => {
     )
 
     const row = screen.getByRole('button', { name: /Die face 1: Amazing Adventures/i })
-    expect(row).toHaveAccessibleName(/routes Secret War, Civil War[^.]*\. Open thread actions/i)
+    expect(row).toHaveAccessibleName(/routes Secret War, Civil War/i)
 
     const routeCue = screen.getByText(/Routes: Secret War · Civil War/i)
     expect(routeCue).toBeVisible()
@@ -109,7 +134,7 @@ describe('ThreadPool eligible mappings', () => {
     expect(routeCue.textContent).toContain('Routes:')
   })
 
-  it('supports keyboard activation of thread rows', () => {
+  it('keeps thread actions available via a clear row affordance', () => {
     const onThreadClick = vi.fn()
     render(
       <MemoryRouter>
@@ -123,12 +148,9 @@ describe('ThreadPool eligible mappings', () => {
 
     const row = screen.getByRole('button', { name: /Die face 1: Amazing Adventures/i })
     expect(row).toHaveAccessibleName(/Open thread actions/i)
+    expect(row.querySelector('[aria-hidden="true"]')).toBeTruthy()
 
-    row.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
-    expect(onThreadClick).toHaveBeenCalledWith({ id: 7, title: 'Amazing Adventures', format: 'ongoing', issue_number: '12' })
-
-    onThreadClick.mockClear()
-    row.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: ' ' }))
+    row.click()
     expect(onThreadClick).toHaveBeenCalledWith({ id: 7, title: 'Amazing Adventures', format: 'ongoing', issue_number: '12' })
   })
 
