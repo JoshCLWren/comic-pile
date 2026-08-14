@@ -27,7 +27,7 @@ export default function QueuePage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
-  const { data: threads, isPending, refetch } = useThreads('')
+  const { data: threads, isPending, refetch } = useQueueThreads('')
   const { data: session, refetch: refetchSession } = useSession()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
