@@ -129,11 +129,8 @@ def main() -> None:
     assert 'uses: ./.github/workflows/free-model-factory-run.yml' in entry_text
     assert 'worker: ${{ inputs.worker }}' in entry_text
     assert 'secrets: inherit' in entry_text
-    assert 'group: fixed-model-factory-${{ inputs.worker }}' in entry_text, (
-        'each fixed-model worker must have its own concurrency lane'
-    )
-    assert 'cancel-in-progress: true' in entry_text, (
-        'duplicate fixed-model runs for one worker must cancel the older run'
+    assert 'concurrency:' not in entry_text, (
+        'entry wrapper must not compete with the reusable runner for the same concurrency group'
     )
     for permission in ENTRY_PERMISSIONS:
         assert permission in entry_text
@@ -145,6 +142,12 @@ def main() -> None:
     worker = Path('.github/scripts/free-model-factory-worker.sh')
     assert runner.exists() and worker.exists()
     runner_text = runner.read_text(encoding='utf-8')
+    assert 'group: fixed-model-factory-${{ inputs.worker }}' in runner_text, (
+        'reusable runner must serialize each fixed-model worker lane'
+    )
+    assert 'cancel-in-progress: false' in runner_text, (
+        'same-worker sessions should serialize; factory-runtime deploys cancel stale revisions explicitly'
+    )
     assert 'opencode-free)' in runner_text
     assert 'runtime_model="opencode/${model}"' in runner_text
     assert "branch_suffix='opencode-free'" in runner_text
