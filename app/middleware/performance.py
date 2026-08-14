@@ -47,7 +47,7 @@ async def compute_startup_duration() -> None:
 
 
 def get_startup_time() -> float:
-    """Return the UNIX epoch startup time for the app."""
+    """Return the UNIX epoch timestamp when the application process started."""
     return _startup_epoch
 
 
