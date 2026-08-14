@@ -8,8 +8,8 @@ _startup_monotonic = time.perf_counter()
 # Wall-clock epoch seconds captured at import, exposed as the app startup time.
 _startup_epoch = time.time()
 _startup_duration = None
-_middleware_lock = False  # simple flag for cold start detection
-_cold_start = True
+# _middleware_lock is deprecated; use startup_diagnostics for cold start detection
+# _cold_start is deprecated; cold start detection now handled by startup_diagnostics
 
 class PerformanceMiddleware(BaseHTTPMiddleware):
     """Middleware that records request duration and adds X-Response-Time header.
@@ -17,17 +17,14 @@ class PerformanceMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next):
-        global _middleware_lock, _cold_start
+        from app.startup_diagnostics import next_request_snapshot
         start_ts = time.perf_counter()
         response: Response = await call_next(request)
         end_ts = time.perf_counter()
         duration_ms = (end_ts - start_ts) * 1000
         response.headers["X-Response-Time"] = str(round(duration_ms, 1))
-        if _cold_start:
-            response.headers["X-Server-Cold-Start"] = "true"
-            _cold_start = False
-        else:
-            response.headers["X-Server-Cold-Start"] = "false"
+        snapshot = next_request_snapshot()
+            response.headers["X-Server-Cold-Start"] = "true" if snapshot.cold else "false"
         return response
 
 
