@@ -61,11 +61,14 @@ export function useThreads(searchTermOrOptions?: string | UseThreadsOptions) {
         }
       } while (!pageToken && nextToken);
 
-      if (!cancelled) {
-        setData(allThreads);
-        setNextPageToken(nextToken);
-        invalidateQueries(['threads']);
-      }
+if (!cancelled) {
+  setData(prev => {
+    const merged = pageToken ? [...(prev ?? []), ...allThreads] : allThreads;
+    setNextPageToken(nextToken);
+    return merged;
+  });
+  invalidateQueries(['threads']);
+}
     } catch (error) {
       if (!cancelled) {
         setIsError(true);
@@ -80,7 +83,7 @@ export function useThreads(searchTermOrOptions?: string | UseThreadsOptions) {
 
   useEffect(() => {
     void fetchData().catch(() => undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
   }, [searchTerm]);
 
   const refetch = useCallback((pageToken?: string): Promise<void> => {
