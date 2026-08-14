@@ -81,12 +81,6 @@ jobs:
               configured=true
               reason='configured'
               ;;
-            llm7)
-              runtime_model="llm7/${model}"
-              branch_suffix='llm7'
-              configured=true
-              reason='configured'
-              ;;
             *)
               echo "Unsupported factory source: ${source}" >&2
               exit 1
@@ -182,26 +176,20 @@ jobs:
           echo "$bin_dir" >> "$GITHUB_PATH"
           "$bin_dir/opencode" --version
 
-      - name: Configure keyless OpenCode-compatible provider
-        if: steps.lane.outputs.configured == 'true' && (steps.lane.outputs.source == 'kilo' || steps.lane.outputs.source == 'llm7')
+      - name: Configure anonymous Kilo free-model provider
+        if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source == 'kilo'
         shell: bash
         env:
-          SOURCE: ${{ steps.lane.outputs.source }}
           MODEL: ${{ steps.lane.outputs.model }}
         run: |
           set -Eeuo pipefail
           mkdir -p "$HOME/.config/opencode"
-          case "$SOURCE" in
-            kilo) base_url='https://api.kilo.ai/api/gateway' ;;
-            llm7) base_url='https://api.llm7.io/v1' ;;
-            *) exit 2 ;;
-          esac
-          jq -n --arg provider "$SOURCE" --arg model "$MODEL" --arg base "$base_url" '{
+          jq -n --arg model "$MODEL" '{
             provider: {
-              ($provider): {
+              kilo: {
                 npm: "@ai-sdk/openai-compatible",
-                name: ($provider + " free"),
-                options: {baseURL: $base, apiKey: "free"},
+                name: "Kilo anonymous free models",
+                options: {baseURL: "https://api.kilo.ai/api/gateway"},
                 models: {($model): {name: $model}}
               }
             }
