@@ -10,8 +10,6 @@ on:
     secrets:
       NVIDIA_API_KEY:
         required: false
-      OPENCODE_API_KEY:
-        required: false
 
 permissions:
   contents: write
@@ -37,7 +35,6 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
-      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
     steps:
       - name: Checkout main
         uses: actions/checkout@v6
@@ -70,28 +67,11 @@ jobs:
               configured=true
               reason='configured'
               ;;
-            zen)
+            opencode-free)
               runtime_model="opencode/${model}"
-              branch_suffix='zen'
-              if [[ -n "${OPENCODE_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-OPENCODE_API_KEY'; fi
-              ;;
-            kilo)
-              runtime_model="kilo/${model}"
-              branch_suffix='kilo'
+              branch_suffix='opencode-free'
               configured=true
-              reason='configured'
-              ;;
-            llm7)
-              runtime_model="llm7/${model}"
-              branch_suffix='llm7'
-              configured=true
-              reason='configured'
-              ;;
-            ovhcloud)
-              runtime_model="ovhcloud/${model}"
-              branch_suffix='ovh'
-              configured=true
-              reason='configured'
+              reason='configured-keyless'
               ;;
             *)
               echo "Unsupported factory source: ${source}" >&2
@@ -188,33 +168,6 @@ jobs:
           test -x "$bin_dir/opencode"
           echo "$bin_dir" >> "$GITHUB_PATH"
           "$bin_dir/opencode" --version
-
-      - name: Configure keyless OpenAI-compatible provider
-        if: steps.lane.outputs.configured == 'true' && (steps.lane.outputs.source == 'kilo' || steps.lane.outputs.source == 'llm7' || steps.lane.outputs.source == 'ovhcloud')
-        shell: bash
-        env:
-          SOURCE: ${{ steps.lane.outputs.source }}
-          MODEL: ${{ steps.lane.outputs.model }}
-        run: |
-          set -Eeuo pipefail
-          mkdir -p "$HOME/.config/opencode"
-          case "$SOURCE" in
-            kilo) base_url='https://api.kilo.ai/api/gateway' ;;
-            llm7) base_url='https://api.llm7.io/v1' ;;
-            ovhcloud) base_url='https://oai.endpoints.kepler.ai.cloud.ovh.net/v1' ;;
-            *) echo "Unsupported keyless provider ${SOURCE}" >&2; exit 2 ;;
-          esac
-          jq -n --arg provider "$SOURCE" --arg model "$MODEL" --arg base "$base_url" '{
-            provider: {
-              ($provider): {
-                npm: "@ai-sdk/openai-compatible",
-                name: ($provider + " free lane"),
-                options: {baseURL: $base},
-                models: {($model): {name: $model}}
-              }
-            }
-          }' > "$HOME/.config/opencode/opencode.json"
-          chmod 600 "$HOME/.config/opencode/opencode.json"
 
       - name: Create ephemeral OmniRoute runtime secrets
         if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source == 'omniroute-opencode'
