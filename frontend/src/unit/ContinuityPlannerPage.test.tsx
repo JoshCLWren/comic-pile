@@ -682,4 +682,136 @@ describe('ContinuityPlannerPage', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel changes' }))
     expect(screen.getByLabelText('Plan name')).toHaveValue('My reading plan')
   })
+
+  it('falls back to the generic save message when the rejection is neither an axios detail nor an Error', async () => {
+    mocks.create.mockReset()
+    mocks.create.mockRejectedValueOnce({ code: 500 })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans']}>
+        <Routes>
+          <Route path="/continuity-plans" element={<ContinuityPlannerPage />} />
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
+    await screen.findByRole('option', { name: /Annual 1/i })
+    await user.selectOptions(screen.getByLabelText('Issue'), '40')
+    await user.click(screen.getByRole('button', { name: 'Add issue' }))
+    await user.click(screen.getByRole('button', { name: 'Save plan' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Unable to save this continuity plan\./i)
+  })
+
+  it('breaks the issue pagination loop when the API repeats the same next_page_token', async () => {
+    mocks.listIssues.mockReset()
+    mocks.listIssues
+      .mockResolvedValueOnce({ issues: [issue], total_count: 1, page_size: 100, next_page_token: 'repeat' })
+      .mockResolvedValueOnce({ issues: [secondIssue], total_count: 1, page_size: 100, next_page_token: 'repeat' })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans']}>
+        <Routes>
+          <Route path="/continuity-plans" element={<ContinuityPlannerPage />} />
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
+    await waitFor(() => expect(mocks.listIssues).toHaveBeenCalledTimes(2))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('does not surface an error from an issue request that was aborted by a thread switch', async () => {
+    mocks.listIssues.mockReset()
+    mocks.listIssues
+      .mockImplementationOnce(() => Promise.reject(new Error('stale failure')))
+      .mockResolvedValueOnce({ issues: [secondIssue], total_count: 1, page_size: 100, next_page_token: null })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans']}>
+        <Routes>
+          <Route path="/continuity-plans" element={<ContinuityPlannerPage />} />
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
+    await user.clear(screen.getByLabelText('Comic series'))
+    await user.click(screen.getByRole('option', { name: /New Gods/i }))
+    await screen.findByRole('option', { name: /#7$/ })
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+  })
+
+  it('ignores plan hydration that resolves after the page has unmounted', async () => {
+    let resolveThreads!: (value: { threads: typeof thread[]; next_page_token: string | null }) => void
+    mocks.listThreads.mockReset()
+    mocks.listThreads.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveThreads = resolve
+    }))
+
+    const { unmount } = render(
+      <MemoryRouter initialEntries={['/continuity-plans']}>
+        <Routes>
+          <Route path="/continuity-plans" element={<ContinuityPlannerPage />} />
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    unmount()
+    resolveThreads({ threads: [thread], next_page_token: null })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(mocks.get).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the generic save message when the API detail is an object without a known code', async () => {
+    mocks.create.mockReset()
+    mocks.create.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { data: { detail: { problem: 'wrapped failure' } } },
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans']}>
+        <Routes>
+          <Route path="/continuity-plans" element={<ContinuityPlannerPage />} />
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
+    await screen.findByRole('option', { name: /Annual 1/i })
+    await user.selectOptions(screen.getByLabelText('Issue'), '40')
+    await user.click(screen.getByRole('button', { name: 'Add issue' }))
+    await user.click(screen.getByRole('button', { name: 'Save plan' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Unable to save this continuity plan\./i)
+  })
+
+  it('restores the default plan name when canceling before the initial name has loaded', async () => {
+    mocks.listThreads.mockReset()
+    mocks.listThreads.mockImplementationOnce(() => new Promise(() => {}))
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans']}>
+        <Routes>
+          <Route path="/continuity-plans" element={<ContinuityPlannerPage />} />
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    const cancelButton = await screen.findByRole('button', { name: 'Cancel changes' })
+    await user.click(cancelButton)
+    expect(screen.getByLabelText('Plan name')).toHaveValue('My reading plan')
+  })
 })
