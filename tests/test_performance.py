@@ -1,3 +1,4 @@
+"""Tests for performance telemetry middleware and metrics endpoint."""
 import os
 from fastapi.testclient import TestClient
 
@@ -12,6 +13,7 @@ reset_startup_diagnostics_for_test()
 client = TestClient(app)
 
 def test_response_time_header():
+    """Verify X-Response-Time and X-Server-Cold-Start headers are set."""
     # First request should have cold start true
     response = client.get("/health")
     assert response.status_code == 200
@@ -22,6 +24,7 @@ def test_response_time_header():
     assert response2.headers.get("X-Server-Cold-Start") == "false"
 
 def test_metrics_endpoint():
+    """Verify the /api/metrics endpoint returns startup_time and startup_duration."""
     response = client.get("/api/metrics")
     assert response.status_code == 200
     data = response.json()

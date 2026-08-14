@@ -8,15 +8,24 @@ _startup_monotonic = time.perf_counter()
 # Wall-clock epoch seconds captured at import, exposed as the app startup time.
 _startup_epoch = time.time()
 _startup_duration = None
-# _middleware_lock is deprecated; use startup_diagnostics for cold start detection
-# _cold_start is deprecated; cold start detection now handled by startup_diagnostics
+
 
 class PerformanceMiddleware(BaseHTTPMiddleware):
     """Middleware that records request duration and adds X-Response-Time header.
+
     Also marks the first request as a cold start for metric purposes.
     """
 
     async def dispatch(self, request: Request, call_next):
+        """Process a request, record duration, and attach performance headers.
+
+        Args:
+            request: Incoming HTTP request.
+            call_next: Next middleware or route handler in the chain.
+
+        Returns:
+            Response with X-Response-Time and X-Server-Cold-Start headers.
+        """
         from app.startup_diagnostics import next_request_snapshot
         snapshot = next_request_snapshot()
         start_ts = time.perf_counter()
@@ -28,12 +37,14 @@ class PerformanceMiddleware(BaseHTTPMiddleware):
         return response
 
 
-# Startup and shutdown hooks to compute startup duration
-async def compute_startup_duration():
+async def compute_startup_duration() -> None:
+    """Compute and store the application startup duration.
+
+    Should be called once during the startup event after initialization completes.
+    """
     global _startup_duration
     _startup_duration = time.perf_counter() - _startup_monotonic
 
-# Public API for metrics
 
 def get_startup_time() -> float:
     """Return the UNIX epoch startup time for the app."""
@@ -43,6 +54,3 @@ def get_startup_time() -> float:
 def get_startup_duration() -> float | None:
     """Return the startup duration in seconds, or None if not yet computed."""
     return _startup_duration
-
-# The below are used in the /api/metrics endpoint
-# But compute_startup_duration will be called in startup event
