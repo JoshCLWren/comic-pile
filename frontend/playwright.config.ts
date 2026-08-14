@@ -46,12 +46,12 @@ export default defineConfig({
       use: { ...devices['Desktop Safari'] },
     },
   ],
-  webServer: {
-    command: process.env.REUSE_EXISTING_SERVER
-      ? 'bash -c "echo Reusing existing server; trap \'exit 0\' TERM INT; tail -f /dev/null"'
-      : 'bash -c "cd .. && set -a && source .env.test && set +a && .venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 9000 --workers 4"',
-    port: 9000,
-    reuseExistingServer: !!process.env.REUSE_EXISTING_SERVER,
-    timeout: 120000,
-  },
+webServer: {
+     command: process.env.REUSE_EXISTING_SERVER
+       ? 'bash -c "echo Reusing existing server; trap \'exit 0\' TERM INT; tail -f /dev/null"'
+       : 'bash -c "cd .. && set -a && source .env.test && set +a && python3 -m uvicorn app.main:app --host 0.0.0.0 --port 9000 --workers 4"',
+     port: 9000,
+     reuseExistingServer: !!process.env.REUSE_EXISTING_SERVER,
+     timeout: 120000,
+   },
 });
