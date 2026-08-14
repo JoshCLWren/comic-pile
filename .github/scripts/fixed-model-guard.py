@@ -7,7 +7,7 @@ import argparse
 import json
 import unittest
 
-MAX_RUN_SECONDS = 2400
+MAX_RUN_SECONDS = 1500
 
 
 def unrelated_repair(previous_pr_files: set[str], latest_commit_files: set[str]) -> bool:
@@ -37,8 +37,8 @@ class GuardTests(unittest.TestCase):
         self.assertFalse(unrelated_repair({"app/service.py"}, set()))
 
     def test_runtime_budget(self) -> None:
-        self.assertFalse(over_runtime_budget(2399, "in_progress"))
-        self.assertTrue(over_runtime_budget(2400, "in_progress"))
+        self.assertFalse(over_runtime_budget(1499, "in_progress"))
+        self.assertTrue(over_runtime_budget(1500, "in_progress"))
         self.assertFalse(over_runtime_budget(9999, "completed"))
 
 
