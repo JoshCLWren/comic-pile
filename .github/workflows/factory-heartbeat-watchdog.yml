@@ -127,7 +127,7 @@ jobs:
               `Checked: ${now.toISOString()}`,
               '',
               stale.length
-                ? 'Check ChatGPT Scheduled for factories 1-5 and GitHub Actions fixed-model schedulers for factories 6-47. Do not assign this alert to a factory.'
+                ? 'Check ChatGPT Scheduled for factories 1-5 and the manifest-backed GitHub Actions fixed-model schedulers for the external fleet. Do not assign this alert to a factory.'
                 : 'This alert closes automatically after every worker recovers.',
             ].join('\n');
 
