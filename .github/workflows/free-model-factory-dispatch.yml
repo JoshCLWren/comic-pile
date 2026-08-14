@@ -16,28 +16,25 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/free-model-factory-dispatch.yml'
+      - '.github/workflows/free-model-factory-entry.yml'
       - '.github/workflows/free-model-factory-run.yml'
       - '.github/free-model-factories.tsv'
 
 permissions:
-  contents: write
-  issues: write
-  pull-requests: write
-  actions: read
-  checks: read
+  contents: read
+  actions: write
 
 jobs:
-  resolve:
+  dispatch:
     runs-on: ubuntu-latest
-    outputs:
-      workers: ${{ steps.resolve.outputs.workers }}
     steps:
       - uses: actions/checkout@v6
         with:
           ref: main
-      - id: resolve
+      - name: Resolve and dispatch fixed workers
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
           SCHEDULE: ${{ github.event.schedule }}
           DISPATCH_WORKER: ${{ inputs.worker }}
@@ -57,16 +54,9 @@ jobs:
           fi
 
           [[ "$workers" != '[]' ]] || { echo 'Dispatcher resolved no workers' >&2; exit 1; }
-          echo "workers=$workers" >> "$GITHUB_OUTPUT"
           echo "Dispatching workers: $workers"
 
-  run:
-    needs: resolve
-    strategy:
-      fail-fast: false
-      matrix:
-        worker: ${{ fromJSON(needs.resolve.outputs.workers) }}
-    uses: ./.github/workflows/free-model-factory-run.yml
-    with:
-      worker: ${{ matrix.worker }}
-    secrets: inherit
+          while IFS= read -r worker; do
+            echo "Starting Factory ${worker}"
+            gh workflow run free-model-factory-entry.yml --ref main -f worker="$worker"
+          done < <(jq -r '.[]' <<< "$workers")

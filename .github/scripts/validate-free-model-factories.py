@@ -10,6 +10,7 @@ from pathlib import Path
 
 MANIFEST = Path('.github/free-model-factories.tsv')
 DISPATCHER = Path('.github/workflows/free-model-factory-dispatch.yml')
+ENTRY = Path('.github/workflows/free-model-factory-entry.yml')
 EXPECTED_WORKERS = set(range(6, 47))
 EXPECTED_SOURCE_COUNTS = {
     'nvidia': 26,
@@ -37,7 +38,7 @@ RETIRED_SCHEDULERS = (
     Path('.github/workflows/free-model-factory-d.yml'),
     Path('.github/workflows/free-model-factory-e.yml'),
 )
-REQUIRED_CALLER_PERMISSIONS = (
+ENTRY_PERMISSIONS = (
     'contents: write',
     'issues: write',
     'pull-requests: write',
@@ -112,10 +113,18 @@ def main() -> None:
     assert 'workers=\'["6","32","39"]\'' in dispatcher_text, (
         'dispatcher must retain immediate NVIDIA/OmniRoute/OpenCode post-merge smoke'
     )
-    assert 'matrix:' in dispatcher_text and 'fromJSON(needs.resolve.outputs.workers)' in dispatcher_text
-    assert 'secrets: inherit' in dispatcher_text
-    for permission in REQUIRED_CALLER_PERMISSIONS:
-        assert permission in dispatcher_text, f'dispatcher missing permission {permission!r}'
+    assert 'contents: read' in dispatcher_text and 'actions: write' in dispatcher_text
+    assert 'gh workflow run free-model-factory-entry.yml' in dispatcher_text
+    assert 'matrix:' not in dispatcher_text, 'dispatcher must not dynamically matrix-call reusable workflows'
+
+    assert ENTRY.exists(), 'dispatchable fixed-model entry workflow is missing'
+    entry_text = ENTRY.read_text(encoding='utf-8')
+    assert 'workflow_dispatch:' in entry_text
+    assert 'uses: ./.github/workflows/free-model-factory-run.yml' in entry_text
+    assert 'worker: ${{ inputs.worker }}' in entry_text
+    assert 'secrets: inherit' in entry_text
+    for permission in ENTRY_PERMISSIONS:
+        assert permission in entry_text, f'entry workflow missing permission {permission!r}'
 
     for retired in RETIRED_SCHEDULERS:
         assert not retired.exists(), f'obsolete scheduler still exists: {retired}'
@@ -128,7 +137,7 @@ def main() -> None:
     assert 'rotate_model' not in worker_text, 'fixed-model worker must never rotate models'
     assert 'Do not switch models' in worker_text, 'fixed-model no-fallback contract is missing'
 
-    print('Validated 41 fixed model factories through one four-batch dispatcher.')
+    print('Validated 41 fixed model factories through dispatchable four-batch scheduler.')
     for minute in DISPATCH_MINUTES:
         print(f'  :{minute:02d} -> {actual_batch_counts[minute]} workers')
     for source, count in EXPECTED_SOURCE_COUNTS.items():
