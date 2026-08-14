@@ -133,9 +133,42 @@ def main() -> None:
     assert "branch_suffix='opencode-free'" in runner_text
     assert 'OPENCODE_API_KEY' not in runner_text, 'direct OpenCode Free must remain keyless'
     assert all(source not in runner_text for source in ('kilo)', 'llm7)', 'ovhcloud)', 'zen)'))
+
     worker_text = worker.read_text(encoding='utf-8')
     assert 'rotate_model' not in worker_text
     assert 'Do not switch models' in worker_text
+
+    # Ownership is a next-action lease, never a permanent reservation. A worker
+    # must hand its claims back when a scheduled session ends so another lane can
+    # continue them on the next heartbeat.
+    for required in (
+        'release_owned_targets',
+        'previous-run-stale-lease',
+        'session-end-handoff',
+        'factory:unowned',
+        'comic-pile-factory-implement-claim-v3',
+        'comic-pile-factory-claim-released-v3',
+    ):
+        assert required in worker_text, f'fixed-model lease invariant missing: {required}'
+    assert '--arg prefix "factory/${WORKER}-"' not in worker_text, (
+        'branch provenance must not act as a permanent ownership lease'
+    )
+    assert 'preserving ownership state and selecting other work' not in worker_text, (
+        'stable PR handoffs must release ownership for cross-worker takeover'
+    )
+
+    # Product work wins over generic PR orbiting. If ordinary work is genuinely
+    # unavailable, the worker must select an executable child of the Chromium
+    # backlog-zero epic rather than claim the non-executable #679 container or
+    # report a clean idle heartbeat.
+    issue_selection = worker_text.index("for selector in 'user-reported bug' 'bug' 'ralph-task'")
+    unowned_pr_selection = worker_text.index('done < <(choose_unowned_pr)')
+    assert issue_selection < unowned_pr_selection, 'new product issues must outrank generic unowned PRs'
+    assert 'issues/679/sub_issues' in worker_text, 'fallback must inspect executable #679 children'
+    assert 'choose_backlog_zero_issue' not in worker_text, '#679 epic itself is not executable'
+    assert 'including #679; ending this session cleanly' not in worker_text, (
+        'no-work must not masquerade as a successful productive heartbeat'
+    )
 
     print('Validated 41 fixed model factories on the proven 15-minute watchdog clock.')
     for minute in BATCH_MINUTES:
