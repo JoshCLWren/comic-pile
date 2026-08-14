@@ -3,7 +3,7 @@ const STAGE_RE = /^factory:(?:building|review|changes-requested|ci|ready|blocked
 const WORKER_BRANCH_RE = /^factory\/([1-9]|[1-3][0-9]|4[0-7])-/;
 const MARKER_RE = /<!-- (?:free-model-factory-owner|nvidia-factory-owner|omniroute-factory-owner):([1-9]|[1-3][0-9]|4[0-7]) -->/g;
 
-async function normalize({ github, context }) {
+async function normalize({ github, context, core }) {
   const pullRequest = context.payload.pull_request;
   const number = pullRequest?.number || (context.payload.issue?.pull_request ? context.payload.issue.number : null);
   if (!number) return;
@@ -53,7 +53,7 @@ async function normalize({ github, context }) {
     issue_number: number,
     labels: [...new Set(next)],
   });
-  core?.info?.(`Normalized PR #${number} to ${owner} with ${stage}`);
+  core.info(`Normalized PR #${number} to ${owner} with ${stage}`);
 }
 
 module.exports = normalize;
