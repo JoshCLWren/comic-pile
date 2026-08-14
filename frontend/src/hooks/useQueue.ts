@@ -33,7 +33,7 @@ export function useQueueThreads(searchTerm?: string) {
       )
 
       if (!cancelled) {
-        setData(pageToken ? [...(data ?? []), ...result.threads] : result.threads)
+        setData(prev => pageToken ? [...(prev ?? []), ...result.threads] : result.threads)
         setNextPageToken(result.next_page_token)
       }
     } catch (error) {
@@ -46,11 +46,10 @@ export function useQueueThreads(searchTerm?: string) {
         setIsPending(false)
       }
     }
-  }, [searchTerm, data])
+  }, [searchTerm])
 
   useEffect(() => {
     void fetchData().catch(() => undefined)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm])
 
   const refetch = useCallback((pageToken?: string): Promise<void> => {
