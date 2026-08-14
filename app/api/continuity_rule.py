@@ -3,7 +3,8 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import and_, func, select
+from sqlalchemy import Select, and_, func, literal, or_, select
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -18,6 +19,7 @@ from app.schemas.continuity_rule import (
     ContinuityNodeType,
     ContinuityRuleCreate,
     ContinuityRuleResponse,
+    ConvergenceTarget,
 )
 from comic_pile.dependencies import refresh_user_blocked_status
 
@@ -92,46 +94,67 @@ async def _would_create_cycle(
     target_id: int,
     exclude_rule_id: int | None = None,
 ) -> bool:
-    """Return whether adding source→target would close a path back to source."""
+    """Return whether adding source→target would close a path back to source.
+
+    Convergence targets add implicit edges: a converged rule's target waits for
+    every convergence target, so each convergence target points into the rule's
+    target beyond the stored source→target edge.
+
+    Args:
+        db: Asynchronous database session.
+        user_id: Authenticated user whose owned graph is being validated.
+        source_type: Continuity node kind of the new edge source.
+        source_id: Continuity node identifier of the new edge source.
+        target_type: Continuity node kind of the new edge target.
+        target_id: Continuity node identifier of the new edge target.
+        exclude_rule_id: Rule identifier to skip during graph traversal.
+
+    Returns:
+        True when the new edge would close a dependency cycle.
+    """
     if source_type == target_type and source_id == target_id:
         return True
 
-    edge = ContinuityRule.__table__.alias("continuity_edge")
-    seed_conditions = [
-        edge.c.user_id == user_id,
-        edge.c.source_type == target_type,
-        edge.c.source_id == target_id,
-    ]
-    if exclude_rule_id is not None:
-        seed_conditions.append(edge.c.id != exclude_rule_id)
+    def _owned_conditions(row) -> list:
+        conditions = [row.c.user_id == user_id]
+        if exclude_rule_id is not None:
+            conditions.append(row.c.id != exclude_rule_id)
+        return conditions
 
-    reachable = (
-        select(
-            edge.c.target_type.label("node_type"),
-            edge.c.target_id.label("node_id"),
-        )
-        .where(*seed_conditions)
-        .cte("reachable_continuity_nodes", recursive=True)
-    )
-
-    recursive_edge = ContinuityRule.__table__.alias("recursive_continuity_edge")
-    recursive_conditions = [recursive_edge.c.user_id == user_id]
-    if exclude_rule_id is not None:
-        recursive_conditions.append(recursive_edge.c.id != exclude_rule_id)
-
-    reachable = reachable.union(
-        select(
-            recursive_edge.c.target_type.label("node_type"),
-            recursive_edge.c.target_id.label("node_id"),
-        )
-        .join(
-            reachable,
+    def _targets_of(rules, seed) -> Select:
+        return select(
+            rules.c.target_type.label("node_type"),
+            rules.c.target_id.label("node_id"),
+        ).join(seed, or_(
             and_(
-                recursive_edge.c.source_type == reachable.c.node_type,
-                recursive_edge.c.source_id == reachable.c.node_id,
+                rules.c.source_type == seed.c.node_type,
+                rules.c.source_id == seed.c.node_id,
             ),
-        )
-        .where(*recursive_conditions)
+            func.cast(rules.c.convergence_targets, JSONB).contains(
+                func.jsonb_build_array(
+                    func.jsonb_build_object(
+                        "type",
+                        seed.c.node_type,
+                        "id",
+                        seed.c.node_id,
+                    )
+                )
+            ),
+        ))
+
+    edge = ContinuityRule.__table__.alias("continuity_edge")
+    target_seed = (
+        select(
+            literal(target_type).label("node_type"),
+            literal(target_id).label("node_id"),
+        ).cte("target_seed_node", recursive=False)
+    )
+    initial_targets = _targets_of(edge, target_seed).where(*_owned_conditions(edge))
+
+    reachable = initial_targets.cte("reachable_continuity_nodes", recursive=True)
+    recursive_edge = ContinuityRule.__table__.alias("recursive_continuity_edge")
+    reachable = reachable.union(
+        _targets_of(recursive_edge, reachable).where(*_owned_conditions(recursive_edge))
     )
 
     result = await db.execute(
@@ -143,6 +166,48 @@ async def _would_create_cycle(
         .limit(1)
     )
     return result.first() is not None
+
+
+async def _would_create_convergence_cycle(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    target_type: ContinuityNodeType,
+    target_id: int,
+    convergence_targets: list[ConvergenceTarget],
+    exclude_rule_id: int | None = None,
+) -> bool:
+    """Return whether a converged gate would deadlock the target node.
+
+    A converged rule makes its target readable only once every convergence
+    target is satisfied, so each convergence target acts as a dependency edge
+    directed into the rule target. A self-wait (a convergence target equal to
+    the rule target) or a convergence target already downstream of the rule
+    target closes a dependency cycle.
+
+    Args:
+        db: Asynchronous database session.
+        user_id: Authenticated user whose owned graph is being validated.
+        target_type: Continuity node kind of the rule target.
+        target_id: Continuity node identifier of the rule target.
+        convergence_targets: The requested convergence-target edges.
+        exclude_rule_id: Rule identifier to skip during graph traversal.
+
+    Returns:
+        True when a convergence target would create a cycle or self-deadlock.
+    """
+    for target in convergence_targets:
+        if await _would_create_cycle(
+            db,
+            user_id=user_id,
+            source_type=target.type,
+            source_id=target.id,
+            target_type=target_type,
+            target_id=target_id,
+            exclude_rule_id=exclude_rule_id,
+        ):
+            return True
+    return False
 
 
 def _cycle_conflict(payload: ContinuityRuleCreate) -> HTTPException:
@@ -243,6 +308,15 @@ async def create_continuity_rule(
     ):
         raise _cycle_conflict(payload)
 
+    if await _would_create_convergence_cycle(
+        db,
+        user_id=current_user.id,
+        target_type=payload.target_type,
+        target_id=payload.target_id,
+        convergence_targets=payload.convergence_targets,
+    ):
+        raise _cycle_conflict(payload)
+
     rule = ContinuityRule(
         user_id=current_user.id,
         source_type=payload.source_type,
@@ -311,6 +385,16 @@ async def update_continuity_rule(
         source_id=payload.source_id,
         target_type=payload.target_type,
         target_id=payload.target_id,
+        exclude_rule_id=rule_id,
+    ):
+        raise _cycle_conflict(payload)
+
+    if await _would_create_convergence_cycle(
+        db,
+        user_id=current_user.id,
+        target_type=payload.target_type,
+        target_id=payload.target_id,
+        convergence_targets=payload.convergence_targets,
         exclude_rule_id=rule_id,
     ):
         raise _cycle_conflict(payload)
