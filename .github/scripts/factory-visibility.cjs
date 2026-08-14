@@ -1,8 +1,9 @@
 const WORKER_OWNER_LABELS = Array.from({ length: 46 }, (_, index) => `factory:${index + 1}`);
+const VISIBILITY_MANAGED_OWNER_LABELS = WORKER_OWNER_LABELS.slice(0, 16);
 
 const DEFINITIONS = {
   factory: ['5319E7', 'Work owned or produced by an autonomous ComicPile factory'],
-  ...Object.fromEntries(WORKER_OWNER_LABELS.map((name, index) => [
+  ...Object.fromEntries(VISIBILITY_MANAGED_OWNER_LABELS.map((name, index) => [
     name,
     ['0366D6', `Current next-action owner is ComicPile Factory ${index + 1}`],
   ])),
