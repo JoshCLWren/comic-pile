@@ -21,7 +21,11 @@ on:
         options: ['9','13','17','21','25','29','33','37','41','45']
 
 permissions:
-  contents: read
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: read
+  checks: read
 
 jobs:
   resolve:
