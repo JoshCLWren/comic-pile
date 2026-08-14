@@ -50,6 +50,7 @@ export function useQueueThreads(searchTerm?: string) {
 
   useEffect(() => {
     void fetchData().catch(() => undefined)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm])
 
   const refetch = useCallback((pageToken?: string): Promise<void> => {

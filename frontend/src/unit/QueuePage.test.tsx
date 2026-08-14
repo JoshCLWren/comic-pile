@@ -67,7 +67,7 @@ vi.mock('../contexts/useToast', () => ({
   useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
 }))
 
-const mockedUseQueueThreads = vi.mocked(useThreads) as any
+const mockedUseQueueThreads = vi.mocked(useQueueThreads) as any
 const mockedUseCreateThread = vi.mocked(useCreateThread) as any
 const mockedUseUpdateThread = vi.mocked(useUpdateThread) as any
 const mockedUseDeleteThread = vi.mocked(useDeleteThread) as any

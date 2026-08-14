@@ -4,14 +4,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserRouter, MemoryRouter } from 'react-router-dom'
 import QueuePage from '../pages/QueuePage'
 import { useThreads, useCreateThread, useUpdateThread, useDeleteThread, useReactivateThread } from '../hooks/useThread'
-import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
+import { useQueueThreads, useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { threadsApi, dependenciesApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 
 vi.mock('../hooks/useThread', () => ({ useThreads: vi.fn(), useCreateThread: vi.fn(), useUpdateThread: vi.fn(), useDeleteThread: vi.fn(), useReactivateThread: vi.fn() }))
-vi.mock('../hooks/useQueue', () => ({ useMoveToBack: vi.fn(), useMoveToFront: vi.fn(), useMoveToPosition: vi.fn(), useShuffleQueue: vi.fn() }))
+vi.mock('../hooks/useQueue', () => ({ useQueueThreads: vi.fn(), useMoveToBack: vi.fn(), useMoveToFront: vi.fn(), useMoveToPosition: vi.fn(), useShuffleQueue: vi.fn() }))
 vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn(), useUnsnooze: vi.fn() }))
 vi.mock('../services/api', () => ({ threadsApi: { setPending: vi.fn() }, dependenciesApi: { listBlockedThreadIds: vi.fn(), getBlockingInfo: vi.fn() } }))
@@ -36,6 +36,7 @@ beforeEach(() => {
   vi.stubGlobal('confirm', vi.fn(() => true))
   mocks.mutate.mockResolvedValue(undefined)
   vi.mocked(useThreads).mockReturnValue({ data: [thread, completed] as never, isPending: false, refetch: mocks.refetch } as never)
+  vi.mocked(useQueueThreads).mockImplementation(() => vi.mocked(useThreads)() as any)
   vi.mocked(useSession).mockReturnValue({ data: { snoozed_threads: [] }, refetch: mocks.refetchSession } as never)
   vi.mocked(useCreateThread).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
   vi.mocked(useUpdateThread).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)

@@ -5,7 +5,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
-import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
+import { useQueueThreads, useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import {
@@ -26,6 +26,7 @@ vi.mock('../hooks/useThread', () => ({
 }))
 
 vi.mock('../hooks/useQueue', () => ({
+  useQueueThreads: vi.fn(),
   useMoveToFront: vi.fn(),
   useMoveToBack: vi.fn(),
   useMoveToPosition: vi.fn(),
@@ -57,6 +58,8 @@ vi.mock('../contexts/useToast', () => ({
 }))
 
 const mockedUseThreads = vi.mocked(useThreads) as any
+const mockedUseQueueThreads = vi.mocked(useQueueThreads) as any
+mockedUseQueueThreads.mockImplementation(() => mockedUseThreads())
 const mockedUseSession = vi.mocked(useSession) as any
 const mockedUseSnooze = vi.mocked(useSnooze) as any
 const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
