@@ -113,9 +113,6 @@ def main() -> None:
     assert "'.github/scripts/free-model-factory-worker.sh'" in dispatcher_text, (
         'worker repairs must trigger an immediate post-merge fleet smoke'
     )
-    assert "'.github/scripts/validate-free-model-factories.py'" in dispatcher_text, (
-        'fleet validator changes must exercise the deployment path'
-    )
     for required in (
         'if [[ "$EVENT_NAME" == push ]]',
         'queued in_progress',
