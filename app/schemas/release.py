@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal, Self
 
+from typing import Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 ReleaseVisibility = Literal["public", "internal"]
