@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -141,6 +141,7 @@ class CrossoverTemplatePreviewRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_positive_ids(self) -> CrossoverTemplatePreviewRequest:
+        """Validate that all source_list_ids are positive integers."""
         if any(not isinstance(item_id, int) or item_id <= 0 for item_id in self.source_list_ids):
             raise ValueError("source_list_ids must contain positive integers")
         return self
@@ -159,6 +160,7 @@ class CrossoverTemplateAdoptRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_positive_ids(self) -> CrossoverTemplateAdoptRequest:
+        """Validate that all source_list_ids are positive integers."""
         if any(not isinstance(item_id, int) or item_id <= 0 for item_id in self.source_list_ids):
             raise ValueError("source_list_ids must contain positive integers")
         return self

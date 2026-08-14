@@ -14,6 +14,11 @@ from app.models.issue import Issue
 from app.models.thread import Thread
 from app.models.user import User
 from app.schemas.continuity_plan import (
+    CrossoverTemplateConflictPreview,
+    CrossoverTemplateIntersectionPreview,
+    CrossoverTemplateItemPreview,
+    CrossoverTemplateParallelCandidatePreview,
+    CrossoverTemplateSerialSpinePreview,
     ContinuityPlanResponse,
     ContinuityPlanWrite,
     CrossoverTemplateAdoptRequest,
@@ -21,11 +26,6 @@ from app.schemas.continuity_plan import (
     DerivedCrossoverTemplatePreview,
 )
 from app.services.crossover_templates import (
-    CrossoverTemplateConflict,
-    CrossoverTemplateIntersection,
-    CrossoverTemplateItem,
-    CrossoverTemplateParallelCandidate,
-    CrossoverTemplateSerialSpine,
     DerivedCrossoverTemplate,
     derive_crossover_template_from_lists,
 )
@@ -104,9 +104,7 @@ async def preview_crossover_template(
         request: Source list IDs and optional target story-arc identifier.
         current_user: Authenticated user (reserved for future per-user
             filtering).
-
-
-    db: Async database session.
+        db: Async database session.
 
     Returns:
         Advisory template with items, conflicts, parallel candidates, serial
@@ -181,7 +179,6 @@ async def adopt_crossover_template(
         _refresh_blocked_state,
     )
     from app.models.continuity_plan import ContinuityPlan
-    from app.schemas.continuity_plan import ContinuityPlanWrite
 
     payload = ContinuityPlanWrite(
         name=request.plan_name,
