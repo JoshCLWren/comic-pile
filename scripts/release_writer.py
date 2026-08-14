@@ -24,6 +24,7 @@ _REQUIRED = {
     "title",
     "summary",
 }
+_GITHUB_API_BASE = "https://api.github.com"
 
 
 def _fail(message: str) -> NoReturn:
@@ -65,6 +66,26 @@ def _request(method: str, url: str, payload: dict[str, object] | None = None) ->
         _fail(f"release API returned HTTP {exc.code}: {detail[:1000]}")
     except urllib.error.URLError as exc:
         _fail(f"release API request failed: {exc.reason}")
+
+
+def _github_request(url: str) -> object:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "ComicPile-release-writer",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    token = os.getenv("GH_TOKEN", "").strip()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            return json.loads(response.read().decode())
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode(errors="replace")
+        _fail(f"GitHub API returned HTTP {exc.code}: {detail[:1000]}")
+    except urllib.error.URLError as exc:
+        _fail(f"GitHub API request failed: {exc.reason}")
 
 
 def _parse_timestamp(value: object, name: str) -> str:
@@ -137,6 +158,63 @@ def _check(repository: str, pr_number: str, merge_sha: str) -> None:
     print(json.dumps(result, separators=(",", ":")))
 
 
+def _recent(repository: str, raw_limit: str) -> None:
+    parts = repository.split("/")
+    if len(parts) != 2 or not all(parts):
+        _fail("repository must use owner/name form")
+    try:
+        limit = int(raw_limit)
+    except ValueError:
+        _fail("recent limit must be an integer")
+    if not 1 <= limit <= 100:
+        _fail("recent limit must be between 1 and 100")
+
+    owner, name = (urllib.parse.quote(part, safe="") for part in parts)
+    merged: list[dict[str, object]] = []
+    page = 1
+    while True:
+        query = urllib.parse.urlencode(
+            {
+                "state": "closed",
+                "base": "main",
+                "per_page": 100,
+                "page": page,
+            }
+        )
+        result = _github_request(f"{_GITHUB_API_BASE}/repos/{owner}/{name}/pulls?{query}")
+        if not isinstance(result, list):
+            _fail("GitHub pulls response must be a list")
+        for item in result:
+            if not isinstance(item, dict):
+                continue
+            number = item.get("number")
+            merged_at = item.get("merged_at")
+            merge_sha = item.get("merge_commit_sha")
+            title = item.get("title")
+            if (
+                isinstance(number, int)
+                and isinstance(merged_at, str)
+                and isinstance(merge_sha, str)
+                and isinstance(title, str)
+            ):
+                merged.append(
+                    {
+                        "number": number,
+                        "merged_at": merged_at,
+                        "merge_commit_sha": merge_sha,
+                        "title": title,
+                    }
+                )
+        if len(result) < 100:
+            break
+        page += 1
+        if page > 100:
+            _fail("GitHub pull pagination exceeded safety bound")
+
+    merged.sort(key=lambda item: str(item["merged_at"]), reverse=True)
+    print(json.dumps(merged[:limit], separators=(",", ":")))
+
+
 def _skip(raw: str) -> None:
     try:
         payload = json.loads(raw)
@@ -145,20 +223,48 @@ def _skip(raw: str) -> None:
     required = {"source_repository", "source_pr_number", "source_merge_sha", "merged_at", "reason"}
     if not isinstance(payload, dict) or required - payload.keys():
         _fail("skip payload is missing required fields")
-    _parse_timestamp(payload["merged_at"], "merged_at")
+    merged_at = _parse_timestamp(payload["merged_at"], "merged_at")
     reason = payload["reason"]
     if not isinstance(reason, str) or not reason.strip() or len(reason) > 500:
         _fail("skip reason must be non-empty and at most 500 characters")
-    print(json.dumps({"classification": "internal", "skipped": True, **payload}, separators=(",", ":")))
+
+    internal_release = _validate_release(
+        json.dumps(
+            {
+                "source_repository": payload["source_repository"],
+                "source_pr_number": payload["source_pr_number"],
+                "source_merge_sha": payload["source_merge_sha"],
+                "merged_at": merged_at,
+                "released_at": merged_at,
+                "category": "Internal",
+                "title": f"Internal change (PR #{payload['source_pr_number']})",
+                "summary": reason,
+                "visibility": "internal",
+                "status": "published",
+                "sort_order": 0,
+                "provenance_json": {"classification": "internal", "reason": reason},
+            }
+        )
+    )
+    result = _request("PUT", _api_base() + "/", internal_release)
+    print(
+        json.dumps(
+            {"classification": "internal", "skipped": True, "recorded": True, "release": result},
+            separators=(",", ":"),
+        )
+    )
 
 
 def main() -> None:
     """Run the release-writer command-line interface."""
     if len(sys.argv) < 2:
-        _fail("usage: release_writer.py check|publish|skip ...")
+        _fail("usage: release_writer.py check|recent|publish|skip ...")
     command = sys.argv[1]
     if command == "check" and len(sys.argv) == 5:
         _check(sys.argv[2], sys.argv[3], sys.argv[4])
+        return
+    if command == "recent" and len(sys.argv) == 4:
+        _recent(sys.argv[2], sys.argv[3])
         return
     if command == "publish" and len(sys.argv) == 3:
         payload = _validate_release(sys.argv[2])
