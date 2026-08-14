@@ -259,8 +259,8 @@ persist_issue_pr() {
   local number="$1" branch="$2" pr title body
   [[ -n "$(git status --porcelain)" ]] || return 1
   git add -A
-  git commit -m "factory: advance #${number} with ${DISPLAY}"
-  git push --set-upstream origin "$branch"
+  git commit -m "factory: advance #${number} with ${DISPLAY}" >&2
+  git push --set-upstream origin "$branch" >&2
   pr="$(gh pr list --state open --head "$branch" --json number --jq '.[0].number // empty')"
   if [[ -z "$pr" ]]; then
     title="$(gh issue view "$number" --json title --jq .title)"
