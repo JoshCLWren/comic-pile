@@ -6,8 +6,6 @@ on:
       - opened
       - reopened
       - synchronize
-    paths-ignore:
-      - docs/**
 
 permissions:
   contents: write
