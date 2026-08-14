@@ -527,6 +527,37 @@ describe('ReadingRouteExplanation', () => {
     expect(chainsRefetch).toHaveBeenCalledOnce()
   })
 
+  it('shows authoritative eligibility with a retryable chain-detail error', async () => {
+    mocks.useContinuityReadiness.mockReturnValue({
+      readiness: { node_type: 'issue', node_id: 7, is_readable: true, evaluated_issue_id: 7, blockers: [] },
+      isLoading: false,
+      error: null,
+      refetch,
+    })
+    setupChains({
+      chains: null,
+      isLoading: false,
+      error: new Error('chain detail unavailable'),
+    })
+    render(
+      <ReadingRouteExplanation
+        isOpen
+        issueId={7}
+        issueLabel="Avengers #7"
+        readingOrders={[]}
+        connectedThreads={[]}
+        onClose={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('Currently readable')).toBeVisible()
+    expect(screen.getByText(/expanded prerequisite detail could not be loaded/i)).toBeVisible()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /retry continuity detail/i }))
+    expect(chainsRefetch).toHaveBeenCalledOnce()
+    expect(refetch).not.toHaveBeenCalled()
+  })
+
   it('explains incomplete server details for blocked readiness and zero-length route progress', () => {
     mocks.useContinuityReadiness.mockReturnValue({
       readiness: { node_type: 'issue', node_id: 7, is_readable: false, evaluated_issue_id: 7, blockers: [] },

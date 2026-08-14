@@ -112,8 +112,7 @@ export function ReadingRouteExplanation({
     [chains],
   )
 
-  const hasBridgeState =
-    readinessState.isLoading || chainsState.isLoading || (readinessState.readiness && !chains)
+  const hasBridgeState = readinessState.isLoading || chainsState.isLoading
 
   const headingForEligibility =
     readability === true
@@ -155,7 +154,7 @@ export function ReadingRouteExplanation({
           >
             Checking authoritative readiness…
           </p>
-        ) : readinessState.error || chainsState.error || !readinessState.readiness ? (
+        ) : readinessState.error || !readinessState.readiness ? (
           <div className="mt-2">
             <p className="text-[11px] text-rose-200" role="alert">
               Readiness is unavailable. The pending roll has not been changed.
@@ -169,6 +168,25 @@ export function ReadingRouteExplanation({
               className="mt-3 min-h-11 rounded-xl border border-rose-700/40 px-4 text-xs font-black text-rose-200"
             >
               Retry readiness
+            </button>
+          </div>
+        ) : chainsState.error ? (
+          <div className="mt-2">
+            <p
+              className={`text-[11px] font-bold ${readability ? 'text-emerald-300' : 'text-rose-300'}`}
+            >
+              {headingForEligibility}
+            </p>
+            <p className="mt-1 text-[11px] text-rose-200" role="alert">
+              The authoritative readiness result is shown above, but the expanded prerequisite
+              detail could not be loaded.
+            </p>
+            <button
+              type="button"
+              onClick={chainsState.refetch}
+              className="mt-3 min-h-11 rounded-xl border border-rose-700/40 px-4 text-xs font-black text-rose-200"
+            >
+              Retry continuity detail
             </button>
           </div>
         ) : readability ? (
@@ -185,7 +203,7 @@ export function ReadingRouteExplanation({
         )}
       </section>
 
-      {issueId != null && (hasBridgeState || readinessState.error) ? null : (
+      {issueId != null && (hasBridgeState || readinessState.error || chainsState.error) ? null : (
         <>
           {directBlockers.length > 0 ? (
             <section
