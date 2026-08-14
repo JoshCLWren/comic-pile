@@ -101,7 +101,7 @@ async def derive_crossover_template_from_lists(
     db: AsyncSession,
     *,
     source_list_ids: tuple[int, ...],
-    target_story_arc_id: str,
+    target_story_arc_id: str | None = None,
 ) -> DerivedCrossoverTemplate:
     """Build a crossover template from persisted CBL and ComicVine evidence.
 
