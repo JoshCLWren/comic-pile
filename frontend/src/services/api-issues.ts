@@ -17,9 +17,10 @@ export const issuesApi = {
    */
   list: async (
     threadId: number,
-    params?: { status?: 'unread' | 'read'; page_size?: number; page_token?: string }
+    params?: { status?: 'unread' | 'read'; page_size?: number; page_token?: string },
+    signal?: AbortSignal
   ): Promise<IssueListResponse> => {
-    return api.get(`/v1/threads/${threadId}/issues`, { params })
+    return api.get(`/v1/threads/${threadId}/issues`, { params, ...(signal ? { signal } : {}) })
   },
 
   /**
