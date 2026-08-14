@@ -10,6 +10,14 @@ WORKER = Path('.github/scripts/free-model-factory-worker.sh')
 
 
 def _function_body(name: str) -> str:
+    """Extract the function body from the worker script.
+
+    Args:
+        name: The name of the function to extract from the worker script.
+
+    Returns:
+        The function body text as a string.
+    """
     text = WORKER.read_text(encoding='utf-8')
     match = re.search(rf'(?ms)^{re.escape(name)}\(\) \{{\n(.*?)^\}}$', text)
     assert match is not None, f'{name} function not found'
