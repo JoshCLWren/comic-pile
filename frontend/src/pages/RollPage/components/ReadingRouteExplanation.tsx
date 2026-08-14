@@ -485,7 +485,8 @@ export function ReadingRouteExplanation({
           directBlockers.length === 0 &&
           readablePrerequisites.length === 0 &&
           diagnostics.length === 0 &&
-          upstreamThreads.length === 0 ? (
+          upstreamThreads.length === 0 &&
+          sortedReadingOrders.length === 0 ? (
             <section
               aria-labelledby="no-routes-heading"
               className="rounded-2xl border border-white/10 bg-white/[0.04] p-3"

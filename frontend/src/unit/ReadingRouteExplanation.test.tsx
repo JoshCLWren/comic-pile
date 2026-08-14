@@ -418,6 +418,7 @@ describe('ReadingRouteExplanation', () => {
     expect(screen.getByText('Currently readable')).toBeVisible()
     expect(screen.getByText(/no unresolved hard prerequisite/i)).toBeVisible()
     expect(screen.getByText('Avengers path')).toBeInTheDocument()
+    expect(screen.queryByTestId('no-route-membership')).not.toBeInTheDocument()
   })
 
   it('dismisses with Escape without changing the pending rating state', async () => {
@@ -587,7 +588,8 @@ describe('ReadingRouteExplanation', () => {
       />,
     )
     expect(screen.getByText(/0 of 0 complete · 0%/i)).toBeVisible()
-    expect(screen.getByTestId('no-route-membership')).toBeInTheDocument()
+    expect(screen.queryByTestId('no-route-membership')).not.toBeInTheDocument()
+    expect(screen.getByText('Empty route')).toBeVisible()
   })
 
   it('does not render or lock scrolling while closed', () => {
