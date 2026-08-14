@@ -10,7 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 NODE_TYPES = ("issue", "crossover")
-SATISFACTION_TYPES = ("item_read", "all_members_read", "checkpoint", "selected_members_read")
+SATISFACTION_TYPES = ("item_read", "all_members_read", "checkpoint", "selected_members_read", "converged")
 
 
 class ContinuityRule(Base):
@@ -30,6 +30,9 @@ class ContinuityRule(Base):
     satisfaction_type: Mapped[str] = mapped_column(String(32), nullable=False)
     checkpoint_issue_id: Mapped[int | None] = mapped_column(
         ForeignKey("issues.id", ondelete="RESTRICT"), nullable=True
+    )
+    convergence_targets: Mapped[list[str]] = mapped_column(
+        JSON, nullable=True
     )
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -53,7 +56,7 @@ class ContinuityRule(Base):
         CheckConstraint("source_type IN ('issue', 'crossover')", name="ck_continuity_rule_source_type"),
         CheckConstraint("target_type IN ('issue', 'crossover')", name="ck_continuity_rule_target_type"),
         CheckConstraint(
-            "satisfaction_type IN ('item_read', 'all_members_read', 'checkpoint', 'selected_members_read')",
+            "satisfaction_type IN ('item_read', 'all_members_read', 'checkpoint', 'selected_members_read', 'converged')",
             name="ck_continuity_rule_satisfaction_type",
         ),
         CheckConstraint(
@@ -62,7 +65,9 @@ class ContinuityRule(Base):
         ),
         CheckConstraint(
             "(satisfaction_type = 'checkpoint' AND checkpoint_issue_id IS NOT NULL) OR "
-            "(satisfaction_type <> 'checkpoint' AND checkpoint_issue_id IS NULL)",
+            "(satisfaction_type <> 'checkpoint' AND checkpoint_issue_id IS NULL) "
+            "(satisfaction_type = 'converged' AND convergence_targets IS NOT NULL) OR "
+            "(satisfaction_type <> 'converged' AND convergence_targets IS NULL)",
             name="ck_continuity_rule_checkpoint_shape",
         ),
         UniqueConstraint(

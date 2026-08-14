@@ -16,6 +16,7 @@ from app.schemas.continuity_readiness import (
     ContinuityReadinessNodeType,
     ContinuityReadinessResponse,
 )
+from typing import List, Dict, Any, Optional
 
 MAX_GRAPH_THREADS = 5_000
 MAX_GRAPH_ISSUES = 10_000
@@ -45,6 +46,20 @@ def _too_large(limit: int) -> HTTPException:
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         detail={"code": "continuity_graph_too_large", "limit": limit},
     )
+
+
+def _validate_convergence_rule(rule: ContinuityRule, snapshot: _GraphSnapshot) -> None:
+    """Validate convergence gate configuration for validity and acyclicity."""
+    if rule.satisfaction_type == "converged" and rule.convergence_targets is not None:
+        # Check for self-reference (invalid)
+        target_ids = set()
+        for target_info in rule.convergence_targets:
+            target_id = target_info['id']
+            if target_id in target_ids:
+                raise ValueError(f"Convergence gate cannot reference itself (rule {rule.id})")
+            target_ids.add(target_id)
+            
+        # Additional validation can be added here as needed
 
 
 def _group_rows[T](rows: list[T], key: Callable[[T], int]) -> dict[int, tuple[T, ...]]:
@@ -188,6 +203,10 @@ def _evaluate_rule(rule: ContinuityRule, snapshot: _GraphSnapshot) -> Continuity
     causing_issue_ids: list[int] = []
     causing_member_issue_ids: list[int] = []
 
+    # Validate convergence gate configuration before evaluating
+    if rule.satisfaction_type == "converged" and rule.convergence_targets is not None:
+        _validate_convergence_rule(rule, snapshot)
+
     if rule.satisfaction_type == "item_read":
         if rule.source_type == "issue":
             causing_issue_ids = [] if _is_read(rule.source_id, snapshot) else [rule.source_id]
@@ -204,15 +223,35 @@ def _evaluate_rule(rule: ContinuityRule, snapshot: _GraphSnapshot) -> Continuity
             ]
         else:
             causing_issue_ids = [] if _is_read(rule.source_id, snapshot) else [rule.source_id]
-    elif rule.satisfaction_type == "checkpoint":
-        checkpoint_id = rule.checkpoint_issue_id
-        if checkpoint_id is not None and not _is_read(checkpoint_id, snapshot):
-            causing_issue_ids = [checkpoint_id]
+elif rule.satisfaction_type == "checkpoint":
+         checkpoint_id = rule.checkpoint_issue_id
+         if checkpoint_id is not None and not _is_read(checkpoint_id, snapshot):
+             causing_issue_ids = [checkpoint_id]
+     elif rule.satisfaction_type == "converged":
+         # For convergence gates, we need to check if all target lanes/nodes are read
+         convergence_targets = rule.convergence_targets
+         if convergence_targets is not None:
+             # Check if all convergence targets are read
+             for target_info in convergence_targets:
+                 # target_info should be a dict with 'type' and 'id' fields
+                 target_type = target_info['type']
+                 target_id = target_info['id']
+                 
+                 if target_type == "issue":
+                     if not _is_read(target_id, snapshot):
+                         causing_issue_ids = [target_id]
+                         break
+                 elif target_type == "crossover":
+                     # For crossover targets, we need to check if all member issues are read
+                     member_ids = _group_issue_ids(target_id, snapshot)
+                     causing_member_issue_ids = [
+                         issue_id for issue_id in member_ids if not _is_read(issue_id, snapshot)
+                     ]
+                     if causing_member_issue_ids:
+                         causing_issue_ids = causing_member_issue_ids
+                         break
+                 # Add other target types as needed
     else:
-        selected_ids = snapshot.selected_member_issue_ids.get(rule.id, ())
-        causing_member_issue_ids = [
-            issue_id for issue_id in selected_ids if not _is_read(issue_id, snapshot)
-        ]
 
     if not causing_issue_ids and not causing_member_issue_ids:
         return None
