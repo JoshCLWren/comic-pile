@@ -5,8 +5,10 @@ from fastapi.testclient import TestClient
 # that the conditional router inclusion in create_app() is triggered.
 os.environ["TEST_ENVIRONMENT"] = "true"
 from app.main import create_app
+from app.startup_diagnostics import reset_startup_diagnostics_for_test
 
 app = create_app()
+reset_startup_diagnostics_for_test()
 client = TestClient(app)
 
 def test_response_time_header():

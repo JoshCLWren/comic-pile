@@ -18,12 +18,12 @@ class PerformanceMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         from app.startup_diagnostics import next_request_snapshot
+        snapshot = next_request_snapshot()
         start_ts = time.perf_counter()
         response: Response = await call_next(request)
         end_ts = time.perf_counter()
         duration_ms = (end_ts - start_ts) * 1000
         response.headers["X-Response-Time"] = str(round(duration_ms, 1))
-        snapshot = next_request_snapshot()
         response.headers["X-Server-Cold-Start"] = "true" if snapshot.cold else "false"
         return response
 
