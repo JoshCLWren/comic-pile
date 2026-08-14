@@ -14,7 +14,7 @@ This test file verifies two things:
 
 import pytest
 
-from fastapi.routing import APIRoute
+from fastapi.routing import APIRoute, Mount
 from httpx import AsyncClient
 
 from app.main import create_app
@@ -52,8 +52,6 @@ async def test_api_v1_alias_session_endpoint_matches_legacy(auth_client: AsyncCl
 
 def _collect_routes(app) -> dict[str, frozenset[str]]:
     """Collect all APIRoute paths and methods, including those in IncludedRouters."""
-    from fastapi.routing import APIRoute, Mount
-
     methods_by_path: dict[str, frozenset[str]] = {}
 
     def collect_from_routes(routes):
