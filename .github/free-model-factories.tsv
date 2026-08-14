@@ -1,0 +1,43 @@
+# worker	source	model	minute	display_name
+6	nvidia	z-ai/glm-5.2	7	GLM 5.2
+7	nvidia	moonshotai/kimi-k2.6	19	Kimi K2.6
+8	nvidia	deepseek-ai/deepseek-v4-pro	31	DeepSeek V4 Pro
+9	nvidia	deepseek-ai/deepseek-v4-flash	43	DeepSeek V4 Flash
+10	nvidia	stepfun-ai/step-3.7-flash	55	Step 3.7 Flash
+11	nvidia	nvidia/nemotron-3-ultra-550b-a55b	1	Nemotron 3 Ultra
+12	nvidia	openai/gpt-oss-120b	13	GPT OSS 120B
+13	nvidia	mistralai/mistral-medium-3.5-128b	25	Mistral Medium 3.5
+14	nvidia	minimaxai/minimax-m3	37	MiniMax M3
+15	nvidia	mistralai/mistral-nemotron	49	Mistral Nemotron
+16	omniroute-opencode	oc/mimo-v2.5-free	34	OmniRoute MiMo V2.5 Free
+17	omniroute-opencode	oc/deepseek-v4-flash-free	46	OmniRoute DeepSeek V4 Flash Free
+18	nvidia	nvidia/nemotron-3-super-120b-a12b	0	Nemotron 3 Super
+19	nvidia	nvidia/nemotron-3-nano-omni-30b-a3b-reasoning	2	Nemotron 3 Omni
+20	nvidia	nvidia/llama-3.3-nemotron-super-49b-v1.5	3	Llama 3.3 Nemotron Super 49B
+21	nvidia	nvidia/nemotron-3-nano-30b-a3b	5	Nemotron Nano 30B
+22	nvidia	openai/gpt-oss-20b	6	GPT OSS 20B
+23	nvidia	google/gemma-4-31b-it	8	Gemma 4 31B
+24	nvidia	nvidia/nvidia-nemotron-nano-9b-v2	9	Nemotron Nano 9B v2
+25	nvidia	deepseek-ai/deepseek-coder-6.7b-instruct	10	DeepSeek Coder 6.7B
+26	nvidia	mistralai/codestral-22b-instruct-v0.1	11	Codestral 22B
+27	nvidia	thinkingmachines/inkling	12	Inkling
+28	nvidia	meta/llama-3.2-11b-vision-instruct	14	Llama 3.2 11B Vision
+29	nvidia	nvidia/nemotron-mini-4b-instruct	15	Nemotron Mini 4B
+30	omniroute-opencode	oc/big-pickle	17	OmniRoute Big Pickle
+31	omniroute-opencode	oc/hy3-free	18	OmniRoute HY3 Free
+32	omniroute-opencode	oc/nemotron-3-ultra-free	20	OmniRoute Nemotron 3 Ultra Free
+33	omniroute-opencode	oc/north-mini-code-free	21	OmniRoute North Mini Code Free
+34	omniroute-opencode	oc/poolside/laguna-s-2.1-free	22	OmniRoute Laguna S 2.1 Free
+35	omniroute-opencode	oc/ling-3.0-flash-free	23	OmniRoute Ling 3.0 Flash Free
+36	zen	big-pickle	24	Zen Big Pickle
+37	zen	deepseek-v4-flash-free	26	Zen DeepSeek V4 Flash Free
+38	zen	mimo-v2.5-free	27	Zen MiMo V2.5 Free
+39	zen	nemotron-3-ultra-free	29	Zen Nemotron 3 Ultra Free
+40	zen	north-mini-code-free	30	Zen North Mini Code Free
+41	zen	poolside/laguna-s-2.1-free	32	Zen Laguna S 2.1 Free
+42	zen	ling-3.0-flash-free	33	Zen Ling 3.0 Flash Free
+43	kilo	kilo-auto/free	35	Kilo Auto Free
+44	llm7	minimax-m2.7	36	LLM7 MiniMax M2.7
+45	llm7	gemini-3.1-flash-lite	38	LLM7 Gemini 3.1 Flash Lite
+46	llm7	gpt-oss:20b	39	LLM7 GPT OSS 20B
+47	llm7	codestral-latest	41	LLM7 Codestral Latest
