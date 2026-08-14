@@ -64,7 +64,7 @@ Comic Pile is a dice-driven comic reading tracker built with:
 ### 5. Data Storage
 **Decision**: PostgreSQL with asyncpg for application runtime
 **Documented in**: 
-- [AGENTS.md](AGENTS.md) (Critical: Async PostgreSQL Only in Application Code)
+- [AGENTS.md](../AGENTS.md) (Critical: Async PostgreSQL Only in Application Code)
 - [DATABASE_SAVE_LOAD.md](DATABASE_SAVE_LOAD.md)
 
 **Key Points**:
@@ -75,9 +75,9 @@ Comic Pile is a dice-driven comic reading tracker built with:
 ### 6. Development Workflow
 **Decision**: Unified local development with Docker and Makefile
 **Documented in**: 
-- [README.md](README.md)
-- [Makefile](Makefile)
-- [LOCAL_TESTING.md](LOCAL_TESTING.md)
+- [README.md](../README.md)
+- [Makefile](../Makefile)
+- [LOCAL_TESTING.md](../LOCAL_TESTING.md)
 
 **Key Points**:
 - `make dev` starts both frontend (Vite) and backend (FastAPI) servers
@@ -182,7 +182,7 @@ Comic Pile is a dice-driven comic reading tracker built with:
 
 ## Related Documentation
 
-- [AGENTS.md](AGENTS.md): Project guidelines and conventions for coding agents
+- [AGENTS.md](../AGENTS.md): Project guidelines and conventions for coding agents
 - [API.md](API.md): Complete API reference documentation
 - [REACT_ARCHITECTURE.md](REACT_ARCHITECTURE.md): Frontend-specific architecture
 - [VERCEL_ARCHITECTURE.md](VERCEL_ARCHITECTURE.md): Deployment architecture details
