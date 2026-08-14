@@ -1,0 +1,29 @@
+name: Fixed Model Factory Config
+
+on:
+  pull_request:
+    paths:
+      - '.github/free-model-factories.tsv'
+      - '.github/scripts/free-model-factory-worker.sh'
+      - '.github/scripts/fixed-model-owner-normalize.cjs'
+      - '.github/scripts/validate-free-model-factories.py'
+      - '.github/workflows/free-model-factory-*.yml'
+      - '.github/workflows/factory-heartbeat-watchdog.yml'
+      - '.github/workflows/nvidia-factory-owner-reconcile.yml'
+      - '.github/workflows/factory-visibility.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate fixed-model roster and schedules
+        run: python .github/scripts/validate-free-model-factories.py
+      - name: Check JavaScript helper syntax
+        run: node --check .github/scripts/fixed-model-owner-normalize.cjs
+      - name: Check shell worker syntax
+        run: bash -n .github/scripts/free-model-factory-worker.sh

@@ -36,3 +36,10 @@ jobs:
           script: |
             const reconcile = require('./.github/scripts/factory-visibility.cjs');
             await reconcile({ github, context, core });
+
+      - name: Normalize fixed-model owners 17-47
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const normalize = require('./.github/scripts/fixed-model-owner-normalize.cjs');
+            await normalize({ github, context, core });
