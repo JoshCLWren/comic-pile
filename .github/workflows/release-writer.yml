@@ -33,6 +33,27 @@ jobs:
           ref: main
           persist-credentials: false
 
+      - name: Validate release-writer credentials
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ -z "$RELEASE_WRITER_TOKEN" ]]; then
+            echo '::error::RELEASE_WRITER_TOKEN is not configured in GitHub Actions secrets.'
+            exit 1
+          fi
+          if [[ -z "$NVIDIA_API_KEY" ]]; then
+            echo '::error::NVIDIA_API_KEY is not configured in GitHub Actions secrets.'
+            exit 1
+          fi
+
+      - name: Install OpenCode CLI
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          curl -fsSL https://opencode.ai/install | bash
+          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+          "$HOME/.opencode/bin/opencode" --version
+
       - name: Install pinned FCM discovery CLI
         run: npm install --global --ignore-scripts free-coding-models@0.5.69
 
@@ -65,14 +86,11 @@ jobs:
           printf 'prompt=%s\n' "$prompt" >> "$GITHUB_OUTPUT"
 
       - name: Run dedicated release writer
-        uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
-          RELEASE_API_URL: ${{ env.RELEASE_API_URL }}
-          RELEASE_WRITER_TOKEN: ${{ secrets.RELEASE_WRITER_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          MODEL: ${{ steps.model.outputs.model }}
           PROMPT: ${{ steps.prompt.outputs.prompt }}
-        with:
-          model: ${{ steps.model.outputs.model }}
-          agent: release-writer
-          use_github_token: true
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          opencode run -m "$MODEL" --agent release-writer --auto --dir "$GITHUB_WORKSPACE" --title "ComicPile release writer" "$PROMPT"
