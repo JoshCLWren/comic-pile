@@ -832,6 +832,7 @@ export default function RollPage() {
               pool={pool}
               blockedThreads={blockedThreads}
               blockingReasonMap={blockingReasonMap}
+              dieSize={dieSize}
               isRatingView={isRatingView}
               isRolling={isRolling}
               rolledResult={rolledResult}
