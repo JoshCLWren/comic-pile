@@ -60,6 +60,9 @@ RUN pnpm install --frozen-lockfile && \
 # Stage 6: Frontend build.
 FROM frontend-deps AS frontend-build
 COPY frontend/ frontend/
+COPY app/ app/
+COPY comic_pile/ comic_pile/
+COPY pyproject.toml ./
 RUN pnpm --filter frontend run build
 
 # Stage 7: Final image with everything.
