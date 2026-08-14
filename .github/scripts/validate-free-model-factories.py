@@ -7,19 +7,25 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 MANIFEST = Path('.github/free-model-factories.tsv')
-EXPECTED_WORKERS = set(range(6, 48))
+EXPECTED_WORKERS = set(range(6, 46))
 EXPECTED_SOURCE_COUNTS = {
     'nvidia': 22,
     'omniroute-opencode': 8,
     'zen': 7,
-    'kilo': 1,
-    'llm7': 4,
+    'kilo': 3,
 }
 EXPECTED_SCHEDULERS = {'A', 'B', 'C', 'D'}
 RETIRED_SCHEDULERS = (
     Path('.github/workflows/nvidia-factory-6.yml'),
     Path('.github/workflows/omniroute-factory-16.yml'),
     Path('.github/workflows/omniroute-factory-17.yml'),
+)
+REQUIRED_CALLER_PERMISSIONS = (
+    'contents: write',
+    'issues: write',
+    'pull-requests: write',
+    'actions: read',
+    'checks: read',
 )
 
 
@@ -31,7 +37,7 @@ def main() -> None:
             delimiter='\t',
         ))
 
-    assert len(rows) == 42, f'expected 42 fixed-model lanes, got {len(rows)}'
+    assert len(rows) == 40, f'expected 40 fixed-model lanes, got {len(rows)}'
 
     workers = [int(row['worker']) for row in rows]
     assert set(workers) == EXPECTED_WORKERS, (
@@ -81,6 +87,10 @@ def main() -> None:
             f'scheduler {scheduler} workflow does not match manifest: '
             f'expected={ordered} actual={sorted(actual)}'
         )
+        for permission in REQUIRED_CALLER_PERMISSIONS:
+            assert permission in text, (
+                f'scheduler {scheduler} is missing reusable-worker permission {permission!r}'
+            )
 
     for retired in RETIRED_SCHEDULERS:
         assert not retired.exists(), f'obsolete rotating scheduler still exists: {retired}'
@@ -93,7 +103,7 @@ def main() -> None:
     assert 'rotate_model' not in worker_text, 'fixed-model worker must never rotate models'
     assert 'Do not switch models' in worker_text, 'fixed-model no-fallback contract is missing'
 
-    print('Validated 42 fixed-model factory lanes across schedulers A-D.')
+    print('Validated 40 fixed-model factory lanes across schedulers A-D.')
     for source, count in EXPECTED_SOURCE_COUNTS.items():
         print(f'  {source}: {count}')
 
