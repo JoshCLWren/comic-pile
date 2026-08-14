@@ -12,13 +12,23 @@ from scripts import release_writer
 
 
 def _capture_stderr(func, *args, **kwargs) -> str:
-    """Capture stderr from a function call that exits unsuccessfully."""
+    """Capture stderr from a function call that exits unsuccessfully.
+
+    Args:
+        func: The function to call.
+        *args: Positional arguments to pass to func.
+        **kwargs: Keyword arguments to pass to func.
+
+    Returns:
+        The captured stderr output as a string.
+    """
     f = io.StringIO()
     with redirect_stderr(f):
         try:
             func(*args, **kwargs)
         except SystemExit as exc:
-            assert exc.code == 2
+            if exc.code != 2:
+                pytest.fail(f"Expected SystemExit with exit code 2, got {exc.code}")
         else:
             pytest.fail("Expected SystemExit with exit code 2")
     return f.getvalue()
@@ -127,6 +137,10 @@ class TestReleaseWriterValidation:
         assert "source_pr_number must be a positive integer" in stderr
 
         payload["source_pr_number"] = True
+        stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
+        assert "source_pr_number must be a positive integer" in stderr
+
+        payload["source_pr_number"] = False
         stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
         assert "source_pr_number must be a positive integer" in stderr
 
@@ -326,9 +340,15 @@ class TestReleaseWriterCheck:
         """
         with patch.object(release_writer, "_request") as mock_request:
             mock_request.return_value = {"exists": True, "release": {"id": 42}}
-            with patch.object(release_writer, "_api_base", return_value="http://test/api"):
-                with patch.object(release_writer, "_token", return_value="test-token"):
-                    release_writer._check("JoshCLWren/comic-pile", "123", "abcdef1234567890")
+            with patch.object(
+                release_writer, "_api_base", return_value="http://test/api"
+            ):
+                with patch.object(
+                    release_writer, "_token", return_value="test-token"
+                ):
+                    release_writer._check(
+                        "JoshCLWren/comic-pile", "123", "abcdef1234567890"
+                    )
             mock_request.assert_called_once()
             args, kwargs = mock_request.call_args
             assert args[0] == "GET"
@@ -413,9 +433,15 @@ class TestReleaseWriterSkip:
         }
         with patch.object(release_writer, "_request") as mock_request:
             mock_request.return_value = {"id": 1}
-            with patch.object(release_writer, "_api_base", return_value="http://test/api"):
-                with patch.object(release_writer, "_token", return_value="test-token"):
-                    output = _capture_stdout(release_writer._skip, json.dumps(payload))
+            with patch.object(
+                release_writer, "_api_base", return_value="http://test/api"
+            ):
+                with patch.object(
+                    release_writer, "_token", return_value="test-token"
+                ):
+                    output = _capture_stdout(
+                        release_writer._skip, json.dumps(payload)
+                    )
         result = json.loads(output.strip())
         assert result["classification"] == "internal"
         assert result["skipped"] is True
@@ -453,8 +479,12 @@ class TestReleaseWriterRequest:
             mock_response.__exit__ = Mock(return_value=False)
             mock_urlopen.return_value = mock_response
 
-            with patch.object(release_writer, "_api_base", return_value="http://test/api"):
-                with patch.object(release_writer, "_token", return_value="secret-token"):
+            with patch.object(
+                release_writer, "_api_base", return_value="http://test/api"
+            ):
+                with patch.object(
+                    release_writer, "_token", return_value="secret-token"
+                ):
                     release_writer._request("PUT", "http://test/api/", {"test": "data"})
 
             call_args = mock_urlopen.call_args
@@ -486,8 +516,12 @@ class TestReleaseWriterRequest:
             )
             mock_urlopen.side_effect = http_error
 
-            with patch.object(release_writer, "_api_base", return_value="http://test/api"):
-                with patch.object(release_writer, "_token", return_value="secret-token"):
+            with patch.object(
+                release_writer, "_api_base", return_value="http://test/api"
+            ):
+                with patch.object(
+                    release_writer, "_token", return_value="secret-token"
+                ):
                     stderr = _capture_stderr(
                         release_writer._request,
                         "PUT",
@@ -511,8 +545,12 @@ class TestReleaseWriterRequest:
             url_error = urllib.error.URLError(reason="Connection refused")
             mock_urlopen.side_effect = url_error
 
-            with patch.object(release_writer, "_api_base", return_value="http://test/api"):
-                with patch.object(release_writer, "_token", return_value="secret-token"):
+            with patch.object(
+                release_writer, "_api_base", return_value="http://test/api"
+            ):
+                with patch.object(
+                    release_writer, "_token", return_value="secret-token"
+                ):
                     stderr = _capture_stderr(
                         release_writer._request,
                         "PUT",

@@ -181,7 +181,9 @@ def _recent(repository: str, raw_limit: str) -> None:
                 "page": page,
             }
         )
-        result = _github_request(f"{_GITHUB_API_BASE}/repos/{owner}/{name}/pulls?{query}")
+        result = _github_request(
+            f"{_GITHUB_API_BASE}/repos/{owner}/{name}/pulls?{query}"
+        )
         if not isinstance(result, list):
             _fail("GitHub pulls response must be a list")
         if page > 100 and result:
