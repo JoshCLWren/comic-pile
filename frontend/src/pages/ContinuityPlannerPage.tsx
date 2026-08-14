@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import axios from 'axios'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
@@ -84,7 +84,8 @@ function toPayload(name: string, nodes: PlannerNode[]) {
 export default function ContinuityPlannerPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const planId = id ? Number(id) : null
+  const parsedId = id ? Number(id) : null
+  const planId = parsedId && Number.isInteger(parsedId) && parsedId > 0 ? parsedId : null
   const [name, setName] = useState(DEFAULT_PLAN_NAME)
   const [nodes, setNodes] = useState<PlannerNode[]>([])
   const [savedName, setSavedName] = useState('')
@@ -99,8 +100,10 @@ export default function ContinuityPlannerPage() {
   const [isLoadingIssues, setIsLoadingIssues] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [issueLoadError, setIssueLoadError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const lastPlanId = typeof window === 'undefined' ? null : window.localStorage.getItem(LAST_PLAN_KEY)
+  const issueRequestRef = useRef<AbortController | null>(null)
 
   const isDirty = name !== savedName || JSON.stringify(nodes) !== JSON.stringify(savedNodes)
 
@@ -132,7 +135,8 @@ export default function ContinuityPlannerPage() {
           return
         }
         const plan = await continuityPlansApi.get(planId)
-        const hydrated = await hydrateLabels(plan.nodes, loadedGroups)
+        const orderedNodes = [...plan.nodes].sort((a, b) => a.position - b.position)
+        const hydrated = await hydrateLabels(orderedNodes, loadedGroups)
         if (!active) return
         setName(plan.name)
         setNodes(hydrated)
@@ -149,14 +153,24 @@ export default function ContinuityPlannerPage() {
     setSelectedThread(thread)
     setSelectedIssue(null)
     setIssues([])
-    if (!thread) return
+    setIssueLoadError(null)
+    if (!thread) {
+      setIsLoadingIssues(false)
+      return
+    }
+    if (issueRequestRef.current) issueRequestRef.current.abort()
+    const controller = new AbortController()
+    issueRequestRef.current = controller
     setIsLoadingIssues(true)
     try {
-      setIssues(await fetchAllIssues(thread.id))
+      const loadedIssues = await fetchAllIssues(thread.id)
+      if (controller.signal.aborted) return
+      setIssues(loadedIssues)
     } catch (error) {
-      setLoadError(errorMessage(error, 'Unable to load issues for that comic.'))
+      if (controller.signal.aborted) return
+      setIssueLoadError(errorMessage(error, 'Unable to load issues for that comic.'))
     } finally {
-      setIsLoadingIssues(false)
+      if (!controller.signal.aborted) setIsLoadingIssues(false)
     }
   }
 
@@ -268,7 +282,7 @@ export default function ContinuityPlannerPage() {
         <form onSubmit={addIssue} className="space-y-3" aria-label="Add an issue">
           <h2 className="font-black text-stone-100">Add an issue</h2>
           <ContinuityThreadSelector threads={threads} value={selectedThread} onChange={(thread) => void selectThread(thread)} label="Comic series" />
-          <ContinuityIssueSelector issues={issues} value={selectedIssue} onChange={setSelectedIssue} isLoading={isLoadingIssues} disabled={!selectedThread} />
+          <ContinuityIssueSelector issues={issues} value={selectedIssue} onChange={setSelectedIssue} isLoading={isLoadingIssues} disabled={!selectedThread} error={issueLoadError} />
           <button type="submit" disabled={!selectedIssue} className="min-h-11 w-full rounded-xl bg-amber-500 px-4 font-black text-stone-950 disabled:opacity-50">Add issue</button>
         </form>
 
