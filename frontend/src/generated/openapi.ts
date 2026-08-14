@@ -3867,7 +3867,7 @@ export interface components {
              * Satisfaction Type
              * @enum {string}
              */
-            satisfaction_type: "item_read" | "all_members_read" | "checkpoint" | "selected_members_read";
+            satisfaction_type: "item_read" | "all_members_read" | "checkpoint" | "selected_members_read" | "converged";
             /**
              * Satisfied
              * @default false
@@ -4004,13 +4004,15 @@ export interface components {
         ContinuityRuleCreate: {
             /** Checkpoint Issue Id */
             checkpoint_issue_id?: number | null;
+            /** Convergence Targets */
+            convergence_targets?: components["schemas"]["ConvergenceTarget"][];
             /** Note */
             note?: string | null;
             /**
              * Satisfaction Type
              * @enum {string}
              */
-            satisfaction_type: "item_read" | "all_members_read" | "checkpoint" | "selected_members_read";
+            satisfaction_type: "item_read" | "all_members_read" | "checkpoint" | "selected_members_read" | "converged";
             /** Selected Member Issue Ids */
             selected_member_issue_ids?: number[];
             /** Source Id */
@@ -4035,6 +4037,8 @@ export interface components {
         ContinuityRuleResponse: {
             /** Checkpoint Issue Id */
             checkpoint_issue_id: number | null;
+            /** Convergence Targets */
+            convergence_targets: components["schemas"]["ConvergenceTarget"][];
             /**
              * Created At
              * Format: date-time
@@ -4048,7 +4052,7 @@ export interface components {
              * Satisfaction Type
              * @enum {string}
              */
-            satisfaction_type: "item_read" | "all_members_read" | "checkpoint" | "selected_members_read";
+            satisfaction_type: "item_read" | "all_members_read" | "checkpoint" | "selected_members_read" | "converged";
             /** Selected Member Issue Ids */
             selected_member_issue_ids: number[];
             /** Source Id */
@@ -4072,6 +4076,19 @@ export interface components {
             updated_at: string;
             /** User Id */
             user_id: number;
+        };
+        /**
+         * ConvergenceTarget
+         * @description A single node a converged continuity rule waits for.
+         */
+        ConvergenceTarget: {
+            /** Id */
+            id: number;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "issue" | "crossover";
         };
         /**
          * DependencyCreate

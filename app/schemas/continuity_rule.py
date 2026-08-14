@@ -65,6 +65,11 @@ class ContinuityRuleCreate(BaseModel):
         elif self.selected_member_issue_ids:
             raise ValueError("selected_member_issue_ids are only valid for selected-member rules")
         self.selected_member_issue_ids = list(dict.fromkeys(self.selected_member_issue_ids))
+        if self.convergence_targets:
+            seen_targets: dict[tuple[str, int], ConvergenceTarget] = {}
+            for target in self.convergence_targets:
+                seen_targets[(target.type, target.id)] = target
+            self.convergence_targets = list(seen_targets.values())
         return self
 
 

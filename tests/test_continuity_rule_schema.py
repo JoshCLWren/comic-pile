@@ -115,3 +115,27 @@ def test_convergence_targets_rejected_for_other_policies() -> None:
             satisfaction_type="item_read",
             convergence_targets=[{"type": "issue", "id": 3}],
         )
+
+
+def test_convergence_targets_are_deduplicated() -> None:
+    """Deduplicate repeated convergence targets while preserving order."""
+    rule = ContinuityRuleCreate(
+        source_type="issue",
+        source_id=1,
+        target_type="issue",
+        target_id=2,
+        satisfaction_type="converged",
+        convergence_targets=[
+            {"type": "issue", "id": 3},
+            {"type": "issue", "id": 4},
+            {"type": "issue", "id": 3},
+            {"type": "crossover", "id": 5},
+            {"type": "crossover", "id": 5},
+        ],
+    )
+
+    assert [target.model_dump() for target in rule.convergence_targets] == [
+        {"type": "issue", "id": 3},
+        {"type": "issue", "id": 4},
+        {"type": "crossover", "id": 5},
+    ]

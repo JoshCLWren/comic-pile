@@ -308,3 +308,32 @@ async def test_converged_rule_rejects_unowned_target(
     response = await auth_client.post("/api/v1/continuity-rules/", json=payload)
     assert response.status_code == 404
 
+
+@pytest.mark.asyncio
+async def test_converged_rule_rejects_unowned_crossover_target(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Convergence crossover targets must be owned by the authenticated user."""
+    user = await get_or_create_user_async(async_db)
+    source = await _make_issue(async_db, user_id=user.id, suffix="converged-x-source")
+    target = await _make_issue(async_db, user_id=user.id, suffix="converged-x-target")
+    other_user = User(username="converged-x-other", email="converged-x-other@example.com")
+    async_db.add(other_user)
+    await async_db.flush()
+    foreign_group = DependencyGroup(user_id=other_user.id, name="Foreign crossover")
+    async_db.add(foreign_group)
+    await async_db.flush()
+    await async_db.commit()
+
+    payload = {
+        "source_type": "issue",
+        "source_id": source.id,
+        "target_type": "issue",
+        "target_id": target.id,
+        "satisfaction_type": "converged",
+        "convergence_targets": [{"type": "crossover", "id": foreign_group.id}],
+    }
+    response = await auth_client.post("/api/v1/continuity-rules/", json=payload)
+    assert response.status_code == 404
+
