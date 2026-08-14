@@ -15,9 +15,9 @@ EXPECTED_WORKERS = set(range(6, 47))
 EXPECTED_SOURCE_COUNTS = {
     'nvidia': 26,
     'omniroute-opencode': 7,
-    'zen': 8,
+    'opencode-free': 8,
 }
-EXPECTED_ZEN_MODELS = {
+EXPECTED_OPENCODE_FREE_MODELS = {
     'big-pickle',
     'deepseek-v4-flash-free',
     'hy3-free',
@@ -64,10 +64,13 @@ def main() -> None:
     source_counts = Counter(row['source'] for row in rows)
     assert source_counts == EXPECTED_SOURCE_COUNTS, f'unexpected source counts: {dict(source_counts)}'
 
-    zen_models = {row['model'] for row in rows if row['source'] == 'zen'}
-    assert zen_models == EXPECTED_ZEN_MODELS, (
-        f'OpenCode free roster changed: missing={sorted(EXPECTED_ZEN_MODELS - zen_models)} '
-        f'extra={sorted(zen_models - EXPECTED_ZEN_MODELS)}'
+    opencode_free_models = {row['model'] for row in rows if row['source'] == 'opencode-free'}
+    assert opencode_free_models == EXPECTED_OPENCODE_FREE_MODELS, (
+        f'OpenCode free roster changed: missing={sorted(EXPECTED_OPENCODE_FREE_MODELS - opencode_free_models)} '
+        f'extra={sorted(opencode_free_models - EXPECTED_OPENCODE_FREE_MODELS)}'
+    )
+    assert not any(row['source'] in {'zen', 'kilo', 'llm7', 'ovhcloud'} for row in rows), (
+        'retired or unrelated provider source returned to the fixed-model roster'
     )
 
     source_models = [(row['source'], row['model']) for row in rows]
@@ -76,6 +79,10 @@ def main() -> None:
         row['source'] == 'nvidia' and row['model'] == 'deepseek-ai/deepseek-v4-pro'
         for row in rows
     )
+    assert not any(
+        row['source'] == 'nvidia' and row['model'] == 'mistralai/mistral-medium-3.5-128b'
+        for row in rows
+    ), 'Factory 13 retired NVIDIA model returned to the roster'
 
     expected_batch_counts = Counter({0: 11, 15: 10, 30: 10, 45: 10})
     actual_batch_counts: Counter[int] = Counter()
@@ -120,6 +127,12 @@ def main() -> None:
     runner = Path('.github/workflows/free-model-factory-run.yml')
     worker = Path('.github/scripts/free-model-factory-worker.sh')
     assert runner.exists() and worker.exists()
+    runner_text = runner.read_text(encoding='utf-8')
+    assert 'opencode-free)' in runner_text
+    assert 'runtime_model="opencode/${model}"' in runner_text
+    assert "branch_suffix='opencode-free'" in runner_text
+    assert 'OPENCODE_API_KEY' not in runner_text, 'direct OpenCode Free must remain keyless'
+    assert all(source not in runner_text for source in ('kilo)', 'llm7)', 'ovhcloud)', 'zen)'))
     worker_text = worker.read_text(encoding='utf-8')
     assert 'rotate_model' not in worker_text
     assert 'Do not switch models' in worker_text
