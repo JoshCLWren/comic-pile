@@ -1,11 +1,9 @@
 name: Fixed Model Factory Dispatcher
 
 on:
-  schedule:
-    - cron: '7 * * * *'
-    - cron: '22 * * * *'
-    - cron: '37 * * * *'
-    - cron: '52 * * * *'
+  workflow_run:
+    workflows: ['Factory heartbeat watchdog']
+    types: [completed]
   workflow_dispatch:
     inputs:
       worker:
@@ -26,6 +24,7 @@ permissions:
 
 jobs:
   dispatch:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -36,7 +35,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
-          SCHEDULE: ${{ github.event.schedule }}
+          WATCHDOG_RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
           DISPATCH_WORKER: ${{ inputs.worker }}
         run: |
           set -Eeuo pipefail
@@ -45,9 +44,12 @@ jobs:
           if [[ "$EVENT_NAME" == workflow_dispatch && -n "${DISPATCH_WORKER:-}" ]]; then
             awk -F '\t' -v worker="$DISPATCH_WORKER" '$1 == worker {found=1} END {exit !found}' "$manifest"
             workers="$(jq -nc --arg worker "$DISPATCH_WORKER" '[$worker]')"
-          elif [[ "$EVENT_NAME" == schedule ]]; then
-            minute="${SCHEDULE%% *}"
+          elif [[ "$EVENT_NAME" == workflow_run ]]; then
+            slots=(0 15 30 45)
+            index=$((WATCHDOG_RUN_NUMBER % 4))
+            minute="${slots[$index]}"
             workers="$(awk -F '\t' -v minute="$minute" '$4 == minute {print $1}' "$manifest" | jq -Rsc 'split("\n") | map(select(length > 0))')"
+            echo "Watchdog run ${WATCHDOG_RUN_NUMBER} selected :$(printf '%02d' "$minute") batch"
           else
             # Immediate post-merge/manual smoke: NVIDIA, OmniRoute, OpenCode.
             workers='["6","32","39"]'
