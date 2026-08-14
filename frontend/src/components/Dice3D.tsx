@@ -921,10 +921,6 @@ export default function Dice3D({
     renderer.setClearColor(0x000000, 0);
     rendererRef.current = renderer;
 
-    // Re-measure the container and resize the renderer when it becomes visible
-    // or changes size. A die that mounts while its parent is hidden (clientWidth
-    // 0) otherwise keeps the initial fallback size forever and renders full-size
-    // once revealed.
     const applySize = () => {
       const nextW = container.clientWidth;
       const nextH = container.clientHeight;

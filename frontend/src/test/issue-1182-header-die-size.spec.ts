@@ -7,19 +7,19 @@ test.describe('Issue #1182: duplicate full-size die after rating', () => {
     const username = `issue1182_${timestamp}_${Math.random().toString(36).slice(2, 8)}@example.com`;
     const password = 'TestPass123!';
 
-const registerResponse = await page.request.post('/api/v1/auth/register', {
+const registerResponse = await page.request.post('/api/auth/register', {
   data: { username, email: username, password },
 });
     expect(registerResponse.ok()).toBeTruthy();
 
-    const loginResponse = await page.request.post('/api/v1/auth/login', {
+    const loginResponse = await page.request.post('/api/auth/login', {
       data: { username, password },
     });
     expect(loginResponse.ok()).toBeTruthy();
     const loginData = (await loginResponse.json()) as { access_token: string };
     const token = loginData.access_token;
 
-    const csrfResponse = await page.request.get('/api/v1/auth/csrf', {
+    const csrfResponse = await page.request.get('/api/auth/csrf', {
       headers: { Authorization: `Bearer ${token}` },
     });
     expect(csrfResponse.ok()).toBeTruthy();
@@ -30,13 +30,13 @@ const registerResponse = await page.request.post('/api/v1/auth/register', {
       'X-CSRF-Token': csrfData.csrf_token,
     };
 
-    const threadResponse = await page.request.post('/api/v1/threads/', {
+    const threadResponse = await page.request.post('/api/threads/', {
       data: { title: `Issue 1182 thread ${timestamp}`, format: 'comic', issues_remaining: 5 },
       headers: authHeaders,
     });
     expect(threadResponse.ok()).toBeTruthy();
     const threadData = (await threadResponse.json()) as { id: number };
-    const issuesResponse = await page.request.post(`/api/v1/threads/${threadData.id}/issues`, {
+    const issuesResponse = await page.request.post(`/api/threads/${threadData.id}/issues`, {
       data: { issue_range: '1-10' },
       headers: authHeaders,
     });
@@ -65,7 +65,7 @@ const registerResponse = await page.request.post('/api/v1/auth/register', {
 
     await setRangeInput(page, '#rating-input', '4');
     const rateResponse = page.waitForResponse(
-      (response) => response.url().includes('/api/v1/rate/') && response.request().method() === 'POST',
+      (response) => response.url().includes('/api/rate/') && response.request().method() === 'POST',
     );
     await page.click('button[data-testid="save-and-continue"]');
     await rateResponse;
