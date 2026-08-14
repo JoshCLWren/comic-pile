@@ -19,6 +19,13 @@ function releasedAtTimestamp(release: Release) {
   return Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed
 }
 
+export function releaseDisplayText(text: string) {
+  return text
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .trim()
+}
+
 export function sortReleasesNewestFirst(releases: Release[]): Release[] {
   return [...releases].sort((left, right) => {
     const timestampDifference = releasedAtTimestamp(right) - releasedAtTimestamp(left)
@@ -79,13 +86,18 @@ export function groupReleasesByDay(releases: Release[], timeZone?: string): Rele
 }
 
 function ReleaseCard({ release }: { release: Release }) {
+  const title = releaseDisplayText(release.title)
+  const summary = releaseDisplayText(release.summary)
+
   return (
     <article className="rounded-xl border border-stone-800 bg-stone-900/50 p-4">
       <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-400">
         {release.category}
       </p>
-      <h3 className="mt-1 text-lg font-bold text-stone-100">{release.title}</h3>
-      <p className="mt-2 leading-7 text-stone-300">{release.summary}</p>
+      <h3 className="mt-1 text-lg font-bold text-stone-100">{title}</h3>
+      {summary !== title && (
+        <p className="mt-2 leading-7 text-stone-300">{summary}</p>
+      )}
     </article>
   )
 }
