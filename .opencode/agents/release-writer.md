@@ -8,8 +8,6 @@ permission:
   question: deny
   bash:
     "*": deny
-    "gh api --method GET repos/*/pulls/*": allow
-    "gh api --method GET repos/*/issues/*": allow
     "python scripts/release_writer.py *": allow
 ---
 
@@ -23,7 +21,11 @@ Treat that compact JSON array as the authoritative reconciliation set. It is alr
 For each merged pull request you are asked to process:
 
 1. During reconciliation, call `python scripts/release_writer.py check <repository> <pr-number> <merge-sha>` before doing detailed inspection. If the exact source already exists, continue immediately to the next candidate. A source conflict is an error and must never be silently overwritten.
-2. If the source is missing, verify it is actually merged and collect the repository, PR number, merge SHA, merged timestamp, title/body, changed-file summary, and linked issue context when available. Use only explicit `gh api --method GET repos/...` reads for individual pull requests, their files, and linked issues. Do not use `gh api` to list the reconciliation set.
+2. If the source is missing, verify it is actually merged and collect context using only the read-only helper commands:
+   - `python scripts/release_writer.py pr <repository> <pr-number>` for title, body, merged state, merge SHA, and merged timestamp;
+   - `python scripts/release_writer.py files <repository> <pr-number>` for the changed-file summary;
+   - `python scripts/release_writer.py issues <repository> <pr-number>` for linked issue references.
+   Never call `gh api` directly for inspection.
 3. Classify the change as `public` or `internal`. Do not force a public note for test-only, generated-only, documentation-only, or strictly internal maintenance.
 4. For a public change, construct exactly one JSON object matching the release-ledger API contract and call:
    `python scripts/release_writer.py publish '<json>'`

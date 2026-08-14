@@ -1,0 +1,89 @@
+"""Tests for the dedicated release-writer agent read-only safety contract."""
+
+from pathlib import Path
+
+import yaml
+
+ROOT = Path(__file__).resolve().parents[1]
+RELEASE_WRITER_AGENT = ROOT / ".opencode" / "agents" / "release-writer.md"
+RELEASE_WRITER_HELPER = ROOT / "scripts" / "release_writer.py"
+
+
+def _load_agent_permission() -> dict:
+    """Load the release-writer agent's permission block from its frontmatter.
+
+    Args:
+        None.
+
+    Returns:
+        The parsed YAML permission mapping for the release-writer agent.
+    """
+    text = RELEASE_WRITER_AGENT.read_text(encoding="utf-8")
+    assert text.startswith("---"), "release-writer agent must start with YAML frontmatter"
+    _, frontmatter, _ = text.split("---", 2)
+    config = yaml.safe_load(frontmatter)
+    return config["permission"]
+
+
+def test_release_writer_cannot_edit_or_run_arbitrary_shell_commands() -> None:
+    """Require structural denial of edits and arbitrary shell execution."""
+    permission = _load_agent_permission()
+    assert permission["edit"] == "deny"
+    assert permission["task"] == "deny"
+    assert permission["external_directory"] == "deny"
+    assert permission["question"] == "deny"
+    assert permission["bash"]["*"] == "deny"
+
+
+def test_release_writer_only_calls_validated_helper() -> None:
+    """The only allowed command must be the credential-holding helper script."""
+    permission = _load_agent_permission()
+    allowed_bash = {
+        command for command, decision in permission["bash"].items() if decision == "allow"
+    }
+    assert allowed_bash == {"python scripts/release_writer.py *"}
+
+
+def test_release_writer_has_no_github_metadata_mutation_command() -> None:
+    """Reject merge, label, comment, edit, or raw gh api commands."""
+    permission = _load_agent_permission()
+    allowed_bash = {
+        command for command, decision in permission["bash"].items() if decision == "allow"
+    }
+    for command in allowed_bash:
+        assert "gh api" not in command
+        assert "merge" not in command
+        assert "label" not in command
+        assert "comment" not in command
+        assert "git push" not in command
+
+
+def test_release_writer_helper_documents_all_commands() -> None:
+    """Every documented helper command must exist in the release-writer script."""
+    helper_text = RELEASE_WRITER_HELPER.read_text(encoding="utf-8")
+    agent_text = RELEASE_WRITER_AGENT.read_text(encoding="utf-8")
+    for command in ("recent", "check", "publish", "skip", "pr", "files", "issues"):
+        assert f'command == "{command}"' in helper_text, f"missing {command} handler"
+        assert f"release_writer.py {command}" in agent_text, f"missing {command} docs"
+
+
+def test_release_writer_github_reads_are_get_only(monkeypatch) -> None:
+    """The helper's GitHub API reads must never send an explicit write method."""
+    import io
+    import json as jsonlib
+
+    from scripts import release_writer
+
+    responses = [jsonlib.dumps([{"number": 1}]).encode()]
+    monkeypatch.setenv("GH_TOKEN", "test-token")
+
+    def fake_urlopen(request, timeout=20):
+        request_data = getattr(request, "data", None)
+        assert request_data is None, "GitHub reads must not send a request body"
+        assert request.get_method() == "GET", "GitHub reads must use GET"
+        captured = io.BytesIO(responses.pop(0))
+        return captured
+
+    monkeypatch.setattr(release_writer.urllib.request, "urlopen", fake_urlopen)
+
+    release_writer._recent("JoshCLWren/comic-pile", "1")

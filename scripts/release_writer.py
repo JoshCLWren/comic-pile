@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -25,6 +26,7 @@ _REQUIRED = {
     "summary",
 }
 _GITHUB_API_BASE = "https://api.github.com"
+_ISSUE_REFERENCE_PATTERN = re.compile(r"#(\d{1,7})")
 
 
 def _fail(message: str) -> NoReturn:
@@ -217,6 +219,90 @@ def _recent(repository: str, raw_limit: str) -> None:
     print(json.dumps(merged[:limit], separators=(",", ":")))
 
 
+def _repository_parts(repository: str) -> tuple[str, str]:
+    parts = repository.split("/")
+    if len(parts) != 2 or not all(parts):
+        _fail("repository must use owner/name form")
+    return (urllib.parse.quote(parts[0], safe=""), urllib.parse.quote(parts[1], safe=""))
+
+
+def _pr_number(raw_number: str) -> int:
+    try:
+        number = int(raw_number)
+    except ValueError:
+        _fail("PR number must be an integer")
+    if number < 1:
+        _fail("PR number must be a positive integer")
+    return number
+
+
+def _fetch_pull(repository: str, number: int) -> dict[str, object]:
+    owner, name = _repository_parts(repository)
+    result = _github_request(f"{_GITHUB_API_BASE}/repos/{owner}/{name}/pulls/{number}")
+    if not isinstance(result, dict):
+        _fail("GitHub pull response must be an object")
+    return result
+
+
+def _pr(repository: str, raw_number: str) -> None:
+    number = _pr_number(raw_number)
+    pull = _fetch_pull(repository, number)
+    user = pull.get("user")
+    print(
+        json.dumps(
+            {
+                "number": pull.get("number"),
+                "title": pull.get("title"),
+                "body": pull.get("body"),
+                "state": pull.get("state"),
+                "merged": pull.get("merged"),
+                "merged_at": pull.get("merged_at"),
+                "merge_commit_sha": pull.get("merge_commit_sha"),
+                "html_url": pull.get("html_url"),
+                "author": user.get("login") if isinstance(user, dict) else None,
+            },
+            separators=(",", ":"),
+        )
+    )
+
+
+def _files(repository: str, raw_number: str) -> None:
+    number = _pr_number(raw_number)
+    owner, name = _repository_parts(repository)
+    query = urllib.parse.urlencode({"per_page": 100})
+    result = _github_request(
+        f"{_GITHUB_API_BASE}/repos/{owner}/{name}/pulls/{number}/files?{query}"
+    )
+    if not isinstance(result, list):
+        _fail("GitHub pull files response must be a list")
+    files = []
+    for item in result:
+        if not isinstance(item, dict):
+            continue
+        files.append(
+            {
+                "filename": item.get("filename"),
+                "status": item.get("status"),
+                "additions": item.get("additions"),
+                "deletions": item.get("deletions"),
+            }
+        )
+    print(json.dumps(files, separators=(",", ":")))
+
+
+def _issues(repository: str, raw_number: str) -> None:
+    number = _pr_number(raw_number)
+    pull = _fetch_pull(repository, number)
+    references: set[int] = set()
+    for match in _ISSUE_REFERENCE_PATTERN.finditer(
+        f"{pull.get('title') or ''} {pull.get('body') or ''}"
+    ):
+        referenced = int(match.group(1))
+        if referenced != number:
+            references.add(referenced)
+    print(json.dumps(sorted(references), separators=(",", ":")))
+
+
 def _skip(raw: str) -> None:
     try:
         payload = json.loads(raw)
@@ -267,7 +353,7 @@ def main() -> None:
         None.
     """
     if len(sys.argv) < 2:
-        _fail("usage: release_writer.py check|recent|publish|skip ...")
+        _fail("usage: release_writer.py check|recent|publish|skip|pr|files|issues ...")
     command = sys.argv[1]
     if command == "check" and len(sys.argv) == 5:
         _check(sys.argv[2], sys.argv[3], sys.argv[4])
@@ -282,6 +368,15 @@ def main() -> None:
         return
     if command == "skip" and len(sys.argv) == 3:
         _skip(sys.argv[2])
+        return
+    if command == "pr" and len(sys.argv) == 4:
+        _pr(sys.argv[2], sys.argv[3])
+        return
+    if command == "files" and len(sys.argv) == 4:
+        _files(sys.argv[2], sys.argv[3])
+        return
+    if command == "issues" and len(sys.argv) == 4:
+        _issues(sys.argv[2], sys.argv[3])
         return
     _fail("invalid release_writer.py arguments")
 
