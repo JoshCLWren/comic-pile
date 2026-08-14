@@ -1,0 +1,23 @@
+name: Fixed Model Factory Entry
+
+on:
+  workflow_dispatch:
+    inputs:
+      worker:
+        description: Fixed-model Factory number (6-46)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: read
+  checks: read
+
+jobs:
+  run:
+    uses: ./.github/workflows/free-model-factory-run.yml
+    with:
+      worker: ${{ inputs.worker }}
+    secrets: inherit
