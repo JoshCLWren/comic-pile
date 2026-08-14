@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Validate the deterministic free-model factory roster and scheduler wiring."""
+"""Validate the deterministic free-model factory roster and dispatcher wiring."""
 
 from __future__ import annotations
 
 import csv
 import re
-from collections import Counter, defaultdict
+from collections import Counter
 from pathlib import Path
 
 MANIFEST = Path('.github/free-model-factories.tsv')
+DISPATCHER = Path('.github/workflows/free-model-factory-dispatch.yml')
 EXPECTED_WORKERS = set(range(6, 47))
 EXPECTED_SOURCE_COUNTS = {
     'nvidia': 26,
@@ -25,11 +26,16 @@ EXPECTED_ZEN_MODELS = {
     'nemotron-3-ultra-free',
     'nemotron-3.5-lightning-free',
 }
-EXPECTED_SCHEDULERS = {'A', 'B', 'C', 'D', 'E'}
+DISPATCH_MINUTES = (7, 22, 37, 52)
 RETIRED_SCHEDULERS = (
     Path('.github/workflows/nvidia-factory-6.yml'),
     Path('.github/workflows/omniroute-factory-16.yml'),
     Path('.github/workflows/omniroute-factory-17.yml'),
+    Path('.github/workflows/free-model-factory-a.yml'),
+    Path('.github/workflows/free-model-factory-b.yml'),
+    Path('.github/workflows/free-model-factory-c.yml'),
+    Path('.github/workflows/free-model-factory-d.yml'),
+    Path('.github/workflows/free-model-factory-e.yml'),
 )
 REQUIRED_CALLER_PERMISSIONS = (
     'contents: write',
@@ -41,7 +47,7 @@ REQUIRED_CALLER_PERMISSIONS = (
 
 
 def main() -> None:
-    """Validate roster completeness, stable assignments, and scheduler invariants."""
+    """Validate roster completeness, fixed assignments, and dispatcher invariants."""
     with MANIFEST.open(newline='', encoding='utf-8') as handle:
         rows = list(csv.DictReader(
             (line for line in handle if not line.startswith('# worker')),
@@ -72,56 +78,47 @@ def main() -> None:
     source_models = [(row['source'], row['model']) for row in rows]
     assert len(source_models) == len(set(source_models)), 'duplicate model inside the same source'
 
-    # NVIDIA lists DeepSeek V4 Pro on build.nvidia.com, but its NIM API does not
-    # expose that ID. A dead page-only lane is not a factory, so keep it out.
     assert not any(
         row['source'] == 'nvidia' and row['model'] == 'deepseek-ai/deepseek-v4-pro'
         for row in rows
     ), 'page-only NVIDIA DeepSeek V4 Pro must not be scheduled as an API factory'
 
-    schedule_minutes: dict[str, list[int]] = defaultdict(list)
-    seen_slots: set[tuple[str, int]] = set()
+    expected_batch_counts = Counter({7: 11, 22: 10, 37: 10, 52: 10})
+    actual_batch_counts: Counter[int] = Counter()
     for row in rows:
         worker = int(row['worker'])
         minute = int(row['minute'])
-        scheduler = row['scheduler']
-        assert scheduler in EXPECTED_SCHEDULERS, f'worker {worker}: invalid scheduler {scheduler!r}'
-        assert 0 <= minute <= 59, f'worker {worker}: invalid minute {minute}'
-        slot = (scheduler, minute)
-        assert slot not in seen_slots, f'duplicate scheduler slot {scheduler}:{minute:02d}'
-        seen_slots.add(slot)
-        schedule_minutes[scheduler].append(minute)
+        assert row['scheduler'] == 'dispatcher', f'worker {worker}: stale scheduler {row["scheduler"]!r}'
+        expected_minute = DISPATCH_MINUTES[(worker - 6) % len(DISPATCH_MINUTES)]
+        assert minute == expected_minute, (
+            f'worker {worker}: expected :{expected_minute:02d}, got :{minute:02d}'
+        )
+        actual_batch_counts[minute] += 1
         assert row['model'], f'worker {worker}: model is empty'
         assert row['display_name'], f'worker {worker}: display name is empty'
+    assert actual_batch_counts == expected_batch_counts, (
+        f'dispatch batch counts changed: {dict(actual_batch_counts)}'
+    )
 
-    for scheduler, minutes in schedule_minutes.items():
-        ordered = sorted(minutes)
-        wrapped = ordered + [ordered[0] + 60]
-        gaps = [
-            right - left
-            for left, right in zip(wrapped[:-1], wrapped[1:], strict=True)
-        ]
-        assert min(gaps) >= 5, (
-            f'scheduler {scheduler} violates five-minute floor: minutes={ordered}, gaps={gaps}'
-        )
-
-        workflow = Path(f'.github/workflows/free-model-factory-{scheduler.lower()}.yml')
-        text = workflow.read_text(encoding='utf-8')
-        actual = {
-            int(match.group(1))
-            for match in re.finditer(r"cron:\s*['\"](\d+) \* \* \* \*['\"]", text)
-        }
-        assert actual == set(ordered), (
-            f'scheduler {scheduler} workflow does not match manifest: '
-            f'expected={ordered} actual={sorted(actual)}'
-        )
-        for permission in REQUIRED_CALLER_PERMISSIONS:
-            assert permission in text, (
-                f'scheduler {scheduler} is missing reusable-worker permission {permission!r}'
-            )
+    assert DISPATCHER.exists(), 'single fixed-model dispatcher is missing'
+    dispatcher_text = DISPATCHER.read_text(encoding='utf-8')
+    actual_crons = {
+        int(match.group(1))
+        for match in re.finditer(r"cron:\s*['\"](\d+) \* \* \* \*['\"]", dispatcher_text)
+    }
+    assert actual_crons == set(DISPATCH_MINUTES), (
+        f'dispatcher cron mismatch: expected={list(DISPATCH_MINUTES)} actual={sorted(actual_crons)}'
+    )
+    assert 'workers=\'["6","32","39"]\'' in dispatcher_text, (
+        'dispatcher must retain immediate NVIDIA/OmniRoute/OpenCode post-merge smoke'
+    )
+    assert 'matrix:' in dispatcher_text and 'fromJSON(needs.resolve.outputs.workers)' in dispatcher_text
+    assert 'secrets: inherit' in dispatcher_text
+    for permission in REQUIRED_CALLER_PERMISSIONS:
+        assert permission in dispatcher_text, f'dispatcher missing permission {permission!r}'
 
     for retired in RETIRED_SCHEDULERS:
-        assert not retired.exists(), f'obsolete rotating scheduler still exists: {retired}'
+        assert not retired.exists(), f'obsolete scheduler still exists: {retired}'
 
     runner = Path('.github/workflows/free-model-factory-run.yml')
     worker = Path('.github/scripts/free-model-factory-worker.sh')
@@ -131,7 +128,9 @@ def main() -> None:
     assert 'rotate_model' not in worker_text, 'fixed-model worker must never rotate models'
     assert 'Do not switch models' in worker_text, 'fixed-model no-fallback contract is missing'
 
-    print('Validated 41 fixed model factory lanes across schedulers A-E.')
+    print('Validated 41 fixed model factories through one four-batch dispatcher.')
+    for minute in DISPATCH_MINUTES:
+        print(f'  :{minute:02d} -> {actual_batch_counts[minute]} workers')
     for source, count in EXPECTED_SOURCE_COUNTS.items():
         print(f'  {source}: {count}')
 
