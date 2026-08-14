@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import re
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -15,6 +16,11 @@ EXPECTED_SOURCE_COUNTS = {
     'llm7': 4,
 }
 EXPECTED_SCHEDULERS = {'A', 'B', 'C', 'D'}
+RETIRED_SCHEDULERS = (
+    Path('.github/workflows/nvidia-factory-6.yml'),
+    Path('.github/workflows/omniroute-factory-16.yml'),
+    Path('.github/workflows/omniroute-factory-17.yml'),
+)
 
 
 def main() -> None:
@@ -64,6 +70,28 @@ def main() -> None:
         assert min(gaps) >= 5, (
             f'scheduler {scheduler} violates five-minute floor: minutes={ordered}, gaps={gaps}'
         )
+
+        workflow = Path(f'.github/workflows/free-model-factory-{scheduler.lower()}.yml')
+        text = workflow.read_text(encoding='utf-8')
+        actual = {
+            int(match.group(1))
+            for match in re.finditer(r"cron:\s*['\"](\d+) \* \* \* \*['\"]", text)
+        }
+        assert actual == set(ordered), (
+            f'scheduler {scheduler} workflow does not match manifest: '
+            f'expected={ordered} actual={sorted(actual)}'
+        )
+
+    for retired in RETIRED_SCHEDULERS:
+        assert not retired.exists(), f'obsolete rotating scheduler still exists: {retired}'
+
+    runner = Path('.github/workflows/free-model-factory-run.yml')
+    worker = Path('.github/scripts/free-model-factory-worker.sh')
+    assert runner.exists(), 'reusable fixed-model runner is missing'
+    assert worker.exists(), 'fixed-model worker script is missing'
+    worker_text = worker.read_text(encoding='utf-8')
+    assert 'rotate_model' not in worker_text, 'fixed-model worker must never rotate models'
+    assert 'Do not switch models' in worker_text, 'fixed-model no-fallback contract is missing'
 
     print('Validated 42 fixed-model factory lanes across schedulers A-D.')
     for source, count in EXPECTED_SOURCE_COUNTS.items():
