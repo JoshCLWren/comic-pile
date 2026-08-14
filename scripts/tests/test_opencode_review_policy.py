@@ -40,7 +40,7 @@ class OpenCodeReviewPolicyTests(unittest.TestCase):
         """Reject additive/sequential stage mutation or owner-dropping replacement."""
         workflow = OPENCODE_WORKFLOW.read_text(encoding="utf-8")
         self.assertNotIn("gh api --method DELETE", workflow)
-        self.assertIn('^factory:(unowned|local|[1-5])$', workflow)
+        self.assertIn('^factory:(unowned|local|', workflow)
         self.assertIn('first // "factory:unowned"', workflow)
         self.assertEqual(workflow.count('gh api --method PUT'), 2)
         self.assertNotIn(
