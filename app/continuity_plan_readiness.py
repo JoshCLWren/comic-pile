@@ -182,24 +182,43 @@ def _detect_plan_cycles(
         target_list.sort()
 
     color: dict[tuple[str, int], int] = dict.fromkeys(nodes, 0)
-    stack: list[tuple[str, int]] = []
     in_cycle: set[tuple[str, int]] = set()
 
-    def visit(node: tuple[str, int]) -> None:
-        color[node] = 1
-        stack.append(node)
-        for nxt in adjacency.get(node, ()):
-            if color[nxt] == 1:
-                start = stack.index(nxt)
-                in_cycle.update(stack[start:])
-            elif color[nxt] == 0:
-                visit(nxt)
-        stack.pop()
-        color[node] = 2
+    for start_node in sorted(nodes):
+        if color[start_node] != 0:
+            continue
 
-    for node in sorted(nodes):
-        if color[node] == 0:
-            visit(node)
+        stack: list[tuple[tuple[str, int], int]] = [(start_node, 0)]
+        path: list[tuple[str, int]] = []
+
+        while stack:
+            node, state = stack.pop()
+
+            if state == 0:
+                if color[node] == 2:
+                    continue
+                if color[node] == 1:
+                    continue
+
+                color[node] = 1
+                path.append(node)
+                stack.append((node, 1))
+
+                for nxt in reversed(adjacency.get(node, ())):
+                    if color[nxt] == 0:
+                        stack.append((nxt, 0))
+                    elif color[nxt] == 1:
+                        try:
+                            idx = path.index(nxt)
+                            in_cycle.update(path[idx:])
+                        except ValueError:
+                            pass
+
+            else:
+                if path and path[-1] == node:
+                    path.pop()
+                color[node] = 2
+
     return in_cycle
 
 
