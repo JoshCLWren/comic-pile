@@ -114,7 +114,7 @@ def _validate_release(raw: str) -> dict[str, object]:
     if not isinstance(repository, str) or not (1 <= len(repository) <= 255):
         _fail("source_repository must be 1..255 characters")
     pr_number = payload["source_pr_number"]
-    if not isinstance(pr_number, int) or pr_number < 1:
+    if isinstance(pr_number, bool) or not isinstance(pr_number, int) or pr_number < 1:
         _fail("source_pr_number must be a positive integer")
     merge_sha = payload["source_merge_sha"]
     if not isinstance(merge_sha, str) or not (7 <= len(merge_sha) <= 64):
@@ -181,9 +181,13 @@ def _recent(repository: str, raw_limit: str) -> None:
                 "page": page,
             }
         )
-        result = _github_request(f"{_GITHUB_API_BASE}/repos/{owner}/{name}/pulls?{query}")
+        result = _github_request(
+            f"{_GITHUB_API_BASE}/repos/{owner}/{name}/pulls?{query}"
+        )
         if not isinstance(result, list):
             _fail("GitHub pulls response must be a list")
+        if page > 100 and result:
+            _fail("GitHub pull pagination exceeded safety bound")
         for item in result:
             if not isinstance(item, dict):
                 continue
@@ -208,8 +212,6 @@ def _recent(repository: str, raw_limit: str) -> None:
         if len(result) < 100:
             break
         page += 1
-        if page > 100:
-            _fail("GitHub pull pagination exceeded safety bound")
 
     merged.sort(key=lambda item: str(item["merged_at"]), reverse=True)
     print(json.dumps(merged[:limit], separators=(",", ":")))
@@ -256,7 +258,14 @@ def _skip(raw: str) -> None:
 
 
 def main() -> None:
-    """Run the release-writer command-line interface."""
+    """Run the release-writer command-line interface.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
     if len(sys.argv) < 2:
         _fail("usage: release_writer.py check|recent|publish|skip ...")
     command = sys.argv[1]
