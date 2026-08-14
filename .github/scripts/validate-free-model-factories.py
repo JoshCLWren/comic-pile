@@ -81,6 +81,7 @@ def main() -> None:
     )
     assert not any(
         row['source'] == 'nvidia' and row['model'] == 'mistralai/mistral-medium-3.5-128b'
+        for row in rows
     ), 'Factory 13 retired NVIDIA model returned to the roster'
 
     expected_batch_counts = Counter({0: 11, 15: 10, 30: 10, 45: 10})
