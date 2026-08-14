@@ -23,7 +23,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  FACTORY_BUDGET_SECONDS: '6000'
+  FACTORY_BUDGET_SECONDS: '1200'
   OPENCODE_VERSION: '1.18.18'
   OPENCODE_LINUX_X64_SHA256: '0cddc222418b8553669905a8980c0cda7088f00da24d83d6ac76b01c9fdb2aaf'
   OMNIROUTE_IMAGE: 'diegosouzapw/omniroute:3.8.49@sha256:92c768c56e2de32c51a0621ef182835018b00b288c9bb235c5c5e4514658c1a1'
@@ -31,7 +31,7 @@ env:
 jobs:
   factory:
     runs-on: ubuntu-latest
-    timeout-minutes: 116
+    timeout-minutes: 30
     env:
       GH_TOKEN: ${{ github.token }}
       NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
