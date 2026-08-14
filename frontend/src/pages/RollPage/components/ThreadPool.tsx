@@ -6,6 +6,7 @@ interface ThreadPoolProps {
   pool: RollBootstrapThread[]
   blockedThreads: RollBootstrapThread[]
   blockingReasonMap: Record<number, string[]>
+  dieSize?: number
   isRatingView: boolean
   isRolling: boolean
   rolledResult: number | null
@@ -29,6 +30,7 @@ export function ThreadPool({
   pool,
   blockedThreads,
   blockingReasonMap,
+  dieSize,
   isRatingView,
   isRolling,
   rolledResult,
@@ -74,6 +76,11 @@ export function ThreadPool({
         <div className="w-2 h-2 rounded-full bg-amber-600 shadow-[0_0_15px_var(--accent-red)]"></div>
         <div className="flex-1">
           <p className="text-[10px] font-black uppercase tracking-wider text-stone-300">Eligible now · {pool.length}</p>
+          {dieSize && pool.length > 0 && pool.length < dieSize && (
+            <p className="text-[10px] text-stone-500 mt-1" data-smaller-than-die>
+              Only {pool.length} of d{dieSize} faces are mapped to eligible reads — the roll picks among these visible faces.
+            </p>
+          )}
         </div>
         <button
           type="button"
@@ -157,6 +164,9 @@ export function ThreadPool({
                       Routes: {thread.route_labels.join(' · ')}
                     </p>
                   ) : null}
+                  <span aria-hidden="true" className="text-stone-600 group-hover:text-stone-400 transition-colors text-lg leading-none shrink-0">
+                    ⋯
+                  </span>
                 </div>
               </div>
             )

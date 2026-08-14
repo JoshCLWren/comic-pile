@@ -11,7 +11,7 @@ import pytest
 from scripts import release_writer
 
 
-def _capture_stderr(func, *args, **kwargs) -> str:
+def _capture_stderr(func: object, *args: object, **kwargs: object) -> str:
     """Capture stderr from a function call that exits unsuccessfully.
 
     Args:
@@ -34,8 +34,17 @@ def _capture_stderr(func, *args, **kwargs) -> str:
     return f.getvalue()
 
 
-def _capture_stdout(func, *args, **kwargs):
-    """Capture stdout from a function call."""
+def _capture_stdout(func: object, *args: object, **kwargs: object) -> str:
+    """Capture stdout from a function call.
+
+    Args:
+        func: The function to call.
+        *args: Positional arguments to pass to func.
+        **kwargs: Keyword arguments to pass to func.
+
+    Returns:
+        The captured stdout output as a string.
+    """
     f = io.StringIO()
     with redirect_stdout(f):
         func(*args, **kwargs)
