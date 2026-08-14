@@ -164,6 +164,9 @@ export function ThreadPool({
                       Routes: {thread.route_labels.join(' · ')}
                     </p>
                   ) : null}
+                  <span aria-hidden="true" className="text-stone-600 group-hover:text-stone-400 transition-colors text-lg leading-none shrink-0">
+                    ⋯
+                  </span>
                 </div>
                 <span aria-hidden="true" className="text-stone-600 group-hover:text-stone-400 transition-colors text-lg leading-none shrink-0">
                   ⋯
