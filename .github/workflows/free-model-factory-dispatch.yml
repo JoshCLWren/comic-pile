@@ -16,6 +16,8 @@ on:
       - '.github/workflows/free-model-factory-dispatch.yml'
       - '.github/workflows/free-model-factory-entry.yml'
       - '.github/workflows/free-model-factory-run.yml'
+      - '.github/scripts/free-model-factory-worker.sh'
+      - '.github/scripts/validate-free-model-factories.py'
       - '.github/free-model-factories.tsv'
 
 permissions:
@@ -35,11 +37,35 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
+          DEPLOY_SHA: ${{ github.sha }}
           WATCHDOG_RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
           DISPATCH_WORKER: ${{ inputs.worker }}
         run: |
           set -Eeuo pipefail
           manifest='.github/free-model-factories.tsv'
+
+          if [[ "$EVENT_NAME" == push ]]; then
+            echo "Fixed-model automation changed at ${DEPLOY_SHA}; canceling older entry runs"
+            stale_runs="$({
+              for status in queued in_progress; do
+                gh run list --workflow free-model-factory-entry.yml --status "$status" --limit 100 \
+                  --json databaseId,headSha \
+                  | jq -r --arg sha "$DEPLOY_SHA" '.[] | select(.headSha != $sha) | .databaseId'
+              done
+            } | sort -u)"
+
+            while IFS= read -r run_id; do
+              [[ -n "$run_id" ]] || continue
+              echo "Canceling stale fixed-model entry run ${run_id}"
+              if ! gh run cancel "$run_id"; then
+                current_status="$(gh run view "$run_id" --json status --jq '.status')"
+                [[ "$current_status" == completed ]] || {
+                  echo "Unable to cancel stale fixed-model entry run ${run_id}; status=${current_status}" >&2
+                  exit 1
+                }
+              fi
+            done <<< "$stale_runs"
+          fi
 
           if [[ "$EVENT_NAME" == workflow_dispatch && -n "${DISPATCH_WORKER:-}" ]]; then
             awk -F '\t' -v worker="$DISPATCH_WORKER" '$1 == worker {found=1} END {exit !found}' "$manifest"
