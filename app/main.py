@@ -170,10 +170,6 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     @app.middleware("http")
     async def csrf_middleware(request: Request, call_next):
         """Require a matching CSRF header and cookie on mutating API requests."""
-    if os.getenv("TEST_ENVIRONMENT") == "true":
-    app.include_router(metrics.router, prefix="/api", tags=["metrics"])
-
-            return await call_next(request)
         if not is_csrf_protected_request(request.method, request.url.path):
             return await call_next(request)
 
@@ -195,6 +191,10 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             )
 
         return await call_next(request)
+
+    # Conditionally include metrics router in test environment
+    if os.getenv("TEST_ENVIRONMENT") == "true":
+        app.include_router(metrics.router, prefix="/api", tags=["metrics"])
 
     # Error-only request logging (body redaction + environment-aware sanitization).
     add_request_logging_middleware(app, app_settings.environment)

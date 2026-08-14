@@ -22,4 +22,3 @@ def test_metrics_endpoint():
     assert "startup_duration" in data
     assert isinstance(data["startup_time"], float)
     assert isinstance(data["startup_duration"], float) or data["startup_duration"] is None
-"
