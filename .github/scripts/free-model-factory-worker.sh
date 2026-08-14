@@ -46,6 +46,12 @@ current_stage() {
   if [[ -n "$stage" ]]; then printf '%s\n' "$stage"; else printf '%s\n' "$fallback"; fi
 }
 
+current_owner_is_self() {
+  local number="$1" labels
+  labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
+  jq -e --arg owner "$OWNER" 'index($owner) != null' >/dev/null <<< "$labels"
+}
+
 release_target() {
   local number="$1" fallback_stage="$2" reason="$3" target_kind="${4:-target}"
   local stage epoch marker
@@ -76,13 +82,23 @@ linked_issue_from_branch() {
   sed -nE 's#^factory/[0-9]+-([0-9]+)-.*$#\1#p' <<< "$1"
 }
 
+issue_has_open_factory_pr() {
+  local issue="$1"
+  gh pr list --state open --limit 300 --json headRefName,body | jq -e --arg issue "$issue" '
+    any(.[];
+      (.headRefName | test("^factory/[0-9]+-" + $issue + "-"))
+      or (.headRefName | test("^factory/" + $issue + "-"))
+      or ((.body // "") | test("(?im)(closes|fixes|resolves|implements|part of)[[:space:]]+#" + $issue + "([^0-9]|$)"))
+    )' >/dev/null
+}
+
 release_pr_and_issue() {
-  local pr="$1" branch="$2" stage="$3" reason="$4" issue
+  local pr="$1" branch="$2" stage="$3" reason="$4" issue state
   release_target "$pr" "$stage" "$reason" 'pr'
   issue="$(linked_issue_from_branch "$branch")"
   if [[ -n "$issue" ]]; then
     state="$(gh issue view "$issue" --json state --jq .state 2>/dev/null || true)"
-    if [[ "$state" == 'OPEN' ]]; then
+    if [[ "$state" == 'OPEN' ]] && current_owner_is_self "$issue"; then
       release_target "$issue" "$stage" "$reason" 'issue'
     fi
   fi
@@ -112,14 +128,18 @@ choose_unowned_pr() {
 }
 
 choose_issue() {
-  local labels=("$@")
+  local labels=("$@") candidate
   local args=(issue list --state open --limit 300 --json number,labels,createdAt)
   local label
   for label in "${labels[@]}"; do args+=(--label "$label"); done
-  gh "${args[@]}" | jq -r --arg owner_re "$OWNER_RE" '
+  while IFS= read -r candidate; do
+    [[ -n "$candidate" ]] || continue
+    issue_has_open_factory_pr "$candidate" && continue
+    printf '%s\n' "$candidate"
+  done < <(gh "${args[@]}" | jq -r --arg owner_re "$OWNER_RE" '
     map(select(.number != 679 and .number != 1093 and .number != 1109))
     | map(select((([.labels[].name | select(test($owner_re) and . != "factory:unowned")] | length) == 0)))
-    | sort_by(.createdAt) | reverse | .[].number'
+    | sort_by(.createdAt) | reverse | .[].number')
 }
 
 choose_backlog_zero_child() {
@@ -134,6 +154,7 @@ choose_backlog_zero_child() {
 
 claim_issue() {
   local number="$1" labels target epoch marker
+  issue_has_open_factory_pr "$number" && return 1
   labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
   if jq -e --arg owner_re "$OWNER_RE" \
     '[.[] | select(test($owner_re) and . != "factory:unowned")] | length > 0' \
