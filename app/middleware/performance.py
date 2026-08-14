@@ -24,7 +24,7 @@ class PerformanceMiddleware(BaseHTTPMiddleware):
         duration_ms = (end_ts - start_ts) * 1000
         response.headers["X-Response-Time"] = str(round(duration_ms, 1))
         snapshot = next_request_snapshot()
-            response.headers["X-Server-Cold-Start"] = "true" if snapshot.cold else "false"
+        response.headers["X-Server-Cold-Start"] = "true" if snapshot.cold else "false"
         return response
 
 
