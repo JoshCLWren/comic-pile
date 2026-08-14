@@ -81,7 +81,6 @@ def main() -> None:
     )
     assert not any(
         row['source'] == 'nvidia' and row['model'] == 'mistralai/mistral-medium-3.5-128b'
-        for row in rows
     ), 'Factory 13 retired NVIDIA model returned to the roster'
 
     expected_batch_counts = Counter({0: 11, 15: 10, 30: 10, 45: 10})
@@ -111,6 +110,20 @@ def main() -> None:
     assert 'contents: read' in dispatcher_text and 'actions: write' in dispatcher_text
     assert 'gh workflow run free-model-factory-entry.yml' in dispatcher_text
     assert 'matrix:' not in dispatcher_text
+    assert "'.github/scripts/free-model-factory-worker.sh'" in dispatcher_text, (
+        'worker repairs must trigger an immediate post-merge fleet smoke'
+    )
+    assert "'.github/scripts/validate-free-model-factories.py'" in dispatcher_text, (
+        'fleet validator changes must exercise the deployment path'
+    )
+    for required in (
+        'if [[ "$EVENT_NAME" == push ]]',
+        'queued in_progress',
+        '--json databaseId,headSha',
+        'select(.headSha != $sha)',
+        'gh run cancel "$run_id"',
+    ):
+        assert required in dispatcher_text, f'fixed-model deployment fence missing: {required}'
 
     assert ENTRY.exists(), 'dispatchable fixed-model entry workflow is missing'
     entry_text = ENTRY.read_text(encoding='utf-8')
@@ -118,6 +131,12 @@ def main() -> None:
     assert 'uses: ./.github/workflows/free-model-factory-run.yml' in entry_text
     assert 'worker: ${{ inputs.worker }}' in entry_text
     assert 'secrets: inherit' in entry_text
+    assert 'group: fixed-model-factory-${{ inputs.worker }}' in entry_text, (
+        'each fixed-model worker must have its own concurrency lane'
+    )
+    assert 'cancel-in-progress: true' in entry_text, (
+        'duplicate fixed-model runs for one worker must cancel the older run'
+    )
     for permission in ENTRY_PERMISSIONS:
         assert permission in entry_text
 
