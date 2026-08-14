@@ -366,7 +366,7 @@ async def test_membership_collection_is_bounded(
 
 
 @pytest.mark.asyncio
-async def test_membership_collection_is_bounded(
+async def test_selected_member_collection_is_bounded(
     auth_client: AsyncClient,
     async_db: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
