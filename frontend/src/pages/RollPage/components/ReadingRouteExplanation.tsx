@@ -20,7 +20,7 @@ interface ReadingRouteExplanationProps {
   onClose: () => void
 }
 
-const DIAGONISTIC_CODE_LABEL: Readonly<Record<ContinuityChainDiagnostic['code'], string>> = {
+const DIAGNOSTIC_CODE_LABEL: Readonly<Record<ContinuityChainDiagnostic['code'], string>> = {
   cycle_detected: 'cyclic continuity state',
   depth_limit_exceeded: 'chain depth exceeded while traversing',
   node_limit_exceeded: 'chain breadth exceeded while traversing',
@@ -359,7 +359,7 @@ export function ReadingRouteExplanation({
                     className="rounded-xl border border-amber-700/40 bg-amber-900/15 p-2"
                   >
                     <p className="text-[11px] font-bold text-amber-200">
-                      {DIAGONISTIC_CODE_LABEL[diagnostic.code] ?? diagnostic.code}
+                      {DIAGNOSTIC_CODE_LABEL[diagnostic.code] ?? diagnostic.code}
                     </p>
                     <p className="mt-1 text-[10px] text-stone-400">
                       {diagnostic.node_type} {diagnostic.node_id}
