@@ -81,6 +81,18 @@ jobs:
               configured=true
               reason='configured'
               ;;
+            llm7)
+              runtime_model="llm7/${model}"
+              branch_suffix='llm7'
+              configured=true
+              reason='configured'
+              ;;
+            ovhcloud)
+              runtime_model="ovhcloud/${model}"
+              branch_suffix='ovh'
+              configured=true
+              reason='configured'
+              ;;
             *)
               echo "Unsupported factory source: ${source}" >&2
               exit 1
@@ -176,20 +188,27 @@ jobs:
           echo "$bin_dir" >> "$GITHUB_PATH"
           "$bin_dir/opencode" --version
 
-      - name: Configure anonymous Kilo free-model provider
-        if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source == 'kilo'
+      - name: Configure keyless OpenAI-compatible provider
+        if: steps.lane.outputs.configured == 'true' && (steps.lane.outputs.source == 'kilo' || steps.lane.outputs.source == 'llm7' || steps.lane.outputs.source == 'ovhcloud')
         shell: bash
         env:
+          SOURCE: ${{ steps.lane.outputs.source }}
           MODEL: ${{ steps.lane.outputs.model }}
         run: |
           set -Eeuo pipefail
           mkdir -p "$HOME/.config/opencode"
-          jq -n --arg model "$MODEL" '{
+          case "$SOURCE" in
+            kilo) base_url='https://api.kilo.ai/api/gateway' ;;
+            llm7) base_url='https://api.llm7.io/v1' ;;
+            ovhcloud) base_url='https://oai.endpoints.kepler.ai.cloud.ovh.net/v1' ;;
+            *) echo "Unsupported keyless provider ${SOURCE}" >&2; exit 2 ;;
+          esac
+          jq -n --arg provider "$SOURCE" --arg model "$MODEL" --arg base "$base_url" '{
             provider: {
-              kilo: {
+              ($provider): {
                 npm: "@ai-sdk/openai-compatible",
-                name: "Kilo anonymous free models",
-                options: {baseURL: "https://api.kilo.ai/api/gateway"},
+                name: ($provider + " free lane"),
+                options: {baseURL: $base},
                 models: {($model): {name: $model}}
               }
             }
