@@ -12,31 +12,41 @@ function contextFor(eventName, payload) {
   };
 }
 
-function githubFor({ labels = [], comments = [], setLabels, commentIssueNumbers } = {}) {
+function githubFor({
+  labels = [],
+  comments = [],
+  setLabels,
+  updateLabel,
+  commentIssueNumbers,
+  extraDefinitions = [],
+} = {}) {
   const workerDefinitions = Object.fromEntries(
-    Array.from({ length: 46 }, (_, index) => [
+    Array.from({ length: 16 }, (_, index) => [
       `factory:${index + 1}`,
       ['0366D6', `Current next-action owner is ComicPile Factory ${index + 1}`],
     ]),
   );
-  const definitions = Object.entries({
-    factory: ['5319E7', 'Work owned or produced by an autonomous ComicPile factory'],
-    ...workerDefinitions,
-    'factory:local': ['0366D6', 'Current next-action owner is the local OpenCode factory'],
-    'factory:unowned': ['BFDADC', 'Factory work has no current next-action owner'],
-    'factory:building': ['FBCA04', 'A factory is actively implementing or repairing this work'],
-    'factory:review': ['D4C5F9', 'The exact current head needs review or re-review'],
-    'factory:changes-requested': ['D73A4A', 'Actionable review findings currently block progress'],
-    'factory:ci': ['1D76DB', 'Review passed and required exact-head checks are being verified'],
-    'factory:ready': ['0E8A16', 'All exact-head factory merge gates are satisfied'],
-    'factory:blocked': ['B60205', 'A genuine human, credential, or external blocker remains'],
-  }).map(([name, [color, description]]) => ({ name, color, description }));
+  const definitions = [
+    ...Object.entries({
+      factory: ['5319E7', 'Work owned or produced by an autonomous ComicPile factory'],
+      ...workerDefinitions,
+      'factory:local': ['0366D6', 'Current next-action owner is the local OpenCode factory'],
+      'factory:unowned': ['BFDADC', 'Factory work has no current next-action owner'],
+      'factory:building': ['FBCA04', 'A factory is actively implementing or repairing this work'],
+      'factory:review': ['D4C5F9', 'The exact current head needs review or re-review'],
+      'factory:changes-requested': ['D73A4A', 'Actionable review findings currently block progress'],
+      'factory:ci': ['1D76DB', 'Review passed and required exact-head checks are being verified'],
+      'factory:ready': ['0E8A16', 'All exact-head factory merge gates are satisfied'],
+      'factory:blocked': ['B60205', 'A genuine human, credential, or external blocker remains'],
+    }).map(([name, [color, description]]) => ({ name, color, description })),
+    ...extraDefinitions,
+  ];
   const api = {
     listLabelsForRepo() {},
     listLabelsOnIssue() {},
     listComments() {},
     createLabel: async () => {},
-    updateLabel: async () => {},
+    updateLabel: updateLabel || (async () => {}),
     setLabels: setLabels || (async () => {}),
   };
   return {
@@ -63,6 +73,22 @@ test('fixed-model worker tokens map across the complete fleet range', () => {
   assert.equal(ownerFor('opencode-free-model-factory-32'), 'factory:32');
   assert.equal(ownerFor('opencode-free-model-factory-46'), 'factory:46');
   assert.equal(ownerFor('opencode-free-model-factory-47'), 'factory:unowned');
+});
+
+test('fixed-model label metadata is recognized without being rewritten', async () => {
+  const updates = [];
+  const github = githubFor({
+    extraDefinitions: [{
+      name: 'factory:32',
+      color: '5319e7',
+      description: 'Fixed-model Factory 32: OmniRoute Big Pickle via omniroute-opencode',
+    }],
+    updateLabel: async input => updates.push(input),
+  });
+
+  await reconcile({ github, context: contextFor('workflow_dispatch', {}) });
+
+  assert.ok(!updates.some(update => update.name === 'factory:32'));
 });
 
 test('label reconciliation replaces both groups with one atomic call', async () => {
