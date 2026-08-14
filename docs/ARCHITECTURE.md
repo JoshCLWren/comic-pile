@@ -12,7 +12,7 @@ Comic Pile is a dice-driven comic reading tracker built with:
 
 ### 1. Repository Structure: Monorepo
 **Decision**: Keep frontend and backend in a single repository
-**Documented in**: [REPOSITORY_STRUCTURE_DECISION.md](REPOSITORY_STRUCTURE_DECISION.md)
+**Documented in**: [repository-boundary-decision.md](architecture/repository-boundary-decision.md) (canonical), [REPOSITORY_STRUCTURE_DECISION.md](REPOSITORY_STRUCTURE_DECISION.md) (summary)
 **Date**: 2026-08-13
 
 **Rationale**:

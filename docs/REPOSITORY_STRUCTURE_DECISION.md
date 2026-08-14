@@ -1,5 +1,7 @@
 # Repository Structure Decision: Monorepo vs Split Repo
 
+> **Note:** This is the earlier summary of the issue #640 decision. The canonical decision, reproducible coupling evidence, and re-evaluation trigger live at [`docs/architecture/repository-boundary-decision.md`](architecture/repository-boundary-decision.md) with a short landing page at [`docs/REPO_BOUNDARY.md`](REPO_BOUNDARY.md).
+
 ## Date: 2026-08-13
 
 ## Context
