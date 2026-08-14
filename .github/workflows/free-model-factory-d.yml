@@ -1,0 +1,58 @@
+name: Fixed Model Factory Scheduler D
+
+on:
+  schedule:
+    - cron: '3 * * * *'
+    - cron: '8 * * * *'
+    - cron: '13 * * * *'
+    - cron: '18 * * * *'
+    - cron: '23 * * * *'
+    - cron: '28 * * * *'
+    - cron: '33 * * * *'
+    - cron: '38 * * * *'
+    - cron: '43 * * * *'
+    - cron: '48 * * * *'
+  workflow_dispatch:
+    inputs:
+      worker:
+        description: Factory worker from scheduler D
+        required: true
+        type: choice
+        options: ['9','13','17','21','25','29','33','37','41','45']
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      worker: ${{ steps.resolve.outputs.worker }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+      - id: resolve
+        shell: bash
+        env:
+          SCHEDULE: ${{ github.event.schedule }}
+          DISPATCH_WORKER: ${{ inputs.worker }}
+        run: |
+          set -Eeuo pipefail
+          if [[ -n "${DISPATCH_WORKER:-}" ]]; then
+            worker="$DISPATCH_WORKER"
+          else
+            minute="${SCHEDULE%% *}"
+            worker="$(awk -F '\t' -v minute="$minute" '$4 == minute && $5 == "D" {print $1; exit}' .github/free-model-factories.tsv)"
+          fi
+          [[ -n "$worker" ]] || { echo "No scheduler D lane resolved" >&2; exit 1; }
+          awk -F '\t' -v worker="$worker" '$1 == worker && $5 == "D" {found=1} END {exit !found}' .github/free-model-factories.tsv
+          echo "worker=$worker" >> "$GITHUB_OUTPUT"
+          echo "Scheduler D selected Factory $worker"
+
+  run:
+    needs: resolve
+    uses: ./.github/workflows/free-model-factory-run.yml
+    with:
+      worker: ${{ needs.resolve.outputs.worker }}
+    secrets: inherit
