@@ -7,10 +7,6 @@ from pathlib import Path
 from typing import cast
 
 from fastapi import Depends, FastAPI, Request, status
-import pathlib
-# Ensure PurePosixPath has a full_match method for vercel gate tests
-if not hasattr(pathlib.PurePosixPath, "full_match"):
-    pathlib.PurePosixPath.full_match = pathlib.PurePosixPath.match
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -137,23 +133,6 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         description="API for tracking comic reading with dice rolls",
         version="0.1.0",
     )
-    # Helper to copy routes from an existing APIRouter to a new prefix without double-including the same router instance.
-    def _copy_routes(src_router, prefix: str) -> None:
-        for route in src_router.routes:
-            # FastAPI expects path without leading slash handling; ensure correct concatenation.
-            new_path = prefix + route.path
-            app.add_api_route(
-                new_path,
-                route.endpoint,
-                methods=route.methods,
-                name=route.name,
-                include_in_schema=route.include_in_schema,
-                response_model=getattr(route, "response_model", None),
-                status_code=getattr(route, "status_code", None),
-                tags=getattr(route, "tags", None),
-            )
-
-
     # Register rate limiter and handler for both normal and test-mode rate limiting.
     app.state.limiter = limiter
 
@@ -228,48 +207,27 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     # Add new client resources under /api/v1/*; do not introduce new bare
     # /api/* routes.
     app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
-    # Add v1 alias routes for roll
-    _copy_routes(roll.router, "/api/v1/roll")
-    # Add legacy routes for roll
-    _copy_routes(roll.router, "/api/roll")
+    app.include_router(roll.router, prefix="/api/v1/roll", tags=["roll"])
     app.include_router(admin.router, prefix="/api", tags=["admin"])
     app.include_router(analytics.router, prefix="/api", tags=["analytics"])
     app.include_router(bug_report.router, prefix="/api/bug-reports", tags=["bug-reports"])
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-    # Add v1 alias routes for auth
-    _copy_routes(auth.router, "/api/v1/auth")
-    # Add legacy routes for auth
-    _copy_routes(auth.router, "/api/auth")
+    app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(thread.router, prefix="/api/threads", tags=["threads"])
-    # Add v1 alias routes for threads
-    _copy_routes(thread.router, "/api/v1/threads")
-    # Add legacy routes for threads
-    _copy_routes(thread.router, "/api/threads")
+    app.include_router(thread.router, prefix="/api/v1/threads", tags=["threads"])
     if app_settings.environment != "production":
         app.include_router(debug.router, prefix="/api", tags=["debug"])
     app.include_router(issue.router, tags=["issues"])
     app.include_router(rate.router, prefix="/api/rate", tags=["rate"])
-    # Add v1 alias routes for rate
-    _copy_routes(rate.router, "/api/v1/rate")
-    # Add legacy routes for rate
-    _copy_routes(rate.router, "/api/rate")
+    app.include_router(rate.router, prefix="/api/v1/rate", tags=["rate"])
     app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
     app.include_router(reading_orders.router, tags=["reading-orders"])
     app.include_router(session.router, prefix="/api/sessions", tags=["session"])
-    # Add v1 alias routes for sessions
-    _copy_routes(session.router, "/api/v1/sessions")
-    # Add legacy routes for sessions
-    _copy_routes(session.router, "/api/sessions")
+    app.include_router(session.router, prefix="/api/v1/sessions", tags=["session"])
     app.include_router(snooze.router, prefix="/api/snooze", tags=["snooze"])
-    # Add v1 alias routes for snooze
-    _copy_routes(snooze.router, "/api/v1/snooze")
-    # Add legacy routes for snooze
-    _copy_routes(snooze.router, "/api/snooze")
+    app.include_router(snooze.router, prefix="/api/v1/snooze", tags=["snooze"])
     app.include_router(undo.router, prefix="/api/undo", tags=["undo"])
-    # Add v1 alias routes for undo
-    _copy_routes(undo.router, "/api/v1/undo")
-    # Add legacy routes for undo
-    _copy_routes(undo.router, "/api/undo")
+    app.include_router(undo.router, prefix="/api/v1/undo", tags=["undo"])
     app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
     if os.getenv("TEST_ENVIRONMENT") == "true":
         app.include_router(test_helpers.router, prefix="/api", tags=["test"])
