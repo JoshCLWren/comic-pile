@@ -1,4 +1,4 @@
-const WORKER_OWNER_LABELS = Array.from({ length: 16 }, (_, index) => `factory:${index + 1}`);
+const WORKER_OWNER_LABELS = Array.from({ length: 46 }, (_, index) => `factory:${index + 1}`);
 
 const DEFINITIONS = {
   factory: ['5319E7', 'Work owned or produced by an autonomous ComicPile factory'],
@@ -54,6 +54,13 @@ function workerFrom(body) {
 function ownerFor(worker) {
   const scheduled = worker?.match(/^chatgpt-factory-([1-5])$/);
   if (scheduled) return `factory:${scheduled[1]}`;
+
+  const fixedModel = worker?.match(/^opencode-(?:free-model|nvidia)-factory-(\d+)$/);
+  if (fixedModel) {
+    const number = Number(fixedModel[1]);
+    if (number >= 6 && number <= 46) return `factory:${number}`;
+  }
+
   if (worker === 'local' || worker === 'local-opencode' || worker?.startsWith('local-opencode-')) {
     return 'factory:local';
   }
@@ -154,11 +161,14 @@ async function ensureLabels(github, context) {
 }
 
 async function ownerFromLinkedIssue(github, context, pullRequest) {
-  const branch = pullRequest.head.ref.match(/^factory\/(\d+)(?:-|$)/);
   const closing = (pullRequest.body || '').match(
     /(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/i,
   );
-  const issueNumber = Number(branch?.[1] || closing?.[1] || 0);
+  const fixedModelBranch = pullRequest.head.ref.match(
+    /^factory\/\d+-(\d+)-(?:nvidia|omni|opencode-free)(?:-|$)/,
+  );
+  const legacyBranch = pullRequest.head.ref.match(/^factory\/(\d+)(?:-|$)/);
+  const issueNumber = Number(closing?.[1] || fixedModelBranch?.[1] || legacyBranch?.[1] || 0);
   if (!issueNumber) return 'factory:unowned';
 
   const comments = await withRetry(() => github.paginate(github.rest.issues.listComments, {
@@ -224,7 +234,7 @@ async function reconcile({ github, context }) {
       .find(label => current.has(label));
 
     await reconcileLabels(github, context, pullRequest.number, {
-      // External workers write their durable PR owner before review workflows
+      // Fixed-model workers write their durable PR owner before review workflows
       // refresh visibility. Preserve that stronger PR-local signal even when the
       // linked issue has since been released for other work.
       owner: externalOwner || await ownerFromLinkedIssue(github, context, pullRequest),
