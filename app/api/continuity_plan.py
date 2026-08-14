@@ -10,13 +10,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.continuity_rule import _refresh_blocked_state, _would_create_cycle
 from app.auth import get_current_user
+from app.continuity_plan_readiness import evaluate_plan_readiness, plan_rule_marker
 from app.continuity_rules import ensure_owned_continuity_node
 from app.database import get_db
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.thread import Thread
 from app.models.user import User
-from app.schemas.continuity_plan import ContinuityPlanNode, ContinuityPlanResponse, ContinuityPlanWrite
+from app.schemas.continuity_plan import (
+    ContinuityPlanNode,
+    ContinuityPlanReadinessResponse,
+    ContinuityPlanResponse,
+    ContinuityPlanWrite,
+)
 from app.schemas.continuity_rule import ContinuityNodeType
 
 router = APIRouter(tags=["continuity-plans"])
@@ -24,7 +30,7 @@ router = APIRouter(tags=["continuity-plans"])
 
 def _marker(plan_id: int) -> str:
     """Return the durable ownership marker for rules compiled from one plan."""
-    return f"continuity-plan:{plan_id}"
+    return plan_rule_marker(plan_id)
 
 
 def _to_response(plan: ContinuityPlan) -> ContinuityPlanResponse:
@@ -199,6 +205,38 @@ async def get_continuity_plan(
 ) -> ContinuityPlanResponse:
     """Return one owned continuity plan."""
     return _to_response(await _get_owned_plan(db, current_user.id, plan_id))
+
+
+@router.get(
+    "/continuity-plans/{plan_id}/readiness",
+    response_model=ContinuityPlanReadinessResponse,
+    description="Return live readiness for every visible node of one owned plan.",
+)
+async def get_continuity_plan_readiness(
+    plan_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    include_chains: bool = False,
+) -> ContinuityPlanReadinessResponse:
+    """Evaluate live per-node readiness for one owned saved plan.
+
+    Args:
+        plan_id: Identifier of the owned plan to visualize.
+        current_user: Authenticated owner resolved by the API dependency.
+        db: Database session supplied by the API dependency.
+        include_chains: Whether to include bounded prerequisite chains for every
+            blocked node so the client can explain blocking without another call.
+
+    Returns:
+        Deterministic per-node readiness aligned with the readiness API.
+    """
+    plan = await _get_owned_plan(db, current_user.id, plan_id)
+    return await evaluate_plan_readiness(
+        db,
+        user_id=current_user.id,
+        plan=plan,
+        include_chains=include_chains,
+    )
 
 
 @router.put("/continuity-plans/{plan_id}", response_model=ContinuityPlanResponse)
