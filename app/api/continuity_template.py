@@ -111,7 +111,7 @@ async def preview_crossover_template(
         spines, and cross-series intersections. No continuity rules are
         created.
     """
-    template = derive_crossover_template_from_lists(
+    template = await derive_crossover_template_from_lists(
         db,
         source_list_ids=request.source_list_ids,
         target_story_arc_id=request.target_story_arc_id,
@@ -139,7 +139,7 @@ async def adopt_crossover_template(
     The plan defaults to informational ordering mode, storing the adopted
     positions without compiling any hard continuity rules.
     """
-    template = derive_crossover_template_from_lists(
+    template = await derive_crossover_template_from_lists(
         db,
         source_list_ids=request.source_list_ids,
         target_story_arc_id=request.target_story_arc_id,
@@ -148,7 +148,7 @@ async def adopt_crossover_template(
     lane = {"id": request.lane_id, "name": request.lane_name, "order": 0}
     nodes = []
     for position, item in enumerate(template.items):
-        result = db.execute(
+        result = await db.execute(
             select(Issue.id)
             .join(Thread, Thread.id == Issue.thread_id)
             .where(Issue.id == item.issue_id, Thread.user_id == current_user.id)
