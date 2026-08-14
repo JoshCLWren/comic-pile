@@ -313,6 +313,7 @@ class TestReleaseWriterCheck:
                 release_writer._check, "repo", "not-a-number", "abcdef1234567890"
             )
             assert "PR number must be an integer" in stderr
+            mock_request.assert_not_called()
 
     def test_check_calls_api(self) -> None:
         """Check should call the reconciliation endpoint.
