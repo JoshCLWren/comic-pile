@@ -1,0 +1,72 @@
+name: Fixed Model Factory Dispatcher
+
+on:
+  schedule:
+    - cron: '7 * * * *'
+    - cron: '22 * * * *'
+    - cron: '37 * * * *'
+    - cron: '52 * * * *'
+  workflow_dispatch:
+    inputs:
+      worker:
+        description: Optional single Factory 6-46; blank runs the three-lane smoke set
+        required: false
+        type: string
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/free-model-factory-dispatch.yml'
+      - '.github/workflows/free-model-factory-run.yml'
+      - '.github/free-model-factories.tsv'
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: read
+  checks: read
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      workers: ${{ steps.resolve.outputs.workers }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+      - id: resolve
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+          DISPATCH_WORKER: ${{ inputs.worker }}
+        run: |
+          set -Eeuo pipefail
+          manifest='.github/free-model-factories.tsv'
+
+          if [[ "$EVENT_NAME" == workflow_dispatch && -n "${DISPATCH_WORKER:-}" ]]; then
+            awk -F '\t' -v worker="$DISPATCH_WORKER" '$1 == worker {found=1} END {exit !found}' "$manifest"
+            workers="$(jq -nc --arg worker "$DISPATCH_WORKER" '[$worker]')"
+          elif [[ "$EVENT_NAME" == schedule ]]; then
+            minute="${SCHEDULE%% *}"
+            workers="$(awk -F '\t' -v minute="$minute" '$4 == minute {print $1}' "$manifest" | jq -Rsc 'split("\n") | map(select(length > 0))')"
+          else
+            # Immediate post-merge/manual smoke: NVIDIA, OmniRoute, OpenCode.
+            workers='["6","32","39"]'
+          fi
+
+          [[ "$workers" != '[]' ]] || { echo 'Dispatcher resolved no workers' >&2; exit 1; }
+          echo "workers=$workers" >> "$GITHUB_OUTPUT"
+          echo "Dispatching workers: $workers"
+
+  run:
+    needs: resolve
+    strategy:
+      fail-fast: false
+      matrix:
+        worker: ${{ fromJSON(needs.resolve.outputs.workers) }}
+    uses: ./.github/workflows/free-model-factory-run.yml
+    with:
+      worker: ${{ matrix.worker }}
+    secrets: inherit
