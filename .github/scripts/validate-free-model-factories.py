@@ -84,7 +84,10 @@ def main() -> None:
     for scheduler, minutes in schedule_minutes.items():
         ordered = sorted(minutes)
         wrapped = ordered + [ordered[0] + 60]
-        gaps = [right - left for left, right in zip(wrapped, wrapped[1:], strict=True)]
+        gaps = [
+            right - left
+            for left, right in zip(wrapped[:-1], wrapped[1:], strict=True)
+        ]
         assert min(gaps) >= 5, (
             f'scheduler {scheduler} violates five-minute floor: minutes={ordered}, gaps={gaps}'
         )
