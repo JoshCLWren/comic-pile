@@ -39,6 +39,71 @@ replace_labels() {
     --input - <<< "{\"labels\":${target}}" >/dev/null
 }
 
+current_stage() {
+  local number="$1" fallback="$2" labels stage
+  labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
+  stage="$(jq -r --arg stage_re "$STAGE_RE" '[.[] | select(test($stage_re))][0] // empty' <<< "$labels")"
+  if [[ -n "$stage" ]]; then printf '%s\n' "$stage"; else printf '%s\n' "$fallback"; fi
+}
+
+current_owner_is_self() {
+  local number="$1" labels
+  labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
+  jq -e --arg owner "$OWNER" 'index($owner) != null' >/dev/null <<< "$labels"
+}
+
+release_target() {
+  local number="$1" fallback_stage="$2" reason="$3" target_kind="${4:-target}"
+  local stage epoch marker
+  stage="$(current_stage "$number" "$fallback_stage")"
+  replace_labels "$number" 'factory:unowned' "$stage"
+  epoch="$(date +%s)"
+  marker="<!-- comic-pile-factory-claim-released-v3:${target_kind}-${number}:${WORKER_ID}:${epoch}:${reason} -->"
+  gh issue comment "$number" --body "$marker" >/dev/null 2>&1 || true
+  log "released ${target_kind} #${number} to factory:unowned at ${stage} (${reason})"
+}
+
+release_owned_targets() {
+  local reason="$1" number stage
+  while IFS= read -r number; do
+    [[ -n "$number" ]] || continue
+    stage="$(current_stage "$number" 'factory:building')"
+    release_target "$number" "$stage" "$reason" 'issue'
+  done < <(gh issue list --state open --limit 300 --label "$OWNER" --json number --jq '.[].number')
+
+  while IFS= read -r number; do
+    [[ -n "$number" ]] || continue
+    stage="$(current_stage "$number" 'factory:review')"
+    release_target "$number" "$stage" "$reason" 'pr'
+  done < <(gh pr list --state open --limit 200 --label "$OWNER" --json number --jq '.[].number')
+}
+
+linked_issue_from_branch() {
+  sed -nE 's#^factory/[0-9]+-([0-9]+)-.*$#\1#p' <<< "$1"
+}
+
+issue_has_open_factory_pr() {
+  local issue="$1"
+  gh pr list --state open --limit 300 --json headRefName,body | jq -e --arg issue "$issue" '
+    any(.[];
+      (.headRefName | test("^factory/[0-9]+-" + $issue + "-"))
+      or (.headRefName | test("^factory/" + $issue + "-"))
+      or ((.body // "") | test("(?im)(closes|fixes|resolves|implements|part of)[[:space:]]+#" + $issue + "([^0-9]|$)"))
+    )' >/dev/null
+}
+
+release_pr_and_issue() {
+  local pr="$1" branch="$2" stage="$3" reason="$4" issue state
+  release_target "$pr" "$stage" "$reason" 'pr'
+  issue="$(linked_issue_from_branch "$branch")"
+  if [[ -n "$issue" ]]; then
+    state="$(gh issue view "$issue" --json state --jq .state 2>/dev/null || true)"
+    if [[ "$state" == 'OPEN' ]] && current_owner_is_self "$issue"; then
+      release_target "$issue" "$stage" "$reason" 'issue'
+    fi
+  fi
+}
+
 ensure_owner_label() {
   if ! gh api "repos/${GITHUB_REPOSITORY}/labels/factory%3A${WORKER}" >/dev/null 2>&1; then
     gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" \
@@ -50,12 +115,9 @@ ensure_owner_label() {
 }
 
 choose_existing_pr() {
-  gh pr list --state open --limit 200 --json number,headRefName,labels,updatedAt | jq -r \
-    --arg prefix "factory/${WORKER}-" --arg owner "$OWNER" '
-      map(select(
-        (.headRefName | startswith($prefix)) or
-        (([.labels[].name] | index($owner)) != null)
-      ))
+  gh pr list --state open --limit 200 --json number,labels,updatedAt | jq -r \
+    --arg owner "$OWNER" '
+      map(select(([.labels[].name] | index($owner)) != null))
       | sort_by(.updatedAt)
       | .[].number'
 }
@@ -66,25 +128,33 @@ choose_unowned_pr() {
 }
 
 choose_issue() {
-  local labels=("$@")
+  local labels=("$@") candidate
   local args=(issue list --state open --limit 300 --json number,labels,createdAt)
   local label
   for label in "${labels[@]}"; do args+=(--label "$label"); done
-  gh "${args[@]}" | jq -r --arg owner_re "$OWNER_RE" '
+  while IFS= read -r candidate; do
+    [[ -n "$candidate" ]] || continue
+    issue_has_open_factory_pr "$candidate" && continue
+    printf '%s\n' "$candidate"
+  done < <(gh "${args[@]}" | jq -r --arg owner_re "$OWNER_RE" '
     map(select(.number != 679 and .number != 1093 and .number != 1109))
     | map(select((([.labels[].name | select(test($owner_re) and . != "factory:unowned")] | length) == 0)))
-    | sort_by(.createdAt) | reverse | .[].number'
+    | sort_by(.createdAt) | reverse | .[].number')
 }
 
-choose_backlog_zero_issue() {
-  gh issue view 679 --json state,labels 2>/dev/null | jq -r --arg owner_re "$OWNER_RE" '
-    select(.state == "OPEN")
-    | select((([.labels[].name | select(test($owner_re) and . != "factory:unowned")] | length) == 0))
-    | "679"' || true
+choose_backlog_zero_child() {
+  gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/679/sub_issues?per_page=100" 2>/dev/null \
+    | jq -s -r --arg owner_re "$OWNER_RE" '
+      add
+      | map(select(.state == "open"))
+      | map(select((([.labels[].name | select(test($owner_re) and . != "factory:unowned")] | length) == 0)))
+      | sort_by(.number)
+      | .[].number' || true
 }
 
 claim_issue() {
-  local number="$1" labels target
+  local number="$1" labels target epoch marker
+  issue_has_open_factory_pr "$number" && return 1
   labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
   if jq -e --arg owner_re "$OWNER_RE" \
     '[.[] | select(test($owner_re) and . != "factory:unowned")] | length > 0' \
@@ -96,6 +166,9 @@ claim_issue() {
     + ["factory", $owner, "factory:building"] | unique' <<< "$labels")"
   gh api --method PUT "repos/${GITHUB_REPOSITORY}/issues/${number}/labels" \
     --input - <<< "{\"labels\":${target}}" >/dev/null
+  epoch="$(date +%s)"
+  marker="<!-- comic-pile-factory-implement-claim-v3:issue-${number}:${WORKER_ID}:${epoch}:attempt-1 -->"
+  gh issue comment "$number" --body "$marker" >/dev/null 2>&1 || true
 }
 
 claim_unowned_pr() {
@@ -210,6 +283,8 @@ persist_pr_changes() {
 }
 
 ensure_owner_label
+release_owned_targets 'previous-run-stale-lease'
+trap 'release_owned_targets session-end-handoff || true' EXIT
 log "starting fixed-model session with runtime ${RUNTIME_MODEL}; budget ${BUDGET_SECONDS}s"
 
 while (( $(remaining) > 480 )); do
@@ -227,20 +302,6 @@ while (( $(remaining) > 480 )); do
   done < <(choose_existing_pr)
 
   if [[ -z "$NUMBER" ]]; then
-    while IFS= read -r candidate; do
-      [[ -n "$candidate" ]] || continue
-      contains_skip_pr "$candidate" && continue
-      if claim_unowned_pr "$candidate"; then
-        NUMBER="$candidate"
-        MODE='pr'
-        BRANCH="$(gh pr view "$NUMBER" --json headRefName --jq .headRefName)"
-        log "adopted unowned PR #${NUMBER} on ${BRANCH}"
-        break
-      fi
-    done < <(choose_unowned_pr)
-  fi
-
-  if [[ -z "$NUMBER" ]]; then
     for selector in 'user-reported bug' 'bug' 'ralph-task'; do
       read -r -a labels <<< "$selector"
       while IFS= read -r candidate; do
@@ -256,17 +317,34 @@ while (( $(remaining) > 480 )); do
   fi
 
   if [[ -z "$NUMBER" ]]; then
-    candidate="$(choose_backlog_zero_issue)"
-    if [[ -n "$candidate" ]] && claim_issue "$candidate"; then
-      NUMBER="$candidate"
-      MODE='issue'
-      BRANCH="factory/${WORKER}-${NUMBER}-${BRANCH_SUFFIX}"
-      log 'ordinary executable backlog unavailable; entering required #679 backlog-zero phase'
-    fi
+    while IFS= read -r candidate; do
+      [[ -n "$candidate" ]] || continue
+      contains_skip_pr "$candidate" && continue
+      if claim_unowned_pr "$candidate"; then
+        NUMBER="$candidate"
+        MODE='pr'
+        BRANCH="$(gh pr view "$NUMBER" --json headRefName --jq .headRefName)"
+        log "adopted unowned PR #${NUMBER} on ${BRANCH}"
+        break
+      fi
+    done < <(choose_unowned_pr)
   fi
 
   if [[ -z "$NUMBER" ]]; then
-    log 'no unclaimed executable target is currently available, including #679; ending this session cleanly'
+    while IFS= read -r candidate; do
+      [[ -n "$candidate" ]] || continue
+      if claim_issue "$candidate"; then
+        NUMBER="$candidate"
+        MODE='issue'
+        BRANCH="factory/${WORKER}-${NUMBER}-${BRANCH_SUFFIX}"
+        log "ordinary executable backlog unavailable; entering required #679 child #${NUMBER}"
+        break
+      fi
+    done < <(choose_backlog_zero_child)
+  fi
+
+  if [[ -z "$NUMBER" ]]; then
+    log 'no selectable ordinary target or unowned #679 child is currently available; refusing to report this as productive work'
     break
   fi
 
@@ -315,19 +393,22 @@ while (( $(remaining) > 480 )); do
   if [[ "$MODE" == 'issue' ]]; then
     if pr="$(persist_issue_pr "$NUMBER" "$BRANCH")"; then
       log "opened/updated PR #${pr} for issue #${NUMBER}"
+      release_target "$NUMBER" 'factory:review' 'pr-opened-handoff' 'issue'
+      release_target "$pr" 'factory:review' 'pr-opened-handoff' 'pr'
       SKIP_PRS+=("$pr")
     elif (( transient_failure == 1 )); then
       log "issue #${NUMBER} produced no changes because the pinned model was interrupted; releasing without marking the issue blocked"
-      replace_labels "$NUMBER" 'factory:unowned' 'factory:building'
+      release_target "$NUMBER" 'factory:building' 'transient-model-interruption' 'issue'
     else
       log "issue #${NUMBER} produced no changes; releasing as blocked/unowned"
-      replace_labels "$NUMBER" 'factory:unowned' 'factory:blocked'
+      release_target "$NUMBER" 'factory:blocked' 'no-persisted-change' 'issue'
     fi
     continue
   fi
 
   if persist_pr_changes "$NUMBER" "$BRANCH"; then
     log "pushed repairs to PR #${NUMBER}; review/CI must refresh"
+    release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'repairs-pushed-handoff'
     SKIP_PRS+=("$NUMBER")
     continue
   fi
@@ -337,7 +418,7 @@ while (( $(remaining) > 480 )); do
     machine_merge_gates_pass "$NUMBER" "$current"; then
     log "all exact-head gates passed for PR #${NUMBER}; merging ${current}"
     gh pr merge "$NUMBER" --merge --match-head-commit "$current" --delete-branch
-    issue_number="$(sed -nE "s#^factory/${WORKER}-([0-9]+)-.*$#\\1#p" <<< "$BRANCH")"
+    issue_number="$(linked_issue_from_branch "$BRANCH")"
     if [[ -n "$issue_number" ]]; then
       state="$(gh issue view "$issue_number" --json state --jq .state 2>/dev/null || true)"
       if [[ "$state" == 'OPEN' ]]; then
@@ -349,9 +430,11 @@ while (( $(remaining) > 480 )); do
   fi
 
   if (( transient_failure == 1 )); then
-    log "PR #${NUMBER} was interrupted transiently with no persisted edits; preserving ownership state and selecting other work"
+    log "PR #${NUMBER} was interrupted transiently with no persisted edits; releasing the lease and selecting other work"
+    release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'transient-model-interruption'
   else
-    log "PR #${NUMBER} is not merge-eligible now; preserving it for a later exact-head pass and selecting other work"
+    log "PR #${NUMBER} is not merge-eligible now; releasing the lease for cross-worker takeover"
+    release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'not-merge-eligible-handoff'
   fi
   SKIP_PRS+=("$NUMBER")
 done
