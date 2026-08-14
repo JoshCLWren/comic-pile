@@ -110,6 +110,7 @@ class CrossoverTemplateSerialSpinePreview(BaseModel):
 
     thread_id: int
     issue_ids: tuple[int, ...]
+    source_paths: tuple[str, ...]
     explanation: str
 
 
@@ -118,6 +119,7 @@ class CrossoverTemplateIntersectionPreview(BaseModel):
 
     first_issue_id: int
     second_issue_id: int
+    source_paths: tuple[str, ...]
     explanation: str
 
 

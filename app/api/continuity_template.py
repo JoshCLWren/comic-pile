@@ -70,6 +70,7 @@ def _to_preview(
             CrossoverTemplateSerialSpinePreview(
                 thread_id=spine.thread_id,
                 issue_ids=spine.issue_ids,
+                source_paths=spine.source_paths,
                 explanation=spine.explanation,
             )
             for spine in template.serial_spines
@@ -78,6 +79,7 @@ def _to_preview(
             CrossoverTemplateIntersectionPreview(
                 first_issue_id=intersection.first_issue_id,
                 second_issue_id=intersection.second_issue_id,
+                source_paths=intersection.source_paths,
                 explanation=intersection.explanation,
             )
             for intersection in template.intersections
