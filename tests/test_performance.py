@@ -1,7 +1,12 @@
+import os
 from fastapi.testclient import TestClient
 
-from app.main import app
+# Must set environment variable BEFORE importing app to ensure
+# that the conditional router inclusion in create_app() is triggered.
+os.environ["TEST_ENVIRONMENT"] = "true"
+from app.main import create_app
 
+app = create_app()
 client = TestClient(app)
 
 def test_response_time_header():
