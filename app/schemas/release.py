@@ -1,7 +1,7 @@
 """Typed API schemas for the durable release ledger."""
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -27,7 +27,7 @@ class ReleaseUpsertRequest(BaseModel):
     provenance_json: dict[str, object] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def require_github_identity(self) -> ReleaseUpsertRequest:
+    def require_github_identity(self) -> Self:
         """Require at least one stable source identity for retry-safe publication.
 
         Args:
