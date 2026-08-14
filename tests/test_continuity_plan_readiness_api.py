@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
+from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
 from app.models.issue import Issue
 from app.models.thread import Thread
 from app.models.user import User
@@ -75,6 +76,34 @@ def _issue_node(issue: Issue, *, position: int) -> dict[str, object]:
     }
 
 
+def _crossover_node(group: DependencyGroup, *, position: int) -> dict[str, object]:
+    """Build one crossover node descriptor for a plan payload."""
+    return {
+        "id": f"crossover-{group.id}",
+        "node_type": "crossover",
+        "ref_id": group.id,
+        "lane_id": "main",
+        "position": position,
+    }
+
+
+async def _make_group(
+    async_db: AsyncSession,
+    *,
+    user_id: int,
+    suffix: str,
+    issue_ids: list[int] | None = None,
+) -> DependencyGroup:
+    """Create one owned crossover wrapping the given member issues."""
+    group = DependencyGroup(user_id=user_id, name=f"Crossover {suffix}")
+    async_db.add(group)
+    await async_db.flush()
+    for issue_id in issue_ids or []:
+        async_db.add(DependencyGroupMembership(group_id=group.id, issue_id=issue_id))
+    await async_db.flush()
+    return group
+
+
 @pytest.mark.asyncio
 async def test_plan_readiness_reports_readable_blocked_and_complete_states(
     auth_client: AsyncClient,
@@ -140,6 +169,84 @@ async def test_plan_readiness_reports_readable_blocked_and_complete_states(
     assert summary["readable"] == 1
     assert summary["blocked"] == 0
     assert summary["unavailable"] == 0
+
+
+@pytest.mark.asyncio
+async def test_plan_readiness_reports_crossover_node_states(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Crossover nodes reuse canonical group readiness inside plan visualization."""
+    user = await get_or_create_user_async(async_db)
+    _source_thread, source_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="crossover-source", issue_count=1
+    )
+    _member_thread, member_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="crossover-member", issue_count=1
+    )
+    group = await _make_group(
+        async_db,
+        user_id=user.id,
+        suffix="plan-node",
+        issue_ids=[member_issues[0].id],
+    )
+    async_db.add(
+        ContinuityRule(
+            user_id=user.id,
+            source_type="issue",
+            source_id=source_issues[0].id,
+            target_type="issue",
+            target_id=member_issues[0].id,
+            satisfaction_type="item_read",
+        )
+    )
+    await async_db.commit()
+
+    created = await auth_client.post(
+        "/api/v1/continuity-plans/",
+        json=_plan_payload(
+            [
+                _issue_node(source_issues[0], position=0),
+                _crossover_node(group, position=1),
+            ]
+        ),
+    )
+    assert created.status_code == 201, created.text
+    plan_id = created.json()["id"]
+
+    response = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/readiness")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    nodes = {node["node_id"]: node for node in body["nodes"]}
+    crossover_node = nodes[f"crossover-{group.id}"]
+    assert crossover_node["node_type"] == "crossover"
+    assert crossover_node["label"] == "Crossover plan-node"
+    assert crossover_node["is_readable"] is False
+    assert crossover_node["is_complete"] is False
+    assert crossover_node["blockers"][0]["causing_issue_ids"] == [source_issues[0].id]
+    summary = body["summary"]
+    assert summary["total"] == 2
+    assert summary["readable"] == 1
+    assert summary["blocked"] == 1
+    assert summary["complete"] == 0
+    assert summary["unavailable"] == 0
+
+    source_issues[0].status = "read"
+    member_issues[0].status = "read"
+    await async_db.commit()
+    after = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/readiness")
+    after_body = after.json()
+    after_nodes = {node["node_id"]: node for node in after_body["nodes"]}
+    after_crossover = after_nodes[f"crossover-{group.id}"]
+    assert after_crossover["is_readable"] is True
+    assert after_crossover["is_complete"] is True
+    assert after_crossover["blockers"] == []
+    after_summary = after_body["summary"]
+    assert after_summary["total"] == 2
+    assert after_summary["readable"] == 0
+    assert after_summary["blocked"] == 0
+    assert after_summary["complete"] == 2
+    assert after_summary["unavailable"] == 0
 
 
 @pytest.mark.asyncio
