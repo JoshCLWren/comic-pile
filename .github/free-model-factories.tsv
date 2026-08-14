@@ -36,8 +36,6 @@
 40	zen	north-mini-code-free	42	C	Zen North Mini Code Free
 41	zen	poolside/laguna-s-2.1-free	43	D	Zen Laguna S 2.1 Free
 42	zen	ling-3.0-flash-free	45	A	Zen Ling 3.0 Flash Free
-43	kilo	kilo-auto/free	46	B	Kilo Auto Free
-44	llm7	minimax-m2.7	47	C	LLM7 MiniMax M2.7
-45	llm7	gemini-3.1-flash-lite	48	D	LLM7 Gemini 3.1 Flash Lite
-46	llm7	gpt-oss:20b	50	A	LLM7 GPT OSS 20B
-47	llm7	codestral-latest	51	B	LLM7 Codestral Latest
+43	kilo	stepfun/step-3.7-flash:free	46	B	Kilo Step 3.7 Flash Free
+44	kilo	poolside/laguna-m.1:free	47	C	Kilo Laguna M.1 Free
+45	kilo	nvidia/nemotron-3-ultra-550b-a55b:free	48	D	Kilo Nemotron 3 Ultra Free
