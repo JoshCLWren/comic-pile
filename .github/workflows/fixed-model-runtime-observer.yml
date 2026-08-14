@@ -51,7 +51,7 @@ jobs:
             echo 'publish=false' >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          gh api "repos/${GITHUB_REPOSITORY}/actions/jobs/${job_id}/logs" > "$RUNNER_TEMP/fixed-model.log"
+          gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --log > "$RUNNER_TEMP/fixed-model.log"
           python .github/scripts/classify-fixed-model-run.py \
             --log "$RUNNER_TEMP/fixed-model.log" > "$RUNNER_TEMP/runtime-outcome.json"
           worker="$(jq -r '.worker // empty' "$RUNNER_TEMP/runtime-outcome.json")"
