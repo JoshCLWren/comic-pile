@@ -275,11 +275,11 @@ describe('ContinuityPlannerPage pagination', () => {
     renderCreate()
     await selectFirstThread(user)
     await waitFor(() => expect(mocks.listIssues).toHaveBeenCalledTimes(2))
-    expect(mocks.listIssues).toHaveBeenNthCalledWith(1, 4, { page_size: 100 })
+    expect(mocks.listIssues).toHaveBeenNthCalledWith(1, 4, { page_size: 100 }, expect.any(AbortSignal))
     expect(mocks.listIssues).toHaveBeenNthCalledWith(2, 4, {
       page_size: 100,
       page_token: 'more',
-    })
+    }, expect.any(AbortSignal))
   })
 })
 

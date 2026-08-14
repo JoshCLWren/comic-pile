@@ -81,4 +81,68 @@ describe('ThreadPool eligible mappings', () => {
     expect(screen.queryByLabelText(/Eligible now/i)).not.toBeInTheDocument()
     expect(screen.queryByText('Issue 12')).not.toBeInTheDocument()
   })
+
+  it('shows route memberships as informational without claiming blocking', () => {
+    render(
+      <MemoryRouter>
+        <ThreadPool
+          {...baseProps}
+          pool={[{
+            id: 7,
+            title: 'Amazing Adventures',
+            format: 'ongoing',
+            issue_id: 42,
+            issue_number: '12',
+            route_labels: ['Secret War', 'Civil War'],
+          }]}
+        />
+      </MemoryRouter>,
+    )
+
+    const row = screen.getByRole('button', { name: /Die face 1: Amazing Adventures/i })
+    expect(row).toHaveAccessibleName(/routes Secret War, Civil War[^.]*\. Open thread actions/i)
+
+    const routeCue = screen.getByText(/Routes: Secret War · Civil War/i)
+    expect(routeCue).toBeVisible()
+    const cueText = routeCue.textContent ?? ''
+    expect(cueText.toLowerCase()).not.toMatch(/blocked|prerequisite|read .* first|required/i)
+    expect(routeCue.textContent).toContain('Routes:')
+  })
+
+  it('supports keyboard activation of thread rows', () => {
+    const onThreadClick = vi.fn()
+    render(
+      <MemoryRouter>
+        <ThreadPool
+          {...baseProps}
+          onThreadClick={onThreadClick}
+          pool={[{ id: 7, title: 'Amazing Adventures', format: 'ongoing', issue_number: '12' }]}
+        />
+      </MemoryRouter>,
+    )
+
+    const row = screen.getByRole('button', { name: /Die face 1: Amazing Adventures/i })
+    expect(row).toHaveAccessibleName(/Open thread actions/i)
+
+    row.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
+    expect(onThreadClick).toHaveBeenCalledWith({ id: 7, title: 'Amazing Adventures', format: 'ongoing', issue_number: '12' })
+
+    onThreadClick.mockClear()
+    row.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: ' ' }))
+    expect(onThreadClick).toHaveBeenCalledWith({ id: 7, title: 'Amazing Adventures', format: 'ongoing', issue_number: '12' })
+  })
+
+  it('shows a placeholder identity when the next issue has no issue number', () => {
+    render(
+      <MemoryRouter>
+        <ThreadPool
+          {...baseProps}
+          pool={[{ id: 7, title: 'Amazing Adventures', format: 'ongoing' }]}
+        />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText('Next unread issue')).toBeVisible()
+    expect(screen.queryByText('Issue')).not.toBeInTheDocument()
+  })
 })

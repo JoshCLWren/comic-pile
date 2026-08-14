@@ -55,7 +55,10 @@ async function fetchAllThreads(): Promise<Thread[]> {
   return result
 }
 
-async function fetchAllIssues(threadId: number): Promise<Issue[]> {
+async function fetchAllIssues(
+  threadId: number,
+  signal?: AbortSignal,
+): Promise<Issue[]> {
   const result: Issue[] = []
   const seen = new Set<string>()
   let token: string | null = null
@@ -63,6 +66,7 @@ async function fetchAllIssues(threadId: number): Promise<Issue[]> {
     const page = await issuesApi.list(
       threadId,
       { page_size: 100, ...(token ? { page_token: token } : {}) },
+      signal,
     )
     result.push(...page.issues)
     token = page.next_page_token
@@ -95,7 +99,7 @@ export default function ContinuityPlannerPage() {
 
   const [name, setName] = useState(DEFAULT_PLAN_NAME)
   const [nodes, setNodes] = useState<PlannerNode[]>([])
-  const [savedName, setSavedName] = useState('')
+  const [savedName, setSavedName] = useState(DEFAULT_PLAN_NAME)
   const [savedNodes, setSavedNodes] = useState<PlannerNode[]>([])
   const [threads, setThreads] = useState<Thread[]>([])
   const [groups, setGroups] = useState<DependencyGroup[]>([])
@@ -185,7 +189,7 @@ export default function ContinuityPlannerPage() {
     issueRequestRef.current = controller
     setIsLoadingIssues(true)
     try {
-      const loadedIssues = await fetchAllIssues(thread.id)
+      const loadedIssues = await fetchAllIssues(thread.id, controller.signal)
       if (controller.signal.aborted) return
       setIssues(loadedIssues)
     } catch (error) {
@@ -263,10 +267,14 @@ export default function ContinuityPlannerPage() {
       const saved = planId
         ? await continuityPlansApi.update(planId, toPayload(name, nodes))
         : await continuityPlansApi.create(toPayload(name, nodes))
-      const normalized = nodes.map((node, position) => ({ ...node, position }))
-      setNodes(normalized)
+      const savedNodes = nodes.map((node, position) => ({
+        ...node,
+        position,
+        lane_id: node.lane_id ?? LANE_ID,
+      }))
+      setNodes(savedNodes)
       setSavedName(saved.name)
-      setSavedNodes(normalized)
+      setSavedNodes(savedNodes)
       window.localStorage.setItem(LAST_PLAN_KEY, String(saved.id))
       if (!planId) {
         navigate(`/continuity-plans/${saved.id}`, { replace: true })
