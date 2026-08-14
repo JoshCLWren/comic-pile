@@ -236,6 +236,17 @@ describe('ContinuityCorrectionDialog', () => {
     expect(saveButton).toBeDisabled()
   })
 
+  it('disables saving in Skip mode even when something could be added', async () => {
+    renderDialog({ issueId: 42, connectedThreads: [] })
+    await waitFor(() => expect(listGroups).toHaveBeenCalled())
+
+    const skipButton = screen.getByRole('button', { name: 'Skip' })
+    expect(skipButton).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Save Changes' })).toBeDisabled()
+    expect(createGroup).not.toHaveBeenCalled()
+    expect(addMember).not.toHaveBeenCalled()
+  })
+
   it('closes the dialog when cancel is clicked', async () => {
     const user = userEvent.setup()
     const onClose = vi.fn()

@@ -107,7 +107,8 @@ export default function ContinuityCorrectionDialog({
 
   const canSaveCurrentIssue = issueId != null
   const canSaveConnected = resolvedConnected.length > 0
-  const hasSomethingToAdd = canSaveCurrentIssue || canSaveConnected
+  const hasSomethingToAdd =
+    mode !== 'none' && (canSaveCurrentIssue || canSaveConnected)
 
   async function handleSaveMemberships() {
     setError(null)
