@@ -1711,6 +1711,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/continuity/chains": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get Continuity Chains
+         * @description Resolve bounded transitive prerequisite chains, currently readable prerequisites, and structured traversal diagnostics for one owned node.
+         */
+        post: operations["get_continuity_chains_api_v1_continuity_chains_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/continuity/readiness": {
         parameters: {
             query?: never;
@@ -3883,6 +3903,66 @@ export interface components {
              * @enum {string}
              */
             source_type: "issue" | "crossover";
+        };
+        /**
+         * ContinuityChainDiagnostic
+         * @description One structured traversal failure that does not require text parsing.
+         */
+        ContinuityChainDiagnostic: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "cycle_detected" | "depth_limit_exceeded" | "node_limit_exceeded";
+            /** Limit */
+            limit?: number | null;
+            /** Node Id */
+            node_id: number;
+            /**
+             * Node Type
+             * @enum {string}
+             */
+            node_type: "issue" | "crossover";
+        };
+        /**
+         * ContinuityChainNode
+         * @description One structured node along a prerequisite chain.
+         */
+        ContinuityChainNode: {
+            /** Is Readable */
+            is_readable: boolean;
+            /** Label */
+            label: string;
+            /** Node Id */
+            node_id: number;
+            /**
+             * Node Type
+             * @enum {string}
+             */
+            node_type: "issue" | "crossover";
+        };
+        /**
+         * ContinuityChainResponse
+         * @description Bounded transitive prerequisite chains for one requested node.
+         */
+        ContinuityChainResponse: {
+            /** Chains */
+            chains?: components["schemas"]["ContinuityChainNode"][][];
+            /** Diagnostics */
+            diagnostics?: components["schemas"]["ContinuityChainDiagnostic"][];
+            /** Direct Blockers */
+            direct_blockers?: components["schemas"]["ContinuityBlocker"][];
+            /** Evaluated Issue Id */
+            evaluated_issue_id?: number | null;
+            /** Node Id */
+            node_id: number;
+            /**
+             * Node Type
+             * @enum {string}
+             */
+            node_type: "issue" | "thread" | "crossover";
+            /** Readable Prerequisites */
+            readable_prerequisites?: components["schemas"]["ContinuityChainNode"][];
         };
         /**
          * ContinuityPlanLane
@@ -7203,6 +7283,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_continuity_chains_api_v1_continuity_chains_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContinuityReadinessRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityChainResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
