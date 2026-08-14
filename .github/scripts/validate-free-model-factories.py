@@ -7,14 +7,16 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 MANIFEST = Path('.github/free-model-factories.tsv')
-EXPECTED_WORKERS = set(range(6, 46))
+EXPECTED_WORKERS = set(range(6, 60))
 EXPECTED_SOURCE_COUNTS = {
-    'nvidia': 22,
-    'omniroute-opencode': 8,
+    'nvidia': 26,
+    'omniroute-opencode': 7,
     'zen': 7,
-    'kilo': 3,
+    'kilo': 2,
+    'llm7': 5,
+    'ovhcloud': 7,
 }
-EXPECTED_SCHEDULERS = {'A', 'B', 'C', 'D'}
+EXPECTED_SCHEDULERS = {'A', 'B', 'C', 'D', 'E'}
 RETIRED_SCHEDULERS = (
     Path('.github/workflows/nvidia-factory-6.yml'),
     Path('.github/workflows/omniroute-factory-16.yml'),
@@ -37,7 +39,7 @@ def main() -> None:
             delimiter='\t',
         ))
 
-    assert len(rows) == 40, f'expected 40 fixed-model lanes, got {len(rows)}'
+    assert len(rows) == 54, f'expected 54 fixed model/route lanes, got {len(rows)}'
 
     workers = [int(row['worker']) for row in rows]
     assert set(workers) == EXPECTED_WORKERS, (
@@ -53,6 +55,13 @@ def main() -> None:
 
     source_models = [(row['source'], row['model']) for row in rows]
     assert len(source_models) == len(set(source_models)), 'duplicate model inside the same source'
+
+    # NVIDIA lists DeepSeek V4 Pro on build.nvidia.com, but its NIM API does not
+    # expose that ID. A dead page-only lane is not a factory, so keep it out.
+    assert not any(
+        row['source'] == 'nvidia' and row['model'] == 'deepseek-ai/deepseek-v4-pro'
+        for row in rows
+    ), 'page-only NVIDIA DeepSeek V4 Pro must not be scheduled as an API factory'
 
     schedule_minutes: dict[str, list[int]] = defaultdict(list)
     seen_slots: set[tuple[str, int]] = set()
@@ -103,7 +112,7 @@ def main() -> None:
     assert 'rotate_model' not in worker_text, 'fixed-model worker must never rotate models'
     assert 'Do not switch models' in worker_text, 'fixed-model no-fallback contract is missing'
 
-    print('Validated 40 fixed-model factory lanes across schedulers A-D.')
+    print('Validated 54 fixed model/route factory lanes across schedulers A-E.')
     for source, count in EXPECTED_SOURCE_COUNTS.items():
         print(f'  {source}: {count}')
 
