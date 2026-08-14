@@ -20,6 +20,7 @@ def unrelated_repair(previous_pr_files: set[str], latest_commit_files: set[str])
 
     Returns:
         True when the latest commit is an unrelated repair that should be rejected.
+
     """
     return bool(
         previous_pr_files
@@ -57,6 +58,7 @@ def main() -> int:
 
     Returns:
         Process exit code (0 on success).
+
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--self-test", action="store_true")

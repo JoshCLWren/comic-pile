@@ -71,6 +71,7 @@ def classify(log: str) -> Result:
 
     Returns:
         Result describing worker, model, and terminal outcome.
+
     """
     lock = LOCK_RE.search(log)
     if not lock:
@@ -83,18 +84,18 @@ def classify(log: str) -> Result:
     target = target_matches[-1].groupdict() if target_matches else {"kind": "", "number": ""}
     persisted = any(signal in log for signal in PRODUCTIVE_SIGNALS)
 
-    common = dict(
-        worker=values["worker"],
-        source=values["source"],
-        model=values["model"],
-        runtime_model=values["runtime"],
-        minute=values["minute"],
-        configured=configured,
-        exact_model_proven=exact_proven,
-        selected_kind=target["kind"],
-        selected_number=target["number"],
-        persisted_work=persisted,
-    )
+    common = {
+        "worker": values["worker"],
+        "source": values["source"],
+        "model": values["model"],
+        "runtime_model": values["runtime"],
+        "minute": values["minute"],
+        "configured": configured,
+        "exact_model_proven": exact_proven,
+        "selected_kind": target["kind"],
+        "selected_number": target["number"],
+        "persisted_work": persisted,
+    }
 
     if not configured:
         return Result(
@@ -267,6 +268,7 @@ def main() -> int:
 
     Returns:
         Process exit code (0 on success).
+
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--log", type=Path)
