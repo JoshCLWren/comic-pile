@@ -37,6 +37,9 @@ jobs:
       cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      OPENCODE_VERSION: '1.18.18'
+      OPENCODE_LINUX_X64_SHA256: '0cddc222418b8553669905a8980c0cda7088f00da24d83d6ac76b01c9fdb2aaf'
     permissions:
       contents: read
       pull-requests: write
@@ -57,12 +60,12 @@ jobs:
             "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels?per_page=100" \
             --jq '[.[].name]')"
           owner="$(jq -r '
-            map(select(test("^factory:(unowned|local|([1-9]|1[0-6]))$"))) | first // "factory:unowned"
+            map(select(test("^factory:(unowned|local|([1-9]|[1-3][0-9]|4[0-6]))$"))) | first // "factory:unowned"
           ' <<< "$current_labels")"
           target_labels="$(jq -c --arg owner "$owner" '
             map(select(
               (test("^factory:(building|review|changes-requested|ci|ready|blocked)$") | not) and
-              (test("^factory:(unowned|local|([1-9]|1[0-6]))$") | not) and
+              (test("^factory:(unowned|local|([1-9]|[1-3][0-9]|4[0-6]))$") | not) and
               . != "factory"
             )) + ["factory", $owner, "factory:review"] | unique
           ' <<< "$current_labels")"
@@ -73,11 +76,27 @@ jobs:
       - name: Install pinned FCM discovery CLI
         run: npm install --global --ignore-scripts free-coding-models@0.5.69
 
+      - name: Install pinned OpenCode release
+        run: |
+          set -Eeuo pipefail
+          archive="$RUNNER_TEMP/opencode-linux-x64.tar.gz"
+          bin_dir="$RUNNER_TEMP/opencode-bin"
+          curl -fsSL \
+            "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-x64.tar.gz" \
+            -o "$archive"
+          printf '%s  %s\n' "$OPENCODE_LINUX_X64_SHA256" "$archive" | sha256sum --check -
+          mkdir -p "$bin_dir"
+          tar -xzf "$archive" -C "$bin_dir"
+          test -x "$bin_dir/opencode"
+          echo "$bin_dir" >> "$GITHUB_PATH"
+          "$bin_dir/opencode" --version
+
       - name: Select a healthy NVIDIA model
         id: model
         env:
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
         run: |
+          set -Eeuo pipefail
           fcm_output="$(free-coding-models \
             --json \
             --origin nvidia \
@@ -88,28 +107,32 @@ jobs:
             python scripts/select_fcm_nvidia_model.py)"
           selected_model=""
           while IFS= read -r candidate; do
-            echo "Probing $candidate through NVIDIA chat completions"
-            provider_model="${candidate#nvidia/}"
-            request="$(jq -nc \
-              --arg model "$provider_model" \
-              '{model:$model,messages:[{role:"user",content:"Reply with exactly: FCM_NVIDIA_MODEL_OK"}],max_tokens:32}')"
-            response="$(curl --silent --show-error --fail-with-body \
-              --header "Authorization: Bearer $NVIDIA_API_KEY" \
-              --header 'Content-Type: application/json' \
-              --data "$request" \
-              https://integrate.api.nvidia.com/v1/chat/completions || true)"
-            if jq -e \
-              '.choices[0].message.content | strings | contains("FCM_NVIDIA_MODEL_OK")' \
-              >/dev/null 2>&1 <<< "$response"; then
+            [[ -n "$candidate" ]] || continue
+            echo "Probing $candidate through OpenCode"
+            probe_log="$RUNNER_TEMP/fcm-opencode-probe.log"
+            : > "$probe_log"
+            set +e
+            timeout --signal=TERM --kill-after=10s 180s \
+              opencode run -m "$candidate" --agent build --dir "$GITHUB_WORKSPACE" \
+              --title 'ComicPile PR review model probe' \
+              'Reply with exactly FCM_NVIDIA_MODEL_OK. Do not edit files, run commands, or use tools.' \
+              2>&1 | tee "$probe_log"
+            status=${PIPESTATUS[0]}
+            set -e
+            if (( status == 0 )) && grep -q 'FCM_NVIDIA_MODEL_OK' "$probe_log"; then
               selected_model="$candidate"
               break
             fi
-            echo "Candidate did not produce a compatible response"
+            echo "Candidate failed the OpenCode compatibility probe (status=${status})"
           done <<< "$candidates"
           if [[ -z "$selected_model" ]]; then
             echo "No FCM candidate completed the OpenCode compatibility probe" >&2
             exit 1
           fi
+          [[ -z "$(git status --porcelain)" ]] || {
+            echo 'OpenCode compatibility probe modified the worktree' >&2
+            exit 1
+          }
           echo "Selected $selected_model"
           echo "model=$selected_model" >> "$GITHUB_OUTPUT"
 
@@ -121,16 +144,15 @@ jobs:
 
       - name: Run OpenCode PR agent
         if: github.event_name != 'workflow_dispatch'
-        uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a
         env:
           GITHUB_TOKEN: ${{ github.token }}
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          MODEL: ${{ steps.model.outputs.model }}
+          AGENT: pr-reviewer
+          USE_GITHUB_TOKEN: 'true'
           PROMPT: >-
             ${{ github.event_name == 'pull_request' && 'Perform an exact-head code review of this pull request. Read the complete diff and relevant surrounding code. Report only actionable correctness, security, regression, maintainability, or missing-test findings. For every actionable finding, use the GitHub API or gh CLI to create a pull-request review comment directly on the relevant changed RIGHT-side diff line; include a concise explanation and a valid suggested patch when appropriate. Do not merely list findings in the final summary, do not comment on unchanged lines, and do not modify, push, merge, or change labels. Your FINAL response MUST begin with exactly OPENCODE_REVIEW: PASS when there are zero actionable inline findings, or exactly OPENCODE_REVIEW: CHANGES_REQUIRED when one or more actionable inline findings were posted. After that first line, you may include a concise overall verdict and finding count.' || '' }}
-        with:
-          model: ${{ steps.model.outputs.model }}
-          agent: pr-reviewer
-          use_github_token: true
+        run: opencode github run
 
       - name: Reconcile automatic review stage
         if: github.event_name == 'pull_request'
@@ -157,12 +179,12 @@ jobs:
             "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels?per_page=100" \
             --jq '[.[].name]')"
           owner="$(jq -r '
-            map(select(test("^factory:(unowned|local|([1-9]|1[0-6]))$"))) | first // "factory:unowned"
+            map(select(test("^factory:(unowned|local|([1-9]|[1-3][0-9]|4[0-6]))$"))) | first // "factory:unowned"
           ' <<< "$current_labels")"
           target_labels="$(jq -c --arg owner "$owner" --arg stage "$target_stage" '
             map(select(
               (test("^factory:(building|review|changes-requested|ci|ready|blocked)$") | not) and
-              (test("^factory:(unowned|local|([1-9]|1[0-6]))$") | not) and
+              (test("^factory:(unowned|local|([1-9]|[1-3][0-9]|4[0-6]))$") | not) and
               . != "factory"
             )) + ["factory", $owner, $stage] | unique
           ' <<< "$current_labels")"
