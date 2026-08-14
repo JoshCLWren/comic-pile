@@ -102,7 +102,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
       {isMoreOpen && (
         <nav ref={moreMenuRef} id="secondary-navigation" aria-label="More pages" className="fixed bottom-16 right-3 z-50 w-56 rounded-2xl border border-stone-700 bg-stone-950 p-2 shadow-2xl md:bottom-24 md:right-6">
           <Link to="/continuity-plans" className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-stone-100 hover:bg-stone-800"><span aria-hidden="true">🧭</span><span>Continuity Planner</span></Link>
-          <Link to="/whats-new" className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-stone-100 hover:bg-stone-800"><span aria-hidden="true">✨</span><span>What's New</span></Link>
+          <Link to="/whats-new" className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-stone-100 hover:bg-stone-800"><span aria-hidden="true">✨</span><span>What’s New</span></Link>
           <Link to="/help" className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-stone-100 hover:bg-stone-800"><span aria-hidden="true">❓</span><span>Help</span></Link>
           <div className="space-y-1 border-t border-stone-800 pt-2 md:hidden">
             <BugReportButton onSubmit={onBugReportSubmit} variant="nav" />
