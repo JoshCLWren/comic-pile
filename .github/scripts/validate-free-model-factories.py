@@ -148,6 +148,8 @@ def main() -> None:
         'factory:unowned',
         'comic-pile-factory-implement-claim-v3',
         'comic-pile-factory-claim-released-v3',
+        'current_owner_is_self',
+        'issue_has_open_factory_pr',
     ):
         assert required in worker_text, f'fixed-model lease invariant missing: {required}'
     assert '--arg prefix "factory/${WORKER}-"' not in worker_text, (
@@ -155,6 +157,15 @@ def main() -> None:
     )
     assert 'preserving ownership state and selecting other work' not in worker_text, (
         'stable PR handoffs must release ownership for cross-worker takeover'
+    )
+    assert 'issue_has_open_factory_pr "$candidate" && continue' in worker_text, (
+        'issues with an open linked factory PR must not be selected as fresh implementation work'
+    )
+    assert 'issue_has_open_factory_pr "$number" && return 1' in worker_text, (
+        'issue claim must recheck for an open linked PR to close the selection race'
+    )
+    assert 'current_owner_is_self "$issue"' in worker_text, (
+        'PR handoff must not revoke an issue lease already taken by another worker'
     )
 
     # Product work wins over generic PR orbiting. If ordinary work is genuinely
