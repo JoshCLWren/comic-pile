@@ -36,7 +36,7 @@ const registerResponse = await page.request.post('/api/auth/register', {
     });
     expect(threadResponse.ok()).toBeTruthy();
     const threadData = (await threadResponse.json()) as { id: number };
-    const issuesResponse = await page.request.post(`/api/threads/${threadData.id}/issues`, {
+    const issuesResponse = await page.request.post(`/api/v1/threads/${threadData.id}/issues`, {
       data: { issue_range: '1-10' },
       headers: authHeaders,
     });
