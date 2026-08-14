@@ -17,7 +17,6 @@ on:
       - '.github/workflows/free-model-factory-entry.yml'
       - '.github/workflows/free-model-factory-run.yml'
       - '.github/scripts/free-model-factory-worker.sh'
-      - '.github/scripts/validate-free-model-factories.py'
       - '.github/free-model-factories.tsv'
 
 permissions:
