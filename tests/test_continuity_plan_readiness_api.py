@@ -270,6 +270,50 @@ async def test_plan_readiness_reports_dangling_reference_without_crashing(
 
 
 @pytest.mark.asyncio
+async def test_plan_readiness_dangling_diagnostic_survives_cross_type_ref_id_collision(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """A malformed node whose ref_id collides with a different type is still dangling."""
+    user = await get_or_create_user_async(async_db)
+    thread, _ = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="collision", issue_count=1
+    )
+    await async_db.commit()
+
+    raw_payload = _plan_payload(
+        [
+            {
+                "id": "malformed-cross",
+                "node_type": "ghost",
+                "ref_id": thread.id,
+                "lane_id": "main",
+                "position": 1,
+            },
+        ]
+    )
+    plan = ContinuityPlan(
+        user_id=user.id,
+        name="Collision plan",
+        ordering_mode="informational",
+        lanes_json=[{"id": "main", "name": "Main", "order": 0}],
+        nodes_json=list(raw_payload["nodes"]),
+    )
+    async_db.add(plan)
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/continuity-plans/{plan.id}/readiness")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    nodes = {node["node_id"]: node for node in body["nodes"]}
+    node = nodes["malformed-cross"]
+    assert node["is_readable"] is False
+    codes = [diagnostic["code"] for diagnostic in node["diagnostics"]]
+    assert codes == ["dangling_plan_reference"]
+    assert body["summary"]["unavailable"] == 1
+
+
+@pytest.mark.asyncio
 async def test_plan_readiness_detects_plan_owned_rule_cycle(
     auth_client: AsyncClient,
     async_db: AsyncSession,
