@@ -196,10 +196,14 @@ async def adopt_crossover_template(
     )
     db.add(plan)
     await db.flush()
-    await _replace_compiled_rules(
-        db, user_id=current_user.id, plan=plan, payload=payload
-    )
-    await db.commit()
+    try:
+        await _replace_compiled_rules(
+            db, user_id=current_user.id, plan=plan, payload=payload
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(plan)
     if request.ordering_mode == "strict_sequential":
         await _refresh_blocked_state(current_user.id, db)
