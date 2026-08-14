@@ -10,16 +10,13 @@ on:
     - cron: '27 * * * *'
     - cron: '32 * * * *'
     - cron: '37 * * * *'
-    - cron: '42 * * * *'
-    - cron: '47 * * * *'
-    - cron: '52 * * * *'
   workflow_dispatch:
     inputs:
       worker:
         description: Factory worker from scheduler C
         required: true
         type: choice
-        options: ['8','13','18','23','28','33','38','43','48','53','58']
+        options: ['8','13','18','23','28','33','38','43']
 
 permissions:
   contents: write
