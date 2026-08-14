@@ -66,7 +66,7 @@ test.describe('Issue #1182: duplicate full-size die after rating', () => {
 
     await setRangeInput(page, '#rating-input', '4');
     const rateResponse = page.waitForResponse(
-      (response) => response.url().includes('/api/rate/') && response.request().method() === 'POST',
+      (response) => response.url().includes('/api/v1/rate/') && response.request().method() === 'POST',
     );
     await page.click('button[data-testid="save-and-continue"]');
     await rateResponse;
