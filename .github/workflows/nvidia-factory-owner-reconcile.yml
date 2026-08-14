@@ -26,26 +26,24 @@ jobs:
           branch="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr}" --jq .head.ref)"
           worker=''
 
-          # Durable scheduled workers are 1-47. Do not mistake ordinary
-          # factory/<issue>-... branches such as factory/924-* for worker IDs.
-          if [[ "$branch" =~ ^factory/([1-9]|[1-3][0-9]|4[0-7])- ]]; then
+          # Durable scheduled workers use one- or two-digit IDs. Do not mistake
+          # ordinary factory/<issue>-... branches such as factory/924-* for workers.
+          if [[ "$branch" =~ ^factory/([1-9][0-9]?)- ]]; then
             worker="${BASH_REMATCH[1]}"
           else
-            # Adopted PRs keep their original branch. Preserve both historical
-            # markers and the fixed-model marker so old work stays recoverable.
             worker="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${pr}/comments?per_page=100" --jq '.[].body' \
-              | grep -Eo '<!-- (free-model-factory-owner|nvidia-factory-owner|omniroute-factory-owner):([1-9]|[1-3][0-9]|4[0-7]) -->' \
+              | grep -Eo '<!-- (free-model-factory-owner|nvidia-factory-owner|omniroute-factory-owner):([1-9][0-9]?) -->' \
               | sed -E 's/^.*:([0-9]+) -->$/\1/' \
               | tail -1 || true)"
           fi
-          [[ "$worker" =~ ^([1-9]|[1-3][0-9]|4[0-7])$ ]] || exit 0
+          [[ "$worker" =~ ^[1-9][0-9]?$ ]] || exit 0
 
           labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${pr}/labels?per_page=100" --jq '[.[].name]')"
           stage="$(jq -r '[.[] | select(test("^factory:(building|review|changes-requested|ci|ready|blocked)$"))] | first // "factory:review"' <<< "$labels")"
           target="$(jq -c --arg owner "factory:${worker}" --arg stage "$stage" '
             map(select(
               (test("^factory:(building|review|changes-requested|ci|ready|blocked)$") | not) and
-              (test("^factory:(unowned|local|([1-9]|[1-3][0-9]|4[0-7]))$") | not) and
+              (test("^factory:(unowned|local|[1-9][0-9]?)$") | not) and
               . != "factory"
             )) + ["factory", $owner, $stage] | unique' <<< "$labels")"
           gh api --method PUT "repos/${GITHUB_REPOSITORY}/issues/${pr}/labels" \
