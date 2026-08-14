@@ -9,6 +9,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy import text
 
 revision: str = "c85100000001"
 down_revision: str | Sequence[str] | None = "c85000000001"
@@ -47,6 +48,19 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Remove the convergence_targets column and restore the strict checkpoint shape."""
+    bind = op.get_bind()
+    result = bind.execute(
+        text("SELECT COUNT(*) FROM continuity_rules WHERE satisfaction_type = 'converged'")
+    )
+    converged_rows = result.scalar_one()
+    if converged_rows:
+        bind.execute(
+            text(
+                "UPDATE continuity_rules "
+                "SET satisfaction_type = 'item_read', convergence_targets = NULL "
+                "WHERE satisfaction_type = 'converged'"
+            )
+        )
     op.drop_constraint("ck_continuity_rule_checkpoint_shape", "continuity_rules", type_="check")
     op.create_check_constraint(
         "ck_continuity_rule_checkpoint_shape",
