@@ -410,12 +410,27 @@ class TestReleaseWriterSkip:
             "merged_at": "2024-01-01T00:00:00Z",
             "reason": "Internal maintenance only",
         }
-        output = _capture_stdout(release_writer._skip, json.dumps(payload))
+        with patch.object(release_writer, "_request") as mock_request:
+            mock_request.return_value = {"id": 1}
+            with patch.object(release_writer, "_api_base", return_value="http://test/api"):
+                with patch.object(release_writer, "_token", return_value="test-token"):
+                    output = _capture_stdout(release_writer._skip, json.dumps(payload))
         result = json.loads(output.strip())
         assert result["classification"] == "internal"
         assert result["skipped"] is True
-        assert result["reason"] == "Internal maintenance only"
-        assert result["source_pr_number"] == 1
+        assert result["recorded"] is True
+        assert result["release"] == {"id": 1}
+        args = mock_request.call_args[0]
+        assert args[0] == "PUT"
+        assert args[1] == "http://test/api/"
+        published = args[2]
+        assert published["source_pr_number"] == 1
+        assert published["visibility"] == "internal"
+        assert published["summary"] == "Internal maintenance only"
+        assert published["provenance_json"] == {
+            "classification": "internal",
+            "reason": "Internal maintenance only",
+        }
 
 
 class TestReleaseWriterRequest:
