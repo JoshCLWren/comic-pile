@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -191,12 +191,30 @@ describe('ContinuityPlannerPage', () => {
       </MemoryRouter>,
     )
 
+    // Initially first item is "Mister Miracle #Annual 1" at position 1
+    await waitFor(() => expect(screen.getByText('Mister Miracle #Annual 1')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('lane-item-0')).toHaveTextContent('Mister Miracle #Annual 1'))
+    await waitFor(() => expect(screen.getByTestId('lane-item-1')).toHaveTextContent('Fourth World'))
+
     const moveDownButton = await screen.findByRole('button', { name: /Move Mister Miracle #Annual 1 later/i })
-    await user.click(moveDownButton)
-    await waitFor(() => expect(screen.getByText('2')).toBeVisible())
+    await act(async () => {
+      await user.click(moveDownButton)
+    })
+    // After moving down, the order should be swapped
+    const firstItem = screen.getByTestId('lane-item-0')
+    const secondItem = screen.getByTestId('lane-item-1')
+    expect(firstItem).toHaveTextContent('Fourth World')
+    expect(secondItem).toHaveTextContent('Mister Miracle #Annual 1')
+
     const moveUpButton = screen.getByRole('button', { name: /Move Mister Miracle #Annual 1 earlier/i })
-    await user.click(moveUpButton)
-    await waitFor(() => expect(screen.getByText('1')).toBeVisible())
+    await act(async () => {
+      await user.click(moveUpButton)
+    })
+    // After moving up, the order should be restored
+    const restoredFirstItem = screen.getByTestId('lane-item-0')
+    const restoredSecondItem = screen.getByTestId('lane-item-1')
+    expect(restoredFirstItem).toHaveTextContent('Mister Miracle #Annual 1')
+    expect(restoredSecondItem).toHaveTextContent('Fourth World')
   })
 
   it('reopens the last saved plan when the local-storage marker exists', async () => {
@@ -323,8 +341,7 @@ describe('ContinuityPlannerPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/continuity cycle/i)
   })
 
-  it('rejects a non-positive integer route id and treats the URL as a new plan', async () => {
-    const user = userEvent.setup()
+  it('shows an error for a non-numeric route id', async () => {
     render(
       <MemoryRouter initialEntries={['/continuity-plans/not-a-number']}>
         <Routes>
@@ -334,7 +351,35 @@ describe('ContinuityPlannerPage', () => {
       </MemoryRouter>,
     )
 
-    await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Invalid continuity plan ID/i)
+    expect(mocks.get).not.toHaveBeenCalled()
+  })
+
+  it('shows an error for a zero route id', async () => {
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans/0']}>
+        <Routes>
+          <Route path="/continuity-plans" element={<ContinuityPlannerPage />} />
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Invalid continuity plan ID/i)
+    expect(mocks.get).not.toHaveBeenCalled()
+  })
+
+  it('shows an error for a negative route id', async () => {
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans/-1']}>
+        <Routes>
+          <Route path="/continuity-plans" element={<ContinuityPlannerPage />} />
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Invalid continuity plan ID/i)
     expect(mocks.get).not.toHaveBeenCalled()
   })
 
@@ -580,7 +625,7 @@ describe('ContinuityPlannerPage', () => {
     await screen.findByRole('option', { name: /#7$/ })
   })
 
-  it('moves an item beyond the lane bounds without crashing', async () => {
+  it('disables move controls at lane boundaries and removes nodes', async () => {
     mocks.get.mockResolvedValue({
       id: 12,
       user_id: 1,
@@ -608,6 +653,37 @@ describe('ContinuityPlannerPage', () => {
     await user.click(screen.getByRole('button', { name: 'Remove Fourth World' }))
     await user.click(screen.getByRole('button', { name: 'Save plan' }))
     await waitFor(() => expect(mocks.update).toHaveBeenCalledOnce())
+  })
+
+  it('moves the first node down and back up, preserving order', async () => {
+    mocks.get.mockResolvedValue({
+      id: 12,
+      user_id: 1,
+      name: 'Saved lane',
+      ordering_mode: 'strict_sequential',
+      lanes: [{ id: 'main', name: 'Reading order', order: 0 }],
+      nodes: [
+        { id: 'issue-40', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0 },
+        { id: 'crossover-8', node_type: 'crossover', ref_id: 8, lane_id: 'main', position: 1 },
+      ],
+      created_at: '2026-08-12T00:00:00Z',
+      updated_at: '2026-08-12T00:00:00Z',
+    })
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans/12']}>
+        <Routes>
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    const moveDownButton = await screen.findByRole('button', { name: /Move Mister Miracle #Annual 1 later/i })
+    await user.click(moveDownButton)
+    await waitFor(() => expect(screen.getByText('2')).toBeVisible())
+    const moveUpButton = screen.getByRole('button', { name: /Move Mister Miracle #Annual 1 earlier/i })
+    await user.click(moveUpButton)
+    await waitFor(() => expect(screen.getByText('1')).toBeVisible())
   })
 
   it('ignores the create form when the user has not selected an issue', async () => {
@@ -662,7 +738,7 @@ describe('ContinuityPlannerPage', () => {
     await waitFor(() => expect(mocks.listThreads).toHaveBeenCalledTimes(2))
   })
 
-  it('falls back to the default plan name when canceling an unsaved new plan with no prior name', async () => {
+  it('falls back to the default plan name when canceling an unsaved new plan without typing a name', async () => {
     const user = userEvent.setup()
     render(
       <MemoryRouter initialEntries={['/continuity-plans']}>
@@ -673,12 +749,6 @@ describe('ContinuityPlannerPage', () => {
       </MemoryRouter>,
     )
 
-    await user.clear(await screen.findByLabelText('Plan name'))
-    await user.type(screen.getByLabelText('Plan name'), 'Ephemeral')
-    await user.click(screen.getByRole('option', { name: /Mister Miracle/i }))
-    await screen.findByRole('option', { name: /Annual 1/i })
-    await user.selectOptions(screen.getByLabelText('Issue'), '40')
-    await user.click(screen.getByRole('button', { name: 'Add issue' }))
     await user.click(screen.getByRole('button', { name: 'Cancel changes' }))
     expect(screen.getByLabelText('Plan name')).toHaveValue('My reading plan')
   })

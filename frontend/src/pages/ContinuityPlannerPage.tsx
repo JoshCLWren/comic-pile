@@ -86,6 +86,7 @@ export default function ContinuityPlannerPage() {
   const navigate = useNavigate()
   const parsedId = id ? Number(id) : null
   const planId = parsedId && Number.isInteger(parsedId) && parsedId > 0 ? parsedId : null
+  const isInvalidRoute = id !== undefined && parsedId !== null && (!Number.isInteger(parsedId) || parsedId <= 0)
   const [name, setName] = useState(DEFAULT_PLAN_NAME)
   const [nodes, setNodes] = useState<PlannerNode[]>([])
   const [savedName, setSavedName] = useState('')
@@ -130,6 +131,11 @@ export default function ContinuityPlannerPage() {
         if (!active) return
         setThreads(loadedThreads)
         setGroups(loadedGroups)
+        if (isInvalidRoute) {
+          active && setLoadError('Invalid continuity plan ID.')
+          active && setIsLoading(false)
+          return
+        }
         if (!planId) {
           setSavedName(DEFAULT_PLAN_NAME)
           return
@@ -147,7 +153,7 @@ export default function ContinuityPlannerPage() {
       .catch((error) => active && setLoadError(errorMessage(error, 'Unable to load the continuity planner.')))
       .finally(() => active && setIsLoading(false))
     return () => { active = false }
-  }, [hydrateLabels, planId])
+  }, [hydrateLabels, planId, isInvalidRoute])
 
   const selectThread = async (thread: Thread | null) => {
     setSelectedThread(thread)
@@ -312,7 +318,7 @@ export default function ContinuityPlannerPage() {
         ) : (
           <ol className="mt-3 grid gap-2">
             {nodes.map((node, index) => (
-              <li key={node.id} className="flex items-center gap-3 rounded-2xl border border-stone-700 bg-stone-900 p-3">
+              <li key={node.id} data-testid={`lane-item-${index}`} className="flex items-center gap-3 rounded-2xl border border-stone-700 bg-stone-900 p-3">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-stone-800 font-black text-amber-300">{index + 1}</span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-bold text-stone-100">{node.label}</p>
