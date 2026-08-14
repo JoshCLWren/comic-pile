@@ -2,6 +2,8 @@
 import os
 from fastapi.testclient import TestClient
 
+from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, generate_csrf_token
+
 # Must set environment variable BEFORE importing app to ensure
 # that the conditional router inclusion in create_app() is triggered.
 os.environ["TEST_ENVIRONMENT"] = "true"
@@ -34,8 +36,22 @@ def test_metrics_endpoint():
     assert isinstance(data["startup_duration"], float) or data["startup_duration"] is None
 
 def test_csrf_protection():
-    """Verify CSRF middleware rejects unauthenticated POST requests."""
-    # Attempt a POST to /api/roll without CSRF token should be rejected
+    """Verify the CSRF middleware rejects authenticated POSTs without a token.
+
+    The CSRF check only applies to requests that carry an ``Authorization``
+    header; unauthenticated requests fall through to normal auth handling.
+    """
+    # With an Authorization header but no CSRF token, the CSRF middleware must
+    # reject the mutating request and report the CSRF-specific detail.
+    client.headers["Authorization"] = "Bearer test"
     response = client.post("/api/roll", json={})
-    # CSRF middleware should reject and return 403
     assert response.status_code == 403
+    assert response.json() == {"detail": "CSRF token missing or invalid"}
+
+    # With a valid CSRF token attached, the request passes the CSRF layer even
+    # though the (invalid) bearer token still fails downstream auth.
+    token = generate_csrf_token()
+    client.cookies.set(CSRF_COOKIE_NAME, token)
+    client.headers[CSRF_HEADER_NAME] = token
+    response2 = client.post("/api/roll", json={})
+    assert response2.json().get("detail") != "CSRF token missing or invalid"
