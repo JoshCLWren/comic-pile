@@ -50,14 +50,35 @@ async def test_api_v1_alias_session_endpoint_matches_legacy(auth_client: AsyncCl
 
 
 
+def _collect_routes(app) -> dict[str, frozenset[str]]:
+    """Collect all APIRoute paths and methods, including those in IncludedRouters."""
+    from fastapi.routing import APIRoute, Mount
+
+    methods_by_path: dict[str, frozenset[str]] = {}
+
+    def collect_from_routes(routes):
+        for route in routes:
+            if isinstance(route, APIRoute):
+                methods_by_path[route.path] = frozenset(route.methods or set())
+            elif hasattr(route, "original_router") and hasattr(route, "include_context"):
+                # IncludedRouter - collect from the original router with prefix
+                prefix = route.include_context.prefix
+                for r in route.original_router.routes:
+                    if isinstance(r, APIRoute):
+                        full_path = prefix + r.path
+                        methods_by_path[full_path] = frozenset(r.methods or set())
+            elif isinstance(route, Mount):
+                # Recursively collect from mounted apps
+                collect_from_routes(getattr(route.app, "routes", []))
+
+    collect_from_routes(app.routes)
+    return methods_by_path
+
+
 def test_v1_snooze_and_undo_aliases_match_legacy_route_methods() -> None:
     """Canonical aliases reuse the same snooze and undo handler contracts."""
     app = create_app(serve_frontend=False)
-    methods_by_path = {
-        route.path: frozenset(route.methods or set())
-        for route in app.routes
-        if isinstance(route, APIRoute)
-    }
+    methods_by_path = _collect_routes(app)
 
     alias_pairs = (
         ("/api/snooze/", "/api/v1/snooze/"),
@@ -72,9 +93,26 @@ def test_v1_snooze_and_undo_aliases_match_legacy_route_methods() -> None:
         assert canonical_path in methods_by_path
         assert methods_by_path[canonical_path] == methods_by_path[legacy_path]
 
+
+def test_v1_queue_aliases_match_legacy_route_methods() -> None:
+    """Canonical /api/v1/queue aliases reuse the same queue handler contracts."""
+    app = create_app(serve_frontend=False)
+    methods_by_path = _collect_routes(app)
+
+    alias_pairs = (
+        ("/api/queue/shuffle/", "/api/v1/queue/shuffle/"),
+        ("/api/queue/threads/{thread_id}/back/", "/api/v1/queue/threads/{thread_id}/back/"),
+        ("/api/queue/threads/{thread_id}/front/", "/api/v1/queue/threads/{thread_id}/front/"),
+        ("/api/queue/threads/{thread_id}/position/", "/api/v1/queue/threads/{thread_id}/position/"),
+    )
+    for legacy_path, canonical_path in alias_pairs:
+        assert canonical_path in methods_by_path
+        assert methods_by_path[canonical_path] == methods_by_path[legacy_path]
+
 def test_no_new_bare_api_client_routes() -> None:
     """Regression guard: no client-facing routes under bare /api/* (non-v1)."""
     app = create_app(serve_frontend=False)
+    methods_by_path = _collect_routes(app)
 
     # Grandfathered legacy bare /api/* routes. Extensions of an already-
     # grandfathered resource stay here when changing the prefix would break
@@ -136,10 +174,7 @@ def test_no_new_bare_api_client_routes() -> None:
         }
     )
 
-    for route in app.routes:
-        path = getattr(route, "path", None)
-        if path is None:
-            continue
+    for path in methods_by_path:
         if not path.startswith("/api/"):
             continue
         if path.startswith("/api/v1/"):

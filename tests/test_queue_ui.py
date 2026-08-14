@@ -21,7 +21,7 @@ async def test_jump_to_position_works_for_large_distance(
     last_position = len(active_threads)
 
     response = await auth_client.put(
-        f"/api/queue/threads/{thread_id}/position/", json={"new_position": last_position}
+        f"/api/v1/queue/threads/{thread_id}/position/", json={"new_position": last_position}
     )
     assert response.status_code == 200
 
@@ -43,7 +43,7 @@ async def test_jump_to_position_works_for_small_distance(
     last_thread_id = threads[-1]["id"]
 
     response = await auth_client.put(
-        f"/api/queue/threads/{last_thread_id}/position/", json={"new_position": 1}
+        f"/api/v1/queue/threads/{last_thread_id}/position/", json={"new_position": 1}
     )
     assert response.status_code == 200
 
@@ -61,7 +61,7 @@ async def test_drag_and_drop_updates_position(
     new_position = 3
 
     response = await auth_client.put(
-        f"/api/queue/threads/{thread_id}/position/", json={"new_position": new_position}
+        f"/api/v1/queue/threads/{thread_id}/position/", json={"new_position": new_position}
     )
     assert response.status_code == 200
 
@@ -81,7 +81,7 @@ async def test_move_to_front_via_api(
     """Move an active thread to the normalized front."""
     thread_id = sample_data["threads"][3].id
 
-    response = await auth_client.put(f"/api/queue/threads/{thread_id}/front/")
+    response = await auth_client.put(f"/api/v1/queue/threads/{thread_id}/front/")
     assert response.status_code == 200
 
     thread = await async_db.get(Thread, thread_id)
@@ -102,7 +102,7 @@ async def test_move_to_back_via_api(
     active_threads = [t for t in threads if t["status"] == "active"]
     last_position = len(active_threads)
 
-    response = await auth_client.put(f"/api/queue/threads/{thread_id}/back/")
+    response = await auth_client.put(f"/api/v1/queue/threads/{thread_id}/back/")
     assert response.status_code == 200
 
     thread = await async_db.get(Thread, thread_id)
