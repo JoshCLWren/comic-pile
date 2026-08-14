@@ -19,6 +19,8 @@ Release publication is deliberately asynchronous. A release-writer failure recor
 
 ## Reconciliation and provenance
 
+Recent reconciliation starts with `python scripts/release_writer.py recent <repository> <limit>`. The helper reads closed pull requests from GitHub, filters to merges into `main`, sorts the complete merged set by exact `merged_at` timestamp, and emits only the requested newest rows. This keeps shell quoting, API pagination, and model output truncation out of recent-PR discovery.
+
 Before retrying a source, the release writer checks `/api/v1/releases/source` with repository, PR number, and merge SHA. Existing matching records are left alone. A 409 source-identity conflict is treated as an error and is never silently overwritten.
 
-Public changes are validated by `scripts/release_writer.py` before being sent to the release API. Strictly internal changes are emitted as an explicit machine-readable `internal`/`skipped` classification in the workflow log instead of forcing a public What's New entry.
+Public changes are validated by `scripts/release_writer.py` before being sent to the release API. Strictly internal changes are stored as durable `visibility=internal` release records. Public release reads filter those rows out, while source reconciliation can still see them so hourly runs do not repeatedly reclassify the same internal pull request.
