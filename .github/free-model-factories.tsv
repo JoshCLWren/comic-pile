@@ -32,24 +32,11 @@
 36	omniroute-opencode	oc/laguna-s-2.1-free	30	A	OmniRoute Laguna S 2.1 Free
 37	omniroute-opencode	oc/hy3-free	31	B	OmniRoute Tencent Hy3 Free
 38	omniroute-opencode	oc/nemotron-3.5-lightning-free	32	C	OmniRoute Nemotron 3.5 Lightning Free
-39	zen	big-pickle	33	D	Zen Big Pickle
-40	zen	deepseek-v4-flash-free	34	E	Zen DeepSeek V4 Flash Free
-41	zen	mimo-v2.5-free	35	A	Zen MiMo V2.5 Free
-42	zen	nemotron-3-ultra-free	36	B	Zen Nemotron 3 Ultra Free
-43	zen	laguna-s-2.1-free	37	C	Zen Laguna S 2.1 Free
-44	zen	hy3-free	38	D	Zen Tencent Hy3 Free
-45	zen	nemotron-3.5-lightning-free	39	E	Zen Nemotron 3.5 Lightning Free
-46	kilo	kilo-auto/free	40	A	Kilo Auto Free
-47	kilo	kilo-auto/small	41	B	Kilo Auto Small
-48	llm7	minimax-m2.7	42	C	LLM7 MiniMax M2.7
-49	llm7	gemini-3.1-flash-lite	43	D	LLM7 Gemini 3.1 Flash Lite
-50	llm7	gpt-oss:20b	44	E	LLM7 GPT OSS 20B
-51	llm7	mistral-Nemo-Instruct-2407	45	A	LLM7 Mistral Nemo 12B
-52	llm7	codestral-latest	46	B	LLM7 Codestral Latest
-53	ovhcloud	Qwen3.5-397B-A17B	47	C	OVH Qwen3.5 397B MoE
-54	ovhcloud	Qwen3.6-27B	48	D	OVH Qwen3.6 27B
-55	ovhcloud	gpt-oss-120b	49	E	OVH GPT OSS 120B
-56	ovhcloud	gpt-oss-20b	50	A	OVH GPT OSS 20B
-57	ovhcloud	Meta-Llama-3_3-70B-Instruct	51	B	OVH Llama 3.3 70B
-58	ovhcloud	Qwen3.5-9B	52	C	OVH Qwen3.5 9B
-59	ovhcloud	Qwen2.5-VL-72B-Instruct	53	D	OVH Qwen2.5 VL 72B
+39	zen	big-pickle	33	D	OpenCode Big Pickle
+40	zen	deepseek-v4-flash-free	34	E	OpenCode DeepSeek V4 Flash Free
+41	zen	mimo-v2.5-free	35	A	OpenCode MiMo V2.5 Free
+42	zen	nemotron-3-ultra-free	36	B	OpenCode Nemotron 3 Ultra Free
+43	zen	laguna-s-2.1-free	37	C	OpenCode Laguna S 2.1 Free
+44	zen	hy3-free	38	D	OpenCode Tencent Hy3 Free
+45	zen	nemotron-3.5-lightning-free	39	E	OpenCode Nemotron 3.5 Lightning Free
+46	zen	ling-3.0-tiny-free	40	A	OpenCode Ling 3.0 Tiny Free
