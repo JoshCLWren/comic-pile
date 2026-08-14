@@ -61,14 +61,14 @@ export function useThreads(searchTermOrOptions?: string | UseThreadsOptions) {
         }
       } while (!pageToken && nextToken);
 
-if (!cancelled) {
-  setData(prev => {
-    const merged = pageToken ? [...(prev ?? []), ...allThreads] : allThreads;
-    setNextPageToken(nextToken);
-    return merged;
-  });
-  invalidateQueries(['threads']);
-}
+      if (!cancelled) {
+        setData(prev => {
+          const merged = pageToken ? [...(prev ?? []), ...allThreads] : allThreads;
+          setNextPageToken(nextToken);
+          return merged;
+        });
+        invalidateQueries(['threads']);
+      }
     } catch (error) {
       if (!cancelled) {
         setIsError(true);
