@@ -65,7 +65,7 @@ const registerResponse = await page.request.post('/api/auth/register', {
 
     await setRangeInput(page, '#rating-input', '4');
     const rateResponse = page.waitForResponse(
-      (response) => response.url().includes('/api/rate/') && response.request().method() === 'POST',
+      (response) => response.url().includes('/api/v1/rate/') && response.request().method() === 'POST',
     );
     await page.click('button[data-testid="save-and-continue"]');
     await rateResponse;
