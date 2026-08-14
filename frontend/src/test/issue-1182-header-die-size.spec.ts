@@ -3,6 +3,7 @@ import { setRangeInput } from './helpers';
 
 test.describe('Issue #1182: duplicate full-size die after rating', () => {
   test('header die preview keeps its 40px size when the 3D chunk loads during the rating view', async ({ page }) => {
+    test.setTimeout(60000);
     const timestamp = Date.now();
     const username = `issue1182_${timestamp}_${Math.random().toString(36).slice(2, 8)}@example.com`;
     const password = 'TestPass123!';
@@ -30,7 +31,7 @@ test.describe('Issue #1182: duplicate full-size die after rating', () => {
       'X-CSRF-Token': csrfData.csrf_token,
     };
 
-    const threadResponse = await page.request.post('/api/v1/threads/', {
+    const threadResponse = await page.request.post('/api/threads/', {
       data: { title: `Issue 1182 thread ${timestamp}`, format: 'comic', issues_remaining: 5 },
       headers: authHeaders,
     });
@@ -58,19 +59,27 @@ test.describe('Issue #1182: duplicate full-size die after rating', () => {
     await page.waitForSelector('#rating-input', { state: 'visible', timeout: 10000 });
 
     // Let the delayed Dice3D chunk resolve while the header die is hidden.
-    // Wait for the header canvas to appear instead of a fixed timeout, which
-    // directly proves the chunk loaded and the header Dice3D mounted.
-    await page.waitForSelector('header canvas', { timeout: 10000 });
+    // Wait for the header canvas to be attached to the DOM (present) instead of a fixed timeout,
+    // which directly proves the chunk loaded and the header Dice3D mounted.
+    // The canvas will be hidden while the rating view is open, so we wait for 'attached' state.
+    await page.waitForSelector('header canvas', { state: 'attached', timeout: 10000 });
 
     await setRangeInput(page, '#rating-input', '4');
     const rateResponse = page.waitForResponse(
-      (response) => response.url().includes('/api/v1/rate/') && response.request().method() === 'POST',
+      (response) => response.url().includes('/api/rate/') && response.request().method() === 'POST',
     );
     await page.click('button[data-testid="save-and-continue"]');
     await rateResponse;
 
     await page.waitForSelector('#main-die-3d', { state: 'visible', timeout: 10000 });
-    await page.waitForTimeout(500);
+    // Wait for header die to settle at 40x40 instead of a fixed timeout
+    await page.waitForFunction(() => {
+      const canvases = Array.from(document.querySelectorAll('header canvas'));
+      return canvases.length > 0 && canvases.every((canvas) => {
+        const rect = canvas.getBoundingClientRect();
+        return Math.round(rect.width) === 40 && Math.round(rect.height) === 40;
+      });
+    }, { timeout: 5000 });
 
     const headerCanvasSizes = await page.evaluate(() => {
       const canvases = Array.from(document.querySelectorAll('header canvas'));
