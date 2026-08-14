@@ -1751,6 +1751,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/crossover-templates/adopt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Adopt Crossover Template
+         * @description Adopt an external template into an editable continuity plan. Defaults to informational mode so no hard rules are created until the user explicitly selects blocking semantics.
+         */
+        post: operations["adopt_crossover_template_api_v1_crossover_templates_adopt_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/crossover-templates/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Crossover Template
+         * @description Preview a derived crossover template from active CBL lists. Read-only: never mutates user data or continuity rules.
+         */
+        post: operations["preview_crossover_template_api_v1_crossover_templates_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dependencies/": {
         parameters: {
             query?: never;
@@ -4154,6 +4194,123 @@ export interface components {
             user_id: number;
         };
         /**
+         * CrossoverTemplateAdoptRequest
+         * @description Adopt an external template into an editable continuity plan.
+         */
+        CrossoverTemplateAdoptRequest: {
+            /**
+             * Issue Node Id Prefix
+             * @default tpl-
+             */
+            issue_node_id_prefix: string;
+            /**
+             * Lane Id
+             * @default imported
+             */
+            lane_id: string;
+            /**
+             * Lane Name
+             * @default Imported
+             */
+            lane_name: string;
+            /**
+             * Ordering Mode
+             * @default informational
+             * @enum {string}
+             */
+            ordering_mode: "informational" | "strict_sequential";
+            /** Plan Name */
+            plan_name: string;
+            /** Source List Ids */
+            source_list_ids: number[];
+            /** Target Story Arc Id */
+            target_story_arc_id?: string | null;
+        };
+        /**
+         * CrossoverTemplateConflictPreview
+         * @description A pair whose reading-order evidence disagrees across source lists.
+         */
+        CrossoverTemplateConflictPreview: {
+            /** First Issue Id */
+            first_issue_id: number;
+            /** Second Issue Id */
+            second_issue_id: number;
+            /** Source Paths */
+            source_paths: string[];
+        };
+        /**
+         * CrossoverTemplateIntersectionPreview
+         * @description Consistent cross-thread ordering observation, never a hard dependency.
+         */
+        CrossoverTemplateIntersectionPreview: {
+            /** Explanation */
+            explanation: string;
+            /** First Issue Id */
+            first_issue_id: number;
+            /** Second Issue Id */
+            second_issue_id: number;
+        };
+        /**
+         * CrossoverTemplateItemPreview
+         * @description Suggested crossover member with full provenance and advisory metadata.
+         */
+        CrossoverTemplateItemPreview: {
+            /**
+             * Confidence
+             * @enum {string}
+             */
+            confidence: "high" | "medium" | "low";
+            /** Explanation */
+            explanation: string;
+            /** Issue Id */
+            issue_id: number;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "core" | "context/prelude" | "epilogue" | "unknown";
+            /** Source Paths */
+            source_paths: string[];
+            /** Suggested Position */
+            suggested_position: number;
+            /** Target Story Arc Id */
+            target_story_arc_id: string | null;
+        };
+        /**
+         * CrossoverTemplateParallelCandidatePreview
+         * @description Advisory pair that may represent parallel branches.
+         */
+        CrossoverTemplateParallelCandidatePreview: {
+            /** First Issue Id */
+            first_issue_id: number;
+            /** Second Issue Id */
+            second_issue_id: number;
+            /** Source Paths */
+            source_paths: string[];
+        };
+        /**
+         * CrossoverTemplatePreviewRequest
+         * @description Request to preview a derived crossover template from persisted CBL evidence.
+         */
+        CrossoverTemplatePreviewRequest: {
+            /** Source List Ids */
+            source_list_ids: number[];
+            /** Target Story Arc Id */
+            target_story_arc_id?: string | null;
+        };
+        /**
+         * CrossoverTemplateSerialSpinePreview
+         * @description Same-thread issue order preserved as advisory series structure.
+         */
+        CrossoverTemplateSerialSpinePreview: {
+            /** Explanation */
+            explanation: string;
+            /** Issue Ids */
+            issue_ids: number[];
+            /** Thread Id */
+            thread_id: number;
+        };
+        /**
          * DependencyCreate
          * @description Schema for creating dependencies.
          */
@@ -4347,6 +4504,22 @@ export interface components {
             target_thread_id?: number | null;
             /** Warning */
             warning?: string | null;
+        };
+        /**
+         * DerivedCrossoverTemplatePreview
+         * @description Non-blocking preview of a derived external crossover template.
+         */
+        DerivedCrossoverTemplatePreview: {
+            /** Conflicts */
+            conflicts?: components["schemas"]["CrossoverTemplateConflictPreview"][];
+            /** Intersections */
+            intersections?: components["schemas"]["CrossoverTemplateIntersectionPreview"][];
+            /** Items */
+            items: components["schemas"]["CrossoverTemplateItemPreview"][];
+            /** Parallel Candidates */
+            parallel_candidates?: components["schemas"]["CrossoverTemplateParallelCandidatePreview"][];
+            /** Serial Spines */
+            serial_spines?: components["schemas"]["CrossoverTemplateSerialSpinePreview"][];
         };
         /**
          * DiagnosticError
@@ -7348,6 +7521,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ContinuityReadinessResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adopt_crossover_template_api_v1_crossover_templates_adopt_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrossoverTemplateAdoptRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityPlanResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_crossover_template_api_v1_crossover_templates_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrossoverTemplatePreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DerivedCrossoverTemplatePreview"];
                 };
             };
             /** @description Validation Error */
