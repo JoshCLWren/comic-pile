@@ -7,12 +7,12 @@ test.describe('Issue #1182: duplicate full-size die after rating', () => {
     const username = `issue1182_${timestamp}_${Math.random().toString(36).slice(2, 8)}@example.com`;
     const password = 'TestPass123!';
 
-    const registerResponse = await page.request.post('/api/v1/auth/register', {
+    const registerResponse = await page.request.post('/api/auth/register', {
       data: { username, email: username, password },
     });
     expect(registerResponse.ok()).toBeTruthy();
 
-    const loginResponse = await page.request.post('/api/v1/auth/login', {
+    const loginResponse = await page.request.post('/api/auth/login', {
       data: { username, password },
     });
     expect(loginResponse.ok()).toBeTruthy();
@@ -58,7 +58,9 @@ test.describe('Issue #1182: duplicate full-size die after rating', () => {
     await page.waitForSelector('#rating-input', { state: 'visible', timeout: 10000 });
 
     // Let the delayed Dice3D chunk resolve while the header die is hidden.
-    await page.waitForTimeout(6000);
+    // Wait for the header canvas to appear instead of a fixed timeout, which
+    // directly proves the chunk loaded and the header Dice3D mounted.
+    await page.waitForSelector('header canvas', { timeout: 10000 });
 
     await setRangeInput(page, '#rating-input', '4');
     const rateResponse = page.waitForResponse(
