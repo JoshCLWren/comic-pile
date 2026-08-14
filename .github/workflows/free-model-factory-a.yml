@@ -22,7 +22,11 @@ on:
         options: ['6','10','14','18','22','26','30','34','38','42','46']
 
 permissions:
-  contents: read
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: read
+  checks: read
 
 jobs:
   resolve:
