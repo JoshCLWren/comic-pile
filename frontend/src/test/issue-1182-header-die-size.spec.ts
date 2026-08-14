@@ -3,14 +3,13 @@ import { setRangeInput } from './helpers';
 
 test.describe('Issue #1182: duplicate full-size die after rating', () => {
   test('header die preview keeps its 40px size when the 3D chunk loads during the rating view', async ({ page }) => {
-    test.setTimeout(60000);
     const timestamp = Date.now();
     const username = `issue1182_${timestamp}_${Math.random().toString(36).slice(2, 8)}@example.com`;
     const password = 'TestPass123!';
 
-    const registerResponse = await page.request.post('/api/auth/register', {
-      data: { username, email: username, password },
-    });
+const registerResponse = await page.request.post('/api/v1/auth/register', {
+  data: { username, email: username, password },
+});
     expect(registerResponse.ok()).toBeTruthy();
 
     const loginResponse = await page.request.post('/api/auth/login', {
