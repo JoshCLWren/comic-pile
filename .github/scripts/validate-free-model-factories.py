@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+"""Validate the deterministic free-model factory roster and scheduler wiring."""
+
 from __future__ import annotations
 
 import csv
@@ -32,6 +34,7 @@ REQUIRED_CALLER_PERMISSIONS = (
 
 
 def main() -> None:
+    """Validate roster completeness, stable assignments, and scheduler invariants."""
     with MANIFEST.open(newline='', encoding='utf-8') as handle:
         rows = list(csv.DictReader(
             (line for line in handle if not line.startswith('# worker')),
@@ -81,7 +84,7 @@ def main() -> None:
     for scheduler, minutes in schedule_minutes.items():
         ordered = sorted(minutes)
         wrapped = ordered + [ordered[0] + 60]
-        gaps = [right - left for left, right in zip(wrapped, wrapped[1:])]
+        gaps = [right - left for left, right in zip(wrapped, wrapped[1:], strict=True)]
         assert min(gaps) >= 5, (
             f'scheduler {scheduler} violates five-minute floor: minutes={ordered}, gaps={gaps}'
         )
