@@ -8,6 +8,10 @@ on:
         required: true
         type: string
 
+concurrency:
+  group: fixed-model-factory-${{ inputs.worker }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
   issues: write
