@@ -24,6 +24,8 @@ MODEL_MISSING_RE = re.compile(
     re.I,
 )
 TIMEOUT_RE = re.compile(r"timed? out|timeout|exit status 124|process completed with exit code 124", re.I)
+CANCEL_RE = re.compile(r"operation was canceled|operation was cancelled|cancellation requested|job was canceled|job was cancelled", re.I)
+PROCESS_FAILURE_RE = re.compile(r"process completed with exit code [1-9][0-9]*|command failed with exit code [1-9][0-9]*", re.I)
 PROVIDER_RE = re.compile(
     r"provider error|service unavailable|bad gateway|gateway timeout|502|503|504|"
     r"econnreset|connection reset|model probe failed|failed the opencode compatibility probe",
@@ -84,18 +86,20 @@ def classify(log: str) -> Result:
     if MODEL_MISSING_RE.search(log):
         return Result(**common, outcome="MODEL MISSING", detail="the configured provider did not expose the pinned model")
 
+    # Useful persistence wins even if a later cleanup/provider call failed. The
+    # run did useful work with the exact model, which is the fleet fact we care about.
     if persisted and exact_proven:
         return Result(**common, outcome="HEALTHY / PRODUCTIVE", detail="exact OpenCode model proof succeeded and useful work was persisted")
 
     if RATE_LIMIT_RE.search(log):
         return Result(**common, outcome="RATE LIMITED", detail="runtime evidence contains a provider rate-limit or capacity response")
 
-    if TIMEOUT_RE.search(log):
-        return Result(**common, outcome="TIMEOUT", detail="the pinned-model execution exceeded its runtime budget")
+    if TIMEOUT_RE.search(log) or CANCEL_RE.search(log):
+        return Result(**common, outcome="TIMEOUT", detail="the pinned-model run was cancelled or exceeded its runtime lease")
 
     if exact_proven:
-        if PROVIDER_RE.search(log):
-            return Result(**common, outcome="PROVIDER FAILURE", detail="the model proved itself, then the provider/runtime failed before useful persistence")
+        if PROVIDER_RE.search(log) or PROCESS_FAILURE_RE.search(log):
+            return Result(**common, outcome="PROVIDER FAILURE", detail="the model proved itself, then the worker/provider runtime failed before useful persistence")
         return Result(**common, outcome="HEALTHY / IDLE", detail="exact OpenCode model proof succeeded but no useful work was persisted")
 
     # A smoke invocation reached OpenCode but did not produce the proof token.
@@ -141,6 +145,14 @@ class ClassifierTests(unittest.TestCase):
 
     def test_failed_exact_smoke_is_provider_failure(self) -> None:
         self.assertEqual(classify(self.BASE + "Smoke exact pinned model through OpenCode\nError: unexpected provider response\n").outcome, "PROVIDER FAILURE")
+
+    def test_post_proof_worker_failure_is_not_healthy(self) -> None:
+        result = classify(self.BASE + "FIXED_MODEL_OPENCODE_OK\nRun continuous fixed-model factory session\nProcess completed with exit code 1\n")
+        self.assertEqual(result.outcome, "PROVIDER FAILURE")
+
+    def test_post_proof_cancellation_is_timeout(self) -> None:
+        result = classify(self.BASE + "FIXED_MODEL_OPENCODE_OK\nThe operation was canceled.\n")
+        self.assertEqual(result.outcome, "TIMEOUT")
 
 
 def main() -> int:
