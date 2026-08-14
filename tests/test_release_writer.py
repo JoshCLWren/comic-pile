@@ -3,6 +3,7 @@
 import io
 import json
 import os
+from collections.abc import Callable
 from contextlib import redirect_stderr, redirect_stdout
 from unittest.mock import Mock, patch
 
@@ -11,7 +12,9 @@ import pytest
 from scripts import release_writer
 
 
-def _capture_stderr(func: object, *args: object, **kwargs: object) -> str:
+def _capture_stderr(
+    func: Callable[..., object], *args: object, **kwargs: object
+) -> str:
     """Capture stderr from a function call that exits unsuccessfully.
 
     Args:
@@ -21,6 +24,7 @@ def _capture_stderr(func: object, *args: object, **kwargs: object) -> str:
 
     Returns:
         The captured stderr output as a string.
+
     """
     f = io.StringIO()
     with redirect_stderr(f):
@@ -34,7 +38,9 @@ def _capture_stderr(func: object, *args: object, **kwargs: object) -> str:
     return f.getvalue()
 
 
-def _capture_stdout(func: object, *args: object, **kwargs: object) -> str:
+def _capture_stdout(
+    func: Callable[..., object], *args: object, **kwargs: object
+) -> str:
     """Capture stdout from a function call.
 
     Args:
@@ -44,6 +50,7 @@ def _capture_stdout(func: object, *args: object, **kwargs: object) -> str:
 
     Returns:
         The captured stdout output as a string.
+
     """
     f = io.StringIO()
     with redirect_stdout(f):
@@ -607,7 +614,7 @@ class TestReleaseWriterEnvironment:
             assert "RELEASE_WRITER_TOKEN is required" in stderr
 
 
-def _valid_payload() -> dict:
+def _valid_payload() -> dict[str, object]:
     """Return a valid release payload for testing."""
     return {
         "source_repository": "JoshCLWren/comic-pile",
