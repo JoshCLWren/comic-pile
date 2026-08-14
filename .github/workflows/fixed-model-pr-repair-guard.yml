@@ -1,0 +1,73 @@
+name: Fixed Model PR Repair Guard
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  guard-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Test fleet guard decisions
+        run: python .github/scripts/fixed-model-guard.py --self-test
+
+  reject-unrelated-repair:
+    if: >-
+      github.event.action == 'synchronize' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Reject unrelated fixed-model repair commit
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          commit="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}")"
+          author="$(jq -r '.commit.author.name // ""' <<< "$commit")"
+          if ! [[ "$author" =~ ^opencode-free-model-factory-[0-9]+\[bot\]$ ]]; then
+            echo "Latest commit is not from a fixed-model factory: ${author:-unknown}"
+            exit 0
+          fi
+
+          parent="$(jq -r '.parents[0].sha // empty' <<< "$commit")"
+          [[ -n "$parent" ]] || exit 0
+          latest_files="$(jq -c '[.files[]?.filename] | unique' <<< "$commit")"
+          previous_files="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${BASE_SHA}...${parent}" \
+            --jq '[.files[]?.filename] | unique')"
+
+          decision="$(python .github/scripts/fixed-model-guard.py \
+            --previous-json "$previous_files" --latest-json "$latest_files")"
+          if [[ "$(jq -r .reject <<< "$decision")" != true ]]; then
+            echo 'Fixed-model repair overlaps the existing PR diff; allowing it.'
+            exit 0
+          fi
+
+          echo "Rejecting unrelated fixed-model repair ${HEAD_SHA}; restoring ${parent}."
+          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/heads/${HEAD_BRANCH}" \
+            -f sha="$parent" -F force=true >/dev/null
+
+          labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels?per_page=100" --jq '[.[].name]')"
+          target="$(jq -c '
+            map(select((test("^factory:(unowned|local|[1-9][0-9]*|building|review|changes-requested|ci|ready|blocked)$") | not) and . != "factory"))
+            + ["factory", "factory:unowned", "factory:review"] | unique' <<< "$labels")"
+          gh api --method PUT "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" \
+            --input - <<< "{\"labels\":${target}}" >/dev/null
+          gh pr comment "$PR_NUMBER" --body "Rejected fixed-model repair commit \`${HEAD_SHA}\`: its changed files had zero overlap with the PR's existing diff. The branch was restored to \`${parent}\` and released to \`factory:unowned\`." >/dev/null
