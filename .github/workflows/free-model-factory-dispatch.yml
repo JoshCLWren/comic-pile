@@ -22,6 +22,8 @@ on:
 permissions:
   contents: read
   actions: write
+  issues: write
+  pull-requests: write
 
 jobs:
   dispatch:
@@ -42,6 +44,70 @@ jobs:
         run: |
           set -Eeuo pipefail
           manifest='.github/free-model-factories.tsv'
+          owner_pattern='^factory:(local|([1-9]|[1-3][0-9]|4[0-6]))$'
+
+          heartbeat_worker_for_run() {
+            local run_id="$1"
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
+              | jq -rs --arg run "$run_id" '
+                  [
+                    .[][]?
+                    | select(.body | test("(?m)^Run: " + $run + "$"))
+                    | .body
+                    | capture("Worker: opencode-free-model-factory-(?<worker>[0-9]+)").worker
+                  ]
+                  | last // empty
+                '
+          }
+
+          release_cancelled_worker_leases() {
+            local worker="$1"
+            local owner="factory:${worker}"
+            local number current_labels other_owner latest_labels target_labels
+
+            awk -F '\t' -v worker="$worker" '$1 == worker {found=1} END {exit !found}' "$manifest" || {
+              echo "Refusing lease recovery for unknown fixed-model worker ${worker}" >&2
+              return 1
+            }
+
+            while IFS= read -r number; do
+              [[ -n "$number" ]] || continue
+              current_labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}" --jq '[.labels[].name]')"
+              jq -e --arg owner "$owner" 'index($owner) != null' >/dev/null <<< "$current_labels" || continue
+              other_owner="$(jq -r --arg owner "$owner" --arg pattern "$owner_pattern" \
+                '[.[] | select(test($pattern) and . != $owner)] | first // empty' <<< "$current_labels")"
+              if [[ -n "$other_owner" ]]; then
+                echo "Skipping #${number}; another worker already owns it via ${other_owner}"
+                continue
+              fi
+
+              # Re-read immediately before the atomic replacement so a takeover
+              # that happened during discovery is observed rather than erased.
+              latest_labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}" --jq '[.labels[].name]')"
+              jq -e --arg owner "$owner" 'index($owner) != null' >/dev/null <<< "$latest_labels" || {
+                echo "Skipping #${number}; ${owner} is no longer current"
+                continue
+              }
+              other_owner="$(jq -r --arg owner "$owner" --arg pattern "$owner_pattern" \
+                '[.[] | select(test($pattern) and . != $owner)] | first // empty' <<< "$latest_labels")"
+              if [[ -n "$other_owner" ]]; then
+                echo "Skipping #${number}; takeover observed via ${other_owner}"
+                continue
+              fi
+
+              target_labels="$(jq -c --arg owner "$owner" '
+                map(if . == $owner then "factory:unowned" else . end) | unique
+              ' <<< "$latest_labels")"
+              echo "Releasing cancelled Factory ${worker} lease on #${number}"
+              gh api --method PUT \
+                "repos/${GITHUB_REPOSITORY}/issues/${number}/labels" \
+                --input - <<< "{\"labels\":${target_labels}}" >/dev/null
+            done < <(
+              gh api --paginate \
+                "repos/${GITHUB_REPOSITORY}/issues?state=open&labels=factory%3A${worker}&per_page=100" \
+                --jq '.[].number'
+            )
+          }
 
           if [[ "$EVENT_NAME" == push ]]; then
             echo "Fixed-model automation changed at ${DEPLOY_SHA}; canceling older entry runs"
@@ -55,7 +121,8 @@ jobs:
 
             while IFS= read -r run_id; do
               [[ -n "$run_id" ]] || continue
-              echo "Canceling stale fixed-model entry run ${run_id}"
+              worker="$(heartbeat_worker_for_run "$run_id")"
+              echo "Canceling stale fixed-model entry run ${run_id}${worker:+ for Factory ${worker}}"
               if ! gh run cancel "$run_id"; then
                 current_status="$(gh run view "$run_id" --json status --jq '.status')"
                 [[ "$current_status" == completed ]] || {
@@ -63,6 +130,31 @@ jobs:
                   exit 1
                 }
               fi
+
+              run_status=''
+              conclusion=''
+              for _ in {1..90}; do
+                read -r run_status conclusion < <(
+                  gh run view "$run_id" --json status,conclusion \
+                    --jq '[.status, (.conclusion // "")] | @tsv'
+                )
+                [[ "$run_status" == completed ]] && break
+                sleep 2
+              done
+              [[ "$run_status" == completed ]] || {
+                echo "Stale fixed-model entry run ${run_id} did not reach a terminal state" >&2
+                exit 1
+              }
+
+              if [[ "$conclusion" != cancelled ]]; then
+                echo "Run ${run_id} completed as ${conclusion:-unknown}; normal worker handoff remains authoritative"
+                continue
+              fi
+              if [[ -z "$worker" ]]; then
+                echo "Cancelled run ${run_id} had no fixed-model heartbeat; no lease cleanup is required"
+                continue
+              fi
+              release_cancelled_worker_leases "$worker"
             done <<< "$stale_runs"
           fi
 

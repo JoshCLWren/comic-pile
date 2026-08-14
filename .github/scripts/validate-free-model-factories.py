@@ -109,6 +109,7 @@ def main() -> None:
     assert 'slots=(0 15 30 45)' in dispatcher_text
     assert 'workers=\'["6","32","39"]\'' in dispatcher_text
     assert 'contents: read' in dispatcher_text and 'actions: write' in dispatcher_text
+    assert 'issues: write' in dispatcher_text and 'pull-requests: write' in dispatcher_text
     assert 'gh workflow run free-model-factory-entry.yml' in dispatcher_text
     assert 'matrix:' not in dispatcher_text
     assert "'.github/scripts/free-model-factory-worker.sh'" in dispatcher_text, (
@@ -122,6 +123,29 @@ def main() -> None:
         'gh run cancel "$run_id"',
     ):
         assert required in dispatcher_text, f'fixed-model deployment fence missing: {required}'
+
+    # GitHub can terminate a cancelled runner before its EXIT trap runs. The
+    # deploy fence must therefore wait for terminal cancellation and recover
+    # only that run's worker leases from the registry heartbeat.
+    for required in (
+        'heartbeat_worker_for_run',
+        'issues/1093/comments?per_page=100',
+        'Run: " + $run + "$"',
+        'Worker: opencode-free-model-factory-',
+        '--json status,conclusion',
+        'for _ in {1..90}',
+        '[[ "$conclusion" != cancelled ]]',
+        'release_cancelled_worker_leases',
+        'issues?state=open&labels=factory%3A${worker}&per_page=100',
+        'factory:unowned',
+        'gh api --method PUT',
+        'another worker already owns it',
+        'takeover observed',
+    ):
+        assert required in dispatcher_text, f'cancelled-run handoff invariant missing: {required}'
+    assert "owner_pattern='^factory:(local|([1-9]|[1-3][0-9]|4[0-6]))$'" in dispatcher_text, (
+        'cancelled-run recovery must recognize every active fixed-model owner without treating unowned as a takeover'
+    )
 
     assert ENTRY.exists(), 'dispatchable fixed-model entry workflow is missing'
     entry_text = ENTRY.read_text(encoding='utf-8')
