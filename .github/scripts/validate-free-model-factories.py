@@ -9,14 +9,21 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 MANIFEST = Path('.github/free-model-factories.tsv')
-EXPECTED_WORKERS = set(range(6, 60))
+EXPECTED_WORKERS = set(range(6, 47))
 EXPECTED_SOURCE_COUNTS = {
     'nvidia': 26,
     'omniroute-opencode': 7,
-    'zen': 7,
-    'kilo': 2,
-    'llm7': 5,
-    'ovhcloud': 7,
+    'zen': 8,
+}
+EXPECTED_ZEN_MODELS = {
+    'big-pickle',
+    'deepseek-v4-flash-free',
+    'hy3-free',
+    'laguna-s-2.1-free',
+    'ling-3.0-tiny-free',
+    'mimo-v2.5-free',
+    'nemotron-3-ultra-free',
+    'nemotron-3.5-lightning-free',
 }
 EXPECTED_SCHEDULERS = {'A', 'B', 'C', 'D', 'E'}
 RETIRED_SCHEDULERS = (
@@ -42,7 +49,7 @@ def main() -> None:
             delimiter='\t',
         ))
 
-    assert len(rows) == 54, f'expected 54 fixed model/route lanes, got {len(rows)}'
+    assert len(rows) == 41, f'expected 41 fixed model lanes, got {len(rows)}'
 
     workers = [int(row['worker']) for row in rows]
     assert set(workers) == EXPECTED_WORKERS, (
@@ -54,6 +61,12 @@ def main() -> None:
     source_counts = Counter(row['source'] for row in rows)
     assert source_counts == EXPECTED_SOURCE_COUNTS, (
         f'source counts changed unexpectedly: {dict(source_counts)}'
+    )
+
+    zen_models = {row['model'] for row in rows if row['source'] == 'zen'}
+    assert zen_models == EXPECTED_ZEN_MODELS, (
+        f'OpenCode free roster changed: missing={sorted(EXPECTED_ZEN_MODELS - zen_models)} '
+        f'extra={sorted(zen_models - EXPECTED_ZEN_MODELS)}'
     )
 
     source_models = [(row['source'], row['model']) for row in rows]
@@ -118,7 +131,7 @@ def main() -> None:
     assert 'rotate_model' not in worker_text, 'fixed-model worker must never rotate models'
     assert 'Do not switch models' in worker_text, 'fixed-model no-fallback contract is missing'
 
-    print('Validated 54 fixed model/route factory lanes across schedulers A-E.')
+    print('Validated 41 fixed model factory lanes across schedulers A-E.')
     for source, count in EXPECTED_SOURCE_COUNTS.items():
         print(f'  {source}: {count}')
 
