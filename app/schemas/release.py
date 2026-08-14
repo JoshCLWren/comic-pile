@@ -1,4 +1,5 @@
 """Typed API schemas for the durable release ledger."""
+from __future__ import annotations
 
 from datetime import datetime
 from typing import Literal
