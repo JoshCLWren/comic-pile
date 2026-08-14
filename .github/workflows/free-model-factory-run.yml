@@ -169,7 +169,8 @@ jobs:
         env:
           REASON: ${{ steps.lane.outputs.reason }}
           DISPLAY: ${{ steps.lane.outputs.display }}
-        run: echo "${DISPLAY} lane is installed but inactive: ${REASON}"
+        run: |
+          echo "${DISPLAY} lane is installed but inactive: ${REASON}"
 
       - name: Install pinned OpenCode release
         if: steps.lane.outputs.configured == 'true'

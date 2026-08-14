@@ -23,6 +23,8 @@ jobs:
       - uses: actions/checkout@v6
       - name: Validate fixed-model roster and schedules
         run: python .github/scripts/validate-free-model-factories.py
+      - name: Parse fixed-model workflow YAML
+        run: ruby -e 'require "yaml"; ARGV.each { |f| YAML.parse_file(f) }' .github/workflows/free-model-factory-*.yml
       - name: Check JavaScript helper syntax
         run: node --check .github/scripts/fixed-model-owner-normalize.cjs
       - name: Check shell worker syntax
