@@ -1679,50 +1679,20 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/continuity-plans/{plan_id}/reading-orders/project": {
+    "/api/v1/continuity-plans/{plan_id}/readiness": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
         /**
-         * Confirm Plan Projection
-         * @description Apply a projection atomically after a successful preview.
-         *
-         *     The confirm endpoint re-computes the projection and rejects the request
-         *     if any conflict is detected. A failed or cancelled projection leaves
-         *     both the plan and the reading order unchanged because all mutations are
-         *     performed in a single transaction that rolls back on any error.
+         * Get Continuity Plan Readiness
+         * @description Return live readiness for every visible node of one owned plan.
          */
-        post: operations["confirm_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
+        get: operations["get_continuity_plan_readiness_api_v1_continuity_plans__plan_id__readiness_get"];
         put?: never;
-        /**
-         * Preview Plan Projection
-         * @description Preview a deterministic projection without mutating any resource.
-         *
-         *     The preview is recomputed from the persisted plan JSON on every call so
-         *     that callers always see the current state, even after concurrent edits.
-         *     Duplicate thread references, missing owned threads, and non-thread
-         *     nodes are reported as conflicts before any mutation is permitted.
-         */
-        post: operations["preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4035,30 +4005,10 @@ export interface components {
             source_type: "issue" | "crossover";
         };
         /**
-         * ContinuityChainDiagnostic
-         * @description One structured traversal failure that does not require text parsing.
+         * ContinuityPlanChainNode
+         * @description One labeled issue or crossover step in a plan prerequisite chain.
          */
-        ContinuityChainDiagnostic: {
-            /**
-             * Code
-             * @enum {string}
-             */
-            code: "cycle_detected" | "depth_limit_exceeded" | "node_limit_exceeded";
-            /** Limit */
-            limit?: number | null;
-            /** Node Id */
-            node_id: number;
-            /**
-             * Node Type
-             * @enum {string}
-             */
-            node_type: "issue" | "crossover";
-        };
-        /**
-         * ContinuityChainNode
-         * @description One structured node along a prerequisite chain.
-         */
-        ContinuityChainNode: {
+        ContinuityPlanChainNode: {
             /** Is Readable */
             is_readable: boolean;
             /** Label */
@@ -4070,29 +4020,6 @@ export interface components {
              * @enum {string}
              */
             node_type: "issue" | "crossover";
-        };
-        /**
-         * ContinuityChainResponse
-         * @description Bounded transitive prerequisite chains for one requested node.
-         */
-        ContinuityChainResponse: {
-            /** Chains */
-            chains?: components["schemas"]["ContinuityChainNode"][][];
-            /** Diagnostics */
-            diagnostics?: components["schemas"]["ContinuityChainDiagnostic"][];
-            /** Direct Blockers */
-            direct_blockers?: components["schemas"]["ContinuityBlocker"][];
-            /** Evaluated Issue Id */
-            evaluated_issue_id?: number | null;
-            /** Node Id */
-            node_id: number;
-            /**
-             * Node Type
-             * @enum {string}
-             */
-            node_type: "issue" | "thread" | "crossover";
-            /** Readable Prerequisites */
-            readable_prerequisites?: components["schemas"]["ContinuityChainNode"][];
         };
         /**
          * ContinuityPlanLane
@@ -4124,6 +4051,119 @@ export interface components {
             position: number;
             /** Ref Id */
             ref_id: number;
+        };
+        /**
+         * ContinuityPlanNodeReadiness
+         * @description Live readiness of one visible node in a saved continuity plan.
+         */
+        ContinuityPlanNodeReadiness: {
+            /** Blockers */
+            blockers?: components["schemas"]["ContinuityBlocker"][];
+            /** Chains */
+            chains?: components["schemas"]["ContinuityPlanChainNode"][][];
+            /** Diagnostics */
+            diagnostics?: components["schemas"]["ContinuityPlanReadinessDiagnostic"][];
+            /** Evaluated Issue Id */
+            evaluated_issue_id?: number | null;
+            /** Is Complete */
+            is_complete: boolean;
+            /** Is Readable */
+            is_readable: boolean;
+            /** Label */
+            label: string;
+            /** Lane Id */
+            lane_id: string;
+            /** Node Id */
+            node_id: string;
+            /**
+             * Node Type
+             * @enum {string}
+             */
+            node_type: "issue" | "crossover" | "thread";
+            /** Position */
+            position: number;
+            /** Readable Prerequisites */
+            readable_prerequisites?: components["schemas"]["ContinuityPlanChainNode"][];
+            /** Ref Id */
+            ref_id: number;
+        };
+        /**
+         * ContinuityPlanReadinessDiagnostic
+         * @description One structured plan-readiness failure that does not require text parsing.
+         */
+        ContinuityPlanReadinessDiagnostic: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "dangling_plan_reference" | "plan_cycle_detected" | "cycle_detected" | "depth_limit_exceeded" | "node_limit_exceeded";
+            /** Limit */
+            limit?: number | null;
+            /** Node Id */
+            node_id: number;
+            /**
+             * Node Type
+             * @enum {string}
+             */
+            node_type: "issue" | "crossover" | "thread";
+        };
+        /**
+         * ContinuityPlanReadinessResponse
+         * @description Aggregate live readiness for every visible node of one owned plan.
+         */
+        ContinuityPlanReadinessResponse: {
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Lanes */
+            lanes?: components["schemas"]["ContinuityPlanLane"][];
+            /** Nodes */
+            nodes?: components["schemas"]["ContinuityPlanNodeReadiness"][];
+            /**
+             * Ordering Mode
+             * @enum {string}
+             */
+            ordering_mode: "informational" | "strict_sequential";
+            /** Plan Diagnostics */
+            plan_diagnostics?: components["schemas"]["ContinuityPlanReadinessDiagnostic"][];
+            /** Plan Id */
+            plan_id: number;
+            /** Plan Name */
+            plan_name: string;
+            summary?: components["schemas"]["ContinuityPlanReadinessSummary"];
+        };
+        /**
+         * ContinuityPlanReadinessSummary
+         * @description Deterministic state buckets for one saved plan.
+         */
+        ContinuityPlanReadinessSummary: {
+            /**
+             * Blocked
+             * @default 0
+             */
+            blocked: number;
+            /**
+             * Complete
+             * @default 0
+             */
+            complete: number;
+            /**
+             * Readable
+             * @default 0
+             */
+            readable: number;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /**
+             * Unavailable
+             * @default 0
+             */
+            unavailable: number;
         };
         /**
          * ContinuityPlanResponse
@@ -7584,20 +7624,18 @@ export interface operations {
             };
         };
     };
-    confirm_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_post: {
+    get_continuity_plan_readiness_api_v1_continuity_plans__plan_id__readiness_get: {
         parameters: {
-            query?: never;
+            query?: {
+                include_chains?: boolean;
+            };
             header?: never;
             path: {
                 plan_id: number;
             };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReadingOrderProjectionRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -7605,42 +7643,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReadingOrderProjectionResult"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                plan_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReadingOrderProjectionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReadingOrderProjectionPreview"];
+                    "application/json": components["schemas"]["ContinuityPlanReadinessResponse"];
                 };
             };
             /** @description Validation Error */

@@ -700,52 +700,8 @@
         "title": "ContinuityBlocker",
         "type": "object"
       },
-      "ContinuityChainDiagnostic": {
-        "description": "One structured traversal failure that does not require text parsing.",
-        "properties": {
-          "code": {
-            "enum": [
-              "cycle_detected",
-              "depth_limit_exceeded",
-              "node_limit_exceeded"
-            ],
-            "title": "Code",
-            "type": "string"
-          },
-          "limit": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Limit"
-          },
-          "node_id": {
-            "title": "Node Id",
-            "type": "integer"
-          },
-          "node_type": {
-            "enum": [
-              "issue",
-              "crossover"
-            ],
-            "title": "Node Type",
-            "type": "string"
-          }
-        },
-        "required": [
-          "code",
-          "node_type",
-          "node_id"
-        ],
-        "title": "ContinuityChainDiagnostic",
-        "type": "object"
-      },
-      "ContinuityChainNode": {
-        "description": "One structured node along a prerequisite chain.",
+      "ContinuityPlanChainNode": {
+        "description": "One labeled issue or crossover step in a plan prerequisite chain.",
         "properties": {
           "is_readable": {
             "title": "Is Readable",
@@ -774,73 +730,7 @@
           "label",
           "is_readable"
         ],
-        "title": "ContinuityChainNode",
-        "type": "object"
-      },
-      "ContinuityChainResponse": {
-        "description": "Bounded transitive prerequisite chains for one requested node.",
-        "properties": {
-          "chains": {
-            "items": {
-              "items": {
-                "$ref": "#/components/schemas/ContinuityChainNode"
-              },
-              "type": "array"
-            },
-            "title": "Chains",
-            "type": "array"
-          },
-          "diagnostics": {
-            "items": {
-              "$ref": "#/components/schemas/ContinuityChainDiagnostic"
-            },
-            "title": "Diagnostics",
-            "type": "array"
-          },
-          "direct_blockers": {
-            "items": {
-              "$ref": "#/components/schemas/ContinuityBlocker"
-            },
-            "title": "Direct Blockers",
-            "type": "array"
-          },
-          "evaluated_issue_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Evaluated Issue Id"
-          },
-          "node_id": {
-            "title": "Node Id",
-            "type": "integer"
-          },
-          "node_type": {
-            "enum": [
-              "issue",
-              "thread",
-              "crossover"
-            ],
-            "title": "Node Type",
-            "type": "string"
-          },
-          "readable_prerequisites": {
-            "items": {
-              "$ref": "#/components/schemas/ContinuityChainNode"
-            },
-            "title": "Readable Prerequisites",
-            "type": "array"
-          }
-        },
-        "required": [
-          "node_type",
-          "node_id"
-        ],
-        "title": "ContinuityChainResponse",
+        "title": "ContinuityPlanChainNode",
         "type": "object"
       },
       "ContinuityPlanLane": {
@@ -915,6 +805,239 @@
           "position"
         ],
         "title": "ContinuityPlanNode",
+        "type": "object"
+      },
+      "ContinuityPlanNodeReadiness": {
+        "description": "Live readiness of one visible node in a saved continuity plan.",
+        "properties": {
+          "blockers": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityBlocker"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "chains": {
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/ContinuityPlanChainNode"
+              },
+              "type": "array"
+            },
+            "title": "Chains",
+            "type": "array"
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanReadinessDiagnostic"
+            },
+            "title": "Diagnostics",
+            "type": "array"
+          },
+          "evaluated_issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluated Issue Id"
+          },
+          "is_complete": {
+            "title": "Is Complete",
+            "type": "boolean"
+          },
+          "is_readable": {
+            "title": "Is Readable",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "lane_id": {
+            "title": "Lane Id",
+            "type": "string"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "node_type": {
+            "enum": [
+              "issue",
+              "crossover",
+              "thread"
+            ],
+            "title": "Node Type",
+            "type": "string"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "readable_prerequisites": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanChainNode"
+            },
+            "title": "Readable Prerequisites",
+            "type": "array"
+          },
+          "ref_id": {
+            "title": "Ref Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "node_id",
+          "node_type",
+          "ref_id",
+          "lane_id",
+          "position",
+          "label",
+          "is_readable",
+          "is_complete"
+        ],
+        "title": "ContinuityPlanNodeReadiness",
+        "type": "object"
+      },
+      "ContinuityPlanReadinessDiagnostic": {
+        "description": "One structured plan-readiness failure that does not require text parsing.",
+        "properties": {
+          "code": {
+            "enum": [
+              "dangling_plan_reference",
+              "plan_cycle_detected",
+              "cycle_detected",
+              "depth_limit_exceeded",
+              "node_limit_exceeded"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "integer"
+          },
+          "node_type": {
+            "enum": [
+              "issue",
+              "crossover",
+              "thread"
+            ],
+            "title": "Node Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "node_type",
+          "node_id"
+        ],
+        "title": "ContinuityPlanReadinessDiagnostic",
+        "type": "object"
+      },
+      "ContinuityPlanReadinessResponse": {
+        "description": "Aggregate live readiness for every visible node of one owned plan.",
+        "properties": {
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "lanes": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanLane"
+            },
+            "title": "Lanes",
+            "type": "array"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanNodeReadiness"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "ordering_mode": {
+            "enum": [
+              "informational",
+              "strict_sequential"
+            ],
+            "title": "Ordering Mode",
+            "type": "string"
+          },
+          "plan_diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanReadinessDiagnostic"
+            },
+            "title": "Plan Diagnostics",
+            "type": "array"
+          },
+          "plan_id": {
+            "title": "Plan Id",
+            "type": "integer"
+          },
+          "plan_name": {
+            "title": "Plan Name",
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ContinuityPlanReadinessSummary"
+          }
+        },
+        "required": [
+          "plan_id",
+          "plan_name",
+          "ordering_mode",
+          "generated_at"
+        ],
+        "title": "ContinuityPlanReadinessResponse",
+        "type": "object"
+      },
+      "ContinuityPlanReadinessSummary": {
+        "description": "Deterministic state buckets for one saved plan.",
+        "properties": {
+          "blocked": {
+            "default": 0,
+            "title": "Blocked",
+            "type": "integer"
+          },
+          "complete": {
+            "default": 0,
+            "title": "Complete",
+            "type": "integer"
+          },
+          "readable": {
+            "default": 0,
+            "title": "Readable",
+            "type": "integer"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          },
+          "unavailable": {
+            "default": 0,
+            "title": "Unavailable",
+            "type": "integer"
+          }
+        },
+        "title": "ContinuityPlanReadinessSummary",
         "type": "object"
       },
       "ContinuityPlanResponse": {
@@ -7844,10 +7967,10 @@
         ]
       }
     },
-    "/api/v1/continuity-plans/{plan_id}/reading-orders/project": {
-      "post": {
-        "description": "Apply a projection atomically after a successful preview.\n\nThe confirm endpoint re-computes the projection and rejects the request\nif any conflict is detected. A failed or cancelled projection leaves\nboth the plan and the reading order unchanged because all mutations are\nperformed in a single transaction that rolls back on any error.",
-        "operationId": "confirm_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_post",
+    "/api/v1/continuity-plans/{plan_id}/readiness": {
+      "get": {
+        "description": "Return live readiness for every visible node of one owned plan.",
+        "operationId": "get_continuity_plan_readiness_api_v1_continuity_plans__plan_id__readiness_get",
         "parameters": [
           {
             "in": "path",
@@ -7857,24 +7980,24 @@
               "title": "Plan Id",
               "type": "integer"
             }
+          },
+          {
+            "in": "query",
+            "name": "include_chains",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Chains",
+              "type": "boolean"
+            }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReadingOrderProjectionRequest"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReadingOrderProjectionResult"
+                  "$ref": "#/components/schemas/ContinuityPlanReadinessResponse"
                 }
               }
             },
@@ -7896,71 +8019,11 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Confirm Plan Projection",
+        "summary": "Get Continuity Plan Readiness",
         "tags": [
           "dependencies",
           "dependencies",
-          "reading-orders"
-        ]
-      }
-    },
-    "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview": {
-      "post": {
-        "description": "Preview a deterministic projection without mutating any resource.\n\nThe preview is recomputed from the persisted plan JSON on every call so\nthat callers always see the current state, even after concurrent edits.\nDuplicate thread references, missing owned threads, and non-thread\nnodes are reported as conflicts before any mutation is permitted.",
-        "operationId": "preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "plan_id",
-            "required": true,
-            "schema": {
-              "title": "Plan Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReadingOrderProjectionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadingOrderProjectionPreview"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Preview Plan Projection",
-        "tags": [
-          "dependencies",
-          "dependencies",
-          "reading-orders"
+          "continuity-plans"
         ]
       }
     },

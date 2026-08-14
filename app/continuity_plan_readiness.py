@@ -1,5 +1,6 @@
 """Plan-scoped live readiness evaluation for continuity-plan visualization."""
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -28,6 +29,18 @@ from app.schemas.continuity_plan import (
 from app.schemas.continuity_readiness import ContinuityBlocker
 
 PLAN_RULE_MARKER_PREFIX = "continuity-plan"
+
+
+@dataclass(frozen=True)
+class _PlanNodeRow:
+    """One normalized visible plan node derived from persisted JSON."""
+
+    id: str
+    node_type: str
+    raw_node_type: str
+    ref_id: int
+    lane_id: str
+    position: int
 
 
 def plan_rule_marker(plan_id: int) -> str:
@@ -133,9 +146,12 @@ async def _plan_edges(
         )
         .order_by(ContinuityRule.id)
     )
-    plan_keys = {
-        (str(node.get("node_type")), int(node["ref_id"])) for node in plan.nodes_json
-    }
+    plan_keys: set[tuple[str, int]] = set()
+    for node in plan.nodes_json:
+        try:
+            plan_keys.add((str(node.get("node_type", "")), int(node["ref_id"])))
+        except (KeyError, TypeError, ValueError):
+            continue
     edges: list[tuple[tuple[str, int], tuple[str, int]]] = []
     for rule in rule_result.scalars():
         source = (rule.source_type, rule.source_id)
@@ -280,7 +296,7 @@ async def evaluate_plan_readiness(
     lane_order = {lane.id: lane.order for lane in lanes}
 
     valid_types = {"issue", "crossover", "thread"}
-    node_rows: list[dict[str, object]] = []
+    node_rows: list[_PlanNodeRow] = []
     for node in plan.nodes_json:
         node_type = str(node.get("node_type", ""))
         try:
@@ -288,17 +304,19 @@ async def evaluate_plan_readiness(
         except (KeyError, TypeError, ValueError):
             ref_id = 0
         node_rows.append(
-            {
-                "id": str(node.get("id", "")),
-                "node_type": node_type if node_type in valid_types else "issue",
-                "raw_node_type": node_type,
-                "ref_id": ref_id,
-                "lane_id": str(node.get("lane_id", "")),
-                "position": int(node.get("position", 0)),
-            }
+            _PlanNodeRow(
+                id=str(node.get("id", "")),
+                node_type=node_type if node_type in valid_types else "issue",
+                raw_node_type=node_type,
+                ref_id=ref_id,
+                lane_id=str(node.get("lane_id", "")),
+                position=int(node.get("position", 0)),
+            )
         )
     node_keys = [
-        (row["node_type"], row["ref_id"]) for row in node_rows if row["node_type"] in {"issue", "crossover"}
+        (row.node_type, row.ref_id)
+        for row in node_rows
+        if row.node_type in {"issue", "crossover"}
     ]
     edges = await _plan_edges(db, user_id=user_id, plan=plan)
     cycle_nodes = _detect_plan_cycles(node_keys, edges)
@@ -309,14 +327,14 @@ async def evaluate_plan_readiness(
     for row in sorted(
         node_rows,
         key=lambda item: (
-            lane_order.get(item["lane_id"], 0),
-            item["position"],
-            str(item["id"]),
+            lane_order.get(item.lane_id, 0),
+            item.position,
+            str(item.id),
         ),
     ):
-        node_type = row["node_type"]
-        ref_id = row["ref_id"]
-        malformed = row["raw_node_type"] not in valid_types or ref_id <= 0
+        node_type = row.node_type
+        ref_id = row.ref_id
+        malformed = row.raw_node_type not in valid_types or ref_id <= 0
         exists = (
             node_type == "issue"
             and ref_id in snapshot.issues
@@ -328,11 +346,11 @@ async def evaluate_plan_readiness(
         if malformed or not exists:
             readiness_nodes.append(
                 ContinuityPlanNodeReadiness(
-                    node_id=row["id"],
+                    node_id=row.id,
                     node_type=node_type,
                     ref_id=ref_id,
-                    lane_id=row["lane_id"],
-                    position=row["position"],
+                    lane_id=row.lane_id,
+                    position=row.position,
                     label=_node_label(node_type, ref_id, snapshot),
                     is_readable=False,
                     is_complete=False,
@@ -371,11 +389,11 @@ async def evaluate_plan_readiness(
 
         readiness_nodes.append(
             ContinuityPlanNodeReadiness(
-                node_id=row["id"],
+                node_id=row.id,
                 node_type=node_type,
                 ref_id=ref_id,
-                lane_id=row["lane_id"],
-                position=row["position"],
+                lane_id=row.lane_id,
+                position=row.position,
                 label=_node_label(node_type, ref_id, snapshot),
                 is_readable=is_readable,
                 is_complete=is_complete,
@@ -388,7 +406,12 @@ async def evaluate_plan_readiness(
         )
 
     for node_type, node_id in sorted(cycle_nodes):
-        if (node_type, node_id) not in plan_diagnostics:
+        if not any(
+            diagnostic.code == "plan_cycle_detected"
+            and diagnostic.node_type == node_type
+            and diagnostic.node_id == node_id
+            for diagnostic in plan_diagnostics
+        ):
             plan_diagnostics.append(
                 ContinuityPlanReadinessDiagnostic(
                     code="plan_cycle_detected",
