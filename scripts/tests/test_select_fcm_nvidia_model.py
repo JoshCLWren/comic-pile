@@ -153,6 +153,9 @@ class SelectFcmNvidiaModelTests(unittest.TestCase):
         self.assertIn("grep -q 'FCM_NVIDIA_MODEL_OK'", workflow)
         self.assertIn('Candidate failed the OpenCode compatibility probe', workflow)
         self.assertNotIn('https://integrate.api.nvidia.com/v1/chat/completions', workflow)
+        self.assertIn('run: opencode github run', workflow)
+        self.assertIn('MODEL: ${{ steps.model.outputs.model }}', workflow)
+        self.assertNotIn('anomalyco/opencode/github@', workflow)
         self.assertGreaterEqual(
             workflow.count('^factory:(unowned|local|([1-9]|[1-3][0-9]|4[0-6]))$'),
             4,
