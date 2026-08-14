@@ -1,7 +1,6 @@
 """Plan-scoped live readiness evaluation for continuity-plan visualization."""
 
 from datetime import UTC, datetime
-from typing import TypedDict
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
