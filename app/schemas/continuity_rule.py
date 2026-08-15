@@ -66,7 +66,7 @@ class ContinuityRuleCreate(BaseModel):
                 raise ValueError(
                     "selected-member rules require at least one issue"
                 )
-        elif self.selected_member_issue_ids:
+        if self.selected_member_issue_ids and self.satisfaction_type != "selected_members_read":
             raise ValueError(
                 "selected_member_issue_ids are only valid for selected-member rules"
             )
