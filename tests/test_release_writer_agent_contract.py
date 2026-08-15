@@ -99,31 +99,33 @@ def test_release_writer_all_read_helpers_are_get_only(monkeypatch) -> None:
     monkeypatch.setenv("GH_TOKEN", "test-token")
 
     def make_fake():
-        responses_map = {
-            "pulls": [jsonlib.dumps([{"number": 1, "merged_at": "2026-01-01T00:00:00Z",
-                                      "merge_commit_sha": "abc", "title": "PR"}]).encode()],
-            "pull": jsonlib.dumps({"number": 1082, "title": "PR #1082", "body": "Closes #1070.",
-                                     "merged": True, "merged_at": "2026-08-11T00:00:00Z",
-                                     "merge_commit_sha": "abc123", "state": "closed",
-                                     "html_url": "https://example.com", "user": {"login": "t"}}).encode(),
-            "files": [jsonlib.dumps([{"filename": "x.py", "status": "modified",
-                                     "additions": 1, "deletions": 0}]).encode()],
-            "issues": [jsonlib.dumps({"number": 1082, "title": "PR #1082", "body": "Closes #1070."}).encode()],
-        }
         # Provide enough responses for any call order
         available = {
-            "pulls": responses_map["pulls"],
-            "pull": responses_map["pull"],
-            "files": responses_map["files"],
-            "issues": responses_map["pull"],
+            "pulls": jsonlib.dumps(
+                [{"number": 1, "merged_at": "2026-01-01T00:00:00Z",
+                  "merge_commit_sha": "abc", "title": "PR"}]
+            ).encode(),
+            "pull": jsonlib.dumps(
+                {"number": 1082, "title": "PR #1082", "body": "Closes #1070.",
+                 "merged": True, "merged_at": "2026-08-11T00:00:00Z",
+                 "merge_commit_sha": "abc123", "state": "closed",
+                 "html_url": "https://example.com", "user": {"login": "t"}}
+            ).encode(),
+            "files": jsonlib.dumps(
+                [{"filename": "x.py", "status": "modified",
+                  "additions": 1, "deletions": 0}]
+            ).encode(),
+            "issues": jsonlib.dumps(
+                {"number": 1082, "title": "PR #1082", "body": "Closes #1070."}
+            ).encode(),
         }
 
         def fake_urlopen(request, timeout=20):
             assert request.get_method() == "GET", f"Expected GET, got {request.get_method()}"
             assert getattr(request, "data", None) is None, "GitHub reads must not send a body"
             url = str(getattr(request, "full_url", getattr(request, "url", "unknown")))
-            key = "pull" if "/pulls/" in url else ("files" if "/files" in url else ("pulls" if "/pulls?" in url else "issues"))
-            body_bytes = available.get(key, responses_map["pull"])
+            key = "files" if "/files" in url else ("pull" if "/pulls/" in url else ("pulls" if "/pulls?" in url else "issues"))
+            body_bytes = available.get(key, available["pull"])
             return io.BytesIO(body_bytes)
 
         return fake_urlopen
