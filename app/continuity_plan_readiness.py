@@ -354,13 +354,11 @@ async def evaluate_plan_readiness(
         node_type = row.node_type
         ref_id = row.ref_id
         malformed = row.raw_node_type not in valid_types or ref_id <= 0
-        exists = any(
-            (
-                node_type == "issue" and ref_id in snapshot.issues,
-                node_type == "thread" and ref_id in snapshot.threads,
-                node_type == "crossover" and ref_id in snapshot.groups,
-            )
-        )
+        exists = any((
+            node_type == "issue" and ref_id in snapshot.issues,
+            node_type == "thread" and ref_id in snapshot.threads,
+            node_type == "crossover" and ref_id in snapshot.groups,
+        ))
         if malformed or not exists:
             readiness_nodes.append(
                 ContinuityPlanNodeReadiness(
