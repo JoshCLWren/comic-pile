@@ -671,6 +671,8 @@ async def test_continuity_chains_membership_collection_is_bounded(
         "code": "continuity_graph_too_large",
         "limit": 1,
     }
+
+
 @pytest.mark.asyncio
 async def test_selected_member_collection_is_bounded(
     auth_client: AsyncClient,
