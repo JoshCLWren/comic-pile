@@ -87,9 +87,6 @@ def test_release_writer_github_reads_are_get_only(monkeypatch) -> None:
     monkeypatch.setattr(release_writer.urllib.request, "urlopen", fake_urlopen)
 
     release_writer._recent("JoshCLWren/comic-pile", "1")
-    release_writer._pr("JoshCLWren/comic-pile", "1082")
-    release_writer._files("JoshCLWren/comic-pile", "1082")
-    release_writer._issues("JoshCLWren/comic-pile", "1082")
 
 
 def test_release_writer_all_read_helpers_are_get_only(monkeypatch) -> None:
