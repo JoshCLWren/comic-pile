@@ -346,6 +346,20 @@ test_regression_model_committed_merge() {
   git reset -q --hard "$EXPECTED_HEAD"
 }
 
+test_worker_fail_fast_env() {
+  printf '\n--- test_worker_fail_fast_env ---\n'
+  # The worker must refuse to start when required identity env vars are
+  # missing. The test harness provides no factory env vars here on purpose;
+  # this proves fail-fast does not depend on weakened production defaults.
+  local output
+  output="$(env -i HOME="$HOME" PATH="$PATH" bash "$WORKER" 2>&1 || true)"
+  if grep -q 'FACTORY_WORKER is required' <<< "$output"; then
+    pass "worker fails fast on missing FACTORY_WORKER"
+  else
+    fail "worker did not fail fast on missing FACTORY_WORKER"
+  fi
+}
+
 test_worker_syntax() {
   printf '\n--- test_worker_syntax ---\n'
   bash -n "$WORKER" && pass "worker script has valid bash syntax" || fail "worker script has syntax errors"
@@ -354,6 +368,7 @@ test_worker_syntax() {
 }
 
 test_worker_syntax
+test_worker_fail_fast_env
 test_trusted_guard_staging
 test_regression_stale_branch_guard
 test_regression_merge_main_rejected

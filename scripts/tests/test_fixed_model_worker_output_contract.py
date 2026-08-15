@@ -41,6 +41,28 @@ def test_persist_issue_pr_stdout_is_reserved_for_pr_number() -> None:
     assert stdout_commands == ['echo "$pr"']
 
 
+def test_worker_config_environment_vars_remain_fail_fast() -> None:
+    """Production worker identity must fail fast, never default silently.
+
+    The worker must refuse to run when FACTORY_WORKER / FACTORY_SOURCE /
+    FACTORY_MODEL / FACTORY_RUNTIME_MODEL are unset. A default like
+    ``${FACTORY_WORKER:-test}`` would silently run an anonymous worker and is
+    prohibited. The bash regression suite supplies its own test environment
+    and must never require weakening this fail-fast property.
+    """
+    text = WORKER.read_text(encoding='utf-8')
+
+    assert 'WORKER="${FACTORY_WORKER:?FACTORY_WORKER is required}"' in text
+    assert 'SOURCE="${FACTORY_SOURCE:?FACTORY_SOURCE is required}"' in text
+    assert 'MODEL="${FACTORY_MODEL:?FACTORY_MODEL is required}"' in text
+    assert 'RUNTIME_MODEL="${FACTORY_RUNTIME_MODEL:?FACTORY_RUNTIME_MODEL is required}"' in text
+
+    for var in ('FACTORY_WORKER', 'FACTORY_SOURCE', 'FACTORY_MODEL', 'FACTORY_RUNTIME_MODEL'):
+        assert re.search(rf'{re.escape(var)}:-\$', text) is None, (
+            f'{var} must not be given a silent default'
+        )
+
+
 def test_trusted_guard_is_staged_before_checkout() -> None:
     """The guard must be copied from the main checkout before any branch switch.
 
