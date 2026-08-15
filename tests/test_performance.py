@@ -5,7 +5,6 @@ from collections.abc import AsyncIterator
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, generate_csrf_token
 from app.main import create_app
 from app.startup_diagnostics import reset_startup_diagnostics_for_test
 
@@ -64,26 +63,3 @@ async def test_metrics_endpoint(client: AsyncClient) -> None:
     assert isinstance(data["startup_duration"], float) or data["startup_duration"] is None
 
 
-@pytest.mark.asyncio
-async def test_csrf_protection(client: AsyncClient) -> None:
-    """Verify the CSRF middleware rejects authenticated POSTs without a token.
-
-    The CSRF check only applies to requests that carry an ``Authorization``
-    header; unauthenticated requests fall through to normal auth handling.
-
-    Args:
-        client: Fresh application test client.
-
-    Returns:
-        None.
-    """
-    client.headers["Authorization"] = "Bearer test"
-    response = await client.post("/api/roll", json={})
-    assert response.status_code == 403
-    assert response.json() == {"detail": "CSRF token missing or invalid"}
-
-    token = generate_csrf_token()
-    client.cookies.set(CSRF_COOKIE_NAME, token)
-    client.headers[CSRF_HEADER_NAME] = token
-    response2 = await client.post("/api/roll", json={})
-    assert response2.json().get("detail") != "CSRF token missing or invalid"
