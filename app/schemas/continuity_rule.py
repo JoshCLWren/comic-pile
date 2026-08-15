@@ -58,22 +58,30 @@ class ContinuityRuleCreate(BaseModel):
             if not self.convergence_targets:
                 raise ValueError("convergence_targets are required for converged rules")
         elif self.convergence_targets:
-            raise ValueError("convergence_targets are only valid for converged rules")
+            raise ValueError(
+                "convergence_targets are only valid for converged rules"
+            )
         if self.satisfaction_type == "selected_members_read":
             if not self.selected_member_issue_ids:
-                raise ValueError("selected-member rules require at least one issue")
+                raise ValueError(
+                    "selected-member rules require at least one issue"
+                )
         elif self.selected_member_issue_ids:
-            raise ValueError("selected_member_issue_ids are only valid for selected-member rules")
-        self.selected_member_issue_ids = list(dict.fromkeys(self.selected_member_issue_ids))
-if self.convergence_targets:
-             seen = set()
-             deduped: list[ConvergenceTarget] = []
-             for target in self.convergence_targets:
-                 key = (target.type, target.id)
-                 if key not in seen:
-                     seen.add(key)
-                     deduped.append(target)
-             self.convergence_targets = deduped
+            raise ValueError(
+                "selected_member_issue_ids are only valid for selected-member rules"
+            )
+        self.selected_member_issue_ids = list(
+            dict.fromkeys(self.selected_member_issue_ids)
+        )
+        if self.convergence_targets:
+            seen: set[tuple[str, int]] = set()
+            deduped: list[ConvergenceTarget] = []
+            for target in self.convergence_targets:
+                key = (target.type, target.id)
+                if key not in seen:
+                    seen.add(key)
+                    deduped.append(target)
+            self.convergence_targets = deduped
         return self
 
 
