@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import csv
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -216,13 +217,16 @@ def main() -> None:
         'e2e-infrastructure',
         'factory:unowned',
         'ralph-status:pending',
-        '"issue", "create"',
-        '"issue", "comment"',
         'results.json',
         'GITHUB_RUN_ID',
         'GITHUB_SHA',
     ):
         assert required in classifier, f'discovery classifier invariant missing: {required}'
+    for action in ('create', 'comment'):
+        assert re.search(
+            rf'run_gh\(\s*"issue",\s*"{action}"',
+            classifier,
+        ), f'discovery classifier issue {action} call missing'
 
     print('Validated 28 external factory lanes, shared-pool selection, and daily Chromium discovery.')
     for minute in BATCH_MINUTES:
