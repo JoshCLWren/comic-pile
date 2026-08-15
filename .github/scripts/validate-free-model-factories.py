@@ -11,18 +11,16 @@ MANIFEST = Path('.github/free-model-factories.tsv')
 DISPATCHER = Path('.github/workflows/free-model-factory-dispatch.yml')
 ENTRY = Path('.github/workflows/free-model-factory-entry.yml')
 WATCHDOG = Path('.github/workflows/factory-heartbeat-watchdog.yml')
-EXPECTED_WORKERS = set(range(6, 47))
+EXPECTED_WORKERS = set(range(6, 25)) | {29} | set(range(39, 46))
 EXPECTED_SOURCE_COUNTS = {
-    'nvidia': 26,
-    'omniroute-opencode': 7,
-    'opencode-free': 8,
+    'nvidia': 20,
+    'opencode-free': 7,
 }
 EXPECTED_OPENCODE_FREE_MODELS = {
     'big-pickle',
     'deepseek-v4-flash-free',
     'hy3-free',
     'laguna-s-2.1-free',
-    'ling-3.0-tiny-free',
     'mimo-v2.5-free',
     'nemotron-3-ultra-free',
     'nemotron-3.5-lightning-free',
@@ -56,7 +54,7 @@ def main() -> None:
             delimiter='\t',
         ))
 
-    assert len(rows) == 41, f'expected 41 fixed model lanes, got {len(rows)}'
+    assert len(rows) == 27, f'expected 27 fixed model lanes, got {len(rows)}'
     workers = [int(row['worker']) for row in rows]
     assert set(workers) == EXPECTED_WORKERS
     assert len(workers) == len(set(workers)), 'duplicate worker IDs'
@@ -84,7 +82,7 @@ def main() -> None:
         for row in rows
     ), 'Factory 13 retired NVIDIA model returned to the roster'
 
-    expected_batch_counts = Counter({0: 11, 15: 10, 30: 10, 45: 10})
+    expected_batch_counts = Counter({0: 6, 15: 7, 30: 7, 45: 7})
     actual_batch_counts: Counter[int] = Counter()
     for row in rows:
         worker = int(row['worker'])
@@ -107,7 +105,7 @@ def main() -> None:
     assert 'schedule:' not in dispatcher_text, 'dispatcher must not own an independent cron clock'
     assert 'WATCHDOG_RUN_NUMBER' in dispatcher_text
     assert 'slots=(0 15 30 45)' in dispatcher_text
-    assert 'workers=\'["6","32","39"]\'' in dispatcher_text
+    assert 'workers=\'["6","39"]\'' in dispatcher_text
     assert 'contents: read' in dispatcher_text and 'actions: write' in dispatcher_text
     assert 'issues: write' in dispatcher_text and 'pull-requests: write' in dispatcher_text
     assert 'gh workflow run free-model-factory-entry.yml' in dispatcher_text
@@ -126,7 +124,7 @@ def main() -> None:
 
     # GitHub can terminate a cancelled runner before its EXIT trap runs. The
     # deploy fence must therefore wait for terminal cancellation and recover
-    # only that run's worker leases from the registry heartbeat.
+    # that run's worker leases even if its lane was just retired from the roster.
     for required in (
         'heartbeat_worker_for_run',
         'issues/1093/comments?per_page=100',
@@ -141,10 +139,11 @@ def main() -> None:
         'gh api --method PUT',
         'another worker already owns it',
         'takeover observed',
+        'unknown historical fixed-model worker',
     ):
         assert required in dispatcher_text, f'cancelled-run handoff invariant missing: {required}'
     assert "owner_pattern='^factory:(local|([1-9]|[1-3][0-9]|4[0-6]))$'" in dispatcher_text, (
-        'cancelled-run recovery must recognize every active fixed-model owner without treating unowned as a takeover'
+        'cancelled-run recovery must recognize historical fixed-model owners without treating unowned as a takeover'
     )
 
     assert ENTRY.exists(), 'dispatchable fixed-model entry workflow is missing'
@@ -247,7 +246,7 @@ def main() -> None:
         'no-work must not masquerade as a successful productive heartbeat'
     )
 
-    print('Validated 41 fixed model factories on the proven 15-minute watchdog clock.')
+    print('Validated 27 fixed model factories on the proven 15-minute watchdog clock.')
     for minute in BATCH_MINUTES:
         print(f'  :{minute:02d} -> {actual_batch_counts[minute]} workers')
     for source, count in EXPECTED_SOURCE_COUNTS.items():
