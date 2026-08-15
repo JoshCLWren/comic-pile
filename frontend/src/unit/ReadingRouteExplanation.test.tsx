@@ -231,6 +231,126 @@ describe('ReadingRouteExplanation', () => {
     expect(screen.getByTestId('prerequisite-lane-1')).toHaveTextContent('Convergence B')
   })
 
+  it('does not mislabel independent lanes as converging branches', () => {
+    setupChains({
+      chains: {
+        node_type: 'issue',
+        node_id: 7,
+        evaluated_issue_id: null,
+        direct_blockers: [],
+        chains: [
+          [
+            {
+              node_type: 'issue',
+              node_id: 11,
+              label: 'Convergence A',
+              is_readable: true,
+            },
+          ],
+          [
+            {
+              node_type: 'issue',
+              node_id: 13,
+              label: 'Convergence B',
+              is_readable: true,
+            },
+          ],
+        ],
+        readable_prerequisites: [
+          {
+            node_type: 'issue',
+            node_id: 11,
+            label: 'Convergence A',
+            is_readable: true,
+          },
+          {
+            node_type: 'issue',
+            node_id: 13,
+            label: 'Convergence B',
+            is_readable: true,
+          },
+        ],
+        diagnostics: [],
+      },
+    })
+
+    render(
+      <ReadingRouteExplanation
+        isOpen
+        issueId={7}
+        issueLabel="Convergence target"
+        readingOrders={[]}
+        connectedThreads={[]}
+        onClose={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByText('Converging branches')).not.toBeInTheDocument()
+  })
+
+  it('labels lanes as converging only when branches share a common leaf', () => {
+    setupChains({
+      chains: {
+        node_type: 'issue',
+        node_id: 7,
+        evaluated_issue_id: null,
+        direct_blockers: [],
+        chains: [
+          [
+            {
+              node_type: 'issue',
+              node_id: 11,
+              label: 'Convergence A',
+              is_readable: true,
+            },
+            {
+              node_type: 'issue',
+              node_id: 12,
+              label: 'Shared leaf',
+              is_readable: true,
+            },
+          ],
+          [
+            {
+              node_type: 'issue',
+              node_id: 13,
+              label: 'Convergence B',
+              is_readable: true,
+            },
+            {
+              node_type: 'issue',
+              node_id: 12,
+              label: 'Shared leaf',
+              is_readable: true,
+            },
+          ],
+        ],
+        readable_prerequisites: [
+          {
+            node_type: 'issue',
+            node_id: 12,
+            label: 'Shared leaf',
+            is_readable: true,
+          },
+        ],
+        diagnostics: [],
+      },
+    })
+
+    render(
+      <ReadingRouteExplanation
+        isOpen
+        issueId={7}
+        issueLabel="Convergence target"
+        readingOrders={[]}
+        connectedThreads={[]}
+        onClose={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('Converging branches')).toBeVisible()
+  })
+
   it('shows verified downstream unlocks separately and omits absent unlock data', () => {
     render(
       <ReadingRouteExplanation
