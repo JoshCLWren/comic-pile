@@ -213,9 +213,9 @@ export default function QueuePage() {
           setIssuesToAdd={modals.setIssuesToAdd}
           activeThreads={activeThreads}
           completedThreads={completedThreads}
-          onCreateSubmit={modals.handleCreateSubmit as unknown as (event: FormEvent) => Promise<void>}
-          onEditSubmit={modals.handleEditSubmit as unknown as (event: FormEvent) => Promise<void>}
-          onReactivateSubmit={modals.handleReactivateSubmit as unknown as (event: FormEvent) => Promise<void>}
+          onCreateSubmit={modals.handleCreateSubmit}
+          onEditSubmit={modals.handleEditSubmit}
+          onReactivateSubmit={modals.handleReactivateSubmit}
           onRepositionConfirm={handleRepositionConfirm}
           onDependencyChanged={() => refetch()}
           onCloseCreate={modals.closeCreateModal}

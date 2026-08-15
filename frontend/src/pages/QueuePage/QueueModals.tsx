@@ -1,4 +1,4 @@
-import type { ChangeEvent } from 'react'
+import type { ChangeEvent, FormEvent } from 'react'
 import Modal from '../../components/Modal'
 import PositionSlider from '../../components/PositionSlider'
 import DependencyBuilder from '../../components/DependencyBuilder'
@@ -27,9 +27,9 @@ interface QueueModalsProps {
   setIssuesToAdd: (next: number) => void
   activeThreads: Thread[]
   completedThreads: Thread[]
-  onCreateSubmit: (event: React.FormEvent) => Promise<void>
-  onEditSubmit: (event: React.FormEvent) => Promise<void>
-  onReactivateSubmit: (event: React.FormEvent) => Promise<void>
+  onCreateSubmit: (event: FormEvent) => Promise<void>
+  onEditSubmit: (event: FormEvent) => Promise<void>
+  onReactivateSubmit: (event: FormEvent) => Promise<void>
   onRepositionConfirm: (targetPosition: number) => Promise<void> | void
   onDependencyChanged: () => Promise<unknown> | unknown
   onCloseCreate: () => void
