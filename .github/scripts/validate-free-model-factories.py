@@ -4,8 +4,6 @@
 from __future__ import annotations
 
 import csv
-import re
-import subprocess
 from collections import Counter
 from pathlib import Path
 
@@ -15,6 +13,7 @@ ENTRY = Path('.github/workflows/free-model-factory-entry.yml')
 RUNNER = Path('.github/workflows/free-model-factory-run.yml')
 WATCHDOG = Path('.github/workflows/factory-heartbeat-watchdog.yml')
 WORKER = Path('.github/scripts/free-model-factory-worker.sh')
+PRIMITIVES = Path('.github/scripts/free-model-factory-worker-primitives.sh')
 KILO_HELPER = Path('.github/scripts/kilo-auto-factory-run.sh')
 GUARD = Path('.github/scripts/fixed-model-guard.py')
 EXPECTED_WORKERS = set(range(6, 25)) | {29} | set(range(39, 47))
@@ -121,20 +120,9 @@ def main() -> None:
     assert 'factory-control-out-of-scope' in guard and 'is_factory_control_path' in guard
 
     worker = WORKER.read_text(encoding='utf-8')
-
-    # The repair intentionally reuses the proven worker primitives from the
-    # immediately preceding repository blob and replaces only the drifted main
-    # selector/session loop. Factory runners use fetch-depth: 0, so this blob is
-    # a local Git-history dependency rather than a hosted service dependency.
-    match = re.search(r"LEGACY_WORKER_BLOB='([0-9a-f]{40})'", worker)
-    assert match, 'shared-pool worker must pin its inherited primitive blob'
-    legacy_blob = match.group(1)
-    legacy = subprocess.run(
-        ['git', 'cat-file', 'blob', legacy_blob],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout
+    assert PRIMITIVES.exists(), 'tracked worker primitives are missing'
+    primitives = PRIMITIVES.read_text(encoding='utf-8')
+    assert "source <(sed '/^ensure_owner_label$/,$d' .github/scripts/free-model-factory-worker-primitives.sh)" in worker
     for required in (
         'release_owned_targets',
         'comic-pile-factory-implement-claim-v3',
@@ -147,11 +135,10 @@ def main() -> None:
         '.github/scripts/kilo-auto-factory-run.sh',
         'Do not switch models',
     ):
-        assert required in legacy, f'inherited worker primitive missing: {required}'
+        assert required in primitives, f'inherited worker primitive missing: {required}'
 
     # One shared pool: user bugs first, then bugs, then all other executable
-    # product work. ralph-task remains useful metadata but is not an eligibility
-    # gate. Existing unowned PRs come only after fresh executable product work.
+    # product work. ralph-task remains metadata, not an eligibility gate.
     for required in (
         'choose_ranked_issues',
         'issue_is_executable',
@@ -182,8 +169,7 @@ def main() -> None:
         'trigger_backlog_zero_discovery',
     )
 
-    # Effective backlog zero is a behavior, not a magic issue lease. The worker
-    # directly dispatches the maintained Chromium discovery workflow.
+    # Effective backlog zero is behavior, not a magic issue lease.
     assert 'gh workflow run chromium-discovery.yml --ref main' in worker
     assert 'no coordination issue is required' in worker
     assert '#679 child' not in worker
