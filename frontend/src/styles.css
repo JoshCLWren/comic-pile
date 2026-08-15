@@ -283,13 +283,12 @@ body {
 }
 
 .modal-card {
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: var(--glass-blur);
+  background: rgba(17, 14, 10, 0.95);
   border: 1px solid var(--glass-border);
   border-radius: 0.5rem;
   box-shadow:
     0 20px 25px -5px rgba(0, 0, 0, 0.3),
-    0 10px 10px -5px rgba(0, 0, 0, 0.2);
+     0 10px 10px -5px rgba(0, 0, 0, 0.2);
 }
 
 .dice-state-idle {

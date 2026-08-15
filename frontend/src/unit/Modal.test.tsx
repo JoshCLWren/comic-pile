@@ -56,20 +56,23 @@ it('keeps focus on a controlled input while typing across parent rerenders', asy
   expect(titleInput).toHaveValue('Saga')
 })
 
-it('uses a translucent modal surface with a softened overlay', () => {
+it('uses an opaque modal surface with a dimmed overlay', () => {
   render(
-    <Modal isOpen title="Translucent Modal" onClose={() => {}}>
+    <Modal isOpen title="Opaque Modal" onClose={() => {}}>
       <p>Modal content</p>
     </Modal>
   )
 
-  const dialog = screen.getByRole('dialog', { name: 'Translucent Modal' })
+  const dialog = screen.getByRole('dialog', { name: 'Opaque Modal' })
   const overlay = document.querySelector('[data-overlay-root="true"] [aria-hidden="true"]')
 
   expect(dialog).toHaveClass('modal-card')
   expect(dialog.className).toContain('modal-card')
   expect(overlay).not.toBeNull()
   expect(overlay).toHaveClass('backdrop-blur-sm')
+
+  const dialogStyle = window.getComputedStyle(dialog)
+  expect(dialogStyle.backgroundColor).not.toBe('rgba(255, 255, 255, 0.03)')
 })
 
 it('returns null while closed and supports fallback focus without autofocus', async () => {
