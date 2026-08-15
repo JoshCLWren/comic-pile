@@ -32,14 +32,14 @@ ENTRY_PERMISSIONS = ('contents: write', 'issues: write', 'pull-requests: write',
 
 
 def assert_in_order(text: str, *needles: str) -> None:
-    # Use the final occurrence because helper names also appear in function
-    # definitions before the actual main-loop call sites we are ordering.
+    """Assert that the final call-site occurrence of each marker is ordered."""
     positions = [text.rfind(needle) for needle in needles]
     assert all(position >= 0 for position in positions), f'missing ordered marker: {needles}'
     assert positions == sorted(positions), f'expected ordering: {needles}'
 
 
 def main() -> None:
+    """Validate roster, runtime, lease, and shared-pool selection invariants."""
     with MANIFEST.open(newline='', encoding='utf-8') as handle:
         rows = list(csv.DictReader(
             (line for line in handle if not line.startswith('# worker')),
@@ -141,8 +141,6 @@ def main() -> None:
     ):
         assert required in primitives, f'inherited worker primitive missing: {required}'
 
-    # One shared pool: user bugs first, then bugs, then all other executable
-    # product work. ralph-task remains metadata, not an eligibility gate.
     for required in (
         'choose_ranked_issues',
         'issue_is_executable',
@@ -173,7 +171,6 @@ def main() -> None:
         'trigger_backlog_zero_discovery',
     )
 
-    # Effective backlog zero is behavior, not a magic issue lease.
     assert 'gh workflow run chromium-discovery.yml --ref main' in worker
     assert 'no coordination issue is required' in worker
     assert '#679 child' not in worker
