@@ -6,7 +6,7 @@ import PositionSlider from '../../components/PositionSlider'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import DependencyBuilder from '../../components/DependencyBuilder'
 import MigrationDialog from '../../components/MigrationDialog'
-import { useQueueThreads, useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../../hooks/useQueue'
+import { useThreads, useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../../hooks/useQueue'
 import { useCreateThread, useDeleteThread, useReactivateThread, useUpdateThread } from '../../hooks/useThread'
 import { useSession } from '../../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
@@ -27,7 +27,7 @@ export default function QueuePage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
-  const { data: threads, isPending, refetch } = useQueueThreads('')
+  const { data: threads, isPending, refetch } = useThreads('')
   const { data: session, refetch: refetchSession } = useSession()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()

@@ -1,5 +1,5 @@
 export { useThread, useStaleThreads, useCreateThread, useUpdateThread, useDeleteThread, useReactivateThread } from './useThread'
-export { useQueueThreads, useMoveToPosition, useMoveToFront, useMoveToBack, useShuffleQueue } from './useQueue'
+export { useMoveToPosition, useMoveToFront, useMoveToBack, useShuffleQueue } from './useQueue'
 export { useRate } from './useRate'
 export { useRoll, useOverrideRoll, useDismissPending, useSetDie, useClearManualDie, useReroll } from './useRoll'
 export { useSession, useSessions, useSessionDetails, useSessionSnapshots, useRestoreSessionStart } from './useSession'
