@@ -84,7 +84,7 @@ export function useThreads(searchTermOrOptions?: string | UseThreadsOptions) {
   useEffect(() => {
     void fetchData().catch(() => undefined);
     
-  }, [searchTerm]);
+  }, [fetchData]);
 
   const refetch = useCallback((pageToken?: string): Promise<void> => {
     return fetchData(pageToken);
