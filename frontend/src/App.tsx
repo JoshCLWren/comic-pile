@@ -1,8 +1,10 @@
-import { lazy, Suspense, createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
+import { Suspense, createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from './query/queryClient'
+import { lazyRoute } from './routes/routeModules'
+import { useRoutePrefetch } from './hooks/useRoutePrefetch'
 import Navigation from './components/Navigation'
 import BugReportButton from './components/BugReportButton'
 import type { ReportType } from './components/BugReportModal'
@@ -33,16 +35,16 @@ type BugReportSubmit = (
 const AUTH_BOOTSTRAP_TIMEOUT_MS = 15000
 const AUTH_BOOTSTRAP_RETRY_DELAY_MS = 1000
 
-const RollPage = lazy(() => import('./pages/RollPage'))
-const QueuePage = lazy(() => import('./pages/QueuePage'))
-const ThreadDetailView = lazy(() => import('./pages/ThreadDetailView'))
-const HistoryPage = lazy(() => import('./pages/HistoryPage'))
-const SessionPage = lazy(() => import('./pages/SessionPage'))
-const CrossoversPage = lazy(() => import('./pages/CrossoversPage'))
-const HelpPage = lazy(() => import('./pages/HelpPage'))
-const WhatsNewPage = lazy(() => import('./pages/WhatsNewPage'))
-const LoginPage = lazy(() => import('./pages/LoginPage'))
-const RegisterPage = lazy(() => import('./pages/RegisterPage'))
+const RollPage = lazyRoute('roll')
+const QueuePage = lazyRoute('queue')
+const ThreadDetailView = lazyRoute('threadDetail')
+const HistoryPage = lazyRoute('history')
+const SessionPage = lazyRoute('session')
+const CrossoversPage = lazyRoute('crossovers')
+const HelpPage = lazyRoute('help')
+const WhatsNewPage = lazyRoute('whatsNew')
+const LoginPage = lazyRoute('login')
+const RegisterPage = lazyRoute('register')
 
 export interface AuthContextValue {
   isAuthenticated: boolean
@@ -230,11 +232,17 @@ function BugReportConnected({ onSubmit }: { onSubmit: BugReportSubmit }) {
   return <div className="hidden md:block"><BugReportButton onSubmit={onSubmit} /></div>
 }
 
+function RouteChunkPrefetcher({ enabled }: { enabled: boolean }) {
+  useRoutePrefetch(enabled)
+  return null
+}
+
 function AppRoutes() {
   const { submit } = useBugReport()
   const { isAuthenticated } = useAuth()
   return (
     <Suspense fallback={<div className="text-center text-stone-500">Loading page...</div>}>
+      <RouteChunkPrefetcher enabled={isAuthenticated} />
       <Routes>
         <Route path="/login" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><LoginPage /></PublicLayout></PublicRoute>} />
         <Route path="/register" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><RegisterPage /></PublicLayout></PublicRoute>} />
