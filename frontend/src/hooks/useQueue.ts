@@ -92,3 +92,6 @@ export function useShuffleQueue() {
 
   return { mutate, isPending, isError }
 }
+
+// Re-export delete thread hook for backward compatibility
+export { useDeleteThread } from './useThread';
