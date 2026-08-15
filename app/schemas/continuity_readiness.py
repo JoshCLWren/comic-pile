@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from app.schemas.continuity_rule import ContinuityNodeType, ContinuitySatisfactionType
 
 ContinuityReadinessNodeType = Literal["issue", "thread", "crossover"]
+ContinuityBlockerType = Literal["item_unread", "members_unread", "selected_members_unread"]
 
 
 class ContinuityReadinessRequest(BaseModel):
@@ -24,6 +25,7 @@ class ContinuityBlocker(BaseModel):
     source_id: int
     source_label: str
     satisfaction_type: ContinuitySatisfactionType
+    blocker_type: ContinuityBlockerType
     satisfied: Literal[False] = False
     causing_issue_ids: list[int] = Field(default_factory=list)
     causing_member_issue_ids: list[int] = Field(default_factory=list)

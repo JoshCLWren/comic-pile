@@ -667,6 +667,15 @@
             "title": "Satisfaction Type",
             "type": "string"
           },
+          "blocker_type": {
+            "enum": [
+              "item_unread",
+              "members_unread",
+              "selected_members_unread"
+            ],
+            "title": "Blocker Type",
+            "type": "string"
+          },
           "satisfied": {
             "const": false,
             "default": false,
@@ -695,7 +704,8 @@
           "source_type",
           "source_id",
           "source_label",
-          "satisfaction_type"
+          "satisfaction_type",
+          "blocker_type"
         ],
         "title": "ContinuityBlocker",
         "type": "object"

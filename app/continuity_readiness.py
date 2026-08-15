@@ -317,12 +317,20 @@ def _evaluate_rule(rule: ContinuityRule, snapshot: _GraphSnapshot) -> Continuity
 
     if not causing_issue_ids and not causing_member_issue_ids:
         return None
+    if causing_member_issue_ids:
+        if rule.satisfaction_type not in {"item_read", "all_members_read"}:
+            blocker_type = "selected_members_unread"
+        else:
+            blocker_type = "members_unread"
+    else:
+        blocker_type = "item_unread"
     return ContinuityBlocker(
         rule_id=rule.id,
         source_type=rule.source_type,
         source_id=rule.source_id,
         source_label=_source_label(rule, snapshot),
         satisfaction_type=rule.satisfaction_type,
+        blocker_type=blocker_type,
         causing_issue_ids=causing_issue_ids,
         causing_member_issue_ids=causing_member_issue_ids,
         note=rule.note,

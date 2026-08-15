@@ -3989,6 +3989,11 @@ export interface components {
              */
             satisfaction_type: "item_read" | "all_members_read" | "checkpoint" | "selected_members_read" | "converged";
             /**
+             * Blocker Type
+             * @enum {string}
+             */
+            blocker_type: "item_unread" | "members_unread" | "selected_members_unread";
+            /**
              * Satisfied
              * @default false
              * @constant
