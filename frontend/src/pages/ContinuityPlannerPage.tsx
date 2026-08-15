@@ -153,7 +153,6 @@ export default function ContinuityPlannerPage() {
         setThreads(loadedThreads)
         setGroups(loadedGroups)
         if (!planId) {
-          setSavedName(DEFAULT_PLAN_NAME)
           return
         }
         const plan = await continuityPlansApi.get(planId)
@@ -267,10 +266,9 @@ export default function ContinuityPlannerPage() {
       const saved = planId
         ? await continuityPlansApi.update(planId, toPayload(name, nodes))
         : await continuityPlansApi.create(toPayload(name, nodes))
-      const savedNodes = nodes.map((node, position) => ({
+      const savedNodes = saved.nodes.map((node, position) => ({
         ...node,
         position,
-        lane_id: node.lane_id ?? LANE_ID,
       }))
       setNodes(savedNodes)
       setSavedName(saved.name)
