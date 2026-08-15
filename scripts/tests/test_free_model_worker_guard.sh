@@ -186,8 +186,9 @@ test_trusted_guard_staging() {
   new_work
   stage_real_guard_on_main
   extract_functions stage_trusted_guard
+  TRUSTED_GUARD="${TEST_TMPDIR}/trusted-fixed-model-guard.py"
   stage_trusted_guard
-  assert_true "trusted guard copy exists in /tmp" test -f "${TRUSTED_GUARD:-}"
+  assert_true "trusted guard copy exists in test workspace" test -f "${TRUSTED_GUARD:-}"
   assert_true "trusted copy carries the new git-state logic" \
     grep -q 'conflict_markers' "${TRUSTED_GUARD}"
 }
@@ -200,6 +201,7 @@ test_regression_stale_branch_guard() {
   new_work
   stage_real_guard_on_main
   extract_functions stage_trusted_guard
+  TRUSTED_GUARD="${TEST_TMPDIR}/trusted-fixed-model-guard.py"
   stage_trusted_guard
 
   cd "$TEST_TMPDIR/work"
@@ -254,6 +256,7 @@ test_regression_merge_main_rejected() {
   cp "$TRUSTED_GUARD_SRC" .github/scripts/fixed-model-guard.py
   git add -A && git commit -qm "add trusted guard"
   git push -q origin main
+  TRUSTED_GUARD="${TEST_TMPDIR}/trusted-fixed-model-guard.py"
   stage_trusted_guard
 
   git checkout -q -b feature
@@ -314,6 +317,7 @@ test_regression_model_committed_merge() {
   cp "$TRUSTED_GUARD_SRC" .github/scripts/fixed-model-guard.py
   git add -A && git commit -qm "add trusted guard"
   git push -q origin main
+  TRUSTED_GUARD="${TEST_TMPDIR}/trusted-fixed-model-guard.py"
   stage_trusted_guard
 
   git checkout -q -b feature

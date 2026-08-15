@@ -82,6 +82,21 @@ def test_trusted_guard_is_staged_before_checkout() -> None:
     assert guard_index < loop_index
 
 
+def test_stage_trusted_guard_keeps_tmp_fallback_in_production() -> None:
+    """Production keeps its /tmp mktemp fallback; tests set TRUSTED_GUARD.
+
+    The regression suite points TRUSTED_GUARD inside its own test workspace so
+    the CI review agent never needs external-directory permission. Production
+    must not be narrowed to satisfy the test: when TRUSTED_GUARD is unset the
+    worker still stages the guard under /tmp via mktemp.
+    """
+    body = _function_body('stage_trusted_guard')
+
+    assert re.search(r'TRUSTED_GUARD="\$\{TRUSTED_GUARD:-\}"', body)
+    assert re.search(r'mktemp /tmp/comic-pile-fixed-model-guard\.XXXXXX\.py', body)
+    assert 'cp .github/scripts/fixed-model-guard.py "$TRUSTED_GUARD"' in body
+
+
 def test_reject_out_of_scope_diff_uses_trusted_guard_and_git_state() -> None:
     """The pre-push decision must be made by the trusted guard with git state.
 
