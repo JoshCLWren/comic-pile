@@ -262,13 +262,13 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
   const handleCreateSubmit = useCallback(
     async (event: FormEvent) => {
       event.preventDefault()
-      const { parseIssueRange } = await import('../../utils/issueParser')
-      const hasIssueRange = Boolean(createForm.issues && createForm.issues.trim())
-      let issuesRemaining = Number(createForm.issuesRemaining)
-      if (hasIssueRange) {
-        issuesRemaining = parseIssueRange(createForm.issues)
-      }
       try {
+        const { parseIssueRange } = await import('../../utils/issueParser')
+        const hasIssueRange = Boolean(createForm.issues && createForm.issues.trim())
+        let issuesRemaining = Number(createForm.issuesRemaining)
+        if (hasIssueRange) {
+          issuesRemaining = parseIssueRange(createForm.issues)
+        }
         const result = (await submitCreate({
           title: createForm.title,
           format: createForm.format,
