@@ -355,10 +355,6 @@ body {
   }
 }
 
-.animate-slide-up {
-  animation: slide-up 0.25s cubic-bezier(0.32, 0.72, 0, 1);
-}
-
 @keyframes fade-in {
   from {
     opacity: 0;
@@ -368,6 +364,17 @@ body {
     opacity: 1;
     transform: scale(1);
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-up,
+  .animate-fade-in {
+    animation: none;
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.25s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .animate-fade-in {
