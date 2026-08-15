@@ -204,6 +204,19 @@ describe('QueuePage callback coverage', () => {
     await waitFor(() => expect(screen.getByText(/issue identifier too long/i)).toBeInTheDocument())
   })
 
+  it('alerts the user when create submit is attempted with an invalid issue range', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(screen.getAllByRole('button', { name: /add thread/i })[0])
+    await user.type(screen.getByLabelText('Title'), 'Broken Range')
+    await user.type(screen.getByLabelText('Issues'), '8-2')
+    await user.click(screen.getByRole('button', { name: /create thread/i }))
+    await waitFor(() =>
+      expect(alert).toHaveBeenCalledWith(expect.stringContaining('Failed to create thread')),
+    )
+    expect(mocks.mutate).not.toHaveBeenCalled()
+  })
+
   it('loads mixed blocking reasons and leaves a blank reactivation selection untouched', async () => {
     vi.mocked(dependenciesApi.listBlockedThreadIds).mockResolvedValue([1, 3])
     vi.mocked(dependenciesApi.getBlockingInfo).mockResolvedValueOnce({ blocking_reasons: ['Finish Saga'] }).mockRejectedValueOnce(new Error('reason failed'))

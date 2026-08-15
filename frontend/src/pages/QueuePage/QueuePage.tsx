@@ -1,499 +1,156 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import type { ChangeEvent, DragEvent, FormEvent } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
-import Modal from '../../components/Modal'
-import PositionSlider from '../../components/PositionSlider'
+import { useCallback, useState } from 'react'
+import type { FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import DependencyBuilder from '../../components/DependencyBuilder'
-import MigrationDialog from '../../components/MigrationDialog'
-import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../../hooks/useQueue'
-import { useCreateThread, useDeleteThread, useReactivateThread, useThreads, useUpdateThread } from '../../hooks/useThread'
+import { useCreateThread, useReactivateThread, useThreads, useUpdateThread } from '../../hooks/useThread'
+import { useMoveToPosition, useShuffleQueue } from '../../hooks/useQueue'
 import { useSession } from '../../hooks/useSession'
-import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
-import { threadsApi } from '../../services/api'
-import { issuesApi } from '../../services/api-issues'
-import { useBugReportRestore } from '../../contexts/useBugReportRestore'
-import { PositionMenuProvider } from '../../contexts/PositionMenuContext'
+import { PositionMenuProvider } from '../../contexts/PositionMenuProvider'
 import type { Thread } from '../../types'
-import { getApiErrorDetail } from '../../utils/apiError'
-import { FormatSelect } from './FormatSelect'
-import { IssueToggleList } from './IssueToggleList'
-import CompletedThreadsSection from './CompletedThreadsSection'
 import QueueThreadCard from './QueueThreadCard'
-import VirtualizedThreadList, { VIRTUALIZATION_THRESHOLD } from './VirtualizedThreadList'
-import { DEFAULT_CREATE_STATE, type QueueFormState } from './types'
+import CompletedThreadsSection from './CompletedThreadsSection'
+import { QueueControls } from './QueueControls'
+import { QueueList } from './QueueList'
+import { QueueModals } from './QueueModals'
+import { useQueueFilters, type QueueSortBy } from './useQueueFilters'
+import { useQueueThreadActions } from './useQueueThreadActions'
+import { useQueueModals as useQueueModalsHook } from './useQueueModals'
 
+/**
+ * Route entry for the Queue page. The component composes the focused
+ * retained feature modules (`QueueControls`, `QueueList`, `QueueModals`,
+ * `CompletedThreadsSection`) plus the page-level navigation/error boundary
+ * concerns. Data ownership stays in the page so a second cache layer is
+ * never introduced.
+ */
 export default function QueuePage() {
   const navigate = useNavigate()
-  const location = useLocation()
-  const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
+  const [sortBy, setSortBy] = useState<QueueSortBy>('position')
+  const [searchQuery, setSearchQuery] = useState('')
+
   const { data: threads, isPending, refetch } = useThreads('')
   const { data: session, refetch: refetchSession } = useSession()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
-  const deleteMutation = useDeleteThread()
   const reactivateMutation = useReactivateThread()
-  const moveToFrontMutation = useMoveToFront()
-  const moveToBackMutation = useMoveToBack()
   const moveToPositionMutation = useMoveToPosition()
   const shuffleQueueMutation = useShuffleQueue()
-  const snoozeMutation = useSnooze()
-  const unsnoozeMutation = useUnsnooze()
 
-  const [isCreateOpen, setIsCreateOpen] = useState(false)
-  const [isEditOpen, setIsEditOpen] = useState(false)
-  const [isReactivateOpen, setIsReactivateOpen] = useState(false)
-  const [createForm, setCreateForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
-  const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
-  const [editingThread, setEditingThread] = useState<Thread | null>(null)
-  const [reactivateThreadId, setReactivateThreadId] = useState('')
-  const [issuesToAdd, setIssuesToAdd] = useState(1)
-  const [draggedThreadId, setDraggedThreadId] = useState<number | null>(null)
-  const [dragOverThreadId, setDragOverThreadId] = useState<number | null>(null)
-  const [repositioningThread, setRepositioningThread] = useState<Thread | null>(null)
-  const [reorderError, setReorderError] = useState<string | null>(null)
-  const [sortBy, setSortBy] = useState<'position' | 'alphabetical' | 'created'>('position')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [showMigrationDialog, setShowMigrationDialog] = useState(false)
-  const [threadToMigrate, setThreadToMigrate] = useState<Thread | null>(null)
-  const [dependencyThread, setDependencyThread] = useState<Thread | null>(null)
-  const [isDependencyBuilderOpen, setIsDependencyBuilderOpen] = useState(false)
-  const [issuePreview, setIssuePreview] = useState<number | null>(null)
-  const [issueParseError, setIssueParseError] = useState<string | null>(null)
-
-  const isAnyModalOpen = isCreateOpen || isEditOpen || isReactivateOpen || isDependencyBuilderOpen || showMigrationDialog
-
-  useEffect(() => {
-    let cancelled = false
-    const calculatePreview = async () => {
-      const issueInput = createForm.issues
-      if (issueInput) {
-        try {
-          const { parseIssueRange } = await import('../../utils/issueParser')
-          const total = parseIssueRange(issueInput)
-          if (cancelled) return
-          setIssuePreview(total)
-          setIssueParseError(null)
-        } catch (err) {
-          if (cancelled) return
-          setIssuePreview(null)
-          setIssueParseError(err instanceof Error ? err.message : 'Invalid issue range')
-        }
-      } else {
-        if (cancelled) return
-        setIssuePreview(null)
-        setIssueParseError(null)
-      }
-    }
-    calculatePreview()
-
-    return () => {
-      cancelled = true
-    }
-  }, [createForm.issues])
-
-  const activeThreads = useMemo(
-    () => threads
-      ?.filter((thread) => thread.status === 'active')
-      .sort((a, b) => a.queue_position - b.queue_position) ?? [],
-    [threads],
-  )
-  const completedThreads = useMemo(
-    () => threads?.filter((thread) => thread.status === 'completed') ?? [],
-    [threads],
-  )
-
-  const sortedThreads = useMemo(() => {
-    if (sortBy === 'alphabetical') {
-      return [...activeThreads].sort((a, b) => a.title.localeCompare(b.title))
-    }
-    if (sortBy === 'created') {
-      return [...activeThreads].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    }
-    return activeThreads
-  }, [activeThreads, sortBy])
-
-  const filteredThreads = useMemo(() => {
-    if (!searchQuery.trim()) return sortedThreads
-    return sortedThreads.filter((t) =>
-      t.title.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-  }, [sortedThreads, searchQuery])
-
-  const handleDelete = (threadId: number) => {
-    if (window.confirm('Are you sure you want to delete this thread?')) {
-      deleteMutation.mutate(threadId).then(() => refetch()).catch((err: unknown) => {
-        alert(`Failed to delete thread: ${getApiErrorDetail(err)}`)
-      })
-    }
-  }
-
-  const handleMoveToFront = (threadId: number) => {
-    moveToFrontMutation.mutate(threadId).then(() => refetch()).catch(() => {
-      alert('Failed to move thread to front. Please try again.')
-    })
-  }
-
-  const handleMoveToBack = (threadId: number) => {
-    moveToBackMutation.mutate(threadId).then(() => refetch()).catch(() => {
-      alert('Failed to move thread to back. Please try again.')
-    })
-  }
-
-  const handleShuffleQueue = async () => {
-    try {
-      await shuffleQueueMutation.mutate()
-      await refetch()
-    } catch {
-      alert('Failed to shuffle queue. Please try again.')
-    }
-  }
-
-  const handleDragStart = (threadId: number) => (event: DragEvent<HTMLElement>) => {
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData('text/plain', String(threadId))
-    setDraggedThreadId(threadId)
-    setReorderError(null)
-  }
-
-  const handleDragOver = (threadId: number) => (event: DragEvent<HTMLElement>) => {
-    event.preventDefault()
-    setDragOverThreadId(threadId)
-  }
-
-  const handleDrop = (threadId: number) => (event: DragEvent<HTMLElement>) => {
-    event.preventDefault()
-
-    if (!draggedThreadId || draggedThreadId === threadId) {
-      setDragOverThreadId(null)
-      return
-    }
-
-    setReorderError(null)
-    const targetThread = activeThreads.find((thread) => thread.id === threadId)
-    if (targetThread) {
-      moveToPositionMutation.mutate({ id: draggedThreadId, position: targetThread.queue_position })
-        .then(() => {
-          refetch()
-          setReorderError(null)
-        })
-        .catch((error: unknown) => {
-          setReorderError(getApiErrorDetail(error))
-        })
-    }
-
-    setDraggedThreadId(null)
-    setDragOverThreadId(null)
-  }
-
-  const handleDragEnd = () => {
-    setDraggedThreadId(null)
-    setDragOverThreadId(null)
-  }
-
-  const handleCreateSubmit = async (event: FormEvent) => {
-    event.preventDefault()
-
-    try {
-      const hasIssueRange = createForm.issues && createForm.issues.trim()
-
-      let issuesRemaining = Number(createForm.issuesRemaining)
-      if (hasIssueRange) {
-        const { parseIssueRange } = await import('../../utils/issueParser')
-        issuesRemaining = parseIssueRange(createForm.issues)
-      }
-
-      const result = await createMutation.mutate({
-        title: createForm.title,
-        format: createForm.format,
-        issues_remaining: issuesRemaining,
-        notes: createForm.notes || null,
-      })
-
-      if (hasIssueRange && result?.id) {
-        try {
-          const rangeMatch = createForm.issues.trim().match(/^(\d+)-(\d+)$/)
-          const isSimpleRange = !!rangeMatch && Number(rangeMatch[1]) === 1
-          
-          if (isSimpleRange) {
-            const requestedLastRead = Number(createForm.lastIssueRead) || 0
-            const lastRead = Math.max(0, Math.min(requestedLastRead, issuesRemaining))
-            await issuesApi.migrateThread(result.id, lastRead, issuesRemaining)
-          } else {
-            const issueListResponse = await issuesApi.create(result.id, createForm.issues.trim())
-            const requestedLastRead = Number(createForm.lastIssueRead) || 0
-            const lastRead = Math.max(0, Math.min(requestedLastRead, issueListResponse.issues.length))
-            if (lastRead > 0 && issueListResponse.issues.length > 0) {
-              const issuesToMark = issueListResponse.issues.slice(0, lastRead)
-              await Promise.all(issuesToMark.map(issue => issuesApi.markRead(issue.id)))
-            }
-          }
-        } catch (issueError: unknown) {
-          console.error('Thread created but failed to create issues:', issueError)
-          alert(`Thread created successfully, but failed to create individual issues: ${getApiErrorDetail(issueError)}`)
-        }
-      }
-
-      setCreateForm(DEFAULT_CREATE_STATE)
-      closeCreateModal()
-      refetch()
-    } catch (error: unknown) {
-      console.error('Failed to create thread:', error)
-      alert(`Failed to create thread: ${getApiErrorDetail(error)}`)
-    }
-  }
-
-  const handleEditSubmit = async (event: FormEvent) => {
-    event.preventDefault()
-    if (!editingThread) return
-
-    try {
-      const updateData: { title: string; format: string; notes: string | null; issues_remaining?: number } = {
-        title: editForm.title,
-        format: editForm.format,
-        notes: editForm.notes || null,
-      }
-
-      if (editingThread.total_issues === null) {
-        updateData.issues_remaining = Number(editForm.issuesRemaining)
-      }
-
-      await updateMutation.mutate({
-        id: editingThread.id,
-        data: updateData,
-      })
-      closeEditModal()
-    } catch {
-      console.error('Failed to update thread')
-    }
-  }
-
-  const openReactivateModal = (thread: Thread | null) => {
-    setReactivateThreadId(thread?.id ? String(thread.id) : '')
-    setIssuesToAdd(1)
-    setIsReactivateOpen(true)
-  }
-
-  const handleReactivateSubmit = async (event: FormEvent) => {
-    event.preventDefault()
-    if (!reactivateThreadId) return
-
-    try {
-      await reactivateMutation.mutate({
-        thread_id: Number(reactivateThreadId),
-        issues_to_add: Number(issuesToAdd),
-      })
-      setIsReactivateOpen(false)
-      setReactivateThreadId('')
-      setIssuesToAdd(1)
-      refetch()
-    } catch {
-      console.error('Failed to reactivate thread')
-    }
-  }
-
-  const handleMigrationComplete = useCallback(async (migratedThread: Thread) => {
-    try {
-      await refetch()
-      await refetchSession()
-    } catch (error) {
-      console.error('Failed to refresh data after migration:', error)
-      alert('Failed to refresh data. Please refresh the page.')
-    }
-    setShowMigrationDialog(false)
-    setThreadToMigrate(null)
-    setEditingThread(migratedThread)
-  }, [refetch, refetchSession])
-
-  const handleMigrationSkip = useCallback(() => {
-    setShowMigrationDialog(false)
-    setThreadToMigrate(null)
-  }, [])
-
-  const handleMigrationClose = useCallback(() => {
-    setShowMigrationDialog(false)
-    setThreadToMigrate(null)
-  }, [])
-
-  const clearQueueModalState = useCallback(() => {
-    navigate(location.pathname, { replace: true, state: {} })
-  }, [location.pathname, navigate])
-
-  const showCreateModal = useCallback(() => {
-    setCreateForm(DEFAULT_CREATE_STATE)
-    setIsCreateOpen(true)
-    setRestoreAction(() => {
-      setCreateForm(DEFAULT_CREATE_STATE)
-      setIsCreateOpen(true)
-    })
-  }, [setRestoreAction])
-
-  const openCreateModal = useCallback(() => {
-    showCreateModal()
-  }, [showCreateModal])
-
-  const closeCreateModal = useCallback(() => {
-    setIsCreateOpen(false)
-    clearRestoreAction()
-    clearQueueModalState()
-  }, [clearQueueModalState, clearRestoreAction])
-
-  const showEditModal = useCallback((thread: Thread) => {
-    setEditingThread(thread)
-    setEditForm({
-      title: thread.title,
-      format: thread.format,
-      issuesRemaining: thread.issues_remaining,
-      notes: thread.notes || '',
-      issues: '',
-      lastIssueRead: 0,
-    })
-    setIsEditOpen(true)
-    setRestoreAction(() => {
-      setEditingThread(thread)
-      setEditForm({
-        title: thread.title,
-        format: thread.format,
-        issuesRemaining: thread.issues_remaining,
-        notes: thread.notes || '',
-        issues: '',
-        lastIssueRead: 0,
-      })
-      setIsEditOpen(true)
-    })
-  }, [setRestoreAction])
-
-  const openEditModal = useCallback((thread: Thread) => {
-    showEditModal(thread)
-  }, [showEditModal])
-
-  const closeEditModal = useCallback(() => {
-    setEditingThread(null)
-    setIsEditOpen(false)
-    clearRestoreAction()
-    clearQueueModalState()
-    refetch()
-  }, [clearQueueModalState, clearRestoreAction, refetch])
-
-  useEffect(() => {
-    if (location.state?.editThreadId && threads) {
-      const thread = threads.find((t) => t.id === location.state.editThreadId)
-      if (thread && (!isEditOpen || editingThread?.id !== thread.id)) {
-        showEditModal(thread)
-      }
-      clearQueueModalState()
-      return
-    }
-    if (location.state?.openCreate && !isCreateOpen) {
-      showCreateModal()
-      clearQueueModalState()
-    }
-  }, [
-    clearQueueModalState,
-    editingThread?.id,
-    isCreateOpen,
-    isEditOpen,
-    location.state,
-    showCreateModal,
-    showEditModal,
+  const { activeThreads, completedThreads, filteredThreads } = useQueueFilters(
     threads,
-  ])
+    searchQuery,
+    sortBy,
+  )
 
-  const openRepositionModal = (thread: Thread) => {
-    setRepositioningThread(thread)
-  }
+  const navigateToRoll = useCallback(
+    (_thread: Thread, response: unknown) => {
+      navigate('/', { state: { rollResponse: response } })
+    },
+    [navigate],
+  )
 
-  function handleThreadClick(thread: Thread) {
-    navigate(`/thread/${thread.id}`)
-  }
+  const actions = useQueueThreadActions({
+    navigateToRoll,
+    refetchSession: () => refetchSession(),
+    refetch: () => refetch(),
+  })
 
-  async function handleActionForThread(thread: Thread) {
-    try {
-      const isBlocked = thread.is_blocked
-      if (isBlocked) {
-        alert('Cannot read yet:\n\nThis thread is blocked by a dependency.')
+  const submitCreate = useCallback(
+    (input: { title: string; format: string; issues_remaining: number; notes: string | null }) =>
+      createMutation.mutate(input) as Promise<{ id?: number }>,
+    [createMutation],
+  )
+  const submitEdit = useCallback(
+    (input: {
+      id: number
+      data: { title: string; format: string; notes: string | null; issues_remaining?: number }
+    }) => updateMutation.mutate(input),
+    [updateMutation],
+  )
+  const submitReactivate = useCallback(
+    (input: { thread_id: number; issues_to_add: number }) => reactivateMutation.mutate(input),
+    [reactivateMutation],
+  )
+
+  const modals = useQueueModalsHook({
+    threads,
+    onCreated: () => refetch(),
+    onUpdated: () => refetch(),
+    onReactivated: () => refetch(),
+    refetchSession: () => refetchSession(),
+    submitCreate,
+    submitEdit,
+    submitReactivate,
+    isPendingCreate: createMutation.isPending,
+    isPendingEdit: updateMutation.isPending,
+  })
+
+  const handleRepositionConfirm = useCallback(
+    async (targetPosition: number) => {
+      if (!modals.repositioningThread) return
+      if (targetPosition < 1 || targetPosition > activeThreads.length) {
+        window.alert('Invalid position specified. Please choose a valid position.')
         return
       }
+      try {
+        await moveToPositionMutation.mutate({
+          id: modals.repositioningThread.id,
+          position: targetPosition,
+        })
+        modals.closeRepositionModal()
+        await refetch()
+      } catch {
+        modals.closeRepositionModal()
+        window.alert('Failed to reposition thread. Please try again.')
+      }
+    },
+    [modals, moveToPositionMutation, refetch, activeThreads.length],
+  )
 
-      const response = await threadsApi.setPending(thread.id)
-      navigate('/', { state: { rollResponse: response } })
-    } catch (error: unknown) {
-      console.error('Action failed:', error)
-      alert(`Action failed: ${getApiErrorDetail(error)}`)
-    }
-  }
+  const renderThreadCard = useCallback(
+    (thread: Thread, index: number) => {
+      const isDragOver = actions.dragOverThreadId === thread.id
+      const isBlocked = thread.is_blocked
+      const blockingReasons: string[] = []
+      const isSnoozed = session?.snoozed_threads?.some((t) => t.id === thread.id) ?? false
+      const snoozeIcon = isSnoozed ? '🔔' : '😴'
+      const snoozeLabel = isSnoozed ? 'Unsnooze' : 'Snooze'
+      const snoozeDisabled = !isSnoozed && session?.pending_thread_id !== thread.id
 
-  const handleRepositionConfirm = async (targetPosition: number) => {
-    if (!repositioningThread) return
+      return (
+        <QueueThreadCard
+          key={thread.id}
+          thread={thread}
+          index={index}
+          isBlocked={isBlocked}
+          blockingReasons={blockingReasons}
+          isDragOver={isDragOver}
+          snoozeIcon={snoozeIcon}
+          snoozeLabel={snoozeLabel}
+          snoozeDisabled={snoozeDisabled}
+          onCardClick={() => navigate(`/thread/${thread.id}`)}
+          onDragStart={actions.handleDragStart(thread.id)}
+          onDragEnd={actions.handleDragEnd}
+          onDragOver={actions.handleDragOver(thread.id)}
+          onDrop={actions.handleDrop(thread.id, activeThreads)}
+          onRead={() => void actions.handleThreadRead(thread)}
+          onOpenThread={() => navigate(`/thread/${thread.id}`)}
+          onSnooze={() => void actions.handleSnoozeToggle(thread, isSnoozed)}
+          onActionDelete={() => actions.handleDelete(thread.id)}
+          onMoveToFront={() => actions.handleMoveToFront(thread.id)}
+          onMoveToBack={() => actions.handleMoveToBack(thread.id)}
+          onReposition={() => modals.openRepositionModal(thread)}
+          onEdit={() => modals.showEditModal(thread)}
+          onDependencies={() => modals.openDependenciesModal(thread)}
+          onDelete={() => actions.handleDelete(thread.id)}
+        />
+      )
+    },
+    [actions, activeThreads, modals, navigate, session],
+  )
 
-    if (targetPosition < 1 || targetPosition > activeThreads.length) {
-      alert('Invalid position specified. Please choose a valid position.');
-      return;
-    }
-
-    try {
-      await moveToPositionMutation.mutate({ id: repositioningThread.id, position: targetPosition })
-      setRepositioningThread(null)
-      refetch()
-    } catch {
-      setRepositioningThread(null)
-      alert('Failed to reposition thread. Please try again.')
-    }
-  }
-
-  function renderThreadCard(thread: Thread, index: number) {
-    const isDragOver = dragOverThreadId === thread.id
-    const isBlocked = thread.is_blocked
-    const blockingReasons: string[] = []
-    const isSnoozed = session?.snoozed_threads?.some((t) => t.id === thread.id) ?? false
-    const snoozeIcon = isSnoozed ? '🔔' : '😴'
-    const snoozeLabel = isSnoozed ? 'Unsnooze' : 'Snooze'
-    const snoozeDisabled = !isSnoozed && session?.pending_thread_id !== thread.id
-
-    return (
-      <QueueThreadCard
-        key={thread.id}
-        thread={thread}
-        index={index}
-        isBlocked={isBlocked}
-        blockingReasons={blockingReasons}
-        isDragOver={isDragOver}
-        snoozeIcon={snoozeIcon}
-        snoozeLabel={snoozeLabel}
-        snoozeDisabled={snoozeDisabled}
-        onCardClick={() => handleThreadClick(thread)}
-        onDragStart={handleDragStart(thread.id)}
-        onDragEnd={handleDragEnd}
-        onDragOver={handleDragOver(thread.id)}
-        onDrop={handleDrop(thread.id)}
-        onRead={() => handleActionForThread(thread)}
-        onOpenThread={() => navigate(`/thread/${thread.id}`)}
-        onSnooze={async () => {
-          try {
-            if (isSnoozed) {
-              await unsnoozeMutation.mutate(thread.id)
-            } else {
-              await snoozeMutation.mutate(thread.id)
-            }
-            await refetchSession()
-          } catch (error: unknown) {
-            console.error('Snooze action failed:', error)
-            alert(`Failed to ${isSnoozed ? 'unsnooze' : 'snooze'} thread: ${getApiErrorDetail(error)}`)
-          }
-        }}
-        onActionDelete={() => handleDelete(thread.id)}
-        onMoveToFront={() => handleMoveToFront(thread.id)}
-        onMoveToBack={() => handleMoveToBack(thread.id)}
-        onReposition={() => openRepositionModal(thread)}
-        onEdit={() => openEditModal(thread)}
-        onDependencies={() => {
-          setDependencyThread(thread)
-          setIsDependencyBuilderOpen(true)
-        }}
-        onDelete={() => handleDelete(thread.id)}
-      />
-    )
-  }
+  const mobileAddEnabled = !modals.isAnyModalOpen
+  const shuffleDisabled = activeThreads.length < 2
 
   if (isPending) {
     return <LoadingSpinner fullScreen />
@@ -502,359 +159,82 @@ export default function QueuePage() {
   return (
     <PositionMenuProvider>
       <div className="space-y-6 md:space-y-10 pb-10">
-      <header className="space-y-3 md:space-y-4 px-2">
-        <div className="flex justify-between items-start gap-2 md:gap-4">
-          <div className="min-w-0">
-            <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase">Read Queue</h1>
-            <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Your upcoming comics</p>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-1.5 md:gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={handleShuffleQueue}
-              disabled={shuffleQueueMutation.isPending || activeThreads.length < 2}
-              className="h-9 md:h-12 px-3 md:px-5 rounded-lg border border-white/10 bg-white/5 text-[10px] md:text-xs font-black uppercase tracking-widest whitespace-nowrap text-stone-300 hover:bg-white/10 disabled:opacity-50"
-            >
-              Shuffle
-            </button>
-            <button
-              type="button"
-              onClick={openCreateModal}
-              className="hidden md:flex h-12 px-5 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
-            >
-              Add Thread
-            </button>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1">
-            {(['position', 'alphabetical', 'created'] as const).map((sort) => (
-              <button
-                key={sort}
-                type="button"
-                onClick={() => setSortBy(sort)}
-                className={`px-2.5 md:px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors ${
-                  sortBy === sort
-                    ? 'bg-amber-600/20 text-amber-400 border border-amber-500/30'
-                    : 'bg-white/5 text-stone-400 border border-white/10 hover:bg-white/10'
-                }`}
-              >
-                {sort === 'position' ? 'Pos' : sort === 'alphabetical' ? 'A-Z' : 'New'}
-              </button>
-            ))}
-          </div>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search..."
-            className="h-9 px-3 bg-white/5 border border-white/10 rounded-lg text-xs text-stone-300 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors w-full md:w-auto"
-          />
-        </div>
-      </header>
-
-      {!isAnyModalOpen && (
-      <button
-        type="button"
-        onClick={openCreateModal}
-        className="md:hidden fixed bottom-24 right-4 h-14 w-14 rounded-full bg-amber-600 text-white font-black text-3xl shadow-[0_4px_20px_rgba(212,137,14,0.4)] z-50 flex items-center justify-center hover:bg-amber-500 transition-colors"
-        aria-label="Add Thread"
-      >
-        +
-      </button>
-      )}
-
-      {activeThreads.length === 0 ? (
-        <div className="text-center text-stone-500">No active threads in queue</div>
-      ) : filteredThreads.length === 0 ? (
-        <div className="text-center text-stone-500">No threads match your search</div>
-      ) : (
-        <>
-          {reorderError && (
-            <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl text-sm font-medium">
-              {reorderError}
-            </div>
-          )}
-          {filteredThreads.length > VIRTUALIZATION_THRESHOLD ? (
-            <VirtualizedThreadList
-              threads={filteredThreads}
-              renderItem={renderThreadCard}
-            />
-          ) : (
-            <div
-              data-testid="queue-thread-list"
-              id="queue-container"
-              role="list"
-              aria-label="Thread queue"
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4"
-            >
-              {filteredThreads.map((thread, index) => renderThreadCard(thread, index))}
-            </div>
-          )}
-        </>
-      )}
-
-      <CompletedThreadsSection
-        threads={completedThreads}
-        onReactivate={openReactivateModal}
-      />
-
-  <Modal isOpen={isCreateOpen} title="Create Thread" onClose={closeCreateModal}>
-  <form className="space-y-4" onSubmit={handleCreateSubmit}>
-  <div className="space-y-2">
-  <label htmlFor="create-thread-title" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Title</label>
-  <input
-  id="create-thread-title"
-  value={createForm.title}
-  onChange={(event) => setCreateForm({ ...createForm, title: event.target.value })}
-  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
-  required
-  />
-  </div>
-  <div className="space-y-2">
-  <label htmlFor="create-thread-format" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Format</label>
-  <FormatSelect
-  id="create-thread-format"
-  value={createForm.format}
-  onChange={(value) => setCreateForm({ ...createForm, format: value })}
-  required
-  />
-  </div>
-
-  <div className="space-y-2">
-  <label htmlFor="create-thread-issues" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</label>
-  <input
-  id="create-thread-issues"
-  type="text"
-  value={createForm.issues}
-  onChange={(event) => setCreateForm({ ...createForm, issues: event.target.value })}
-  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
-  placeholder="0-25 or 0, ½, Annual 1, 5-7"
-  required
-  />
-  {issuePreview !== null && (
-  <p className="text-xs text-stone-400">
-  Will create {issuePreview} issue{issuePreview !== 1 ? 's' : ''}
-  </p>
-  )}
-  <p className="text-xs text-stone-400">
-  Enter the exact issues you want to track, such as 71. You do not need to add earlier issues.
-  </p>
-  {issueParseError && (
-  <p className="text-xs text-red-400">{issueParseError}</p>
-  )}
-  </div>
-  <div className="space-y-2">
-  <label htmlFor="create-thread-last-read" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues already read (optional)</label>
-  <input
-  id="create-thread-last-read"
-  type="number"
-  min="0"
-  max={issuePreview ?? undefined}
-  value={createForm.lastIssueRead}
-  onChange={(event: ChangeEvent<HTMLInputElement>) => {
-  const value = Number.parseInt(event.target.value, 10) || 0
-  const clampedValue = issuePreview !== null ? Math.min(value, issuePreview) : value
-  setCreateForm({
-  ...createForm,
-  lastIssueRead: clampedValue,
-  })
-  }}
-  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
-  />
-            <p className="text-xs text-stone-400">
-              Enter a count from the issue list above, not an issue number.
-            </p>
-            {createForm.lastIssueRead > 0 && issuePreview !== null && (
-              <p className="text-xs text-stone-400">
-                First {Math.min(createForm.lastIssueRead, issuePreview)} issues (in creation order) of {issuePreview} will be marked as read
-              </p>
-            )}
-          </div>
-
-  <div className="space-y-2">
-  <label htmlFor="create-thread-notes" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Notes</label>
-  <textarea
-  id="create-thread-notes"
-  value={createForm.notes}
-  onChange={(event) => setCreateForm({ ...createForm, notes: event.target.value })}
-  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors min-h-[80px]"
-  ></textarea>
-  </div>
-          <button
-            type="submit"
-            disabled={createMutation.isPending}
-            className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-60"
-          >
-            {createMutation.isPending ? 'Creating...' : 'Create Thread'}
-          </button>
-        </form>
-      </Modal>
-
-  <Modal isOpen={isEditOpen} title="Edit Thread" onClose={closeEditModal} overlayClassName="edit-modal__overlay">
-  <div className="space-y-4">
-  <form id="edit-thread-form" className="space-y-4" onSubmit={handleEditSubmit}>
-  <div className="space-y-2">
-  <label htmlFor="edit-thread-title" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Title</label>
-  <input
-  id="edit-thread-title"
-  value={editForm.title}
-  onChange={(event) => setEditForm({ ...editForm, title: event.target.value })}
-  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
-  required
-  />
-  </div>
-
-  <div className="space-y-2">
-  <label htmlFor="edit-thread-format" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Format</label>
-  <FormatSelect
-  id="edit-thread-format"
-  value={editForm.format}
-  onChange={(value) => setEditForm({ ...editForm, format: value })}
-  required
-  />
-  </div>
-
-  {editingThread?.total_issues === null && (
-  <div className="space-y-2">
-  <label htmlFor="edit-thread-issues-remaining" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues Remaining</label>
-  <input
-  id="edit-thread-issues-remaining"
-  type="number"
-  min="0"
-  value={editForm.issuesRemaining}
-  onChange={(event: ChangeEvent<HTMLInputElement>) =>
-  setEditForm({
-  ...editForm,
-  issuesRemaining: Number.parseInt(event.target.value, 10) || 0,
-  })
-  }
-  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
-  />
-  </div>
-  )}
-
-  <div className="space-y-2">
-  <label htmlFor="edit-thread-notes" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Notes</label>
-  <textarea
-  id="edit-thread-notes"
-  value={editForm.notes}
-  onChange={(event) => setEditForm({ ...editForm, notes: event.target.value })}
-  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors min-h-[80px]"
-  ></textarea>
-  </div>
-
-            {editingThread?.total_issues === null && (
-              <div className="space-y-2 pt-2 border-t border-white/10">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setThreadToMigrate(editingThread)
-                    setShowMigrationDialog(true)
-                  }}
-                  className="edit-modal__migration-button w-full py-3 px-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-left text-xs font-black text-amber-300 hover:bg-amber-500/20 transition-all flex items-center gap-3"
-                >
-                  <span className="text-lg">📊</span>
-                  <div className="flex-1">
-                    <div className="font-bold">Migrate to Issue Tracking</div>
-                    <div className="font-normal text-stone-400 mt-0.5">Track individual issues instead of remaining count</div>
-                  </div>
-                </button>
-              </div>
-            )}
-          </form>
-
-          {editingThread && editingThread.total_issues !== null && (
-            <IssueToggleList threadId={editingThread.id} />
-          )}
-
-          <button
-            type="submit"
-            form="edit-thread-form"
-            disabled={updateMutation.isPending}
-            className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-60"
-          >
-            {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
-          </button>
-        </div>
-      </Modal>
-
-      <Modal isOpen={isReactivateOpen} title="Reactivate Thread" onClose={() => setIsReactivateOpen(false)}>
-        <form className="space-y-4" onSubmit={handleReactivateSubmit}>
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Completed Thread</label>
-            <select
-              value={reactivateThreadId}
-              onChange={(event) => setReactivateThreadId(event.target.value)}
-              className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
-              required
-            >
-              <option value="">Select a thread...</option>
-              {completedThreads.map((thread) => (
-                  <option key={thread.id} value={String(thread.id)}>
-                  {thread.title} ({thread.format})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues to Add</label>
-            <input
-              type="number"
-              min="1"
-              value={issuesToAdd}
-              onChange={(event) => setIssuesToAdd(Number.parseInt(event.target.value, 10) || 1)}
-              className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
-              required
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={reactivateMutation.isPending}
-            className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-60"
-          >
-            {reactivateMutation.isPending ? 'Reactivating...' : 'Reactivate Thread'}
-          </button>
-        </form>
-      </Modal>
-
-      <Modal
-        isOpen={repositioningThread !== null}
-        title={`Reposition: ${repositioningThread?.title ?? ''}`}
-        onClose={() => setRepositioningThread(null)}
-        data-testid="position-slider-modal"
-      >
-        {repositioningThread && (
-          <PositionSlider
-            threads={activeThreads}
-            currentThread={repositioningThread}
-            onPositionSelect={handleRepositionConfirm}
-            onCancel={() => setRepositioningThread(null)}
-          />
-        )}
-      </Modal>
-
-      <DependencyBuilder
-        thread={dependencyThread}
-        isOpen={isDependencyBuilderOpen}
-        onClose={() => {
-          setIsDependencyBuilderOpen(false)
-          setDependencyThread(null)
-        }}
-        onChanged={async () => {
-          await refetch()
-        }}
-      />
-
-      {showMigrationDialog && threadToMigrate && (
-        <MigrationDialog
-          thread={threadToMigrate}
-          onComplete={handleMigrationComplete}
-          onSkip={handleMigrationSkip}
-          onClose={handleMigrationClose}
+        <QueueControls
+          activeCount={activeThreads.length}
+          shuffleDisabled={shuffleDisabled}
+          shufflePending={shuffleQueueMutation.isPending}
+          onShuffle={actions.handleShuffle}
+          onCreateThread={modals.showCreateModal}
+          sortBy={sortBy}
+          onSortChange={setSortBy}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
         />
-       )}
-     </div>
-     </PositionMenuProvider>
-   )
- }
+
+        {mobileAddEnabled && (
+          <button
+            type="button"
+            onClick={modals.showCreateModal}
+            className="md:hidden fixed bottom-24 right-4 h-14 w-14 rounded-full bg-amber-600 text-white font-black text-3xl shadow-[0_4px_20px_rgba(212,137,14,0.4)] z-50 flex items-center justify-center hover:bg-amber-500 transition-colors"
+            aria-label="Add Thread"
+          >
+            +
+          </button>
+        )}
+
+        <QueueList
+          activeThreads={activeThreads}
+          filteredThreads={filteredThreads}
+          reorderError={actions.reorderError}
+          renderItem={renderThreadCard}
+        />
+
+        <CompletedThreadsSection
+          threads={completedThreads}
+          onReactivate={modals.openReactivateModal}
+        />
+
+        <QueueModals
+          openModal={modals.openModal}
+          createForm={modals.createForm}
+          editForm={modals.editForm}
+          setCreateForm={modals.setCreateForm}
+          setEditForm={modals.setEditForm}
+          issuePreview={modals.issuePreview}
+          issueParseError={modals.issueParseError}
+          editingThread={modals.editingThread}
+          repositioningThread={modals.repositioningThread}
+          dependencyThread={modals.dependencyThread}
+          threadToMigrate={modals.threadToMigrate}
+          showMigrationDialog={modals.showMigrationDialog}
+          reactivateThreadId={modals.reactivateThreadId}
+          setReactivateThreadId={modals.setReactivateThreadId}
+          issuesToAdd={modals.issuesToAdd}
+          setIssuesToAdd={modals.setIssuesToAdd}
+          activeThreads={activeThreads}
+          completedThreads={completedThreads}
+          onCreateSubmit={modals.handleCreateSubmit}
+          onEditSubmit={modals.handleEditSubmit}
+          onReactivateSubmit={modals.handleReactivateSubmit}
+          onRepositionConfirm={handleRepositionConfirm}
+          onDependencyChanged={() => refetch()}
+          onCloseCreate={modals.closeCreateModal}
+          onCloseEdit={modals.closeEditModal}
+          onCloseReactivate={modals.closeReactivateModal}
+          onCloseReposition={modals.closeRepositionModal}
+          onCloseDependency={modals.closeDependenciesModal}
+          onMigrationComplete={modals.handleMigrationComplete}
+          onMigrationSkip={modals.handleMigrationSkip}
+          onCloseMigration={modals.closeMigrationDialog}
+          onOpenMigrationDialog={modals.openMigrationDialog}
+          isPendingCreate={modals.isPendingCreate}
+          isPendingEdit={modals.isPendingEdit}
+          isPendingReactivate={reactivateMutation.isPending}
+        />
+      </div>
+    </PositionMenuProvider>
+  )
+}
+
+// Re-export the type for unit tests that previously imported it from QueuePage.
+export type { QueueSortBy }
