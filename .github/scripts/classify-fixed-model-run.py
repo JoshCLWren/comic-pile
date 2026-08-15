@@ -41,6 +41,10 @@ PRODUCTIVE_SIGNALS = (
 
 @dataclass(frozen=True)
 class Result:
+    """
+    Represents the classification result of a model run.
+    """
+
     worker: str = ""
     source: str = ""
     model: str = ""
@@ -117,7 +121,10 @@ def classify(log: str) -> Result:
 class ClassifierTests(unittest.TestCase):
     BASE = "Factory 32 locked: source=omniroute-opencode model=oc/big-pickle runtime=omniroute/oc/big-pickle minute=:15 scheduler=slot-15 configured=true\n"
 
-    def test_productive(self) -> None:
+    """
+    Test case for productive model runs.
+    """
+
         result = classify(self.BASE + "FIXED_MODEL_OPENCODE_OK\n[factory:32] checked out issue #928 on x\nopened/updated PR #1220 for issue #928\n")
         self.assertEqual(result.outcome, "HEALTHY / PRODUCTIVE")
         self.assertTrue(result.exact_model_proven)
