@@ -205,7 +205,7 @@ export function ReadingRouteExplanation({
 
       {issueId != null ? (
         <>
-          {!(readinessState.error || chainsState.error) ? (
+          {!(hasBridgeState || readinessState.error) ? (
             <>
           {directBlockers.length > 0 ? (
             <section
