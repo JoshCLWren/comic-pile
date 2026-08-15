@@ -27,6 +27,7 @@ _REQUIRED = {
 }
 _GITHUB_API_BASE = "https://api.github.com"
 _ISSUE_REFERENCE_PATTERN = re.compile(r"(?<!\w)#(\d{1,7})\b")
+_ORDINAL_INDICATORS = {"step", "build", "section", "phase", "version", "stage"}
 
 
 def _fail(message: str) -> NoReturn:
@@ -290,13 +291,30 @@ def _files(repository: str, raw_number: str) -> None:
     print(json.dumps(files, separators=(",", ":")))
 
 
+def _preceding_word(text: str, position: int) -> str:
+    """Return the last whitespace-delimited word before a match position.
+
+    Args:
+        text: The full text being scanned.
+        position: Character offset of the matched reference.
+
+    Returns:
+        The preceding word in lowercase, or an empty string when none exists.
+    """
+    prefix = text[:position].rstrip()
+    if not prefix:
+        return ""
+    return prefix.split()[-1].lower().rstrip(".,;:")
+
+
 def _issues(repository: str, raw_number: str) -> None:
     number = _pr_number(raw_number)
     pull = _fetch_pull(repository, number)
     references: set[int] = set()
-    for match in _ISSUE_REFERENCE_PATTERN.finditer(
-        f"{pull.get('title') or ''} {pull.get('body') or ''}"
-    ):
+    text = f"{pull.get('title') or ''} {pull.get('body') or ''}"
+    for match in _ISSUE_REFERENCE_PATTERN.finditer(text):
+        if _preceding_word(text, match.start()) in _ORDINAL_INDICATORS:
+            continue
         referenced = int(match.group(1))
         if referenced != number:
             references.add(referenced)

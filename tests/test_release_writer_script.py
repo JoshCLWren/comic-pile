@@ -247,3 +247,37 @@ def test_issues_skips_own_pr_number(monkeypatch, capsys):
 
     result = json.loads(capsys.readouterr().out)
     assert result == []
+
+
+def test_issues_excludes_ordinal_markers(monkeypatch, capsys):
+    """Ordinal/step markers like 'Step #3' must not be extracted as linked issues."""
+    def fake_github_request(url: str):
+        return {
+            "number": 100,
+            "title": "Migration",
+            "body": "Step #3 of the guide. Build #4 is deployable.",
+        }
+
+    monkeypatch.setattr(release_writer, "_github_request", fake_github_request)
+
+    release_writer._issues("JoshCLWren/comic-pile", "100")
+
+    result = json.loads(capsys.readouterr().out)
+    assert result == []
+
+
+def test_issues_keeps_real_references_after_ordinal_markers(monkeypatch, capsys):
+    """Legitimate issue references must survive filtering of ordinal markers."""
+    def fake_github_request(url: str):
+        return {
+            "number": 100,
+            "title": "Migration phase #2",
+            "body": "Step #3 of the guide. Closes #1070. Build #4 is deployable.",
+        }
+
+    monkeypatch.setattr(release_writer, "_github_request", fake_github_request)
+
+    release_writer._issues("JoshCLWren/comic-pile", "100")
+
+    result = json.loads(capsys.readouterr().out)
+    assert result == [1070]
