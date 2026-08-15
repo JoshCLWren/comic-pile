@@ -1,4 +1,4 @@
-"""API coverage for live per-node readiness of saved continuity plans."""
+"""API coverage for live per-node readiness of saved continuity plans.
 
 from datetime import UTC, datetime
 
@@ -14,6 +14,7 @@ from app.models.thread import Thread
 from app.models.user import User
 from tests.conftest import get_or_create_user_async
 
+ 
 
 async def _make_thread_with_issues(
     async_db: AsyncSession,
@@ -50,6 +51,7 @@ async def _make_thread_with_issues(
     thread.next_unread_issue_id = issues[0].id
     return thread, issues
 
+ 
 
 def _plan_payload(
     nodes: list[dict[str, object]],
@@ -87,6 +89,8 @@ def _crossover_node(group: DependencyGroup, *, position: int) -> dict[str, objec
     }
 
 
+ 
+
 async def _make_group(
     async_db: AsyncSession,
     *,
@@ -103,6 +107,8 @@ async def _make_group(
     await async_db.flush()
     return group
 
+
+ 
 
 @pytest.mark.asyncio
 async def test_plan_readiness_reports_readable_blocked_and_complete_states(
@@ -271,7 +277,7 @@ async def test_plan_readiness_include_chains_resolves_bounded_prerequisites(
                 target_type="issue",
                 target_id=third_issues[0].id,
                 satisfaction_type="item_read",
-            ),
+            ],
         ]
     )
     await async_db.commit()
@@ -429,7 +435,6 @@ async def test_plan_readiness_detects_plan_owned_rule_cycle(
                 _issue_node(issues[1], position=1),
                 _issue_node(issues[2], position=2),
             ],
-            mode="strict_sequential",
         ),
     )
     assert created.status_code == 201, created.text
@@ -489,6 +494,7 @@ async def test_plan_readiness_hides_foreign_plans(
     assert response.status_code == 404
     assert "not found" in response.json()["detail"]
 
+ 
 
 @pytest.mark.asyncio
 async def test_plan_readiness_includes_thread_and_complete_thread_nodes(
