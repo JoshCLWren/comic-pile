@@ -111,14 +111,16 @@ def main() -> None:
     assert 'schedule:' not in dispatcher_text, 'dispatcher must not own an independent cron clock'
     assert 'WATCHDOG_RUN_NUMBER' in dispatcher_text
     assert 'slots=(0 15 30 45)' in dispatcher_text
-    assert 'workers=\'["6","39"]\'' in dispatcher_text
+    assert 'workers=\'["6","39","46"]\'' in dispatcher_text
     assert 'contents: read' in dispatcher_text and 'actions: write' in dispatcher_text
     assert 'issues: write' in dispatcher_text and 'pull-requests: write' in dispatcher_text
     assert 'gh workflow run free-model-factory-entry.yml' in dispatcher_text
     assert 'matrix:' not in dispatcher_text
-    assert "'.github/scripts/free-model-factory-worker.sh'" in dispatcher_text, (
-        'worker repairs must trigger an immediate post-merge fleet smoke'
-    )
+    for path in (
+        "'.github/scripts/free-model-factory-worker.sh'",
+        "'.github/scripts/kilo-auto-factory-run.sh'",
+    ):
+        assert path in dispatcher_text, f'factory runtime change must trigger post-merge smoke: {path}'
     for required in (
         'if [[ "$EVENT_NAME" == push ]]',
         'queued in_progress',
