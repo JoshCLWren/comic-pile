@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import csv
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -12,6 +13,9 @@ DISPATCHER = Path('.github/workflows/free-model-factory-dispatch.yml')
 ENTRY = Path('.github/workflows/free-model-factory-entry.yml')
 RUNNER = Path('.github/workflows/free-model-factory-run.yml')
 WATCHDOG = Path('.github/workflows/factory-heartbeat-watchdog.yml')
+DISCOVERY = Path('.github/workflows/chromium-discovery.yml')
+DISCOVERY_CLASSIFIER = Path('.github/scripts/classify-chromium-discovery.py')
+PLAYWRIGHT_CONFIG = Path('frontend/playwright.config.ts')
 WORKER = Path('.github/scripts/free-model-factory-worker.sh')
 PRIMITIVES = Path('.github/scripts/free-model-factory-worker-primitives.sh')
 KILO_HELPER = Path('.github/scripts/kilo-auto-factory-run.sh')
@@ -39,7 +43,7 @@ def assert_in_order(text: str, *needles: str) -> None:
 
 
 def main() -> None:
-    """Validate roster, runtime, lease, and shared-pool selection invariants."""
+    """Validate roster, runtime, lease, shared-pool, and discovery invariants."""
     with MANIFEST.open(newline='', encoding='utf-8') as handle:
         rows = list(csv.DictReader(
             (line for line in handle if not line.startswith('# worker')),
@@ -101,7 +105,6 @@ def main() -> None:
     runner = RUNNER.read_text(encoding='utf-8')
     assert 'group: fixed-model-factory-${{ inputs.worker }}' in runner
     assert 'cancel-in-progress: false' in runner
-    assert 'actions: write' in runner
     assert 'opencode-free)' in runner and 'runtime_model="opencode/${model}"' in runner
     assert 'OPENCODE_API_KEY' not in runner
     assert 'kilo-auto)' in runner and 'runtime_model="kilo/${model}"' in runner
@@ -156,26 +159,77 @@ def main() -> None:
         'session-end-handoff',
         'no-persisted-change-handoff',
         'leased unowned PR',
+        'stage_trusted_kilo_helper',
+        'TRUSTED_KILO_HELPER',
+        'daily Chromium discovery owns backlog replenishment',
     ):
         assert required in worker, f'shared-pool invariant missing: {required}'
     assert "for selector in 'user-reported bug' 'bug' 'ralph-task'" not in worker
     assert 'choose_backlog_zero_child' not in worker
     assert 'issues/679/sub_issues' not in worker
     assert 'claim_issue "$candidate"' in worker
+    assert 'gh workflow run chromium-discovery.yml' not in worker
+    assert 'trigger_backlog_zero_discovery' not in worker
     assert_in_order(
         worker,
         "claim_from_pool 'user-bug'",
         "claim_from_pool 'bug'",
         "claim_from_pool 'product'",
         'done < <(choose_unowned_pr)',
-        'trigger_backlog_zero_discovery',
+        'daily Chromium discovery owns backlog replenishment',
     )
 
-    assert 'gh workflow run chromium-discovery.yml --ref main' in worker
-    assert 'no coordination issue is required' in worker
-    assert '#679 child' not in worker
+    discovery = DISCOVERY.read_text(encoding='utf-8')
+    for required in (
+        'schedule:',
+        "cron: '23 9 * * *'",
+        'workflow_dispatch:',
+        'fail-fast: false',
+        'if: always()',
+        'retention-days: 30',
+        'playwright-report/',
+        'test-results/',
+        'discovery-artifacts/backend.log',
+        'discovery-artifacts/run-metadata.json',
+        'Classify persisted Chromium failures',
+        'actions/download-artifact@v5',
+        'classify-chromium-discovery.py',
+        'issues: write',
+    ):
+        assert required in discovery, f'daily discovery invariant missing: {required}'
+    assert 'cancel-in-progress: false' in discovery
+    assert '\n  push:\n' not in discovery
 
-    print('Validated 28 external factory lanes and canonical shared-pool selection.')
+    playwright = PLAYWRIGHT_CONFIG.read_text(encoding='utf-8')
+    for required in (
+        "outputFile: '../test-results/results.json'",
+        "trace: 'retain-on-failure'",
+        "screenshot: 'only-on-failure'",
+        "video: 'retain-on-failure'",
+        "retries: process.env.CI ? 2 : 0",
+    ):
+        assert required in playwright, f'Playwright failure-evidence invariant missing: {required}'
+
+    classifier = DISCOVERY_CLASSIFIER.read_text(encoding='utf-8')
+    for required in (
+        'chromium-discovery-failure:',
+        'e2e-discovered',
+        'e2e-infrastructure',
+        'factory:unowned',
+        'ralph-status:pending',
+        'results.json',
+        'GITHUB_RUN_ID',
+        'GITHUB_SHA',
+        'args = ["issue", "create"',
+        'run_gh(*args)',
+    ):
+        assert required in classifier, f'discovery classifier invariant missing: {required}'
+    assert re.search(
+        r'run_gh\(\s*"issue",\s*"comment"',
+        classifier,
+    ), 'discovery classifier issue comment call missing'
+
+    print('Validated 28 external factory lanes, shared-pool selection, and daily Chromium discovery.')
     for minute in BATCH_MINUTES:
         print(f'  :{minute:02d} -> {counts[minute]} workers')
     for source, count in EXPECTED_SOURCE_COUNTS.items():

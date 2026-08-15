@@ -58,6 +58,51 @@ unclean_git_state_json() {
 # loop below is the canonical shared-pool implementation.
 source <(sed '/^ensure_owner_label$/,$d' .github/scripts/free-model-factory-worker-primitives.sh)
 
+# A PR branch may predate the Kilo integration entirely. Stage the backend
+# runner from trusted main before any checkout so cross-worker takeover never
+# executes a missing or stale branch copy, mirroring the trusted guard model.
+stage_trusted_kilo_helper() {
+  [[ "$SOURCE" == 'kilo-auto' ]] || return 0
+  TRUSTED_KILO_HELPER="${TRUSTED_KILO_HELPER:-}"
+  if [[ -z "$TRUSTED_KILO_HELPER" ]]; then
+    TRUSTED_KILO_HELPER="$(mktemp /tmp/comic-pile-kilo-auto-run.XXXXXX.sh)"
+  fi
+  cp .github/scripts/kilo-auto-factory-run.sh "$TRUSTED_KILO_HELPER"
+  chmod +x "$TRUSTED_KILO_HELPER"
+}
+
+# Keep the established OpenCode/NVIDIA implementation untouched. Kilo needs a
+# small override only so it invokes the trusted helper staged from main.
+eval "$(declare -f run_agent | sed '1s/^run_agent /legacy_run_agent /')"
+run_agent() {
+  local mode="$1" number="$2" timeout_seconds="$3"
+  local target mission prompt status=0
+  if [[ "$SOURCE" != 'kilo-auto' ]]; then
+    legacy_run_agent "$@"
+    return $?
+  fi
+
+  if [[ "$mode" == 'pr' ]]; then
+    target="pull request #${number}"
+    mission="Resume this PR. Inspect the exact current head, required CI, review submissions, and every inline review thread. Fix closure-critical defects and resolve or concretely rebut actionable threads. If no edits are required, decide whether the PR fully completes its declared scope and is safe to merge. End your final response with FACTORY_GATE_READY only when no semantic blocker remains; otherwise end with FACTORY_GATE_NOT_READY."
+  else
+    target="issue #${number}"
+    mission="Implement the full closure-critical acceptance contract for this issue with code and focused tests. Do not stop at planning or optional polish."
+  fi
+
+  prompt="You are external-model Factory ${WORKER} for JoshCLWren/comic-pile. Durable worker ID: ${WORKER_ID}. Source: ${SOURCE}. Requested model or route: ${MODEL}. Runtime selector: ${RUNTIME_MODEL}. Assigned target: ${target}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, docs/CHATGPT_FACTORY_PROMPT.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Follow the canonical product-first factory policy. ${mission} Work only on the assigned target during this agent invocation. Edit the checked-out branch, run focused validation, and use gh/GitHub when needed for review context. Do not commit or push; the wrapper persists changes. Do not switch models, providers, or routes. A provider failure is a result for this lane, not permission to fall back to another paid or unrequested route. Do not enable auto-merge, push main, touch production databases, or alter automation schedules."
+
+  set +e
+  bash "$TRUSTED_KILO_HELPER" \
+    "$timeout_seconds" \
+    "ComicPile Factory ${WORKER} · ${DISPLAY}" \
+    "$prompt" \
+    "/tmp/opencode-factory-${WORKER}.log"
+  status=$?
+  set -e
+  return "$status"
+}
+
 priority_rank_jq='def priority_rank:
   ([.labels[].name] // []) as $labels
   | if ($labels | index("ralph-priority:critical")) then 4
@@ -103,12 +148,12 @@ choose_ranked_issues() {
     gh issue list --state open --limit 300 --json number,title,labels,createdAt \
       | jq -r --arg mode "$mode" --arg owner_re "$OWNER_RE" "$priority_rank_jq
         map(select(.number != 1093 and .number != 1109))
-        | map(select((([.labels[].name | select(test($owner_re) and . != \"factory:unowned\")] | length) == 0)))
+        | map(select((([.labels[].name | select(test(\$owner_re) and . != \"factory:unowned\")] | length) == 0)))
         | map(select(
-            if $mode == \"user-bug\" then
+            if \$mode == \"user-bug\" then
               ([.labels[].name] | index(\"user-reported\")) != null and
               ([.labels[].name] | index(\"bug\")) != null
-            elif $mode == \"bug\" then
+            elif \$mode == \"bug\" then
               ([.labels[].name] | index(\"bug\")) != null
             else true end
           ))
@@ -131,18 +176,9 @@ claim_from_pool() {
   return 1
 }
 
-trigger_backlog_zero_discovery() {
-  log 'shared executable backlog is empty; triggering Chromium discovery directly'
-  if gh workflow run chromium-discovery.yml --ref main >/dev/null 2>&1; then
-    log 'Chromium backlog-zero discovery dispatched; no coordination issue is required'
-    return 0
-  fi
-  log 'Chromium backlog-zero discovery could not be dispatched with the workflow token'
-  return 1
-}
-
 ensure_owner_label
 stage_trusted_guard
+stage_trusted_kilo_helper
 release_owned_targets 'previous-run-stale-lease'
 trap 'release_owned_targets session-end-handoff || true' EXIT
 log "starting shared-pool fixed-model session with runtime ${RUNTIME_MODEL}; budget ${BUDGET_SECONDS}s"
@@ -182,7 +218,7 @@ while (( $(remaining) > 480 )); do
   fi
 
   if [[ -z "$NUMBER" ]]; then
-    trigger_backlog_zero_discovery || exit 88
+    log 'shared executable backlog is empty for this session; daily Chromium discovery owns backlog replenishment'
     break
   fi
 

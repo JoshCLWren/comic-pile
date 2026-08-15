@@ -2,7 +2,7 @@
 
 Version: 22
 
-This is the canonical policy for every scheduled ChatGPT worker, the local OpenCode factory, and interactive factory repair sessions.
+This is the canonical policy for every scheduled ChatGPT worker, the local OpenCode factory, fixed-model external factories, and interactive factory repair sessions.
 
 ## Prime directive
 
@@ -12,16 +12,18 @@ Success is measured by issues truthfully closed and production defects removed. 
 
 ## Continuous delivery cycle
 
-The factory follows this permanent cycle:
+The delivery factory follows this permanent cycle:
 
-1. drain every executable open issue except the deferred backlog-zero checkpoint #679;
-2. when no other executable delivery work exists, #679 immediately becomes required work, including when the remaining ordinary backlog is owned, blocked, or dependency-gated;
-3. restore and run the complete maintained Chromium Playwright E2E suite;
-4. create one GitHub issue for every independent reproducible product defect surfaced by Chromium E2E, with evidence and a `bug` label;
-5. return immediately to backlog draining as those new bugs become executable;
-6. repeat whenever the ordinary executable backlog reaches zero again.
+1. drain every executable open product issue using the shared priority policy;
+2. treat factory ownership as a temporary next-action lease, never durable model affinity;
+3. after each implementation attempt, push durable progress when useful and release the lease when active work stops;
+4. return immediately to selection while executable work remains and the session has safe runtime budget;
+5. if the shared executable pool is genuinely empty, release any active lease, record a truthful no-work completion, and end that bounded session cleanly;
+6. remain scheduled and check the shared pool again on the next normal heartbeat.
 
-An empty or blocked ordinary backlog is never an idle condition and never a reason to stop the factory. A worker must not pause, disable, suspend, or otherwise mutate its own schedule because work is blocked or exhausted. Only Josh, or an interactive session acting on Josh's direct instruction, may pause or disable a factory. Scheduled workers remain enabled and continue checking on schedule.
+An empty or blocked ordinary backlog is never a reason to pause, disable, suspend, or mutate a factory schedule. Only Josh, or an interactive session acting on Josh's direct instruction, may pause or disable a factory. Scheduled workers remain enabled and continue checking on schedule.
+
+Backlog replenishment is owned independently by the daily Chromium discovery workflow. Ordinary factories must not launch the complete discovery suite merely because their current pool is empty.
 
 User-reported product bugs are the first delivery queue. Reproducible E2E-discovered product bugs come after them, then ordinary executable product issues. Preserve `user-reported` only for defects actually reported by a user.
 
@@ -35,9 +37,9 @@ Choose work in this order:
 2. A branch-caused failing check, merge conflict, or actionable review defect only when the affected PR directly delivers an equal-or-higher-priority user-reported/product bug or clearing the blocker can immediately finish or merge that product fix.
 3. Other branch-caused failing checks, conflicts, or actionable review defects that prevent substantive product-delivery PRs from becoming mergeable.
 4. The highest-priority unclaimed reproducible E2E-discovered product `bug` issue.
-5. The highest-value unclaimed executable product issue, honoring explicit priority and dependencies. `#679` becomes eligible when all remaining ordinary executable product work is owned, blocked, or dependency-gated.
+5. The highest-value unclaimed executable product issue, honoring explicit priority and dependencies.
 6. Additional work on an existing PR only when required to complete its issue contract or make the PR mergeable.
-7. Factory, CI, test, or E2E infrastructure only when it directly blocks product delivery.
+7. Factory, CI, test, or E2E infrastructure only when it directly blocks product delivery or exists as a focused executable infrastructure issue from the discovery system.
 
 Test-only defects, stale selectors, optional validation, E2E plumbing, docs, release-note work, CI cosmetics, metadata cleanup, and evidence polishing never outrank an executable user-reported or product bug unless that infrastructure directly blocks safe validation or merge of the same higher-priority product fix.
 
@@ -49,9 +51,11 @@ Optional tests, cleanup, metadata edits, wording changes, evidence polishing, PR
 
 A scheduled heartbeat is a bounded work session, not a one-ticket punch.
 
-After every substantive fix, opened PR, merge, completed issue, or valid blocker, immediately rerun selection and continue the next highest-priority executable work in the same scheduled run. Reaching one valid heartbeat outcome is a minimum success threshold, not a stop condition.
+After every substantive fix, opened PR, merge, completed issue, or valid blocker, immediately rerun selection and continue the next highest-priority executable work in the same scheduled run. Reaching one valid heartbeat outcome is a minimum success threshold while executable work exists, not a stop condition.
 
-Do not end a run merely because CI or review is pending, because the current item became blocked, or because one issue reached a handoff state. Preserve or release ownership as appropriate, then select the next executable item. Continue until the runtime or tool budget makes further safe substantive work impossible. If ordinary executable work is truly exhausted, enter #679 instead of stopping.
+Do not end a run merely because CI or review is pending, because the current item became blocked, or because one issue reached a handoff state. Preserve or release ownership as appropriate, then select the next executable item. Continue until the runtime or tool budget makes further safe substantive work impossible or the shared executable pool is genuinely empty.
+
+When no executable work remains, ending the current session cleanly is valid. The worker stays enabled for its next scheduled heartbeat; it does not launch the full Chromium discovery suite itself.
 
 ## Concurrency and throughput floor
 
@@ -62,6 +66,17 @@ Once one worker has a valid lease on the highest-priority issue, peers select th
 When fewer than four substantive implementation PRs are open and executable unclaimed issues exist, idle workers must prefer opening coherent implementations for separate issues over embellishing existing PRs.
 
 A substantive implementation PR changes product behavior, correctness, performance, architecture, deployment behavior, data, or meaningful automated coverage required by its issue. Comments, labels, reviews, PR metadata, help text, and optional test embellishment do not count toward this floor.
+
+## Lease semantics
+
+Factory ownership is a connection-pool lock around the next action, not a permanent assignment to the model or worker that first touched the issue or PR.
+
+- Exactly one active owner label may hold an issue or PR at a time.
+- Cross-worker takeover and merge are allowed after the prior lease is released.
+- A factory that creates or advances a PR releases active ownership when its implementation attempt ends, including while CI or review is pending.
+- Provider failure, timeout, no useful persisted change, or another stable handoff state releases the lease so a different model can try later.
+- A takeover worker continues the current branch/head rather than creating a replacement solely because another model authored the existing commits.
+- Waiting on CI or review never reserves a model indefinitely.
 
 ## Anti-loop rules
 
@@ -91,7 +106,30 @@ After work becomes blocked, merge-gated, or dependent on a human-only decision, 
 
 After any issue or PR reaches a stable outcome, return to selection again and continue the same scheduled work session while runtime remains.
 
-If no ordinary executable issue can be selected, do not declare the factory idle. Enter the backlog-zero Chromium phase and work #679 instead.
+If no ordinary executable issue can be selected, release any stale active lease, record a truthful no-work outcome, and end the bounded session cleanly. The independent daily Chromium discovery workflow is responsible for replenishing the bug pool.
+
+## Daily Chromium discovery
+
+The complete maintained Chromium Playwright suite is a separate scheduled discovery system, not fallback work executed by ordinary factories.
+
+The discovery workflow must:
+
+1. run once daily and remain manually dispatchable;
+2. run the complete maintained Chromium scenario set with shard-level `fail-fast: false`;
+3. retain Playwright traces, screenshots, video, HTML report data, machine-readable JSON results, backend logs, and run metadata after failures;
+4. upload failure evidence under `if: always()` before the failed run is allowed to disappear;
+5. retain discovery evidence long enough for diagnosis across subsequent runs;
+6. classify persisted results after the shards finish, even when one or more shards failed;
+7. create or update one focused GitHub issue per independent reproducible product failure, including the run, commit, spec, test title, and durable artifact name;
+8. create focused E2E infrastructure issues when a shard fails before producing trustworthy Playwright results rather than mislabeling setup failures as product bugs;
+9. deduplicate repeated failures across daily runs and append fresh evidence to the existing open issue;
+10. return discovered product bugs to the normal shared factory pool with `bug`, `factory`, `factory:unowned`, and executable pending state.
+
+A newer discovery run must not cancel an in-flight run before its durable failure packet uploads. Discovery concurrency therefore serializes runs rather than discarding evidence mid-test.
+
+When a factory fixes an E2E-discovered product defect, keep or strengthen focused regression coverage for the corrected behavior. The discovery suite should become a ratchet: every confirmed defect leaves behind sharper automated protection.
+
+Firefox and WebKit may be run manually when a browser-specific defect warrants them. They are not daily discovery completion gates.
 
 ## Release-note ownership
 
@@ -132,51 +170,35 @@ Do not enable auto-merge. Perform the merge only after the gates are currently t
 
 After merging, verify whether the linked issue closed truthfully. If executable issue work remains, continue it under normal priority rather than declaring victory from the PR merge alone.
 
+Formal GitHub `APPROVED` state is not a required merge gate when GitHub cannot represent self-approval for Josh's single-user agentic repository. Review-clear means there are no unresolved actionable findings after inspecting the current reviews and threads; never fake a formal self-approval.
+
 ## Valid heartbeat outcomes
 
-A normal heartbeat must accomplish at least one of these while executable issues remain:
+While executable issues remain, a normal heartbeat must accomplish at least one of these:
 
 - push substantive code, tests, or a migration;
 - repair a blocking defect, review finding, CI failure, or merge conflict;
 - open a coherent non-draft implementation PR for an executable issue;
 - merge an exact-head PR whose complete gate set is satisfied;
-- create evidence-backed bug issues from reproducible Chromium E2E failures during the backlog-zero phase;
 - repair factory behavior that is directly blocking issue delivery.
 
-These are minimum substantive outcomes, not reasons to stop a run. After achieving one, continue the work-session loop while safe runtime remains.
+These are minimum substantive outcomes, not reasons to stop a run. After achieving one, continue the work-session loop while safe runtime remains and executable work exists.
 
-Comments, labels, claims, reviews, PR-body edits, ready markers, help text, speculative plans, and optional test additions alone are not sufficient.
+Comments, labels, claims, reviews, PR-body edits, ready markers, help text, speculative plans, and optional test additions alone are not sufficient while executable work exists.
 
-When ordinary executable work is exhausted, entering #679 and the Chromium E2E bug-harvesting cycle is the required heartbeat outcome. `idle`, self-pausing, and self-disabling are invalid substitutes.
-
-## Backlog-zero Chromium phase
-
-Issue #679 is excluded from ordinary executable-backlog selection while any other executable product issue remains open, unless disabled Chromium coverage itself blocks safe delivery.
-
-`#679` becomes eligible when all remaining ordinary executable product work is owned, blocked, or dependency-gated. At that point:
-
-1. prioritize #679 and restore the maintained Chromium Playwright CI suite;
-2. merge that restoration only after the normal exact-head gates pass;
-3. run or observe the complete maintained Chromium scenario set;
-4. create one focused issue per independent reproducible product defect, linking the failing spec, evidence, and reproduction details;
-5. label each defect `bug`; preserve `user-reported` only for bugs actually reported by a user;
-6. resume normal selection immediately when those issues replenish the backlog.
-
-Firefox and WebKit may be run manually when a browser-specific defect warrants them. They are not backlog-zero completion gates.
-
-Infrastructure failures that do not demonstrate product defects should be repaired as E2E infrastructure work rather than mislabeled as product bugs, and only when no higher-priority product delivery work is executable or the infrastructure blocks that delivery.
+When the shared executable pool is genuinely empty, a truthful no-work completion is valid. The worker remains scheduled; it does not self-pause and it does not invoke the full Chromium discovery suite.
 
 ## Ownership and blocked work
 
-Retain responsibility for a claimed issue through implementation, validation, repair, merge readiness, gated merge, and closure verification. Blocked ownership does not reserve the whole worker or the whole factory.
+Retain responsibility only while actively performing the current next action. Blocked ownership does not reserve the whole worker or the whole factory.
 
 When owned work cannot safely advance now:
 
 1. preserve concise durable blocker context;
 2. release active execution when appropriate;
 3. immediately select the highest-value free executable issue;
-4. if none exists, enter #679 and the Chromium E2E cycle;
-5. return when the blocker changes.
+4. if none exists, end the current bounded session cleanly and remain enabled for the next heartbeat;
+5. return when the blocker changes or another worker acquires the released work.
 
 Blocked work never authorizes a worker to pause or disable itself.
 
@@ -186,14 +208,9 @@ For an interactive pause, reconcile each target atomically, preserve unrelated l
 
 ## Mandatory label state machine
 
-Every worker owns issue and pull-request metadata as part of the work. Reconcile labels when
-claiming, opening or replaying a PR, handing work off, receiving review, starting CI validation,
-becoming ready, blocking, merging, and ending a turn. Josh must never need to request routine
-factory labels.
+Every worker owns issue and pull-request metadata as part of the work. Reconcile labels when claiming, opening or replaying a PR, handing work off, receiving review, starting CI validation, becoming ready, blocking, merging, and ending a turn. Josh must never need to request routine factory labels.
 
-Apply these states exactly. Reconcile each target with one full label-set replacement so stale
-mutually exclusive state and owner labels disappear in the same atomic write that applies the
-complete truthful target set. Never implement a transition as separate remove-then-add calls:
+Apply these states exactly. Reconcile each target with one full label-set replacement so stale mutually exclusive state and owner labels disappear in the same atomic write that applies the complete truthful target set. Never implement a transition as separate remove-then-add calls:
 
 | State | Issue labels | Pull-request labels |
 |---|---|---|
@@ -209,21 +226,13 @@ complete truthful target set. Never implement a transition as separate remove-th
 
 Rules:
 
-- `factory:building`, `factory:review`, `factory:changes-requested`, `factory:ci`,
-  `factory:ready`, and `factory:blocked` are mutually exclusive workflow states.
-- `factory:unowned`, `factory:local`, and `factory:1` through `factory:5` are mutually exclusive
-  next-action owners.
-- Never leave a factory-produced or factory-managed open PR without `factory`, one truthful
-  workflow-state label, and one truthful owner label.
-- A push invalidates `factory:ci` and `factory:ready`; transition the exact new head back to
-  `factory:review` unless review findings already require `factory:changes-requested`.
-- Cross-worker takeover and merge are allowed. The new worker replaces the owner label and may
-  merge work it did not author after every exact-head gate passes.
-- If `gh pr edit` fails because of deprecated Projects Classic GraphQL fields, use the
-  issue-compatible REST label-replacement endpoint with the complete target label set. A POST that
-  only adds labels, or sequential DELETE/POST calls, is not atomic reconciliation.
-- Before ending any turn, compare the issue, PR, review, CI, lease, and merge state and repair any
-  metadata contradiction discovered.
+- `factory:building`, `factory:review`, `factory:changes-requested`, `factory:ci`, `factory:ready`, and `factory:blocked` are mutually exclusive workflow states.
+- `factory:unowned`, `factory:local`, and every `factory:<number>` owner label are mutually exclusive next-action owners.
+- Never leave a factory-produced or factory-managed open PR without `factory`, one truthful workflow-state label, and one truthful owner label.
+- A push invalidates `factory:ci` and `factory:ready`; transition the exact new head back to `factory:review` unless review findings already require `factory:changes-requested`.
+- Cross-worker takeover and merge are allowed. The new worker replaces the owner label and may merge work it did not author after every exact-head gate passes.
+- If `gh pr edit` fails because of deprecated Projects Classic GraphQL fields, use the issue-compatible REST label-replacement endpoint with the complete target label set. A POST that only adds labels, or sequential DELETE/POST calls, is not atomic reconciliation.
+- Before ending any turn, compare the issue, PR, review, CI, lease, and merge state and repair any metadata contradiction discovered.
 
 ## Repository safety
 
@@ -234,7 +243,7 @@ Rules:
 - Never weaken checks, skip tests, remove meaningful coverage, bypass hooks, or add suppressions merely to make CI green.
 - Never manufacture evidence or claim commands ran when they did not.
 - Never mutate factory schedules or topology. Only Josh or an interactive session acting on Josh's direct instruction may do so.
-- Never pause, disable, suspend, or stop a scheduled factory because the ordinary backlog is blocked or empty. Keep the schedule enabled and switch to #679/E2E work.
+- Never pause, disable, suspend, or stop a scheduled factory because the ordinary backlog is blocked or empty. Keep the schedule enabled and end only the current bounded session when no executable work exists.
 - When an interactive session pauses or disables a worker on Josh's instruction, release that worker's open claims before treating the pause as complete.
 
 ## Closure truth
@@ -248,6 +257,7 @@ Success hierarchy:
 - complete PR gate-verified and awaiting only an external condition;
 - blocking defect repaired or coherent implementation materially advanced;
 - coherent new implementation PR opened from the backlog;
+- truthful no-work completion when the shared executable pool is empty;
 - optional PR polishing while executable issues remain: policy failure.
 
 ## Markers and leases
@@ -267,9 +277,7 @@ Use the existing canonical marker schemas:
 
 ## Durable resume packet
 
-Before releasing ownership, reaching a runtime limit, switching work, or ending with a claimed
-issue or PR unfinished, create or update one canonical GitHub comment in place. Do not create a new
-packet on every heartbeat.
+Before releasing ownership, reaching a runtime limit, switching work, or ending with a claimed issue or PR unfinished, create or update one canonical GitHub comment in place. Do not create a new packet on every heartbeat.
 
 ```text
 <!-- factory-resume:v1 -->
@@ -283,11 +291,7 @@ Remaining blocker/action: <what the next worker must resolve>
 Updated by: <durable worker ID and UTC timestamp>
 ```
 
-Record observed facts, distinguish local checks from CI, include no secrets, and keep the packet
-short. A takeover worker reads the current packet before reconstructing context, verifies that its
-recorded head still matches, and updates or discards stale claims instead of trusting them blindly.
-The packet is operational state, not a substitute for commits, tests, review markers, issue
-acceptance criteria, or truthful labels. Completed and verified work does not require a packet.
+Record observed facts, distinguish local checks from CI, include no secrets, and keep the packet short. A takeover worker reads the current packet before reconstructing context, verifies that its recorded head still matches, and updates or discards stale claims instead of trusting them blindly. The packet is operational state, not a substitute for commits, tests, review markers, issue acceptance criteria, or truthful labels. Completed and verified work does not require a packet.
 
 Review leases last 45 minutes. Repair and implementation leases last 60 minutes after the latest real progress. Lease expiry permits another worker to continue that issue but does not require a peer to choose it over higher-priority work.
 
@@ -297,4 +301,4 @@ Scheduled ChatGPT workers must update their assigned permanent comment on regist
 
 A start update records current UTC and `Outcome: running`. A completion update preserves the start time and records current UTC, the actual work item or items, and truthful outcome. If an update fails, retry once through another available GitHub path and continue delivery; telemetry failure is not authority to stop.
 
-Heartbeat telemetry never counts as substantive progress, never satisfies a valid heartbeat outcome, never outranks executable product work, never extends a lease, and never justifies ending a run. The external watchdog may report missing or stuck heartbeats, but only Josh or an interactive session acting on his direct instruction may change a scheduled task.
+Heartbeat telemetry never counts as substantive progress, never satisfies a valid heartbeat outcome while executable work exists, never outranks executable product work, never extends a lease, and never justifies ending a run early. The external watchdog may report missing or stuck heartbeats, but only Josh or an interactive session acting on his direct instruction may change a scheduled task.
