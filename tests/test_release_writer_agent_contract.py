@@ -137,6 +137,3 @@ def test_release_writer_all_read_helpers_are_get_only(monkeypatch) -> None:
     release_writer._pr("JoshCLWren/comic-pile", "1082")
     release_writer._files("JoshCLWren/comic-pile", "1082")
     release_writer._issues("JoshCLWren/comic-pile", "1082")
-    release_writer._pr("JoshCLWren/comic-pile", "1082")
-    release_writer._files("JoshCLWren/comic-pile", "1082")
-    release_writer._issues("JoshCLWren/comic-pile", "1082")
