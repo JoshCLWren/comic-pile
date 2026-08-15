@@ -208,7 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth()
   const location = useLocation()
-  if (isLoading) return <div className="text-center text-stone-500">Checking authentication...</div>
+  if (isLoading) return <div className="flex min-h-screen items-center justify-center text-center text-stone-500" data-app-shell-ready>Checking authentication...</div>
   if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />
   return children
 }
@@ -216,7 +216,7 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 function PublicRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth()
   const location = useLocation()
-  if (isLoading) return <div className="text-center text-stone-500">Loading...</div>
+  if (isLoading) return <div className="flex min-h-screen items-center justify-center text-center text-stone-500" data-app-shell-ready>Loading...</div>
   if (isAuthenticated) return <Navigate to={location.state?.from?.pathname || '/'} replace />
   return children
 }
