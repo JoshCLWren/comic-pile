@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars. Do not commit terraform.tfvars.
+# tenancy/compartment/region are loaded from ~/.oci/config by `source ./load-profile.sh`.
+
+ssh_source_cidr = "YOUR.PUBLIC.IP.ADDRESS/32"
+
+# First scientific run: consume the current Always Free A1 CPU allowance in one VM.
+ocpus         = 2
+memory_in_gbs = 6
+
+# repo_ref = "infra/gcp-fastapi-benchmark"
