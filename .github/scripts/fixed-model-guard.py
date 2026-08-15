@@ -18,20 +18,27 @@ def unrelated_repair(previous_pr_files: set[str], latest_commit_files: set[str])
 
 
 class GuardTests(unittest.TestCase):
+    """Tests for unrelated_repair logic."""
     def test_unrelated_repair_is_rejected(self) -> None:
+        """Test that unrelated repair is rejected."""
         self.assertTrue(unrelated_repair({".github/scripts/factory-visibility.cjs"}, {"app/schemas/release.py"}))
 
     def test_repair_with_overlap_is_allowed_even_with_new_tests(self) -> None:
+        """Test that repair with overlap is allowed."""
         self.assertFalse(unrelated_repair({"app/service.py"}, {"app/service.py", "tests/test_service.py"}))
 
     def test_first_implementation_commit_is_not_rejected(self) -> None:
+        """Test first implementation commit not rejected."""
         self.assertFalse(unrelated_repair(set(), {"app/new_feature.py"}))
 
     def test_empty_latest_commit_is_not_rejected(self) -> None:
+        """Test empty latest commit not rejected."""
         self.assertFalse(unrelated_repair({"app/service.py"}, set()))
 
 
-def main() -> int:
+    def main() -> int:
+        """Main entry point for script."""
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--previous-json")
