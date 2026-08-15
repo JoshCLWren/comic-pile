@@ -28,11 +28,14 @@ EXPECTED_OPENCODE_FREE_MODELS = {
     'nemotron-3.5-lightning-free',
 }
 BATCH_MINUTES = (0, 15, 30, 45)
-ENTRY_PERMISSIONS = ('contents: write', 'issues: write', 'pull-requests: write', 'actions: read', 'checks: read')
+ENTRY_PERMISSIONS = ('contents: write', 'issues: write', 'pull-requests: write', 'actions: write', 'checks: read')
 
 
 def assert_in_order(text: str, *needles: str) -> None:
-    positions = [text.index(needle) for needle in needles]
+    # Use the final occurrence because helper names also appear in function
+    # definitions before the actual main-loop call sites we are ordering.
+    positions = [text.rfind(needle) for needle in needles]
+    assert all(position >= 0 for position in positions), f'missing ordered marker: {needles}'
     assert positions == sorted(positions), f'expected ordering: {needles}'
 
 
@@ -98,6 +101,7 @@ def main() -> None:
     runner = RUNNER.read_text(encoding='utf-8')
     assert 'group: fixed-model-factory-${{ inputs.worker }}' in runner
     assert 'cancel-in-progress: false' in runner
+    assert 'actions: write' in runner
     assert 'opencode-free)' in runner and 'runtime_model="opencode/${model}"' in runner
     assert 'OPENCODE_API_KEY' not in runner
     assert 'kilo-auto)' in runner and 'runtime_model="kilo/${model}"' in runner
