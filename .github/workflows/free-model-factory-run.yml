@@ -17,7 +17,7 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
-  actions: read
+  actions: write
   checks: read
 
 concurrency:
@@ -37,9 +37,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      # Workflow token for labels/comments/API. A dedicated PAT is used only for
-      # git fetch/push so pull_request workflows (including the repair guard) are
-      # attributed to a trusted actor instead of github-actions[bot].
+      # Workflow token handles GitHub API, labels, comments, and backlog-zero
+      # workflow dispatch. A dedicated PAT is used only for git fetch/push so
+      # pull_request workflows are attributed to a trusted actor.
       GH_TOKEN: ${{ github.token }}
       PR_REBASE_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}
       NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
