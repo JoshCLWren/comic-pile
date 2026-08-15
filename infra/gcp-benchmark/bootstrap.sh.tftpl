@@ -45,7 +45,8 @@ else
 fi
 
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
-sudo -u "$APP_USER" -H /usr/local/bin/uv sync --locked --no-dev --project "$APP_DIR"
+runuser -u "$APP_USER" -- /usr/local/bin/uv sync --locked --no-dev --project "$APP_DIR"
+chmod 0755 "$APP_DIR/infra/gcp-benchmark/configure-env.sh" "$APP_DIR/infra/gcp-benchmark/benchmark-auth.sh"
 
 install -d -m 0750 -o root -g "$APP_USER" "$ENV_DIR"
 cat > "$ENV_DIR/benchmark.env.example" <<'EOF'
