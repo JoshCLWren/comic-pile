@@ -19,6 +19,7 @@ from app.schemas.continuity_plan import (
     CrossoverTemplateItemPreview,
     CrossoverTemplateParallelCandidatePreview,
     CrossoverTemplateSerialSpinePreview,
+    CrossoverTemplateUnresolvedMatchPreview,
     ContinuityPlanResponse,
     ContinuityPlanWrite,
     CrossoverTemplateAdoptRequest,
@@ -83,6 +84,16 @@ def _to_preview(
                 explanation=intersection.explanation,
             )
             for intersection in template.intersections
+        ],
+        unresolved=[
+            CrossoverTemplateUnresolvedMatchPreview(
+                source_path=match.source_path,
+                position=match.position,
+                series_name=match.series_name,
+                issue_number=match.issue_number,
+                reason=match.reason,
+            )
+            for match in template.unresolved
         ],
     )
 

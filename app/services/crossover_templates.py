@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
@@ -87,6 +87,17 @@ class CrossoverTemplateIntersection:
 
 
 @dataclass(frozen=True, slots=True)
+class CrossoverTemplateUnresolvedMatch:
+    """One source entry that could not be matched to a ComicPile issue."""
+
+    source_path: str
+    position: int
+    series_name: str
+    issue_number: str
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
 class DerivedCrossoverTemplate:
     """Rebuildable crossover suggestion that never creates continuity rules."""
 
@@ -95,6 +106,7 @@ class DerivedCrossoverTemplate:
     parallel_candidates: tuple[CrossoverTemplateParallelCandidate, ...] = ()
     serial_spines: tuple[CrossoverTemplateSerialSpine, ...] = ()
     intersections: tuple[CrossoverTemplateIntersection, ...] = ()
+    unresolved: tuple[CrossoverTemplateUnresolvedMatch, ...] = ()
 
 
 async def derive_crossover_template_from_lists(
@@ -184,7 +196,91 @@ async def derive_crossover_template_from_lists(
         )
         for issue_id, placements in sorted(placements_by_issue.items())
     )
-    return derive_crossover_template(evidence)
+    template = derive_crossover_template(evidence)
+    return DerivedCrossoverTemplate(
+        items=template.items,
+        conflicts=template.conflicts,
+        parallel_candidates=template.parallel_candidates,
+        serial_spines=template.serial_spines,
+        intersections=template.intersections,
+        unresolved=_unresolved_matches(db, source_list_ids=tuple(source_list_ids)),
+    )
+
+
+async def _unresolved_matches(
+    db: AsyncSession,
+    *,
+    source_list_ids: tuple[int, ...],
+) -> tuple[CrossoverTemplateUnresolvedMatch, ...]:
+    """Surface source entries that could not be matched to a ComicPile issue.
+
+    Only confirmed ComicVine issue mappings are eligible template members. Every
+    remaining entry in the requested active lists — lacking an embedded identity
+    or lacking a confirmed mapping — is surfaced explicitly so the user can act on
+    missing/unresolved matches instead of watching them be silently dropped.
+
+    Args:
+        db: Async database session.
+        source_list_ids: Active imported CBL lists to inspect.
+
+    Returns:
+        Deterministic tuple of unresolved matches ordered by source then position.
+    """
+    confirmed_identity = (
+        select(IssueExternalIdentityMapping.id)
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
+        )
+        .join(Issue, Issue.id == IssueExternalIdentityMapping.issue_id)
+        .where(
+            CBLSourceEntry.external_issue_identity_id
+            == IssueExternalIdentityMapping.external_identity_id,
+            IssueExternalIdentityMapping.status == "confirmed",
+            ExternalIdentity.provider == "comicvine",
+            ExternalIdentity.entity_type == "issue",
+        )
+        .exists()
+    )
+    rows = list(
+        (
+            await db.execute(
+                select(CBLSourceEntry, CBLSourceList, CBLSource)
+                .join(CBLSourceList, CBLSourceList.id == CBLSourceEntry.list_id)
+                .join(CBLSource, CBLSource.id == CBLSourceList.source_id)
+                .where(
+                    CBLSourceEntry.list_id.in_(source_list_ids),
+                    CBLSourceList.active.is_(True),
+                    or_(
+                        CBLSourceEntry.external_issue_identity_id.is_(None),
+                        ~confirmed_identity,
+                    ),
+                )
+                .order_by(
+                    CBLSource.repository,
+                    CBLSourceList.source_path,
+                    CBLSourceEntry.position,
+                )
+            )
+        ).all()
+    )
+    return tuple(
+        CrossoverTemplateUnresolvedMatch(
+            source_path=f"{source.repository}:{source_list.source_path}",
+            position=entry.position,
+            series_name=entry.series_name,
+            issue_number=entry.issue_number,
+            reason=_unresolved_reason(entry.external_issue_identity_id),
+        )
+        for entry, source_list, source in rows
+    )
+
+
+def _unresolved_reason(external_issue_identity_id: int | None) -> str:
+    """Explain why a source entry is not eligible for a template member."""
+    if external_issue_identity_id is None:
+        return "no embedded ComicVine issue identity"
+    return "no confirmed ComicPile mapping"
 
 
 def derive_crossover_template(

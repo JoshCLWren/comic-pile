@@ -92,16 +92,67 @@ async def _seed_template_evidence(
         )
         async_db.add(mapping)
         await async_db.flush()
-        entry = CBLSourceEntry(
-            list_id=source_list.id,
+        await _seed_template_entry(
+            async_db,
+            source_list=source_list,
             position=position,
             series_name="Crossover",
             issue_number="1",
             external_issue_identity_id=identity.id,
         )
-        async_db.add(entry)
-        await async_db.flush()
     return source_list.id
+
+
+async def _seed_template_entry(
+    async_db: AsyncSession,
+    *,
+    source_list: CBLSourceList,
+    position: int,
+    series_name: str,
+    issue_number: str,
+    external_issue_identity_id: int,
+) -> None:
+    """Persist one CBL entry linked to the given external issue identity."""
+    entry = CBLSourceEntry(
+        list_id=source_list.id,
+        position=position,
+        series_name=series_name,
+        issue_number=issue_number,
+        external_issue_identity_id=external_issue_identity_id,
+    )
+    async_db.add(entry)
+    await async_db.flush()
+
+
+async def _seed_unmatched_entry(
+    async_db: AsyncSession,
+    *,
+    source_list: CBLSourceList,
+    position: int,
+    series_name: str = "Unmatched",
+) -> None:
+    """Persist a CBL entry with no confirmed ComicPile mapping.
+
+    The entry carries an embedded ComicVine identity that has no confirmed
+    issue mapping, so it must be surfaced as an unresolved match rather than
+    being silently dropped from the template.
+    """
+    identity = ExternalIdentity(
+        provider="comicvine",
+        entity_type="issue",
+        external_id=f"4100-{position}",
+        metadata_json={},
+    )
+    async_db.add(identity)
+    await async_db.flush()
+    await _seed_template_entry(
+        async_db,
+        source_list=source_list,
+        position=position,
+        series_name=series_name,
+        issue_number=str(position),
+        external_issue_identity_id=identity.id,
+    )
 
 
 @pytest.mark.asyncio
@@ -240,6 +291,41 @@ async def test_adopt_rejects_unowned_issue(
         select(func.count()).select_from(ContinuityPlan)
     )
     assert plan_count == 0, "no plan is created when adoption is rejected"
+
+
+@pytest.mark.asyncio
+async def test_preview_surfaces_unresolved_matches(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Preview must show unmatched CBL entries instead of silently dropping them."""
+    user = await get_or_create_user_async(async_db)
+    issues = [await _make_issue(async_db, user_id=user.id, suffix=str(i)) for i in range(2)]
+    await async_db.commit()
+    list_id = await _seed_template_evidence(async_db, issues=issues)
+    list_obj = await async_db.get(CBLSourceList, list_id)
+    assert list_obj is not None
+    await _seed_unmatched_entry(
+        async_db,
+        source_list=list_obj,
+        position=3,
+        series_name="Unmatched Spoiler",
+    )
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/v1/crossover-templates/preview",
+        json={"source_list_ids": [list_id]},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [item["issue_id"] for item in body["items"]] == [issue.id for issue in issues]
+    assert len(body["unresolved"]) == 1
+    match = body["unresolved"][0]
+    assert match["series_name"] == "Unmatched Spoiler"
+    assert match["issue_number"] == "3"
+    assert match["position"] == 3
+    assert match["reason"] == "no confirmed ComicPile mapping"
+    assert match["source_path"] == "repo/events:Events/Crossover.cbl"
 
 
 @pytest.mark.asyncio

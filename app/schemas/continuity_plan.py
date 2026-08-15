@@ -133,6 +133,16 @@ class CrossoverTemplateIntersectionPreview(BaseModel):
     explanation: str
 
 
+class CrossoverTemplateUnresolvedMatchPreview(BaseModel):
+    """A source entry that could not be matched to a ComicPile issue."""
+
+    source_path: str
+    position: int
+    series_name: str
+    issue_number: str
+    reason: str
+
+
 class DerivedCrossoverTemplatePreview(BaseModel):
     """Non-blocking preview of a derived external crossover template."""
 
@@ -143,6 +153,7 @@ class DerivedCrossoverTemplatePreview(BaseModel):
     )
     serial_spines: list[CrossoverTemplateSerialSpinePreview] = Field(default_factory=list)
     intersections: list[CrossoverTemplateIntersectionPreview] = Field(default_factory=list)
+    unresolved: list[CrossoverTemplateUnresolvedMatchPreview] = Field(default_factory=list)
 
 
 class CrossoverTemplatePreviewRequest(BaseModel):
