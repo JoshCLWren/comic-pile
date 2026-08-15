@@ -67,8 +67,9 @@ describe('useRoutePrefetch', () => {
     expect(routeLoaders.threadDetail).not.toHaveBeenCalled()
   })
 
-  it('does nothing when prefetching is disabled', () => {
-    renderHook(() => useRoutePrefetch(false), { wrapper: wrapper('/') })
+  it('does nothing for non-retained routes', () => {
+    // Using a non-retained route such as '/crossovers' with prefetch enabled
+    renderHook(() => useRoutePrefetch(true), { wrapper: wrapper('/crossovers') })
     flushIdleWork()
 
     for (const key of routeLoaderKeys) {
