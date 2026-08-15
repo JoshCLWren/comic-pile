@@ -269,4 +269,25 @@ describe('ContinuityCorrectionDialog', () => {
 
     expect(await screen.findByText(/created newly made, but membership failed/i)).toBeInTheDocument()
   })
+
+  it('renders without the issue number badge when issueNumber is null', async () => {
+    renderDialog({ issueNumber: null, issueId: 42, connectedThreads: [] })
+    await waitFor(() => expect(listGroups).toHaveBeenCalled())
+    expect(screen.getByText(/Adds issue/i)).toBeInTheDocument()
+  })
+
+  it('omits the connected-series note and shows the no-issue message when nothing is available to add', async () => {
+    renderDialog({ issueId: null, connectedThreads: [] })
+    await waitFor(() => expect(listGroups).toHaveBeenCalled())
+    expect(screen.getByText(/no specific issue is available to add/i)).toBeInTheDocument()
+    expect(screen.queryByText(/connected series will also be added/i)).not.toBeInTheDocument()
+  })
+
+  it('shows the loading state while crossover groups are still loading', async () => {
+    listGroups.mockReturnValueOnce(new Promise(() => {}))
+    const { user } = renderDialog({ issueId: null, connectedThreads: [] })
+    await user.click(screen.getByRole('button', { name: 'Existing' }))
+    expect(screen.getByRole('combobox', { name: /existing crossover/i })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /loading crossovers/i })).toBeInTheDocument()
+  })
 })

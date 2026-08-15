@@ -45,7 +45,6 @@ export default function ContinuityCorrectionDialog({
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<string | null>(null)
   const [resolvedConnected, setResolvedConnected] = useState<ResolvedThread[]>([])
-  const [connectedThreadsError, setConnectedThreadsError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isOpen) return
@@ -55,7 +54,6 @@ export default function ContinuityCorrectionDialog({
     setError(null)
     setResult(null)
     setResolvedConnected([])
-    setConnectedThreadsError(null)
 
     let isCurrent = true
 
@@ -77,24 +75,19 @@ export default function ContinuityCorrectionDialog({
     async function resolveConnectedThreads() {
       if (connectedThreads.length === 0) return
 
-      try {
-        const resolved = await Promise.all(
-          connectedThreads.map(async (connected): Promise<ResolvedThread | null> => {
-            try {
-              const thread: Thread = await threadsApi.get(connected.thread_id)
-              return { id: thread.id, title: thread.title }
-            } catch {
-              return { id: connected.thread_id, title: connected.title }
-            }
-          }),
-        )
-        if (!isCurrent) return
-        const filtered = resolved.filter((entry): entry is ResolvedThread => entry !== null)
-        setResolvedConnected(filtered)
-      } catch (err: unknown) {
-        if (!isCurrent) return
-        setConnectedThreadsError(getApiErrorDetail(err))
-      }
+      const resolved = await Promise.all(
+        connectedThreads.map(async (connected): Promise<ResolvedThread | null> => {
+          try {
+            const thread: Thread = await threadsApi.get(connected.thread_id)
+            return { id: thread.id, title: thread.title }
+          } catch {
+            return { id: connected.thread_id, title: connected.title }
+          }
+        }),
+      )
+      if (!isCurrent) return
+      const filtered = resolved.filter((entry): entry is ResolvedThread => entry !== null)
+      setResolvedConnected(filtered)
     }
 
     void loadGroups()
@@ -135,11 +128,7 @@ export default function ContinuityCorrectionDialog({
         targetGroup = await dependencyGroupsApi.create(normalizedName)
         createdGroup = targetGroup
       } else {
-        const existing = groups.find((candidate) => candidate.id === selectedGroupId)
-        if (!existing) {
-          throw new Error(`Crossover group ${selectedGroupId} not found.`)
-        }
-        targetGroup = existing
+        targetGroup = groups.find((candidate) => candidate.id === selectedGroupId) as DependencyGroup
       }
 
 
@@ -189,11 +178,7 @@ export default function ContinuityCorrectionDialog({
           <h3 id="continuity-connections-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-400">
             Verified connections
           </h3>
-          {connectedThreadsError ? (
-            <p className="mt-2 text-[11px] text-rose-300" role="alert">
-              Could not load connection details: {connectedThreadsError}
-            </p>
-          ) : resolvedConnected.length === 0 ? (
+          {resolvedConnected.length === 0 ? (
             <p className="mt-2 text-[11px] text-stone-400" role="status">
               Resolving connected series…
             </p>
