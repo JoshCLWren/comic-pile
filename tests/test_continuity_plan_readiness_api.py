@@ -444,6 +444,17 @@ async def test_plan_readiness_detects_plan_owned_rule_cycle(
         ContinuityRule(
             user_id=user.id,
             source_type="issue",
+            source_id=issues[0].id,
+            target_type="issue",
+            target_id=issues[2].id,
+            satisfaction_type="item_read",
+            note=f"continuity-plan:{plan_id}",
+        )
+    )
+    async_db.add(
+        ContinuityRule(
+            user_id=user.id,
+            source_type="issue",
             source_id=issues[2].id,
             target_type="issue",
             target_id=issues[0].id,
