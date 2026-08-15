@@ -26,7 +26,7 @@ _REQUIRED = {
     "summary",
 }
 _GITHUB_API_BASE = "https://api.github.com"
-_ISSUE_REFERENCE_PATTERN = re.compile(r"(?<!\w)#(\d{1,7})\b")
+_ISSUE_REFERENCE_PATTERN = re.compile(r"\b#(\d{1,7})\b")
 _ORDINAL_INDICATORS = {"step", "build", "section", "phase", "version", "stage", "v"}
 _VERSION_STEP_PATTERN = re.compile(r"v?\d+(?:\.\d+)*")
 
