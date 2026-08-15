@@ -10,9 +10,10 @@ RUNTIME_MODEL="${FACTORY_RUNTIME_MODEL:-kilo/kilo-auto/free}"
 # This experiment must prove anonymous/free Kilo routing. Do not inherit an
 # account token or local Kilo state that could make a paid route available.
 unset KILO_API_KEY KILOCODE_API_KEY
-export XDG_CONFIG_HOME="${RUNNER_TEMP:?RUNNER_TEMP is required}/kilo-config"
-export XDG_DATA_HOME="$RUNNER_TEMP/kilo-data"
-export XDG_CACHE_HOME="$RUNNER_TEMP/kilo-cache"
+runtime_root="$(mktemp -d "${RUNNER_TEMP:?RUNNER_TEMP is required}/kilo-runtime.XXXXXX")"
+export XDG_CONFIG_HOME="$runtime_root/config"
+export XDG_DATA_HOME="$runtime_root/data"
+export XDG_CACHE_HOME="$runtime_root/cache"
 mkdir -p "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_CACHE_HOME"
 
 set +e
@@ -33,7 +34,7 @@ if [[ "$step_count" == "0" ]]; then
   exit 85
 fi
 
-if jq -R -e -s 'any(split("\n")[] | fromjson? | select(.type == "step_finish"); ((.part.cost // 0) | tonumber) > 0)' "$LOG_PATH" >/dev/null; then
+if jq -R -e -s 'any(split("\n")[] | fromjson? | select(.type == "step_finish"); (.part.cost // 0) > 0)' "$LOG_PATH" >/dev/null; then
   echo 'Kilo Auto Free reported non-zero cost; refusing any paid execution path' >&2
   exit 86
 fi
