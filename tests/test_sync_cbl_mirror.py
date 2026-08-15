@@ -27,7 +27,7 @@ class _FakeTransaction:
 
 
 class _FakeSession:
-    async def __aenter__(self) -> _FakeSession:
+    async def __aenter__(self) -> None:
         return self
 
     async def __aexit__(
