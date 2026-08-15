@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+exec > >(tee -a /var/log/comicpile-bootstrap.log) 2>&1
+
+echo "[bootstrap] starting ComicPile OCI benchmark host setup"
+
+REPO_URL="${repo_url}"
+REPO_REF="${repo_ref}"
+APP_DIR="/opt/comic-pile"
+APP_USER="comicpile"
+ENV_DIR="/etc/comicpile"
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y ca-certificates curl git build-essential openssl
+
+if ! id "$APP_USER" >/dev/null 2>&1; then
+  useradd --system --create-home --home-dir /var/lib/comicpile --shell /bin/bash "$APP_USER"
+fi
+
+if [ ! -x /usr/local/bin/uv ]; then
+  curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
+fi
+
+if [ -d "$APP_DIR/.git" ]; then
+  git -C "$APP_DIR" fetch --depth 1 origin "$REPO_REF"
+  git -C "$APP_DIR" checkout --force FETCH_HEAD
+else
+  rm -rf "$APP_DIR"
+  git clone --depth 1 --branch "$REPO_REF" "$REPO_URL" "$APP_DIR"
+fi
+
+chown -R "$APP_USER:$APP_USER" "$APP_DIR"
+runuser -u "$APP_USER" -- /usr/local/bin/uv sync --locked --no-dev --project "$APP_DIR"
+chmod 0755 "$APP_DIR/infra/oci-benchmark/configure-env.sh" "$APP_DIR/infra/oci-benchmark/benchmark-auth.sh"
+
+install -d -m 0750 -o root -g "$APP_USER" "$ENV_DIR"
+
+cat > /etc/systemd/system/comicpile-benchmark.service <<'EOF'
+[Unit]
+Description=ComicPile OCI benchmark service
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/comicpile/benchmark.env
+
+[Service]
+Type=simple
+User=comicpile
+Group=comicpile
+WorkingDirectory=/opt/comic-pile
+EnvironmentFile=/etc/comicpile/benchmark.env
+ExecStart=/opt/comic-pile/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2
+Restart=on-failure
+RestartSec=3
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+
+touch /var/log/comicpile-bootstrap.done
+echo "[bootstrap] complete; run sudo /opt/comic-pile/infra/oci-benchmark/configure-env.sh"
