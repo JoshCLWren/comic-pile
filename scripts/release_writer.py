@@ -27,7 +27,8 @@ _REQUIRED = {
 }
 _GITHUB_API_BASE = "https://api.github.com"
 _ISSUE_REFERENCE_PATTERN = re.compile(r"(?<!\w)#(\d{1,7})\b")
-_ORDINAL_INDICATORS = {"step", "build", "section", "phase", "version", "stage"}
+_ORDINAL_INDICATORS = {"step", "build", "section", "phase", "version", "stage", "v"}
+_VERSION_STEP_PATTERN = re.compile(r"v?\d+(?:\.\d+)*")
 
 
 def _fail(message: str) -> NoReturn:
@@ -313,7 +314,8 @@ def _issues(repository: str, raw_number: str) -> None:
     references: set[int] = set()
     text = f"{pull.get('title') or ''} {pull.get('body') or ''}"
     for match in _ISSUE_REFERENCE_PATTERN.finditer(text):
-        if _preceding_word(text, match.start()) in _ORDINAL_INDICATORS:
+        preceding = _preceding_word(text, match.start())
+        if preceding in _ORDINAL_INDICATORS or _VERSION_STEP_PATTERN.fullmatch(preceding):
             continue
         referenced = int(match.group(1))
         if referenced != number:

@@ -281,3 +281,37 @@ def test_issues_keeps_real_references_after_ordinal_markers(monkeypatch, capsys)
 
     result = json.loads(capsys.readouterr().out)
     assert result == [1070]
+
+
+def test_issues_excludes_version_step_markers(monkeypatch, capsys):
+    """Version-step markers like 'v1.2 #3' and 'v2 #4' must not be linked issues."""
+    def fake_github_request(url: str):
+        return {
+            "number": 100,
+            "title": "Release v1.2 #3 ships today.",
+            "body": "In v2 #4 the API changed. Build 1.1 #5 passed.",
+        }
+
+    monkeypatch.setattr(release_writer, "_github_request", fake_github_request)
+
+    release_writer._issues("JoshCLWren/comic-pile", "100")
+
+    result = json.loads(capsys.readouterr().out)
+    assert result == []
+
+
+def test_issues_keeps_real_references_after_version_step_markers(monkeypatch, capsys):
+    """Real issue references must survive filtering of version-step markers."""
+    def fake_github_request(url: str):
+        return {
+            "number": 100,
+            "title": "Release v1.2 #3 ships today.",
+            "body": "In v2 #4 the API changed. Fixes #1070.",
+        }
+
+    monkeypatch.setattr(release_writer, "_github_request", fake_github_request)
+
+    release_writer._issues("JoshCLWren/comic-pile", "100")
+
+    result = json.loads(capsys.readouterr().out)
+    assert result == [1070]
