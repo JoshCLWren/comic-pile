@@ -77,6 +77,15 @@ describe('useRoutePrefetch', () => {
     }
   })
 
+  it('does nothing when prefetching is disabled', () => {
+    renderHook(() => useRoutePrefetch(false), { wrapper: wrapper('/') })
+    flushIdleWork()
+
+    for (const key of routeLoaderKeys) {
+      expect(routeLoaders[key]).not.toHaveBeenCalled()
+    }
+  })
+
   it('cancels pending work when the screen unmounts before idle flush', () => {
     const { unmount } = renderHook(() => useRoutePrefetch(true), {
       wrapper: wrapper('/'),
