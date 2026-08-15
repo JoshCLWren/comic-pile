@@ -165,11 +165,10 @@ class CrossoverTemplatePreviewRequest(BaseModel):
     @model_validator(mode="after")
     def validate_positive_ids(self) -> CrossoverTemplatePreviewRequest:
         """Validate that all source_list_ids are positive non-boolean integers."""
-        if any(
-            isinstance(item_id, bool) or not isinstance(item_id, int) or item_id <= 0
-            for item_id in self.source_list_ids
-        ):
-            raise ValueError("source_list_ids must contain positive integers")
+        for item_id in self.source_list_ids:
+            # Explicitly reject boolean values because bool is a subclass of int
+            if isinstance(item_id, bool) or not isinstance(item_id, int) or item_id <= 0:
+                raise ValueError("source_list_ids must contain positive integers")
         return self
 
 
