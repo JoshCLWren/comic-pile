@@ -624,6 +624,54 @@ async def test_continuity_chains_thread_endpoint_evaluates_next_unread_issue(
 
 
 @pytest.mark.asyncio
+async def test_continuity_chains_membership_collection_is_bounded(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The chains endpoint surfaces the graph-too-large cap before traversal.
+
+    The ``/api/v1/continuity/chains`` endpoint shares ``_load_snapshot`` with the
+    readiness endpoint and therefore must surface a 422 with the
+    ``continuity_graph_too_large`` detail when a crossover membership collection
+    exceeds its cap. This regression guarantees the chains route does not bypass
+    the bounded snapshot gate or return an unstructured 422 to the frontend.
+
+    Args:
+        auth_client: Authenticated API client fixture.
+        async_db: Async database session fixture.
+        monkeypatch: Pytest fixture used to shrink the membership cap for this
+            regression.
+
+    Returns:
+        None.
+    """
+    user = await get_or_create_user_async(async_db)
+    _thread, issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="chains-membership-limit", issue_count=2
+    )
+    await _make_group(
+        async_db,
+        user_id=user.id,
+        suffix="chains-membership-limit",
+        issue_ids=[issue.id for issue in issues],
+    )
+    await async_db.commit()
+    monkeypatch.setattr(readiness, "MAX_GRAPH_MEMBERSHIPS", 1)
+
+    response = await auth_client.post(
+        "/api/v1/continuity/chains",
+        json={"node_type": "issue", "node_id": issues[0].id},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == {
+        "code": "continuity_graph_too_large",
+        "limit": 1,
+    }
+
+
+@pytest.mark.asyncio
 async def test_selected_member_collection_is_bounded(
     auth_client: AsyncClient,
     async_db: AsyncSession,
