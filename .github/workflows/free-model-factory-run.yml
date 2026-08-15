@@ -10,6 +10,8 @@ on:
     secrets:
       NVIDIA_API_KEY:
         required: false
+      PR_REBASE_TOKEN:
+        required: true
 
 permissions:
   contents: write
@@ -33,15 +35,35 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      GH_TOKEN: ${{ github.token }}
+      # Dedicated PAT/App token so factory pushes trigger normal PR workflows.
+      # GITHUB_TOKEN pushes are attributed to github-actions[bot] and leave
+      # pull_request workflows (including the repair guard) stuck in
+      # action_required until a human approves them.
+      GH_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}
       NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
     steps:
+      - name: Require trusted push credential
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo '::error::PR_REBASE_TOKEN is required so fixed-model factory pushes trigger PR workflows without action_required.'
+            exit 1
+          fi
+
       - name: Checkout main
         uses: actions/checkout@v6
         with:
           ref: main
           fetch-depth: 0
-          persist-credentials: true
+          persist-credentials: false
+          token: ${{ secrets.PR_REBASE_TOKEN }}
+
+      - name: Configure trusted git remote
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
       - name: Resolve fixed lane
         id: lane
@@ -272,6 +294,35 @@ jobs:
             }
           }' > "$HOME/.config/opencode/opencode.json"
           chmod 600 "$HOME/.config/opencode/opencode.json"
+
+      - name: Probe pinned NVIDIA model before OpenCode smoke
+        if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source == 'nvidia'
+        shell: bash
+        env:
+          MODEL: ${{ steps.lane.outputs.model }}
+        run: |
+          set -Eeuo pipefail
+          [[ -n "${NVIDIA_API_KEY:-}" ]] || { echo 'NVIDIA_API_KEY missing after lane configured=true' >&2; exit 1; }
+          request="$(jq -nc --arg model "$MODEL" '{model:$model,messages:[{role:"user",content:"Reply with exactly FIXED_MODEL_OK"}],max_tokens:16}')"
+          response="$RUNNER_TEMP/nvidia-probe.json"
+          code="$(curl --silent --show-error --output "$response" --write-out '%{http_code}' \
+            --connect-timeout 5 --max-time 120 \
+            --header "Authorization: Bearer ${NVIDIA_API_KEY}" \
+            --header 'Content-Type: application/json' \
+            --data "$request" \
+            https://integrate.api.nvidia.com/v1/chat/completions || true)"
+          if [[ "$code" == "404" ]]; then
+            echo "Pinned NVIDIA model is not currently invokable for this account: ${MODEL}" >&2
+            echo 'No fallback is allowed for a fixed-model lane.' >&2
+            cat "$response" >&2 || true
+            exit 1
+          fi
+          [[ "$code" =~ ^2 ]] || {
+            echo "Pinned NVIDIA model probe failed HTTP ${code}" >&2
+            cat "$response" >&2 || true
+            exit 1
+          }
+          echo "NVIDIA probe succeeded for ${MODEL}"
 
       - name: Smoke exact pinned model through OpenCode
         if: steps.lane.outputs.configured == 'true'

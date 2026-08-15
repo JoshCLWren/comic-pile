@@ -20,7 +20,7 @@ LOCK_RE = re.compile(
 TARGET_RE = re.compile(r"checked out (?P<kind>issue|pr) #(?P<number>\d+) on ")
 RATE_LIMIT_RE = re.compile(r"429|too many requests|rate.?limit|quota|throttl|capacity", re.I)
 MODEL_MISSING_RE = re.compile(
-    r"pinned .*model is not currently exposed|unknown model|model .*not found|model .*does not exist",
+    r"pinned .*model is not currently (?:exposed|invokable)|unknown model|model .*not found|model .*does not exist",
     re.I,
 )
 TIMEOUT_RE = re.compile(r"timed? out|timeout|exit status 124|process completed with exit code 124", re.I)
@@ -210,6 +210,16 @@ class ClassifierTests(unittest.TestCase):
         self.assertEqual(
             classify(
                 self.BASE + "Pinned OmniRoute model is not currently exposed: oc/big-pickle\n"
+            ).outcome,
+            "MODEL MISSING",
+        )
+
+    def test_nvidia_model_not_invokable_is_missing(self) -> None:
+        """NVIDIA catalog entries that return 404 on invoke map to MODEL MISSING."""
+        self.assertEqual(
+            classify(
+                self.BASE
+                + "Pinned NVIDIA model is not currently invokable for this account: moonshotai/kimi-k2.6\n"
             ).outcome,
             "MODEL MISSING",
         )
