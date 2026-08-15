@@ -160,12 +160,21 @@ class CrossoverTemplatePreviewRequest(BaseModel):
     """Request to preview a derived crossover template from persisted CBL evidence."""
 
     @model_validator(mode="before")
-    def _validate_no_bool_and_positive_pre_conversion(cls, values):
-        """Reject boolean items and non-positive integers before casting."""
+    @classmethod
+    def _validate_no_bool_and_positive_pre_conversion(cls, values: object) -> object:
+        """Reject boolean items and empty source_list_ids before Pydantic casts.
+
+        Args:
+            values: Raw input mapping supplied to the Pydantic model.
+
+        Returns:
+            The input mapping, unchanged.
+        """
+        if not isinstance(values, dict):
+            return values
         raw_ids = values.get("source_list_ids", ())
         if not raw_ids:
             raise ValueError("source_list_ids must not be empty")
-        # bool values are not acceptable because bool is subclass of int
         for v in raw_ids:
             if isinstance(v, bool):
                 raise ValueError("source_list_ids must contain positive integers")
@@ -178,7 +187,6 @@ class CrossoverTemplatePreviewRequest(BaseModel):
     def validate_positive_ids(self) -> CrossoverTemplatePreviewRequest:
         """Validate that all source_list_ids are positive non-boolean integers."""
         for item_id in self.source_list_ids:
-            # Explicitly reject boolean values because bool is a subclass of int
             if isinstance(item_id, bool) or not isinstance(item_id, int) or item_id <= 0:
                 raise ValueError("source_list_ids must contain positive integers")
         return self
@@ -188,8 +196,18 @@ class CrossoverTemplateAdoptRequest(BaseModel):
     """Adopt an external template into an editable continuity plan."""
 
     @model_validator(mode="before")
-    def _validate_no_bool_and_positive_pre_conversion(cls, values):
-        """Reject boolean items and non-positive integers before casting."""
+    @classmethod
+    def _validate_no_bool_and_positive_pre_conversion(cls, values: object) -> object:
+        """Reject boolean items and empty source_list_ids before Pydantic casts.
+
+        Args:
+            values: Raw input mapping supplied to the Pydantic model.
+
+        Returns:
+            The input mapping, unchanged.
+        """
+        if not isinstance(values, dict):
+            return values
         raw_ids = values.get("source_list_ids", ())
         if not raw_ids:
             raise ValueError("source_list_ids must not be empty")
