@@ -176,16 +176,6 @@ claim_from_pool() {
   return 1
 }
 
-trigger_backlog_zero_discovery() {
-  log 'shared executable backlog is empty; triggering Chromium discovery directly'
-  if gh workflow run chromium-discovery.yml --ref main >/dev/null 2>&1; then
-    log 'Chromium backlog-zero discovery dispatched; no coordination issue is required'
-    return 0
-  fi
-  log 'Chromium backlog-zero discovery could not be dispatched with the workflow token'
-  return 1
-}
-
 ensure_owner_label
 stage_trusted_guard
 stage_trusted_kilo_helper
@@ -228,7 +218,7 @@ while (( $(remaining) > 480 )); do
   fi
 
   if [[ -z "$NUMBER" ]]; then
-    trigger_backlog_zero_discovery || exit 88
+    log 'shared executable backlog is empty for this session; daily Chromium discovery owns backlog replenishment'
     break
   fi
 
