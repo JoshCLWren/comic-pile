@@ -36,8 +36,8 @@ class GuardTests(unittest.TestCase):
         self.assertFalse(unrelated_repair({"app/service.py"}, set()))
 
 
-    def main() -> int:
-        """Main entry point for script."""
+def main() -> int:
+    """Main entry point for script."""
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--self-test", action="store_true")
