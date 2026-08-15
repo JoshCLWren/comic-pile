@@ -2,16 +2,18 @@ name: Chromium E2E discovery
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - chromium-discovery
+  schedule:
+    - cron: '23 9 * * *'
 
 permissions:
   contents: read
   packages: write
+  issues: write
 
 concurrency:
-  group: chromium-e2e-discovery-${{ github.ref }}
+  group: chromium-e2e-discovery
+  # Do not cancel an in-flight discovery run. Failure evidence must reach the
+  # artifact upload steps before a newer manual or scheduled run can begin.
   cancel-in-progress: false
 
 env:
@@ -159,6 +161,7 @@ jobs:
           exit 1
 
       - name: Run complete maintained Chromium shard
+        id: e2e
         shell: bash
         run: |
           set -o pipefail
@@ -166,12 +169,33 @@ jobs:
           REUSE_EXISTING_SERVER=true BASE_URL=http://localhost:9000 \
             pnpm exec playwright test --project=chromium --shard=${{ matrix.shard }}/6
 
-      - name: Capture backend log
+      - name: Capture durable failure packet
         if: always()
         shell: bash
+        env:
+          SHARD: ${{ matrix.shard }}
+          JOB_STATUS: ${{ job.status }}
         run: |
           mkdir -p discovery-artifacts
           cp /tmp/backend.log discovery-artifacts/backend.log 2>/dev/null || true
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = {
+              "run_id": os.environ["GITHUB_RUN_ID"],
+              "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT", "1"),
+              "sha": os.environ["GITHUB_SHA"],
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "shard": int(os.environ["SHARD"]),
+              "job_status": os.environ["JOB_STATUS"],
+          }
+          Path("discovery-artifacts/run-metadata.json").write_text(
+              json.dumps(payload, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
 
       - name: Upload Chromium discovery evidence
         if: always()
@@ -183,5 +207,30 @@ jobs:
             test-results/
             frontend/test-results/
             discovery-artifacts/backend.log
+            discovery-artifacts/run-metadata.json
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 30
+
+  classify:
+    name: Classify persisted Chromium failures
+    needs: [build, chromium]
+    if: ${{ always() && needs.chromium.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      actions: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Download durable discovery packets
+        uses: actions/download-artifact@v5
+        with:
+          pattern: chromium-discovery-shard-*-${{ github.run_id }}-${{ github.run_attempt }}
+          path: discovery-input
+
+      - name: Classify persisted Chromium failures
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/classify-chromium-discovery.py discovery-input
