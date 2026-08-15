@@ -15,7 +15,6 @@ export function useQueueThreads(searchTerm?: string) {
   const fetchData = useCallback(async (pageToken?: string) => {
     setIsPending(true)
     setIsError(false)
-    let cancelled = false
 
     try {
       const baseParams: ThreadQueryParams = {}
@@ -32,19 +31,13 @@ export function useQueueThreads(searchTerm?: string) {
         pageToken
       )
 
-      if (!cancelled) {
-        setData(prev => pageToken ? [...(prev ?? []), ...result.threads] : result.threads)
-        setNextPageToken(result.next_page_token)
-      }
+      setData(prev => pageToken ? [...(prev ?? []), ...result.threads] : result.threads)
+      setNextPageToken(result.next_page_token)
     } catch (error) {
-      if (!cancelled) {
-        setIsError(true)
-      }
+      setIsError(true)
       throw error
     } finally {
-      if (!cancelled) {
-        setIsPending(false)
-      }
+      setIsPending(false)
     }
   }, [searchTerm])
 
