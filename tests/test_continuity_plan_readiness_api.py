@@ -213,6 +213,8 @@ async def test_plan_readiness_reports_crossover_blockers(
     assert response.status_code == 200, response.text
     node = response.json()["nodes"][0]
     assert node["is_readable"] is False
+    assert node["is_complete"] is False
+    assert node["label"] == f"Crossover {group.name[len('Crossover '):]}"
     assert node["blockers"][0]["causing_issue_ids"] == [source_issues[0].id]
     assert node["blockers"][0]["blocker_type"] == "item_unread"
     # Verify summary counts for a single crossover node
