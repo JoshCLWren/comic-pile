@@ -14,6 +14,7 @@ RUNNER = Path('.github/workflows/free-model-factory-run.yml')
 WATCHDOG = Path('.github/workflows/factory-heartbeat-watchdog.yml')
 DISCOVERY = Path('.github/workflows/chromium-discovery.yml')
 DISCOVERY_CLASSIFIER = Path('.github/scripts/classify-chromium-discovery.py')
+PLAYWRIGHT_CONFIG = Path('frontend/playwright.config.ts')
 WORKER = Path('.github/scripts/free-model-factory-worker.sh')
 PRIMITIVES = Path('.github/scripts/free-model-factory-worker-primitives.sh')
 KILO_HELPER = Path('.github/scripts/kilo-auto-factory-run.sh')
@@ -187,7 +188,6 @@ def main() -> None:
         'retention-days: 30',
         'playwright-report/',
         'test-results/',
-        'results.json',
         'discovery-artifacts/backend.log',
         'discovery-artifacts/run-metadata.json',
         'Classify persisted Chromium failures',
@@ -198,6 +198,16 @@ def main() -> None:
         assert required in discovery, f'daily discovery invariant missing: {required}'
     assert 'cancel-in-progress: false' in discovery
     assert 'push:' not in discovery
+
+    playwright = PLAYWRIGHT_CONFIG.read_text(encoding='utf-8')
+    for required in (
+        "outputFile: '../test-results/results.json'",
+        "trace: 'retain-on-failure'",
+        "screenshot: 'only-on-failure'",
+        "video: 'retain-on-failure'",
+        "retries: process.env.CI ? 2 : 0",
+    ):
+        assert required in playwright, f'Playwright failure-evidence invariant missing: {required}'
 
     classifier = DISCOVERY_CLASSIFIER.read_text(encoding='utf-8')
     for required in (
