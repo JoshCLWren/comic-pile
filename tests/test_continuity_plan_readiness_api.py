@@ -1,4 +1,4 @@
-"""API coverage for live per-node readiness of saved continuity plans.
+"""API coverage for live per-node readiness of saved continuity plans."""
 
 from datetime import UTC, datetime
 
@@ -277,7 +277,7 @@ async def test_plan_readiness_include_chains_resolves_bounded_prerequisites(
                 target_type="issue",
                 target_id=third_issues[0].id,
                 satisfaction_type="item_read",
-            ],
+            ),
         ]
     )
     await async_db.commit()
