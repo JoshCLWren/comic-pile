@@ -26,7 +26,7 @@ _REQUIRED = {
     "summary",
 }
 _GITHUB_API_BASE = "https://api.github.com"
-_ISSUE_REFERENCE_PATTERN = re.compile(r"#(\d{1,7})")
+_ISSUE_REFERENCE_PATTERN = re.compile(r"\b#(\d{1,7})\b")
 
 
 def _fail(message: str) -> NoReturn:
