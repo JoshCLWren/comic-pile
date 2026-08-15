@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       worker:
-        description: Optional single Factory 6-46; blank runs the three-lane smoke set
+        description: Optional active fixed-model Factory; blank runs the two-lane smoke set
         required: false
         type: string
   push:
@@ -65,8 +65,8 @@ jobs:
             local owner="factory:${worker}"
             local number current_labels other_owner latest_labels target_labels
 
-            awk -F '\t' -v worker="$worker" '$1 == worker {found=1} END {exit !found}' "$manifest" || {
-              echo "Refusing lease recovery for unknown fixed-model worker ${worker}" >&2
+            [[ "$worker" =~ ^[0-9]+$ ]] && (( worker >= 6 && worker <= 46 )) || {
+              echo "Refusing lease recovery for unknown historical fixed-model worker ${worker}" >&2
               return 1
             }
 
@@ -168,8 +168,8 @@ jobs:
             workers="$(awk -F '\t' -v minute="$minute" '$4 == minute {print $1}' "$manifest" | jq -Rsc 'split("\n") | map(select(length > 0))')"
             echo "Watchdog run ${WATCHDOG_RUN_NUMBER} selected :$(printf '%02d' "$minute") batch"
           else
-            # Immediate post-merge/manual smoke: NVIDIA, OmniRoute, OpenCode.
-            workers='["6","32","39"]'
+            # Immediate post-merge/manual smoke: NVIDIA and OpenCode Free.
+            workers='["6","39"]'
           fi
 
           [[ "$workers" != '[]' ]] || { echo 'Dispatcher resolved no workers' >&2; exit 1; }

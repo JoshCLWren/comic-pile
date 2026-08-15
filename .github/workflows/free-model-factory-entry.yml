@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       worker:
-        description: Fixed-model Factory number (6-46)
+        description: Active fixed-model Factory number from the roster
         required: true
         type: string
 
