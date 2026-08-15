@@ -73,33 +73,33 @@ assert_false() {
 }
 
 # Extract named function definitions from the worker script.
+# The declaration line is matched with grep -F (fixed string, no awk regex
+# escape sequences -- gawk and mawk disagree on \( \) \{). Body extraction
+# counts { } characters in awk, which needs no regex at all, so it is
+# portable across awk flavors.
 extract_functions() {
-  local pattern=""
-  local name
+  local name defs="" start_line="" body=""
   for name in "$@"; do
-    [[ -z "$pattern" ]] || pattern="$pattern|"
-    pattern="$pattern^${name}\\(\\) \\{"
+    start_line="$(grep -n -F "${name}() {" "$WORKER" | head -1 | cut -d: -f1)"
+    if [[ -z "$start_line" ]]; then
+      printf 'function %s not found in %s\n' "$name" "$WORKER" >&2
+      return 1
+    fi
+    body="$(sed -n "${start_line},\$p" "$WORKER" | awk '
+      {
+        print
+        for (i = 1; i <= length($0); i++) {
+          c = substr($0, i, 1)
+          if (c == "{") depth++
+          if (c == "}") depth--
+        }
+        if (depth <= 0) exit
+      }
+    ')"
+    defs="$defs
+$body"
   done
-  eval "$(awk -v re="$pattern" '
-    $0 ~ re {
-      in_func = 1
-      depth = 1
-      printf "%s\n", $0
-      next
-    }
-    in_func {
-      printf "%s\n", $0
-      for (i = 1; i <= length($0); i++) {
-        c = substr($0, i, 1)
-        if (c == "{") depth++
-        if (c == "}") depth--
-      }
-      if (depth <= 0) {
-        in_func = 0
-        printf "\n"
-      }
-    }
-  ' "$WORKER")"
+  eval "$defs"
 }
 
 # Minimal OLD guard implementation: zero-overlap detection only. This mirrors
