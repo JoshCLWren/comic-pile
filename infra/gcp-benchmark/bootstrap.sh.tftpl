@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+exec > >(tee -a /var/log/comicpile-bootstrap.log) 2>&1
+
+echo "[bootstrap] starting ComicPile benchmark host setup"
+
+REPO_URL="${repo_url}"
+REPO_REF="${repo_ref}"
+APP_DIR="/opt/comic-pile"
+APP_USER="comicpile"
+ENV_DIR="/etc/comicpile"
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y ca-certificates curl git build-essential
+
+if ! id "$APP_USER" >/dev/null 2>&1; then
+  useradd --system --create-home --home-dir /var/lib/comicpile --shell /bin/bash "$APP_USER"
+fi
+
+if ! swapon --show=NAME --noheadings | grep -qx '/swapfile'; then
+  if [ ! -f /swapfile ]; then
+    fallocate -l 2G /swapfile
+    chmod 600 /swapfile
+    mkswap /swapfile
+  fi
+  swapon /swapfile
+fi
+
+if ! grep -q '^/swapfile none swap sw 0 0$' /etc/fstab; then
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
+if [ ! -x /usr/local/bin/uv ]; then
+  curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
+fi
+
+if [ -d "$APP_DIR/.git" ]; then
+  git -C "$APP_DIR" fetch --depth 1 origin "$REPO_REF"
+  git -C "$APP_DIR" checkout --force FETCH_HEAD
+else
+  rm -rf "$APP_DIR"
+  git clone --depth 1 --branch "$REPO_REF" "$REPO_URL" "$APP_DIR"
+fi
+
+chown -R "$APP_USER:$APP_USER" "$APP_DIR"
+sudo -u "$APP_USER" -H /usr/local/bin/uv sync --locked --no-dev --project "$APP_DIR"
+
+install -d -m 0750 -o root -g "$APP_USER" "$ENV_DIR"
+cat > "$ENV_DIR/benchmark.env.example" <<'EOF'
+# Created by infra/gcp-benchmark/bootstrap.sh.tftpl.
+# Use configure-env.sh instead of putting secrets in Terraform state.
+ENVIRONMENT=staging
+WEB_CONCURRENCY=2
+CACHE_ENABLED=false
+DATABASE_URL=postgresql://USER:PASSWORD@HOST/neondb
+EOF
+chmod 0640 "$ENV_DIR/benchmark.env.example"
+chown root:"$APP_USER" "$ENV_DIR/benchmark.env.example"
+
+cat > /etc/systemd/system/comicpile-benchmark.service <<'EOF'
+[Unit]
+Description=ComicPile FastAPI benchmark service
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/comicpile/benchmark.env
+
+[Service]
+Type=simple
+User=comicpile
+Group=comicpile
+WorkingDirectory=/opt/comic-pile
+EnvironmentFile=/etc/comicpile/benchmark.env
+ExecStart=/opt/comic-pile/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2
+Restart=on-failure
+RestartSec=3
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+
+touch /var/log/comicpile-bootstrap.done
+echo "[bootstrap] complete; run sudo /opt/comic-pile/infra/gcp-benchmark/configure-env.sh to add Neon config and start the service"
