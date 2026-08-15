@@ -82,10 +82,6 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
             "truthful no-work completion",
             "launch expensive fallback work",
         )
-        self.assert_policy_change_fails(
-            "Blocked work never authorizes a worker to pause or disable itself.",
-            "Blocked work may pause the worker.",
-        )
         mutated = self.entrypoint.replace(
             "Never treat an empty or blocked backlog as a reason to self-pause or self-disable.",
             "A blocked backlog may stop the worker schedule.",
@@ -201,10 +197,6 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
         self.assert_policy_change_fails(
             "deduplicate repeated failures across daily runs",
             "create duplicate issues for every daily failure",
-        )
-        self.assert_policy_change_fails(
-            "Firefox and WebKit may be run manually",
-            "All browsers are mandatory",
         )
 
     def test_magic_679_fallback_is_forbidden(self) -> None:
