@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Keep the proven persistence/guard/provider/lease primitives from the worker
-# implementation that was live immediately before this selector repair. The
-# blob is repository history, not a network dependency. We intentionally stop
-# before its old main loop and provide the canonical shared-pool loop below.
-LEGACY_WORKER_BLOB='3ed11e9183310e5e8134cff212a09683ab8d1167'
-source <(git cat-file blob "$LEGACY_WORKER_BLOB" | sed '/^ensure_owner_label$/,$d')
+# Preserve the worker's public fail-fast contract before loading shared
+# primitives. Guard tests intentionally exercise these checks in isolation.
+: "${FACTORY_WORKER:?FACTORY_WORKER is required}"
+: "${FACTORY_SOURCE:?FACTORY_SOURCE is required}"
+: "${FACTORY_MODEL:?FACTORY_MODEL is required}"
+: "${FACTORY_RUNTIME_MODEL:?FACTORY_RUNTIME_MODEL is required}"
+
+# Reuse the proven persistence/guard/provider/lease primitives as a tracked
+# repository file, stopping before its legacy main loop. The selector/session
+# loop below is the canonical shared-pool implementation.
+source <(sed '/^ensure_owner_label$/,$d' .github/scripts/free-model-factory-worker-primitives.sh)
 
 priority_rank_jq='def priority_rank:
   ([.labels[].name] // []) as $labels
