@@ -19,6 +19,8 @@ jobs:
       - uses: actions/checkout@v7
       - name: Test fleet guard decisions
         run: python .github/scripts/fixed-model-guard.py --self-test
+      - name: Test pre-push guard regressions
+        run: bash scripts/tests/test_free_model_worker_guard.sh
 
   reject-unrelated-repair:
     if: >-
@@ -49,32 +51,52 @@ jobs:
 
           parent="$(jq -r '.parents[0].sha // empty' <<< "$commit")"
           [[ -n "$parent" ]] || exit 0
+          parent_count="$(jq '.parents | length' <<< "$commit")"
           latest_files="$(jq -c '[.files[]?.filename] | unique' <<< "$commit")"
           previous_files="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${BASE_SHA}...${parent}" \
             --jq '[.files[]?.filename] | unique')"
 
-          branch_issue=""
-          if [[ "$HEAD_BRANCH" =~ ^factory/[0-9]+-([0-9]+)- ]]; then
-            branch_issue="${BASH_REMATCH[1]}"
-          fi
-          if [[ -n "$branch_issue" ]]; then
-            scope="$(gh issue view "$branch_issue" --json title,body)"
+          reason=""
+          if (( parent_count > 1 )); then
+            reason="merge-commit"
           else
-            scope="$(gh pr view "$PR_NUMBER" --json title,body)"
+            conflicted=""
+            while IFS= read -r file; do
+              [[ -n "$file" ]] || continue
+              encoded="$(gh api "repos/${GITHUB_REPOSITORY}/contents/$(jq -rn --arg p "$file" '$p | @uri')?ref=${HEAD_SHA}" --jq '.content // empty' 2>/dev/null || true)"
+              if [[ -n "$encoded" ]] && grep -qE '^(<<<<<<< |>>>>>>> |=======$)' <(base64 -d <<< "$encoded" 2>/dev/null || true); then
+                conflicted="$conflicted $file"
+              fi
+            done <<< "$(jq -r '.files[]?.filename' <<< "$commit")"
+            if [[ -n "$conflicted" ]]; then
+              reason="conflict-markers-in-${HEAD_SHA:0:12}:${conflicted}"
+            fi
           fi
 
-          decision="$(python .github/scripts/fixed-model-guard.py \
-            --previous-json "$previous_files" \
-            --latest-json "$latest_files" \
-            --title "$(jq -r .title <<< "$scope")" \
-            --body "$(jq -r .body <<< "$scope")")"
-          if [[ "$(jq -r .reject <<< "$decision")" != true ]]; then
-            echo 'Fixed-model repair is in scope; allowing it.'
-            exit 0
+          if [[ -z "$reason" ]]; then
+            branch_issue=""
+            if [[ "$HEAD_BRANCH" =~ ^factory/[0-9]+-([0-9]+)- ]]; then
+              branch_issue="${BASH_REMATCH[1]}"
+            fi
+            if [[ -n "$branch_issue" ]]; then
+              scope="$(gh issue view "$branch_issue" --json title,body)"
+            else
+              scope="$(gh pr view "$PR_NUMBER" --json title,body)"
+            fi
+
+            decision="$(python .github/scripts/fixed-model-guard.py \
+              --previous-json "$previous_files" \
+              --latest-json "$latest_files" \
+              --title "$(jq -r .title <<< "$scope")" \
+              --body "$(jq -r .body <<< "$scope")")"
+            if [[ "$(jq -r .reject <<< "$decision")" != true ]]; then
+              echo 'Fixed-model repair is in scope; allowing it.'
+              exit 0
+            fi
+            reason="$(jq -r .reason <<< "$decision")"
           fi
 
-          reason="$(jq -r .reason <<< "$decision")"
-          echo "Rejecting unrelated fixed-model repair ${HEAD_SHA} (${reason}); restoring ${parent}."
+          echo "Rejecting fixed-model repair ${HEAD_SHA} (${reason}); restoring ${parent}."
           gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/heads/${HEAD_BRANCH}" \
             -f sha="$parent" -F force=true >/dev/null
 
@@ -84,4 +106,4 @@ jobs:
             + ["factory", "factory:unowned", "factory:review"] | unique' <<< "$labels")"
           gh api --method PUT "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" \
             --input - <<< "{\"labels\":${target}}" >/dev/null
-          gh pr comment "$PR_NUMBER" --body "Rejected fixed-model repair commit \`${HEAD_SHA}\` (${reason}): the diff was out of scope for the selected task. The branch was restored to \`${parent}\` and released to \`factory:unowned\`." >/dev/null
+          gh pr comment "$PR_NUMBER" --body "Rejected fixed-model repair commit \`${HEAD_SHA}\` (${reason}): the diff was out of scope for the selected task or carried an unclean merge/conflict state. The branch was restored to \`${parent}\` and released to \`factory:unowned\`." >/dev/null

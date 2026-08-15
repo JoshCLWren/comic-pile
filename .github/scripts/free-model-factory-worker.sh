@@ -28,6 +28,20 @@ contains_skip_pr() {
   return 1
 }
 
+stage_trusted_guard() {
+  # The worker starts on the trusted main checkout. Copy the guard to a
+  # stable location BEFORE any checkout_target switches onto an adopted PR
+  # branch, then invoke only this copy for pre-push decisions. A stale PR
+  # branch copy of fixed-model-guard.py can never downgrade the decision.
+  TRUSTED_GUARD="${TRUSTED_GUARD:-}"
+  if [[ -z "$TRUSTED_GUARD" ]]; then
+    TRUSTED_GUARD="$(mktemp /tmp/comic-pile-fixed-model-guard.XXXXXX.py)"
+  fi
+  cp .github/scripts/fixed-model-guard.py "$TRUSTED_GUARD"
+  chmod +x "$TRUSTED_GUARD"
+  python3 "$TRUSTED_GUARD" --self-test >/dev/null 2>&1
+}
+
 replace_labels() {
   local number="$1" owner="$2" stage="$3"
   local labels target
@@ -200,7 +214,8 @@ checkout_target() {
   else
     git switch -C "$branch" origin/main
   fi
-  log "checked out ${mode} #${number} on ${branch}"
+  EXPECTED_HEAD="$(git rev-parse HEAD)"
+  log "checked out ${mode} #${number} on ${branch} at ${EXPECTED_HEAD}"
 }
 
 current_head_review_blockers() {
@@ -279,8 +294,54 @@ changed_paths_json() {
   } | jq -R -s 'split("\n") | map(select(length > 0)) | unique'
 }
 
+conflict_markers_present() {
+  local file
+  while IFS= read -r file; do
+    [[ -n "$file" ]] || continue
+    [[ -f "$file" ]] || continue
+    if grep -qE '^(<<<<<<< |>>>>>>> |=======$)' "$file" 2>/dev/null; then
+      return 0
+    fi
+  done < <(git diff --name-only --diff-filter=ACMRTUXB HEAD; git ls-files --others --exclude-standard)
+  return 1
+}
+
+branch_folded_main_commits() {
+  local ours theirs shared
+  ours="$(git rev-list "$EXPECTED_HEAD"..HEAD 2>/dev/null || true)"
+  theirs="$(git rev-list "$EXPECTED_HEAD"..origin/main 2>/dev/null || true)"
+  [[ -n "$ours" && -n "$theirs" ]] || return 1
+  shared="$(comm -12 <(printf '%s\n' "$ours" | sort) <(printf '%s\n' "$theirs" | sort))"
+  [[ -n "$shared" ]]
+}
+
+unclean_git_state_json() {
+  local merge_head cherry_pick_head revert_head
+  local merge_in_progress=false cherry_pick_in_progress=false revert_in_progress=false
+  local unmerged_entries=false conflict_markers=false head_changed=false foreign_main_commits=false
+  merge_head="$(git rev-parse -q --verify MERGE_HEAD 2>/dev/null || true)"
+  [[ -z "$merge_head" ]] || merge_in_progress=true
+  cherry_pick_head="$(git rev-parse -q --verify CHERRY_PICK_HEAD 2>/dev/null || true)"
+  [[ -z "$cherry_pick_head" ]] || cherry_pick_in_progress=true
+  revert_head="$(git rev-parse -q --verify REVERT_HEAD 2>/dev/null || true)"
+  [[ -z "$revert_head" ]] || revert_in_progress=true
+  [[ -z "$(git ls-files -u)" ]] || unmerged_entries=true
+  if conflict_markers_present; then conflict_markers=true; fi
+  [[ "$(git rev-parse HEAD)" == "$EXPECTED_HEAD" ]] || head_changed=true
+  if branch_folded_main_commits; then foreign_main_commits=true; fi
+  jq -nc \
+    --argjson merge_in_progress "$merge_in_progress" \
+    --argjson cherry_pick_in_progress "$cherry_pick_in_progress" \
+    --argjson revert_in_progress "$revert_in_progress" \
+    --argjson unmerged_entries "$unmerged_entries" \
+    --argjson conflict_markers "$conflict_markers" \
+    --argjson head_changed "$head_changed" \
+    --argjson foreign_main_commits "$foreign_main_commits" \
+    '{merge_in_progress:$merge_in_progress,cherry_pick_in_progress:$cherry_pick_in_progress,revert_in_progress:$revert_in_progress,unmerged_entries:$unmerged_entries,conflict_markers:$conflict_markers,head_changed:$head_changed,foreign_main_commits:$foreign_main_commits}'
+}
+
 reject_out_of_scope_diff() {
-  local mode="$1" number="$2" base_ref="$3" scope previous latest decision reason
+  local mode="$1" number="$2" base_ref="$3" scope previous latest git_state decision reason
   scope="$(target_scope_text "$mode" "$number")"
   if [[ "$mode" == 'pr' ]]; then
     previous="$(gh api "repos/${GITHUB_REPOSITORY}/compare/$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${number}" --jq .base.sha)...${base_ref}" \
@@ -289,16 +350,18 @@ reject_out_of_scope_diff() {
     previous='[]'
   fi
   latest="$(changed_paths_json "$base_ref")"
-  decision="$(python3 .github/scripts/fixed-model-guard.py \
+  git_state="$(unclean_git_state_json)"
+  decision="$(python3 "$TRUSTED_GUARD" \
     --previous-json "$previous" \
     --latest-json "$latest" \
+    --git-state "$git_state" \
     --title "$(jq -r .title <<< "$scope")" \
     --body "$(jq -r .body <<< "$scope")")"
   if [[ "$(jq -r .reject <<< "$decision")" != true ]]; then
     return 0
   fi
   reason="$(jq -r .reason <<< "$decision")"
-  log "rejecting out-of-scope ${mode} #${number} diff before push (${reason}): $(jq -c .factory_control_files <<< "$decision")"
+  log "rejecting out-of-scope ${mode} #${number} diff before push (${reason}): git_state=$(jq -c .git_state <<< "$decision") factory_control_files=$(jq -c .factory_control_files <<< "$decision")"
   git reset --hard "$base_ref" >/dev/null
   git clean -fd >/dev/null
   return 1
@@ -307,7 +370,7 @@ reject_out_of_scope_diff() {
 persist_issue_pr() {
   local number="$1" branch="$2" pr title body base_ref
   [[ -n "$(git status --porcelain)" ]] || return 1
-  base_ref="$(git rev-parse HEAD)"
+  base_ref="$EXPECTED_HEAD"
   if ! reject_out_of_scope_diff 'issue' "$number" "$base_ref"; then
     return 1
   fi
@@ -329,7 +392,7 @@ persist_issue_pr() {
 persist_pr_changes() {
   local pr="$1" branch="$2" base_ref
   [[ -n "$(git status --porcelain)" ]] || return 1
-  base_ref="$(git rev-parse HEAD)"
+  base_ref="$EXPECTED_HEAD"
   if ! reject_out_of_scope_diff 'pr' "$pr" "$base_ref"; then
     return 1
   fi
@@ -340,6 +403,7 @@ persist_pr_changes() {
 }
 
 ensure_owner_label
+stage_trusted_guard
 release_owned_targets 'previous-run-stale-lease'
 trap 'release_owned_targets session-end-handoff || true' EXIT
 log "starting fixed-model session with runtime ${RUNTIME_MODEL}; budget ${BUDGET_SECONDS}s"
