@@ -1,0 +1,8 @@
+# Copy to terraform.tfvars and set your Google Cloud project ID.
+project_id = "your-gcp-project-id"
+
+# Defaults reproduce the benchmark target closest to Neon us-east-2.
+# region       = "us-east1"
+# zone         = "us-east1-b"
+# machine_type = "e2-micro"
+# repo_ref     = "main"
