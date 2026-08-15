@@ -7837,6 +7837,180 @@
         ]
       }
     },
+    "/api/v1/queue/shuffle/": {
+      "post": {
+        "description": "Randomize all active queue positions for the authenticated user.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    Empty response with HTTP 204 status.",
+        "operationId": "shuffle_threads_api_v1_queue_shuffle__post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Shuffle Threads",
+        "tags": [
+          "queue"
+        ]
+      }
+    },
+    "/api/v1/queue/threads/{thread_id}/back/": {
+      "put": {
+        "description": "Move thread to the back.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    thread_id: The ID of the thread to move.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    ThreadResponse with the updated thread information.\n\nRaises:\n    HTTPException: If thread not found.",
+        "operationId": "move_thread_back_api_v1_queue_threads__thread_id__back__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Move Thread Back",
+        "tags": [
+          "queue"
+        ]
+      }
+    },
+    "/api/v1/queue/threads/{thread_id}/front/": {
+      "put": {
+        "description": "Move thread to the front.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    thread_id: The ID of the thread to move.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    ThreadResponse with the updated thread information.\n\nRaises:\n    HTTPException: If thread not found.",
+        "operationId": "move_thread_front_api_v1_queue_threads__thread_id__front__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Move Thread Front",
+        "tags": [
+          "queue"
+        ]
+      }
+    },
+    "/api/v1/queue/threads/{thread_id}/position/": {
+      "put": {
+        "description": "Move thread to specific position.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    thread_id: The ID of the thread to move.\n    position_request: Request containing the new position.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    ThreadResponse with the updated thread information.\n\nRaises:\n    HTTPException: If thread not found or position invalid.",
+        "operationId": "move_thread_position_api_v1_queue_threads__thread_id__position__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PositionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Move Thread Position",
+        "tags": [
+          "queue"
+        ]
+      }
+    },
     "/api/v1/rate/": {
       "post": {
         "description": "Rate current reading and update its thread.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    rate_data: Rating request data.\n    current_user: Authenticated user making the request.\n    db: SQLAlchemy session.\n\nReturns:\n    Updated thread response.\n\nRaises:\n    HTTPException: If no active session, rating, or thread is valid.",

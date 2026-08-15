@@ -72,7 +72,7 @@ async def test_reposition_thread_with_sequential_positions(
 
     # Test the reposition API call - move Superman from position 1 to position 3
     response = await auth_client.put(
-        f"/api/queue/threads/{superman_thread.id}/position/", json={"new_position": 3}
+        f"/api/v1/queue/threads/{superman_thread.id}/position/", json={"new_position": 3}
     )
 
     assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
@@ -101,7 +101,7 @@ async def test_shuffle_queue_randomizes_active_positions(
 
     monkeypatch.setattr(queue_module.random, "shuffle", lambda threads: threads.reverse())
 
-    response = await auth_client.post("/api/queue/shuffle/")
+    response = await auth_client.post("/api/v1/queue/shuffle/")
     assert response.status_code == 204
 
     result = await async_db.execute(

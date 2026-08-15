@@ -22,7 +22,7 @@ async def test_move_to_position_clamps_to_max(
     max_position = len(active_threads)
 
     response = await auth_client.put(
-        f"/api/queue/threads/{thread_id}/position/", json={"new_position": max_position + 10}
+        f"/api/v1/queue/threads/{thread_id}/position/", json={"new_position": max_position + 10}
     )
     # Should return HTTP 400, not 200 (no silent clamping)
     assert response.status_code == 400
@@ -47,7 +47,7 @@ async def test_move_to_position_returns_400_for_position_beyond_queue(
 
     # Attempt to move to position beyond the queue length
     response = await auth_client.put(
-        f"/api/queue/threads/{thread_id}/position/", json={"new_position": max_position + 10}
+        f"/api/v1/queue/threads/{thread_id}/position/", json={"new_position": max_position + 10}
     )
     # Should return HTTP 400, not 200
     assert response.status_code == 400
@@ -75,7 +75,7 @@ async def test_move_to_position_when_no_threads(
     await async_db.refresh(thread)
 
     response = await auth_client.put(
-        f"/api/queue/threads/{thread.id}/position/", json={"new_position": 1}
+        f"/api/v1/queue/threads/{thread.id}/position/", json={"new_position": 1}
     )
     assert response.status_code == 200
 

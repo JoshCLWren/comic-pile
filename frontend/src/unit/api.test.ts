@@ -80,10 +80,10 @@ it('calls queue endpoints with expected paths', async () => {
   await queueApi.moveToBack(5)
   await queueApi.shuffle()
 
-  expect(put).toHaveBeenCalledWith('/queue/threads/3/position/', { new_position: 2 })
-  expect(put).toHaveBeenCalledWith('/queue/threads/4/front/')
-  expect(put).toHaveBeenCalledWith('/queue/threads/5/back/')
-  expect(post).toHaveBeenCalledWith('/queue/shuffle/')
+  expect(put).toHaveBeenCalledWith('/v1/queue/threads/3/position/', { new_position: 2 })
+  expect(put).toHaveBeenCalledWith('/v1/queue/threads/4/front/')
+  expect(put).toHaveBeenCalledWith('/v1/queue/threads/5/back/')
+  expect(post).toHaveBeenCalledWith('/v1/queue/shuffle/')
 })
 
 it('calls dependency endpoints with expected paths', async () => {

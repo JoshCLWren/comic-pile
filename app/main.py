@@ -222,6 +222,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(rate.router, prefix="/api/rate", tags=["rate"])
     app.include_router(rate.router, prefix="/api/v1/rate", tags=["rate"])
     app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
+    app.include_router(queue.router, prefix="/api/v1/queue", tags=["queue"])
     app.include_router(reading_orders.router, tags=["reading-orders"])
     app.include_router(session.router, prefix="/api/sessions", tags=["session"])
     app.include_router(session.router, prefix="/api/v1/sessions", tags=["session"])
