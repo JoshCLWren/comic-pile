@@ -72,10 +72,16 @@ resource "google_compute_instance" "benchmark" {
     access_config {}
   }
 
-  metadata_startup_script = templatefile("${path.module}/bootstrap.sh.tftpl", {
-    repo_url = var.repo_url
-    repo_ref = var.repo_ref
-  })
+  # Use ordinary metadata rather than metadata_startup_script. The latter is
+  # ForceNew in the Google provider, which makes harmless bootstrap iterations
+  # replace the entire benchmark VM. GCE still recognizes the startup-script
+  # metadata key and runs it on boot, while Terraform can update it in place.
+  metadata = {
+    startup-script = templatefile("${path.module}/bootstrap.sh.tftpl", {
+      repo_url = var.repo_url
+      repo_ref = var.repo_ref
+    })
+  }
 
   depends_on = [
     google_compute_firewall.iap_ssh,
