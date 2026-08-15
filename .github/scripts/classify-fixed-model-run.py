@@ -20,7 +20,7 @@ LOCK_RE = re.compile(
 TARGET_RE = re.compile(r"checked out (?P<kind>issue|pr) #(?P<number>\d+) on ")
 RATE_LIMIT_RE = re.compile(r"429|too many requests|rate.?limit|quota|throttl|capacity", re.I)
 MODEL_MISSING_RE = re.compile(
-    r"pinned .*model is not currently exposed|unknown model|model .*not found|model .*does not exist",
+    r"pinned .*model is not currently (?:exposed|invokable)|unknown model|model .*not found|model .*does not exist",
     re.I,
 )
 TIMEOUT_RE = re.compile(r"timed? out|timeout|exit status 124|process completed with exit code 124", re.I)

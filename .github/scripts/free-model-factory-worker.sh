@@ -255,9 +255,62 @@ run_agent() {
   return "$status"
 }
 
+target_scope_text() {
+  local mode="$1" number="$2" issue title body
+  if [[ "$mode" == 'issue' ]]; then
+    gh issue view "$number" --json title,body --jq '{title,body}'
+    return 0
+  fi
+  title="$(gh pr view "$number" --json title --jq .title)"
+  body="$(gh pr view "$number" --json body --jq .body)"
+  issue="$(linked_issue_from_branch "$(gh pr view "$number" --json headRefName --jq .headRefName)")"
+  if [[ -n "$issue" ]]; then
+    title="$(gh issue view "$issue" --json title --jq .title)"
+    body="$(gh issue view "$issue" --json body --jq .body)"
+  fi
+  jq -nc --arg title "$title" --arg body "$body" '{title:$title,body:$body}'
+}
+
+changed_paths_json() {
+  local base_ref="$1"
+  {
+    git diff --name-only --relative "$base_ref"
+    git ls-files --others --exclude-standard
+  } | jq -R -s 'split("\n") | map(select(length > 0)) | unique'
+}
+
+reject_out_of_scope_diff() {
+  local mode="$1" number="$2" base_ref="$3" scope previous latest decision reason
+  scope="$(target_scope_text "$mode" "$number")"
+  if [[ "$mode" == 'pr' ]]; then
+    previous="$(gh api "repos/${GITHUB_REPOSITORY}/compare/$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${number}" --jq .base.sha)...${base_ref}" \
+      --jq '[.files[]?.filename] | unique')"
+  else
+    previous='[]'
+  fi
+  latest="$(changed_paths_json "$base_ref")"
+  decision="$(python3 .github/scripts/fixed-model-guard.py \
+    --previous-json "$previous" \
+    --latest-json "$latest" \
+    --title "$(jq -r .title <<< "$scope")" \
+    --body "$(jq -r .body <<< "$scope")")"
+  if [[ "$(jq -r .reject <<< "$decision")" != true ]]; then
+    return 0
+  fi
+  reason="$(jq -r .reason <<< "$decision")"
+  log "rejecting out-of-scope ${mode} #${number} diff before push (${reason}): $(jq -c .factory_control_files <<< "$decision")"
+  git reset --hard "$base_ref" >/dev/null
+  git clean -fd >/dev/null
+  return 1
+}
+
 persist_issue_pr() {
-  local number="$1" branch="$2" pr title body
+  local number="$1" branch="$2" pr title body base_ref
   [[ -n "$(git status --porcelain)" ]] || return 1
+  base_ref="$(git rev-parse HEAD)"
+  if ! reject_out_of_scope_diff 'issue' "$number" "$base_ref"; then
+    return 1
+  fi
   git add -A >&2
   git commit -m "factory: advance #${number} with ${DISPLAY}" >&2
   git push --set-upstream origin "$branch" >&2
@@ -274,8 +327,12 @@ persist_issue_pr() {
 }
 
 persist_pr_changes() {
-  local pr="$1" branch="$2"
+  local pr="$1" branch="$2" base_ref
   [[ -n "$(git status --porcelain)" ]] || return 1
+  base_ref="$(git rev-parse HEAD)"
+  if ! reject_out_of_scope_diff 'pr' "$pr" "$base_ref"; then
+    return 1
+  fi
   git add -A
   git commit -m "factory: advance PR #${pr} with ${DISPLAY}"
   git push origin "$branch"

@@ -53,14 +53,28 @@ jobs:
           previous_files="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${BASE_SHA}...${parent}" \
             --jq '[.files[]?.filename] | unique')"
 
+          branch_issue=""
+          if [[ "$HEAD_BRANCH" =~ ^factory/[0-9]+-([0-9]+)- ]]; then
+            branch_issue="${BASH_REMATCH[1]}"
+          fi
+          if [[ -n "$branch_issue" ]]; then
+            scope="$(gh issue view "$branch_issue" --json title,body)"
+          else
+            scope="$(gh pr view "$PR_NUMBER" --json title,body)"
+          fi
+
           decision="$(python .github/scripts/fixed-model-guard.py \
-            --previous-json "$previous_files" --latest-json "$latest_files")"
+            --previous-json "$previous_files" \
+            --latest-json "$latest_files" \
+            --title "$(jq -r .title <<< "$scope")" \
+            --body "$(jq -r .body <<< "$scope")")"
           if [[ "$(jq -r .reject <<< "$decision")" != true ]]; then
-            echo 'Fixed-model repair overlaps the existing PR diff; allowing it.'
+            echo 'Fixed-model repair is in scope; allowing it.'
             exit 0
           fi
 
-          echo "Rejecting unrelated fixed-model repair ${HEAD_SHA}; restoring ${parent}."
+          reason="$(jq -r .reason <<< "$decision")"
+          echo "Rejecting unrelated fixed-model repair ${HEAD_SHA} (${reason}); restoring ${parent}."
           gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/heads/${HEAD_BRANCH}" \
             -f sha="$parent" -F force=true >/dev/null
 
@@ -70,4 +84,4 @@ jobs:
             + ["factory", "factory:unowned", "factory:review"] | unique' <<< "$labels")"
           gh api --method PUT "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" \
             --input - <<< "{\"labels\":${target}}" >/dev/null
-          gh pr comment "$PR_NUMBER" --body "Rejected fixed-model repair commit \`${HEAD_SHA}\`: its changed files had zero overlap with the PR's existing diff. The branch was restored to \`${parent}\` and released to \`factory:unowned\`." >/dev/null
+          gh pr comment "$PR_NUMBER" --body "Rejected fixed-model repair commit \`${HEAD_SHA}\` (${reason}): the diff was out of scope for the selected task. The branch was restored to \`${parent}\` and released to \`factory:unowned\`." >/dev/null

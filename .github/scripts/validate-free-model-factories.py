@@ -177,10 +177,28 @@ def main() -> None:
     assert "branch_suffix='opencode-free'" in runner_text
     assert 'OPENCODE_API_KEY' not in runner_text, 'direct OpenCode Free must remain keyless'
     assert all(source not in runner_text for source in ('kilo)', 'llm7)', 'ovhcloud)', 'zen)'))
+    assert 'secrets.PR_REBASE_TOKEN' in runner_text, (
+        'factory pushes must use PR_REBASE_TOKEN so pull_request workflows are not stuck in action_required'
+    )
+    assert 'GH_TOKEN: ${{ github.token }}' not in runner_text, (
+        'GITHUB_TOKEN pushes attribute to github-actions[bot] and block the repair guard'
+    )
 
     worker_text = worker.read_text(encoding='utf-8')
     assert 'rotate_model' not in worker_text
     assert 'Do not switch models' in worker_text
+    assert 'reject_out_of_scope_diff' in worker_text, (
+        'factories must fail closed on out-of-scope diffs before push'
+    )
+    assert 'fixed-model-guard.py' in worker_text, (
+        'pre-push scope enforcement must use the deterministic fixed-model guard'
+    )
+
+    guard = Path('.github/scripts/fixed-model-guard.py')
+    assert guard.exists()
+    guard_text = guard.read_text(encoding='utf-8')
+    assert 'factory-control-out-of-scope' in guard_text
+    assert 'is_factory_control_path' in guard_text
 
     # Ownership is a next-action lease, never a permanent reservation. A worker
     # must hand its claims back when a scheduled session ends so another lane can
