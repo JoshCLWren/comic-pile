@@ -366,17 +366,17 @@ body {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .animate-slide-up,
-  .animate-fade-in {
-    animation: none;
-  }
-}
-
 .animate-slide-up {
   animation: slide-up 0.25s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .animate-fade-in {
   animation: fade-in 0.2s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-up,
+  .animate-fade-in {
+    animation: none;
+  }
 }
