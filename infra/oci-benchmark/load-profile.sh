@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Source this file: source ./load-profile.sh
-set -euo pipefail
+# Do not enable set -e/-u/-o pipefail here: when sourced, those options mutate the
+# caller's interactive shell and can terminate it (especially zsh prompts).
 
 OCI_CONFIG_FILE="${OCI_CONFIG_FILE:-$HOME/.oci/config}"
 OCI_PROFILE="${OCI_PROFILE:-DEFAULT}"
@@ -24,6 +25,7 @@ REGION="$(read_profile_value region)"
 
 if [ -z "$TENANCY" ] || [ -z "$REGION" ]; then
   echo "Could not read tenancy/region from profile [$OCI_PROFILE] in $OCI_CONFIG_FILE" >&2
+  unset TENANCY REGION
   return 1 2>/dev/null || exit 1
 fi
 
