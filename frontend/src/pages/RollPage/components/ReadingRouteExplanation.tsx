@@ -112,7 +112,7 @@ export function ReadingRouteExplanation({
     [chains],
   )
 
-  const hasBridgeState = readinessState.isLoading || chainsState.isLoading
+  const hasBridgeState = issueId != null ? (readinessState.isLoading || chainsState.isLoading) : false
 
   const headingForEligibility =
     readability === true

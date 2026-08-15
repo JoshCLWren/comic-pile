@@ -781,4 +781,32 @@ describe('ReadingRouteExplanation', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(document.body.style.overflow).toBe('auto')
   })
+
+  it('handles 422 chain detail error and shows retry button', async () => {
+    mocks.useContinuityReadiness.mockReturnValue({
+      readiness: { node_type: 'issue', node_id: 7, is_readable: true, evaluated_issue_id: 7, blockers: [] },
+      isLoading: false,
+      error: null,
+      refetch,
+    })
+    setupChains({
+      chains: null,
+      isLoading: false,
+      error: new Error('422 Unprocessable Entity'),
+    })
+    render(
+      <ReadingRouteExplanation
+        isOpen
+        issueId={7}
+        issueLabel="Avengers #7"
+        readingOrders={[]}
+        connectedThreads={[]}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(screen.getByText(/expanded prerequisite detail could not be loaded/i)).toBeVisible()
+    expect(screen.getByRole('button', { name: /retry continuity detail/i })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /retry continuity detail/i }))
+    expect(chainsRefetch).toHaveBeenCalledOnce()
+  })
 })
