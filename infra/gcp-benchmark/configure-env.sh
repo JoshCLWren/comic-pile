@@ -9,6 +9,7 @@ fi
 ENV_DIR="/etc/comicpile"
 ENV_FILE="$ENV_DIR/benchmark.env"
 APP_USER="comicpile"
+READY_TIMEOUT_SECONDS=90
 
 read -r -s -p "Neon DATABASE_URL: " RAW_DATABASE_URL
 echo
@@ -63,14 +64,19 @@ chmod 0640 "$ENV_FILE"
 systemctl daemon-reload
 systemctl enable --now comicpile-benchmark.service
 
-for _ in $(seq 1 30); do
+echo "Waiting up to ${READY_TIMEOUT_SECONDS}s for ComicPile to become healthy..."
+for second in $(seq 1 "$READY_TIMEOUT_SECONDS"); do
   if curl --max-time 2 --silent --fail http://127.0.0.1:8000/health >/dev/null; then
-    echo "ComicPile benchmark service is healthy on http://127.0.0.1:8000"
+    echo "ComicPile benchmark service is healthy on http://127.0.0.1:8000 after ${second}s"
     exit 0
+  fi
+  if (( second % 10 == 0 )); then
+    echo "Still waiting for ComicPile startup (${second}s elapsed)..."
   fi
   sleep 1
 done
 
-echo "ComicPile did not become healthy within 30 seconds." >&2
+echo "ComicPile did not become healthy within ${READY_TIMEOUT_SECONDS} seconds." >&2
 systemctl status comicpile-benchmark.service --no-pager >&2 || true
+journalctl -u comicpile-benchmark.service --since "-${READY_TIMEOUT_SECONDS} seconds" --no-pager >&2 || true
 exit 1
