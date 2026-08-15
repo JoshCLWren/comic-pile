@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       worker:
-        description: Optional active fixed-model Factory; blank runs the two-lane smoke set
+        description: Optional active external Factory; blank runs the strategy smoke set
         required: false
         type: string
   push:
@@ -17,6 +17,7 @@ on:
       - '.github/workflows/free-model-factory-entry.yml'
       - '.github/workflows/free-model-factory-run.yml'
       - '.github/scripts/free-model-factory-worker.sh'
+      - '.github/scripts/kilo-auto-factory-run.sh'
       - '.github/free-model-factories.tsv'
 
 permissions:
@@ -168,8 +169,8 @@ jobs:
             workers="$(awk -F '\t' -v minute="$minute" '$4 == minute {print $1}' "$manifest" | jq -Rsc 'split("\n") | map(select(length > 0))')"
             echo "Watchdog run ${WATCHDOG_RUN_NUMBER} selected :$(printf '%02d' "$minute") batch"
           else
-            # Immediate post-merge/manual smoke: NVIDIA and OpenCode Free.
-            workers='["6","39"]'
+            # Immediate post-merge/manual smoke: one lane per routing strategy.
+            workers='["6","39","46"]'
           fi
 
           [[ "$workers" != '[]' ]] || { echo 'Dispatcher resolved no workers' >&2; exit 1; }

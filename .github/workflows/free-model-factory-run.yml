@@ -28,6 +28,8 @@ env:
   FACTORY_BUDGET_SECONDS: '1200'
   OPENCODE_VERSION: '1.18.18'
   OPENCODE_LINUX_X64_SHA256: '0cddc222418b8553669905a8980c0cda7088f00da24d83d6ac76b01c9fdb2aaf'
+  KILO_VERSION: '7.4.22'
+  KILO_LINUX_X64_BASELINE_SHA256: 'bf817ad53bc95b16abe92e7a2389cc9f509c62c3510c23ecc58e151a4455cb41'
   OMNIROUTE_IMAGE: 'diegosouzapw/omniroute:3.8.49@sha256:92c768c56e2de32c51a0621ef182835018b00b288c9bb235c5c5e4514658c1a1'
 
 jobs:
@@ -94,6 +96,12 @@ jobs:
               branch_suffix='opencode-free'
               configured=true
               reason='configured-keyless'
+              ;;
+            kilo-auto)
+              runtime_model="kilo/${model}"
+              branch_suffix='kilo-auto'
+              configured=true
+              reason='configured-anonymous-free'
               ;;
             *)
               echo "Unsupported factory source: ${source}" >&2
@@ -175,7 +183,7 @@ jobs:
           echo "${DISPLAY} lane is installed but inactive: ${REASON}"
 
       - name: Install pinned OpenCode release
-        if: steps.lane.outputs.configured == 'true'
+        if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source != 'kilo-auto'
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -190,6 +198,25 @@ jobs:
           test -x "$bin_dir/opencode"
           echo "$bin_dir" >> "$GITHUB_PATH"
           "$bin_dir/opencode" --version
+
+      - name: Install pinned Kilo CLI release
+        if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source == 'kilo-auto'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          archive="$RUNNER_TEMP/kilo-linux-x64-baseline.tar.gz"
+          bin_dir="$RUNNER_TEMP/kilo-bin"
+          curl -fsSL \
+            "https://github.com/Kilo-Org/kilocode/releases/download/v${KILO_VERSION}/kilo-linux-x64-baseline.tar.gz" \
+            -o "$archive"
+          printf '%s  %s\n' "$KILO_LINUX_X64_BASELINE_SHA256" "$archive" | sha256sum --check -
+          mkdir -p "$bin_dir"
+          tar -xzf "$archive" -C "$bin_dir"
+          kilo_path="$(find "$bin_dir" -type f -name kilo -perm -111 | head -n 1)"
+          [[ -n "$kilo_path" ]] || { echo 'Pinned Kilo archive did not contain an executable kilo binary' >&2; exit 1; }
+          if [[ "$kilo_path" != "$bin_dir/kilo" ]]; then ln -s "$kilo_path" "$bin_dir/kilo"; fi
+          echo "$bin_dir" >> "$GITHUB_PATH"
+          "$bin_dir/kilo" --version
 
       - name: Create ephemeral OmniRoute runtime secrets
         if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source == 'omniroute-opencode'
@@ -325,7 +352,7 @@ jobs:
           echo "NVIDIA probe succeeded for ${MODEL}"
 
       - name: Smoke exact pinned model through OpenCode
-        if: steps.lane.outputs.configured == 'true'
+        if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source != 'kilo-auto'
         shell: bash
         env:
           RUNTIME_MODEL: ${{ steps.lane.outputs.runtime_model }}
@@ -344,6 +371,23 @@ jobs:
           (( status == 0 )) || exit "$status"
           grep -q 'FIXED_MODEL_OPENCODE_OK' "$RUNNER_TEMP/fixed-model-smoke.log"
           [[ -z "$(git status --porcelain)" ]] || { echo 'Model smoke modified the worktree' >&2; exit 1; }
+
+      - name: Smoke Kilo Auto Free through Kilo CLI
+        if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source == 'kilo-auto'
+        shell: bash
+        env:
+          FACTORY_RUNTIME_MODEL: ${{ steps.lane.outputs.runtime_model }}
+        run: |
+          set -Eeuo pipefail
+          before="$(git status --porcelain)"
+          [[ -z "$before" ]] || { echo 'Smoke requires clean worktree' >&2; exit 1; }
+          bash .github/scripts/kilo-auto-factory-run.sh \
+            180 \
+            'ComicPile Kilo Auto Free smoke' \
+            'Reply with exactly KILO_AUTO_FREE_OK. Do not edit files, run commands, or use tools.' \
+            "$RUNNER_TEMP/kilo-auto-smoke.log"
+          grep -q 'KILO_AUTO_FREE_OK' "$RUNNER_TEMP/kilo-auto-smoke.log"
+          [[ -z "$(git status --porcelain)" ]] || { echo 'Kilo smoke modified the worktree' >&2; exit 1; }
 
       - name: Run continuous fixed-model factory session
         if: steps.lane.outputs.configured == 'true'

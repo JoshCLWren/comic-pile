@@ -11,10 +11,11 @@ MANIFEST = Path('.github/free-model-factories.tsv')
 DISPATCHER = Path('.github/workflows/free-model-factory-dispatch.yml')
 ENTRY = Path('.github/workflows/free-model-factory-entry.yml')
 WATCHDOG = Path('.github/workflows/factory-heartbeat-watchdog.yml')
-EXPECTED_WORKERS = set(range(6, 25)) | {29} | set(range(39, 46))
+EXPECTED_WORKERS = set(range(6, 25)) | {29} | set(range(39, 47))
 EXPECTED_SOURCE_COUNTS = {
     'nvidia': 20,
     'opencode-free': 7,
+    'kilo-auto': 1,
 }
 EXPECTED_OPENCODE_FREE_MODELS = {
     'big-pickle',
@@ -54,7 +55,7 @@ def main() -> None:
             delimiter='\t',
         ))
 
-    assert len(rows) == 27, f'expected 27 fixed model lanes, got {len(rows)}'
+    assert len(rows) == 28, f'expected 28 external factory lanes, got {len(rows)}'
     workers = [int(row['worker']) for row in rows]
     assert set(workers) == EXPECTED_WORKERS
     assert len(workers) == len(set(workers)), 'duplicate worker IDs'
@@ -67,8 +68,13 @@ def main() -> None:
         f'OpenCode free roster changed: missing={sorted(EXPECTED_OPENCODE_FREE_MODELS - opencode_free_models)} '
         f'extra={sorted(opencode_free_models - EXPECTED_OPENCODE_FREE_MODELS)}'
     )
+    kilo_rows = [row for row in rows if row['source'] == 'kilo-auto']
+    assert len(kilo_rows) == 1
+    assert kilo_rows[0]['worker'] == '46'
+    assert kilo_rows[0]['model'] == 'kilo-auto/free'
+    assert kilo_rows[0]['display_name'] == 'Kilo Auto Free · Forge'
     assert not any(row['source'] in {'zen', 'kilo', 'llm7', 'ovhcloud'} for row in rows), (
-        'retired or unrelated provider source returned to the fixed-model roster'
+        'retired or unrelated provider source returned to the external factory roster'
     )
 
     source_models = [(row['source'], row['model']) for row in rows]
@@ -82,7 +88,7 @@ def main() -> None:
         for row in rows
     ), 'Factory 13 retired NVIDIA model returned to the roster'
 
-    expected_batch_counts = Counter({0: 6, 15: 7, 30: 7, 45: 7})
+    expected_batch_counts = Counter({0: 7, 15: 7, 30: 7, 45: 7})
     actual_batch_counts: Counter[int] = Counter()
     for row in rows:
         worker = int(row['worker'])
@@ -105,14 +111,16 @@ def main() -> None:
     assert 'schedule:' not in dispatcher_text, 'dispatcher must not own an independent cron clock'
     assert 'WATCHDOG_RUN_NUMBER' in dispatcher_text
     assert 'slots=(0 15 30 45)' in dispatcher_text
-    assert 'workers=\'["6","39"]\'' in dispatcher_text
+    assert 'workers=\'["6","39","46"]\'' in dispatcher_text
     assert 'contents: read' in dispatcher_text and 'actions: write' in dispatcher_text
     assert 'issues: write' in dispatcher_text and 'pull-requests: write' in dispatcher_text
     assert 'gh workflow run free-model-factory-entry.yml' in dispatcher_text
     assert 'matrix:' not in dispatcher_text
-    assert "'.github/scripts/free-model-factory-worker.sh'" in dispatcher_text, (
-        'worker repairs must trigger an immediate post-merge fleet smoke'
-    )
+    for path in (
+        "'.github/scripts/free-model-factory-worker.sh'",
+        "'.github/scripts/kilo-auto-factory-run.sh'",
+    ):
+        assert path in dispatcher_text, f'factory runtime change must trigger post-merge smoke: {path}'
     for required in (
         'if [[ "$EVENT_NAME" == push ]]',
         'queued in_progress',
@@ -163,7 +171,8 @@ def main() -> None:
 
     runner = Path('.github/workflows/free-model-factory-run.yml')
     worker = Path('.github/scripts/free-model-factory-worker.sh')
-    assert runner.exists() and worker.exists()
+    kilo_helper = Path('.github/scripts/kilo-auto-factory-run.sh')
+    assert runner.exists() and worker.exists() and kilo_helper.exists()
     runner_text = runner.read_text(encoding='utf-8')
     assert 'group: fixed-model-factory-${{ inputs.worker }}' in runner_text, (
         'reusable runner must serialize each fixed-model worker lane'
@@ -176,6 +185,13 @@ def main() -> None:
     assert "branch_suffix='opencode-free'" in runner_text
     assert 'OPENCODE_API_KEY' not in runner_text, 'direct OpenCode Free must remain keyless'
     assert all(source not in runner_text for source in ('kilo)', 'llm7)', 'ovhcloud)', 'zen)'))
+    assert 'kilo-auto)' in runner_text
+    assert 'runtime_model="kilo/${model}"' in runner_text
+    assert "branch_suffix='kilo-auto'" in runner_text
+    assert "KILO_VERSION: '7.4.22'" in runner_text
+    assert "KILO_LINUX_X64_BASELINE_SHA256: 'bf817ad53bc95b16abe92e7a2389cc9f509c62c3510c23ecc58e151a4455cb41'" in runner_text
+    assert 'kilo-linux-x64-baseline.tar.gz' in runner_text
+    assert 'Smoke Kilo Auto Free through Kilo CLI' in runner_text
     assert 'secrets.PR_REBASE_TOKEN' in runner_text, (
         'factory pushes must use PR_REBASE_TOKEN so pull_request workflows are not stuck in action_required'
     )
@@ -187,6 +203,16 @@ def main() -> None:
         'git remote must authenticate pushes with PR_REBASE_TOKEN'
     )
 
+    kilo_text = kilo_helper.read_text(encoding='utf-8')
+    for required in (
+        'unset KILO_API_KEY KILOCODE_API_KEY',
+        'kilo run -m "$RUNTIME_MODEL" --auto --format json',
+        'requested_route=kilo-auto/free',
+        'step_finish',
+        'non-zero cost',
+    ):
+        assert required in kilo_text, f'Kilo free-route invariant missing: {required}'
+
     worker_text = worker.read_text(encoding='utf-8')
     assert 'rotate_model' not in worker_text
     assert 'Do not switch models' in worker_text
@@ -195,6 +221,11 @@ def main() -> None:
     )
     assert 'fixed-model-guard.py' in worker_text, (
         'pre-push scope enforcement must use the deterministic fixed-model guard'
+    )
+    assert "[[ \"$SOURCE\" == 'kilo-auto' ]]" in worker_text
+    assert '.github/scripts/kilo-auto-factory-run.sh' in worker_text
+    assert "[[ \"$SOURCE\" != 'kilo-auto' ]]" in worker_text, (
+        'experimental Kilo work must not autonomously merge'
     )
 
     guard = Path('.github/scripts/fixed-model-guard.py')
@@ -246,7 +277,7 @@ def main() -> None:
         'no-work must not masquerade as a successful productive heartbeat'
     )
 
-    print('Validated 27 fixed model factories on the proven 15-minute watchdog clock.')
+    print('Validated 28 external factory lanes on the proven 15-minute watchdog clock.')
     for minute in BATCH_MINUTES:
         print(f'  :{minute:02d} -> {actual_batch_counts[minute]} workers')
     for source, count in EXPECTED_SOURCE_COUNTS.items():
