@@ -481,7 +481,9 @@ export function ReadingRouteExplanation({
             ) : null
           )}
 
-          {transitiveChains.length === 0 &&
+          {!hasBridgeState &&
+          !chainsState.error &&
+          transitiveChains.length === 0 &&
           directBlockers.length === 0 &&
           readablePrerequisites.length === 0 &&
           diagnostics.length === 0 &&

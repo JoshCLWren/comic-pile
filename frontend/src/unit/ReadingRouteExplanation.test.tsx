@@ -506,6 +506,60 @@ describe('ReadingRouteExplanation', () => {
     expect(screen.getByTestId('no-route-membership')).toBeVisible()
   })
 
+  it('does not claim no memberships while readiness or chains are loading', () => {
+    mocks.useContinuityReadiness.mockReturnValue({
+      readiness: null,
+      isLoading: true,
+      error: null,
+      refetch,
+    })
+    setupChains({
+      chains: null,
+      isLoading: true,
+      error: null,
+    })
+    render(
+      <ReadingRouteExplanation
+        isOpen
+        issueId={7}
+        issueLabel="Avengers #7"
+        readingOrders={[]}
+        connectedThreads={[]}
+        onClose={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('status')).toHaveTextContent(/checking authoritative readiness/i)
+    expect(screen.queryByTestId('no-route-membership')).not.toBeInTheDocument()
+  })
+
+  it('does not claim no memberships when the chains detail failed to load', () => {
+    mocks.useContinuityReadiness.mockReturnValue({
+      readiness: { node_type: 'issue', node_id: 7, is_readable: true, evaluated_issue_id: 7, blockers: [] },
+      isLoading: false,
+      error: null,
+      refetch,
+    })
+    setupChains({
+      chains: null,
+      isLoading: false,
+      error: new Error('chain detail unavailable'),
+    })
+    render(
+      <ReadingRouteExplanation
+        isOpen
+        issueId={7}
+        issueLabel="Avengers #7"
+        readingOrders={[]}
+        connectedThreads={[]}
+        onClose={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText(/expanded prerequisite detail could not be loaded/i)).toBeVisible()
+    expect(screen.queryByTestId('no-route-membership')).not.toBeInTheDocument()
+  })
+
   it('shows informational route chips when an eligible issue belongs to routes separately from hard dependencies', () => {
     mocks.useContinuityReadiness.mockReturnValue({
       readiness: { node_type: 'issue', node_id: 7, is_readable: true, evaluated_issue_id: 7, blockers: [] },
