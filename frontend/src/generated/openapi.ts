@@ -4315,6 +4315,22 @@ export interface components {
             thread_id: number;
         };
         /**
+         * CrossoverTemplateUnresolvedMatchPreview
+         * @description A source entry that could not be matched to a ComicPile issue.
+         */
+        CrossoverTemplateUnresolvedMatchPreview: {
+            /** Issue Number */
+            issue_number: string;
+            /** Position */
+            position: number;
+            /** Reason */
+            reason: string;
+            /** Series Name */
+            series_name: string;
+            /** Source Path */
+            source_path: string;
+        };
+        /**
          * DependencyCreate
          * @description Schema for creating dependencies.
          */
@@ -4524,6 +4540,8 @@ export interface components {
             parallel_candidates?: components["schemas"]["CrossoverTemplateParallelCandidatePreview"][];
             /** Serial Spines */
             serial_spines?: components["schemas"]["CrossoverTemplateSerialSpinePreview"][];
+            /** Unresolved */
+            unresolved?: components["schemas"]["CrossoverTemplateUnresolvedMatchPreview"][];
         };
         /**
          * DiagnosticError

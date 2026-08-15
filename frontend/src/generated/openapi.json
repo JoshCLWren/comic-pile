@@ -1561,6 +1561,40 @@
         "title": "CrossoverTemplateSerialSpinePreview",
         "type": "object"
       },
+      "CrossoverTemplateUnresolvedMatchPreview": {
+        "description": "A source entry that could not be matched to a ComicPile issue.",
+        "properties": {
+          "issue_number": {
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "series_name": {
+            "title": "Series Name",
+            "type": "string"
+          },
+          "source_path": {
+            "title": "Source Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_path",
+          "position",
+          "series_name",
+          "issue_number",
+          "reason"
+        ],
+        "title": "CrossoverTemplateUnresolvedMatchPreview",
+        "type": "object"
+      },
       "DependencyCreate": {
         "description": "Schema for creating dependencies.",
         "properties": {
@@ -2088,6 +2122,13 @@
               "$ref": "#/components/schemas/CrossoverTemplateSerialSpinePreview"
             },
             "title": "Serial Spines",
+            "type": "array"
+          },
+          "unresolved": {
+            "items": {
+              "$ref": "#/components/schemas/CrossoverTemplateUnresolvedMatchPreview"
+            },
+            "title": "Unresolved",
             "type": "array"
           }
         },

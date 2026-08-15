@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import exists, or_, select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
@@ -203,7 +203,7 @@ async def derive_crossover_template_from_lists(
         parallel_candidates=template.parallel_candidates,
         serial_spines=template.serial_spines,
         intersections=template.intersections,
-        unresolved=_unresolved_matches(db, source_list_ids=tuple(source_list_ids)),
+        unresolved=await _unresolved_matches(db, source_list_ids=tuple(source_list_ids)),
     )
 
 

@@ -329,6 +329,28 @@ async def test_preview_surfaces_unresolved_matches(
 
 
 @pytest.mark.asyncio
+async def test_preview_target_story_arc_marks_core_members(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Passing target_story_arc_id marks matching members as core over HTTP."""
+    user = await get_or_create_user_async(async_db)
+    issues = [await _make_issue(async_db, user_id=user.id, suffix=str(i)) for i in range(2)]
+    await async_db.commit()
+    list_id = await _seed_template_evidence(async_db, issues=issues)
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/v1/crossover-templates/preview",
+        json={"source_list_ids": [list_id], "target_story_arc_id": "123"},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert len(body["items"]) == len(issues)
+    assert all(item["role"] == "core" for item in body["items"])
+    assert all(item["target_story_arc_id"] == "123" for item in body["items"])
+
+
+@pytest.mark.asyncio
 async def test_preview_rejects_boolean_source_list_id(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
