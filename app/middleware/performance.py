@@ -27,7 +27,7 @@ class PerformanceMiddleware(BaseHTTPMiddleware):
             Response with X-Response-Time and X-Server-Cold-Start headers.
         """
         from app.startup_diagnostics import next_request_snapshot
-        snapshot = next_request_snapshot()
+        snapshot = getattr(request.state, "startup_snapshot", None) or next_request_snapshot()
         start_ts = time.perf_counter()
         response: Response = await call_next(request)
         end_ts = time.perf_counter()

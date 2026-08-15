@@ -39,6 +39,11 @@ TRUNCATE_TEST_DATA_SQL = text(
 )
 _SHARED_TEST_ENGINE: AsyncEngine | None = None
 
+# Provide default worker_id for non-xdist environments
+@pytest.fixture(scope="session")
+def worker_id() -> str:
+    return "master"
+
 
 def _get_xdist_sync_dir(tmp_path_factory: pytest.TempPathFactory | None) -> Path:
     """Return a worker-shared temp directory for xdist coordination files."""
