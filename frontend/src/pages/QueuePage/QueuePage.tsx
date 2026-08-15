@@ -6,7 +6,7 @@ import PositionSlider from '../../components/PositionSlider'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import DependencyBuilder from '../../components/DependencyBuilder'
 import MigrationDialog from '../../components/MigrationDialog'
-import { useThreads, useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../../hooks/useQueue'
+import { useQueueThreads, useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../../hooks/useQueue'
 import { useCreateThread, useDeleteThread, useReactivateThread, useUpdateThread } from '../../hooks/useThread'
 import { useSession } from '../../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
@@ -27,7 +27,7 @@ export default function QueuePage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
-  const { data: threads, isPending, refetch } = useThreads('')
+  const { data: threads, isPending, refetch } = useQueueThreads('')
   const { data: session, refetch: refetchSession } = useSession()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
@@ -94,28 +94,28 @@ export default function QueuePage() {
 
   const activeThreads = useMemo(
     () => threads
-      ?.filter((thread) => thread.status === 'active')
-      .sort((a, b) => a.queue_position - b.queue_position) ?? [],
+      ?.filter((thread: Thread) => thread.status === 'active')
+      .sort((a: Thread, b: Thread) => a.queue_position - b.queue_position) ?? [],
     [threads],
   )
   const completedThreads = useMemo(
-    () => threads?.filter((thread) => thread.status === 'completed') ?? [],
+    () => threads?.filter((thread: Thread) => thread.status === 'completed') ?? [],
     [threads],
   )
 
   const sortedThreads = useMemo(() => {
     if (sortBy === 'alphabetical') {
-      return [...activeThreads].sort((a, b) => a.title.localeCompare(b.title))
+      return [...activeThreads].sort((a: Thread, b: Thread) => a.title.localeCompare(b.title))
     }
     if (sortBy === 'created') {
-      return [...activeThreads].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      return [...activeThreads].sort((a: Thread, b: Thread) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     }
     return activeThreads
   }, [activeThreads, sortBy])
 
   const filteredThreads = useMemo(() => {
     if (!searchQuery.trim()) return sortedThreads
-    return sortedThreads.filter((t) =>
+    return sortedThreads.filter((t: Thread) =>
       t.title.toLowerCase().includes(searchQuery.toLowerCase())
     )
   }, [sortedThreads, searchQuery])
@@ -170,7 +170,7 @@ export default function QueuePage() {
     }
 
     setReorderError(null)
-    const targetThread = activeThreads.find((thread) => thread.id === threadId)
+    const targetThread = activeThreads.find((thread: Thread) => thread.id === threadId)
     if (targetThread) {
       moveToPositionMutation.mutate({ id: draggedThreadId, position: targetThread.queue_position })
         .then(() => {
@@ -588,7 +588,7 @@ export default function QueuePage() {
               aria-label="Thread queue"
               className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4"
             >
-              {filteredThreads.map((thread, index) => renderThreadCard(thread, index))}
+              {filteredThreads.map((thread: Thread, index: number) => renderThreadCard(thread, index))}
             </div>
           )}
         </>
