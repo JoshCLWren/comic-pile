@@ -5,13 +5,13 @@ import { BrowserRouter } from 'react-router-dom'
 import QueuePage from '../pages/QueuePage'
 import { ToastProvider } from '../contexts/ToastProvider'
 import {
- useCreateThread,
- useDeleteThread,
- useReactivateThread,
- useUpdateThread,
+  useCreateThread,
+  useDeleteThread,
+  useReactivateThread,
+  useUpdateThread,
 } from '../hooks/useThread'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
-import { useQueueThreads, useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
+import { useMoveToBack, useMoveToFront, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { dependenciesApi, threadsApi } from '../services/api'
@@ -25,10 +25,10 @@ vi.mock('../hooks/useThread', () => ({
 }))
 
 vi.mock('../hooks/useQueue', () => ({
-  useQueueThreads: vi.fn(),
   useMoveToFront: vi.fn(),
   useMoveToBack: vi.fn(),
   useMoveToPosition: vi.fn(),
+  useQueueThreads: vi.fn(),
   useShuffleQueue: vi.fn(),
 }))
 
@@ -188,7 +188,7 @@ it('shuffles the queue from the header control', async () => {
       { id: 3, title: 'Spawn', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 7 },
       { id: 2, title: 'Descender', format: 'Comic', status: 'completed', issues_remaining: 0 },
     ],
-    isPending: false,
+    isLoading: false,
     refetch: mockRefetch,
   })
   mockedUseShuffleQueue.mockReturnValue(mockShuffle)
@@ -295,7 +295,7 @@ describe('Visible action Snooze/Unsnooze', () => {
       data: [
         { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5 },
       ],
-      isPending: false,
+      isLoading: false,
       refetch: mockRefetch,
     })
 
@@ -330,7 +330,7 @@ describe('Visible action Snooze/Unsnooze', () => {
       data: [
         { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5 },
       ],
-      isPending: false,
+      isLoading: false,
       refetch: mockRefetch,
     })
 
@@ -375,7 +375,7 @@ it('filters and sorts active threads while preserving completed threads', async 
       { id: 1, title: 'Zeta', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1, created_at: '2024-01-01' },
       { id: 2, title: 'Alpha', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 2, created_at: '2025-01-01' },
       { id: 3, title: 'Done', format: 'Comic', status: 'completed', queue_position: 0, issues_remaining: 0, created_at: '2023-01-01', notes: 'Finished' },
-    ], isPending: false, refetch: vi.fn(),
+    ], isLoading: false, refetch: vi.fn(),
   })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   expect(screen.getByText('Done')).toBeInTheDocument()
@@ -391,7 +391,7 @@ it('creates a simple issue range and marks the requested issues read', async () 
   const create = vi.fn().mockResolvedValue({ id: 44 })
   mockedUseCreateThread.mockReturnValue({ mutate: create, isPending: false })
   mockedThreadsApi.setPending.mockResolvedValue({})
-  mockedUseQueueThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
+  mockedUseQueueThreads.mockReturnValue({ data: [], isLoading: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await user.click(screen.getAllByRole('button', { name: /add thread/i })[0])
   await user.type(screen.getByLabelText('Title'), 'New Series')
@@ -408,7 +408,7 @@ it('opens edit, reposition, dependency, and completed reactivation flows', async
   mockedUseQueueThreads.mockReturnValue({ data: [
     { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 3, total_issues: null, created_at: '2024-01-01' },
     { id: 2, title: 'Done', format: 'Comic', status: 'completed', issues_remaining: 0, created_at: '2023-01-01' },
-  ], isPending: false, refetch })
+  ], isLoading: false, refetch })
   const update = vi.fn().mockResolvedValue({})
   mockedUseUpdateThread.mockReturnValue({ mutate: update, isPending: false })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)

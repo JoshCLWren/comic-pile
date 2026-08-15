@@ -191,7 +191,9 @@ export function useCreateThread() {
 ```
 
 **Available Hooks**:
-- `useThreads()` - Fetch and manage thread list
+- `useQueueThreads()` - Bounded, screen-specific thread list query for the Queue screen
+- `useThread(id)` - Fetch a single thread's details
+- `useStaleThreads(days)` - Fetch stale-thread summary data
 - `useSession()` - Fetch current session state
 - `useHistory()` - Fetch event history
 - `useSnapshots()` - Fetch restore points
@@ -200,6 +202,31 @@ export function useCreateThread() {
 - `useRoll()` - Roll dice mutation
 - `useDeleteThread()` - Delete thread mutation
 - `useReorderQueue()` - Reorder threads mutation
+
+### Bounded Thread Queries
+
+Thread list data must be loaded through bounded, screen-specific query hooks.
+The universal `useThreads()` hook was removed because it hydrated every page
+of the thread list (page_size=200 plus automatic page traversal) regardless of
+the screen, which defeats the per-screen cache boundaries.
+
+**Supported bounded entry points**:
+- `useQueueThreads(searchTerm?)` in `frontend/src/hooks/useQueue.ts` - the Queue
+  screen's thread-list query. Fetches a single bounded page (`page_size=50`) on
+  mount, supports an optional `search` term, and never auto-traverses pages.
+  Returns `{ data, isPending, isError, refetch, nextPageToken, loadMore }`.
+  `loadMore()` advances to the next page only when `nextPageToken` is present.
+- `useThread(id)` in `frontend/src/hooks/useThread.ts` - a single thread's
+  details (thread detail screen).
+- `useStaleThreads(days)` in `frontend/src/hooks/useThread.ts` - stale-thread
+  summary for the roll screen.
+
+**Rule**: Do not reintroduce a universal thread-list hook that hydrates the
+entire library across all screens. A screen that needs thread list data must
+use a bounded, screen-specific query (single page, opt-in pagination). The
+guard test `frontend/src/unit/boundedThreadQuery.guard.test.ts` fails if the
+universal `useThreads` export is reintroduced or if the queue query starts
+auto-traversing pages.
 
 ### Context Providers
 

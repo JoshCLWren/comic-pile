@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { invalidateAfterQueueMovement } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
-import { queueApi } from '../services/api'
-import { threadsApi } from '../services/api'
+import { queueApi, threadsApi } from '../services/api'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { MoveToPositionPayload, Thread, ThreadListResponse, ThreadQueryParams } from '../types'
 
@@ -145,3 +144,6 @@ export function useShuffleQueue() {
 
   return { mutate, isPending, isError }
 }
+
+// Re-export delete thread hook for backward compatibility
+export { useDeleteThread } from './useThread';

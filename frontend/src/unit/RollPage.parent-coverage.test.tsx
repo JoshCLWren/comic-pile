@@ -32,7 +32,7 @@ vi.mock('../contexts/useBugReportRestore', () => ({
 }))
 vi.mock('../hooks/useSession', () => ({ useSession: () => sessionHook.value ?? ({ data: sessionData, refetch: spies.refetch }) }))
 vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: () => bootstrapHook.value ?? ({ data: bootstrapData, refetch: spies.refetch, isPending: false, isError: false, error: null }) }))
-vi.mock('../hooks/useThread', () => ({ useThreads: () => ({ data: threadsValue, refetch: spies.refetch }), useStaleThreads: () => ({ data: staleData, refetch: spies.refetch }) }))
+vi.mock('../hooks/useThread', () => ({ useStaleThreads: () => ({ data: staleData, refetch: spies.refetch }) }))
 vi.mock('../hooks/useRoll', () => ({
   useSetDie: () => ({ mutate: spies.setDie, isPending: false }), useClearManualDie: () => ({ mutate: spies.clearDie, isPending: false }),
   useRoll: () => ({ mutate: spies.roll, isPending: false }), useDismissPending: () => ({ mutate: spies.dismissPending, isPending: false }),

@@ -3,15 +3,15 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserRouter, MemoryRouter } from 'react-router-dom'
 import QueuePage from '../pages/QueuePage'
-import { useThreads, useCreateThread, useUpdateThread, useDeleteThread, useReactivateThread } from '../hooks/useThread'
-import { useQueueThreads, useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
+import { useCreateThread, useUpdateThread, useDeleteThread, useReactivateThread } from '../hooks/useThread'
+import { useMoveToBack, useMoveToFront, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { threadsApi, dependenciesApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 
-vi.mock('../hooks/useThread', () => ({ useThreads: vi.fn(), useCreateThread: vi.fn(), useUpdateThread: vi.fn(), useDeleteThread: vi.fn(), useReactivateThread: vi.fn() }))
-vi.mock('../hooks/useQueue', () => ({ useQueueThreads: vi.fn(), useMoveToBack: vi.fn(), useMoveToFront: vi.fn(), useMoveToPosition: vi.fn(), useShuffleQueue: vi.fn() }))
+vi.mock('../hooks/useThread', () => ({ useCreateThread: vi.fn(), useUpdateThread: vi.fn(), useDeleteThread: vi.fn(), useReactivateThread: vi.fn() }))
+vi.mock('../hooks/useQueue', () => ({ useMoveToBack: vi.fn(), useMoveToFront: vi.fn(), useMoveToPosition: vi.fn(), useQueueThreads: vi.fn(), useShuffleQueue: vi.fn() }))
 vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn(), useUnsnooze: vi.fn() }))
 vi.mock('../services/api', () => ({ threadsApi: { setPending: vi.fn() }, dependenciesApi: { listBlockedThreadIds: vi.fn(), getBlockingInfo: vi.fn() } }))
@@ -35,8 +35,7 @@ beforeEach(() => {
   vi.stubGlobal('alert', vi.fn())
   vi.stubGlobal('confirm', vi.fn(() => true))
   mocks.mutate.mockResolvedValue(undefined)
-  vi.mocked(useThreads).mockReturnValue({ data: [thread, completed] as never, isPending: false, refetch: mocks.refetch } as never)
-  vi.mocked(useQueueThreads).mockImplementation(() => vi.mocked(useThreads)() as any)
+  vi.mocked(useQueueThreads).mockReturnValue({ data: [thread, completed] as never, isPending: false, refetch: mocks.refetch } as never)
   vi.mocked(useSession).mockReturnValue({ data: { snoozed_threads: [] }, refetch: mocks.refetchSession } as never)
   vi.mocked(useCreateThread).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
   vi.mocked(useUpdateThread).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
@@ -137,7 +136,7 @@ describe('QueuePage callback coverage', () => {
 
   it('covers migrated edit fields, location-driven create, and migration refresh failure', async () => {
     const user = userEvent.setup()
-    vi.mocked(useThreads).mockReturnValue({ data: [{ ...thread, total_issues: 4 }] as never, isPending: false, refetch: mocks.refetch } as never)
+    vi.mocked(useQueueThreads).mockReturnValue({ data: [{ ...thread, total_issues: 4 }] as never, isPending: false, refetch: mocks.refetch } as never)
     mocks.refetch.mockRejectedValueOnce(new Error('refresh after migration failed'))
     renderPage()
     await user.click(screen.getByText('edit modal callback'))
@@ -148,7 +147,7 @@ describe('QueuePage callback coverage', () => {
 
   it('persists a drag reorder between two active threads', async () => {
     const second = { ...thread, id: 3, title: 'Second', queue_position: 2 }
-    vi.mocked(useThreads).mockReturnValue({ data: [thread, second] as never, isPending: false, refetch: mocks.refetch } as never)
+    vi.mocked(useQueueThreads).mockReturnValue({ data: [thread, second] as never, isPending: false, refetch: mocks.refetch } as never)
     mocks.mutate.mockResolvedValue(undefined)
     const user = userEvent.setup()
     renderPage()
@@ -181,7 +180,7 @@ describe('QueuePage callback coverage', () => {
 
   it('uses the virtualized queue renderer for large queues', () => {
     const manyThreads = Array.from({ length: 51 }, (_, index) => ({ ...thread, id: index + 1, queue_position: index + 1 }))
-    vi.mocked(useThreads).mockReturnValue({ data: manyThreads as never, isPending: false, refetch: mocks.refetch } as never)
+    vi.mocked(useQueueThreads).mockReturnValue({ data: manyThreads as never, isPending: false, refetch: mocks.refetch } as never)
     renderPage()
     expect(screen.getByText('card callback')).toBeInTheDocument()
   })
@@ -205,6 +204,19 @@ describe('QueuePage callback coverage', () => {
     await waitFor(() => expect(screen.getByText(/issue identifier too long/i)).toBeInTheDocument())
   })
 
+  it('alerts the user when create submit is attempted with an invalid issue range', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(screen.getAllByRole('button', { name: /add thread/i })[0])
+    await user.type(screen.getByLabelText('Title'), 'Broken Range')
+    await user.type(screen.getByLabelText('Issues'), '8-2')
+    await user.click(screen.getByRole('button', { name: /create thread/i }))
+    await waitFor(() =>
+      expect(alert).toHaveBeenCalledWith(expect.stringContaining('Failed to create thread')),
+    )
+    expect(mocks.mutate).not.toHaveBeenCalled()
+  })
+
   it('loads mixed blocking reasons and leaves a blank reactivation selection untouched', async () => {
     vi.mocked(dependenciesApi.listBlockedThreadIds).mockResolvedValue([1, 3])
     vi.mocked(dependenciesApi.getBlockingInfo).mockResolvedValueOnce({ blocking_reasons: ['Finish Saga'] }).mockRejectedValueOnce(new Error('reason failed'))
@@ -218,7 +230,7 @@ describe('QueuePage callback coverage', () => {
 
   it('covers queue sorting, filtering, empty states, and router edit state', async () => {
     const user = userEvent.setup()
-    vi.mocked(useThreads).mockReturnValue({ data: [
+    vi.mocked(useQueueThreads).mockReturnValue({ data: [
       { ...thread, title: 'Zeta', created_at: '2024-01-01' },
       { ...thread, id: 3, title: 'Alpha', queue_position: 2, created_at: '2025-01-01' },
     ] as never, isPending: false, refetch: mocks.refetch } as never)
@@ -274,12 +286,12 @@ describe('QueuePage callback coverage', () => {
   })
 
   it('handles loading, empty active queues, and failed queue mutations', async () => {
-    vi.mocked(useThreads).mockReturnValue({ data: undefined, isPending: true, refetch: mocks.refetch } as never)
+    vi.mocked(useQueueThreads).mockReturnValue({ data: undefined, isPending: true, refetch: mocks.refetch } as never)
     const { unmount } = renderPage()
     expect(screen.getByText(/loading/i)).toBeInTheDocument()
     unmount()
 
-    vi.mocked(useThreads).mockReturnValue({ data: [completed] as never, isPending: false, refetch: mocks.refetch } as never)
+    vi.mocked(useQueueThreads).mockReturnValue({ data: [completed] as never, isPending: false, refetch: mocks.refetch } as never)
     const user = userEvent.setup()
     renderPage()
     expect(screen.getByText('No active threads in queue')).toBeInTheDocument()
@@ -310,7 +322,7 @@ describe('QueuePage callback coverage', () => {
   it('uses snoozed and blocked card branches and reports blocked reads', async () => {
     const user = userEvent.setup()
     vi.mocked(useSession).mockReturnValue({ data: { snoozed_threads: [{ id: 1 }] }, refetch: mocks.refetchSession } as never)
-    vi.mocked(useThreads).mockReturnValue({ data: [{ ...thread, is_blocked: true }] as never, isPending: false, refetch: mocks.refetch } as never)
+    vi.mocked(useQueueThreads).mockReturnValue({ data: [{ ...thread, is_blocked: true }] as never, isPending: false, refetch: mocks.refetch } as never)
     vi.mocked(dependenciesApi.listBlockedThreadIds).mockResolvedValue([1])
     vi.mocked(dependenciesApi.getBlockingInfo).mockResolvedValue({ blocking_reasons: [] })
     renderPage()
