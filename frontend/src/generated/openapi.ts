@@ -4249,6 +4249,8 @@ export interface components {
             first_issue_id: number;
             /** Second Issue Id */
             second_issue_id: number;
+            /** Source Paths */
+            source_paths: string[];
         };
         /**
          * CrossoverTemplateItemPreview
@@ -4307,6 +4309,8 @@ export interface components {
             explanation: string;
             /** Issue Ids */
             issue_ids: number[];
+            /** Source Paths */
+            source_paths: string[];
             /** Thread Id */
             thread_id: number;
         };

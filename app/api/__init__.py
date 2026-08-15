@@ -29,6 +29,7 @@ __all__ = [
     "continuity_plan",
     "continuity_readiness",
     "continuity_rule",
+    "continuity_template",
     "dependency",
     "dependency_group",
     "dependency_group_batch",

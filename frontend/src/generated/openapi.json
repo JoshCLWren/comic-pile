@@ -1387,11 +1387,19 @@
           "second_issue_id": {
             "title": "Second Issue Id",
             "type": "integer"
+          },
+          "source_paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Paths",
+            "type": "array"
           }
         },
         "required": [
           "first_issue_id",
           "second_issue_id",
+          "source_paths",
           "explanation"
         ],
         "title": "CrossoverTemplateIntersectionPreview",
@@ -1532,6 +1540,13 @@
             "title": "Issue Ids",
             "type": "array"
           },
+          "source_paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Paths",
+            "type": "array"
+          },
           "thread_id": {
             "title": "Thread Id",
             "type": "integer"
@@ -1540,6 +1555,7 @@
         "required": [
           "thread_id",
           "issue_ids",
+          "source_paths",
           "explanation"
         ],
         "title": "CrossoverTemplateSerialSpinePreview",

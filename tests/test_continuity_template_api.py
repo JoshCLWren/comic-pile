@@ -240,3 +240,36 @@ async def test_adopt_rejects_unowned_issue(
         select(func.count()).select_from(ContinuityPlan)
     )
     assert plan_count == 0, "no plan is created when adoption is rejected"
+
+
+@pytest.mark.asyncio
+async def test_preview_rejects_boolean_source_list_id(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Preview must reject bool source_list_ids, not coerce True to list id 1."""
+    await get_or_create_user_async(async_db)
+
+    response = await auth_client.post(
+        "/api/v1/crossover-templates/preview",
+        json={"source_list_ids": [True]},
+    )
+    assert response.status_code == 422, response.text
+    assert "positive integers" in response.text
+
+
+@pytest.mark.asyncio
+async def test_adopt_rejects_boolean_source_list_id(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Adoption must reject bool source_list_ids, not coerce True to list id 1."""
+    await get_or_create_user_async(async_db)
+
+    response = await auth_client.post(
+        "/api/v1/crossover-templates/adopt",
+        json={
+            "source_list_ids": [True],
+            "plan_name": "Bool Crossover",
+        },
+    )
+    assert response.status_code == 422, response.text
+    assert "positive integers" in response.text

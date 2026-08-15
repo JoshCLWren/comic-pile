@@ -3,12 +3,22 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, BeforeValidator, Field, model_validator
 
 PlanOrderingMode = Literal["informational", "strict_sequential"]
 PlanNodeType = Literal["issue", "crossover", "thread"]
+
+
+def _reject_boolean_item_id(value: object) -> object:
+    """Reject boolean JSON values before Pydantic coerces them to integers."""
+    if isinstance(value, bool):
+        raise ValueError("source_list_ids must contain positive integers")
+    return value
+
+
+TemplateSourceListId = Annotated[int, BeforeValidator(_reject_boolean_item_id)]
 
 
 class ContinuityPlanLane(BaseModel):
@@ -138,13 +148,16 @@ class DerivedCrossoverTemplatePreview(BaseModel):
 class CrossoverTemplatePreviewRequest(BaseModel):
     """Request to preview a derived crossover template from persisted CBL evidence."""
 
-    source_list_ids: tuple[int, ...] = Field(min_length=1)
+    source_list_ids: tuple[TemplateSourceListId, ...] = Field(min_length=1)
     target_story_arc_id: str | None = None
 
     @model_validator(mode="after")
     def validate_positive_ids(self) -> CrossoverTemplatePreviewRequest:
-        """Validate that all source_list_ids are positive integers."""
-        if any(not isinstance(item_id, int) or item_id <= 0 for item_id in self.source_list_ids):
+        """Validate that all source_list_ids are positive non-boolean integers."""
+        if any(
+            isinstance(item_id, bool) or not isinstance(item_id, int) or item_id <= 0
+            for item_id in self.source_list_ids
+        ):
             raise ValueError("source_list_ids must contain positive integers")
         return self
 
@@ -152,7 +165,7 @@ class CrossoverTemplatePreviewRequest(BaseModel):
 class CrossoverTemplateAdoptRequest(BaseModel):
     """Adopt an external template into an editable continuity plan."""
 
-    source_list_ids: tuple[int, ...] = Field(min_length=1)
+    source_list_ids: tuple[TemplateSourceListId, ...] = Field(min_length=1)
     target_story_arc_id: str | None = None
     plan_name: str = Field(min_length=1, max_length=200)
     ordering_mode: PlanOrderingMode = "informational"
@@ -162,7 +175,10 @@ class CrossoverTemplateAdoptRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_positive_ids(self) -> CrossoverTemplateAdoptRequest:
-        """Validate that all source_list_ids are positive integers."""
-        if any(not isinstance(item_id, int) or item_id <= 0 for item_id in self.source_list_ids):
+        """Validate that all source_list_ids are positive non-boolean integers."""
+        if any(
+            isinstance(item_id, bool) or not isinstance(item_id, int) or item_id <= 0
+            for item_id in self.source_list_ids
+        ):
             raise ValueError("source_list_ids must contain positive integers")
         return self
