@@ -3,7 +3,6 @@
 import logging
 import os
 import secrets
-from app.middleware.performance import PerformanceMiddleware
 from pathlib import Path
 from typing import cast
 
@@ -28,6 +27,7 @@ from app.api import (
     debug,
     dependency,
     issue,
+    metrics,
     queue,
     rate,
     reading_orders,
@@ -37,7 +37,6 @@ from app.api import (
     test_helpers,
     thread,
     undo,
-    metrics,
 )
 from app.cache import cache
 from app.config import get_app_settings, get_database_settings, get_redis_settings
@@ -47,11 +46,11 @@ from app.csrf import (
     is_csrf_protected_request,
     log_csrf_rejection,
 )
-from app.auth import get_current_user
 from app.database import get_db
 from app.exception_handlers import register_exception_handlers
 from app.lifecycle import init_database
 from app.middleware import limiter, SecurityHeadersMiddleware
+from app.middleware.performance import PerformanceMiddleware, compute_startup_duration
 from app.middleware.request_logging import add_request_logging_middleware
 from app.safe_logging import safe_connection_metadata
 
@@ -205,8 +204,6 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
     # API route prefix convention:
 
-
-
     # - Legacy resources remain available under /api/* as compatibility aliases.
     # - Retained client resources migrate to the versioned /api/v1/* surface.
     # - Retained auth, session, snooze, undo, roll, and rating resources have
@@ -236,61 +233,9 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(session.router, prefix="/api/sessions", tags=["session"])
     app.include_router(session.router, prefix="/api/v1/sessions", tags=["session"])
     app.include_router(snooze.router, prefix="/api/snooze", tags=["snooze"])
-    app.include_router(snooze.router, prefix="/api/v1/snooze", tags=["snooze"])    
-    # Dummy legacy snooze routes for test visibility
-    app.add_api_route(
-        "/api/snooze/",
-        endpoint=lambda request, current_user=Depends(get_current_user), db=Depends(get_db): JSONResponse(content={}),
-        methods=["POST"],
-        tags=["snooze"],
-    )
-    app.add_api_route(
-        "/api/snooze/{thread_id}/unsnooze",
-        endpoint=lambda thread_id, request, current_user=Depends(get_current_user), db=Depends(get_db): JSONResponse(content={}),
-        methods=["POST"],
-        tags=["snooze"],
-    )
-    # Dummy v1 snooze routes for test visibility
-    app.add_api_route(
-        "/api/v1/snooze/",
-        endpoint=lambda request, current_user=Depends(get_current_user), db=Depends(get_db): JSONResponse(content={}),
-        methods=["POST"],
-        tags=["snooze"],
-    )
-    app.add_api_route(
-        "/api/v1/snooze/{thread_id}/unsnooze",
-        endpoint=lambda thread_id, request, current_user=Depends(get_current_user), db=Depends(get_db): JSONResponse(content={}),
-        methods=["POST"],
-        tags=["snooze"],
-    )
+    app.include_router(snooze.router, prefix="/api/v1/snooze", tags=["snooze"])
     app.include_router(undo.router, prefix="/api/undo", tags=["undo"])
-    app.include_router(undo.router, prefix="/api/v1/undo", tags=["undo"])    
-    # Add dummy APIRoute entries for v1 undo aliases to satisfy route existence tests
-    app.add_api_route(
-        "/api/v1/undo/{session_id}/snapshots",
-        endpoint=lambda request, current_user=Depends(get_current_user), db=Depends(get_db): JSONResponse(content={}),
-        methods=["POST"],
-        tags=["undo"],
-    )
-    app.add_api_route(
-        "/api/v1/undo/{session_id}/undo/{snapshot_id}",
-        endpoint=lambda request, current_user=Depends(get_current_user), db=Depends(get_db): JSONResponse(content={}),
-        methods=["POST"],
-        tags=["undo"],
-    )
-    # Dummy legacy undo routes
-    app.add_api_route(
-        "/api/undo/{session_id}/snapshots",
-        endpoint=lambda request, current_user=Depends(get_current_user), db=Depends(get_db): JSONResponse(content={}),
-        methods=["POST"],
-        tags=["undo"],
-    )
-    app.add_api_route(
-        "/api/undo/{session_id}/undo/{snapshot_id}",
-        endpoint=lambda request, current_user=Depends(get_current_user), db=Depends(get_db): JSONResponse(content={}),
-        methods=["POST"],
-        tags=["undo"],
-    )
+    app.include_router(undo.router, prefix="/api/v1/undo", tags=["undo"])
     app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
     if os.getenv("TEST_ENVIRONMENT") == "true":
         app.include_router(test_helpers.router, prefix="/api", tags=["test"])
@@ -473,7 +418,6 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
     @app.on_event("startup")
     async def startup_event():
-        from app.middleware.performance import compute_startup_duration
         """Initialize database and cache on application startup."""
         await init_database(app_settings.environment)
         await compute_startup_duration()
