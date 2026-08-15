@@ -203,8 +203,10 @@ export function ReadingRouteExplanation({
         )}
       </section>
 
-      {issueId != null && readinessState.error ? null : (
+      {issueId != null ? (
         <>
+          {!(readinessState.error || chainsState.error) ? (
+            <>
           {directBlockers.length > 0 ? (
             <section
               aria-labelledby="direct-blockers-heading"
@@ -369,11 +371,13 @@ export function ReadingRouteExplanation({
                 ))}
               </ul>
             </section>
+            ) : null}
+            </>
           ) : null}
 
-          {upstreamThreads.length > 0 ? (
-            <section
-              aria-labelledby="upstream-locks-heading"
+            {upstreamThreads.length > 0 ? (
+              <section
+                aria-labelledby="upstream-locks-heading"
               className="rounded-2xl border border-blue-900/30 bg-blue-950/15 p-3"
             >
               <h3
@@ -506,7 +510,7 @@ export function ReadingRouteExplanation({
             </section>
           ) : null}
         </>
-      )}
+      ) : null}
     </Modal>
   )
 }

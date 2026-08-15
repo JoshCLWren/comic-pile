@@ -809,4 +809,34 @@ describe('ReadingRouteExplanation', () => {
     await userEvent.click(screen.getByRole('button', { name: /retry continuity detail/i }))
     expect(chainsRefetch).toHaveBeenCalledOnce()
   })
+
+  it('keeps informational connected threads and reading routes visible when readiness errors', () => {
+    mocks.useContinuityReadiness.mockReturnValue({
+      readiness: null,
+      isLoading: false,
+      error: new Error('offline'),
+      refetch,
+    })
+    setupChains({
+      chains: null,
+      isLoading: false,
+      error: null,
+    })
+    render(
+      <ReadingRouteExplanation
+        isOpen
+        issueId={7}
+        issueLabel="Avengers #7"
+        readingOrders={routes}
+        connectedThreads={connections}
+        onClose={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText(/readiness is unavailable/i)).toBeVisible()
+    expect(screen.getByRole('button', { name: /retry readiness/i })).toBeInTheDocument()
+    expect(screen.getByText('Prelude')).toBeVisible()
+    expect(screen.getByText('Avengers path')).toBeInTheDocument()
+    expect(screen.getByText('Secret Wars')).toBeInTheDocument()
+  })
 })
