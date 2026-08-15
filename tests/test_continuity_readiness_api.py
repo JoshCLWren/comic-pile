@@ -366,6 +366,312 @@ async def test_membership_collection_is_bounded(
 
 
 @pytest.mark.asyncio
+async def test_continuity_chains_resolves_transitive_path_and_readable_leaf(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """The chains endpoint returns bounded prerequisite paths and readable leaves.
+
+    Args:
+        auth_client: Authenticated API client fixture.
+        async_db: Async database session fixture.
+
+    Returns:
+        None.
+    """
+    user = await get_or_create_user_async(async_db)
+    _target_thread, target_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="chains-target", issue_count=1
+    )
+    _middle_thread, middle_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="chains-middle", issue_count=1
+    )
+    _leaf_thread, leaf_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="chains-leaf", issue_count=1
+    )
+    async_db.add_all(
+        [
+            _rule(
+                user_id=user.id,
+                source_type="issue",
+                source_id=middle_issues[0].id,
+                target_type="issue",
+                target_id=target_issues[0].id,
+                satisfaction_type="item_read",
+            ),
+            _rule(
+                user_id=user.id,
+                source_type="issue",
+                source_id=leaf_issues[0].id,
+                target_type="issue",
+                target_id=middle_issues[0].id,
+                satisfaction_type="item_read",
+            ),
+        ]
+    )
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/v1/continuity/chains",
+        json={"node_type": "issue", "node_id": target_issues[0].id},
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["node_type"] == "issue"
+    assert payload["node_id"] == target_issues[0].id
+    assert payload["evaluated_issue_id"] is None
+    direct_blockers = payload["direct_blockers"]
+    assert [blocker["source_id"] for blocker in direct_blockers] == [middle_issues[0].id]
+    chains = payload["chains"]
+    assert [[node["node_id"] for node in path] for path in chains] == [
+        [middle_issues[0].id, leaf_issues[0].id]
+    ]
+    readable = payload["readable_prerequisites"]
+    assert [node["node_id"] for node in readable] == [leaf_issues[0].id]
+    assert readable[0]["is_readable"] is True
+    assert payload["diagnostics"] == []
+
+
+@pytest.mark.asyncio
+async def test_continuity_chains_reports_structured_cycle_diagnostics(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """A legacy cycle yields empty chains plus a structured cycle diagnostic.
+
+    Args:
+        auth_client: Authenticated API client fixture.
+        async_db: Async database session fixture.
+
+    Returns:
+        None.
+    """
+    user = await get_or_create_user_async(async_db)
+    _first_thread, first_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="cycle-a", issue_count=1
+    )
+    _second_thread, second_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="cycle-b", issue_count=1
+    )
+    async_db.add_all(
+        [
+            _rule(
+                user_id=user.id,
+                source_type="issue",
+                source_id=second_issues[0].id,
+                target_type="issue",
+                target_id=first_issues[0].id,
+                satisfaction_type="item_read",
+            ),
+            _rule(
+                user_id=user.id,
+                source_type="issue",
+                source_id=first_issues[0].id,
+                target_type="issue",
+                target_id=second_issues[0].id,
+                satisfaction_type="item_read",
+            ),
+        ]
+    )
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/v1/continuity/chains",
+        json={"node_type": "issue", "node_id": first_issues[0].id},
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["chains"] == []
+    assert payload["readable_prerequisites"] == []
+    diagnostics = payload["diagnostics"]
+    assert diagnostics[0]["code"] == "cycle_detected"
+    assert diagnostics[0]["node_id"] in {first_issues[0].id, second_issues[0].id}
+
+
+@pytest.mark.asyncio
+async def test_continuity_chains_returns_converging_parallel_branches(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Two parallel prerequisites converge into one target with deterministic paths.
+
+    Args:
+        auth_client: Authenticated API client fixture.
+        async_db: Async database session fixture.
+
+    Returns:
+        None.
+    """
+    user = await get_or_create_user_async(async_db)
+    _target_thread, target_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="converging-target", issue_count=1
+    )
+    _left_thread, left_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="converging-left", issue_count=1
+    )
+    _right_thread, right_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="converging-right", issue_count=1
+    )
+    async_db.add_all(
+        [
+            _rule(
+                user_id=user.id,
+                source_type="issue",
+                source_id=left_issues[0].id,
+                target_type="issue",
+                target_id=target_issues[0].id,
+                satisfaction_type="item_read",
+            ),
+            _rule(
+                user_id=user.id,
+                source_type="issue",
+                source_id=right_issues[0].id,
+                target_type="issue",
+                target_id=target_issues[0].id,
+                satisfaction_type="item_read",
+            ),
+        ]
+    )
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/v1/continuity/chains",
+        json={"node_type": "issue", "node_id": target_issues[0].id},
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    chain_sources = sorted(
+        [path[0]["node_id"] for path in payload["chains"]]
+    )
+    assert chain_sources == sorted([left_issues[0].id, right_issues[0].id])
+    leaves = sorted(node["node_id"] for node in payload["readable_prerequisites"])
+    assert leaves == sorted([left_issues[0].id, right_issues[0].id])
+
+
+@pytest.mark.asyncio
+async def test_continuity_chains_returns_empty_for_readable_node_with_no_chain(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """A readable node with no prerequisites returns empty chain and diagnostic state.
+
+    Args:
+        auth_client: Authenticated API client fixture.
+        async_db: Async database session fixture.
+
+    Returns:
+        None.
+    """
+    user = await get_or_create_user_async(async_db)
+    _thread, issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="readable-no-chain", issue_count=1
+    )
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/v1/continuity/chains",
+        json={"node_type": "issue", "node_id": issues[0].id},
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["direct_blockers"] == []
+    assert payload["chains"] == []
+    assert payload["readable_prerequisites"] == []
+    assert payload["diagnostics"] == []
+
+
+@pytest.mark.asyncio
+async def test_continuity_chains_thread_endpoint_evaluates_next_unread_issue(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """A thread chain request exposes the next unread issue id in the response.
+
+    Args:
+        auth_client: Authenticated API client fixture.
+        async_db: Async database session fixture.
+
+    Returns:
+        None.
+    """
+    user = await get_or_create_user_async(async_db)
+    thread, issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="thread-chain", issue_count=2
+    )
+    _source_thread, source_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="thread-chain-source", issue_count=1
+    )
+    async_db.add(
+        _rule(
+            user_id=user.id,
+            source_type="issue",
+            source_id=source_issues[0].id,
+            target_type="issue",
+            target_id=issues[0].id,
+            satisfaction_type="item_read",
+        )
+    )
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/v1/continuity/chains",
+        json={"node_type": "thread", "node_id": thread.id},
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["evaluated_issue_id"] == issues[0].id
+    assert [blocker["source_id"] for blocker in payload["direct_blockers"]] == [
+        source_issues[0].id
+    ]
+
+
+@pytest.mark.asyncio
+async def test_continuity_chains_membership_collection_is_bounded(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The chains endpoint surfaces the graph-too-large cap before traversal.
+
+    The ``/api/v1/continuity/chains`` endpoint shares ``_load_snapshot`` with the
+    readiness endpoint and therefore must surface a 422 with the
+    ``continuity_graph_too_large`` detail when a crossover membership collection
+    exceeds its cap. This regression guarantees the chains route does not bypass
+    the bounded snapshot gate or return an unstructured 422 to the frontend.
+
+    Args:
+        auth_client: Authenticated API client fixture.
+        async_db: Async database session fixture.
+        monkeypatch: Pytest fixture used to shrink the membership cap for this
+            regression.
+
+    Returns:
+        None.
+    """
+    user = await get_or_create_user_async(async_db)
+    _thread, issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="chains-membership-limit", issue_count=2
+    )
+    await _make_group(
+        async_db,
+        user_id=user.id,
+        suffix="chains-membership-limit",
+        issue_ids=[issue.id for issue in issues],
+    )
+    await async_db.commit()
+    monkeypatch.setattr(readiness, "MAX_GRAPH_MEMBERSHIPS", 1)
+
+    response = await auth_client.post(
+        "/api/v1/continuity/chains",
+        json={"node_type": "issue", "node_id": issues[0].id},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == {
+        "code": "continuity_graph_too_large",
+        "limit": 1,
+    }
+@pytest.mark.asyncio
 async def test_selected_member_collection_is_bounded(
     auth_client: AsyncClient,
     async_db: AsyncSession,
