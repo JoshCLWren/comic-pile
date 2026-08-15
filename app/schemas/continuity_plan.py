@@ -172,8 +172,8 @@ class CrossoverTemplatePreviewRequest(BaseModel):
         """
         if not isinstance(values, dict):
             return values
-        raw_ids = values.get("source_list_ids", ())
-        if not raw_ids:
+        raw_ids = values.get("source_list_ids")
+        if not isinstance(raw_ids, (list, tuple)) or len(raw_ids) == 0:
             raise ValueError("source_list_ids must not be empty")
         for v in raw_ids:
             if isinstance(v, bool):
@@ -208,8 +208,8 @@ class CrossoverTemplateAdoptRequest(BaseModel):
         """
         if not isinstance(values, dict):
             return values
-        raw_ids = values.get("source_list_ids", ())
-        if not raw_ids:
+        raw_ids = values.get("source_list_ids")
+        if not isinstance(raw_ids, (list, tuple)) or len(raw_ids) == 0:
             raise ValueError("source_list_ids must not be empty")
         for v in raw_ids:
             if isinstance(v, bool):
