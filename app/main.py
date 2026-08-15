@@ -194,9 +194,10 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
         return await call_next(request)
 
-    # Conditionally include metrics router in test environment
-    if os.getenv("TEST_ENVIRONMENT") == "true":
-        app.include_router(metrics.router, prefix="/api", tags=["metrics"])
+    # Expose the metrics router in every environment so production performance
+    # tracking (issue #834) and future regression checks can read startup
+    # telemetry. It returns only process startup epoch and duration.
+    app.include_router(metrics.router, prefix="/api", tags=["metrics"])
 
     # Error-only request logging (body redaction + environment-aware sanitization).
     add_request_logging_middleware(app, app_settings.environment)
