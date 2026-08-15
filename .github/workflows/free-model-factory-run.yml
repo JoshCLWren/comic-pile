@@ -35,18 +35,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      # Dedicated PAT/App token so factory pushes trigger normal PR workflows.
-      # GITHUB_TOKEN pushes are attributed to github-actions[bot] and leave
-      # pull_request workflows (including the repair guard) stuck in
-      # action_required until a human approves them.
-      GH_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}
+      # Workflow token for labels/comments/API. A dedicated PAT is used only for
+      # git fetch/push so pull_request workflows (including the repair guard) are
+      # attributed to a trusted actor instead of github-actions[bot].
+      GH_TOKEN: ${{ github.token }}
+      PR_REBASE_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}
       NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
     steps:
       - name: Require trusted push credential
         shell: bash
         run: |
           set -Eeuo pipefail
-          if [[ -z "${GH_TOKEN:-}" ]]; then
+          if [[ -z "${PR_REBASE_TOKEN:-}" ]]; then
             echo '::error::PR_REBASE_TOKEN is required so fixed-model factory pushes trigger PR workflows without action_required.'
             exit 1
           fi
@@ -63,7 +63,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git remote set-url origin "https://x-access-token:${PR_REBASE_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
       - name: Resolve fixed lane
         id: lane

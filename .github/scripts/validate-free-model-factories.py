@@ -180,8 +180,12 @@ def main() -> None:
     assert 'secrets.PR_REBASE_TOKEN' in runner_text, (
         'factory pushes must use PR_REBASE_TOKEN so pull_request workflows are not stuck in action_required'
     )
-    assert 'GH_TOKEN: ${{ github.token }}' not in runner_text, (
-        'GITHUB_TOKEN pushes attribute to github-actions[bot] and block the repair guard'
+    assert 'PR_REBASE_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}' in runner_text
+    assert 'GH_TOKEN: ${{ github.token }}' in runner_text, (
+        'gh API/labels must keep using GITHUB_TOKEN; PR_REBASE_TOKEN is push-only'
+    )
+    assert 'x-access-token:${PR_REBASE_TOKEN}' in runner_text, (
+        'git remote must authenticate pushes with PR_REBASE_TOKEN'
     )
 
     worker_text = worker.read_text(encoding='utf-8')
