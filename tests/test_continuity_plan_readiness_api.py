@@ -215,11 +215,25 @@ async def test_plan_readiness_reports_crossover_blockers(
     assert node["is_readable"] is False
     assert node["blockers"][0]["causing_issue_ids"] == [source_issues[0].id]
     assert node["blockers"][0]["blocker_type"] == "item_unread"
+    # Verify summary counts for a single crossover node
+    summary = response.json()["summary"]
+    assert summary["total"] == 1
+    assert summary["readable"] == 0
+    assert summary["blocked"] == 1
+    assert summary["complete"] == 0
+    assert summary["unavailable"] == 0
 
     source_issues[0].status = "read"
     await async_db.commit()
     after = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/readiness")
     assert after.json()["nodes"][0]["is_readable"] is True
+    # Verify updated summary after source issue is read
+    after_summary = after.json()["summary"]
+    assert after_summary["total"] == 1
+    assert after_summary["readable"] == 1
+    assert after_summary["blocked"] == 0
+    assert after_summary["complete"] == 0
+    assert after_summary["unavailable"] == 0
 
 
 @pytest.mark.asyncio
