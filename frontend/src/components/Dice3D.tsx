@@ -921,6 +921,24 @@ export default function Dice3D({
     renderer.setClearColor(0x000000, 0);
     rendererRef.current = renderer;
 
+    const applySize = () => {
+      const nextW = container.clientWidth;
+      const nextH = container.clientHeight;
+      if (!nextW || !nextH) return;
+      const { w: currentW, h: currentH } = viewportSizeRef.current;
+      if (currentW === nextW && currentH === nextH) return;
+      viewportSizeRef.current = { w: nextW, h: nextH };
+      camera.aspect = nextW / nextH;
+      camera.updateProjectionMatrix();
+      renderer.setSize(nextW, nextH);
+    };
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => applySize());
+      resizeObserver.observe(container);
+    }
+
     container.appendChild(renderer.domElement);
 
     // Center the canvas inside its position:relative container.
@@ -942,6 +960,7 @@ export default function Dice3D({
     scene.add(fillLight);
 
     return () => {
+      if (resizeObserver) resizeObserver.disconnect();
       if (container && renderer.domElement && renderer.domElement.parentNode) {
         renderer.domElement.parentNode.removeChild(renderer.domElement);
       }
