@@ -1,7 +1,10 @@
+"""Test that all modules in app and comic_pile can be imported without errors."""
+
 import importlib
 import pkgutil
 import app
 import comic_pile
+
 
 def _import_submodules(package):
     """Recursively import all submodules of a package."""
@@ -12,6 +15,7 @@ def _import_submodules(package):
             sub_pkg = importlib.import_module(full_name)
             _import_submodules(sub_pkg)
 
-def test_import_all():
+def test_import_all() -> None:
+    """Verify all submodules import successfully."""
     _import_submodules(app)
     _import_submodules(comic_pile)

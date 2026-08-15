@@ -1,3 +1,5 @@
+"""Tests for the opencode pipeline merger script validation."""
+
 import re
 
 import pytest
