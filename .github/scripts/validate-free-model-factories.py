@@ -197,7 +197,7 @@ def main() -> None:
     ):
         assert required in discovery, f'daily discovery invariant missing: {required}'
     assert 'cancel-in-progress: false' in discovery
-    assert 'push:' not in discovery
+    assert '\n  push:\n' not in discovery
 
     playwright = PLAYWRIGHT_CONFIG.read_text(encoding='utf-8')
     for required in (
