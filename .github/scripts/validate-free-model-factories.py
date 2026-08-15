@@ -220,13 +220,14 @@ def main() -> None:
         'results.json',
         'GITHUB_RUN_ID',
         'GITHUB_SHA',
+        'args = ["issue", "create"',
+        'run_gh(*args)',
     ):
         assert required in classifier, f'discovery classifier invariant missing: {required}'
-    for action in ('create', 'comment'):
-        assert re.search(
-            rf'run_gh\(\s*"issue",\s*"{action}"',
-            classifier,
-        ), f'discovery classifier issue {action} call missing'
+    assert re.search(
+        r'run_gh\(\s*"issue",\s*"comment"',
+        classifier,
+    ), 'discovery classifier issue comment call missing'
 
     print('Validated 28 external factory lanes, shared-pool selection, and daily Chromium discovery.')
     for minute in BATCH_MINUTES:
