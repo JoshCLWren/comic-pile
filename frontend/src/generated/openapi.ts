@@ -3975,6 +3975,11 @@ export interface components {
          * @description One unsatisfied continuity rule blocking the requested node.
          */
         ContinuityBlocker: {
+            /**
+             * Blocker Type
+             * @enum {string}
+             */
+            blocker_type: "item_unread" | "members_unread" | "selected_members_unread";
             /** Causing Issue Ids */
             causing_issue_ids?: number[];
             /** Causing Member Issue Ids */
@@ -3988,11 +3993,6 @@ export interface components {
              * @enum {string}
              */
             satisfaction_type: "item_read" | "all_members_read" | "checkpoint" | "selected_members_read" | "converged";
-            /**
-             * Blocker Type
-             * @enum {string}
-             */
-            blocker_type: "item_unread" | "members_unread" | "selected_members_unread";
             /**
              * Satisfied
              * @default false

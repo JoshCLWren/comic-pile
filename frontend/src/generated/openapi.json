@@ -627,6 +627,15 @@
       "ContinuityBlocker": {
         "description": "One unsatisfied continuity rule blocking the requested node.",
         "properties": {
+          "blocker_type": {
+            "enum": [
+              "item_unread",
+              "members_unread",
+              "selected_members_unread"
+            ],
+            "title": "Blocker Type",
+            "type": "string"
+          },
           "causing_issue_ids": {
             "items": {
               "type": "integer"
@@ -665,15 +674,6 @@
               "converged"
             ],
             "title": "Satisfaction Type",
-            "type": "string"
-          },
-          "blocker_type": {
-            "enum": [
-              "item_unread",
-              "members_unread",
-              "selected_members_unread"
-            ],
-            "title": "Blocker Type",
             "type": "string"
           },
           "satisfied": {
