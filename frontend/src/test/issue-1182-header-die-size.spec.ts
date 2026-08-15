@@ -7,9 +7,9 @@ test.describe('Issue #1182: duplicate full-size die after rating', () => {
     const username = `issue1182_${timestamp}_${Math.random().toString(36).slice(2, 8)}@example.com`;
     const password = 'TestPass123!';
 
-const registerResponse = await page.request.post('/api/auth/register', {
-  data: { username, email: username, password },
-});
+    const registerResponse = await page.request.post('/api/auth/register', {
+      data: { username, email: username, password },
+    });
     expect(registerResponse.ok()).toBeTruthy();
 
     const loginResponse = await page.request.post('/api/auth/login', {
