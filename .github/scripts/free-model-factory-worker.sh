@@ -8,6 +8,51 @@ set -Eeuo pipefail
 : "${FACTORY_MODEL:?FACTORY_MODEL is required}"
 : "${FACTORY_RUNTIME_MODEL:?FACTORY_RUNTIME_MODEL is required}"
 
+# These four tiny bridges preserve the existing regression harness, which
+# extracts named helper functions directly from this file. In the real worker
+# they are immediately replaced when the tracked primitives are sourced below.
+# In the isolated harness, each bridge loads the exact tracked definition and
+# then tail-calls it. This keeps security tests pointed at the real helpers.
+stage_trusted_guard() {
+  local primitives definition
+  primitives="$(dirname "${WORKER:-${BASH_SOURCE[0]}}")/free-model-factory-worker-primitives.sh"
+  [[ -f "$primitives" ]] || primitives="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/free-model-factory-worker-primitives.sh"
+  definition="$(sed -n '/^stage_trusted_guard() {/,/^}/p' "$primitives")"
+  unset -f stage_trusted_guard
+  eval "$definition"
+  stage_trusted_guard "$@"
+}
+
+conflict_markers_present() {
+  local primitives definition
+  primitives="$(dirname "${WORKER:-${BASH_SOURCE[0]}}")/free-model-factory-worker-primitives.sh"
+  [[ -f "$primitives" ]] || primitives="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/free-model-factory-worker-primitives.sh"
+  definition="$(sed -n '/^conflict_markers_present() {/,/^}/p' "$primitives")"
+  unset -f conflict_markers_present
+  eval "$definition"
+  conflict_markers_present "$@"
+}
+
+branch_folded_main_commits() {
+  local primitives definition
+  primitives="$(dirname "${WORKER:-${BASH_SOURCE[0]}}")/free-model-factory-worker-primitives.sh"
+  [[ -f "$primitives" ]] || primitives="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/free-model-factory-worker-primitives.sh"
+  definition="$(sed -n '/^branch_folded_main_commits() {/,/^}/p' "$primitives")"
+  unset -f branch_folded_main_commits
+  eval "$definition"
+  branch_folded_main_commits "$@"
+}
+
+unclean_git_state_json() {
+  local primitives definition
+  primitives="$(dirname "${WORKER:-${BASH_SOURCE[0]}}")/free-model-factory-worker-primitives.sh"
+  [[ -f "$primitives" ]] || primitives="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/free-model-factory-worker-primitives.sh"
+  definition="$(sed -n '/^unclean_git_state_json() {/,/^}/p' "$primitives")"
+  unset -f unclean_git_state_json
+  eval "$definition"
+  unclean_git_state_json "$@"
+}
+
 # Reuse the proven persistence/guard/provider/lease primitives as a tracked
 # repository file, stopping before its legacy main loop. The selector/session
 # loop below is the canonical shared-pool implementation.
@@ -87,13 +132,12 @@ claim_from_pool() {
 }
 
 trigger_backlog_zero_discovery() {
-  local token="${PR_REBASE_TOKEN:-${GH_TOKEN:-}}"
   log 'shared executable backlog is empty; triggering Chromium discovery directly'
-  if GH_TOKEN="$token" gh workflow run chromium-discovery.yml --ref main >/dev/null 2>&1; then
+  if gh workflow run chromium-discovery.yml --ref main >/dev/null 2>&1; then
     log 'Chromium backlog-zero discovery dispatched; no coordination issue is required'
     return 0
   fi
-  log 'Chromium backlog-zero discovery could not be dispatched from this token'
+  log 'Chromium backlog-zero discovery could not be dispatched with the workflow token'
   return 1
 }
 
