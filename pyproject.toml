@@ -65,16 +65,6 @@ testpaths = ["tests", "tests_e2e"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = [
-    "--cov=comic_pile",
-    "--cov-report=term-missing",
-    "--cov-report=html",
-    "--cov-fail-under=94",
-]
-asyncio_mode = "auto"
-markers = [
-    "integration: marks tests as integration tests (requires Playwright)",
-]
 
 [tool.coverage.run]
 source = ["app", "comic_pile"]
