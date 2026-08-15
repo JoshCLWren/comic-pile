@@ -214,6 +214,16 @@ class ClassifierTests(unittest.TestCase):
             "MODEL MISSING",
         )
 
+    def test_nvidia_model_not_invokable_is_missing(self) -> None:
+        """NVIDIA catalog entries that return 404 on invoke map to MODEL MISSING."""
+        self.assertEqual(
+            classify(
+                self.BASE
+                + "Pinned NVIDIA model is not currently invokable for this account: moonshotai/kimi-k2.6\n"
+            ).outcome,
+            "MODEL MISSING",
+        )
+
     def test_timeout(self) -> None:
         """Exit code 124 and related signals map to TIMEOUT."""
         self.assertEqual(
