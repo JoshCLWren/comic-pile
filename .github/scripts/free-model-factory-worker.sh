@@ -260,7 +260,19 @@ run_agent() {
     mission="Implement the full closure-critical acceptance contract for this issue with code and focused tests. Do not stop at planning or optional polish."
   fi
 
-  prompt="You are fixed-model OpenCode Factory ${WORKER} for JoshCLWren/comic-pile. Durable worker ID: ${WORKER_ID}. Source: ${SOURCE}. Pinned model: ${MODEL}. Runtime model: ${RUNTIME_MODEL}. Assigned target: ${target}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, docs/CHATGPT_FACTORY_PROMPT.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Follow the canonical product-first factory policy. ${mission} Work only on the assigned target during this agent invocation. Edit the checked-out branch, run focused validation, and use gh/GitHub when needed for review context. Do not commit or push; the wrapper persists changes. Do not switch models, providers, or routes. A provider failure is a result for this model lane, not permission to fall back to another model. Do not enable auto-merge, push main, touch production databases, or alter automation schedules."
+  prompt="You are external-model Factory ${WORKER} for JoshCLWren/comic-pile. Durable worker ID: ${WORKER_ID}. Source: ${SOURCE}. Requested model or route: ${MODEL}. Runtime selector: ${RUNTIME_MODEL}. Assigned target: ${target}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, docs/CHATGPT_FACTORY_PROMPT.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Follow the canonical product-first factory policy. ${mission} Work only on the assigned target during this agent invocation. Edit the checked-out branch, run focused validation, and use gh/GitHub when needed for review context. Do not commit or push; the wrapper persists changes. Do not switch models, providers, or routes. A provider failure is a result for this lane, not permission to fall back to another paid or unrequested route. Do not enable auto-merge, push main, touch production databases, or alter automation schedules."
+
+  if [[ "$SOURCE" == 'kilo-auto' ]]; then
+    set +e
+    bash .github/scripts/kilo-auto-factory-run.sh \
+      "$timeout_seconds" \
+      "ComicPile Factory ${WORKER} · ${DISPLAY}" \
+      "$prompt" \
+      "/tmp/opencode-factory-${WORKER}.log"
+    status=$?
+    set -e
+    return "$status"
+  fi
 
   timeout --signal=TERM --kill-after=30s "${timeout_seconds}s" \
     opencode run -m "$RUNTIME_MODEL" --agent build --auto --dir "$GITHUB_WORKSPACE" \
@@ -535,7 +547,8 @@ while (( $(remaining) > 480 )); do
   fi
 
   current="$(git rev-parse HEAD)"
-  if grep -q 'FACTORY_GATE_READY' "/tmp/opencode-factory-${WORKER}.log" && \
+  if [[ "$SOURCE" != 'kilo-auto' ]] && \
+    grep -q 'FACTORY_GATE_READY' "/tmp/opencode-factory-${WORKER}.log" && \
     machine_merge_gates_pass "$NUMBER" "$current"; then
     log "all exact-head gates passed for PR #${NUMBER}; merging ${current}"
     gh pr merge "$NUMBER" --merge --match-head-commit "$current" --delete-branch
