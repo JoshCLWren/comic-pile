@@ -53,8 +53,7 @@ def run_gh(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
         ["gh", *args],
         check=check,
         text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
     )
 
 
@@ -149,18 +148,18 @@ def collect_suite_failures(
 
 
 def collect_failures(root: Path) -> tuple[list[Failure], list[str]]:
-    """Collect product failures and artifacts that never produced JSON results."""
+    """Collect product failures and artifacts without trustworthy JSON results."""
     failures: list[Failure] = []
-    artifacts_with_results: set[Path] = set()
+    trustworthy_result_artifacts: set[Path] = set()
 
     for result_file in root.rglob("results.json"):
         artifact_root = find_artifact_root(result_file, root)
-        artifacts_with_results.add(artifact_root)
         try:
             payload = json.loads(result_file.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError) as exc:
             print(f"warning: could not parse {result_file}: {exc}")
             continue
+        trustworthy_result_artifacts.add(artifact_root)
         artifact = artifact_root.name
         for suite in payload.get("suites") or []:
             failures.extend(collect_suite_failures(suite, artifact))
@@ -168,7 +167,7 @@ def collect_failures(root: Path) -> tuple[list[Failure], list[str]]:
     missing_results: list[str] = []
     for metadata_file in root.rglob("run-metadata.json"):
         artifact_root = metadata_file.parent.parent
-        if artifact_root in artifacts_with_results:
+        if artifact_root in trustworthy_result_artifacts:
             continue
         try:
             metadata = json.loads(metadata_file.read_text(encoding="utf-8"))
@@ -238,7 +237,13 @@ def create_or_update_product_issue(failure: Failure, markers: dict[str, int]) ->
     )
     existing = markers.get(marker)
     if existing is not None:
-        run_gh("issue", "comment", str(existing), "--body", f"Fresh Chromium failure evidence:\n\n{details}")
+        run_gh(
+            "issue",
+            "comment",
+            str(existing),
+            "--body",
+            f"Fresh Chromium failure evidence:\n\n{details}",
+        )
         print(f"updated existing E2E issue #{existing}: {failure.title}")
         return
 
@@ -264,7 +269,7 @@ def create_or_update_product_issue(failure: Failure, markers: dict[str, int]) ->
 def create_or_update_infrastructure_issue(
     artifacts: list[str], markers: dict[str, int]
 ) -> None:
-    """Preserve discovery setup failures that never reached Playwright results."""
+    """Preserve discovery setup failures that never reached trustworthy results."""
     if not artifacts:
         return
     fingerprint = hashlib.sha256(b"chromium-discovery-missing-results").hexdigest()[:16]
@@ -272,19 +277,25 @@ def create_or_update_infrastructure_issue(
     evidence = evidence_header(", ".join(artifacts))
     details = (
         f"{evidence}\n\n"
-        "The following discovery shard artifacts did not contain `results.json`:\n\n"
+        "The following discovery shard artifacts did not contain trustworthy `results.json` data:\n\n"
         + "\n".join(f"- `{artifact}`" for artifact in artifacts)
         + "\n\nInspect the preserved backend logs and run metadata before changing product code."
     )
     existing = markers.get(marker)
     if existing is not None:
-        run_gh("issue", "comment", str(existing), "--body", f"Fresh discovery infrastructure evidence:\n\n{details}")
+        run_gh(
+            "issue",
+            "comment",
+            str(existing),
+            "--body",
+            f"Fresh discovery infrastructure evidence:\n\n{details}",
+        )
         print(f"updated existing E2E infrastructure issue #{existing}")
         return
 
     body = (
         f"{marker}\n\n"
-        "Scheduled Chromium discovery failed before durable Playwright JSON results were produced. "
+        "Scheduled Chromium discovery failed before trustworthy Playwright JSON results were produced. "
         "This is infrastructure work unless the preserved evidence proves a product defect.\n\n"
         f"{details}"
     )
@@ -322,7 +333,7 @@ def main() -> int:
     create_or_update_infrastructure_issue(missing_results, markers)
     print(
         f"classified Chromium discovery: {len(failures)} product failures, "
-        f"{len(missing_results)} shards without Playwright results"
+        f"{len(missing_results)} shards without trustworthy Playwright results"
     )
     return 0
 
