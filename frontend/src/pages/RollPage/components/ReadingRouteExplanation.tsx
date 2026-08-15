@@ -203,7 +203,7 @@ export function ReadingRouteExplanation({
         )}
       </section>
 
-      {issueId != null && (hasBridgeState || readinessState.error || chainsState.error) ? null : (
+      {issueId != null && (readinessState.error || chainsState.error) ? null : (
         <>
           {directBlockers.length > 0 ? (
             <section
