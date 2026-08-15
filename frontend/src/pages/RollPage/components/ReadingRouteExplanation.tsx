@@ -203,7 +203,7 @@ export function ReadingRouteExplanation({
         )}
       </section>
 
-      {issueId != null && (readinessState.error || chainsState.error) ? null : (
+      {issueId != null && readinessState.error ? null : (
         <>
           {directBlockers.length > 0 ? (
             <section
@@ -328,7 +328,7 @@ export function ReadingRouteExplanation({
                 <p className="mt-2 text-[11px] font-bold text-stone-400">
                   {describeBranchConvergence(
                     readablePrerequisites,
-                    [transitiveChains],
+                    transitiveChains.map((path) => [path]),
                   )}
                 </p>
               ) : null}
