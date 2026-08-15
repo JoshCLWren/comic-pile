@@ -157,6 +157,18 @@ class DerivedCrossoverTemplatePreview(BaseModel):
 
 
 class CrossoverTemplatePreviewRequest(BaseModel):
+
+     @model_validator(mode="before")
+     def _validate_no_bool_and_positive_pre_conversion(cls, values):
+         """Reject boolean items and non-positive integers before casting."""
+         raw_ids = values.get("source_list_ids", ())
+         if not raw_ids:
+             raise ValueError("source_list_ids must not be empty")
+         # bool values are not acceptable because bool is subclass of int
+         for v in raw_ids:
+             if isinstance(v, bool):
+                 raise ValueError("source_list_ids must contain positive integers")
+         return values
     """Request to preview a derived crossover template from persisted CBL evidence."""
 
     source_list_ids: tuple[TemplateSourceListId, ...] = Field(min_length=1)
@@ -173,6 +185,17 @@ class CrossoverTemplatePreviewRequest(BaseModel):
 
 
 class CrossoverTemplateAdoptRequest(BaseModel):
+
+     @model_validator(mode="before")
+     def _validate_no_bool_and_positive_pre_conversion(cls, values):
+         """Reject boolean items and non-positive integers before casting."""
+         raw_ids = values.get("source_list_ids", ())
+         if not raw_ids:
+             raise ValueError("source_list_ids must not be empty")
+         for v in raw_ids:
+             if isinstance(v, bool):
+                 raise ValueError("source_list_ids must contain positive integers")
+         return values
     """Adopt an external template into an editable continuity plan."""
 
     source_list_ids: tuple[TemplateSourceListId, ...] = Field(min_length=1)
