@@ -105,9 +105,7 @@ async def _load_snapshot(db: AsyncSession, user_id: int) -> _GraphSnapshot:
     Returns a snapshot with ``query_count`` and ``rows_loaded`` tracking the
     number of round-trips and total rows materialized for observability.
     """
-    session_cache = db.info.get(SNAPSHOT_SESSION_KEY) if db.info else {}
-    if session_cache is None:
-        session_cache = {}
+    session_cache = db.info.setdefault(SNAPSHOT_SESSION_KEY, {}) if db.info else {}
     cached = session_cache.get(user_id)
     if cached is not None:
         return cached  # type: ignore[return-value]
