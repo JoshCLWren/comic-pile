@@ -130,20 +130,6 @@ async def revoke_token(db: AsyncSession, token: str, user_id: int) -> None:
         await db.rollback()
 
 
-async def is_token_revoked(db: AsyncSession, jti: str) -> bool:
-    """Check if a token JTI is revoked.
-
-    Args:
-        db: SQLAlchemy session for database operations.
-        jti: JWT ID to check.
-
-    Returns:
-        True if token is revoked, False otherwise.
-    """
-    result = await db.execute(select(RevokedToken).where(RevokedToken.jti == jti).limit(1))
-    return result.scalar_one_or_none() is not None
-
-
 async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -188,19 +174,36 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if not jti or not isinstance(jti, str) or await is_token_revoked(db, jti):
+    if not jti or not isinstance(jti, str):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has been revoked",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    result = await db.execute(select(User).where(User.username == username).limit(1))
-    user = result.scalar_one_or_none()
-    if not user:
+    # One round trip replaces the former sequential revoked-token lookup by
+    # JTI and user lookup by username (see issue #1261). The LEFT JOIN keeps
+    # the existing semantics: a revoked token always wins, and a missing user
+    # is reported before endpoint logic.
+    result = await db.execute(
+        select(User, RevokedToken.id)
+        .outerjoin(RevokedToken, RevokedToken.jti == jti)
+        .where(User.username == username)
+        .limit(1)
+    )
+    row = result.one_or_none()
+    if row is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    user = row[0]
+    revoked_token_id = row[1]
+    if revoked_token_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has been revoked",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
