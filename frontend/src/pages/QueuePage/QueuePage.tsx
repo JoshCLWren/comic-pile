@@ -2,8 +2,8 @@ import { useCallback, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import { useCreateThread, useReactivateThread, useThreads, useUpdateThread } from '../../hooks/useThread'
-import { useMoveToPosition, useShuffleQueue } from '../../hooks/useQueue'
+import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hooks/useThread'
+import { useMoveToPosition, useQueueThreads, useShuffleQueue } from '../../hooks/useQueue'
 import { useSession } from '../../hooks/useSession'
 import { PositionMenuProvider } from '../../contexts/PositionMenuProvider'
 import type { Thread } from '../../types'
@@ -28,7 +28,7 @@ export default function QueuePage() {
   const [sortBy, setSortBy] = useState<QueueSortBy>('position')
   const [searchQuery, setSearchQuery] = useState('')
 
-  const { data: threads, isPending, refetch } = useThreads('')
+  const { data: threads, isPending, refetch } = useQueueThreads('')
   const { data: session, refetch: refetchSession } = useSession()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()

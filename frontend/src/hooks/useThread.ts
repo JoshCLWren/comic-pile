@@ -1,94 +1,10 @@
 import { useState, useEffect, useCallback, useContext, useMemo } from 'react';
 import axios from 'axios';
 import { threadsApi } from '../services/api';
-import type { ReactivateThreadPayload, Thread, ThreadCreatePayload, ThreadListResponse, ThreadQueryParams, ThreadUpdatePayload } from '../types';
+import type { ReactivateThreadPayload, Thread, ThreadCreatePayload, ThreadUpdatePayload } from '../types';
 import { CacheContext } from '../contexts/CacheContextValue';
 import { applyUpdatedThreadCache } from '../query/cacheEffects';
 import { queryClient } from '../query/queryClient';
-
-type UseThreadsOptions = {
-  searchTerm?: string;
-};
-
-export function useThreads(searchTermOrOptions?: string | UseThreadsOptions) {
-  const [data, setData] = useState<Thread[] | null>(null);
-  const [isPending, setIsPending] = useState(true);
-  const [isError, setIsError] = useState(false);
-  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
-  const cache = useContext(CacheContext);
-  const invalidateQueries = useMemo(() => cache?.invalidateQueries ?? (() => {}), [cache]);
-
-  // Support both calling conventions:
-  // useThreads('') or useThreads({ searchTerm: '' })
-  const options: UseThreadsOptions = typeof searchTermOrOptions === 'string'
-    ? { searchTerm: searchTermOrOptions }
-    : { ...searchTermOrOptions };
-
-  const { searchTerm = '' } = options;
-
-  const fetchData = useCallback(async (pageToken?: string) => {
-    setIsPending(true);
-    setIsError(false);
-    let cancelled = false;
-
-    try {
-      const baseParams: ThreadQueryParams = {};
-      if (searchTerm?.trim()) {
-        baseParams.search = searchTerm.trim();
-      }
-      // For initial load (no pageToken), fetch all pages with large page_size
-      if (!pageToken) {
-        baseParams.page_size = 200; // max allowed by backend
-      }
-
-      let allThreads: Thread[] = [];
-      let currentToken: string | undefined = pageToken;
-      let nextToken: string | null = null;
-
-      do {
-        const result: ThreadListResponse = await threadsApi.list(
-          Object.keys(baseParams).length > 0 ? baseParams : undefined,
-          currentToken
-        );
-        allThreads = allThreads.concat(result.threads);
-        nextToken = result.next_page_token;
-        // If we are fetching all pages (no initial pageToken), continue with next token
-        if (!pageToken && nextToken) {
-          currentToken = nextToken;
-        } else {
-          // If we were called with a specific pageToken, stop after one page
-          break;
-        }
-      } while (!pageToken && nextToken);
-
-      if (!cancelled) {
-        setData(allThreads);
-        setNextPageToken(nextToken);
-        invalidateQueries(['threads']);
-      }
-    } catch (error) {
-      if (!cancelled) {
-        setIsError(true);
-      }
-      throw error;
-    } finally {
-      if (!cancelled) {
-        setIsPending(false);
-      }
-    }
-  }, [searchTerm, invalidateQueries]);
-
-  useEffect(() => {
-    void fetchData().catch(() => undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm]);
-
-  const refetch = useCallback((pageToken?: string): Promise<void> => {
-    return fetchData(pageToken);
-  }, [fetchData]);
-
-  return { data, isPending, isError, refetch, nextPageToken };
-}
 
 export function useThread(id?: number | null) {
   const [data, setData] = useState<Thread | null>(null);
