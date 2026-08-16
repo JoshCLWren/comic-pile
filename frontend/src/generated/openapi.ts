@@ -1679,6 +1679,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/continuity-plans/{plan_id}/reading-orders/project": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Plan Projection
+         * @description Apply a projection atomically after a successful preview.
+         *
+         *     The confirm endpoint re-computes the projection and rejects the request
+         *     if any conflict is detected. A failed or cancelled projection leaves
+         *     both the plan and the reading order unchanged because all mutations are
+         *     performed in a single transaction that rolls back on any error.
+         */
+        post: operations["confirm_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Plan Projection
+         * @description Preview a deterministic projection without mutating any resource.
+         *
+         *     The preview is recomputed from the persisted plan JSON on every call so
+         *     that callers always see the current state, even after concurrent edits.
+         *     Duplicate thread references, missing owned threads, and non-thread
+         *     nodes are reported as conflicts before any mutation is permitted.
+         */
+        post: operations["preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/continuity-rules/": {
         parameters: {
             query?: never;
@@ -2347,6 +2397,26 @@ export interface paths {
          * @description Remove one membership from an owned group.
          */
         delete: operations["remove_member_api_v1_reading_order_groups__group_id__members__member_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reading-orders/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Reading Orders
+         * @description List reading orders owned by the current user, ordered by name.
+         */
+        get: operations["list_reading_orders_api_v1_reading_orders__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -4955,6 +5025,102 @@ export interface components {
             thread_title: string;
         };
         /**
+         * ReadingOrderListResponse
+         * @description Response schema for listing all reading orders owned by a user.
+         */
+        ReadingOrderListResponse: {
+            /** Reading Orders */
+            reading_orders: components["schemas"]["ReadingOrderSummary"][];
+        };
+        /**
+         * ReadingOrderProjectionConflict
+         * @description A single conflict blocking a projection.
+         */
+        ReadingOrderProjectionConflict: {
+            /** Code */
+            code: string;
+            /**
+             * Existing Positions
+             * @default []
+             */
+            existing_positions: number[];
+            /** Message */
+            message: string;
+            /** Node Id */
+            node_id: string;
+            /** Thread Id */
+            thread_id?: number | null;
+        };
+        /**
+         * ReadingOrderProjectionEntry
+         * @description One row in a projected reading order preview.
+         */
+        ReadingOrderProjectionEntry: {
+            /** Position */
+            position: number;
+            /** Source */
+            source: string;
+            /** Source Node Id */
+            source_node_id?: string | null;
+            /** Thread Id */
+            thread_id: number;
+            /** Thread Title */
+            thread_title: string | null;
+        };
+        /**
+         * ReadingOrderProjectionPreview
+         * @description Response contract for the preview endpoint.
+         */
+        ReadingOrderProjectionPreview: {
+            /** Conflicts */
+            conflicts: components["schemas"]["ReadingOrderProjectionConflict"][];
+            /**
+             * Dropped Node Ids
+             * @default []
+             */
+            dropped_node_ids: string[];
+            /** Entries */
+            entries: components["schemas"]["ReadingOrderProjectionEntry"][];
+            /** Plan Id */
+            plan_id: number;
+            /** Plan Name */
+            plan_name: string;
+            /** Plan Ordering Mode */
+            plan_ordering_mode: string;
+            /** Reading Order Id */
+            reading_order_id: number;
+            /** Reading Order Name */
+            reading_order_name: string;
+            /** Total Positions */
+            total_positions: number;
+        };
+        /**
+         * ReadingOrderProjectionRequest
+         * @description Request contract for both preview and confirm endpoints.
+         */
+        ReadingOrderProjectionRequest: {
+            /** Reading Order Id */
+            reading_order_id: number;
+        };
+        /**
+         * ReadingOrderProjectionResult
+         * @description Response contract for the confirm endpoint.
+         */
+        ReadingOrderProjectionResult: {
+            /** Added Count */
+            added_count: number;
+            /** Kept Count */
+            kept_count: number;
+            /** Plan Id */
+            plan_id: number;
+            /** Reading Order Id */
+            reading_order_id: number;
+            /** Total Positions */
+            total_positions: number;
+            /** Updated Count */
+            updated_count: number;
+        };
+        /**
          * ReadingOrderResponse
          * @description Response schema for a reading order with items.
          */
@@ -4973,6 +5139,23 @@ export interface components {
             /** Name */
             name: string;
             /** Total Items */
+            total_items: number;
+        };
+        /**
+         * ReadingOrderSummary
+         * @description Compact reading order metadata for projection and picker surfaces.
+         */
+        ReadingOrderSummary: {
+            /** Description */
+            description?: string | null;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /**
+             * Total Items
+             * @default 0
+             */
             total_items: number;
         };
         /**
@@ -7401,6 +7584,76 @@ export interface operations {
             };
         };
     };
+    confirm_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingOrderProjectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingOrderProjectionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingOrderProjectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingOrderProjectionPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_continuity_rules_api_v1_continuity_rules__get: {
         parameters: {
             query?: never;
@@ -8469,6 +8722,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_reading_orders_api_v1_reading_orders__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingOrderListResponse"];
                 };
             };
         };

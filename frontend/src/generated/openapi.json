@@ -3019,6 +3019,238 @@
         "title": "ReadingOrderItemResponse",
         "type": "object"
       },
+      "ReadingOrderListResponse": {
+        "description": "Response schema for listing all reading orders owned by a user.",
+        "properties": {
+          "reading_orders": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderSummary"
+            },
+            "title": "Reading Orders",
+            "type": "array"
+          }
+        },
+        "required": [
+          "reading_orders"
+        ],
+        "title": "ReadingOrderListResponse",
+        "type": "object"
+      },
+      "ReadingOrderProjectionConflict": {
+        "description": "A single conflict blocking a projection.",
+        "properties": {
+          "code": {
+            "pattern": "^(duplicate_thread|missing_thread|non_thread_node)$",
+            "title": "Code",
+            "type": "string"
+          },
+          "existing_positions": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Existing Positions",
+            "type": "array"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Id"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "node_id"
+        ],
+        "title": "ReadingOrderProjectionConflict",
+        "type": "object"
+      },
+      "ReadingOrderProjectionEntry": {
+        "description": "One row in a projected reading order preview.",
+        "properties": {
+          "position": {
+            "minimum": 1.0,
+            "title": "Position",
+            "type": "integer"
+          },
+          "source": {
+            "pattern": "^(existing|added|updated)$",
+            "title": "Source",
+            "type": "string"
+          },
+          "source_node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Node Id"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "thread_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Title"
+          }
+        },
+        "required": [
+          "thread_id",
+          "thread_title",
+          "position",
+          "source"
+        ],
+        "title": "ReadingOrderProjectionEntry",
+        "type": "object"
+      },
+      "ReadingOrderProjectionPreview": {
+        "description": "Response contract for the preview endpoint.",
+        "properties": {
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderProjectionConflict"
+            },
+            "title": "Conflicts",
+            "type": "array"
+          },
+          "dropped_node_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Dropped Node Ids",
+            "type": "array"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderProjectionEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "plan_id": {
+            "title": "Plan Id",
+            "type": "integer"
+          },
+          "plan_name": {
+            "title": "Plan Name",
+            "type": "string"
+          },
+          "plan_ordering_mode": {
+            "title": "Plan Ordering Mode",
+            "type": "string"
+          },
+          "reading_order_id": {
+            "title": "Reading Order Id",
+            "type": "integer"
+          },
+          "reading_order_name": {
+            "title": "Reading Order Name",
+            "type": "string"
+          },
+          "total_positions": {
+            "minimum": 0.0,
+            "title": "Total Positions",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_id",
+          "plan_name",
+          "plan_ordering_mode",
+          "reading_order_id",
+          "reading_order_name",
+          "entries",
+          "conflicts",
+          "total_positions"
+        ],
+        "title": "ReadingOrderProjectionPreview",
+        "type": "object"
+      },
+      "ReadingOrderProjectionRequest": {
+        "description": "Request contract for both preview and confirm endpoints.",
+        "properties": {
+          "reading_order_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Reading Order Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "reading_order_id"
+        ],
+        "title": "ReadingOrderProjectionRequest",
+        "type": "object"
+      },
+      "ReadingOrderProjectionResult": {
+        "description": "Response contract for the confirm endpoint.",
+        "properties": {
+          "added_count": {
+            "minimum": 0.0,
+            "title": "Added Count",
+            "type": "integer"
+          },
+          "kept_count": {
+            "minimum": 0.0,
+            "title": "Kept Count",
+            "type": "integer"
+          },
+          "plan_id": {
+            "title": "Plan Id",
+            "type": "integer"
+          },
+          "reading_order_id": {
+            "title": "Reading Order Id",
+            "type": "integer"
+          },
+          "total_positions": {
+            "minimum": 0.0,
+            "title": "Total Positions",
+            "type": "integer"
+          },
+          "updated_count": {
+            "minimum": 0.0,
+            "title": "Updated Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_id",
+          "reading_order_id",
+          "added_count",
+          "updated_count",
+          "kept_count",
+          "total_positions"
+        ],
+        "title": "ReadingOrderProjectionResult",
+        "type": "object"
+      },
       "ReadingOrderResponse": {
         "description": "Response schema for a reading order with items.",
         "properties": {
@@ -3065,6 +3297,41 @@
           "completed_items"
         ],
         "title": "ReadingOrderResponse",
+        "type": "object"
+      },
+      "ReadingOrderSummary": {
+        "description": "Compact reading order metadata for projection and picker surfaces.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "total_items": {
+            "default": 0,
+            "title": "Total Items",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ReadingOrderSummary",
         "type": "object"
       },
       "RefreshTokenRequest": {
@@ -7577,6 +7844,126 @@
         ]
       }
     },
+    "/api/v1/continuity-plans/{plan_id}/reading-orders/project": {
+      "post": {
+        "description": "Apply a projection atomically after a successful preview.\n\nThe confirm endpoint re-computes the projection and rejects the request\nif any conflict is detected. A failed or cancelled projection leaves\nboth the plan and the reading order unchanged because all mutations are\nperformed in a single transaction that rolls back on any error.",
+        "operationId": "confirm_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "title": "Plan Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingOrderProjectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingOrderProjectionResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Confirm Plan Projection",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "reading-orders"
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview": {
+      "post": {
+        "description": "Preview a deterministic projection without mutating any resource.\n\nThe preview is recomputed from the persisted plan JSON on every call so\nthat callers always see the current state, even after concurrent edits.\nDuplicate thread references, missing owned threads, and non-thread\nnodes are reported as conflicts before any mutation is permitted.",
+        "operationId": "preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "title": "Plan Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingOrderProjectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingOrderProjectionPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Plan Projection",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "reading-orders"
+        ]
+      }
+    },
     "/api/v1/continuity-rules/": {
       "get": {
         "description": "List the authenticated user's continuity rules.",
@@ -9243,6 +9630,34 @@
           "dependencies",
           "dependencies",
           "reading-order-groups"
+        ]
+      }
+    },
+    "/api/v1/reading-orders/": {
+      "get": {
+        "description": "List reading orders owned by the current user, ordered by name.",
+        "operationId": "list_reading_orders_api_v1_reading_orders__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingOrderListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Reading Orders",
+        "tags": [
+          "reading-orders",
+          "reading-orders"
         ]
       }
     },

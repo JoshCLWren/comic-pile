@@ -9,6 +9,7 @@ import { continuityPlansApi, type ContinuityPlanNode } from '../services/api-con
 import { dependencyGroupsApi, type DependencyGroup } from '../services/api-dependency-groups'
 import { issuesApi } from '../services/api-issues'
 import { threadsApi } from '../services/api'
+import PlanProjectionDialog from '../components/PlanProjectionDialog'
 import type { Issue, Thread } from '../types'
 
 const LAST_PLAN_KEY = 'comic-pile:last-continuity-plan'
@@ -103,6 +104,7 @@ export default function ContinuityPlannerPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [issueLoadError, setIssueLoadError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [isProjectionOpen, setIsProjectionOpen] = useState(false)
   const lastPlanId = typeof window === 'undefined' ? null : window.localStorage.getItem(LAST_PLAN_KEY)
   const issueRequestRef = useRef<AbortController | null>(null)
 
@@ -311,7 +313,14 @@ export default function ContinuityPlannerPage() {
             <h2 id="lane-heading" className="text-xl font-black text-stone-100">Reading order</h2>
             <p className="text-xs text-stone-500">{nodes.length} {nodes.length === 1 ? 'step' : 'steps'}</p>
           </div>
-          {statusText && <p role="status" className={isDirty ? 'text-amber-300' : 'text-emerald-300'}>{statusText}</p>}
+          <div className="flex items-center gap-2">
+            {planId && (
+              <button type="button" onClick={() => setIsProjectionOpen(true)} className="min-h-11 rounded-xl border border-amber-700 px-4 font-bold text-amber-200">
+                Project to reading order
+              </button>
+            )}
+            {statusText && <p role="status" className={isDirty ? 'text-amber-300' : 'text-emerald-300'}>{statusText}</p>}
+          </div>
         </div>
         {nodes.length === 0 ? (
           <p className="mt-3 rounded-2xl border border-dashed border-stone-700 p-6 text-center text-stone-500">Add an issue or crossover to begin.</p>
@@ -340,6 +349,15 @@ export default function ContinuityPlannerPage() {
         <button type="button" onClick={cancel} disabled={!isDirty || isSaving} className="min-h-11 flex-1 rounded-xl border border-stone-700 font-bold disabled:opacity-40">Cancel changes</button>
         <button type="button" onClick={() => void save()} disabled={!isDirty || isSaving} className="min-h-11 flex-1 rounded-xl bg-amber-500 font-black text-stone-950 disabled:opacity-40">{isSaving ? 'Saving…' : 'Save plan'}</button>
       </div>
+
+      {planId && (
+        <PlanProjectionDialog
+          isOpen={isProjectionOpen}
+          planId={planId}
+          planName={savedName || name}
+          onClose={() => setIsProjectionOpen(false)}
+        />
+      )}
     </section>
   )
 }

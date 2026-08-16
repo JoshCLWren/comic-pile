@@ -28,6 +28,7 @@ _BARE_API_EXCEPTIONS = frozenset(
         "/api/debug/log",
         "/api/metrics",
         "/api/test/sessions/expire",
+        "/api/test/reading-orders",
     }
 )
 

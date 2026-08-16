@@ -12,11 +12,39 @@ from app.models.reading_order import ReadingOrder, ReadingOrderItem
 from app.models.user import User
 from app.schemas.reading_order import (
     ReadingOrderItemResponse,
+    ReadingOrderListResponse,
     ReadingOrderResponse,
+    ReadingOrderSummary,
     ThreadReadingOrdersResponse,
 )
 
 router = APIRouter(tags=["reading-orders"])
+
+
+@router.get("/api/v1/reading-orders/")
+async def list_reading_orders(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ReadingOrderListResponse:
+    """List reading orders owned by the current user, ordered by name."""
+    result = await db.execute(
+        select(ReadingOrder)
+        .where(ReadingOrder.user_id == current_user.id)
+        .options(selectinload(ReadingOrder.items))
+        .order_by(ReadingOrder.name)
+    )
+    orders = result.scalars().all()
+
+    summaries = [
+        ReadingOrderSummary(
+            id=order.id,
+            name=order.name,
+            description=order.description,
+            total_items=len(order.items),
+        )
+        for order in orders
+    ]
+    return ReadingOrderListResponse(reading_orders=summaries)
 
 
 @router.get("/api/v1/threads/{thread_id}/reading-orders")
