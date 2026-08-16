@@ -6,7 +6,6 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 RELEASE_WRITER_AGENT = ROOT / ".opencode" / "agents" / "release-writer.md"
-RELEASE_WRITER_HELPER = ROOT / "scripts" / "release_writer.py"
 
 
 def _load_agent_permission() -> dict:
