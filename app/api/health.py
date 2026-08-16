@@ -8,10 +8,10 @@ import os
 import secrets
 import time
 from collections.abc import Awaitable, Callable
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select, text
@@ -20,7 +20,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.cache import cache
 from app.database import get_db
 from app.models import Event
-from app.startup_diagnostics import next_request_snapshot
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])
@@ -302,7 +301,7 @@ async def _check_recent_activity(db: AsyncSession) -> bool:
         True if recent activity exists, False otherwise.
     """
     threshold_seconds = _get_inactivity_threshold_seconds()
-    cutoff_time = datetime.utcnow() - timedelta(seconds=threshold_seconds)
+    cutoff_time = datetime.now(UTC) - timedelta(seconds=threshold_seconds)
 
     result = await db.execute(
         select(func.max(Event.timestamp)).where(Event.timestamp >= cutoff_time)
@@ -317,6 +316,7 @@ async def _check_recent_activity(db: AsyncSession) -> bool:
     include_in_schema=False,
 )
 async def warm_endpoint(
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> WarmResponse:
     """Minimal warm endpoint for Vercel Fluid Compute instance reuse.
@@ -336,10 +336,20 @@ async def warm_endpoint(
     Returns:
         WarmResponse with instance diagnostics and activity status.
     """
-    from app.startup_diagnostics import startup_event_snapshot
+    if not _is_warm_endpoint_enabled():
+        return WarmResponse(
+            status="no_activity",
+            instance=WarmInstanceDiagnostics(
+                instance_id=_get_instance_id(),
+                process_start_time_ns=0,
+                request_count=0,
+            ),
+            has_active_session=False,
+            request_count_today=0,
+        )
 
     instance_id = _get_instance_id()
-    snapshot = startup_event_snapshot()
+    snapshot = request.state.startup_snapshot
     request_count = snapshot.invocation
 
     if not _is_heartbeat_within_limits(request_count):
