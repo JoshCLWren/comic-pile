@@ -145,7 +145,8 @@ export default function VirtualizedThreadList<T>({
   // ── Drag-reorder edge auto-scroll (583-D) ──
   // Throttle timestamp to avoid calling scrollToIndex faster than the virtualizer
   // can re-measure (~50ms is generous for the resize → remeasure cycle).
-  const lastEdgeScrollRef = useRef<number>(0)
+  // Initialize to a time long ago so first event passes the throttle check.
+  const lastEdgeScrollRef = useRef<number>(-1000000)
 
   const handleContainerDragOver = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
