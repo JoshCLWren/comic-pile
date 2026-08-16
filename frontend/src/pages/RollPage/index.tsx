@@ -32,7 +32,7 @@ import {
   createExplosion,
   buildRatingThread,
 } from './utils'
-import { RatingView } from './components/RatingView'
+import { RatingView } from './rating-module'
 import { ThreadPool } from './components/ThreadPool'
 
 export default function RollPage() {
