@@ -8,6 +8,21 @@ set -Eeuo pipefail
 : "${FACTORY_MODEL:?FACTORY_MODEL is required}"
 : "${FACTORY_RUNTIME_MODEL:?FACTORY_RUNTIME_MODEL is required}"
 
+# Factory selection and lease handoff must keep working even when GitHub's
+# GraphQL installation bucket is exhausted. Route the small set of gh list/view
+# reads used by the wrapper through REST while forwarding every other gh command
+# to the real CLI unchanged.
+install_factory_rest_gh() {
+  local real_gh shim_dir
+  real_gh="$(command -v gh)"
+  shim_dir="$(mktemp -d /tmp/comic-pile-factory-gh.XXXXXX)"
+  cp .github/scripts/factory-gh-rest-shim.sh "$shim_dir/gh"
+  chmod +x "$shim_dir/gh"
+  export FACTORY_REAL_GH="$real_gh"
+  export PATH="$shim_dir:$PATH"
+}
+install_factory_rest_gh
+
 # These four tiny bridges preserve the existing regression harness, which
 # extracts named helper functions directly from this file. In the real worker
 # they are immediately replaced when the tracked primitives are sourced below.
