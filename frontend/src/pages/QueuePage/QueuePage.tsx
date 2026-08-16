@@ -159,8 +159,9 @@ export default function QueuePage() {
   const mobileAddEnabled = !modals.isAnyModalOpen
   const shuffleDisabled = activeThreads.length < 2
 
-  // Keep the already-rendered queue visible while an additional page loads.
-  if (isPending && threads === null) {
+  // Keep already-rendered rows visible while an additional page loads, but
+  // preserve the full-screen initial loading state before Queue has any data.
+  if (isPending && !threads?.length) {
     return <LoadingSpinner fullScreen />
   }
 
