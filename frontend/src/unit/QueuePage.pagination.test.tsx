@@ -1,5 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { BrowserRouter } from 'react-router-dom'
 import QueuePage from '../pages/QueuePage'
@@ -116,7 +115,7 @@ it('shows the initial full-screen loader before any queue data exists', () => {
   expect(screen.queryByTestId('queue-list')).not.toBeInTheDocument()
 })
 
-it('keeps loaded rows visible and disables pagination while another page is loading', () => {
+it('keeps loaded rows visible and shows the incremental-loading state while another page is loading', () => {
   mockedUseQueueThreads.mockReturnValue({
     data: [thread],
     isPending: true,
@@ -129,13 +128,35 @@ it('keeps loaded rows visible and disables pagination while another page is load
   renderQueue()
 
   expect(screen.getByText('Saga')).toBeInTheDocument()
-  expect(screen.getByTestId('queue-load-more')).toBeDisabled()
-  expect(screen.getByTestId('queue-load-more')).toHaveTextContent('Loading more threads…')
+  expect(screen.getByTestId('queue-loading-more')).toBeInTheDocument()
+  expect(screen.getByTestId('queue-infinite-scroll-sentinel')).toBeInTheDocument()
 })
 
-it('loads the next page from the visible pagination control and absorbs request rejection', async () => {
-  const user = userEvent.setup()
+it('loads the next page when the infinite-scroll sentinel becomes visible and absorbs request rejection', async () => {
   const loadMore = vi.fn().mockRejectedValue(new Error('next page unavailable'))
+  let observerCallback: IntersectionObserverCallback | null = null
+  class CapturingIntersectionObserver {
+    constructor(callback: IntersectionObserverCallback) {
+      observerCallback = callback
+    }
+
+    observe(): void {
+      /* no-op */
+    }
+
+    unobserve(): void {
+      /* no-op */
+    }
+
+    disconnect(): void {
+      /* no-op */
+    }
+
+    takeRecords(): IntersectionObserverEntry[] {
+      return []
+    }
+  }
+
   mockedUseQueueThreads.mockReturnValue({
     data: [thread],
     isPending: false,
@@ -145,16 +166,25 @@ it('loads the next page from the visible pagination control and absorbs request 
     loadMore,
   })
 
-  renderQueue()
+  vi.stubGlobal('IntersectionObserver', CapturingIntersectionObserver)
+  try {
+    renderQueue()
 
-  const button = screen.getByTestId('queue-load-more')
-  expect(button).toHaveTextContent('Load more threads')
-  await user.click(button)
+    expect(screen.getByTestId('queue-infinite-scroll-sentinel')).toBeInTheDocument()
+    act(() => {
+      observerCallback?.(
+        [{ isIntersecting: true } as IntersectionObserverEntry],
+        {} as IntersectionObserver,
+      )
+    })
 
-  await waitFor(() => expect(loadMore).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(loadMore).toHaveBeenCalledTimes(1))
+  } finally {
+    vi.unstubAllGlobals()
+  }
 })
 
-it('shows an incremental-load error without discarding the loaded queue', () => {
+it('shows an incremental-load error with a retry control without discarding the loaded queue', () => {
   mockedUseQueueThreads.mockReturnValue({
     data: [thread],
     isPending: false,
@@ -167,7 +197,8 @@ it('shows an incremental-load error without discarding the loaded queue', () => 
   renderQueue()
 
   expect(screen.getByText('Saga')).toBeInTheDocument()
-  expect(screen.getByRole('alert')).toHaveTextContent("Couldn't load the next batch of threads. Try again.")
+  expect(screen.getByRole('alert')).toHaveTextContent("Couldn't load the next batch of threads.")
+  expect(screen.getByTestId('queue-load-more-retry')).toBeInTheDocument()
 })
 
 it('does not show an incremental error before the queue has produced a data snapshot', () => {
@@ -183,5 +214,5 @@ it('does not show an incremental error before the queue has produced a data snap
   renderQueue()
 
   expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-  expect(screen.getByTestId('queue-load-more')).toBeEnabled()
+  expect(screen.getByTestId('queue-infinite-scroll-sentinel')).toBeInTheDocument()
 })

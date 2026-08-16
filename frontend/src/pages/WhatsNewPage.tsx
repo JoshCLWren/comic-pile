@@ -23,6 +23,8 @@ export function releaseDisplayText(text: string) {
   return text
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '$1')
     .replace(/`([^`]+)`/g, '$1')
+    .replace(/\[([^\]]*)\]\(https?:\/\/[^\s()]*\)?/gi, '$1')
+    .replace(/\(?https?:\/\/(?:[a-z0-9-]+\.)*github\.com[^\s()\]>,]*\)?/gi, '')
     .trim()
 }
 

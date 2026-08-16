@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import WhatsNewPage, {
   groupReleasesByDay,
+  releaseDisplayText,
   RELEASE_PAGE_SIZE,
   sortReleasesNewestFirst,
 } from '../pages/WhatsNewPage'
@@ -84,6 +85,44 @@ describe('release ordering helpers', () => {
   })
 })
 
+describe('releaseDisplayText', () => {
+  it('keeps the label of well-formed GitHub markdown links', () => {
+    expect(releaseDisplayText('[#1058](https://github.com/JoshCLWren/comic-pile/pull/1058)')).toBe('#1058')
+  })
+
+  it('removes GitHub URLs truncated by the release title column limit', () => {
+    expect(
+      releaseDisplayText('cache-update behavior ([#820](https://github.com/JoshCLWren/comic-pile/pull/820), [#823](https://github.com/JoshCLWren/comic-pi'),
+    ).toBe('cache-update behavior (#820, #823')
+  })
+
+  it('removes bare GitHub URLs embedded in prose', () => {
+    expect(
+      releaseDisplayText('see https://github.com/JoshCLWren/comic-pile/pull/823 for details').includes('github.com'),
+    ).toBe(false)
+  })
+
+  it('removes backticked and URL-as-label GitHub links', () => {
+    expect(releaseDisplayText('`https://github.com/JoshCLWren/comic-pile/pull/823`')).toBe('')
+    expect(
+      releaseDisplayText('[https://github.com/JoshCLWren/comic-pile/pull/823](https://github.com/JoshCLWren/comic-pile/pull/823)'),
+    ).toBe('')
+  })
+
+  it('keeps labels for non-GitHub markdown links and strips backticks', () => {
+    expect(releaseDisplayText('[docs](https://example.com/readme)')).toBe('docs')
+    expect(releaseDisplayText('`PROD_BASE_URL` now defaults to `https://comic-pile.vercel.app`.')).toBe(
+      'PROD_BASE_URL now defaults to https://comic-pile.vercel.app.',
+    )
+  })
+
+  it('treats www and subdomain GitHub hostnames as GitHub links', () => {
+    expect(releaseDisplayText('[x](https://www.github.com/foo)')).toBe('x')
+    expect(releaseDisplayText('[x](https://gist.github.com/abc)')).toBe('x')
+    expect(releaseDisplayText('x https://github.com./a')).toBe('x')
+  })
+})
+
 describe('WhatsNewPage', () => {
   it('shows loading and then the empty release-ledger state', async () => {
     let resolveList: ((value: { releases: Release[]; total: number; limit: number; offset: number }) => void) | undefined
@@ -112,6 +151,27 @@ describe('WhatsNewPage', () => {
     expect(screen.getByText('1 update published this day.')).toBeInTheDocument()
     expect(screen.queryByText(/1096/)).not.toBeInTheDocument()
     expect(screen.queryByText(/release-import-v1/)).not.toBeInTheDocument()
+  })
+
+  it('never renders GitHub links from release titles or summaries', async () => {
+    api.list.mockResolvedValue({
+      releases: [
+        release({
+          id: 7,
+          title: 'Dependency groups ([#790](https://github.com/JoshCLWren/comic-pile/pull/790), [#805](https://github.com/JoshCLWren/comic-pi',
+          summary: 'Dependency groups (#790, #805, #807).',
+        }),
+      ],
+      total: 1,
+      limit: RELEASE_PAGE_SIZE,
+      offset: 0,
+    })
+
+    render(<WhatsNewPage />)
+
+    expect(await screen.findByText('Dependency groups (#790, #805')).toBeInTheDocument()
+    expect(screen.queryByText(/github\.com/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
   })
 
   it('renders the plural day summary for multiple same-day releases', async () => {
