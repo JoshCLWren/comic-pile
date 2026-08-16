@@ -67,6 +67,30 @@ describe('ThreadPool eligible mappings', () => {
     ).toBeTruthy()
   })
 
+  it('renders series title above issue number when the thread has no route labels', () => {
+    render(
+      <MemoryRouter>
+        <ThreadPool
+          {...baseProps}
+          pool={[{ id: 7, title: 'Saga', format: 'ongoing', issue_id: 42, issue_number: '12' }]}
+        />
+      </MemoryRouter>,
+    )
+
+    const dieFace = screen.getByRole('button', { name: /Die face 1: Saga, issue 12/i })
+    expect(dieFace).toHaveAccessibleName('Die face 1: Saga, issue 12. Open thread actions.')
+
+    const titleText = dieFace.querySelector('p:nth-of-type(1)')
+    const issueText = dieFace.querySelector('p:nth-of-type(2)')
+    expect(titleText?.textContent).toBe('Saga')
+    expect(issueText?.textContent).toBe('Issue 12')
+    expect(
+      titleText && issueText
+        ? titleText.compareDocumentPosition(issueText) & Node.DOCUMENT_POSITION_FOLLOWING
+        : 0,
+    ).toBeTruthy()
+  })
+
   it('omits eligible mappings while rating', () => {
     render(
       <MemoryRouter>

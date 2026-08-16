@@ -11,7 +11,7 @@ test.describe('Roll queue issue-below-title order (#1140)', () => {
     const pool = page.getByLabel(/Eligible now, \d+ mapped results?/i);
     await expect(pool).toBeVisible();
 
-    const firstMapping = pool.getByRole('button', { name: /Die face 1: .+, issue \d+,/i }).first();
+    const firstMapping = pool.getByRole('button', { name: /Die face 1: .+, issue \d+[.,]/i }).first();
     await expect(firstMapping).toBeVisible();
 
     const titleText = firstMapping.locator('p').nth(0);
