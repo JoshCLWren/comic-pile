@@ -14,21 +14,13 @@ export function useInfiniteScroll({
   threshold = 200,
 }: UseInfiniteScrollOptions) {
   const sentinelRef = useRef<HTMLDivElement | null>(null)
-  // Tracks the previous intersection state so a load only fires on a real
-  // outside->inside transition. IntersectionObserver enqueues an entry with the
-  // element's current state synchronously when `observe()` is called, so without
-  // edge-triggering every page load would immediately re-request (and greedily
-  // prefetch) the following page on mount and after each successful fetch.
-  const wasIntersecting = useRef(false)
 
   const handleIntersect = useCallback(
     (entries: IntersectionObserverEntry[]) => {
       const [entry] = entries
-      const isIntersecting = !!entry?.isIntersecting
-      if (isIntersecting && !wasIntersecting.current && hasMore && !isLoading) {
+      if (entry?.isIntersecting && hasMore && !isLoading) {
         onLoadMore()
       }
-      wasIntersecting.current = isIntersecting
     },
     [hasMore, isLoading, onLoadMore],
   )

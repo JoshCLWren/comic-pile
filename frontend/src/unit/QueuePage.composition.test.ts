@@ -48,13 +48,14 @@ describe('QueuePage composition boundaries', () => {
     expect(source).toMatch(/import \{ useQueueThreadActions \}/)
   })
 
-  it('wires bounded Queue pagination into a visible incremental control', () => {
+  it('wires bounded Queue pagination into an infinite scroll control', () => {
     expect(source).toMatch(/nextPageToken/)
     expect(source).toMatch(/loadMore/)
-    expect(source).toMatch(/data-testid="queue-load-more"/)
-    expect(source).toMatch(/onClick=\{\(\) => void loadMore\(\)\.catch/)
+    expect(source).toMatch(/useInfiniteScroll/)
+    expect(source).toMatch(/data-testid="queue-infinite-scroll-sentinel"/)
     expect(source).toMatch(/isPending && !threads\?\.length/)
-    expect(source).toMatch(/Load more threads/)
+    expect(source).not.toMatch(/data-testid="queue-load-more"/)
+    expect(source).not.toMatch(/Load more threads/)
   })
 
   it('stays under 350 lines so it remains a thin route composition', () => {

@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
 import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hooks/useThread'
 import { useMoveToPosition, useQueueThreads, useShuffleQueue } from '../../hooks/useQueue'
 import { useSession } from '../../hooks/useSession'
@@ -156,6 +157,16 @@ export default function QueuePage() {
     [actions, activeThreads, modals, navigate, session],
   )
 
+  const handleLoadMore = useCallback(() => {
+    void loadMore().catch(() => undefined)
+  }, [loadMore])
+
+  const { sentinelRef } = useInfiniteScroll({
+    onLoadMore: handleLoadMore,
+    hasMore: !!nextPageToken,
+    isLoading: isPending,
+  })
+
   const mobileAddEnabled = !modals.isAnyModalOpen
   const shuffleDisabled = activeThreads.length < 2
 
@@ -203,25 +214,24 @@ export default function QueuePage() {
           onReactivate={modals.openReactivateModal}
         />
 
+        {isError && threads !== null && (
+          <p role="alert" className="text-sm text-red-400 text-center px-2">
+            Couldn&apos;t load the next batch of threads. Try again.
+          </p>
+        )}
+
         {nextPageToken && (
-          <div className="px-2 flex flex-col items-center gap-2" data-testid="queue-pagination">
-            {isError && threads !== null && (
-              <p role="alert" className="text-sm text-red-400 text-center">
-                Couldn&apos;t load the next batch of threads. Try again.
-              </p>
-            )}
-            <button
-              type="button"
-              onClick={() => void loadMore().catch(() => undefined)}
-              disabled={isPending}
-              className="min-h-[44px] px-6 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-xs font-black uppercase tracking-widest text-amber-400 hover:bg-amber-500/20 disabled:opacity-50 disabled:cursor-wait transition-colors"
-              data-testid="queue-load-more"
-            >
-              {isPending ? 'Loading more threads…' : 'Load more threads'}
-            </button>
-            <p className="text-[10px] text-stone-500 uppercase tracking-wider text-center">
-              More threads are available beyond the currently loaded page.
-            </p>
+          <div
+            ref={sentinelRef}
+            className="h-4"
+            data-testid="queue-infinite-scroll-sentinel"
+            aria-hidden="true"
+          />
+        )}
+
+        {isPending && threads !== null && threads.length > 0 && (
+          <div className="px-2 flex justify-center py-4" data-testid="queue-loading-more">
+            <LoadingSpinner />
           </div>
         )}
 
