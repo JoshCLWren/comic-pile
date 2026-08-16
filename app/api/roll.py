@@ -449,17 +449,30 @@ async def roll_bootstrap(
                 if membership.name not in labels:
                     labels.append(membership.name)
 
-    roll_pool = [
-        RollBootstrapThread(
-            id=row.id,
-            title=row.title,
-            format=row.format,
-            issue_id=row.issue_id,
-            issue_number=row.issue_number,
-            route_labels=route_labels_by_thread.get(row.id, []),
+    roll_pool = []
+    for row in pool_rows:
+        effective_issue_number = row.issue_number
+        if not effective_issue_number and row.issue_id is not None:
+            effective_issue_number = (
+                await db.execute(
+                    select(Issue.issue_number)
+                    .where(Issue.thread_id == row.id)
+                    .where(Issue.status == "unread")
+                    .order_by(Issue.position)
+                    .limit(1)
+                )
+                .scalar()
+            )
+        roll_pool.append(
+            RollBootstrapThread(
+                id=row.id,
+                title=row.title,
+                format=row.format,
+                issue_id=row.issue_id,
+                issue_number=effective_issue_number,
+                route_labels=route_labels_by_thread.get(row.id, []),
+            )
         )
-        for row in pool_rows
-    ]
 
     snoozed_threads: list[RollBootstrapThread] = []
     if snoozed_ids:
