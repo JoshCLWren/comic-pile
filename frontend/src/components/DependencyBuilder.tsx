@@ -787,62 +787,59 @@ const [isSavingNote, setIsSavingNote] = useState(false)
 
            {selectedThread && !selectedThreadNeedsMigration && (
              <div className="space-y-2">
-               {isLoadingSourceIssues || isLoadingTargetIssues ? (
-                 <p className="text-xs text-stone-500">Loading issues…</p>
-               ) : (
-                 <div className="flex flex-col md:flex-row gap-2 min-w-0">
-                   <div className="min-w-0 w-full">
-                     <label htmlFor="source-issue" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
-                       Prerequisite issue
-                     </label>
-                     <select
-                       id="source-issue"
-                       value={sourceIssueId || ''}
-                       onChange={(event) => setSourceIssueId(event.target.value ? Number(event.target.value) : null)}
-                       className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
-                       disabled={sourceIssues.length === 0}
-                     >
-                       {sourceIssues.length === 0 ? (
-                         <option value="">No unread issues available</option>
-                       ) : (
-                         <>
-                           <option value="">Select an issue</option>
-                           {sourceIssues.map((issue) => (
-                             <option key={issue.id} value={issue.id}>
-                               #{issue.issue_number}
-                             </option>
-                           ))}
-                         </>
-                       )}
-                     </select>
-                   </div>
-                   <div className="min-w-0 w-full">
-                     <label htmlFor="target-issue" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
-                       Target issue
-                     </label>
-                     <select
-                       id="target-issue"
-                       value={targetIssueId || ''}
-                       onChange={(event) => setTargetIssueId(event.target.value ? Number(event.target.value) : null)}
-                       className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
-                       disabled={targetIssues.length === 0}
-                     >
-                       {targetIssues.length === 0 ? (
-                         <option value="">No unread issues available</option>
-                       ) : (
-                         <>
-                           <option value="">Select an issue</option>
-                           {targetIssues.map((issue) => (
-                             <option key={issue.id} value={issue.id}>
-                               #{issue.issue_number}
-                             </option>
-                           ))}
-                         </>
-                       )}
-                     </select>
-                   </div>
-                 </div>
-               )}
+      <div className="flex flex-col md:flex-row gap-2 min-w-0">
+        <div className="min-w-0 w-full">
+          <label htmlFor="source-issue" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+            Prerequisite issue
+          </label>
+          <select
+            id="source-issue"
+            value={sourceIssueId || ''}
+            onChange={(event) => setSourceIssueId(event.target.value ? Number(event.target.value) : null)}
+            className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+            disabled={sourceIssues.length === 0}
+          >
+            {sourceIssues.length === 0 ? (
+              <option value="">No unread issues available</option>
+            ) : (
+              <>
+                <option value="">Select an issue</option>
+                {sourceIssues.map((issue) => (
+                  <option key={issue.id} value={issue.id}>
+                    #{issue.issue_number}
+                  </option>
+                ))}
+              </>
+            )}
+          </select>
+        </div>
+        <div className="min-w-0 w-full">
+          <label htmlFor="target-issue" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+            Target issue
+          </label>
+          <select
+            id="target-issue"
+            value={targetIssueId || ''}
+            onChange={(event) => setTargetIssueId(event.target.value ? Number(event.target.value) : null)}
+            className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+            disabled={targetIssues.length === 0}
+          >
+            {targetIssues.length === 0 ? (
+              <option value="">No unread issues available</option>
+            ) : (
+              <>
+                <option value="">Select an issue</option>
+                {targetIssues.map((issue) => (
+                  <option key={issue.id} value={issue.id}>
+                    #{issue.issue_number}
+                  </option>
+                ))}
+              </>
+            )}
+          </select>
+        </div>
+      </div>
+
              </div>
            )}
 
