@@ -72,7 +72,7 @@ it('uses an opaque modal surface with a dimmed overlay', () => {
   expect(overlay).toHaveClass('backdrop-blur-sm')
 
   const dialogStyle = window.getComputedStyle(dialog)
-  expect(dialogStyle.backgroundColor).not.toBe('rgba(255, 255, 255, 0.03)')
+  expect(dialogStyle.backgroundColor).toBe('rgba(17, 14, 10, 0.95)')
 })
 
 it('returns null while closed and supports fallback focus without autofocus', async () => {
