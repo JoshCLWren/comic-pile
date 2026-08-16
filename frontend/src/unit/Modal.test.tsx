@@ -1,5 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { useState } from 'react'
 import { expect, it, vi } from 'vitest'
 import Modal from '../components/Modal'
@@ -71,8 +73,10 @@ it('uses an opaque modal surface with a dimmed overlay', () => {
   expect(overlay).not.toBeNull()
   expect(overlay).toHaveClass('backdrop-blur-sm')
 
-  const dialogStyle = window.getComputedStyle(dialog)
-  expect(dialogStyle.backgroundColor).toBe('rgba(17, 14, 10, 0.95)')
+  const stylesheet = readFileSync(resolve(__dirname, '../styles.css'), 'utf8')
+  const modalRule = stylesheet.match(/\.modal-card\s*\{([^}]*)\}/)?.[1] ?? ''
+  expect(modalRule).toContain('rgba(17, 14, 10, 0.95)')
+  expect(modalRule).not.toContain('rgba(255, 255, 255, 0.03)')
 })
 
 it('returns null while closed and supports fallback focus without autofocus', async () => {
