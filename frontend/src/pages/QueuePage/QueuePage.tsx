@@ -215,9 +215,19 @@ export default function QueuePage() {
         />
 
         {isError && threads !== null && (
-          <p role="alert" className="text-sm text-red-400 text-center px-2">
-            Couldn&apos;t load the next batch of threads. Try again.
-          </p>
+          <div role="alert" className="text-sm text-red-400 text-center px-2 space-y-2">
+            <p>Couldn&apos;t load the next batch of threads.</p>
+            {nextPageToken && (
+              <button
+                type="button"
+                onClick={handleLoadMore}
+                className="mx-auto block rounded-md bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-500 transition-colors"
+                data-testid="queue-load-more-retry"
+              >
+                Try again
+              </button>
+            )}
+          </div>
         )}
 
         {nextPageToken && (
