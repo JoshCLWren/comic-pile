@@ -10,6 +10,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import event, exc as sqlalchemy_exc, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import Pool
 
 from app.config import get_database_settings
 from app.performance_diagnostics import record_database_query
@@ -35,25 +36,98 @@ DATABASE_DEPENDENCY_TIMEOUT_SECONDS = 10.0
 DATABASE_CONNECT_TIMEOUT_SECONDS = 3.0
 DATABASE_COMMAND_TIMEOUT_SECONDS = 8.0
 
+# Pool configuration from environment (with optimized defaults for Vercel Fluid Compute)
+# Recommended based on benchmarking: size=2, no overflow, no pre-ping
+# See docs/pool_benchmark_results.md for rationale
+POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "2"))
+MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "0"))
+POOL_PRE_PING = os.getenv("DB_POOL_PRE_PING", "false").lower() == "true"
+POOL_RECYCLE = int(os.getenv("DB_POOL_RECYCLE", "3600"))
+
 # Log only an allowlisted metadata projection. Rendering a URL, even with its
 # password hidden, risks exposing usernames, query credentials, or encoded secrets.
 logger.info(
     "Database configured",
-    extra={"database": safe_connection_metadata(ASYNC_DATABASE_URL)},
+    extra={
+        "database": safe_connection_metadata(ASYNC_DATABASE_URL),
+        "pool_size": POOL_SIZE,
+        "max_overflow": MAX_OVERFLOW,
+        "pool_pre_ping": POOL_PRE_PING,
+        "pool_recycle": POOL_RECYCLE,
+    },
 )
 
 async_engine = create_async_engine(
     ASYNC_DATABASE_URL,
-    pool_recycle=3600,
-    pool_size=1,
-    max_overflow=2,
+    pool_recycle=POOL_RECYCLE,
+    pool_size=POOL_SIZE,
+    max_overflow=MAX_OVERFLOW,
     pool_timeout=DATABASE_CONNECT_TIMEOUT_SECONDS,
-    pool_pre_ping=True,
+    pool_pre_ping=POOL_PRE_PING,
     connect_args={
         "timeout": DATABASE_CONNECT_TIMEOUT_SECONDS,
         "command_timeout": DATABASE_COMMAND_TIMEOUT_SECONDS,
     },
 )
+
+
+def _log_pool_state(pool: Pool, event_name: str) -> None:
+    """Log current pool state for observability."""
+    try:
+        checked_out = pool.checkedout()
+        checked_in = pool.checkedin()
+        overflow = pool.overflow()
+        logger.debug(
+            "pool_state event=%s size=%d checked_out=%d checked_in=%d overflow=%d",
+            event_name,
+            pool.size(),
+            checked_out,
+            checked_in,
+            overflow,
+        )
+    except Exception:
+        # Never let observability break the application
+        pass
+
+
+@event.listens_for(async_engine.sync_engine.pool, "checkout")
+def _on_checkout(dbapi_connection: object, connection_record: object, connection_proxy: object) -> None:
+    """Record pool checkout timing and state."""
+    del dbapi_connection, connection_proxy
+    checkout_started = getattr(connection_record, "_comic_pile_checkout_started", None)
+    if isinstance(checkout_started, float):
+        elapsed_ms = (time.perf_counter() - checkout_started) * 1000
+        logger.info("pool_checkout duration_ms=%.2f", elapsed_ms)
+    _log_pool_state(async_engine.sync_engine.pool, "checkout")
+
+
+@event.listens_for(async_engine.sync_engine.pool, "checkin")
+def _on_checkin(dbapi_connection: object, connection_record: object) -> None:
+    """Record pool checkin and state."""
+    del dbapi_connection
+    _log_pool_state(async_engine.sync_engine.pool, "checkin")
+
+
+@event.listens_for(async_engine.sync_engine.pool, "connect")
+def _on_connect(dbapi_connection: object, connection_record: object) -> None:
+    """Record new physical connection creation."""
+    del dbapi_connection, connection_record
+    logger.info("pool_connect new_physical_connection_created=true")
+    _log_pool_state(async_engine.sync_engine.pool, "connect")
+
+
+@event.listens_for(async_engine.sync_engine.pool, "first_connect")
+def _on_first_connect(dbapi_connection: object, connection_record: object) -> None:
+    """Record first connection creation."""
+    del dbapi_connection, connection_record
+    logger.info("pool_first_connect")
+
+
+@event.listens_for(async_engine.sync_engine.pool, "invalidate")
+def _on_invalidate(dbapi_connection: object, connection_record: object, exception: object) -> None:
+    """Record connection invalidation."""
+    del dbapi_connection, connection_record
+    logger.warning("pool_invalidate exception=%s", type(exception).__name__ if exception else "none")
 
 
 @event.listens_for(async_engine.sync_engine, "before_cursor_execute")
@@ -66,7 +140,14 @@ def _before_cursor_execute(
     executemany: bool,
 ) -> None:
     """Start timing a SQL statement after a connection has been acquired."""
-    del connection, cursor, statement, parameters, executemany
+    # Mark checkout start time on the connection record if available
+    try:
+        conn_record = getattr(connection, "_connection_record", None)
+        if conn_record is not None:
+            conn_record._comic_pile_checkout_started = time.perf_counter()
+    except Exception:
+        pass
+    del cursor, statement, parameters, executemany
     vars(context)["_comic_pile_query_started_at"] = time.perf_counter()
 
 
