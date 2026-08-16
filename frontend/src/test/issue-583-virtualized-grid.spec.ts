@@ -1,6 +1,6 @@
 import { expect } from './fixtures';
 import { test } from './fixtures';
-import { waitForQueueReady } from './helpers';
+import { waitForQueueReady, waitForRollPageReady } from './helpers';
 
 test.describe('Responsive multi-column virtualized grid (#583-C)', () => {
   test('renders 3 columns at desktop viewport (1280×720)', async ({ authenticatedWithLargeQueuePage }) => {
@@ -135,9 +135,13 @@ test.describe('Responsive multi-column virtualized grid (#583-C)', () => {
       .poll(async () => new URL(page.url()).pathname)
       .toMatch(/^\/(roll)?$/);
 
-    // The roll page should show the die or roll pool
-    const mainDie = page.locator('[data-testid="d20-die"]');
-    const rollPool = page.locator('[data-roll-pool]');
-    await expect(mainDie.or(rollPool).first()).toBeVisible({ timeout: 5000 });
+    // The roll page should show the die or roll pool. Assert on the real
+    // roll-page ready signal via the shared helper (#main-die-3d or
+    // [data-roll-pool]). The previous selector, [data-testid="d20-die"], is
+    // not rendered anywhere in the app — the roll die is data-testid/id
+    // "main-die-3d" — so it could never match and always timed out even when
+    // the swipe→roll navigation succeeded. Reusing waitForRollPageReady keeps
+    // this in lockstep with every other roll-page spec so it can't drift again.
+    await waitForRollPageReady(page);
   });
 });
