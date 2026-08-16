@@ -64,6 +64,7 @@ def _to_preview(
                 first_issue_id=candidate.first_issue_id,
                 second_issue_id=candidate.second_issue_id,
                 source_paths=candidate.source_paths,
+                explanation=candidate.explanation,
             )
             for candidate in template.parallel_candidates
         ],

@@ -258,7 +258,7 @@ def _make_mock_request(invocation: int = 1) -> MagicMock:
 async def test_warm_endpoint_handler_disabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Verify warm endpoint handler returns no_activity when disabled.
+    """Verify warm endpoint handler is not defined when disabled.
 
     Args:
         monkeypatch: Pytest fixture for setting environment variables.
@@ -273,16 +273,8 @@ async def test_warm_endpoint_handler_disabled(
 
     importlib.reload(health_module)
 
-    mock_request = _make_mock_request()
-    mock_db = AsyncMock()
-
-    result = await health_module.warm_endpoint(mock_request, mock_db)
-
-    assert result.status == "no_activity"
-    assert result.has_active_session is False
-    assert result.request_count_today == 0
-    assert result.instance.request_count == 0
-    assert result.instance.process_start_time_ns == 0
+    # When disabled, the warm_endpoint function is not defined
+    assert not hasattr(health_module, "warm_endpoint")
 
 
 @pytest.mark.asyncio
@@ -308,7 +300,7 @@ async def test_warm_endpoint_handler_enabled_no_activity(
 
     mock_request = _make_mock_request(invocation=5)
     mock_db = AsyncMock()
-    mock_result = AsyncMock()
+    mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = None
     mock_db.execute.return_value = mock_result
 
@@ -347,7 +339,7 @@ async def test_warm_endpoint_handler_with_recent_activity(
 
     mock_request = _make_mock_request(invocation=10)
     mock_db = AsyncMock()
-    mock_result = AsyncMock()
+    mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = datetime.now(UTC)
     mock_db.execute.return_value = mock_result
 

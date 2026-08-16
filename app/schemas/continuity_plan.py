@@ -123,6 +123,8 @@ class CrossoverTemplateConflictPreview(BaseModel):
 class CrossoverTemplateParallelCandidatePreview(CrossoverTemplateConflictPreview):
     """Advisory pair that may represent parallel branches."""
 
+    explanation: str
+
 
 class CrossoverTemplateSerialSpinePreview(BaseModel):
     """Same-thread issue order preserved as advisory series structure."""
@@ -303,90 +305,3 @@ class ContinuityPlanReadinessResponse(BaseModel):
     )
     summary: ContinuityPlanReadinessSummary = Field(default_factory=ContinuityPlanReadinessSummary)
     generated_at: datetime
-
-
-class CrossoverTemplateItemPreview(BaseModel):
-    """One suggested member in a crossover template preview."""
-
-    issue_id: int
-    suggested_position: int
-    role: str
-    confidence: str
-    explanation: str
-    source_paths: list[str]
-    target_story_arc_id: str | None = None
-
-
-class CrossoverTemplateConflictPreview(BaseModel):
-    """A pair whose relative order disagrees across source lists."""
-
-    first_issue_id: int
-    second_issue_id: int
-    source_paths: list[str]
-
-
-class CrossoverTemplateParallelCandidatePreview(BaseModel):
-    """Advisory pair that may represent parallel branches."""
-
-    first_issue_id: int
-    second_issue_id: int
-    source_paths: list[str]
-    explanation: str
-
-
-class CrossoverTemplateSerialSpinePreview(BaseModel):
-    """Same-thread issue order preserved as advisory series structure."""
-
-    thread_id: int
-    issue_ids: list[int]
-    source_paths: list[str]
-    explanation: str
-
-
-class CrossoverTemplateIntersectionPreview(BaseModel):
-    """Consistent cross-thread ordering observation, never a hard dependency."""
-
-    first_issue_id: int
-    second_issue_id: int
-    source_paths: list[str]
-    explanation: str
-
-
-class CrossoverTemplateUnresolvedMatchPreview(BaseModel):
-    """One source entry that could not be matched to a ComicPile issue."""
-
-    source_path: str
-    position: int
-    series_name: str
-    issue_number: str
-    reason: str
-
-
-class DerivedCrossoverTemplatePreview(BaseModel):
-    """Rebuildable crossover suggestion that never creates continuity rules."""
-
-    items: list[CrossoverTemplateItemPreview] = Field(default_factory=list)
-    conflicts: list[CrossoverTemplateConflictPreview] = Field(default_factory=list)
-    parallel_candidates: list[CrossoverTemplateParallelCandidatePreview] = Field(default_factory=list)
-    serial_spines: list[CrossoverTemplateSerialSpinePreview] = Field(default_factory=list)
-    intersections: list[CrossoverTemplateIntersectionPreview] = Field(default_factory=list)
-    unresolved: list[CrossoverTemplateUnresolvedMatchPreview] = Field(default_factory=list)
-
-
-class CrossoverTemplatePreviewRequest(BaseModel):
-    """Request to preview a derived crossover template."""
-
-    source_list_ids: list[int] = Field(default_factory=list, min_length=0, max_length=20)
-    target_story_arc_id: str | None = None
-
-
-class CrossoverTemplateAdoptRequest(BaseModel):
-    """Request to adopt an external template into an editable continuity plan."""
-
-    source_list_ids: list[int] = Field(default_factory=list, min_length=1, max_length=20)
-    target_story_arc_id: str | None = None
-    lane_id: str = Field(min_length=1, max_length=80)
-    lane_name: str = Field(min_length=1, max_length=120)
-    plan_name: str = Field(min_length=1, max_length=200)
-    ordering_mode: PlanOrderingMode = "informational"
-    issue_node_id_prefix: str = Field(default="issue-", min_length=1, max_length=20)
