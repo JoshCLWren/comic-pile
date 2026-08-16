@@ -10,7 +10,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import event, exc as sqlalchemy_exc, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.pool import QueuePool, Pool
+from sqlalchemy.pool import QueuePool
 
 from app.config import get_database_settings
 from app.performance_diagnostics import record_database_query
@@ -64,7 +64,6 @@ async_engine = create_async_engine(
     max_overflow=MAX_OVERFLOW,
     pool_timeout=DATABASE_CONNECT_TIMEOUT_SECONDS,
     pool_pre_ping=POOL_PRE_PING,
-    poolclass=QueuePool,
     connect_args={
         "timeout": DATABASE_CONNECT_TIMEOUT_SECONDS,
         "command_timeout": DATABASE_COMMAND_TIMEOUT_SECONDS,
@@ -72,7 +71,7 @@ async_engine = create_async_engine(
 )
 
 
-def _log_pool_state(pool: Pool, event_name: str) -> None:
+def _log_pool_state(pool: QueuePool, event_name: str) -> None:
     """Log current pool state for observability."""
     try:
         checked_out = pool.checkedout()

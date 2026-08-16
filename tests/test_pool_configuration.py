@@ -6,8 +6,6 @@ and pool event listeners are registered.
 """
 
 import importlib
-import os
-from typing import Any
 
 import pytest
 
@@ -79,20 +77,6 @@ def test_engine_uses_configured_pool_settings() -> None:
     """The async engine receives the configured pool parameters."""
     import app.database as db_mod
 
-    pool = async_engine_get_pool(db_mod)
-    # Verify pool configuration via available attributes if present
-    if hasattr(pool, "_poolconfig") or hasattr(pool, "_pool_config"):
-        cfg = getattr(pool, "_poolconfig", getattr(pool, "_pool_config"))
-        if hasattr(cfg, "pool_size"):
-            assert cfg.pool_size == db_mod.POOL_SIZE
-        if hasattr(cfg, "max_overflow"):
-            assert cfg.max_overflow == db_mod.MAX_OVERFLOW
-    else:
-        # Fallback: use public size and overflow for sanity
-        assert pool.size() <= db_mod.POOL_SIZE
-        assert pool.overflow() <= db_mod.MAX_OVERFLOW
-
-
-def async_engine_get_pool(db_mod: Any) -> Any:
-    """Extract the pool from a database module's async engine."""
-    return db_mod.async_engine.sync_engine.pool
+    pool = db_mod.async_engine.sync_engine.pool
+    assert pool.size() == db_mod.POOL_SIZE
+    assert pool._max_overflow == db_mod.MAX_OVERFLOW
