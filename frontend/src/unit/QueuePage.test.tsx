@@ -18,7 +18,7 @@ import {
   useShuffleQueue,
 } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
-import { useSnooze, useUnsnooze } from '../hooks/useSnooze
+import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { threadsApi, dependenciesApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 import type { Thread } from '../types'
