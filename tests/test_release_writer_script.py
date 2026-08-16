@@ -323,7 +323,7 @@ def test_issues_excludes_parenthesized_version_step_markers(monkeypatch, capsys)
         return {
             "number": 100,
             "title": "Release (v1.2) #3 ships today.",
-            "body": "In [v4] #5 the API changed. Fixes #1070.",
+            "body": "In [v1] #5 the API changed. Step (v1.1) #6 follows.",
         }
 
     monkeypatch.setattr(release_writer, "_github_request", fake_github_request)

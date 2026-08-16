@@ -308,6 +308,41 @@ def _preceding_word(text: str, position: int) -> str:
     return prefix.split()[-1].lower().rstrip(".,;:)!?\\\"'")
 
 
+def _is_inside_version_delimiter(text: str, match_start: int) -> bool:
+    """Return True when the issue number is immediately preceded by a
+    parenthesised or bracket-quoted version-step pattern such as '(v1.2)' or '[v4]'.
+
+    The caller has already passed the basic word-based pre-filter; this check
+    catches bracket-quoted tokens that the standard word splitter cannot see.
+
+    Args:
+        text: The full raw text being scanned.
+        match_start: Character offset of the captured digit group (not the '#').
+
+    Returns:
+        True if the reference lies inside a delimited version-step marker.
+    """
+    pos = match_start
+    while pos > 0 and text[pos - 1] == " ":
+        pos -= 1
+    while pos > 0 and text[pos - 1] in ")]}":
+        pos -= 1
+        closing_pos = pos
+        depth = 1
+        while pos > 0:
+            pos -= 1
+            ch = text[pos]
+            if ch in ")]}":
+                depth += 1
+            elif ch in "([{":
+                depth -= 1
+                if depth == 0:
+                    inner = text[pos + 1 : closing_pos].strip()
+                    return bool(_VERSION_STEP_PATTERN.fullmatch(inner))
+                break
+    return False
+
+
 def _issues(repository: str, raw_number: str) -> None:
     number = _pr_number(raw_number)
     pull = _fetch_pull(repository, number)
@@ -316,6 +351,8 @@ def _issues(repository: str, raw_number: str) -> None:
     for match in _ISSUE_REFERENCE_PATTERN.finditer(text):
         preceding = _preceding_word(text, match.start())
         if preceding in _ORDINAL_INDICATORS or _VERSION_STEP_PATTERN.fullmatch(preceding):
+            continue
+        if _is_inside_version_delimiter(text, match.start()):
             continue
         referenced = int(match.group(1))
         if referenced != number:
