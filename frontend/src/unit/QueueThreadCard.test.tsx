@@ -124,7 +124,7 @@ describe('QueueThreadCard', () => {
     renderCard(createMockThread())
 
     expect(screen.getAllByTestId('mock-position-menu')).toHaveLength(1)
-    expect(screen.queryByTestId('mobile-dependency-action')).not.toBeInTheDocument()
+    expect(screen.getByTestId('mobile-dependency-action')).toBeInTheDocument()
   })
 
   it('opens thread details when the card surface is clicked', async () => {
