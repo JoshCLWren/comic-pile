@@ -118,7 +118,11 @@ async def test_bootstrap_roll_pool_is_never_paginated_below_current_die(monkeypa
         "get_session_with_thread_safe",
         AsyncMock(return_value=(current_session, None)),
     )
-    monkeypatch.setattr(roll_api, "get_current_die", AsyncMock(return_value=100))
+    monkeypatch.setattr(
+        roll_api,
+        "get_current_die_for_session",
+        AsyncMock(return_value=100),
+    )
 
     db = AsyncMock()
     db.execute.side_effect = [

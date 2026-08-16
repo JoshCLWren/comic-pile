@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
 
@@ -81,8 +81,6 @@ async def roll_dice(
     current_die = await get_current_die_for_session(current_session, db)
 
     snoozed_ids = current_session.snoozed_thread_ids or []
-    snoozed_count = len(snoozed_ids)
-    offset = snoozed_count
 
     rows = await get_roll_pool_rows(user_id, db, snoozed_ids)
     if not rows:
@@ -139,6 +137,9 @@ async def roll_dice(
 
     await db.commit()
     await _invalidate_session_caches(current_user.id)
+
+    snoozed_count = len(snoozed_ids)
+    offset = snoozed_count
 
     return RollResponse(
         thread_id=selected_thread_id,
@@ -252,8 +253,6 @@ async def override_roll(
     snoozed_ids = (
         list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
     )
-    snoozed_count = len(snoozed_ids)
-    offset = snoozed_count
 
     if override_thread_id in snoozed_ids:
         raise HTTPException(
@@ -276,6 +275,9 @@ async def override_roll(
 
     await db.commit()
     await _invalidate_session_caches(current_user.id)
+
+    snoozed_count = len(snoozed_ids)
+    offset = snoozed_count
 
     return RollResponse(
         thread_id=override_thread_id,
@@ -405,7 +407,7 @@ async def roll_bootstrap(
             Thread.next_unread_issue_id.label("issue_id"),
             Issue.issue_number,
         )
-        .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
+        .outerjoin(Issue, and_(Issue.id == Thread.next_unread_issue_id, Issue.status == "unread"))
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
         .where(Thread.queue_position >= 1)
