@@ -411,9 +411,18 @@ async def roll_bootstrap(
         .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
         .outerjoin(
             DependencyGroupMembership,
-            or_(DependencyGroupMembership.thread_id == Thread.id,
-                DependencyGroupMembership.issue_id == Thread.next_unread_issue_id),
-        )
+    def _get_dependencies(threads):
+        # Correlated subquery to handle threads with no dependency groups
+        pool = [
+            {
+                'thread_id': t.id,
+                'format': t.format,
+                'route_label': db.session.query(DependencyGroup.label)
+                             .filter(DependencyGroupMembership.thread_id == t.id)
+                             .scalar()
+            }
+            for t in threads
+        ]
         .outerjoin(DependencyGroup, DependencyGroupMembership.group_id == DependencyGroup.id)
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
