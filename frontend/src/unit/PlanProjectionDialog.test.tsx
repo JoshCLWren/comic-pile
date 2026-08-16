@@ -110,7 +110,10 @@ describe('PlanProjectionDialog', () => {
       plan_ordering_mode: 'strict_sequential',
       reading_order_id: 3,
       reading_order_name: 'Alpha',
-      entries: [],
+      entries: [
+        { thread_id: 11, thread_title: 'Mister Miracle', position: 1, source: 'added', source_node_id: null },
+        { thread_id: 12, thread_title: 'Saga', position: 2, source: 'kept', source_node_id: 'node-12' },
+      ],
       conflicts: [],
       total_positions: 2,
       dropped_node_ids: [],
@@ -132,6 +135,33 @@ describe('PlanProjectionDialog', () => {
     await waitFor(() => expect(screen.getByText(/Projection applied/)).toBeInTheDocument())
     expect(readingOrdersApi.confirmProjection).toHaveBeenCalledWith(9, 3)
     expect(screen.getByText(/2 added/)).toBeInTheDocument()
+  })
+
+  it('renders projected entries with position, title, and source label', async () => {
+    mocks.previewProjection.mockResolvedValue({
+      plan_id: 9,
+      plan_name: 'My reading plan',
+      plan_ordering_mode: 'strict_sequential',
+      reading_order_id: 3,
+      reading_order_name: 'Alpha',
+      entries: [
+        { thread_id: 11, thread_title: 'Mister Miracle', position: 1, source: 'added', source_node_id: null },
+        { thread_id: 12, thread_title: 'Saga', position: 2, source: 'existing', source_node_id: 'node-12' },
+      ],
+      conflicts: [],
+      total_positions: 2,
+      dropped_node_ids: [],
+    })
+
+    renderDialog()
+    await waitFor(() => expect(screen.getByRole('option', { name: /Alpha/ })).toBeInTheDocument())
+    await userEvent.selectOptions(screen.getByTestId('projection-reading-order-select'), '3')
+    await userEvent.click(screen.getByRole('button', { name: 'Preview projection' }))
+
+    await waitFor(() => expect(screen.getByText('1')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Mister Miracle')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Added')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Kept')).toBeInTheDocument())
   })
 
   it('shows an error when loading reading orders fails', async () => {
