@@ -109,16 +109,17 @@ async def roll_dice(
     selected_thread_next_unread_issue_id = selected_thread.next_unread_issue_id
 
     selected_thread_issue_id = None
-    selected_thread_issue_number = issue_number
+    selected_thread_issue_number = None
     if selected_thread.uses_issue_tracking() and selected_thread_next_unread_issue_id:
-        selected_thread_issue_id = selected_thread_next_unread_issue_id
-        # Fallback only when the enriched pool row didn't resolve the number.
-        if not selected_thread_issue_number:
+        if unread_count > 0 and issue_number is not None:
+            selected_thread_issue_id = selected_thread_next_unread_issue_id
+            selected_thread_issue_number = issue_number
+        else:
             issue_result = await db.execute(
                 select(Issue).where(Issue.id == selected_thread_next_unread_issue_id)
             )
             next_issue = issue_result.scalar_one_or_none()
-            if next_issue:
+            if next_issue and next_issue.status == "unread":
                 selected_thread_issue_id = next_issue.id
                 selected_thread_issue_number = next_issue.issue_number
 

@@ -1,11 +1,13 @@
 """Edge case tests for queue reordering operations."""
 
+from datetime import UTC, datetime
+
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Thread, User
+from app.models import Issue, Thread, User
 from httpx import AsyncClient
-from comic_pile.queue import move_to_back, move_to_front, move_to_position
+from comic_pile.queue import get_roll_pool_rows, move_to_back, move_to_front, move_to_position
 
 
 @pytest.mark.asyncio
@@ -930,3 +932,166 @@ async def test_move_to_position_beyond_maximum_position(
 
     with pytest.raises(ValueError, match="out of range"):
         await move_to_position(thread_a.id, default_user.id, 10, async_db)
+
+
+@pytest.mark.asyncio
+async def test_get_roll_pool_rows_empty_pool(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """get_roll_pool_rows returns empty list when no active threads exist."""
+    rows = await get_roll_pool_rows(default_user.id, async_db)
+    assert rows == []
+
+
+@pytest.mark.asyncio
+async def test_get_roll_pool_rows_accurate_unread_count_and_issue_number(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """get_roll_pool_rows reports correct unread count and issue number."""
+    now = datetime.now(UTC)
+    thread = Thread(
+        title="Issue Tracked Thread",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=1,
+        status="active",
+        user_id=default_user.id,
+        total_issues=3,
+        created_at=now,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    issue1 = Issue(
+        thread_id=thread.id,
+        issue_number="1",
+        position=1,
+        status="read",
+        read_at=now,
+    )
+    issue1_next = Issue(
+        thread_id=thread.id,
+        issue_number="2",
+        position=2,
+        status="unread",
+    )
+    issue2 = Issue(
+        thread_id=thread.id,
+        issue_number="3",
+        position=3,
+        status="unread",
+    )
+    async_db.add_all([issue1, issue1_next, issue2])
+    await async_db.commit()
+    await async_db.refresh(issue1_next)
+
+    thread.next_unread_issue_id = issue1_next.id
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    rows = await get_roll_pool_rows(default_user.id, async_db)
+
+    assert len(rows) == 1
+    result_thread, unread_count, issue_number = rows[0]
+    assert result_thread.id == thread.id
+    assert unread_count == 2
+    assert issue_number == "2"
+
+
+@pytest.mark.asyncio
+async def test_get_roll_pool_rows_snoozed_threads_excluded(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """get_roll_pool_rows excludes threads whose IDs appear in snoozed_ids."""
+    now = datetime.now(UTC)
+    thread_a = Thread(
+        title="Snoozed Thread",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=1,
+        status="active",
+        user_id=default_user.id,
+        total_issues=2,
+        created_at=now,
+    )
+    thread_b = Thread(
+        title="Active Thread",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=2,
+        status="active",
+        user_id=default_user.id,
+        total_issues=1,
+        created_at=now,
+    )
+    async_db.add_all([thread_a, thread_b])
+    await async_db.commit()
+    await async_db.refresh(thread_a)
+
+    issue_b = Issue(
+        thread_id=thread_b.id,
+        issue_number="1",
+        position=1,
+        status="unread",
+    )
+    thread_b.next_unread_issue_id = issue_b.id
+    async_db.add_all([issue_b, thread_b])
+    await async_db.commit()
+
+    rows = await get_roll_pool_rows(default_user.id, async_db, snoozed_ids=[thread_a.id])
+
+    assert len(rows) == 1
+    assert rows[0][0].id == thread_b.id
+
+
+@pytest.mark.asyncio
+async def test_get_roll_pool_rows_stale_next_unread_issue_id_returns_null_number(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """get_roll_pool_rows returns NULL number when next_unread_issue_id points to a read issue."""
+    now = datetime.now(UTC)
+    thread = Thread(
+        title="Thread with Stale Pointer",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=default_user.id,
+        total_issues=2,
+        created_at=now,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    issue_read = Issue(
+        thread_id=thread.id,
+        issue_number="1",
+        position=1,
+        status="read",
+        read_at=now,
+    )
+    issue_unread = Issue(
+        thread_id=thread.id,
+        issue_number="2",
+        position=2,
+        status="unread",
+    )
+    async_db.add_all([issue_read, issue_unread])
+    await async_db.commit()
+    await async_db.refresh(issue_unread)
+
+    thread.next_unread_issue_id = issue_read.id
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    rows = await get_roll_pool_rows(default_user.id, async_db)
+
+    assert len(rows) == 1
+    result_thread, unread_count, issue_number = rows[0]
+    assert result_thread.id == thread.id
+    assert unread_count == 1
+    assert issue_number is None

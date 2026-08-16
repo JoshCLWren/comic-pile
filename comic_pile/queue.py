@@ -4,7 +4,7 @@ from collections.abc import Collection
 from datetime import UTC, datetime, timedelta
 import logging
 import random
-from sqlalchemy import func, select, text
+from sqlalchemy import and_, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 
@@ -485,7 +485,10 @@ async def get_roll_pool_rows(
             Issue.issue_number.label("next_issue_number"),
         )
         .outerjoin(unread_counts, unread_counts.c.thread_id == Thread.id)
-        .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
+        .outerjoin(
+            Issue,
+            and_(Issue.id == Thread.next_unread_issue_id, Issue.status == "unread"),
+        )
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
         .where(Thread.queue_position >= 1)
