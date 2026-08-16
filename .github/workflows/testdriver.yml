@@ -20,11 +20,13 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '20'
-        cache: 'npm'
+        node-version: '24'
+
+    - name: Enable pnpm
+      run: corepack enable
 
     - name: Install dependencies
-      run: npm ci
+      run: pnpm install --frozen-lockfile
 
     # Authenticate to TestDriver via GitHub OIDC (no stored secret needed once the
     # TestDriver GitHub App is authorized for your org). Falls back to a TD_API_KEY
@@ -36,7 +38,7 @@ jobs:
         api-key: ${{ secrets.TD_API_KEY }}
 
     - name: Run TestDriver.ai tests
-      run: npx vitest run
+      run: pnpm exec vitest run
 
     - name: Upload test results
       if: always()
