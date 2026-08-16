@@ -8,6 +8,14 @@ import {createThread,
   openThreadActions,
 } from './helpers';
 
+// The React app talks to the versioned thread endpoints (`/api/v1/threads/…`)
+// via the axios client's `/api` baseURL. The backend also mounts the same
+// router at the legacy `/api/threads/…` prefix, so match either shape rather
+// than the literal legacy substring — otherwise `waitForResponse` never
+// resolves for the UI-driven create/edit/delete requests and the test times
+// out. See issue #1292.
+const THREADS_ENDPOINT = /\/api\/(v1\/)?threads\//;
+
 test.describe('Thread Management', () => {
   test('should create a new thread successfully', async ({ authenticatedPage }) => {
     await gotoQueue(authenticatedPage);
@@ -21,7 +29,7 @@ test.describe('Thread Management', () => {
     await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1-10');
     await Promise.all([
       authenticatedPage.waitForResponse((response) =>
-        response.url().includes('/api/threads/') &&
+        THREADS_ENDPOINT.test(response.url()) &&
         response.request().method() === 'POST' &&
         response.status() < 300
       ),
@@ -49,7 +57,7 @@ test.describe('Thread Management', () => {
       await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1-10');
       await Promise.all([
         authenticatedPage.waitForResponse((response) =>
-          response.url().includes('/api/threads/') &&
+          THREADS_ENDPOINT.test(response.url()) &&
           response.request().method() === 'POST' &&
           response.status() < 300
         ),
@@ -121,7 +129,7 @@ test.describe('Thread Management', () => {
     await authenticatedPage.fill('label:has-text("Title") + input', 'Updated Title');
     await Promise.all([
       authenticatedPage.waitForResponse((response) =>
-        response.url().includes('/api/threads/') &&
+        THREADS_ENDPOINT.test(response.url()) &&
         response.request().method() === 'PUT' &&
         response.status() < 300
       ),
@@ -147,7 +155,7 @@ test.describe('Thread Management', () => {
     const menu = await openThreadActions(threadItem)
     await Promise.all([
       authenticatedPage.waitForResponse((response) =>
-        response.url().includes('/api/threads/') &&
+        THREADS_ENDPOINT.test(response.url()) &&
         response.request().method() === 'DELETE'
       ),
       menu.getByRole('menuitem', { name: 'Delete thread' }).click(),
