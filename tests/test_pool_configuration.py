@@ -80,7 +80,9 @@ def test_engine_uses_configured_pool_settings() -> None:
     import app.database as db_mod
 
     pool = async_engine_get_pool(db_mod)
-    assert pool.size() == db_mod.POOL_SIZE
+    # Verify pool configuration matches environment defaults via internal pool config
+    assert pool._poolconfig.pool_size == db_mod.POOL_SIZE
+    assert pool._poolconfig.max_overflow == db_mod.MAX_OVERFLOW
     assert pool.overflow() <= db_mod.MAX_OVERFLOW
 
 

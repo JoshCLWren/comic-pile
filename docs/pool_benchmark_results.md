@@ -101,7 +101,7 @@ DB_POOL_RECYCLE=3600
 
 The following pool events are now logged for production monitoring:
 
-- `pool_checkout duration_ms=X.XX` - Checkout latency
+- `pool_checkout idle_since_last_query_ms=X.XX` - Idle time since last query
 - `pool_checkin` - Connection returned
 - `pool_connect new_physical_connection_created=true` - New physical connection
 - `pool_first_connect` - First connection created
