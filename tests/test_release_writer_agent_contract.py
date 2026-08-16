@@ -74,19 +74,38 @@ def test_release_writer_github_reads_are_get_only(monkeypatch) -> None:
 
     from scripts import release_writer
 
-    responses = [jsonlib.dumps([{"number": 1}]).encode()]
+    responses: list[bytes] = [
+        jsonlib.dumps([{"number": 1}]).encode(),
+        jsonlib.dumps(
+            {"number": 1082, "title": "PR #1082", "body": "Closes #1070.",
+             "merged": True, "merged_at": "2026-08-11T00:00:00Z",
+             "merge_commit_sha": "abc123", "state": "closed",
+             "html_url": "https://example.com", "user": {"login": "t"}}
+        ).encode(),
+        jsonlib.dumps(
+            [{"filename": "x.py", "status": "modified",
+              "additions": 1, "deletions": 0}]
+        ).encode(),
+        jsonlib.dumps(
+            {"number": 1082, "title": "PR #1082", "body": "Closes #1070."}
+        ).encode(),
+    ]
     monkeypatch.setenv("GH_TOKEN", "test-token")
 
     def fake_urlopen(request, timeout=20):
-        request_data = getattr(request, "data", None)
-        assert request_data is None, "GitHub reads must not send a request body"
-        assert request.get_method() == "GET", "GitHub reads must use GET"
-        captured = io.BytesIO(responses.pop(0))
-        return captured
-
-    monkeypatch.setattr(release_writer.urllib.request, "urlopen", fake_urlopen)
+        assert request.get_method() == "GET", f"Expected GET, got {request.get_method()}"
+        assert getattr(request, "data", None) is None, "GitHub reads must not send a body"
+        url = str(getattr(request, "full_url", getattr(request, "url", "unknown")))
+        key = ("issues" if "/issues" in url else
+               "pull" if "/pulls/" in url and "/files" not in url else
+               "files" if "/files" in url else "pulls")
+        body_bytes = responses.pop(0) if responses else jsonlib.dumps({"number": 1}).encode()
+        return io.BytesIO(body_bytes)
 
     release_writer._recent("JoshCLWren/comic-pile", "1")
+    release_writer._pr("JoshCLWren/comic-pile", "1082")
+    release_writer._files("JoshCLWren/comic-pile", "1082")
+    release_writer._issues("JoshCLWren/comic-pile", "1082")
 
 
 def test_release_writer_all_read_helpers_are_get_only(monkeypatch) -> None:
