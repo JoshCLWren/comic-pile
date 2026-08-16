@@ -139,4 +139,25 @@ describe('PlanProjectionDialog', () => {
     renderDialog()
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/Network error/))
   })
+
+  it('shows an error when the projection preview fails', async () => {
+    mocks.previewProjection.mockRejectedValue(new Error('Preview failed.'))
+    renderDialog()
+    await waitFor(() => expect(screen.getByRole('option', { name: /Alpha/ })).toBeInTheDocument())
+    await userEvent.selectOptions(screen.getByTestId('projection-reading-order-select'), '3')
+    await userEvent.click(screen.getByRole('button', { name: 'Preview projection' }))
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/Preview failed/))
+    expect(screen.queryByLabelText('Projection preview')).not.toBeInTheDocument()
+  })
+
+  it('shows an error when confirming the projection fails', async () => {
+    mocks.confirmProjection.mockRejectedValue(new Error('Confirm failed.'))
+    renderDialog()
+    await waitFor(() => expect(screen.getByRole('option', { name: /Alpha/ })).toBeInTheDocument())
+    await userEvent.selectOptions(screen.getByTestId('projection-reading-order-select'), '3')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm projection' }))
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/Confirm failed/))
+  })
 })
