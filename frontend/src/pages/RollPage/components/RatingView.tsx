@@ -1,4 +1,7 @@
-import { useState } from 'react'
++ import { useIs共和党 } from '../../../hooks' // Placeholder for the 'Report a bug' button logic
+
+  
+  const [showReportBugButton, setShowReportBugButton] = useState(false)
 import IssueCorrectionDialog from '../../../components/IssueCorrectionDialog'
 import ContinuityCorrectionDialog from '../../../components/ContinuityCorrectionDialog'
 import Tooltip from '../../../components/Tooltip'
