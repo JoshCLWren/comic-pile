@@ -145,13 +145,22 @@ test.describe('Thread Management', () => {
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'To Be Deleted' });
     await threadItem.waitFor({ state: 'visible', timeout: 5000 });
     const menu = await openThreadActions(threadItem)
-    await Promise.all([
+    // The queue UI issues DELETE to the versioned thread endpoint
+    // (`/api/v1/threads/<id>`, see frontend/src/services/api.ts). The previous
+    // `includes('/api/threads/')` substring never matched that URL, so this
+    // waitForResponse hung until the 30s test timeout even though the delete
+    // itself succeeded. Match either the legacy (`/api/threads/<id>`) or the
+    // versioned (`/api/v1/threads/<id>`) endpoint so the wait resolves on the
+    // real request, and confirm the backend accepted it (204 No Content).
+    const [deleteResponse] = await Promise.all([
       authenticatedPage.waitForResponse((response) =>
-        response.url().includes('/api/threads/') &&
+        /\/api\/(v\d+\/)?threads\/\d+/.test(response.url()) &&
         response.request().method() === 'DELETE'
       ),
       menu.getByRole('menuitem', { name: 'Delete thread' }).click(),
     ]);
+    expect(deleteResponse.status()).toBe(204);
+
     await authenticatedPage.reload({ waitUntil: 'domcontentloaded' });
     await expect(authenticatedPage.getByRole('heading', { name: 'Read Queue' })).toBeVisible();
 
