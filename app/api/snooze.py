@@ -82,6 +82,9 @@ async def build_session_response(session: SessionModel, db: AsyncSession) -> Ses
     snapshot_count = result.scalar() or 0
 
     snoozed_ids = session.snoozed_thread_ids or []
+    # ensure only integer ids for safe IN clause
+    filtered_ids = [sid for sid in snoozed_ids if isinstance(sid, int)]
+    snoozed_ids = filtered_ids
     snoozed_threads: list[SnoozedThreadInfo] = []
     if snoozed_ids:
         result = await db.execute(select(Thread).where(Thread.id.in_(snoozed_ids)))
@@ -91,6 +94,7 @@ async def build_session_response(session: SessionModel, db: AsyncSession) -> Ses
             for thread_id in snoozed_ids
             if thread_id in threads_by_id
         ]
+
 
     return SessionResponse(
         id=session.id,
