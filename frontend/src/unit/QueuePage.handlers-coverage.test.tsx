@@ -35,7 +35,16 @@ beforeEach(() => {
   vi.stubGlobal('alert', vi.fn())
   vi.stubGlobal('confirm', vi.fn(() => true))
   mocks.mutate.mockResolvedValue(undefined)
-  vi.mocked(useQueueThreads).mockReturnValue({ data: [thread, completed] as never, isPending: false, refetch: mocks.refetch } as never)
+  vi.mocked(useQueueThreads).mockImplementation(() => {
+     return {
+       data: [thread, completed] as never,
+       isPending: false,
+       isError: false,
+       refetch: mocks.refetch,
+       nextPageToken: null,
+       loadMore: vi.fn(),
+     } as never
+   })
   vi.mocked(useSession).mockReturnValue({ data: { snoozed_threads: [] }, refetch: mocks.refetchSession } as never)
   vi.mocked(useCreateThread).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
   vi.mocked(useUpdateThread).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
@@ -230,15 +239,25 @@ describe('QueuePage callback coverage', () => {
 
   it('covers queue sorting, filtering, empty states, and router edit state', async () => {
     const user = userEvent.setup()
-    vi.mocked(useQueueThreads).mockReturnValue({ data: [
-      { ...thread, title: 'Zeta', created_at: '2024-01-01' },
-      { ...thread, id: 3, title: 'Alpha', queue_position: 2, created_at: '2025-01-01' },
-    ] as never, isPending: false, refetch: mocks.refetch } as never)
+    vi.mocked(useQueueThreads).mockImplementation((searchTerm) => {
+      let data: { id: number; title: string; format: string; status: string; queue_position: number; issues_remaining: number; total_issues: null; created_at: string; is_blocked?: boolean; blocking_reasons?: never[]; notes?: string }[] = []
+      if (searchTerm !== 'missing') {
+        data = [
+          { ...thread, title: 'Zeta', created_at: '2024-01-01' },
+          { ...thread, id: 3, title: 'Alpha', queue_position: 2, created_at: '2025-01-01' },
+        ]
+      }
+      return {
+        data: data as never,
+        isPending: false,
+        refetch: mocks.refetch,
+      } as never
+    })
     renderPage()
     await user.click(screen.getByRole('button', { name: 'A-Z' }))
     await user.click(screen.getByRole('button', { name: 'New' }))
     await user.type(screen.getByPlaceholderText('Search...'), 'missing')
-    expect(screen.getByText('No threads match your search')).toBeInTheDocument()
+    expect(screen.getByText('No active threads match your search')).toBeInTheDocument()
     await user.clear(screen.getByPlaceholderText('Search...'))
     expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument()
 

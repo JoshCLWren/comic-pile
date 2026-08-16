@@ -28,6 +28,7 @@ export default function QueuePage() {
   const navigate = useNavigate()
   const [sortBy, setSortBy] = useState<QueueSortBy>('position')
   const [searchQuery, setSearchQuery] = useState('')
+  const isSearching = searchQuery.trim() !== ''
 
   const {
     data: threads,
@@ -36,7 +37,7 @@ export default function QueuePage() {
     refetch,
     nextPageToken,
     loadMore,
-  } = useQueueThreads('')
+  } = useQueueThreads(searchQuery)
   const { data: session, refetch: refetchSession } = useSession()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
@@ -46,7 +47,6 @@ export default function QueuePage() {
 
   const { activeThreads, completedThreads, filteredThreads } = useQueueFilters(
     threads,
-    searchQuery,
     sortBy,
   )
 
@@ -207,6 +207,7 @@ export default function QueuePage() {
           filteredThreads={filteredThreads}
           reorderError={actions.reorderError}
           renderItem={renderThreadCard}
+          isSearching={isSearching}
         />
 
         <CompletedThreadsSection
