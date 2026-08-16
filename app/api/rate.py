@@ -63,7 +63,8 @@ async def _capture_thread_pre_state(thread: Thread, db: AsyncSession) -> dict:
 
     if uses_issue_tracking:
         issues_result = await db.execute(
-            select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
+        select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
+        ).limit(100)
         )
         issues = issues_result.scalars().all()
         state["issue_states"] = [
@@ -212,12 +213,13 @@ async def rate_thread(
         HTTPException: If no active session, rating, or thread is valid.
     """
     user_id = current_user.id
-    result = await db.execute(
+        result = await db.execute(
         select(SessionModel)
         .where(SessionModel.user_id == user_id)
         .where(SessionModel.ended_at.is_(None))
         .order_by(SessionModel.started_at.desc())
-    )
+        .limit(1)
+        )
     current_session = result.scalars().first()
     if not current_session:
         raise HTTPException(
