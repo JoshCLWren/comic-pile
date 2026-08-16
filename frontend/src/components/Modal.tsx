@@ -58,13 +58,13 @@ export default function Modal({
   // Wait until the portaled overlay node is attached before registering, layering,
   // or focusing the modal. This avoids dereferencing a ref that cannot exist yet.
   useLayoutEffect(() => {
-    if (!isOpen || !overlayElement || !modalRef.current) return
+    if (!isOpen) return
 
     const modalId = modalIdRef.current!
     // This effect's cleanup always removes its entry before a rerun, so every
     // active modal has exactly one stack entry.
     openModalStack.push(modalId)
-    overlayElement.style.zIndex = String(nextModalLayer++)
+    if (overlayElement && modalRef.current) overlayElement.style.zIndex = String(nextModalLayer++)
 
     previousFocusRef.current = document.activeElement as HTMLElement
 
@@ -114,7 +114,9 @@ export default function Modal({
       const cleanupIndex = openModalStack.indexOf(modalId)
       const wasTopmost = cleanupIndex === openModalStack.length - 1
       // An open modal always owns one stack entry until this cleanup executes.
+      if (cleanupIndex !== -1) {
       openModalStack.splice(cleanupIndex, 1)
+    }
       if (openModalStack.length === 0) nextModalLayer = 60
 
       // Only restore focus when this modal was the topmost layer. Closing a
@@ -125,7 +127,15 @@ export default function Modal({
     }
   }, [autoFocus, isOpen, overlayElement])
 
-  // Lock the #root scroller while a modal is open (fixes iOS scroll-bleed).
+  useEffect(() => {
+     if (isOpen) {
+       const modalId = modalIdRef.current!;
+       if (!openModalStack.includes(modalId)) {
+         openModalStack.push(modalId);
+       }
+     }
+   }, [isOpen]);
+   // Lock the #root scroller while a modal is open (fixes iOS scroll-bleed).
   // The dialog itself is portaled to document.body, so locking #root no longer
   // affects touch-panning inside modal content. The ref count still protects
   // nested and overlapping dialogs from prematurely restoring page scrolling.
