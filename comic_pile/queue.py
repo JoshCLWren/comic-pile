@@ -470,6 +470,8 @@ async def get_roll_pool_rows(
         List of ``(Thread, unread_count, next_issue_number)`` tuples ordered by
         queue position.
     """
+    # Index justification: unread_counts uses Issue.status + Issue.thread_id,
+    # covered by existing index `ix_issue_thread_is_read` (`thread_id`, `status`).
     unread_counts = (
         select(Issue.thread_id.label("thread_id"), func.count(Issue.id).label("unread_count"))
         .where(Issue.status == "unread")

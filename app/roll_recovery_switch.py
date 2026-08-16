@@ -12,7 +12,7 @@ from app.continuity_chains import resolve_continuity_chains
 from app.models import Event, Issue, Session, Thread
 from app.roll_recovery import build_roll_recovery
 from app.schemas.roll import RollRecoveryInfo
-from comic_pile.session import get_current_die, get_or_create
+from comic_pile.session import get_current_die_for_session, get_or_create
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,7 +171,7 @@ async def switch_pending_roll_to_prerequisite(
     target_thread_title = target_thread.title
     target_issue_id = target_issue.id
     target_issue_number = target_issue.issue_number
-    current_die = await get_current_die(locked_session.id, db)
+    current_die = await get_current_die_for_session(locked_session, db)
     db.add(
         Event(
             type="roll",
