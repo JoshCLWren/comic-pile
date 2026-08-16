@@ -101,6 +101,9 @@ async def _load_snapshot(db: AsyncSession, user_id: int) -> _GraphSnapshot:
     The snapshot is cached on the session (``db.info``) so that multiple
     continuity calculations within the same request reuse the same bounded
     load rather than repeating the full query sequence.
+
+    Returns a snapshot with ``query_count`` and ``rows_loaded`` tracking the
+    number of round-trips and total rows materialized for observability.
     """
     session_cache = db.info.get(SNAPSHOT_SESSION_KEY) if db.info else {}
     if session_cache is None:
@@ -111,13 +114,16 @@ async def _load_snapshot(db: AsyncSession, user_id: int) -> _GraphSnapshot:
 
     query_count = 0
     rows_loaded = 0
+
     thread_result = await db.execute(
         select(Thread)
         .where(Thread.user_id == user_id)
         .order_by(Thread.id)
         .limit(MAX_GRAPH_THREADS + 1)
     )
+    query_count += 1
     thread_rows = list(thread_result.scalars())
+    rows_loaded += len(thread_rows)
     if len(thread_rows) > MAX_GRAPH_THREADS:
         raise _too_large(MAX_GRAPH_THREADS)
     threads = {thread.id: thread for thread in thread_rows}
@@ -129,7 +135,9 @@ async def _load_snapshot(db: AsyncSession, user_id: int) -> _GraphSnapshot:
         .order_by(Issue.id)
         .limit(MAX_GRAPH_ISSUES + 1)
     )
+    query_count += 1
     issue_rows = list(issue_result.scalars())
+    rows_loaded += len(issue_rows)
     if len(issue_rows) > MAX_GRAPH_ISSUES:
         raise _too_large(MAX_GRAPH_ISSUES)
     issues = {issue.id: issue for issue in issue_rows}
@@ -144,7 +152,9 @@ async def _load_snapshot(db: AsyncSession, user_id: int) -> _GraphSnapshot:
         .order_by(DependencyGroup.id)
         .limit(MAX_GRAPH_GROUPS + 1)
     )
+    query_count += 1
     group_rows = list(group_result.scalars())
+    rows_loaded += len(group_rows)
     if len(group_rows) > MAX_GRAPH_GROUPS:
         raise _too_large(MAX_GRAPH_GROUPS)
     groups = {group.id: group for group in group_rows}
@@ -156,7 +166,9 @@ async def _load_snapshot(db: AsyncSession, user_id: int) -> _GraphSnapshot:
         .order_by(DependencyGroupMembership.id)
         .limit(MAX_GRAPH_MEMBERSHIPS + 1)
     )
+    query_count += 1
     membership_rows = list(membership_result.scalars())
+    rows_loaded += len(membership_rows)
     if len(membership_rows) > MAX_GRAPH_MEMBERSHIPS:
         raise _too_large(MAX_GRAPH_MEMBERSHIPS)
     group_memberships = _group_rows(membership_rows, lambda membership: membership.group_id)
@@ -167,7 +179,9 @@ async def _load_snapshot(db: AsyncSession, user_id: int) -> _GraphSnapshot:
         .order_by(ContinuityRule.id)
         .limit(MAX_GRAPH_RULES + 1)
     )
+    query_count += 1
     rule_rows = list(rule_result.scalars())
+    rows_loaded += len(rule_rows)
     if len(rule_rows) > MAX_GRAPH_RULES:
         raise _too_large(MAX_GRAPH_RULES)
     rules = tuple(rule_rows)
@@ -185,7 +199,9 @@ async def _load_snapshot(db: AsyncSession, user_id: int) -> _GraphSnapshot:
         .order_by(ContinuityRuleSelectedMember.id)
         .limit(MAX_GRAPH_SELECTED_MEMBERS + 1)
     )
+    query_count += 1
     selected_member_rows = list(selected_member_result.scalars())
+    rows_loaded += len(selected_member_rows)
     if len(selected_member_rows) > MAX_GRAPH_SELECTED_MEMBERS:
         raise _too_large(MAX_GRAPH_SELECTED_MEMBERS)
     selected_member_issue_ids = {
@@ -204,6 +220,8 @@ async def _load_snapshot(db: AsyncSession, user_id: int) -> _GraphSnapshot:
         rules_by_target=rules_by_target,
         thread_issue_ids=thread_issue_ids,
         selected_member_issue_ids=selected_member_issue_ids,
+        query_count=query_count,
+        rows_loaded=rows_loaded,
     )
     # Cache the snapshot in the session's info dict for reuse within the same request
     if db.info is None:
