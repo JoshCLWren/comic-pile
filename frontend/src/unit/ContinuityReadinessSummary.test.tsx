@@ -46,7 +46,7 @@ describe('ContinuityReadinessSummary', () => {
       isLoading: false, error: null, refetch,
     })
     const { rerender } = render(<ContinuityReadinessSummary issueId={7} />)
-    expect(screen.queryByRole('heading', { name: 'Ready to read' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Ready to read' })).toBeVisible()
 
     mocks.useContinuityReadiness.mockReturnValue({
       readiness: {

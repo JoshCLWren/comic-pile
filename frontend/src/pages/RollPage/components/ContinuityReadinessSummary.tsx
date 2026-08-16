@@ -62,7 +62,7 @@ export function ContinuityReadinessSummary({ issueId }: ContinuityReadinessSumma
     )
   }
 
-  if (readiness.is_readable) {
+    if (readiness.is_readable) {
    return (
      <section
        aria-labelledby="readiness-heading"
