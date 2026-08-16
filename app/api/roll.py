@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
 
@@ -28,8 +28,8 @@ from app.schemas import (
     RollRequest,
     RollResponse,
 )
-from comic_pile.queue import get_roll_pool
-from comic_pile.session import get_current_die, get_or_create
+from comic_pile.queue import get_roll_pool_rows
+from comic_pile.session import get_current_die_for_session, get_or_create
 
 router = APIRouter(tags=["roll"])
 
@@ -59,7 +59,7 @@ async def roll_dice(
         HTTPException: If no active threads available.
     """
     user_id = current_user.id
-    current_session = await get_or_create(db, user_id=user_id)
+    current_session = await get_or_create(db, user_id=user_id, existing_user=current_user)
     current_session_id = current_session.id
 
     if current_session.pending_thread_id is not None:
@@ -78,30 +78,29 @@ async def roll_dice(
             ),
         )
 
-    current_die = await get_current_die(current_session_id, db)
+    current_die = await get_current_die_for_session(current_session, db)
 
-    # Exclude snoozed threads from the pool
     snoozed_ids = current_session.snoozed_thread_ids or []
-    snoozed_count = len(snoozed_ids)
-    offset = snoozed_count
 
-    threads = await get_roll_pool(user_id, db, snoozed_ids)
-    if not threads:
+    rows = await get_roll_pool_rows(user_id, db, snoozed_ids)
+    if not rows:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No active threads available to roll",
         )
 
-    pool_size = min(current_die, len(threads))
+    # Bound the selection to the current die size, matching original semantics.
+    bounded_rows = rows[:current_die]
+    pool_size = len(bounded_rows)
     selected_index = random.randint(0, pool_size - 1)
-    selected_thread = threads[selected_index]
+    selected_thread, unread_count, issue_number = bounded_rows[selected_index]
 
     selected_thread_id = selected_thread.id
     selected_thread_title = selected_thread.title
     selected_thread_format = selected_thread.format
     selected_thread_queue_position = selected_thread.queue_position
 
-    selected_thread_issues_remaining = await selected_thread.get_issues_remaining(db)
+    selected_thread_issues_remaining = unread_count
 
     selected_thread_total_issues = selected_thread.total_issues
     selected_thread_reading_progress = selected_thread.reading_progress
@@ -110,15 +109,17 @@ async def roll_dice(
     selected_thread_issue_id = None
     selected_thread_issue_number = None
     if selected_thread.uses_issue_tracking() and selected_thread_next_unread_issue_id:
-        from app.models import Issue
-
-        issue_result = await db.execute(
-            select(Issue).where(Issue.id == selected_thread_next_unread_issue_id)
-        )
-        next_issue = issue_result.scalar_one_or_none()
-        if next_issue:
-            selected_thread_issue_id = next_issue.id
-            selected_thread_issue_number = next_issue.issue_number
+        if unread_count > 0 and issue_number is not None:
+            selected_thread_issue_id = selected_thread_next_unread_issue_id
+            selected_thread_issue_number = issue_number
+        else:
+            issue_result = await db.execute(
+                select(Issue).where(Issue.id == selected_thread_next_unread_issue_id)
+            )
+            next_issue = issue_result.scalar_one_or_none()
+            if next_issue and next_issue.status == "unread":
+                selected_thread_issue_id = next_issue.id
+                selected_thread_issue_number = next_issue.issue_number
 
     event = Event(
         type="roll",
@@ -136,6 +137,9 @@ async def roll_dice(
 
     await db.commit()
     await _invalidate_session_caches(current_user.id)
+
+    snoozed_count = len(snoozed_ids)
+    offset = snoozed_count
 
     return RollResponse(
         thread_id=selected_thread_id,
@@ -167,7 +171,7 @@ async def dismiss_pending_roll(
         current_user: The authenticated user making the request.
         db: SQLAlchemy session for database operations.
     """
-    current_session = await get_or_create(db, user_id=current_user.id)
+    current_session = await get_or_create(db, user_id=current_user.id, existing_user=current_user)
     current_session.pending_thread_id = None
     current_session.pending_thread_updated_at = None
     await db.commit()
@@ -219,9 +223,9 @@ async def override_roll(
             detail=f"Thread {request.thread_id} is {override_thread.status} and cannot be selected",
         )
 
-    current_session = await get_or_create(db, user_id=current_user.id)
+    current_session = await get_or_create(db, user_id=current_user.id, existing_user=current_user)
     current_session_id = current_session.id
-    current_die = await get_current_die(current_session_id, db)
+    current_die = await get_current_die_for_session(current_session, db)
 
     override_thread_id = override_thread.id
     override_thread_title = override_thread.title
@@ -234,24 +238,21 @@ async def override_roll(
     override_thread_reading_progress = override_thread.reading_progress
     override_thread_next_unread_issue_id = override_thread.next_unread_issue_id
 
+    # For override we don't have the enriched pool row; resolve directly.
     override_thread_issue_id = None
     override_thread_issue_number = None
     if override_thread.uses_issue_tracking() and override_thread_next_unread_issue_id:
-        from app.models import Issue
-
         issue_result = await db.execute(
             select(Issue).where(Issue.id == override_thread_next_unread_issue_id)
         )
         next_issue = issue_result.scalar_one_or_none()
-        if next_issue:
+        if next_issue and next_issue.status == "unread":
             override_thread_issue_id = next_issue.id
             override_thread_issue_number = next_issue.issue_number
 
     snoozed_ids = (
         list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
     )
-    snoozed_count = len(snoozed_ids)
-    offset = snoozed_count
 
     if override_thread_id in snoozed_ids:
         raise HTTPException(
@@ -274,6 +275,9 @@ async def override_roll(
 
     await db.commit()
     await _invalidate_session_caches(current_user.id)
+
+    snoozed_count = len(snoozed_ids)
+    offset = snoozed_count
 
     return RollResponse(
         thread_id=override_thread_id,
@@ -313,7 +317,7 @@ async def set_manual_die(
     Raises:
         HTTPException: If die size is invalid.
     """
-    current_session = await get_or_create(db, user_id=current_user.id)
+    current_session = await get_or_create(db, user_id=current_user.id, existing_user=current_user)
 
     if die not in [4, 6, 8, 10, 12, 20, 30, 50, 100]:
         raise HTTPException(
@@ -342,7 +346,7 @@ async def clear_manual_die(
     Returns:
         HTML string with the current die size.
     """
-    current_session = await get_or_create(db, user_id=current_user.id)
+    current_session = await get_or_create(db, user_id=current_user.id, existing_user=current_user)
 
     current_session.manual_die = None
     await db.commit()
@@ -350,7 +354,7 @@ async def clear_manual_die(
     await _invalidate_session_caches(current_user.id)
 
     await db.refresh(current_session)
-    current_die = await get_current_die(current_session.id, db)
+    current_die = await get_current_die_for_session(current_session, db)
     return f"d{current_die}"
 
 
@@ -372,14 +376,14 @@ async def roll_bootstrap(
         RollBootstrapResponse with session state, bounded pool, snoozed/blocked/stale summaries.
     """
     user_id = current_user.id
-    current_session = await get_or_create(db, user_id=user_id)
+    current_session = await get_or_create(db, user_id=user_id, existing_user=current_user)
     await db.refresh(current_session)
 
     current_session_id = current_session.id
 
     _, active_thread = await get_session_with_thread_safe(current_session_id, db)
 
-    die_size = await get_current_die(current_session_id, db)
+    die_size = await get_current_die_for_session(current_session, db)
     manual_die = current_session.manual_die
     pending_thread_id = current_session.pending_thread_id
     last_rolled_result = active_thread.last_rolled_result if active_thread else None
@@ -403,7 +407,7 @@ async def roll_bootstrap(
             Thread.next_unread_issue_id.label("issue_id"),
             Issue.issue_number,
         )
-        .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
+        .outerjoin(Issue, and_(Issue.id == Thread.next_unread_issue_id, Issue.status == "unread"))
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
         .where(Thread.queue_position >= 1)
