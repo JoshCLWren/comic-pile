@@ -31,7 +31,7 @@ EXPECTED_OPENCODE_FREE_MODELS = {
     'nemotron-3-ultra-free',
     'nemotron-3.5-lightning-free',
 }
-BATCH_MINUTES = (0, 15, 30, 45)
+SCHEDULE_MINUTES = tuple(range(0, 60, 5))
 ENTRY_PERMISSIONS = ('contents: write', 'issues: write', 'pull-requests: write', 'actions: write', 'checks: read')
 
 
@@ -65,22 +65,26 @@ def main() -> None:
     assert kilo[0]['display_name'] == 'Kilo Auto Free · Forge'
 
     counts: Counter[int] = Counter()
-    for row in rows:
-        worker = int(row['worker'])
+    for index, row in enumerate(rows):
         minute = int(row['minute'])
-        assert row['scheduler'] == 'watchdog'
-        assert minute == BATCH_MINUTES[(worker - 6) % 4]
+        assert row['scheduler'] == 'dispatcher'
+        assert minute == SCHEDULE_MINUTES[index % len(SCHEDULE_MINUTES)]
         counts[minute] += 1
-    assert counts == Counter({0: 7, 15: 7, 30: 7, 45: 7})
+    assert set(counts) == set(SCHEDULE_MINUTES)
+    assert max(counts.values()) - min(counts.values()) <= 1
+    assert sum(counts.values()) == 28
 
     watchdog = WATCHDOG.read_text(encoding='utf-8')
     assert "cron: '*/15 * * * *'" in watchdog
 
     dispatcher = DISPATCHER.read_text(encoding='utf-8')
-    assert 'workflow_run:' in dispatcher
-    assert "workflows: ['Factory heartbeat watchdog']" in dispatcher
-    assert 'schedule:' not in dispatcher
-    assert 'slots=(0 15 30 45)' in dispatcher
+    assert 'workflow_run:' not in dispatcher
+    assert 'schedule:' in dispatcher
+    for minute in SCHEDULE_MINUTES:
+        assert f"cron: '{minute} * * * *'" in dispatcher
+    assert 'SCHEDULE_EXPR: ${{ github.event.schedule }}' in dispatcher
+    assert 'elif [[ "$EVENT_NAME" == schedule ]]; then' in dispatcher
+    assert 'minute="${SCHEDULE_EXPR%% *}"' in dispatcher
     assert 'workers=\'["6","39","46"]\'' in dispatcher
     assert 'gh workflow run free-model-factory-entry.yml' in dispatcher
     assert "'.github/scripts/free-model-factory-worker.sh'" in dispatcher
@@ -229,8 +233,8 @@ def main() -> None:
         classifier,
     ), 'discovery classifier issue comment call missing'
 
-    print('Validated 28 external factory lanes, shared-pool selection, and daily Chromium discovery.')
-    for minute in BATCH_MINUTES:
+    print('Validated 28 external factory lanes, staggered scheduling, shared-pool selection, and daily Chromium discovery.')
+    for minute in SCHEDULE_MINUTES:
         print(f'  :{minute:02d} -> {counts[minute]} workers')
     for source, count in EXPECTED_SOURCE_COUNTS.items():
         print(f'  {source}: {count}')
