@@ -40,7 +40,7 @@ permissions:
 
 concurrency:
   group: fixed-model-factory-dispatch
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   dispatch:
