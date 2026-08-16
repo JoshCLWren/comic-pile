@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { KeyboardEvent } from 'react'
 import { issuesApi } from '../services/api-issues'
+import { threadsApi } from '../services/api'
+import type { SetCurrentIssuePayload } from '../types'
 import type { Issue } from '../types'
 
 interface IssueCorrectionDialogProps {
@@ -130,28 +132,22 @@ export default function IssueCorrectionDialog({
         if (insertPosition === 'start') {
           await issuesApi.move(targetIssue.id, null)
         }
+
+        const refreshedIssues = await loadAllIssues()
+        targetIssue = refreshedIssues.find((issue) => issue.issue_number === targetNumber) ?? targetIssue
+        if (!targetIssue) {
+          throw new Error('Issue not found after creation')
+        }
       }
 
-      const orderedIssues = await loadAllIssues()
-      const targetIndex = orderedIssues.findIndex((issue) => issue.issue_number === targetNumber)
-
-      if (targetIndex === -1) {
-        throw new Error('Issue not found after update')
-      }
-
-      const issuesBeforeTarget = orderedIssues.slice(0, targetIndex)
-      const unreadBeforeTarget = issuesBeforeTarget.filter((issue) => issue.status !== 'read')
-      await Promise.all(unreadBeforeTarget.map((issue) => issuesApi.markRead(issue.id)))
-
-      if (targetIssue.status === 'read') {
-        await issuesApi.markUnread(targetIssue.id)
-      }
+      const payload: SetCurrentIssuePayload = { issue_id: targetIssue.id }
+      await threadsApi.setCurrentIssue(threadId, targetIssue.id)
 
       onSuccess()
       onClose()
     } catch (err) {
-      console.error('Failed to update issue:', err)
-      setError('Failed to update issue. Please try again.')
+      console.error('Failed to set current issue:', err)
+      setError('Failed to set current issue. Please try again.')
     } finally {
       setIsLoading(false)
     }

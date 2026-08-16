@@ -30,6 +30,8 @@ export interface RollPageState {
   suppressPendingAutoOpenRef: React.MutableRefObject<boolean>
   rollIntervalRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>
   rollTimeoutRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>
+  isIssueCorrectionDialogOpen: boolean
+  issueToCorrect: number | null
 }
 
 export interface RollPageStateSetters {
@@ -57,6 +59,8 @@ export interface RollPageStateSetters {
   setRating: (value: number) => void
   setPredictedDie: (value: number) => void
   setErrorMessage: (value: string) => void
+  setIsIssueCorrectionDialogOpen: (value: boolean) => void
+  setIssueToCorrect: (value: number | null) => void
 }
 
 export function useRollPageState(): RollPageState & RollPageStateSetters {
@@ -84,6 +88,8 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const [rating, setRating] = useState(4.0)
   const [predictedDie, setPredictedDie] = useState(6)
   const [errorMessage, setErrorMessage] = useState('')
+  const [isIssueCorrectionDialogOpen, setIsIssueCorrectionDialogOpen] = useState(false)
+  const [issueToCorrect, setIssueToCorrect] = useState<number | null>(null)
 
   const suppressPendingAutoOpenRef = useRef(false)
   const rollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -149,5 +155,9 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
     suppressPendingAutoOpenRef,
     rollIntervalRef,
     rollTimeoutRef,
+    isIssueCorrectionDialogOpen,
+    setIsIssueCorrectionDialogOpen,
+    issueToCorrect,
+    setIssueToCorrect,
   }
 }

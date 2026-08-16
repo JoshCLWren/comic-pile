@@ -9,7 +9,7 @@ import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import or_, select, update
+from sqlalchemy import case, or_, select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +26,7 @@ from app.schemas import (
     QueueThreadListResponse,
     ReactivateRequest,
     RollResponse,
+    SetCurrentIssueRequest,
     ThreadCreate,
     ThreadDetail,
     ThreadResponse,
@@ -710,6 +711,110 @@ async def set_pending_thread(
         next_issue_number=thread_issue_number,
         total_issues=thread_total_issues,
         reading_progress=thread_reading_progress,
+    )
+
+
+@router.post("/{thread_id}/set-current-issue", response_model=ThreadResponse)
+async def set_current_issue(
+    thread_id: int,
+    request: SetCurrentIssueRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> ThreadResponse:
+    """Atomically set a specific issue as the current/next unread issue for a thread.
+
+    Marks every issue positioned before the target as read, ensures the
+    target issue is unread, updates thread.next_unread_issue_id, and
+    refreshes the active session's pending_issue_id — all in one
+    transaction so partial updates cannot leave the thread in an
+    inconsistent state.
+
+    Args:
+        thread_id: The thread to update.
+        request: Contains the target issue_id.
+        current_user: The authenticated user making the request.
+        db: Database session.
+
+    Returns:
+        ThreadResponse reflecting the corrected thread state.
+    """
+    thread = await get_owned_thread_or_404(db, current_user.id, thread_id)
+
+    if not thread.uses_issue_tracking():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Thread does not use issue tracking",
+        )
+
+    target_issue = await get_owned_issue_or_404(db, current_user.id, request.issue_id)
+    if target_issue.thread_id != thread_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Issue does not belong to this thread",
+        )
+
+    result = await db.execute(
+        select(Issue)
+        .where(Issue.thread_id == thread_id)
+        .order_by(Issue.position, Issue.id),
+    )
+    issues = result.scalars().all()
+    target_index = next((i for i, iss in enumerate(issues) if iss.id == request.issue_id), None)
+    if target_index is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Issue not found in thread",
+        )
+
+    await db.execute(
+        update(Issue)
+        .where(Issue.thread_id == thread_id)
+        .where(Issue.position < target_issue.position)
+        .where(Issue.status != "read")
+        .values(
+            status="read",
+            read_at=case(
+                (Issue.read_at.isnot(None), Issue.read_at),
+                else_=datetime.now(UTC),
+            ),
+        ),
+    )
+
+    await db.refresh(target_issue)
+    if target_issue.status == "read":
+        target_issue.status = "unread"
+        target_issue.read_at = None
+
+    thread.next_unread_issue_id = target_issue.id
+
+    current_session = await get_or_create(current_user.id, db)
+    current_session.pending_issue_id = target_issue.id
+
+    await db.commit()
+    await invalidate_user_view(current_user.id)
+
+    issues_remaining = thread.total_issues - target_index - 1
+
+    next_issue_number = target_issue.issue_number
+
+    return ThreadResponse(
+        id=thread.id,
+        title=thread.title,
+        format=thread.format,
+        issues_remaining=issues_remaining,
+        queue_position=thread.queue_position,
+        status=thread.status,
+        last_rating=thread.last_rating,
+        last_activity_at=thread.last_activity_at,
+        notes=thread.notes,
+        is_test=thread.is_test,
+        is_blocked=thread.is_blocked,
+        created_at=thread.created_at,
+        total_issues=thread.total_issues,
+        reading_progress=thread.reading_progress,
+        next_unread_issue_id=target_issue.id,
+        next_unread_issue_number=next_issue_number,
+        blocking_reasons=[],
     )
 
 

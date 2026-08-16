@@ -115,6 +115,10 @@ export interface ReactivateThreadPayload {
   issues_to_add: number;
 }
 
+export interface SetCurrentIssuePayload {
+  issue_id: number;
+}
+
 export interface SessionThread {
   id: number;
   title: string;

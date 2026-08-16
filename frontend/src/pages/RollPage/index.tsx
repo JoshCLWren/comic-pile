@@ -34,6 +34,7 @@ import {
 } from './utils'
 import { RatingView } from './components/RatingView'
 import { ThreadPool } from './components/ThreadPool'
+import IssueCorrectionDialog from '../../components/IssueCorrectionDialog'
 
 export default function RollPage() {
   const state = useRollPageState()
@@ -65,6 +66,8 @@ export default function RollPage() {
     suppressPendingAutoOpenRef,
     rollIntervalRef,
     rollTimeoutRef,
+    isIssueCorrectionDialogOpen, setIsIssueCorrectionDialogOpen,
+    issueToCorrect, setIssueToCorrect,
   } = state
 
   const [readingOrders, setReadingOrders] = useState<import('../../services/api-reading-orders').ReadingOrder[]>([])
@@ -299,7 +302,9 @@ export default function RollPage() {
           await refetchBootstrap()
           break
         case 'edit':
-          navigate('/queue', { state: { editThreadId: selectedThread!.id } })
+          const currentIssueNumber = selectedThread?.issue_number ?? selectedThread?.next_issue_number ?? null
+          setIssueToCorrect(selectedThread!.id)
+          setIsIssueCorrectionDialogOpen(true)
           break
       }
     } catch (error) {
@@ -311,6 +316,23 @@ export default function RollPage() {
   const rollPool = useMemo(() => bootstrap?.roll_pool ?? [], [bootstrap?.roll_pool])
   const blockedThreads = bootstrap?.blocked_threads ?? []
   const displayDie = isDiceSide(currentDie) ? currentDie : 6
+
+  const handleIssueCorrectionSuccess = useCallback(async () => {
+    setIsIssueCorrectionDialogOpen(false)
+    setIssueToCorrect(null)
+    const latest = await refetchBootstrap()
+    const pendingId = Number(latest?.pending_thread_id ?? bootstrap?.pending_thread_id ?? 0)
+    if (!pendingId) return
+    const pendingMetadata = latest?.active_thread && latest.active_thread.id === pendingId
+      ? { id: latest.active_thread.id, title: latest.active_thread.title, format: latest.active_thread.format,
+          issues_remaining: latest.active_thread.issues_remaining ?? 0, queue_position: latest.active_thread.queue_position ?? 0,
+          total_issues: latest.active_thread.total_issues ?? null, reading_progress: latest.active_thread.reading_progress ?? null,
+          issue_id: latest.active_thread.issue_id ?? null, issue_number: latest.active_thread.issue_number ?? null,
+          next_issue_id: latest.active_thread.next_issue_id ?? null, next_issue_number: latest.active_thread.next_issue_number ?? null,
+          last_rolled_result: latest.last_rolled_result ?? null }
+      : null
+    enterRatingView(pendingId, latest?.last_rolled_result ?? bootstrap?.last_rolled_result ?? null, pendingMetadata)
+  }, [refetchBootstrap, bootstrap, enterRatingView])
 
   const [overrideThreads, setOverrideThreads] = useState<Thread[] | null>(null)
   useEffect(() => {
@@ -862,6 +884,18 @@ export default function RollPage() {
 
         {showSimpleMigration && activeRatingThread && (
           <SimpleMigrationDialog threadTitle={activeRatingThread.title} onComplete={handleSimpleMigrationComplete} onClose={() => setShowSimpleMigration(false)} />
+        )}
+
+        {isIssueCorrectionDialogOpen && issueToCorrect && (
+          <IssueCorrectionDialog
+            isOpen={isIssueCorrectionDialogOpen}
+            threadId={issueToCorrect}
+            currentIssueNumber={selectedThread?.issue_number ?? null}
+            totalIssues={selectedThread?.total_issues ?? null}
+            threadTitle={selectedThread?.title ?? ''}
+            onClose={() => { setIsIssueCorrectionDialogOpen(false); setIssueToCorrect(null) }}
+            onSuccess={handleIssueCorrectionSuccess}
+          />
         )}
 
         <Modal isOpen={isOverrideOpen} title="Pick manually" onClose={() => { setIsOverrideOpen(false); setOverrideErrorMessage('') }}>

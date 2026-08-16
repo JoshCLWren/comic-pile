@@ -94,3 +94,9 @@ class QueueThreadListResponse(BaseModel):
 
     threads: list[QueueThreadListItem]
     next_page_token: str | None = None
+
+
+class SetCurrentIssueRequest(BaseModel):
+    """Schema for setting the current/next unread issue for a thread."""
+
+    issue_id: int = Field(..., gt=0, description="Issue ID to set as the current unread issue")
