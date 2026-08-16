@@ -372,19 +372,29 @@ test.describe('Dependencies', () => {
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Loading Target' }).first()
       await clickThreadAction(targetCard, 'Manage dependencies')
 
-      await authenticatedPage.fill('input#search-prereq-thread', 'Loading')
-      await authenticatedPage.waitForSelector('button:has-text("Loading Source")', { state: 'visible' })
+      // Search for the prerequisite thread. Selecting the result via the shared
+      // helper scopes the click to the dialog and asserts a single match, so the
+      // step can't accidentally resolve to the queue card behind the modal (the
+      // ambiguity that made this test hang for the full 30s timeout).
+      await authenticatedPage.fill('input#search-prereq-thread', 'Loading Source')
+      await selectDependencySearchResult(authenticatedPage, 'Loading Source')
 
-      // Click the thread and wait for issues to finish loading
-      await authenticatedPage.click('button:has-text("Loading Source")')
+      // Selecting the source thread kicks off the issue fetch. The dialog shows a
+      // "Loading issues…" indicator while both source and target issues load. It
+      // may resolve too quickly to observe, so treat its presence as optional but
+      // require it to be gone before we assert on the populated dropdowns.
+      const loadingIndicator = authenticatedPage
+        .locator('#comic-pile-overlay-root-dialog')
+        .locator('text=Loading issues…')
+      await expect(loadingIndicator).toHaveCount(0, { timeout: 10000 })
 
-      // Wait for loading to complete - if loading was too fast to see, that's okay
-      // Just verify the dropdowns appear with issues
-      await authenticatedPage.waitForSelector('#source-issue', { state: 'visible', timeout: 5000 })
-      await authenticatedPage.waitForSelector('#target-issue', { state: 'visible', timeout: 5000 })
+      // Once loading completes the dropdowns render with their issue options.
+      await authenticatedPage.waitForSelector('#source-issue', { state: 'visible', timeout: 10000 })
+      await authenticatedPage.waitForSelector('#target-issue', { state: 'visible', timeout: 10000 })
 
-      // Verify that issues were loaded
+      // Verify that issues were actually loaded (more than the placeholder option).
       await expect.poll(async () => authenticatedPage.locator('#source-issue option').count()).toBeGreaterThan(1)
+      await expect.poll(async () => authenticatedPage.locator('#target-issue option').count()).toBeGreaterThan(1)
     })
 
     test('button shows issue numbers when issues selected', async ({ authenticatedPage }) => {
