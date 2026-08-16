@@ -26,6 +26,7 @@ on:
       - '.github/workflows/free-model-factory-dispatch.yml'
       - '.github/workflows/free-model-factory-entry.yml'
       - '.github/workflows/free-model-factory-run.yml'
+      - '.github/scripts/factory-work-controller.py'
       - '.github/scripts/free-model-factory-worker.sh'
       - '.github/scripts/kilo-auto-factory-run.sh'
       - '.github/free-model-factories.tsv'
@@ -35,6 +36,10 @@ permissions:
   actions: write
   issues: write
   pull-requests: write
+
+concurrency:
+  group: fixed-model-factory-dispatch
+  cancel-in-progress: false
 
 jobs:
   dispatch:
@@ -123,6 +128,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: main
+
       - name: Resolve and dispatch fixed workers
         shell: bash
         env:
@@ -134,6 +140,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           manifest='.github/free-model-factories.tsv'
+          controller='.github/scripts/factory-work-controller.py'
           owner_pattern='^factory:(local|([1-9]|[1-3][0-9]|4[0-6]))$'
 
           heartbeat_worker_for_run() {
@@ -171,8 +178,6 @@ jobs:
                 continue
               fi
 
-              # Re-read immediately before the atomic replacement so a takeover
-              # that happened during discovery is observed rather than erased.
               latest_labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}" --jq '[.labels[].name]')"
               jq -e --arg owner "$owner" 'index($owner) != null' >/dev/null <<< "$latest_labels" || {
                 echo "Skipping #${number}; ${owner} is no longer current"
@@ -197,6 +202,34 @@ jobs:
                 "repos/${GITHUB_REPOSITORY}/issues?state=open&labels=factory%3A${worker}&per_page=100" \
                 --jq '.[].number'
             )
+          }
+
+          dispatch_assigned_worker() {
+            local worker="$1"
+            local assignment kind attempt=1
+
+            assignment="$(python3 "$controller" assign --worker "$worker")"
+            kind="$(jq -r '.kind' <<< "$assignment")"
+            if [[ "$kind" == 'none' ]]; then
+              echo "Factory ${worker}: no executable control-plane assignment"
+              return 0
+            fi
+
+            echo "Factory ${worker} assignment: ${assignment}"
+            while (( attempt <= 3 )); do
+              echo "Starting Factory ${worker} (dispatch attempt ${attempt}/3)"
+              if gh workflow run free-model-factory-entry.yml --ref main -f worker="$worker"; then
+                return 0
+              fi
+              if (( attempt < 3 )); then
+                sleep $((attempt * 3))
+              fi
+              attempt=$((attempt + 1))
+            done
+
+            echo "Unable to dispatch Factory ${worker}; releasing its assignment and continuing the batch" >&2
+            python3 "$controller" release --worker "$worker" || true
+            return 1
           }
 
           if [[ "$EVENT_NAME" == push ]]; then
@@ -241,7 +274,7 @@ jobs:
                 continue
               fi
               if [[ -z "$worker" ]]; then
-                echo "Cancelled run ${run_id} had no fixed-model heartbeat; no lease cleanup is required"
+                echo "Cancelled run ${run_id} had no fixed-model heartbeat; controller reconciliation will recover any abandoned lease"
                 continue
               fi
               release_cancelled_worker_leases "$worker"
@@ -260,14 +293,21 @@ jobs:
             workers="$(awk -F '\t' -v minute="$minute" '$4 == minute {print $1}' "$manifest" | jq -Rsc 'split("\n") | map(select(length > 0))')"
             echo "Scheduled :$(printf '%02d' "$minute") batch"
           else
-            # Immediate post-merge/manual smoke: one lane per routing strategy.
             workers='["6","39","46"]'
           fi
 
           [[ "$workers" != '[]' ]] || { echo 'Dispatcher resolved no workers' >&2; exit 1; }
-          echo "Dispatching workers: $workers"
 
+          echo 'Reconciling abandoned factory leases before assignment'
+          python3 "$controller" reconcile
+
+          echo "Dispatching workers through centralized assignment: $workers"
+          dispatch_failures=0
           while IFS= read -r worker; do
-            echo "Starting Factory ${worker}"
-            gh workflow run free-model-factory-entry.yml --ref main -f worker="$worker"
+            dispatch_assigned_worker "$worker" || dispatch_failures=$((dispatch_failures + 1))
           done < <(jq -r '.[]' <<< "$workers")
+
+          if (( dispatch_failures > 0 )); then
+            echo "${dispatch_failures} worker dispatch(es) failed after retries; later workers were still attempted" >&2
+            exit 1
+          fi
