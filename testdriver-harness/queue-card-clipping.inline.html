@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Queue card clipping regression harness (#625 / #1295)</title>
+    <style id="app-css">
+      /*
+        The rules below are the subset of the real application styles that apply
+        to a queue thread card. They mirror frontend/src/styles.css (.glass-card)
+        and the Tailwind utilities used on the card element in
+        QueueThreadCard.tsx. Crucially — exactly as in the shipped app — NONE of
+        them set `overflow` on the card. That is the #1295 bug: the card computes
+        `overflow: visible` and does not clip its content.
+      */
+      :root {
+        --glass-bg: rgba(255, 255, 255, 0.04);
+        --glass-border: rgba(255, 255, 255, 0.08);
+      }
+      .glass-card {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 0.75rem;
+      }
+      /* Tailwind utilities used on the card / children (values from Tailwind). */
+      .h-full { height: 100%; }
+      .p-3 { padding: 0.75rem; }
+      .space-y-2 > * + * { margin-top: 0.5rem; }
+      .flex { display: flex; }
+      .items-start { align-items: flex-start; }
+      .items-center { align-items: center; }
+      .justify-between { justify-content: space-between; }
+      .gap-2 { gap: 0.5rem; }
+      .gap-1 { gap: 0.25rem; }
+      .min-w-0 { min-width: 0; }
+      .flex-1 { flex: 1 1 0%; }
+      .text-left { text-align: left; }
+      .font-black { font-weight: 900; }
+      .w-11 { width: 2.75rem; }
+      .h-11 { height: 2.75rem; }
+      .rounded-lg { border-radius: 0.5rem; }
+    </style>
+    <style>
+      /*
+        PRODUCT FIX under test (#1295 / #625): the queue thread card must clip
+        its own content. Toggling `.fix-applied` adds the single missing rule —
+        exactly what a real `.queue-thread-card { overflow: hidden }` (or the
+        `overflow-hidden` Tailwind utility on the card) would do.
+      */
+      .queue-thread-card.fix-applied { overflow: hidden; }
+
+      body {
+        margin: 0;
+        background: #110e0a;
+        color: #e8d5b0;
+        font-family: system-ui, sans-serif;
+      }
+      .harness-shell { width: 390px; margin: 0 auto; padding: 16px; }
+      .harness-controls {
+        display: flex; gap: 8px; align-items: center;
+        margin-bottom: 12px; flex-wrap: wrap;
+      }
+      #toggle-fix {
+        background: #d4890e; color: #110e0a; border: 0; border-radius: 8px;
+        padding: 8px 12px; font-weight: 700; cursor: pointer;
+      }
+      #overflow-readout { font-weight: 700; }
+      /* Oversized banner that must be CLIPPED when the card clips its content.
+         With overflow visible it spills well below the fixed-height card. */
+      .overflow-probe {
+        margin-top: 8px; height: 220px;
+        background: repeating-linear-gradient(
+          45deg,
+          rgba(192, 57, 43, 0.9), rgba(192, 57, 43, 0.9) 12px,
+          rgba(212, 137, 14, 0.9) 12px, rgba(212, 137, 14, 0.9) 24px
+        );
+        border-radius: 8px; display: flex; align-items: flex-end;
+        justify-content: center; padding-bottom: 8px; color: #110e0a; font-weight: 800;
+      }
+      .queue-thread-card.harness-fixed-height { height: 140px; }
+    </style>
+  </head>
+  <body>
+    <div class="harness-shell">
+      <div class="harness-controls">
+        <button id="toggle-fix" type="button">Apply overflow:hidden fix</button>
+        <span>computed overflow:&nbsp;<span id="overflow-readout" data-testid="overflow-readout">visible</span></span>
+      </div>
+
+      <!-- DOM mirrors QueueThreadCard.tsx: outer <div class="queue-thread-card glass-card ...">. -->
+      <div
+        id="queue-card"
+        data-testid="queue-thread-item"
+        class="queue-thread-card glass-card harness-fixed-height h-full p-3 space-y-2 group cursor-pointer"
+        role="link"
+        tabindex="0"
+        aria-label="Open Sample Thread details"
+      >
+        <div class="flex justify-between items-start gap-2">
+          <div class="flex items-start gap-2 min-w-0 flex-1">
+            <span class="font-black">#1</span>
+            <div class="flex items-center gap-2 min-w-0 flex-1">
+              <button type="button" aria-label="Drag to reorder">&#x283f;</button>
+              <button type="button" class="min-w-0 flex-1 text-left" aria-label="Open Sample Thread">
+                <span>Sample Thread</span>
+              </button>
+            </div>
+          </div>
+          <div class="flex items-center gap-1">
+            <button
+              type="button"
+              class="flex items-center w-11 h-11 rounded-lg"
+              aria-label="Thread actions"
+              aria-haspopup="menu"
+              aria-expanded="false"
+            >
+              &#x22ee;
+            </button>
+          </div>
+        </div>
+
+        <!-- Oversized content that must be clipped when the card clips overflow. -->
+        <div class="overflow-probe" data-testid="overflow-probe">OVERFLOW PROBE</div>
+      </div>
+    </div>
+
+    <script>
+      const card = document.getElementById('queue-card');
+      const readout = document.getElementById('overflow-readout');
+      const toggle = document.getElementById('toggle-fix');
+
+      function refresh() {
+        readout.textContent = getComputedStyle(card).overflow;
+      }
+      toggle.addEventListener('click', () => {
+        const applied = card.classList.toggle('fix-applied');
+        toggle.textContent = applied ? 'Remove overflow:hidden fix' : 'Apply overflow:hidden fix';
+        refresh();
+      });
+      refresh();
+    </script>
+  </body>
+</html>
