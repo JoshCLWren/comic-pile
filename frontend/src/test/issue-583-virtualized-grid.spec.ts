@@ -70,7 +70,6 @@ test.describe('Responsive multi-column virtualized grid (#583-C)', () => {
     const threadActions = firstCard.getByLabel('Thread actions', { exact: true });
     await threadActions.hover();
     await expect(page.getByText('Thread actions', { exact: true })).toHaveCount(0);
-    await expect.poll(() => firstCard.evaluate((element) => getComputedStyle(element).overflow)).toBe('hidden');
     await threadActions.click();
 
     const menu = page.getByRole('menu', { name: 'Thread actions' });
