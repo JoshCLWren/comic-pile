@@ -27,6 +27,7 @@ on:
       - '.github/workflows/free-model-factory-entry.yml'
       - '.github/workflows/free-model-factory-run.yml'
       - '.github/scripts/factory-work-controller.py'
+      - '.github/scripts/factory-gh-rest-shim.sh'
       - '.github/scripts/free-model-factory-worker.sh'
       - '.github/scripts/kilo-auto-factory-run.sh'
       - '.github/free-model-factories.tsv'
@@ -51,6 +52,22 @@ jobs:
       issues: write
       pull-requests: write
     steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Install REST-backed factory GitHub reads
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          real_gh="$(command -v gh)"
+          shim_dir="$RUNNER_TEMP/factory-gh-rest"
+          mkdir -p "$shim_dir"
+          cp .github/scripts/factory-gh-rest-shim.sh "$shim_dir/gh"
+          chmod +x "$shim_dir/gh"
+          echo "FACTORY_REAL_GH=$real_gh" >> "$GITHUB_ENV"
+          echo "$shim_dir" >> "$GITHUB_PATH"
+
       - name: Drain exact-head ready factory PRs
         continue-on-error: true
         shell: bash
@@ -61,18 +78,24 @@ jobs:
 
           current_head_review_blockers() {
             local pr="$1" head="$2" changes unresolved
-            changes="$(gh api --paginate \
+            if ! changes="$(gh api --paginate \
               "repos/${GITHUB_REPOSITORY}/pulls/${pr}/reviews?per_page=100" \
               | jq -s --arg head "$head" \
-                '[.[][] | select(.state == "CHANGES_REQUESTED" and .commit_id == $head)] | length')"
+                '[.[][] | select(.state == "CHANGES_REQUESTED" and .commit_id == $head)] | length')"; then
+              echo "Unable to inspect current-head review submissions for PR #${pr}" >&2
+              return 1
+            fi
             [[ "$changes" == "0" ]] || return 1
 
-            unresolved="$(gh api graphql \
+            if ! unresolved="$(gh api graphql \
               -F owner="${GITHUB_REPOSITORY_OWNER}" \
               -F name="${GITHUB_REPOSITORY#*/}" \
               -F number="$pr" \
               -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}}}}}' \
-              --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length')"
+              --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length')"; then
+              echo "Unable to inspect unresolved review threads for PR #${pr}; leaving it open" >&2
+              return 1
+            fi
             [[ "$unresolved" == "0" ]]
           }
 
@@ -85,16 +108,24 @@ jobs:
             [[ "$(jq -r .mergeable <<< "$info")" == "MERGEABLE" ]] || return 1
             head="$(jq -r .headRefOid <<< "$info")"
             [[ "$head" == "$expected_head" ]] || return 1
-            gh pr checks "$pr" --repo "$GITHUB_REPOSITORY" --required >/tmp/factory-ready-checks 2>&1 || return 1
+            if ! gh pr checks "$pr" --repo "$GITHUB_REPOSITORY" --required >/tmp/factory-ready-checks 2>&1; then
+              echo "Required checks for PR #${pr} are unavailable or not green; leaving it open" >&2
+              cat /tmp/factory-ready-checks >&2 || true
+              return 1
+            fi
             current_head_review_blockers "$pr" "$head"
           }
 
-          mapfile -t ready_prs < <(
-            gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 100 \
-              --label 'factory:ready' \
-              --json number,isDraft,headRefOid \
-              --jq '.[] | select(.isDraft == false) | [.number, .headRefOid] | @tsv'
-          )
+          ready_file="$RUNNER_TEMP/factory-ready-prs.tsv"
+          if ! gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 100 \
+            --label 'factory:ready' \
+            --json number,isDraft,headRefOid \
+            --jq '.[] | select(.isDraft == false) | [.number, .headRefOid] | @tsv' \
+            > "$ready_file"; then
+            echo 'Unable to enumerate factory:ready PRs; merge drain will retry on the next dispatcher tick' >&2
+            exit 1
+          fi
+          mapfile -t ready_prs < "$ready_file"
 
           if (( ${#ready_prs[@]} == 0 )); then
             echo 'No factory:ready PRs to drain'
@@ -106,7 +137,7 @@ jobs:
             [[ -n "$pr" && -n "$head" ]] || continue
 
             if ! ready_to_merge "$pr" "$head"; then
-              echo "PR #${pr} is labeled ready but exact-head gates are no longer satisfied; leaving it open"
+              echo "PR #${pr} is labeled ready but exact-head gates are not currently satisfied; leaving it open"
               continue
             fi
 
@@ -124,10 +155,6 @@ jobs:
               echo "Unable to merge ready PR #${pr}; it will be retried on the next dispatcher tick" >&2
             fi
           done
-
-      - uses: actions/checkout@v6
-        with:
-          ref: main
 
       - name: Resolve and dispatch fixed workers
         shell: bash
