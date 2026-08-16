@@ -13,7 +13,7 @@
     "globals": "^15.13.0",
     "htmlhint": "^1.1.5",
     "jiti": "^2.6.1",
-    "testdriverai": "^7.11.58-test",
+    "testdriverai": "^7.11.59-test",
     "vitest": "^4.1.10"
   },
   "scripts": {
