@@ -44,8 +44,9 @@ function ScrollSentinel({
   return <div ref={sentinelRef} data-testid="sentinel" />
 }
 
-const intersectingEntry = (isIntersecting: boolean) =>
-  ({ isIntersecting } as unknown as IntersectionObserverEntry)
+const intersectingEntry = (isIntersecting: boolean) => ({
+  isIntersecting,
+} as IntersectionObserverEntry)
 
 function getObserver(): MockIntersectionObserver {
   const observer = MockIntersectionObserver.instances.at(-1)
