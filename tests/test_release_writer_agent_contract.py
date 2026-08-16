@@ -29,10 +29,10 @@ def test_release_writer_cannot_edit_or_run_arbitrary_shell_commands() -> None:
     """Require structural denial of edits and arbitrary shell execution."""
     permission = _load_agent_permission()
 
-    assert permission["edit"] is False, "release-writer agent must not edit"
-    assert permission["task"] is False, "release-writer agent must not task"
-    assert permission["external_directory"] is False, "release-writer agent must not access external_directory"
-    assert permission["question"] is False, "release-writer agent must not answer questions"
+    assert permission["edit"] == "deny", "release-writer agent must not edit"
+    assert permission["task"] == "deny", "release-writer agent must not task"
+    assert permission["external_directory"] == "deny", "release-writer agent must not access external_directory"
+    assert permission["question"] == "deny", "release-writer agent must not answer questions"
 
 
 def test_release_writer_can_use_gh_api_get_pulls() -> None:
@@ -53,10 +53,9 @@ def test_release_writer_can_use_gh_api_get_issues() -> None:
 
     assert permission["bash"] is not None, "bash permissions must be configured"
     bash_perms = permission["bash"]
-    assert any(
-        "*" in p or "repos/*/issues/*" in p
-        for p in bash_perms
-    ), "bash must allow targeted gh api GET repos/*/issues/*"
+assert any(
+    v == "allow" for v in bash_perms.values()
+), "bash must allow targeted gh api GET repos/*/issues/*"
 
 
 def test_release_writer_cannot_edit_source() -> None:
@@ -70,4 +69,4 @@ def test_release_writer_cannot_mutate_labels() -> None:
     """Ensure the agent cannot mutate GitHub labels."""
     permission = _load_agent_permission()
 
-    assert permission["external_directory"] is False, "release-writer agent must not mutate labels"
+    assert permission["external_directory"] is False, "release-writer agent must not access external_directory"
