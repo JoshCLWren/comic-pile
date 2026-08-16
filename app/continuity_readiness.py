@@ -1,5 +1,6 @@
 """Bounded direct readiness evaluation for generalized continuity rules."""
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -16,6 +17,8 @@ from app.schemas.continuity_readiness import (
     ContinuityReadinessNodeType,
     ContinuityReadinessResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 MAX_GRAPH_THREADS = 5_000
 MAX_GRAPH_ISSUES = 10_000
@@ -108,6 +111,10 @@ async def _load_snapshot(db: AsyncSession, user_id: int) -> _GraphSnapshot:
     session_cache = db.info.setdefault(SNAPSHOT_SESSION_KEY, {}) if db.info else {}
     cached = session_cache.get(user_id)
     if cached is not None:
+        logger.debug(
+            "Continuity snapshot cache hit",
+            extra={"user_id": user_id, "query_count": cached.query_count, "rows_loaded": cached.rows_loaded},
+        )
         return cached  # type: ignore[return-value]
 
     query_count = 0
@@ -229,6 +236,10 @@ async def _load_snapshot(db: AsyncSession, user_id: int) -> _GraphSnapshot:
         cache = {}
         db.info[SNAPSHOT_SESSION_KEY] = cache
     cache[user_id] = snapshot
+    logger.debug(
+        "Continuity snapshot loaded and cached",
+        extra={"user_id": user_id, "query_count": query_count, "rows_loaded": rows_loaded},
+    )
     return snapshot
 
 
