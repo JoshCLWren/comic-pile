@@ -26,6 +26,7 @@ from app.main import create_app
 _BARE_API_EXCEPTIONS = frozenset(
     {
         "/api/debug/log",
+        "/api/metrics",
         "/api/test/sessions/expire",
     }
 )

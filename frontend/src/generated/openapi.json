@@ -1323,6 +1323,321 @@
         "title": "ConvergenceTarget",
         "type": "object"
       },
+      "CrossoverTemplateAdoptRequest": {
+        "description": "Adopt an external template into an editable continuity plan.",
+        "properties": {
+          "issue_node_id_prefix": {
+            "default": "tpl-",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Issue Node Id Prefix",
+            "type": "string"
+          },
+          "lane_id": {
+            "default": "imported",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Lane Id",
+            "type": "string"
+          },
+          "lane_name": {
+            "default": "Imported",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Lane Name",
+            "type": "string"
+          },
+          "ordering_mode": {
+            "default": "informational",
+            "enum": [
+              "informational",
+              "strict_sequential"
+            ],
+            "title": "Ordering Mode",
+            "type": "string"
+          },
+          "plan_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Plan Name",
+            "type": "string"
+          },
+          "source_list_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 1,
+            "title": "Source List Ids",
+            "type": "array"
+          },
+          "target_story_arc_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Story Arc Id"
+          }
+        },
+        "required": [
+          "source_list_ids",
+          "plan_name"
+        ],
+        "title": "CrossoverTemplateAdoptRequest",
+        "type": "object"
+      },
+      "CrossoverTemplateConflictPreview": {
+        "description": "A pair whose reading-order evidence disagrees across source lists.",
+        "properties": {
+          "first_issue_id": {
+            "title": "First Issue Id",
+            "type": "integer"
+          },
+          "second_issue_id": {
+            "title": "Second Issue Id",
+            "type": "integer"
+          },
+          "source_paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Paths",
+            "type": "array"
+          }
+        },
+        "required": [
+          "first_issue_id",
+          "second_issue_id",
+          "source_paths"
+        ],
+        "title": "CrossoverTemplateConflictPreview",
+        "type": "object"
+      },
+      "CrossoverTemplateIntersectionPreview": {
+        "description": "Consistent cross-thread ordering observation, never a hard dependency.",
+        "properties": {
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "first_issue_id": {
+            "title": "First Issue Id",
+            "type": "integer"
+          },
+          "second_issue_id": {
+            "title": "Second Issue Id",
+            "type": "integer"
+          },
+          "source_paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Paths",
+            "type": "array"
+          }
+        },
+        "required": [
+          "first_issue_id",
+          "second_issue_id",
+          "source_paths",
+          "explanation"
+        ],
+        "title": "CrossoverTemplateIntersectionPreview",
+        "type": "object"
+      },
+      "CrossoverTemplateItemPreview": {
+        "description": "Suggested crossover member with full provenance and advisory metadata.",
+        "properties": {
+          "confidence": {
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "role": {
+            "enum": [
+              "core",
+              "context/prelude",
+              "epilogue",
+              "unknown"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "source_paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Paths",
+            "type": "array"
+          },
+          "suggested_position": {
+            "title": "Suggested Position",
+            "type": "integer"
+          },
+          "target_story_arc_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Story Arc Id"
+          }
+        },
+        "required": [
+          "issue_id",
+          "suggested_position",
+          "role",
+          "confidence",
+          "explanation",
+          "source_paths",
+          "target_story_arc_id"
+        ],
+        "title": "CrossoverTemplateItemPreview",
+        "type": "object"
+      },
+      "CrossoverTemplateParallelCandidatePreview": {
+        "description": "Advisory pair that may represent parallel branches.",
+        "properties": {
+          "first_issue_id": {
+            "title": "First Issue Id",
+            "type": "integer"
+          },
+          "second_issue_id": {
+            "title": "Second Issue Id",
+            "type": "integer"
+          },
+          "source_paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Paths",
+            "type": "array"
+          }
+        },
+        "required": [
+          "first_issue_id",
+          "second_issue_id",
+          "source_paths"
+        ],
+        "title": "CrossoverTemplateParallelCandidatePreview",
+        "type": "object"
+      },
+      "CrossoverTemplatePreviewRequest": {
+        "description": "Request to preview a derived crossover template from persisted CBL evidence.",
+        "properties": {
+          "source_list_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 1,
+            "title": "Source List Ids",
+            "type": "array"
+          },
+          "target_story_arc_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Story Arc Id"
+          }
+        },
+        "required": [
+          "source_list_ids"
+        ],
+        "title": "CrossoverTemplatePreviewRequest",
+        "type": "object"
+      },
+      "CrossoverTemplateSerialSpinePreview": {
+        "description": "Same-thread issue order preserved as advisory series structure.",
+        "properties": {
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "issue_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Issue Ids",
+            "type": "array"
+          },
+          "source_paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Paths",
+            "type": "array"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "thread_id",
+          "issue_ids",
+          "source_paths",
+          "explanation"
+        ],
+        "title": "CrossoverTemplateSerialSpinePreview",
+        "type": "object"
+      },
+      "CrossoverTemplateUnresolvedMatchPreview": {
+        "description": "A source entry that could not be matched to a ComicPile issue.",
+        "properties": {
+          "issue_number": {
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "series_name": {
+            "title": "Series Name",
+            "type": "string"
+          },
+          "source_path": {
+            "title": "Source Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_path",
+          "position",
+          "series_name",
+          "issue_number",
+          "reason"
+        ],
+        "title": "CrossoverTemplateUnresolvedMatchPreview",
+        "type": "object"
+      },
       "DependencyCreate": {
         "description": "Schema for creating dependencies.",
         "properties": {
@@ -1812,6 +2127,58 @@
           "created_at"
         ],
         "title": "DependencyResponse",
+        "type": "object"
+      },
+      "DerivedCrossoverTemplatePreview": {
+        "description": "Non-blocking preview of a derived external crossover template.",
+        "properties": {
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/CrossoverTemplateConflictPreview"
+            },
+            "title": "Conflicts",
+            "type": "array"
+          },
+          "intersections": {
+            "items": {
+              "$ref": "#/components/schemas/CrossoverTemplateIntersectionPreview"
+            },
+            "title": "Intersections",
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CrossoverTemplateItemPreview"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "parallel_candidates": {
+            "items": {
+              "$ref": "#/components/schemas/CrossoverTemplateParallelCandidatePreview"
+            },
+            "title": "Parallel Candidates",
+            "type": "array"
+          },
+          "serial_spines": {
+            "items": {
+              "$ref": "#/components/schemas/CrossoverTemplateSerialSpinePreview"
+            },
+            "title": "Serial Spines",
+            "type": "array"
+          },
+          "unresolved": {
+            "items": {
+              "$ref": "#/components/schemas/CrossoverTemplateUnresolvedMatchPreview"
+            },
+            "title": "Unresolved",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "DerivedCrossoverTemplatePreview",
         "type": "object"
       },
       "DiagnosticError": {
@@ -5103,6 +5470,39 @@
         ]
       }
     },
+    "/api/metrics": {
+      "get": {
+        "description": "Return simple performance metrics.",
+        "operationId": "metrics_api_metrics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "title": "Response Metrics Api Metrics Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Metrics",
+        "tags": [
+          "metrics"
+        ]
+      }
+    },
     "/api/queue/shuffle/": {
       "post": {
         "description": "Randomize all active queue positions for the authenticated user.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    Empty response with HTTP 204 status.",
@@ -7501,6 +7901,104 @@
           "dependencies",
           "dependencies",
           "continuity"
+        ]
+      }
+    },
+    "/api/v1/crossover-templates/adopt": {
+      "post": {
+        "description": "Adopt an external template into an editable continuity plan. Defaults to informational mode so no hard rules are created until the user explicitly selects blocking semantics.",
+        "operationId": "adopt_crossover_template_api_v1_crossover_templates_adopt_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrossoverTemplateAdoptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Adopt Crossover Template",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "crossover-templates"
+        ]
+      }
+    },
+    "/api/v1/crossover-templates/preview": {
+      "post": {
+        "description": "Preview a derived crossover template from active CBL lists. Read-only: never mutates user data or continuity rules.",
+        "operationId": "preview_crossover_template_api_v1_crossover_templates_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrossoverTemplatePreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DerivedCrossoverTemplatePreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Crossover Template",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "crossover-templates"
         ]
       }
     },
