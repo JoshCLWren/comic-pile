@@ -1,0 +1,5 @@
+{
+  "labels": ["ralph-status:in-progress", "factory:8", "factory:building", "factory:local"]
+}
+EOF'
+&& gh api --method PUT repos/JoshCLWren/comic-pile/issues/934/labels --input labels.json && gh issue comment 934 --body "Starting decomposition of RollPage into modules. Extracting registration, rating, snooze, and recovery logic into separate components."
