@@ -42,6 +42,15 @@ from app.schemas.session import (
     SessionResponse,
 )
 from app.schemas.snapshot import SnapshotResponse, SnapshotsListResponse
+from app.schemas.reader_context import (
+    CrossoverInfo,
+    CrossoverMemberInfo,
+    LocalChainEdge,
+    LocalChainIssue,
+    LocalChainResponse,
+    ReaderContextResponse,
+    SeriesInfo,
+)
 from app.schemas.thread import (
     QueueThreadListItem,
     QueueThreadListResponse,
@@ -104,4 +113,12 @@ __all__ = [
     # Snapshot
     "SnapshotResponse",
     "SnapshotsListResponse",
+    # Reader Context
+    "SeriesInfo",
+    "CrossoverMemberInfo",
+    "CrossoverInfo",
+    "LocalChainIssue",
+    "LocalChainEdge",
+    "LocalChainResponse",
+    "ReaderContextResponse",
 ]

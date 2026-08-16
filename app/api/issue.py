@@ -13,7 +13,7 @@ from app.auth import get_current_user
 from app.cache import TTL, cached
 from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
-from app.models import Event, Issue, Thread
+from app.models import Dependency, Event, Issue, Thread
 from app.models.user import User
 from app.schemas import (
     IssueCreateRange,
@@ -24,6 +24,15 @@ from app.schemas import (
     IssueResponse,
 )
 from app.schemas.comicvine import ComicVineIssueIntelligence
+from app.schemas.reader_context import (
+    CrossoverInfo,
+    CrossoverMemberInfo,
+    LocalChainEdge,
+    LocalChainIssue,
+    LocalChainResponse,
+    ReaderContextResponse,
+    SeriesInfo,
+)
 from app.services.comicvine_intelligence import get_issue_intelligence
 from app.utils.issue_parser import parse_issue_ranges
 from app.services.ownership import get_owned_issue_or_404, get_owned_thread_or_404
@@ -889,3 +898,439 @@ async def should_update_next_unread(
         return False
 
     return issue.position < next_issue.position
+
+
+@router.get(
+    "/issues/{issue_id}/reader-context",
+    response_model=ReaderContextResponse,
+    description="Get bounded reader context for the active roll issue.",
+)
+async def get_reader_context(
+    issue_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ReaderContextResponse:
+    """Return bounded reader context for one owned issue.
+
+    Provides series identity, canonical-series aggregates, exact crossover context,
+    and a bounded local same-thread chain with one-hop edges.
+
+    Args:
+        issue_id: The owned issue ID to get context for.
+        current_user: Authenticated owner of the issue.
+        db: Async database session.
+
+    Returns:
+        ReaderContextResponse with series, crossovers, and local chain data.
+
+    Raises:
+        HTTPException: If issue not found or not owned by user.
+    """
+    issue = await get_owned_issue_or_404(db, current_user.id, issue_id)
+    thread = await get_owned_thread_or_404(db, current_user.id, issue.thread_id)
+
+    series_info = await _build_series_info(db, current_user.id, issue, thread)
+    crossovers = await _build_crossover_info(db, current_user.id, issue, thread)
+    local_chain = await _build_local_chain(db, current_user.id, issue, thread)
+
+    return ReaderContextResponse(
+        issue_id=issue_id,
+        series=series_info,
+        crossovers=crossovers,
+        local_chain=local_chain,
+    )
+
+
+async def _build_series_info(
+    db: AsyncSession, user_id: int, issue: Issue, thread: Thread
+) -> SeriesInfo:
+    """Build series identity and aggregate rating information."""
+    from app.models.external_identity import IssueExternalIdentityMapping, ThreadExternalSeriesMapping
+    from app.schemas.reader_context import LocalChainIssue as LocalChainIssueSchema
+
+    mapping_result = await db.execute(
+        select(ThreadExternalSeriesMapping).where(
+            ThreadExternalSeriesMapping.thread_id == thread.id,
+            ThreadExternalSeriesMapping.provider == "comicvine",
+            ThreadExternalSeriesMapping.status == "confirmed",
+        )
+    )
+    mapping = mapping_result.scalar_one_or_none()
+
+    if mapping is None:
+        return SeriesInfo(
+            identity_source="unavailable",
+            canonical_series_id=None,
+            series_name=None,
+            average_rating=None,
+            ratings_count=0,
+            previous_issue=None,
+            recent_ratings=[],
+            highest_rating=None,
+            lowest_rating=None,
+        )
+
+    external_result = await db.execute(
+        select(ExternalIdentity).where(ExternalIdentity.id == mapping.external_identity_id)
+    )
+    external = external_result.scalar_one_or_none()
+
+    canonical_series_id = external.external_id if external else None
+    series_name = external.metadata_json.get("name") if external else None
+
+    thread_issues_result = await db.execute(
+        select(Issue)
+        .where(Issue.thread_id == thread.id)
+        .order_by(Issue.position)
+    )
+    thread_issues = list(thread_issues_result.scalars().all())
+
+    issue_positions = {i.id: i.position for i in thread_issues}
+
+    issue_mapping_result = await db.execute(
+        select(IssueExternalIdentityMapping)
+        .join(ExternalIdentity, ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id)
+        .where(
+            IssueExternalIdentityMapping.issue_id.in_(issue_positions.keys()),
+            IssueExternalIdentityMapping.status == "confirmed",
+            ExternalIdentity.provider == "comicvine",
+        )
+    )
+    issue_mappings = list(issue_mapping_result.scalars().all())
+
+    ratings_result = await db.execute(
+        select(Event)
+        .where(
+            Event.type == "rate",
+            Event.issue_id.isnot(None),
+            Event.issue_id.in_(issue_positions.keys()),
+        )
+        .order_by(Event.timestamp.desc())
+    )
+    all_ratings = list(ratings_result.scalars().all())
+
+    seen_issues: set[int] = set()
+    effective_ratings: dict[int, float] = {}
+    for event in all_ratings:
+        if event.issue_id and event.issue_id not in seen_issues and event.rating is not None:
+            effective_ratings[event.issue_id] = event.rating
+            seen_issues.add(event.issue_id)
+
+    rating_values = list(effective_ratings.values())
+    average_rating = sum(rating_values) / len(rating_values) if rating_values else None
+    ratings_count = len(effective_ratings)
+    highest_rating = max(rating_values) if rating_values else None
+    lowest_rating = min(rating_values) if rating_values else None
+
+    sorted_by_position = sorted(thread_issues, key=lambda i: i.position)
+    current_idx = next(
+        (idx for idx, i in enumerate(sorted_by_position) if i.id == issue.id),
+        None,
+    )
+
+    previous_issue = None
+    recent_ratings_list = []
+
+    if current_idx is not None and current_idx > 0:
+        prev_issue = sorted_by_position[current_idx - 1]
+        prev_rating = effective_ratings.get(prev_issue.id)
+        previous_issue = LocalChainIssueSchema(
+            issue_id=prev_issue.id,
+            issue_number=prev_issue.issue_number,
+            position=prev_issue.position,
+            status=prev_issue.status,
+            relation="previous",
+            rating=prev_rating,
+            crossover_memberships=[],
+        )
+
+    recent_events = all_ratings[:5]
+    for event in recent_events:
+        if event.issue_id and event.issue_id in effective_ratings:
+            issue_obj = next((i for i in thread_issues if i.id == event.issue_id), None)
+            if issue_obj:
+                recent_ratings_list.append(
+                    LocalChainIssueSchema(
+                        issue_id=issue_obj.id,
+                        issue_number=issue_obj.issue_number,
+                        position=issue_obj.position,
+                        status=issue_obj.status,
+                        relation="current" if issue_obj.id == issue.id else "previous",
+                        rating=effective_ratings.get(issue_obj.id),
+                        crossover_memberships=[],
+                    )
+                )
+
+    return SeriesInfo(
+        identity_source="comicvine",
+        canonical_series_id=canonical_series_id,
+        series_name=series_name,
+        average_rating=average_rating,
+        ratings_count=ratings_count,
+        previous_issue=previous_issue,
+        recent_ratings=recent_ratings_list[:5],
+        highest_rating=highest_rating,
+        lowest_rating=lowest_rating,
+    )
+
+
+async def _build_crossover_info(
+    db: AsyncSession, user_id: int, issue: Issue, thread: Thread
+) -> list[CrossoverInfo]:
+    """Build exact crossover context for the current issue."""
+    from app.models.external_identity import IssueExternalIdentityMapping, ExternalIdentity
+
+    issue_mapping_result = await db.execute(
+        select(IssueExternalIdentityMapping)
+        .join(ExternalIdentity, ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id)
+        .where(
+            IssueExternalIdentityMapping.issue_id == issue.id,
+            IssueExternalIdentityMapping.status == "confirmed",
+            ExternalIdentity.provider == "comicvine",
+        )
+    )
+    current_mappings = list(issue_mapping_result.scalars().all())
+
+    if not current_mappings:
+        return []
+
+    thread_issues_result = await db.execute(
+        select(Issue).where(Issue.thread_id == thread.id)
+    )
+    thread_issues = {i.id: i for i in thread_issues_result.scalars().all()}
+
+    all_issue_ids = list(thread_issues.keys())
+
+    all_mappings_result = await db.execute(
+        select(IssueExternalIdentityMapping)
+        .join(ExternalIdentity, ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id)
+        .where(
+            IssueExternalIdentityMapping.issue_id.in_(all_issue_ids),
+            IssueExternalIdentityMapping.status == "confirmed",
+            ExternalIdentity.provider == "comicvine",
+        )
+    )
+    all_mappings = list(all_mappings_result.scalars().all())
+
+    series_to_issues: dict[str, list[int]] = {}
+    for mapping in all_mappings:
+        ext_result = await db.execute(
+            select(ExternalIdentity).where(ExternalIdentity.id == mapping.external_identity_id)
+        )
+        ext = ext_result.scalar_one_or_none()
+        if ext and ext.entity_type == "series":
+            series_to_issues.setdefault(ext.external_id, []).append(mapping.issue_id)
+
+    crossovers = []
+    for mapping in current_mappings:
+        ext_result = await db.execute(
+            select(ExternalIdentity).where(ExternalIdentity.id == mapping.external_identity_id)
+        )
+        ext = ext_result.scalar_one_or_none()
+        if ext and ext.entity_type == "series":
+            member_issue_ids = series_to_issues.get(ext.external_id, [])
+            ratings_result = await db.execute(
+                select(Event)
+                .where(
+                    Event.type == "rate",
+                    Event.issue_id.isnot(None),
+                    Event.issue_id.in_(member_issue_ids),
+                )
+                .order_by(Event.timestamp.desc())
+            )
+            all_member_ratings = list(ratings_result.scalars().all())
+
+            seen: set[int] = set()
+            effective: dict[int, float] = {}
+            for ev in all_member_ratings:
+                if ev.issue_id and ev.issue_id not in seen and ev.rating is not None:
+                    effective[ev.issue_id] = ev.rating
+                    seen.add(ev.issue_id)
+
+            member_ratings = list(effective.values())
+            avg = sum(member_ratings) / len(member_ratings) if member_ratings else None
+            read_count = sum(
+                1 for iid in member_issue_ids
+                if thread_issues.get(iid) and thread_issues[iid].status == "read"
+            )
+
+            next_member = None
+            sorted_members = sorted(
+                [thread_issues[iid] for iid in member_issue_ids if iid in thread_issues],
+                key=lambda i: i.position,
+            )
+            for m in sorted_members:
+                if m.position > issue.position:
+                    m_rating = effective.get(m.id)
+                    next_member = LocalChainIssue(
+                        issue_id=m.id,
+                        issue_number=m.issue_number,
+                        position=m.position,
+                        status=m.status,
+                        relation="future",
+                        rating=m_rating,
+                        crossover_memberships=[],
+                    )
+                    break
+
+            crossovers.append(
+                CrossoverInfo(
+                    id=ext.id,
+                    name=ext.metadata_json.get("name", "Unknown"),
+                    applies_to_current_issue=mapping.issue_id == issue.id,
+                    next_member=next_member,
+                    average_rating=avg,
+                    ratings_count=len(member_ratings),
+                    read_count=read_count,
+                )
+            )
+
+    return crossovers
+
+
+async def _build_local_chain(
+    db: AsyncSession, user_id: int, issue: Issue, thread: Thread
+) -> LocalChainResponse:
+    """Build bounded local same-thread chain with one-hop edges."""
+    thread_issues_result = await db.execute(
+        select(Issue)
+        .where(Issue.thread_id == thread.id)
+        .order_by(Issue.position)
+    )
+    all_thread_issues = list(thread_issues_result.scalars().all())
+
+    current_idx = next(
+        (idx for idx, i in enumerate(all_thread_issues) if i.id == issue.id),
+        None,
+    )
+
+    if current_idx is None:
+        return LocalChainResponse(issues=[], edges=[])
+
+    start_idx = max(0, current_idx - 2)
+    end_idx = min(len(all_thread_issues), current_idx + 3)
+    neighborhood_issues = all_thread_issues[start_idx:end_idx]
+
+    issue_ids = [i.id for i in neighborhood_issues]
+
+    ratings_result = await db.execute(
+        select(Event)
+        .where(
+            Event.type == "rate",
+            Event.issue_id.isnot(None),
+            Event.issue_id.in_(issue_ids),
+        )
+        .order_by(Event.timestamp.desc())
+    )
+    all_ratings = list(ratings_result.scalars().all())
+
+    seen: set[int] = set()
+    effective: dict[int, float] = {}
+    for ev in all_ratings:
+        if ev.issue_id and ev.issue_id not in seen and ev.rating is not None:
+            effective[ev.issue_id] = ev.rating
+            seen.add(ev.issue_id)
+
+    from app.models.external_identity import IssueExternalIdentityMapping, ExternalIdentity
+
+    mappings_result = await db.execute(
+        select(IssueExternalIdentityMapping)
+        .join(ExternalIdentity, ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id)
+        .where(
+            IssueExternalIdentityMapping.issue_id.in_(issue_ids),
+            IssueExternalIdentityMapping.status == "confirmed",
+            ExternalIdentity.provider == "comicvine",
+        )
+    )
+    all_mappings = list(mappings_result.scalars().all())
+
+    issue_crossovers: dict[int, list[CrossoverMemberInfo]] = {}
+    for mapping in all_mappings:
+        ext_result = await db.execute(
+            select(ExternalIdentity).where(ExternalIdentity.id == mapping.external_identity_id)
+        )
+        ext = ext_result.scalar_one_or_none()
+        if ext and ext.entity_type == "series":
+            issue_crossovers.setdefault(mapping.issue_id, []).append(
+                CrossoverMemberInfo(
+                    issue_id=mapping.issue_id,
+                    issue_number=next(
+                        (i.issue_number for i in neighborhood_issues if i.id == mapping.issue_id),
+                        "?",
+                    ),
+                    rating=effective.get(mapping.issue_id),
+                    status=next(
+                        (i.status for i in neighborhood_issues if i.id == mapping.issue_id),
+                        "unread",
+                    ),
+                )
+            )
+
+    local_issues = []
+    for idx_i, i in enumerate(neighborhood_issues):
+        position_offset = idx_i - current_idx
+        if position_offset < 0:
+            relation = "previous"
+        elif position_offset == 0:
+            relation = "current"
+        elif position_offset == 1:
+            relation = "next"
+        else:
+            relation = "future"
+
+        local_issues.append(
+            LocalChainIssue(
+                issue_id=i.id,
+                issue_number=i.issue_number,
+                position=i.position,
+                status=i.status,
+                relation=relation,
+                rating=effective.get(i.id),
+                crossover_memberships=issue_crossovers.get(i.id, []),
+            )
+        )
+
+    deps_out_result = await db.execute(
+        select(Dependency).where(Dependency.source_issue_id.in_(issue_ids))
+    )
+    deps_out = list(deps_out_result.scalars().all())
+
+    deps_in_result = await db.execute(
+        select(Dependency).where(Dependency.target_issue_id.in_(issue_ids))
+    )
+    deps_in = list(deps_in_result.scalars().all())
+
+    all_deps = deps_out + deps_in
+    seen_dep_ids: set[int] = set()
+    unique_deps: list[Dependency] = []
+    for dep in all_deps:
+        if dep.id not in seen_dep_ids:
+            unique_deps.append(dep)
+            seen_dep_ids.add(dep.id)
+
+    edges = []
+    for dep in unique_deps[:20]:
+        source_issue = await db.get(Issue, dep.source_issue_id)
+        target_issue = await db.get(Issue, dep.target_issue_id)
+
+        if source_issue and target_issue:
+            source_thread = await db.get(Thread, source_issue.thread_id)
+            target_thread = await db.get(Thread, target_issue.thread_id)
+
+            if source_thread and target_thread:
+                edges.append(
+                    LocalChainEdge(
+                        dependency_id=dep.id,
+                        source_issue_id=dep.source_issue_id,
+                        target_issue_id=dep.target_issue_id,
+                        source_issue_number=source_issue.issue_number,
+                        target_issue_number=target_issue.issue_number,
+                        source_thread_id=source_issue.thread_id,
+                        target_thread_id=target_issue.thread_id,
+                        source_thread_title=source_thread.title,
+                        target_thread_title=target_thread.title,
+                        note=dep.note,
+                    )
+                )
+
+    return LocalChainResponse(issues=local_issues, edges=edges)

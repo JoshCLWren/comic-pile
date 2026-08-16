@@ -148,7 +148,7 @@ export function RatingView({
         <section aria-labelledby="connected-heading" className="rounded-2xl border border-blue-800/30 bg-blue-950/15 p-3">
           <div className="flex items-center justify-between gap-2">
             <h3 id="connected-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-400">
-              Verified dependency connections
+              Thread dependency groups
             </h3>
             <button
               type="button"
@@ -158,6 +158,9 @@ export function RatingView({
               Correct continuity
             </button>
           </div>
+          <p className="mt-1 text-[10px] text-stone-500">
+            Thread-level group memberships (not exact current-issue dependencies)
+          </p>
           <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Connected threads">
             {connectedThreads.map((connectedThread) => (
               <li
