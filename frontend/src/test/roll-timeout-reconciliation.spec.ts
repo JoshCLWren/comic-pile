@@ -10,8 +10,19 @@ type MutationCase = {
   submit: (page: import('@playwright/test').Page) => Promise<void>;
 };
 
+// The short-timeout clamp is armed lazily via this window flag. `addInitScript`
+// runs on *every* navigation, so an unconditional clamp would also throttle the
+// initial bootstrap fetch during setup (openRatingView) — under CI load that
+// bootstrap exceeds 50 ms, the thread pool never renders, and setup fails before
+// the behavior under test is even exercised. Gating on a flag that we only flip
+// on *after* setup keeps the clamp scoped to the mutation under test.
 async function installShortAxiosTimeout(page: import('@playwright/test').Page): Promise<void> {
   await page.addInitScript((timeoutMs: number) => {
+    const globalScope = window as Window & { __COMIC_PILE_SHORT_TIMEOUT__?: boolean };
+    if (globalScope.__COMIC_PILE_SHORT_TIMEOUT__ === undefined) {
+      globalScope.__COMIC_PILE_SHORT_TIMEOUT__ = false;
+    }
+
     const descriptor = Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, 'timeout');
     if (!descriptor?.get || !descriptor.set) {
       throw new Error('XMLHttpRequest.timeout is not patchable in this browser');
@@ -24,10 +35,19 @@ async function installShortAxiosTimeout(page: import('@playwright/test').Page): 
       enumerable: descriptor.enumerable,
       get: nativeTimeoutGetter,
       set(value: number) {
-        nativeTimeoutSetter.call(this, Math.min(Number(value), timeoutMs));
+        const clampActive = (window as Window & { __COMIC_PILE_SHORT_TIMEOUT__?: boolean })
+          .__COMIC_PILE_SHORT_TIMEOUT__ === true;
+        const nextValue = clampActive ? Math.min(Number(value), timeoutMs) : Number(value);
+        nativeTimeoutSetter.call(this, nextValue);
       },
     });
   }, CLIENT_TIMEOUT_MS);
+}
+
+async function armShortAxiosTimeout(page: import('@playwright/test').Page): Promise<void> {
+  await page.evaluate(() => {
+    (window as Window & { __COMIC_PILE_SHORT_TIMEOUT__?: boolean }).__COMIC_PILE_SHORT_TIMEOUT__ = true;
+  });
 }
 
 async function openRatingView(page: import('@playwright/test').Page): Promise<void> {
@@ -96,6 +116,10 @@ for (const mutationCase of mutationCases) {
     });
 
     await openRatingView(page);
+    // Only clamp the client timeout once setup has loaded the rating view. The
+    // initial bootstrap fetch must run with the app's normal timeout; the 50 ms
+    // clamp exists to force *the mutation under test* to time out, not setup.
+    await armShortAxiosTimeout(page);
     const reconciliationBaseline = reconciliationRequests;
 
     await mutationCase.submit(page);
