@@ -333,3 +333,17 @@ def test_issues_excludes_parenthesized_version_step_markers(monkeypatch, capsys)
 
     result = json.loads(capsys.readouterr().out)
     assert result == [1070]
+
+
+def test_issues_excludes_unbalanced_parenthesized_markers(monkeypatch, capsys):
+    """Unbalanced (vN #M and [vN #M must not produce false issue refs."""
+    def fake_github_request(url: str):
+        return {
+            "number": 100,
+            "title": "Release (v2) #3 ships today.",
+            "body": "In (v2 #3 the API changed. [v4 #5 broke. Fixes #1070.",
+        }
+
+    monkeypatch.setattr(release_writer, "_github_request", fake_github_request)
+    release_writer._issues("JoshCLWren/comic-pile", "100")
+    assert json.loads(capsys.readouterr().out) == [1070]
