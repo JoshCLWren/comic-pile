@@ -46,7 +46,8 @@ def test_first_connect_listener_registered(_reload_database: None) -> None:
     import app.database as db_mod
 
     dispatch = db_mod.async_engine.sync_engine.pool.dispatch
-    assert len(list(dispatch.first_connect.listeners)) >= 1
+    first_connect = getattr(dispatch, "first_connect", None)
+    assert first_connect is not None and len(list(first_connect.listeners)) >= 1
 
 
 def test_invalidate_listener_registered(_reload_database: None) -> None:
@@ -54,7 +55,8 @@ def test_invalidate_listener_registered(_reload_database: None) -> None:
     import app.database as db_mod
 
     dispatch = db_mod.async_engine.sync_engine.pool.dispatch
-    assert len(list(dispatch.invalidate.listeners)) >= 1
+    invalidate = getattr(dispatch, "invalidate", None)
+    assert invalidate is not None and len(list(invalidate.listeners)) >= 1
 
 
 def test_before_cursor_execute_listener_registered(_reload_database: None) -> None:
@@ -62,7 +64,8 @@ def test_before_cursor_execute_listener_registered(_reload_database: None) -> No
     import app.database as db_mod
 
     dispatch = db_mod.async_engine.sync_engine.dispatch
-    assert len(list(dispatch.before_cursor_execute.listeners)) >= 1
+    before_cursor_execute = getattr(dispatch, "before_cursor_execute", None)
+    assert before_cursor_execute is not None and len(list(before_cursor_execute.listeners)) >= 1
 
 
 def test_after_cursor_execute_listener_registered(_reload_database: None) -> None:
@@ -70,4 +73,5 @@ def test_after_cursor_execute_listener_registered(_reload_database: None) -> Non
     import app.database as db_mod
 
     dispatch = db_mod.async_engine.sync_engine.dispatch
-    assert len(list(dispatch.after_cursor_execute.listeners)) >= 1
+    after_cursor_execute = getattr(dispatch, "after_cursor_execute", None)
+    assert after_cursor_execute is not None and len(list(after_cursor_execute.listeners)) >= 1
