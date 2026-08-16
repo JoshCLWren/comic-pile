@@ -126,6 +126,7 @@ async def test_comicvine_intelligence_normalizes_metadata_and_matches_arc_member
     assert body["creators"] == [{"name": "Writer One", "roles": ["writer", "cover"]}]
     related_issues = body["story_arcs"][0]["related_issues"]
     assert [item["comicvine_issue_id"] for item in related_issues] == ["101", "102"]
+    assert [item["name"] for item in related_issues] == ["Middle", "Finale"]
     assert len(related_issues[0]["comicpile_matches"]) == 2
     assert {match["status"] for match in related_issues[0]["comicpile_matches"]} == {
         "read",
