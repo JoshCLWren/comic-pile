@@ -13,7 +13,9 @@ from app.auth import get_current_user
 from app.cache import TTL, cached
 from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
-from app.models import Event, Issue, Thread
+from app.models import Dependency, Event, Issue, Thread
+from app.models.continuity_rule import ContinuityRule, ContinuityRuleSelectedMember
+from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
 from app.models.user import User
 from app.schemas import (
     IssueCreateRange,
@@ -24,6 +26,7 @@ from app.schemas import (
     IssueResponse,
 )
 from app.schemas.comicvine import ComicVineIssueIntelligence
+from app.schemas.reader_context import ReaderContextResponse
 from app.services.comicvine_intelligence import get_issue_intelligence
 from app.utils.issue_parser import parse_issue_ranges
 from app.services.ownership import get_owned_issue_or_404, get_owned_thread_or_404
@@ -889,3 +892,450 @@ async def should_update_next_unread(
         return False
 
     return issue.position < next_issue.position
+
+
+@router.get(
+    "/issues/{issue_id}/reader-context",
+    response_model=ReaderContextResponse,
+    description="Get bounded reader context for the active roll issue.",
+)
+async def get_reader_context(
+    issue_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ReaderContextResponse:
+    """Return bounded reader context for one owned issue.
+
+    Provides series identity, canonical-series aggregates, exact crossover context,
+    and a bounded local same-thread chain with one-hop edges.
+
+    Args:
+        issue_id: The owned issue ID to get context for.
+        current_user: Authenticated owner of the issue.
+        db: Async database session.
+
+    Returns:
+        ReaderContextResponse with series, crossovers, and local chain data.
+
+    Raises:
+        HTTPException: If issue not found or not owned by user.
+    """
+    issue = await get_owned_issue_or_404(db, current_user.id, issue_id)
+    thread = await get_owned_thread_or_404(db, current_user.id, issue.thread_id)
+
+    # --- Series identity and aggregates ---
+    series_info = await _build_series_info(db, current_user.id, issue, thread)
+
+    # --- Exact crossover context ---
+    crossovers = await _build_crossover_info(db, current_user.id, issue, thread)
+
+    # --- Local same-thread chain + one-hop edges ---
+    local_chain = await _build_local_chain(db, current_user.id, issue, thread)
+
+    return ReaderContextResponse(
+        issue_id=issue_id,
+        series=series_info,
+        crossovers=crossovers,
+        local_chain=local_chain,
+    )
+
+
+async def _build_series_info(
+    db: AsyncSession, user_id: int, issue: Issue, thread: Thread
+) -> "SeriesInfo":
+    """Build series identity and aggregate rating information."""
+    from app.models.external_identity import ThreadExternalSeriesMapping
+    from app.schemas.reader_context import SeriesInfo, LocalChainIssue
+
+    # Check for confirmed ComicVine identity
+    mapping_result = await db.execute(
+        select(ThreadExternalSeriesMapping).where(
+            ThreadExternalSeriesMapping.thread_id == thread.id,
+            ThreadExternalSeriesMapping.provider == "comicvine",
+        )
+    )
+    mapping = mapping_result.scalar_one_or_none()
+
+    if mapping is None:
+        return SeriesInfo(
+            identity_source="unavailable",
+            canonical_series_id=None,
+            series_name=None,
+            average_rating=None,
+            ratings_count=0,
+            previous_issue=None,
+            recent_ratings=[],
+            highest_rating=None,
+            lowest_rating=None,
+        )
+
+    canonical_series_id = str(mapping.external_series_id)
+
+    # Get all issues in this thread that are confirmed to the same canonical series
+    # For now, we use the thread's issues since the mapping is at thread level
+    thread_issues_result = await db.execute(
+        select(Issue)
+        .where(Issue.thread_id == thread.id)
+        .order_by(Issue.position)
+    )
+    thread_issues = list(thread_issues_result.scalars().all())
+
+    # Get effective ratings for issues in this thread (latest rate event per issue)
+    from app.models import Event
+
+    issue_ids = [i.id for i in thread_issues]
+    if not issue_ids:
+        return SeriesInfo(
+            identity_source="comicvine",
+            canonical_series_id=canonical_series_id,
+            series_name=thread.title,
+            average_rating=None,
+            ratings_count=0,
+            previous_issue=None,
+            recent_ratings=[],
+            highest_rating=None,
+            lowest_rating=None,
+        )
+
+    # Get latest rate event per issue
+    rate_events_result = await db.execute(
+        select(Event)
+        .where(Event.type == "rate", Event.issue_id.in_(issue_ids))
+        .order_by(Event.issue_id, Event.timestamp.desc())
+    )
+    rate_events = rate_events_result.scalars().all()
+
+    # Dedupe by issue_id - keep only the latest per issue
+    latest_ratings: dict[int, float] = {}
+    for event in rate_events:
+        if event.issue_id and event.issue_id not in latest_ratings:
+            latest_ratings[event.issue_id] = event.rating
+
+    # Calculate aggregates
+    ratings = list(latest_ratings.values())
+    ratings_count = len(ratings)
+    average_rating = sum(ratings) / ratings_count if ratings_count > 0 else None
+    highest_rating = max(ratings) if ratings else None
+    lowest_rating = min(ratings) if ratings else None
+
+    # Find previous issue (immediately preceding by position in current thread)
+    current_position = issue.position
+    previous_issue = None
+    for thread_issue in thread_issues:
+        if thread_issue.position < current_position:
+            if previous_issue is None or thread_issue.position > previous_issue.position:
+                previous_issue = thread_issue
+
+    # Build previous issue response
+    previous_issue_response = None
+    if previous_issue:
+        previous_issue_response = LocalChainIssue(
+            issue_id=previous_issue.id,
+            issue_number=previous_issue.issue_number,
+            position=previous_issue.position,
+            status=previous_issue.status,
+            relation="previous",
+            rating=latest_ratings.get(previous_issue.id),
+            crossover_memberships=[],  # Will be populated separately if needed
+        )
+
+    # Recent ratings (max 5, ordered by effective-event timestamp descending)
+    # We need to get the events with timestamps for ordering
+    recent_events_result = await db.execute(
+        select(Event)
+        .where(Event.type == "rate", Event.issue_id.in_(issue_ids))
+        .order_by(Event.timestamp.desc())
+        .limit(5)
+    )
+    recent_events = recent_events_result.scalars().all()
+
+    recent_ratings = []
+    seen_issues = set()
+    for event in recent_events:
+        if event.issue_id and event.issue_id not in seen_issues:
+            seen_issues.add(event.issue_id)
+            rated_issue = next((i for i in thread_issues if i.id == event.issue_id), None)
+            if rated_issue:
+                recent_ratings.append(
+                    LocalChainIssue(
+                        issue_id=rated_issue.id,
+                        issue_number=rated_issue.issue_number,
+                        position=rated_issue.position,
+                        status=rated_issue.status,
+                        relation="current" if rated_issue.id == issue.id else "previous",
+                        rating=event.rating,
+                        crossover_memberships=[],
+                    )
+                )
+
+    return SeriesInfo(
+        identity_source="comicvine",
+        canonical_series_id=canonical_series_id,
+        series_name=thread.title,
+        average_rating=average_rating,
+        ratings_count=ratings_count,
+        previous_issue=previous_issue_response,
+        recent_ratings=recent_ratings,
+        highest_rating=highest_rating,
+        lowest_rating=lowest_rating,
+    )
+
+
+async def _build_crossover_info(
+    db: AsyncSession, user_id: int, issue: Issue, thread: Thread
+) -> list["CrossoverInfo"]:
+    """Build exact crossover context for the current issue."""
+    from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
+    from app.schemas.reader_context import CrossoverInfo, LocalChainIssue, CrossoverMemberInfo
+
+    # Get crossovers this thread belongs to
+    memberships_result = await db.execute(
+        select(DependencyGroupMembership)
+        .where(DependencyGroupMembership.thread_id == thread.id)
+    )
+    memberships = memberships_result.scalars().all()
+
+    if not memberships:
+        return []
+
+    group_ids = [m.group_id for m in memberships]
+    groups_result = await db.execute(
+        select(DependencyGroup).where(DependencyGroup.id.in_(group_ids))
+    )
+    groups = list(groups_result.scalars().all())
+
+    crossovers = []
+    for group in groups:
+        # Get all member issues for this crossover (owned by user)
+        member_memberships_result = await db.execute(
+            select(DependencyGroupMembership)
+            .where(
+                DependencyGroupMembership.group_id == group.id,
+                DependencyGroupMembership.issue_id.is_not(None),
+            )
+        )
+        member_memberships = member_memberships_result.scalars().all()
+
+        member_issue_ids = [m.issue_id for m in member_memberships if m.issue_id]
+        member_issues = []
+        if member_issue_ids:
+            member_issues_result = await db.execute(
+                select(Issue).where(Issue.id.in_(member_issue_ids))
+            )
+            member_issues = list(member_issues_result.scalars().all())
+
+        # Check if current issue is a member
+        applies_to_current = any(m.issue_id == issue.id for m in member_memberships)
+
+        # Find next member (future issue in the same thread)
+        next_member = None
+        thread_member_issues = [i for i in member_issues if i.thread_id == thread.id]
+        future_members = [i for i in thread_member_issues if i.position > issue.position]
+        if future_members:
+            next_member_issue = min(future_members, key=lambda i: i.position)
+            next_member = LocalChainIssue(
+                issue_id=next_member_issue.id,
+                issue_number=next_member_issue.issue_number,
+                position=next_member_issue.position,
+                status=next_member_issue.status,
+                relation="future",
+                rating=None,
+                crossover_memberships=[],
+            )
+
+        # Calculate crossover aggregates using effective ratings
+        if member_issue_ids:
+            rate_events_result = await db.execute(
+                select(Event)
+                .where(Event.type == "rate", Event.issue_id.in_(member_issue_ids))
+                .order_by(Event.issue_id, Event.timestamp.desc())
+            )
+            rate_events = rate_events_result.scalars().all()
+
+            latest_ratings: dict[int, float] = {}
+            for event in rate_events:
+                if event.issue_id and event.issue_id not in latest_ratings:
+                    latest_ratings[event.issue_id] = event.rating
+
+            ratings = list(latest_ratings.values())
+            average_rating = sum(ratings) / len(ratings) if ratings else None
+            ratings_count = len(ratings)
+            read_count = sum(1 for i in member_issues if i.status == "read")
+        else:
+            average_rating = None
+            ratings_count = 0
+            read_count = 0
+
+        # Build member info for the crossover
+        member_info = []
+        for member_issue in member_issues:
+            member_info.append(
+                CrossoverMemberInfo(
+                    issue_id=member_issue.id,
+                    issue_number=member_issue.issue_number,
+                    rating=latest_ratings.get(member_issue.id) if member_issue_ids else None,
+                    status=member_issue.status,
+                )
+            )
+
+        crossovers.append(
+            CrossoverInfo(
+                id=group.id,
+                name=group.name,
+                applies_to_current_issue=applies_to_current,
+                next_member=next_member,
+                average_rating=average_rating,
+                ratings_count=ratings_count,
+                read_count=read_count,
+            )
+        )
+
+    return crossovers
+
+
+async def _build_local_chain(
+    db: AsyncSession, user_id: int, issue: Issue, thread: Thread
+) -> "LocalChainResponse":
+    """Build bounded local same-thread chain with one-hop edges."""
+    from app.schemas.reader_context import (
+        LocalChainResponse,
+        LocalChainIssue,
+        LocalChainEdge,
+        CrossoverMemberInfo,
+    )
+
+    # Get up to 5 same-thread issues centered on current: up to 2 before, current, up to 2 after
+    thread_issues_result = await db.execute(
+        select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
+    )
+    thread_issues = list(thread_issues_result.scalars().all())
+
+    current_index = next((i for i, ti in enumerate(thread_issues) if ti.id == issue.id), 0)
+    start = max(0, current_index - 2)
+    end = min(len(thread_issues), current_index + 3)  # current + 2 after
+    neighborhood_issues = thread_issues[start:end]
+
+    # Get effective ratings for neighborhood issues
+    neighborhood_issue_ids = [i.id for i in neighborhood_issues]
+    rate_events_result = await db.execute(
+        select(Event)
+        .where(Event.type == "rate", Event.issue_id.in_(neighborhood_issue_ids))
+        .order_by(Event.issue_id, Event.timestamp.desc())
+    )
+    rate_events = rate_events_result.scalars().all()
+
+    latest_ratings: dict[int, float] = {}
+    for event in rate_events:
+        if event.issue_id and event.issue_id not in latest_ratings:
+            latest_ratings[event.issue_id] = event.rating
+
+    # Get crossover memberships for neighborhood issues
+    memberships_result = await db.execute(
+        select(DependencyGroupMembership)
+        .where(DependencyGroupMembership.issue_id.in_(neighborhood_issue_ids))
+    )
+    memberships = memberships_result.scalars().all()
+
+    group_ids = list({m.group_id for m in memberships})
+    groups = {}
+    if group_ids:
+        groups_result = await db.execute(
+            select(DependencyGroup).where(DependencyGroup.id.in_(group_ids))
+        )
+        groups = {g.id: g for g in groups_result.scalars().all()}
+
+    # Group memberships by issue_id
+    memberships_by_issue: dict[int, list[DependencyGroupMembership]] = {}
+    for m in memberships:
+        if m.issue_id:
+            memberships_by_issue.setdefault(m.issue_id, []).append(m)
+
+    # Build local chain issues
+    local_issues = []
+    for idx, ti in enumerate(neighborhood_issues):
+        if idx == current_index - start:
+            relation = "current"
+        elif idx < current_index - start:
+            relation = "previous" if idx == current_index - start - 1 else "previous"
+        else:
+            relation = "next" if idx == current_index - start + 1 else "future"
+
+        # Get crossover memberships for this issue
+        issue_memberships = memberships_by_issue.get(ti.id, [])
+        crossover_memberships = []
+        for m in issue_memberships:
+            group = groups.get(m.group_id)
+            if group:
+                crossover_memberships.append(
+                    CrossoverMemberInfo(
+                        issue_id=ti.id,
+                        issue_number=ti.issue_number,
+                        rating=latest_ratings.get(ti.id),
+                        status=ti.status,
+                    )
+                )
+
+        local_issues.append(
+            LocalChainIssue(
+                issue_id=ti.id,
+                issue_number=ti.issue_number,
+                position=ti.position,
+                status=ti.status,
+                relation=relation,
+                rating=latest_ratings.get(ti.id),
+                crossover_memberships=crossover_memberships,
+            )
+        )
+
+    # Get one-hop edges touching neighborhood issues
+    # Edges where source or target is in the neighborhood
+    neighborhood_issue_id_set = set(neighborhood_issue_ids)
+    edges_result = await db.execute(
+        select(Dependency)
+        .where(
+            (Dependency.source_issue_id.in_(neighborhood_issue_ids))
+            | (Dependency.target_issue_id.in_(neighborhood_issue_ids))
+        )
+        .limit(20)
+    )
+    edges = list(edges_result.scalars().all())
+
+    # Build edge responses with full context
+    all_issue_ids = set()
+    for edge in edges:
+        all_issue_ids.add(edge.source_issue_id)
+        all_issue_ids.add(edge.target_issue_id)
+
+    all_issues = {}
+    if all_issue_ids:
+        all_issues_result = await db.execute(
+            select(Issue).where(Issue.id.in_(all_issue_ids))
+        )
+        all_issues = {i.id: i for i in all_issues_result.scalars().all()}
+
+    local_edges = []
+    for edge in edges:
+        source_issue = all_issues.get(edge.source_issue_id)
+        target_issue = all_issues.get(edge.target_issue_id)
+
+        if source_issue and target_issue:
+            source_thread = await db.get(Thread, source_issue.thread_id)
+            target_thread = await db.get(Thread, target_issue.thread_id)
+
+            if source_thread and target_thread:
+                local_edges.append(
+                    LocalChainEdge(
+                        dependency_id=edge.id,
+                        source_issue_id=edge.source_issue_id,
+                        target_issue_id=edge.target_issue_id,
+                        source_issue_number=source_issue.issue_number,
+                        target_issue_number=target_issue.issue_number,
+                        source_thread_id=source_thread.id,
+                        target_thread_id=target_thread.id,
+                        source_thread_title=source_thread.title,
+                        target_thread_title=target_thread.title,
+                        note=edge.note,
+                    )
+                )
+
+    return LocalChainResponse(issues=local_issues, edges=local_edges)
