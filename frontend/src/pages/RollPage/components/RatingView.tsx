@@ -45,7 +45,7 @@ export function RatingView({
   rating,
   predictedDie,
   hasValidRolledResult,
-  poolSize,
+  _poolSize,
   errorMessage,
   rateIsPending,
   snoozeIsPending,
@@ -96,8 +96,7 @@ export function RatingView({
               </h2>
               {hasValidRolledResult ? (
                 <p className="mt-1 text-[11px] font-bold text-stone-400">
-                  Rolled {rolledResult} on d{currentDie}
-                  {currentDie > poolSize ? ` · ${poolSize} eligible` : ''}
+                  You rolled a {rolledResult}
                 </p>
               ) : null}
             </div>
