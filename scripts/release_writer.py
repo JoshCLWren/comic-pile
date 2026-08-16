@@ -29,6 +29,23 @@ _GITHUB_API_BASE = "https://api.github.com"
 _ISSUE_REFERENCE_PATTERN = re.compile(r"(?<!\w)#(\d{1,7})\b")
 _ORDINAL_INDICATORS = {"step", "build", "section", "phase", "version", "stage", "v"}
 _VERSION_STEP_PATTERN = re.compile(r"v?\d+(?:\.\d+)*")
+_MARKDOWN_LINK_PATTERN = re.compile(r"\[([^\]]+)\]\((https?:\/\/[^)]+)\)")
+_BACKTICK_PATTERN = re.compile(r"`([^`]+)`")
+_MIN_PUBLIC_CONTENT = {"category": 2, "title": 4, "summary": 12}
+
+
+def _display_length(value: object) -> int:
+    """Return the visible length of release copy after stripping Markdown formatting.
+
+    Args:
+        value: Raw release copy that may contain Markdown links or backticks.
+
+    Returns:
+        The number of visible characters in the stripped text.
+    """
+    text = _MARKDOWN_LINK_PATTERN.sub(r"\1", str(value))
+    text = _BACKTICK_PATTERN.sub(r"\1", text)
+    return len(text.strip())
 
 
 def _fail(message: str) -> NoReturn:
@@ -143,6 +160,16 @@ def _validate_release(raw: str) -> dict[str, object]:
     payload.setdefault("status", "published")
     payload.setdefault("sort_order", 0)
     payload.setdefault("provenance_json", {})
+    if (
+        payload["visibility"] == "public"
+        and payload["status"] == "published"
+    ):
+        for name, minimum in _MIN_PUBLIC_CONTENT.items():
+            if _display_length(payload[name]) < minimum:
+                _fail(
+                    f"{name} must contain meaningful release content "
+                    f"(at least {minimum} visible characters)"
+                )
     return payload
 
 
@@ -402,6 +429,39 @@ def _skip(raw: str) -> None:
     )
 
 
+def _retract(repository: str, raw_pr_number: str, merge_sha: str) -> None:
+    """Retract one broken or placeholder public release by source identity.
+
+    Args:
+        repository: Owner/name repository containing the source pull request.
+        raw_pr_number: Source pull request number.
+        merge_sha: Source merge commit SHA.
+
+    Returns:
+        None.
+    """
+    number = _pr_number(raw_pr_number)
+    query = urllib.parse.urlencode(
+        {
+            "source_repository": repository,
+            "source_pr_number": number,
+            "source_merge_sha": merge_sha,
+        }
+    )
+    source = _request("GET", f"{_api_base()}/source?{query}")
+    release = source.get("release")
+    if not source.get("exists") or not isinstance(release, dict) or "id" not in release:
+        _fail("no release ledger record exists for this source identity")
+    release_id = release["id"]
+    result = _request("POST", f"{_api_base()}/{release_id}/retract")
+    print(
+        json.dumps(
+            {"retracted": True, "release": result},
+            separators=(",", ":"),
+        )
+    )
+
+
 def main() -> None:
     """Run the release-writer command-line interface.
 
@@ -412,7 +472,7 @@ def main() -> None:
         None.
     """
     if len(sys.argv) < 2:
-        _fail("usage: release_writer.py check|recent|publish|skip|pr|files|issues ...")
+        _fail("usage: release_writer.py check|recent|publish|skip|retract|pr|files|issues ...")
     command = sys.argv[1]
     if command == "check" and len(sys.argv) == 5:
         _check(sys.argv[2], sys.argv[3], sys.argv[4])
@@ -427,6 +487,9 @@ def main() -> None:
         return
     if command == "skip" and len(sys.argv) == 3:
         _skip(sys.argv[2])
+        return
+    if command == "retract" and len(sys.argv) == 5:
+        _retract(sys.argv[2], sys.argv[3], sys.argv[4])
         return
     if command == "pr" and len(sys.argv) == 4:
         _pr(sys.argv[2], sys.argv[3])

@@ -29,8 +29,12 @@ For each merged pull request you are asked to process:
 3. Classify the change as `public` or `internal`. Do not force a public note for test-only, generated-only, documentation-only, or strictly internal maintenance.
 4. For a public change, construct exactly one JSON object matching the release-ledger API contract and call:
    `python scripts/release_writer.py publish '<json>'`
+   Public published copy must be meaningful. Placeholder-sized titles, summaries, or categories are rejected by the helper and by the release API, so never send single-character or fragmentary copy.
 5. For an internal change, call:
    `python scripts/release_writer.py skip '<json>'`
    with repository, PR number, merge SHA, merged timestamp, and a concise reason. The helper records a durable hidden internal source record so future reconciliation does not repeatedly reclassify the same PR.
+6. If a public release record is later found to be broken or placeholder copy, remove it from What's New with:
+   `python scripts/release_writer.py retract <repository> <pr-number> <merge-sha>`
+   Retraction marks the record retracted so the public page stops showing it; it never rewrites source identity.
 
 Keep summaries user-facing and concrete. The helper validates allowed fields and lengths and holds the credential boundary. Never print, inspect, or request release credentials. Never put credentials in prompts or command arguments.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Literal, Self
 
@@ -9,6 +10,21 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 ReleaseVisibility = Literal["public", "internal"]
 ReleaseStatus = Literal["draft", "published", "retracted"]
+
+_MARKDOWN_LINK_PATTERN = re.compile(r"\[([^\]]+)\]\((https?:\/\/[^)]+)\)")
+_BACKTICK_PATTERN = re.compile(r"`([^`]+)`")
+
+
+def display_text(value: str) -> str:
+    """Strip Markdown display formatting so copy quality is measured on visible text.
+
+    Args:
+        value: Raw release copy that may contain Markdown links or backticks.
+
+    Returns:
+        The visible text with link targets and code markers removed.
+    """
+    return _MARKDOWN_LINK_PATTERN.sub(r"\1", value).replace("`", "").strip()
 
 
 class ReleaseUpsertRequest(BaseModel):
@@ -43,6 +59,39 @@ class ReleaseUpsertRequest(BaseModel):
         """
         if self.source_pr_number is None and self.source_merge_sha is None:
             raise ValueError("source_pr_number or source_merge_sha is required")
+        return self
+
+    @model_validator(mode="after")
+    def require_meaningful_public_content(self) -> Self:
+        """Reject placeholder copy that would render as broken What's New cards.
+
+        Public published rows must carry meaningful, visible release notes. The
+        release writer has produced records whose title was a single character and
+        summary a single word, so a minimum visible-content guard applies to every
+        public published row.
+
+        Args:
+            self: Validated release publication request.
+
+        Returns:
+            The validated request when public content is meaningful.
+
+        Raises:
+            ValueError: If public published content is placeholder-sized.
+        """
+        if self.status != "published" or self.visibility != "public":
+            return self
+        minimums = {
+            "category": 2,
+            "title": 4,
+            "summary": 12,
+        }
+        for field_name, minimum in minimums.items():
+            if len(display_text(str(getattr(self, field_name)))) < minimum:
+                raise ValueError(
+                    f"{field_name} must contain meaningful release content "
+                    f"(at least {minimum} visible characters)"
+                )
         return self
 
 

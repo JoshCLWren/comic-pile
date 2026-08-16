@@ -325,6 +325,168 @@ class TestReleaseWriterValidation:
         assert result["provenance_json"] == {}
 
 
+class TestReleaseWriterMeaningfulContent:
+    """Test public release copy cannot be placeholder-sized."""
+
+    def test_publish_rejects_placeholder_public_title_and_summary(self) -> None:
+        """One-character public titles and summaries are never valid release notes.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["title"] = "T"
+        payload["summary"] = "S"
+        stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
+        assert "title must contain meaningful release content" in stderr
+
+    def test_publish_rejects_short_public_summary(self) -> None:
+        """Public summaries must carry meaningful visible content.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["summary"] = "Sh"
+        stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
+        assert "summary must contain meaningful release content" in stderr
+
+    def test_publish_rejects_short_public_category(self) -> None:
+        """Public categories must be at least two visible characters.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["category"] = "B"
+        stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
+        assert "category must contain meaningful release content" in stderr
+
+    def test_publish_measures_visible_text_after_stripping_markdown(self) -> None:
+        """Markdown link syntax must not inflate the meaningful-content length.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["title"] = "[#123](https://github.com/JoshCLWren/comic-pile/pull/123)"
+        result = release_writer._validate_release(json.dumps(payload))
+        assert result["title"] == (
+            "[#123](https://github.com/JoshCLWren/comic-pile/pull/123)"
+        )
+
+    def test_publish_allows_short_internal_records(self) -> None:
+        """Internal skip records are exempt from public copy quality checks.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["visibility"] = "internal"
+        payload["title"] = "T"
+        payload["summary"] = "S"
+        result = release_writer._validate_release(json.dumps(payload))
+        assert result["title"] == "T"
+        assert result["summary"] == "S"
+
+
+class TestReleaseWriterRetract:
+    """Test the retract command for removing broken public releases."""
+
+    def test_retract_validates_pr_number(self) -> None:
+        """PR number must be an integer.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        with patch.object(release_writer, "_request") as mock_request:
+            stderr = _capture_stderr(
+                release_writer._retract, "repo", "not-a-number", "abcdef1234567890"
+            )
+            assert "PR number must be an integer" in stderr
+            mock_request.assert_not_called()
+
+    def test_retract_resolves_source_then_retracts(self, capsys) -> None:
+        """Retract resolves the source identity and posts to the retract endpoint.
+
+        Args:
+            capsys: Pytest output capture helper.
+
+        Returns:
+            None.
+        """
+        with patch.object(release_writer, "_request") as mock_request:
+            mock_request.side_effect = [
+                {"exists": True, "release": {"id": 42}},
+                {"id": 42, "status": "retracted"},
+            ]
+            with patch.object(
+                release_writer, "_api_base", return_value="http://test/api"
+            ):
+                with patch.object(
+                    release_writer, "_token", return_value="test-token"
+                ):
+                    release_writer._retract(
+                        "JoshCLWren/comic-pile", "123", "abcdef1234567890"
+                    )
+            assert mock_request.call_count == 2
+            source_args = mock_request.call_args_list[0][0]
+            assert source_args[0] == "GET"
+            assert "source_repository=JoshCLWren%2Fcomic-pile" in source_args[1]
+            assert "source_pr_number=123" in source_args[1]
+            assert "source_merge_sha=abcdef1234567890" in source_args[1]
+            retract_args = mock_request.call_args_list[1][0]
+            assert retract_args[0] == "POST"
+            assert retract_args[1] == "http://test/api/42/retract"
+        output = capsys.readouterr().out
+        result = json.loads(output.strip())
+        assert result["retracted"] is True
+        assert result["release"]["id"] == 42
+
+    def test_retract_fails_when_source_is_missing(self) -> None:
+        """Retracting an unknown source identity must not invent a record.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        with patch.object(release_writer, "_request") as mock_request:
+            mock_request.return_value = {"exists": False, "release": None}
+            with patch.object(
+                release_writer, "_api_base", return_value="http://test/api"
+            ):
+                with patch.object(
+                    release_writer, "_token", return_value="test-token"
+                ):
+                    stderr = _capture_stderr(
+                        release_writer._retract,
+                        "JoshCLWren/comic-pile",
+                        "123",
+                        "abcdef1234567890",
+                    )
+            assert "no release ledger record exists for this source identity" in stderr
+
+
 class TestReleaseWriterCheck:
     """Test the check command for reconciliation."""
 

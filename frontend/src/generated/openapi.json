@@ -710,6 +710,149 @@
         "title": "ContinuityBlocker",
         "type": "object"
       },
+      "ContinuityChainDiagnostic": {
+        "description": "One structured traversal failure that does not require text parsing.",
+        "properties": {
+          "code": {
+            "enum": [
+              "cycle_detected",
+              "depth_limit_exceeded",
+              "node_limit_exceeded"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "integer"
+          },
+          "node_type": {
+            "enum": [
+              "issue",
+              "crossover"
+            ],
+            "title": "Node Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "node_type",
+          "node_id"
+        ],
+        "title": "ContinuityChainDiagnostic",
+        "type": "object"
+      },
+      "ContinuityChainNode": {
+        "description": "One structured node along a prerequisite chain.",
+        "properties": {
+          "is_readable": {
+            "title": "Is Readable",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "integer"
+          },
+          "node_type": {
+            "enum": [
+              "issue",
+              "crossover"
+            ],
+            "title": "Node Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "node_type",
+          "node_id",
+          "label",
+          "is_readable"
+        ],
+        "title": "ContinuityChainNode",
+        "type": "object"
+      },
+      "ContinuityChainResponse": {
+        "description": "Bounded transitive prerequisite chains for one requested node.",
+        "properties": {
+          "chains": {
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/ContinuityChainNode"
+              },
+              "type": "array"
+            },
+            "title": "Chains",
+            "type": "array"
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityChainDiagnostic"
+            },
+            "title": "Diagnostics",
+            "type": "array"
+          },
+          "direct_blockers": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityBlocker"
+            },
+            "title": "Direct Blockers",
+            "type": "array"
+          },
+          "evaluated_issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluated Issue Id"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "integer"
+          },
+          "node_type": {
+            "enum": [
+              "issue",
+              "thread",
+              "crossover"
+            ],
+            "title": "Node Type",
+            "type": "string"
+          },
+          "readable_prerequisites": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityChainNode"
+            },
+            "title": "Readable Prerequisites",
+            "type": "array"
+          }
+        },
+        "required": [
+          "node_type",
+          "node_id"
+        ],
+        "title": "ContinuityChainResponse",
+        "type": "object"
+      },
       "ContinuityPlanChainNode": {
         "description": "One labeled issue or crossover step in a plan prerequisite chain.",
         "properties": {
@@ -6716,6 +6859,90 @@
         ]
       }
     },
+    "/api/test/reading-orders": {
+      "post": {
+        "description": "Create a reading order (with optional items) for E2E tests.\n\nOnly available in test environments. Accepts a name and a list of\nthread_id/position items so browser tests can seed projection targets.",
+        "operationId": "create_test_reading_order_api_test_reading_orders_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Test Reading Order Api Test Reading Orders Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Test Reading Order",
+        "tags": [
+          "test",
+          "test"
+        ]
+      }
+    },
+    "/api/test/sessions/expire": {
+      "post": {
+        "description": "Expire the current active session by setting started_at to an old timestamp.\n\nThis endpoint is only available in test environment and is used for E2E testing\nof session expiry notifications.\n\nArgs:\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    Dictionary with success message.\n\nRaises:\n    HTTPException: If not in test environment or no active session found.",
+        "operationId": "expire_current_session_api_test_sessions_expire_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Expire Current Session Api Test Sessions Expire Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Expire Current Session",
+        "tags": [
+          "test",
+          "test"
+        ]
+      }
+    },
     "/api/threads/": {
       "get": {
         "description": "List threads ordered by position with cursor-based pagination.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    search: Optional case-insensitive title search filter.\n    page_size: Number of threads to return per page (default 50, max 200).\n    page_token: Token for pagination continuation (queue_position,thread_id).\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    QueueThreadListResponse with paginated threads and next_page_token if more exist.\n\nRaises:\n    HTTPException: If a retired ``collection_id`` query parameter is present.",
@@ -8034,6 +8261,126 @@
           "dependencies",
           "dependencies",
           "continuity-plans"
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/reading-orders/project": {
+      "post": {
+        "description": "Apply a projection atomically after a successful preview.\n\nThe confirm endpoint re-computes the projection and rejects the request\nif any conflict is detected. A failed or cancelled projection leaves\nboth the plan and the reading order unchanged because all mutations are\nperformed in a single transaction that rolls back on any error.",
+        "operationId": "confirm_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "title": "Plan Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingOrderProjectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingOrderProjectionResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Confirm Plan Projection",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "reading-orders"
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview": {
+      "post": {
+        "description": "Preview a deterministic projection without mutating any resource.\n\nThe preview is recomputed from the persisted plan JSON on every call so\nthat callers always see the current state, even after concurrent edits.\nDuplicate thread references, missing owned threads, and non-thread\nnodes are reported as conflicts before any mutation is permitted.",
+        "operationId": "preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "title": "Plan Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingOrderProjectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingOrderProjectionPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Plan Projection",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "reading-orders"
         ]
       }
     },
@@ -9989,6 +10336,67 @@
           }
         },
         "summary": "Get Release",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "releases"
+        ]
+      }
+    },
+    "/api/v1/releases/{release_id}/retract": {
+      "post": {
+        "description": "Retract a release so it leaves the public What's New list.",
+        "operationId": "retract_release_api_v1_releases__release_id__retract_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "release_id",
+            "required": true,
+            "schema": {
+              "title": "Release Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-release-writer-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Release-Writer-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retract Release",
         "tags": [
           "dependencies",
           "dependencies",

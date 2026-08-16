@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models.release import Release
 from app.schemas.release import (
     PublicReleaseResponse,
     ReleaseListResponse,
@@ -179,4 +180,36 @@ async def publish_release(
     except ReleaseSourceConflictError as exc:
         await db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return ReleaseResponse.model_validate(release)
+
+
+@router.post(
+    "/{release_id}/retract",
+    response_model=ReleaseResponse,
+    description="Retract a release so it leaves the public What's New list.",
+)
+async def retract_release(
+    release_id: int,
+    _: Annotated[None, Depends(require_release_writer_token)],
+    db: AsyncSession = Depends(get_db),
+) -> ReleaseResponse:
+    """Mark one release retracted so public readers no longer see it.
+
+    Args:
+        release_id: Release primary key.
+        _: Successful release-writer authorization dependency.
+        db: Async database session.
+
+    Returns:
+        The updated release with its status set to retracted.
+
+    Raises:
+        HTTPException: If no release exists with the given id.
+    """
+    release = await db.get(Release, release_id)
+    if release is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Release not found")
+    release.status = "retracted"
+    await db.commit()
+    await db.refresh(release)
     return ReleaseResponse.model_validate(release)

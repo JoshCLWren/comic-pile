@@ -88,11 +88,12 @@ export function groupReleasesByDay(releases: Release[], timeZone?: string): Rele
 function ReleaseCard({ release }: { release: Release }) {
   const title = releaseDisplayText(release.title)
   const summary = releaseDisplayText(release.summary)
+  const category = releaseDisplayText(release.category)
 
   return (
     <article className="rounded-xl border border-stone-800 bg-stone-900/50 p-4">
       <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-400">
-        {release.category}
+        {category}
       </p>
       <h3 className="mt-1 text-lg font-bold text-stone-100">{title}</h3>
       {summary !== title && (
@@ -100,6 +101,10 @@ function ReleaseCard({ release }: { release: Release }) {
       )}
     </article>
   )
+}
+
+export function isDisplayableRelease(release: Release): boolean {
+  return releaseDisplayText(release.title).length > 1
 }
 
 export default function WhatsNewPage() {
@@ -184,27 +189,31 @@ export default function WhatsNewPage() {
 
       {!loading && releases.length > 0 && (
         <div className="space-y-6">
-          {days.map(day => (
-            <section
-              key={day.key}
-              aria-labelledby={`release-day-${day.key}`}
-              className="rounded-2xl border border-stone-800 bg-stone-950/60 p-5"
-            >
-              <div className="mb-4 border-b border-stone-800 pb-3">
-                <h2 id={`release-day-${day.key}`} className="text-2xl font-black text-stone-100">
-                  {day.label}
-                </h2>
-                <p className="mt-1 text-sm text-stone-400">
-                  {day.releases.length} {day.releases.length === 1 ? 'update' : 'updates'} published this day.
-                </p>
-              </div>
-              <div className="space-y-3">
-                {day.releases.map(release => (
-                  <ReleaseCard key={release.id} release={release} />
-                ))}
-              </div>
-            </section>
-          ))}
+          {days.map(day => {
+            const visibleReleases = day.releases.filter(isDisplayableRelease)
+            if (visibleReleases.length === 0) return null
+            return (
+              <section
+                key={day.key}
+                aria-labelledby={`release-day-${day.key}`}
+                className="rounded-2xl border border-stone-800 bg-stone-950/60 p-5"
+              >
+                <div className="mb-4 border-b border-stone-800 pb-3">
+                  <h2 id={`release-day-${day.key}`} className="text-2xl font-black text-stone-100">
+                    {day.label}
+                  </h2>
+                  <p className="mt-1 text-sm text-stone-400">
+                    {visibleReleases.length} {visibleReleases.length === 1 ? 'update' : 'updates'} published this day.
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  {visibleReleases.map(release => (
+                    <ReleaseCard key={release.id} release={release} />
+                  ))}
+                </div>
+              </section>
+            )
+          })}
 
           {hasMore && (
             <div className="flex justify-center">

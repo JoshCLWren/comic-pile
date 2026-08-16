@@ -3,6 +3,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import WhatsNewPage, {
   groupReleasesByDay,
+  isDisplayableRelease,
+  releaseDisplayText,
   RELEASE_PAGE_SIZE,
   sortReleasesNewestFirst,
 } from '../pages/WhatsNewPage'
@@ -82,6 +84,19 @@ describe('release ordering helpers', () => {
     expect(days[1].label).toBe('Unknown date')
     expect(days[1].releases.map(item => item.id)).toEqual([1])
   })
+
+  it('cleans markdown from visible card copy', () => {
+    expect(releaseDisplayText(
+      '[#1058](https://github.com/JoshCLWren/comic-pile/pull/1058) persists reading lists',
+    )).toBe('#1058 persists reading lists')
+    expect(releaseDisplayText('`queue` search')).toBe('queue search')
+  })
+
+  it('hides placeholder-sized titles from the public page', () => {
+    expect(isDisplayableRelease(release({ id: 1, title: 'T' }))).toBe(false)
+    expect(isDisplayableRelease(release({ id: 2, title: 'S' }))).toBe(false)
+    expect(isDisplayableRelease(release({ id: 3, title: 'Add queue search' }))).toBe(true)
+  })
 })
 
 describe('WhatsNewPage', () => {
@@ -129,6 +144,25 @@ describe('WhatsNewPage', () => {
 
     expect(await screen.findByText('First same-day update')).toBeInTheDocument()
     expect(screen.getByText('2 updates published this day.')).toBeInTheDocument()
+  })
+
+  it('skips placeholder-sized releases so broken entries never reach the page', async () => {
+    api.list.mockResolvedValue({
+      releases: [
+        release({ id: 2, title: 'T', summary: 'S', category: 'bug' }),
+        release({ id: 1, title: 'Real release note' }),
+      ],
+      total: 2,
+      limit: RELEASE_PAGE_SIZE,
+      offset: 0,
+    })
+
+    render(<WhatsNewPage />)
+
+    expect(await screen.findByText('Real release note')).toBeInTheDocument()
+    expect(screen.queryByText('T')).not.toBeInTheDocument()
+    expect(screen.queryByText('S')).not.toBeInTheDocument()
+    expect(screen.getByText('1 update published this day.')).toBeInTheDocument()
   })
 
   it('loads older releases incrementally using the current offset', async () => {

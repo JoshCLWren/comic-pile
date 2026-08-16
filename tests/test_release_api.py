@@ -183,6 +183,118 @@ async def test_public_release_list_filters_and_orders(
     assert [item["title"] for item in second_page.json()["releases"]] == ["Release 1205"]
 
 
+@pytest.mark.asyncio
+async def test_public_release_payload_rejects_placeholder_content(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Placeholder-sized public copy must be rejected before it reaches What's New.
+
+    Args:
+        auth_client: Authenticated async API client.
+        monkeypatch: Pytest environment patch helper.
+
+    Returns:
+        None.
+    """
+    monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
+    headers = {"X-Release-Writer-Token": "writer-secret"}
+    payload = _release_payload(pr_number=1211, merge_sha="9" * 40)
+    payload["title"] = "T"
+    payload["summary"] = "S"
+
+    response = await auth_client.put("/api/v1/releases/", json=payload, headers=headers)
+
+    assert response.status_code == 422
+    errors = response.json()["errors"]
+    assert any(
+        error["message"]
+        == "Value error, title must contain meaningful release content "
+        "(at least 4 visible characters)"
+        for error in errors
+    )
+
+
+@pytest.mark.asyncio
+async def test_release_retract_requires_writer_credential(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Normal authenticated users must not retract release records.
+
+    Args:
+        auth_client: Authenticated async API client.
+        monkeypatch: Pytest environment patch helper.
+
+    Returns:
+        None.
+    """
+    monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
+
+    response = await auth_client.post("/api/v1/releases/1/retract")
+
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_release_retract_removes_public_release(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Retracted releases leave the public What's New list.
+
+    Args:
+        auth_client: Authenticated async API client.
+        monkeypatch: Pytest environment patch helper.
+
+    Returns:
+        None.
+    """
+    monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
+    headers = {"X-Release-Writer-Token": "writer-secret"}
+    payload = _release_payload(pr_number=1212, merge_sha="8" * 40)
+
+    published = await auth_client.put("/api/v1/releases/", json=payload, headers=headers)
+    assert published.status_code == 200
+    release_id = published.json()["id"]
+
+    listed = await auth_client.get("/api/v1/releases/", params={"limit": 100, "offset": 0})
+    assert any(item["id"] == release_id for item in listed.json()["releases"])
+
+    retracted = await auth_client.post(
+        f"/api/v1/releases/{release_id}/retract",
+        headers=headers,
+    )
+    assert retracted.status_code == 200
+    assert retracted.json()["id"] == release_id
+    assert retracted.json()["status"] == "retracted"
+
+    after = await auth_client.get("/api/v1/releases/", params={"limit": 100, "offset": 0})
+    assert all(item["id"] != release_id for item in after.json()["releases"])
+
+
+@pytest.mark.asyncio
+async def test_release_retract_missing_release_is_404(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Retracting an unknown release id must return not found.
+
+    Args:
+        auth_client: Authenticated async API client.
+        monkeypatch: Pytest environment patch helper.
+
+    Returns:
+        None.
+    """
+    monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
+    headers = {"X-Release-Writer-Token": "writer-secret"}
+
+    response = await auth_client.post("/api/v1/releases/999999/retract", headers=headers)
+
+    assert response.status_code == 404
+
+
 def _release_payload(*, pr_number: int, merge_sha: str) -> dict[str, object]:
     """Build a valid merged-PR-backed release payload for API tests."""
     now = datetime.now(UTC).isoformat()
