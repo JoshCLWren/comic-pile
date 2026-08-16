@@ -2,7 +2,7 @@
 """Deterministic assignment and lease reconciliation for ComicPile factories.
 
 The control plane owns repository-wide prioritization. Fixed-model workers only
-execute the target currently leased to their factory:<n> owner label.
+execute the target currently leased to their ``factory:<n>`` owner label.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from datetime import datetime
 from typing import Any, Iterable
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
-LOCAL_LEASE_TTL_SECONDS = int(os.environ.get("FACTORY_LOCAL_LEASE_TTL_SECONDS", "8100"))
+LOCAL_LEASE_TTL_SECONDS = int(os.environ.get("FACTORY_LOCAL_LEASE_TTL_SECONDS", "3600"))
 NON_EXECUTABLE_ISSUES = {679, 1093, 1109}
 
 OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-3][0-9]|4[0-6])$")
@@ -52,6 +52,7 @@ LEASE_ACTIVITY_PATTERNS = (
     re.compile(r"comic-pile-factory-fix-(?:claim|progress)-v3:[^:>]+:[^:>]+:(\d{10})"),
     re.compile(r"comic-pile-factory-review-claim-v2:[^:>]+:[^:>]+:(\d{10})"),
 )
+TRUSTED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
 
 
 @dataclass(frozen=True)
@@ -77,13 +78,9 @@ def parse_time(value: str | None) -> float:
 
 
 def labels_of(item: dict[str, Any]) -> set[str]:
-    labels = item.get("labels") or []
     result: set[str] = set()
-    for label in labels:
-        if isinstance(label, dict):
-            name = label.get("name")
-        else:
-            name = label
+    for label in item.get("labels") or []:
+        name = label.get("name") if isinstance(label, dict) else label
         if name:
             result.add(str(name))
     return result
@@ -93,10 +90,10 @@ def owner_of(labels: Iterable[str]) -> str | None:
     owners = [label for label in labels if OWNER_RE.fullmatch(label)]
     active = [label for label in owners if label != "factory:unowned"]
     if active:
+        # Multiple active owners are an inconsistent state, but they are still
+        # occupied. Returning one prevents accidental theft until reconciliation.
         return sorted(active)[0]
-    if "factory:unowned" in owners:
-        return "factory:unowned"
-    return None
+    return "factory:unowned" if "factory:unowned" in owners else None
 
 
 def priority_rank(labels: Iterable[str]) -> int:
@@ -121,14 +118,12 @@ def linked_issue_from_branch(branch: str | None) -> int | None:
     return int(match.group(1)) if match else None
 
 
-def is_infrastructure(labels: set[str]) -> bool:
-    return bool(labels & INFRA_LABELS)
-
-
 def provenance_lane(labels: set[str]) -> int:
+    # Provenance beats generic bug classification. E2E-discovered bugs stay in
+    # their explicit fallback lane even if another generic label is present.
     if "e2e-discovered" in labels:
         return 4
-    if is_infrastructure(labels):
+    if labels & INFRA_LABELS:
         return 5
     if "user-reported" in labels and "bug" in labels:
         return 1
@@ -136,15 +131,14 @@ def provenance_lane(labels: set[str]) -> int:
 
 
 def item_is_unowned(labels: set[str]) -> bool:
-    owner = owner_of(labels)
-    return owner in (None, "factory:unowned")
+    return owner_of(labels) in (None, "factory:unowned")
 
 
-def issue_is_static_candidate(issue: dict[str, Any], open_pr_issue_numbers: set[int]) -> bool:
+def issue_is_static_candidate(issue: dict[str, Any], suppressing_pr_issues: set[int]) -> bool:
     number = int(issue["number"])
     labels = labels_of(issue)
     title = str(issue.get("title") or "")
-    if number in NON_EXECUTABLE_ISSUES or number in open_pr_issue_numbers:
+    if number in NON_EXECUTABLE_ISSUES or number in suppressing_pr_issues:
         return False
     if title.startswith(("Epic:", "PRD:")):
         return False
@@ -174,19 +168,33 @@ def pr_is_static_candidate(pr: dict[str, Any], issue_map: dict[int, dict[str, An
     return True
 
 
+def pr_suppresses_issue_candidate(pr: dict[str, Any], issue_map: dict[int, dict[str, Any]]) -> bool:
+    """Return whether this PR should stand in for its linked issue in the queue.
+
+    Ready PRs are owned by the merge controller. Other PRs suppress duplicate
+    issue implementation only when the PR itself is executable. Draft, blocked,
+    or otherwise ineligible PRs must never make the linked issue disappear.
+    """
+    labels = labels_of(pr)
+    if "factory:ready" in labels and not pr.get("isDraft"):
+        return True
+    return pr_is_static_candidate(pr, issue_map)
+
+
 def build_candidates(
     issues: list[dict[str, Any]], prs: list[dict[str, Any]]
 ) -> list[Candidate]:
     issue_map = {int(issue["number"]): issue for issue in issues}
-    open_pr_issue_numbers = {
+    suppressing_pr_issues = {
         linked
         for pr in prs
         if (linked := linked_issue_from_branch(pr.get("headRefName"))) is not None
+        and pr_suppresses_issue_candidate(pr, issue_map)
     }
     candidates: list[Candidate] = []
 
     for issue in issues:
-        if not issue_is_static_candidate(issue, open_pr_issue_numbers):
+        if not issue_is_static_candidate(issue, suppressing_pr_issues):
             continue
         labels = labels_of(issue)
         candidates.append(
@@ -208,8 +216,8 @@ def build_candidates(
             labels |= labels_of(issue_map[linked])
         lane = provenance_lane(labels)
         if lane == 1:
-            # A PR is repair/finish work, not a fresh user report. It comes
-            # immediately after new user-reported bugs.
+            # Existing repair/finish work directly landing a user-reported bug
+            # sits immediately after fresh user-reported bug implementation.
             lane = 2
         candidates.append(
             Candidate(
@@ -241,6 +249,9 @@ def lease_is_stale(
     local_ttl_seconds: int = LOCAL_LEASE_TTL_SECONDS,
 ) -> bool:
     if owner == "factory:local":
+        # Never reap local merely from label age. Require a trusted lease marker
+        # so the controller has positive evidence that the local lease existed
+        # and then stopped receiving progress.
         return (
             latest_activity_epoch is not None
             and now_epoch - latest_activity_epoch > local_ttl_seconds
@@ -336,8 +347,8 @@ def issue_has_open_blocker(number: int) -> bool:
             ["api", f"repos/{REPO}/issues/{number}/dependencies/blocked_by?per_page=100"]
         )
     except RuntimeError:
-        # Native dependency API availability should not make the control plane
-        # claim uncertain work. Fail closed.
+        # Dependency uncertainty must not cause the controller to claim work it
+        # cannot prove executable.
         return True
     return any(item.get("state") == "open" for item in blockers or [])
 
@@ -361,11 +372,11 @@ def required_checks_failed(pr_number: int) -> bool:
         check=False,
     )
     if not proc.stdout.strip():
-        return proc.returncode == 1
+        return False
     try:
         checks = json.loads(proc.stdout)
     except json.JSONDecodeError:
-        return proc.returncode == 1
+        return False
     failure_states = {
         "FAILURE",
         "ERROR",
@@ -384,9 +395,8 @@ def candidate_is_live_executable(candidate: Candidate) -> bool:
     labels = {label["name"] for label in target.get("labels", [])}
     if "factory:ci" in labels:
         return required_checks_failed(candidate.number)
-    # review/changes-requested/building/unclassified PR work is executable:
-    # the worker can inspect the exact head and either repair it or prove it
-    # ready. factory:ready was filtered before this point.
+    # Review/changes-requested/building/unclassified PR work is executable: the
+    # worker can inspect the exact head and either repair it or prove it ready.
     return True
 
 
@@ -406,6 +416,9 @@ def assign_candidate(candidate: Candidate, worker: str) -> bool:
         if issue and issue.get("state") == "open":
             numbers.insert(0, candidate.linked_issue)
 
+    # Dispatcher serialization protects fixed-vs-fixed selection. This final
+    # read also protects against a local/interactive takeover between ranking
+    # and mutation.
     for number in numbers:
         if not target_still_unowned(number):
             return False
@@ -425,6 +438,16 @@ def assign_candidate(candidate: Candidate, worker: str) -> bool:
     return True
 
 
+def flatten_pages(pages: Any) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for page in pages or []:
+        if isinstance(page, list):
+            result.extend(item for item in page if isinstance(item, dict))
+        elif isinstance(page, dict):
+            result.append(page)
+    return result
+
+
 def latest_lease_activity_epoch(number: int) -> int | None:
     try:
         pages = gh_json(
@@ -432,12 +455,9 @@ def latest_lease_activity_epoch(number: int) -> int | None:
         )
     except RuntimeError:
         return None
-    comments = [comment for page in (pages or []) for comment in (page or [])]
     latest: int | None = None
-    for comment in comments:
-        if not isinstance(comment, dict):
-            continue
-        if comment.get("author_association") not in {"OWNER", "MEMBER", "COLLABORATOR"}:
+    for comment in flatten_pages(pages):
+        if comment.get("author_association") not in TRUSTED_ASSOCIATIONS:
             continue
         body = str(comment.get("body") or "")
         for pattern in LEASE_ACTIVITY_PATTERNS:
@@ -468,14 +488,17 @@ def active_fixed_workers() -> set[int]:
         if match:
             workers.add(int(match.group(1)))
         else:
-            unresolved_run_ids.add(str(run.get("id") or ""))
+            run_id = str(run.get("id") or "")
+            if run_id:
+                unresolved_run_ids.add(run_id)
 
     if unresolved_run_ids:
         pages = gh_json(
             ["api", "--paginate", "--slurp", f"repos/{REPO}/issues/1093/comments?per_page=100"]
         )
-        comments = [comment for page in (pages or []) for comment in (page or [])]
-        for comment in comments:
+        for comment in flatten_pages(pages):
+            if comment.get("author_association") not in TRUSTED_ASSOCIATIONS:
+                continue
             body = str(comment.get("body") or "")
             run_match = re.search(r"(?m)^Run:\s*(\d+)\s*$", body)
             worker_match = re.search(
@@ -486,11 +509,15 @@ def active_fixed_workers() -> set[int]:
     return workers
 
 
-def owned_targets() -> list[tuple[int, str]]:
+def owned_targets(
+    issues: list[dict[str, Any]] | None = None,
+    prs: list[dict[str, Any]] | None = None,
+) -> list[tuple[int, str]]:
     targets: list[tuple[int, str]] = []
-    for item in [*list_issues(), *list_prs()]:
-        labels = labels_of(item)
-        owner = owner_of(labels)
+    issue_items = list_issues() if issues is None else issues
+    pr_items = list_prs() if prs is None else prs
+    for item in [*issue_items, *pr_items]:
+        owner = owner_of(labels_of(item))
         if owner and owner != "factory:unowned":
             targets.append((int(item["number"]), owner))
     return targets
@@ -518,9 +545,23 @@ def reconcile_stale_leases(now_epoch: int | None = None) -> list[int]:
     return released
 
 
+def worker_has_active_lease(worker: str) -> bool:
+    owner = f"factory:{worker}"
+    return any(current_owner == owner for _, current_owner in owned_targets())
+
+
 def assign(worker: str) -> Candidate | None:
     if not re.fullmatch(r"(?:[6-9]|[1-3][0-9]|4[0-6])", worker):
         raise SystemExit(f"unsupported fixed-model worker: {worker}")
+
+    # A worker with a live lease is already busy. Do not queue a second target
+    # behind it and do not revive affinity to the existing target.
+    if worker_has_active_lease(worker):
+        print(
+            f"[factory-controller] Factory {worker} already has an active lease; skipping dispatch",
+            file=sys.stderr,
+        )
+        return None
 
     candidates = build_candidates(list_issues(), list_prs())
     for candidate in candidates:
@@ -550,7 +591,6 @@ def release_worker(worker: str) -> list[int]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
-
     subparsers.add_parser("reconcile")
 
     assign_parser = subparsers.add_parser("assign")
@@ -562,8 +602,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.command == "reconcile":
-        released = reconcile_stale_leases()
-        print(json.dumps({"released": released}))
+        print(json.dumps({"released": reconcile_stale_leases()}))
         return 0
 
     if args.command == "assign":
@@ -584,8 +623,7 @@ def main() -> int:
         )
         return 0
 
-    released = release_worker(args.worker)
-    print(json.dumps({"released": released}))
+    print(json.dumps({"released": release_worker(args.worker)}))
     return 0
 
 
