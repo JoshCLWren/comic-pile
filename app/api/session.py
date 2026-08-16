@@ -86,6 +86,461 @@ async def _fetch_thread_issue_metadata(
     return None, None
 
 
+async def _bulk_unread_counts(threads: list[Thread], db: AsyncSession) -> dict[int, int]:
+    """Bulk-load unread issue counts for migrated threads in one grouped query.
+
+    Unmigrated threads (``total_issues`` null) fall back to their stored
+    ``issues_remaining`` value and are omitted from the returned map.
+
+    Args:
+        threads: Threads that may appear as an active thread in the History page.
+        db: Database session.
+
+    Returns:
+        Mapping of migrated thread ID to its unread issue count.
+    """
+    migrated_ids = [t.id for t in threads if t.uses_issue_tracking()]
+    if not migrated_ids:
+        return {}
+
+    result = await db.execute(
+        select(Issue.thread_id, func.count())
+        .where(Issue.thread_id.in_(migrated_ids))
+        .where(Issue.status == "unread")
+        .group_by(Issue.thread_id)
+    )
+    return {row[0]: row[1] for row in result.all()}
+
+
+async def _bulk_next_issue_numbers(threads: list[Thread], db: AsyncSession) -> dict[int, str]:
+    """Bulk-load next-unread issue numbers in one query.
+
+    Args:
+        threads: Threads that may appear as an active thread in the History page.
+        db: Database session.
+
+    Returns:
+        Mapping of issue ID to issue number for every referenced next-unread issue.
+    """
+    issue_ids = {
+        t.next_unread_issue_id
+        for t in threads
+        if t.uses_issue_tracking() and t.next_unread_issue_id is not None
+    }
+    if not issue_ids:
+        return {}
+
+    result = await db.execute(select(Issue.id, Issue.issue_number).where(Issue.id.in_(issue_ids)))
+    return {row[0]: row[1] for row in result.all()}
+
+
+class _SessionReadProjection:
+    """Bulk projection for session-read endpoints.
+
+    Consolidates the session row, snapshot count, relevant events, thread
+    data, and derived active-thread info into a minimal set of queries so
+    that current-session and session-details responses can be assembled
+    without per-entity helper round trips.
+    """
+
+    def __init__(
+        self,
+        sessions_by_id: dict[int, SessionModel],
+        events_by_type: _SessionReadEvents,
+        threads_by_id: dict[int, Thread],
+        unread_counts: dict[int, int],
+        issue_numbers: dict[int, str],
+    ) -> None:
+        self.sessions_by_id = sessions_by_id
+        self.events_by_type = events_by_type
+        self.threads_by_id = threads_by_id
+        self.unread_counts = unread_counts
+        self.issue_numbers = issue_numbers
+
+    @staticmethod
+    async def collect(
+        db: AsyncSession,
+        user_id: int,
+        specific_session_id: int | None = None,
+        include_all_events: bool = False,
+    ) -> _SessionReadProjection:
+        """Build the projection for a user's session reads.
+
+        Args:
+            db: Async database session.
+            user_id: User whose sessions are being read.
+            specific_session_id: When given, restricts the event queue to
+                one session (used by the session-details endpoint).
+            include_all_events: When True, includes every event for
+                ``specific_session_id`` so the narrative summary has
+                complete input without issuing a separate query.
+
+        Returns:
+            Populated projection ready for response assembly.
+        """
+        session_query = (
+            select(
+                SessionModel.id,
+                SessionModel.started_at,
+                SessionModel.ended_at,
+                SessionModel.start_die,
+                SessionModel.manual_die,
+                SessionModel.user_id,
+                SessionModel.pending_thread_id,
+                SessionModel.pending_issue_id,
+                SessionModel.pending_thread_updated_at,
+                SessionModel.snoozed_thread_ids,
+                func.count(Snapshot.id).label("snapshot_count"),
+            )
+            .outerjoin(Snapshot, Snapshot.session_id == SessionModel.id)
+            .where(SessionModel.user_id == user_id)
+            .where(SessionModel.ended_at.is_(None))
+            .group_by(
+                SessionModel.id,
+                SessionModel.started_at,
+                SessionModel.ended_at,
+                SessionModel.start_die,
+                SessionModel.manual_die,
+                SessionModel.user_id,
+                SessionModel.pending_thread_id,
+                SessionModel.pending_issue_id,
+                SessionModel.pending_thread_updated_at,
+                SessionModel.snoozed_thread_ids,
+            )
+            .order_by(
+                func.coalesce(
+                    SessionModel.pending_thread_updated_at,
+                    SessionModel.started_at,
+                ).desc()
+            )
+        )
+        if specific_session_id is not None:
+            session_query = session_query.where(SessionModel.id == specific_session_id)
+        session_rows = (await db.execute(session_query)).all()
+
+        sessions_by_id: dict[int, SessionModel] = {}
+        snapshot_counts: dict[int, int] = {}
+        snoozed_ids_by_session: dict[int, list[int]] = {}
+        for row in session_rows:
+            sid, started_at, ended_at, start_die, manual_die, uid, ptid, piid, ptua, stids, sc = row
+            s = SessionModel(
+                id=sid,
+                started_at=started_at,
+                ended_at=ended_at,
+                start_die=start_die,
+                manual_die=manual_die,
+                user_id=uid,
+                pending_thread_id=ptid,
+                pending_issue_id=piid,
+                pending_thread_updated_at=ptua,
+                snoozed_thread_ids=stids,
+            )
+            sessions_by_id[sid] = s
+            snapshot_counts[sid] = sc or 0
+            snoozed_ids_by_session[sid] = stids or []
+
+        session_ids = list(sessions_by_id.keys())
+        if not session_ids:
+            return _SessionReadProjection(
+                sessions_by_id=sessions_by_id,
+                events_by_type=_SessionReadEvents(),
+                threads_by_id={},
+                unread_counts={},
+                issue_numbers={},
+            )
+
+        action_types = ("roll", "rate", "snooze", "rolled_but_skipped")
+        ladder_types = ("rate", "snooze", "undo")
+
+        rolled_events: dict[int, list[Event]] = {}
+        ladder_events_by_session: dict[int, list[Event]] = {}
+        all_events_by_session: dict[int, list[Event]] = {}
+        if specific_session_id is not None and include_all_events:
+            all_rows = (
+                await db.execute(
+                    select(Event)
+                    .where(Event.session_id == specific_session_id)
+                    .order_by(Event.timestamp, Event.id)
+                )
+            ).scalars().all()
+            all_events_by_session[specific_session_id] = list(all_rows)
+            for ev in all_events_by_session[specific_session_id]:
+                if ev.type in action_types:
+                    rolled_events.setdefault(specific_session_id, []).append(ev)
+                if ev.type in ladder_types and ev.die_after is not None:
+                    ladder_events_by_session.setdefault(specific_session_id, []).append(
+                        ev
+                    )
+        else:
+            result = (
+                await db.execute(
+                    select(Event)
+                    .where(Event.session_id.in_(session_ids))
+                    .where(Event.type.in_(action_types))
+                    .order_by(Event.session_id, Event.timestamp.desc(), Event.id.desc())
+                )
+            ).scalars().all()
+            for ev in result:
+                sid = ev.session_id
+                assert sid is not None
+                rolled_events.setdefault(sid, []).append(ev)
+
+            ladder_rows = (
+                await db.execute(
+                    select(Event)
+                    .where(Event.session_id.in_(session_ids))
+                    .where(Event.type.in_(ladder_types))
+                    .where(Event.die_after.is_not(None))
+                    .order_by(Event.session_id, Event.timestamp, Event.id)
+                )
+            ).scalars().all()
+            for ev in ladder_rows:
+                sid = ev.session_id
+                assert sid is not None
+                ladder_events_by_session.setdefault(sid, []).append(ev)
+
+        rolled_events_by_session = {
+            sid: list(events[:1]) for sid, events in rolled_events.items()
+        }
+        for sid in session_ids:
+            ladder_events_by_session.setdefault(sid, [])
+            rolled_events_by_session.setdefault(sid, [])
+
+        thread_ids = {
+            ev.thread_id
+            for events in rolled_events.values()
+            for ev in events
+            if ev.thread_id is not None
+        } | {
+            ev.thread_id
+            for events in ladder_events_by_session.values()
+            for ev in events
+            if ev.thread_id is not None
+        }
+        thread_ids = {tid for tid in thread_ids if tid is not None}
+
+        threads_by_id: dict[int, Thread] = {}
+        if thread_ids:
+            threads_result = (
+                await db.execute(select(Thread).where(Thread.id.in_(thread_ids)))
+            ).scalars().all()
+            threads_by_id = {t.id: t for t in threads_result}
+
+        migrated_ids = [
+            t.id for t in threads_by_id.values() if t.uses_issue_tracking()
+        ]
+        unread_counts: dict[int, int] = {}
+        if migrated_ids:
+            unread_rows = (
+                await db.execute(
+                    select(Issue.thread_id, func.count())
+                    .where(Issue.thread_id.in_(migrated_ids))
+                    .where(Issue.status == "unread")
+                    .group_by(Issue.thread_id)
+                )
+            ).all()
+            unread_counts = {row[0]: row[1] for row in unread_rows}
+
+        issue_ids = {
+            t.next_unread_issue_id
+            for t in threads_by_id.values()
+            if t.uses_issue_tracking() and t.next_unread_issue_id is not None
+        }
+        issue_numbers: dict[int, str] = {}
+        if issue_ids:
+            issue_rows = (
+                await db.execute(
+                    select(Issue.id, Issue.issue_number).where(Issue.id.in_(issue_ids))
+                )
+            ).all()
+            issue_numbers = {row[0]: row[1] for row in issue_rows}
+
+        events_by_type = _SessionReadEvents(
+            rolled=rolled_events_by_session,
+            ladder=ladder_events_by_session,
+            all_by_session=all_events_by_session,
+        )
+
+        return _SessionReadProjection(
+            sessions_by_id=sessions_by_id,
+            events_by_type=events_by_type,
+            threads_by_id=threads_by_id,
+            unread_counts=unread_counts,
+            issue_numbers=issue_numbers,
+        )
+
+
+class _SessionReadEvents:
+    """Event sets derived from the session read projection."""
+
+    def __init__(
+        self,
+        rolled: dict[int, list[Event]] | None = None,
+        ladder: dict[int, list[Event]] | None = None,
+        all_by_session: dict[int, list[Event]] | None = None,
+    ) -> None:
+        self.rolled = rolled or {}
+        self.ladder = ladder or {}
+        self.all_by_session = all_by_session or {}
+
+
+def _build_ladder_path(
+    session: SessionModel,
+    events_by_type: _SessionReadEvents,
+) -> str:
+    """Build dice ladder path string from pre-fetched session state and events.
+
+    Args:
+        session: Session ORM instance (already fetched).
+        events_by_type: Pre-fetched event collections.
+
+    Returns:
+        Dice path string like "d6 → d8 → d10".
+    """
+    ladder_evts = events_by_type.ladder.get(session.id, [])
+    ladder_evts = [ev for ev in ladder_evts if ev.die_after is not None]
+    if not ladder_evts:
+        return str(session.start_die)
+    path: list[int] = [session.start_die]
+    for ev in ladder_evts:
+        if ev.die_after is not None:
+            path.append(ev.die_after)
+    return " → ".join(str(d) for d in path)
+
+
+def _build_current_die(
+    session: SessionModel,
+    events_by_type: _SessionReadEvents,
+) -> int:
+    """Derive current die from pre-fetched session state and die-change events.
+
+    Args:
+        session: Session ORM instance (already fetched).
+        events_by_type: Pre-fetched event collections.
+
+    Returns:
+        Current die size to display.
+    """
+    if session.manual_die is not None:
+        return session.manual_die
+    ladder_evts = events_by_type.ladder.get(session.id, [])
+    ladder_evts = [ev for ev in ladder_evts if ev.die_after is not None]
+    if ladder_evts:
+        die_after = ladder_evts[-1].die_after
+        if die_after is not None:
+            return die_after
+    return session.start_die
+
+
+def _build_active_thread_info(
+    session: SessionModel,
+    events_by_type: _SessionReadEvents,
+    threads_by_id: dict[int, Thread],
+    unread_counts: dict[int, int],
+    issue_numbers: dict[int, str],
+) -> ActiveThreadInfo | None:
+    """Build active thread info from pre-fetched projection data.
+
+    Args:
+        session: Session ORM instance.
+        events_by_type: Pre-fetched event collections.
+        threads_by_id: Threads keyed by ID from the projection.
+        unread_counts: Unread issue counts per migrated thread ID.
+        issue_numbers: Next issue numbers per unread issue ID.
+
+    Returns:
+        ActiveThreadInfo if an active thread exists, else None.
+    """
+    event_batch = events_by_type.rolled.get(session.id, [])
+    event_batch = event_batch[:1]
+    last_event: Event | None = next(iter(event_batch), None)
+    last_event = last_event if (last_event and last_event.type == "roll") else None
+    last_rolled_result: str | None = last_event.result if last_event else None
+
+    target_thread_id: int | None = session.pending_thread_id
+    if target_thread_id is None and last_event and last_event.selected_thread_id:
+        target_thread_id = last_event.selected_thread_id
+    if target_thread_id is None:
+        return None
+
+    thread = threads_by_id.get(target_thread_id)
+    if thread is None or thread.user_id != session.user_id:
+        return None
+
+    issues_remaining = (
+        unread_counts.get(thread.id, thread.issues_remaining)
+        if thread.uses_issue_tracking()
+        else thread.issues_remaining
+    )
+    issue_id: int | None = None
+    issue_number: str | None = None
+    if thread.uses_issue_tracking() and thread.next_unread_issue_id is not None:
+        resolved = issue_numbers.get(thread.next_unread_issue_id)
+        if resolved is not None:
+            issue_id = thread.next_unread_issue_id
+            issue_number = resolved
+
+    return ActiveThreadInfo(
+        id=thread.id,
+        title=thread.title,
+        format=thread.format,
+        issues_remaining=issues_remaining,
+        queue_position=thread.queue_position,
+        last_rolled_result=last_rolled_result,
+        total_issues=thread.total_issues,
+        reading_progress=thread.reading_progress,
+        issue_id=issue_id,
+        issue_number=issue_number,
+        next_issue_id=issue_id,
+        next_issue_number=issue_number,
+    )
+
+
+async def _compute_session_response(
+    session: SessionModel,
+    projection: _SessionReadProjection,
+    snapshot_count: int,
+    snoozed_threads: list[SnoozedThreadInfo],
+) -> SessionResponse:
+    """Assemble a SessionResponse from pre-fetched projection data.
+
+    Args:
+        session: Session ORM instance.
+        projection: Pre-computed session read projection.
+        snapshot_count: Snapshot count already extracted.
+        snoozed_threads: Snoozed thread summaries already collected.
+
+    Returns:
+        Fully assembled SessionResponse.
+    """
+    ladder_path = _build_ladder_path(session, projection.events_by_type)
+    current_die = _build_current_die(session, projection.events_by_type)
+    active_thread = _build_active_thread_info(
+        session,
+        projection.events_by_type,
+        projection.threads_by_id,
+        projection.unread_counts,
+        projection.issue_numbers,
+    )
+    return SessionResponse(
+        id=session.id,
+        started_at=session.started_at,
+        ended_at=session.ended_at,
+        start_die=session.start_die,
+        manual_die=session.manual_die,
+        user_id=session.user_id,
+        ladder_path=ladder_path,
+        active_thread=active_thread,
+        current_die=current_die,
+        last_rolled_result=active_thread.last_rolled_result if active_thread else None,
+        has_restore_point=snapshot_count > 0,
+        snapshot_count=snapshot_count,
+        snoozed_thread_ids=session.snoozed_thread_ids or [],
+        snoozed_threads=snoozed_threads,
+        pending_thread_id=session.pending_thread_id,
+    )
+
+
 async def get_session_with_thread_safe(
     session_id: int, db: AsyncSession
 ) -> tuple[SessionModel | None, ActiveThreadInfo | None]:
@@ -852,6 +1307,7 @@ async def restore_session_start(
                 )
 
             threads_to_recount: list[Thread] = []
+
             for thread_id, state in snapshot.thread_states.items():
                 thread_id_int = int(thread_id)
                 thread = await db.get(Thread, thread_id_int)
@@ -929,6 +1385,7 @@ async def restore_session_start(
 
                     if "issue_states" in state and state["issue_states"] is not None:
                         max_position = 0
+
                         for issue_state in state["issue_states"]:
                             position = issue_state.get("position", max_position + 1)
                             if position > max_position:
