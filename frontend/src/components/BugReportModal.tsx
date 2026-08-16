@@ -153,7 +153,7 @@ export default function BugReportModal({
         {diagnosticData && (
           <div className="text-[10px] text-stone-400 flex items-center gap-1">
             <span aria-hidden="true" className="text-amber-500">i</span>
-            <span>Browser info and console errors will be included</span>
+            <span>Browser info &amp; console errors will be included</span>
           </div>
         )}
 
