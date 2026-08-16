@@ -278,7 +278,7 @@ export function RatingView({
           data-testid="save-and-continue"
           className="w-full rounded-xl border border-amber-600/50 bg-amber-600/25 py-3.5 text-xs font-black uppercase tracking-[0.15em] transition hover:bg-amber-600/35 focus:ring-2 focus:ring-amber-500 disabled:opacity-50 active:scale-[0.98]"
         >
-          {rateIsPending ? 'Saving…' : issuesRemaining === 1 ? 'Mark read & complete' : 'Mark read & save'}
+          {rateIsPending ? 'Saving…' : issuesRemaining === 1 ? 'Save & Complete' : 'Save & Continue'}
         </button>
         <div className="flex gap-2">
           <button

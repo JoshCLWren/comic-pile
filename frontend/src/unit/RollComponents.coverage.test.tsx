@@ -122,7 +122,7 @@ describe('RatingView', () => {
     const rating = screen.getByRole('slider')
     fireEvent.change(rating, { target: { value: '3' } })
     expect(onUpdateRating).toHaveBeenCalledWith('3')
-    await user.click(screen.getByRole('button', { name: /mark read & save/i }))
+    await user.click(screen.getByRole('button', { name: /save & continue/i }))
     await user.click(screen.getByRole('button', { name: /snooze/i }))
     expect(onSubmitRating).toHaveBeenCalled()
     expect(onSnooze).toHaveBeenCalled()
@@ -189,7 +189,7 @@ describe('RatingView', () => {
     />)
     expect(screen.getByText('Saga')).toBeInTheDocument()
     expect(screen.getByText('Die stays the same')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Mark read & save' }))
+    await user.click(screen.getByRole('button', { name: 'Save & Continue' }))
     expect(callbacks.onSubmitRating).toHaveBeenCalledWith(false)
   })
 
