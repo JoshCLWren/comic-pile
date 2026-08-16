@@ -23,3 +23,10 @@ def test_ready_drain_reuses_dispatch_runner_without_blocking_dispatch() -> None:
     assert '\n  drain-ready:\n' not in dispatcher
     assert 'continue-on-error: true' in dispatcher
     assert dispatcher.index('Drain exact-head ready factory PRs') < dispatcher.index('Resolve and dispatch fixed workers')
+
+
+def test_pr_ci_cancels_superseded_heads_without_canceling_main() -> None:
+    ci = Path('.github/workflows/ci.yml').read_text(encoding='utf-8')
+
+    assert 'group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}' in ci
+    assert "cancel-in-progress: ${{ github.event_name == 'pull_request' }}" in ci
