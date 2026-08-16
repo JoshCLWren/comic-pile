@@ -180,3 +180,54 @@ async def publish_release(
         await db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return ReleaseResponse.model_validate(release)
+
+
+@router.post(
+    "/{release_id}/retract",
+    response_model=ReleaseResponse,
+    description="Retract a release so it leaves the public What's New list.",
+)
+async def retract_release(
+    release_id: int,
+    _: Annotated[None, Depends(require_release_writer_token)],
+    db: AsyncSession = Depends(get_db),
+    x_release_writer_token: Annotated[str | None, Header()] = None,
+) -> ReleaseResponse:
+    """Retract a release so it leaves the public What's New list.
+
+    Args:
+        release_id: The release to retract.
+        _: Successful release-writer authorization dependency.
+        db: Async database session.
+        x_release_writer_token: Release-writer credential supplied by trusted automation.
+
+    Returns:
+        The retracted release.
+
+    Raises:
+        HTTPException: If release writing is unconfigured, the credential is invalid,
+            or the release is not found.
+    """
+    expected = os.getenv("RELEASE_WRITER_TOKEN", "").strip()
+    if not expected:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Release writer authorization is not configured",
+        )
+    if x_release_writer_token is None or not secrets.compare_digest(
+        x_release_writer_token,
+        expected,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid release writer credential",
+        )
+
+    release = await get_published_release(db, release_id)
+    if release is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Release not found")
+
+    release.status = "retracted"
+    await db.commit()
+    await db.refresh(release)
+    return ReleaseResponse.model_validate(release)
