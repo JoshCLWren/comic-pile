@@ -3019,6 +3019,23 @@
         "title": "ReadingOrderItemResponse",
         "type": "object"
       },
+      "ReadingOrderListResponse": {
+        "description": "Response schema for listing all reading orders owned by a user.",
+        "properties": {
+          "reading_orders": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderSummary"
+            },
+            "title": "Reading Orders",
+            "type": "array"
+          }
+        },
+        "required": [
+          "reading_orders"
+        ],
+        "title": "ReadingOrderListResponse",
+        "type": "object"
+      },
       "ReadingOrderProjectionConflict": {
         "description": "A single conflict blocking a projection.",
         "properties": {
@@ -3280,6 +3297,41 @@
           "completed_items"
         ],
         "title": "ReadingOrderResponse",
+        "type": "object"
+      },
+      "ReadingOrderSummary": {
+        "description": "Compact reading order metadata for projection and picker surfaces.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "total_items": {
+            "default": 0,
+            "title": "Total Items",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ReadingOrderSummary",
         "type": "object"
       },
       "RefreshTokenRequest": {
@@ -9578,6 +9630,34 @@
           "dependencies",
           "dependencies",
           "reading-order-groups"
+        ]
+      }
+    },
+    "/api/v1/reading-orders/": {
+      "get": {
+        "description": "List reading orders owned by the current user, ordered by name.",
+        "operationId": "list_reading_orders_api_v1_reading_orders__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingOrderListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Reading Orders",
+        "tags": [
+          "reading-orders",
+          "reading-orders"
         ]
       }
     },

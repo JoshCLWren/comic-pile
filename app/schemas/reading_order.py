@@ -30,6 +30,21 @@ class ThreadReadingOrdersResponse(BaseModel):
     reading_orders: list[ReadingOrderResponse]
 
 
+class ReadingOrderSummary(BaseModel):
+    """Compact reading order metadata for projection and picker surfaces."""
+
+    id: int
+    name: str
+    description: str | None = None
+    total_items: int = 0
+
+
+class ReadingOrderListResponse(BaseModel):
+    """Response schema for listing all reading orders owned by a user."""
+
+    reading_orders: list[ReadingOrderSummary]
+
+
 class ReadingOrderProjectionEntry(BaseModel):
     """One row in a projected reading order preview."""
 

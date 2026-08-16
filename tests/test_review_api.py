@@ -1,5 +1,7 @@
 """Removal-contract tests for the retired Reviews API."""
 
+import re
+
 import pytest
 from httpx import AsyncClient
 
@@ -36,9 +38,7 @@ async def test_reviews_are_absent_from_openapi(auth_client: AsyncClient) -> None
 
     assert response.status_code == 200
     paths = response.json()["paths"]
-    # Check for actual Reviews API paths (e.g., /api/v1/reviews/...), not
-    # incidental substrings like "preview" in other endpoints.
-    assert not any(
-        "/review" in path.lower().split("/")[3:] or path.lower().count("/review") > 1
-        for path in paths
-    )
+    # Check for actual Reviews API paths (e.g., /api/v1/reviews/... and
+    # /api/threads/{id}/reviews), not incidental substrings like "preview"
+    # in other endpoints. The retired surface must stay unregistered.
+    assert not any(re.search(r"/reviews?(?=/|$)", path) for path in paths)

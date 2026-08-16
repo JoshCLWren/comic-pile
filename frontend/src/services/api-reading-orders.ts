@@ -21,7 +21,76 @@ export interface ThreadReadingOrdersResponse {
   reading_orders: ReadingOrder[]
 }
 
+export interface ReadingOrderSummary {
+  id: number
+  name: string
+  description: string | null
+  total_items: number
+}
+
+export interface ReadingOrderListResponse {
+  reading_orders: ReadingOrderSummary[]
+}
+
+export interface ReadingOrderProjectionEntry {
+  thread_id: number
+  thread_title: string | null
+  position: number
+  source: 'existing' | 'added' | 'updated'
+  source_node_id: string | null
+}
+
+export interface ReadingOrderProjectionConflict {
+  code: 'duplicate_thread' | 'missing_thread' | 'non_thread_node'
+  message: string
+  node_id: string
+  thread_id: number | null
+  existing_positions: number[]
+}
+
+export interface ReadingOrderProjectionPreview {
+  plan_id: number
+  plan_name: string
+  plan_ordering_mode: string
+  reading_order_id: number
+  reading_order_name: string
+  entries: ReadingOrderProjectionEntry[]
+  conflicts: ReadingOrderProjectionConflict[]
+  total_positions: number
+  dropped_node_ids: string[]
+}
+
+export interface ReadingOrderProjectionResult {
+  plan_id: number
+  reading_order_id: number
+  added_count: number
+  updated_count: number
+  kept_count: number
+  total_positions: number
+}
+
 export const readingOrdersApi = {
+  list: async (): Promise<ReadingOrderListResponse> => {
+    return api.get<ReadingOrderListResponse>('/v1/reading-orders/')
+  },
+  previewProjection: async (
+    planId: number,
+    readingOrderId: number,
+  ): Promise<ReadingOrderProjectionPreview> => {
+    return api.post<ReadingOrderProjectionPreview>(
+      `/v1/continuity-plans/${planId}/reading-orders/project-preview`,
+      { reading_order_id: readingOrderId },
+    )
+  },
+  confirmProjection: async (
+    planId: number,
+    readingOrderId: number,
+  ): Promise<ReadingOrderProjectionResult> => {
+    return api.post<ReadingOrderProjectionResult>(
+      `/v1/continuity-plans/${planId}/reading-orders/project`,
+      { reading_order_id: readingOrderId },
+    )
+  },
   getForThread: async (threadId: number): Promise<ThreadReadingOrdersResponse> => {
     return api.get<ThreadReadingOrdersResponse>(`/v1/threads/${threadId}/reading-orders`)
   }

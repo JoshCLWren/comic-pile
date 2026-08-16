@@ -517,3 +517,263 @@ async def test_projection_updates_existing_entries(
     )
     assert [row.thread_id for row in rows] == [thread.id for thread in threads]
     assert [row.position for row in rows] == [1, 2, 3]
+
+
+async def test_list_reading_orders_is_user_scoped_and_sorted(
+    projection_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """The list endpoint returns only the current user's orders, sorted by name."""
+    user = (await async_db.execute(select(User).limit(1))).scalar_one()
+    order_b = await _make_reading_order(async_db, user_id=user.id, name="Beta")
+    order_a = await _make_reading_order(async_db, user_id=user.id, name="Alpha")
+    await async_db.commit()
+
+    response = await projection_client.get("/api/v1/reading-orders/")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    orders = body["reading_orders"]
+    assert [order["name"] for order in orders] == ["Alpha", "Beta"]
+    assert [order["id"] for order in orders] == [order_a.id, order_b.id]
+    assert all(order["total_items"] == 0 for order in orders)
+
+
+async def test_get_thread_reading_orders_lists_containing_orders(
+    projection_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """The thread-scoped endpoint reports matching orders with read state."""
+    from app.models.issue import Issue
+
+    user = (await async_db.execute(select(User).limit(1))).scalar_one()
+    thread_a = await _make_thread(async_db, user_id=user.id, title="Alpha")
+    thread_b = await _make_thread(async_db, user_id=user.id, title="Beta")
+    order = await _make_reading_order(async_db, user_id=user.id, name="Combined")
+    async_db.add(
+        ReadingOrderItem(
+            reading_order_id=order.id, thread_id=thread_a.id, position=1, issue_number=None
+        )
+    )
+    async_db.add(
+        ReadingOrderItem(
+            reading_order_id=order.id, thread_id=thread_b.id, position=2, issue_number=None
+        )
+    )
+    async_db.add(
+        Issue(thread_id=thread_a.id, issue_number="1", position=1, status="read", read_at=datetime.now(UTC))
+    )
+    await async_db.commit()
+
+    response = await projection_client.get(f"/api/v1/threads/{thread_a.id}/reading-orders")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert len(body["reading_orders"]) == 1
+    order_body = body["reading_orders"][0]
+    assert order_body["name"] == "Combined"
+    assert order_body["total_items"] == 2
+    assert order_body["completed_items"] == 1
+    items = {item["thread_title"]: item for item in order_body["items"]}
+    assert items["Alpha"]["is_read"] is True
+    assert items["Beta"]["is_read"] is False
+
+
+async def test_projection_with_unowned_reading_order_is_not_found(
+    projection_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A reading order belonging to another user is rejected without leaking existence."""
+    from tests.conftest import get_or_create_user_async
+
+    user = (await async_db.execute(select(User).limit(1))).scalar_one()
+    other = await get_or_create_user_async(async_db, username=f"other_{user.id}")
+    thread = await _make_thread(async_db, user_id=user.id, title="Mine")
+    await async_db.commit()
+    payload = _build_plan_payload(
+        mode="informational",
+        lanes=[{"id": "main", "name": "Main", "order": 0}],
+        nodes=[
+            {
+                "id": f"node-{thread.id}",
+                "node_type": "thread",
+                "ref_id": thread.id,
+                "lane_id": "main",
+                "position": 0,
+            }
+        ],
+    )
+    plan = await _make_plan(async_db, user_id=user.id, payload=payload)
+    order = ReadingOrder(name="Foreign", user_id=other.id)
+    async_db.add(order)
+    await async_db.commit()
+
+    response = await projection_client.post(
+        f"/api/v1/continuity-plans/{plan.id}/reading-orders/project-preview",
+        json={"reading_order_id": order.id},
+    )
+    assert response.status_code == 404
+
+
+async def test_malformed_plan_nodes_are_rejected_as_conflict(
+    projection_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Invalid persisted plan nodes surface a malformed_plan conflict, not a crash."""
+    user = (await async_db.execute(select(User).limit(1))).scalar_one()
+    thread = await _make_thread(async_db, user_id=user.id, title="Valid")
+    await async_db.commit()
+    payload = _build_plan_payload(
+        mode="informational",
+        lanes=[{"id": "main", "name": "Main", "order": 0}],
+        nodes=[
+            {
+                "id": f"node-{thread.id}",
+                "node_type": "thread",
+                "ref_id": thread.id,
+                "lane_id": "main",
+                "position": 0,
+            }
+        ],
+    )
+    plan = await _make_plan(async_db, user_id=user.id, payload=payload)
+    plan.nodes_json = [{"id": "broken", "node_type": "issue"}]  # missing ref_id/lane/position
+    order = await _make_reading_order(async_db, user_id=user.id)
+    await async_db.commit()
+
+    response = await projection_client.post(
+        f"/api/v1/continuity-plans/{plan.id}/reading-orders/project-preview",
+        json={"reading_order_id": order.id},
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "malformed_plan"
+
+
+async def test_missing_thread_conflict_is_reported(
+    projection_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A plan node referencing an unowned thread blocks projection with a conflict."""
+    user = (await async_db.execute(select(User).limit(1))).scalar_one()
+    from tests.conftest import get_or_create_user_async
+
+    other = await get_or_create_user_async(async_db, username=f"foreign_{user.id}")
+    foreign_thread = await _make_thread(async_db, user_id=other.id, title="Not mine")
+    await async_db.commit()
+    payload = _build_plan_payload(
+        mode="informational",
+        lanes=[{"id": "main", "name": "Main", "order": 0}],
+        nodes=[
+            {
+                "id": f"node-{foreign_thread.id}",
+                "node_type": "thread",
+                "ref_id": foreign_thread.id,
+                "lane_id": "main",
+                "position": 0,
+            }
+        ],
+    )
+    plan = await _make_plan(async_db, user_id=user.id, payload=payload)
+    order = await _make_reading_order(async_db, user_id=user.id)
+    await async_db.commit()
+
+    preview = await projection_client.post(
+        f"/api/v1/continuity-plans/{plan.id}/reading-orders/project-preview",
+        json={"reading_order_id": order.id},
+    )
+    assert preview.status_code == 200
+    body = preview.json()
+    assert any(conflict["code"] == "missing_thread" for conflict in body["conflicts"])
+
+    confirm = await projection_client.post(
+        f"/api/v1/continuity-plans/{plan.id}/reading-orders/project",
+        json={"reading_order_id": order.id},
+    )
+    assert confirm.status_code == 409
+
+
+async def test_kept_entries_are_counted_when_position_unchanged(
+    projection_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Threads already at their projected position are reported as kept."""
+    user = (await async_db.execute(select(User).limit(1))).scalar_one()
+    thread = await _make_thread(async_db, user_id=user.id, title="Stays put")
+    await async_db.commit()
+    payload = _build_plan_payload(
+        mode="informational",
+        lanes=[{"id": "main", "name": "Main", "order": 0}],
+        nodes=[
+            {
+                "id": f"node-{thread.id}",
+                "node_type": "thread",
+                "ref_id": thread.id,
+                "lane_id": "main",
+                "position": 0,
+            }
+        ],
+    )
+    plan = await _make_plan(async_db, user_id=user.id, payload=payload)
+    order = await _make_reading_order(async_db, user_id=user.id)
+    async_db.add(
+        ReadingOrderItem(
+            reading_order_id=order.id, thread_id=thread.id, position=1, issue_number=None
+        )
+    )
+    await async_db.commit()
+
+    preview = await projection_client.post(
+        f"/api/v1/continuity-plans/{plan.id}/reading-orders/project-preview",
+        json={"reading_order_id": order.id},
+    )
+    assert preview.status_code == 200
+    body = preview.json()
+    assert body["entries"][0]["source"] == "existing"
+
+    confirm = await projection_client.post(
+        f"/api/v1/continuity-plans/{plan.id}/reading-orders/project",
+        json={"reading_order_id": order.id},
+    )
+    assert confirm.status_code == 200, confirm.text
+    assert confirm.json()["kept_count"] == 1
+    assert confirm.json()["total_positions"] == 1
+
+
+async def test_apply_projection_rolls_back_on_db_failure(
+    projection_client: AsyncClient, async_db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failure while persisting entries rolls the transaction back."""
+    user = (await async_db.execute(select(User).limit(1))).scalar_one()
+    thread = await _make_thread(async_db, user_id=user.id, title="Rollback")
+    await async_db.commit()
+    payload = _build_plan_payload(
+        mode="informational",
+        lanes=[{"id": "main", "name": "Main", "order": 0}],
+        nodes=[
+            {
+                "id": f"node-{thread.id}",
+                "node_type": "thread",
+                "ref_id": thread.id,
+                "lane_id": "main",
+                "position": 0,
+            }
+        ],
+    )
+    plan = await _make_plan(async_db, user_id=user.id, payload=payload)
+    order = await _make_reading_order(async_db, user_id=user.id)
+    order_id = order.id
+    await async_db.commit()
+
+    async def _raise_commit(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("simulated commit failure")
+
+    monkeypatch.setattr(async_db, "commit", _raise_commit)
+
+    confirm = await projection_client.post(
+        f"/api/v1/continuity-plans/{plan.id}/reading-orders/project",
+        json={"reading_order_id": order.id},
+    )
+    assert confirm.status_code == 500
+
+    rows = (
+        (
+            await async_db.execute(
+                select(ReadingOrderItem).where(ReadingOrderItem.reading_order_id == order_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert rows == []

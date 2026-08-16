@@ -2402,6 +2402,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reading-orders/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Reading Orders
+         * @description List reading orders owned by the current user, ordered by name.
+         */
+        get: operations["list_reading_orders_api_v1_reading_orders__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/releases/": {
         parameters: {
             query?: never;
@@ -5005,6 +5025,14 @@ export interface components {
             thread_title: string;
         };
         /**
+         * ReadingOrderListResponse
+         * @description Response schema for listing all reading orders owned by a user.
+         */
+        ReadingOrderListResponse: {
+            /** Reading Orders */
+            reading_orders: components["schemas"]["ReadingOrderSummary"][];
+        };
+        /**
          * ReadingOrderProjectionConflict
          * @description A single conflict blocking a projection.
          */
@@ -5111,6 +5139,23 @@ export interface components {
             /** Name */
             name: string;
             /** Total Items */
+            total_items: number;
+        };
+        /**
+         * ReadingOrderSummary
+         * @description Compact reading order metadata for projection and picker surfaces.
+         */
+        ReadingOrderSummary: {
+            /** Description */
+            description?: string | null;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /**
+             * Total Items
+             * @default 0
+             */
             total_items: number;
         };
         /**
@@ -8677,6 +8722,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_reading_orders_api_v1_reading_orders__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingOrderListResponse"];
                 };
             };
         };
