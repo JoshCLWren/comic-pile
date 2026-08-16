@@ -143,7 +143,7 @@ class _SessionReadProjection:
     def __init__(
         self,
         sessions_by_id: dict[int, SessionModel],
-        events_by_type: "_SessionReadEvents",
+        events_by_type: _SessionReadEvents,
         threads_by_id: dict[int, Thread],
         unread_counts: dict[int, int],
         issue_numbers: dict[int, str],
@@ -160,7 +160,7 @@ class _SessionReadProjection:
         user_id: int,
         specific_session_id: int | None = None,
         include_all_events: bool = False,
-    ) -> "_SessionReadProjection":
+    ) -> _SessionReadProjection:
         """Build the projection for a user's session reads.
 
         Args:
@@ -175,10 +175,6 @@ class _SessionReadProjection:
         Returns:
             Populated projection ready for response assembly.
         """
-        from comic_pile.session import _session_gap_hours
-
-        cutoff = datetime.now(UTC) - timedelta(hours=_session_gap_hours())
-
         session_query = (
             select(
                 SessionModel.id,
@@ -250,11 +246,10 @@ class _SessionReadProjection:
                 issue_numbers={},
             )
 
-        event_types = ("roll", "rate", "snooze", "rolled_but_skipped", "undo")
         action_types = ("roll", "rate", "snooze", "rolled_but_skipped")
         ladder_types = ("rate", "snooze", "undo")
 
-        rolled_events = {}
+        rolled_events: dict[int, list[Event]] = {}
         ladder_events_by_session: dict[int, list[Event]] = {}
         all_events_by_session: dict[int, list[Event]] = {}
         if specific_session_id is not None and include_all_events:
@@ -283,7 +278,9 @@ class _SessionReadProjection:
                 )
             ).scalars().all()
             for ev in result:
-                rolled_events.setdefault(ev.session_id, []).append(ev)
+                sid = ev.session_id
+                assert sid is not None
+                rolled_events.setdefault(sid, []).append(ev)
 
             ladder_rows = (
                 await db.execute(
@@ -295,7 +292,9 @@ class _SessionReadProjection:
                 )
             ).scalars().all()
             for ev in ladder_rows:
-                ladder_events_by_session.setdefault(ev.session_id, []).append(ev)
+                sid = ev.session_id
+                assert sid is not None
+                ladder_events_by_session.setdefault(sid, []).append(ev)
 
         rolled_events_by_session = {
             sid: list(events[:1]) for sid, events in rolled_events.items()
@@ -424,7 +423,9 @@ def _build_current_die(
     ladder_evts = events_by_type.ladder.get(session.id, [])
     ladder_evts = [ev for ev in ladder_evts if ev.die_after is not None]
     if ladder_evts:
-        return ladder_evts[-1].die_after  # type: ignore[return-value]
+        die_after = ladder_evts[-1].die_after
+        if die_after is not None:
+            return die_after
     return session.start_die
 
 
