@@ -110,6 +110,7 @@ async def test_bootstrap_roll_pool_is_never_paginated_below_current_die(monkeypa
             format="ongoing",
             issue_id=None,
             issue_number=None,
+            route_labels=[],
         )
         for index in range(1, 101)
     ]
