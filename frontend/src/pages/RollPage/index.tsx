@@ -550,13 +550,14 @@ export default function RollPage() {
     try {
       await snoozeMutation.mutate()
       await refetchBootstrap()
+    } catch (error: unknown) {
+      setErrorMessage(getApiErrorDetail(error))
+    } finally {
       setIsRolling(false)
       setIsRatingView(false)
       setRolledResult(null)
       setSelectedThreadId(null)
       setActiveRatingThread(null)
-    } catch (error: unknown) {
-      setErrorMessage(getApiErrorDetail(error))
     }
   }
 
@@ -817,13 +818,13 @@ export default function RollPage() {
                     await refetchBootstrap()
                   } catch (error) {
                     setErrorMessage(getApiErrorDetail(error))
-                    return
+                  } finally {
+                    setIsRatingView(false)
+                    setRolledResult(null)
+                    setSelectedThreadId(null)
+                    setActiveRatingThread(null)
+                    setErrorMessage('')
                   }
-                  setIsRatingView(false)
-                  setRolledResult(null)
-                  setSelectedThreadId(null)
-                  setActiveRatingThread(null)
-                  setErrorMessage('')
                 }}
               />
             )}
