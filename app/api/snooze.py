@@ -83,10 +83,13 @@ async def build_session_response(session: SessionModel, db: AsyncSession) -> Ses
 
     snoozed_ids = session.snoozed_thread_ids or []
     snoozed_threads: list[SnoozedThreadInfo] = []
-    for thread_id in snoozed_ids:
-        thread = await db.get(Thread, thread_id)
-        if thread:
-            snoozed_threads.append(SnoozedThreadInfo(id=thread.id, title=thread.title))
+    if snoozed_ids:
+        result = await db.execute(select(Thread).where(Thread.id.in_(snoozed_ids)))
+        threads_by_id = {thread.id: thread for thread in result.scalars().all()}
+        for thread_id in snoozed_ids:
+            thread = threads_by_id.get(thread_id)
+            if thread:
+                snoozed_threads.append(SnoozedThreadInfo(id=thread.id, title=thread.title))
 
     return SessionResponse(
         id=session.id,

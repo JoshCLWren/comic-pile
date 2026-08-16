@@ -9,7 +9,7 @@ import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,6 +33,7 @@ from app.schemas import (
 )
 from app.schemas.migration import MigrateToIssuesSimpleRequest
 from app.services.ownership import get_owned_thread_or_404
+from app.services.thread_issue_stats import load_next_issue_numbers, load_unread_counts
 from comic_pile.session import get_current_die, get_or_create
 
 router = APIRouter(tags=["threads"])
@@ -98,36 +99,10 @@ async def thread_to_response(
     )
 
 
-async def _bulk_issue_number_map(threads: list[Thread], db: AsyncSession) -> dict[int, str]:
-    """Batch-fetch issue numbers for all threads' next_unread_issue_id values."""
-    issue_ids = {t.next_unread_issue_id for t in threads if t.next_unread_issue_id is not None}
-    if not issue_ids:
-        return {}
-    result = await db.execute(select(Issue.id, Issue.issue_number).where(Issue.id.in_(issue_ids)))
-    return {row.id: row.issue_number for row in result}
-
-
-async def _bulk_issues_remaining(threads: list[Thread], db: AsyncSession) -> dict[int, int]:
-    """Bulk-fetch unread issue counts for all migrated threads in one query."""
-    migrated_ids = [t.id for t in threads if t.uses_issue_tracking()]
-    if not migrated_ids:
-        return {}
-    result = await db.execute(
-        select(Issue.thread_id, func.count())
-        .where(Issue.status == "unread")
-        .where(Issue.thread_id.in_(migrated_ids))
-        .group_by(Issue.thread_id),
-    )
-    counts: dict[int, int] = {}
-    for row in result:
-        counts[row[0]] = row[1]
-    return counts
-
-
 async def _threads_to_responses(threads: list[Thread], db: AsyncSession) -> list[ThreadResponse]:
     """Convert a list of Thread models to ThreadResponses with batched lookups."""
-    issue_map = await _bulk_issue_number_map(threads, db)
-    remaining_map = await _bulk_issues_remaining(threads, db)
+    issue_map = await load_next_issue_numbers(threads, db)
+    remaining_map = await load_unread_counts(threads, db)
     return [
         await thread_to_response(
             thread,
