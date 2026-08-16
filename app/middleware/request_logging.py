@@ -232,7 +232,8 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
         """Add diagnostics headers and log slow or failed requests."""
         started_at = time.perf_counter()
         request_id = uuid.uuid4().hex
-        startup = next_request_snapshot()
+        request.state.startup_snapshot = next_request_snapshot()
+        startup = request.state.startup_snapshot
         diagnostics_token = begin_request_diagnostics(
             request_id=request_id,
             route=request.url.path,
