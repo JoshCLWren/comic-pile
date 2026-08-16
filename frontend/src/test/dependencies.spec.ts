@@ -308,7 +308,7 @@ test.describe('Dependencies', () => {
 
       // Choose a later pair so the dependency proves it uses the explicitly
       // selected issues rather than the auto-selected next unread.
-      await authenticatedPage.selectOption('#source-issue', { index: 2 })
+      await authenticatedPage.selectOption("#source-issue", { label: \"#2\" })
       await authenticatedPage.selectOption('#target-issue', { index: 2 })
       await expect.poll(async () => authenticatedPage.locator('#source-issue option:checked').textContent()).toBe('#2')
       await expect.poll(async () => authenticatedPage.locator('#target-issue option:checked').textContent()).toBe('#2')
