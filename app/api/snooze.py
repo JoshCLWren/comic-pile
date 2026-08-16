@@ -39,29 +39,39 @@ async def get_active_thread_info(
         Tuple of (thread_id, ActiveThreadInfo or None).
     """
     result = await db.execute(
-        select(Event)
+        select(Event, Thread)
         .where(Event.session_id == session_id)
         .where(Event.type == "roll")
         .where(Event.selected_thread_id.is_not(None))
         .order_by(Event.timestamp.desc())
     )
-    event = result.scalars().first()
+    events = result.all()
 
-    if not event or not event.selected_thread_id:
+    if not events or not events[0].selected_thread_id:
         return None, None
 
-    thread = await db.get(Thread, event.selected_thread_id)
-    if not thread:
-        return event.selected_thread_id, None
+    # Load all threads in a single query to avoid N+1
+    thread_ids = {event.selected_thread_id for event in events if event.selected_thread_id}
+    thread_map = {}
+    if thread_ids:
+        thread_result = await db.execute(select(Thread).where(Thread.id.in_(thread_ids)))
+        threads = thread_result.scalars().all()
+        thread_map = {thread.id: thread for thread in threads}
 
-    return event.selected_thread_id, ActiveThreadInfo(
-        id=thread.id,
-        title=thread.title,
-        format=thread.format,
-        issues_remaining=thread.issues_remaining,
-        queue_position=thread.queue_position,
-        last_rolled_result=event.result,
-    )
+    # Find the most recent event with a valid thread
+    for event in events:
+        if event.selected_thread_id and event.selected_thread_id in thread_map:
+            thread = thread_map[event.selected_thread_id]
+            return event.selected_thread_id, ActiveThreadInfo(
+                id=thread.id,
+                title=thread.title,
+                format=thread.format,
+                issues_remaining=thread.issues_remaining,
+                queue_position=thread.queue_position,
+                last_rolled_result=event.result,
+            )
+
+    return None, None
 
 
 async def build_session_response(session: SessionModel, db: AsyncSession) -> SessionResponse:
