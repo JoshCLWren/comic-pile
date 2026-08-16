@@ -315,3 +315,20 @@ def test_issues_keeps_real_references_after_version_step_markers(monkeypatch, ca
 
     result = json.loads(capsys.readouterr().out)
     assert result == [1070]
+
+
+def test_issues_excludes_parenthesized_version_step_markers(monkeypatch, capsys):
+    """Parenthesized or bracket-quoted version-step patterns like '(v2) #3' must not be linked issues."""
+    def fake_github_request(url: str):
+        return {
+            "number": 100,
+            "title": "Release (v1.2) #3 ships today.",
+            "body": "In [v4] #5 the API changed. Fixes #1070.",
+        }
+
+    monkeypatch.setattr(release_writer, "_github_request", fake_github_request)
+
+    release_writer._issues("JoshCLWren/comic-pile", "100")
+
+    result = json.loads(capsys.readouterr().out)
+    assert result == []

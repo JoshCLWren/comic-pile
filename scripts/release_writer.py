@@ -305,7 +305,7 @@ def _preceding_word(text: str, position: int) -> str:
     prefix = text[:position].rstrip()
     if not prefix:
         return ""
-    return prefix.split()[-1].lower().rstrip(".,;:")
+    return prefix.split()[-1].lower().rstrip(".,;:)!?\\\"'")
 
 
 def _issues(repository: str, raw_number: str) -> None:
