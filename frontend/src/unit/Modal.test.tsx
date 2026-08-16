@@ -1,5 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { useState } from 'react'
 import { expect, it, vi } from 'vitest'
 import Modal from '../components/Modal'
@@ -56,20 +58,25 @@ it('keeps focus on a controlled input while typing across parent rerenders', asy
   expect(titleInput).toHaveValue('Saga')
 })
 
-it('uses a translucent modal surface with a softened overlay', () => {
+it('uses an opaque modal surface with a dimmed overlay', () => {
   render(
-    <Modal isOpen title="Translucent Modal" onClose={() => {}}>
+    <Modal isOpen title="Opaque Modal" onClose={() => {}}>
       <p>Modal content</p>
     </Modal>
   )
 
-  const dialog = screen.getByRole('dialog', { name: 'Translucent Modal' })
+  const dialog = screen.getByRole('dialog', { name: 'Opaque Modal' })
   const overlay = document.querySelector('[data-overlay-root="true"] [aria-hidden="true"]')
 
   expect(dialog).toHaveClass('modal-card')
   expect(dialog.className).toContain('modal-card')
   expect(overlay).not.toBeNull()
   expect(overlay).toHaveClass('backdrop-blur-sm')
+
+  const stylesheet = readFileSync(resolve(__dirname, '../styles.css'), 'utf8')
+  const modalRule = stylesheet.match(/\.modal-card\s*\{([^}]*)\}/)?.[1] ?? ''
+  expect(modalRule).toContain('rgba(17, 14, 10, 0.95)')
+  expect(modalRule).not.toContain('rgba(255, 255, 255, 0.03)')
 })
 
 it('returns null while closed and supports fallback focus without autofocus', async () => {
