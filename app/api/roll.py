@@ -245,7 +245,7 @@ async def override_roll(
             select(Issue).where(Issue.id == override_thread_next_unread_issue_id)
         )
         next_issue = issue_result.scalar_one_or_none()
-        if next_issue:
+        if next_issue and next_issue.status == "unread":
             override_thread_issue_id = next_issue.id
             override_thread_issue_number = next_issue.issue_number
 
