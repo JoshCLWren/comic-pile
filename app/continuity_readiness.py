@@ -108,7 +108,7 @@ async def _load_snapshot(db: AsyncSession, user_id: int) -> _GraphSnapshot:
     Returns a snapshot with ``query_count`` and ``rows_loaded`` tracking the
     number of round-trips and total rows materialized for observability.
     """
-    session_cache = db.info.setdefault(SNAPSHOT_SESSION_KEY, {}) if db.info else {}
+    session_cache = db.info.setdefault(SNAPSHOT_SESSION_KEY, {}) if db.info is not None else {}
     cached = session_cache.get(user_id)
     if cached is not None:
         logger.debug(
@@ -228,7 +228,7 @@ async def _load_snapshot(db: AsyncSession, user_id: int) -> _GraphSnapshot:
         query_count=query_count,
         rows_loaded=rows_loaded,
     )
-    session_cache = db.info.setdefault(SNAPSHOT_SESSION_KEY, {}) if db.info else {}
+    session_cache = db.info.setdefault(SNAPSHOT_SESSION_KEY, {}) if db.info is not None else {}
     session_cache[user_id] = snapshot
     logger.debug(
         "Continuity snapshot loaded and cached",
