@@ -1,4 +1,4 @@
-"""Regression coverage for canonical and legacy authentication routes."""
+"""Regression coverage for application startup and authentication routes."""
 
 from fastapi.routing import APIRoute
 
@@ -16,6 +16,13 @@ AUTH_SUFFIXES = frozenset(
     }
 )
 
+STARTUP_SENTINEL_ROUTES = {
+    "/api/v1/auth/me": frozenset({"GET"}),
+    "/api/v1/crossover-templates/preview": frozenset({"POST"}),
+    "/api/v1/crossover-templates/adopt": frozenset({"POST"}),
+    "/api/v1/continuity-plans/{plan_id}/readiness": frozenset({"GET"}),
+}
+
 
 def _route_methods_by_path() -> dict[str, frozenset[str]]:
     """Return HTTP methods for each application route path.
@@ -29,6 +36,15 @@ def _route_methods_by_path() -> dict[str, frozenset[str]]:
         for route in app.routes
         if isinstance(route, APIRoute)
     }
+
+
+def test_application_startup_loads_cross_feature_routers() -> None:
+    """Require startup to load auth, crossover-template, and readiness routers."""
+    methods_by_path = _route_methods_by_path()
+
+    for path, methods in STARTUP_SENTINEL_ROUTES.items():
+        assert path in methods_by_path
+        assert methods_by_path[path] == methods
 
 
 def test_auth_v1_routes_are_canonical_compatibility_twins() -> None:
