@@ -1,54 +1,49 @@
 #!/usr/bin/env python3
-"""Validate the deterministic free-model factory roster and watchdog-backed dispatcher."""
+"""Validate the deterministic free-model factory roster and shared-pool worker."""
 
 from __future__ import annotations
 
 import csv
+import re
 from collections import Counter
 from pathlib import Path
 
 MANIFEST = Path('.github/free-model-factories.tsv')
 DISPATCHER = Path('.github/workflows/free-model-factory-dispatch.yml')
 ENTRY = Path('.github/workflows/free-model-factory-entry.yml')
+RUNNER = Path('.github/workflows/free-model-factory-run.yml')
 WATCHDOG = Path('.github/workflows/factory-heartbeat-watchdog.yml')
-EXPECTED_WORKERS = set(range(6, 47))
-EXPECTED_SOURCE_COUNTS = {
-    'nvidia': 26,
-    'omniroute-opencode': 7,
-    'opencode-free': 8,
-}
+DISCOVERY = Path('.github/workflows/chromium-discovery.yml')
+DISCOVERY_CLASSIFIER = Path('.github/scripts/classify-chromium-discovery.py')
+PLAYWRIGHT_CONFIG = Path('frontend/playwright.config.ts')
+WORKER = Path('.github/scripts/free-model-factory-worker.sh')
+PRIMITIVES = Path('.github/scripts/free-model-factory-worker-primitives.sh')
+KILO_HELPER = Path('.github/scripts/kilo-auto-factory-run.sh')
+GUARD = Path('.github/scripts/fixed-model-guard.py')
+EXPECTED_WORKERS = set(range(6, 25)) | {29} | set(range(39, 47))
+EXPECTED_SOURCE_COUNTS = {'nvidia': 20, 'opencode-free': 7, 'kilo-auto': 1}
 EXPECTED_OPENCODE_FREE_MODELS = {
     'big-pickle',
     'deepseek-v4-flash-free',
     'hy3-free',
     'laguna-s-2.1-free',
-    'ling-3.0-tiny-free',
     'mimo-v2.5-free',
     'nemotron-3-ultra-free',
     'nemotron-3.5-lightning-free',
 }
-BATCH_MINUTES = (0, 15, 30, 45)
-RETIRED_SCHEDULERS = (
-    Path('.github/workflows/nvidia-factory-6.yml'),
-    Path('.github/workflows/omniroute-factory-16.yml'),
-    Path('.github/workflows/omniroute-factory-17.yml'),
-    Path('.github/workflows/free-model-factory-a.yml'),
-    Path('.github/workflows/free-model-factory-b.yml'),
-    Path('.github/workflows/free-model-factory-c.yml'),
-    Path('.github/workflows/free-model-factory-d.yml'),
-    Path('.github/workflows/free-model-factory-e.yml'),
-)
-ENTRY_PERMISSIONS = (
-    'contents: write',
-    'issues: write',
-    'pull-requests: write',
-    'actions: read',
-    'checks: read',
-)
+SCHEDULE_MINUTES = tuple(range(0, 60, 5))
+ENTRY_PERMISSIONS = ('contents: write', 'issues: write', 'pull-requests: write', 'actions: write', 'checks: read')
+
+
+def assert_in_order(text: str, *needles: str) -> None:
+    """Assert that the final call-site occurrence of each marker is ordered."""
+    positions = [text.rfind(needle) for needle in needles]
+    assert all(position >= 0 for position in positions), f'missing ordered marker: {needles}'
+    assert positions == sorted(positions), f'expected ordering: {needles}'
 
 
 def main() -> None:
-    """Validate roster completeness, fixed assignments, and trigger invariants."""
+    """Validate roster, runtime, lease, shared-pool, and discovery invariants."""
     with MANIFEST.open(newline='', encoding='utf-8') as handle:
         rows = list(csv.DictReader(
             (line for line in handle if not line.startswith('# worker')),
@@ -56,200 +51,191 @@ def main() -> None:
             delimiter='\t',
         ))
 
-    assert len(rows) == 41, f'expected 41 fixed model lanes, got {len(rows)}'
+    assert len(rows) == 28, f'expected 28 external factory lanes, got {len(rows)}'
     workers = [int(row['worker']) for row in rows]
     assert set(workers) == EXPECTED_WORKERS
     assert len(workers) == len(set(workers)), 'duplicate worker IDs'
+    assert Counter(row['source'] for row in rows) == EXPECTED_SOURCE_COUNTS
 
-    source_counts = Counter(row['source'] for row in rows)
-    assert source_counts == EXPECTED_SOURCE_COUNTS, f'unexpected source counts: {dict(source_counts)}'
+    opencode_models = {row['model'] for row in rows if row['source'] == 'opencode-free'}
+    assert opencode_models == EXPECTED_OPENCODE_FREE_MODELS
+    kilo = [row for row in rows if row['source'] == 'kilo-auto']
+    assert len(kilo) == 1 and kilo[0]['worker'] == '46'
+    assert kilo[0]['model'] == 'kilo-auto/free'
+    assert kilo[0]['display_name'] == 'Kilo Auto Free · Forge'
 
-    opencode_free_models = {row['model'] for row in rows if row['source'] == 'opencode-free'}
-    assert opencode_free_models == EXPECTED_OPENCODE_FREE_MODELS, (
-        f'OpenCode free roster changed: missing={sorted(EXPECTED_OPENCODE_FREE_MODELS - opencode_free_models)} '
-        f'extra={sorted(opencode_free_models - EXPECTED_OPENCODE_FREE_MODELS)}'
-    )
-    assert not any(row['source'] in {'zen', 'kilo', 'llm7', 'ovhcloud'} for row in rows), (
-        'retired or unrelated provider source returned to the fixed-model roster'
-    )
-
-    source_models = [(row['source'], row['model']) for row in rows]
-    assert len(source_models) == len(set(source_models)), 'duplicate model inside the same source'
-    assert not any(
-        row['source'] == 'nvidia' and row['model'] == 'deepseek-ai/deepseek-v4-pro'
-        for row in rows
-    )
-    assert not any(
-        row['source'] == 'nvidia' and row['model'] == 'mistralai/mistral-medium-3.5-128b'
-        for row in rows
-    ), 'Factory 13 retired NVIDIA model returned to the roster'
-
-    expected_batch_counts = Counter({0: 11, 15: 10, 30: 10, 45: 10})
-    actual_batch_counts: Counter[int] = Counter()
-    for row in rows:
-        worker = int(row['worker'])
+    counts: Counter[int] = Counter()
+    for index, row in enumerate(rows):
         minute = int(row['minute'])
-        assert row['scheduler'] == 'watchdog', f'worker {worker}: stale scheduler {row["scheduler"]!r}'
-        expected_minute = BATCH_MINUTES[(worker - 6) % len(BATCH_MINUTES)]
-        assert minute == expected_minute, f'worker {worker}: expected {expected_minute}, got {minute}'
-        actual_batch_counts[minute] += 1
-        assert row['model'] and row['display_name']
-    assert actual_batch_counts == expected_batch_counts
+        assert row['scheduler'] == 'dispatcher'
+        assert minute == SCHEDULE_MINUTES[index % len(SCHEDULE_MINUTES)]
+        counts[minute] += 1
+    assert set(counts) == set(SCHEDULE_MINUTES)
+    assert max(counts.values()) - min(counts.values()) <= 1
+    assert sum(counts.values()) == 28
 
-    assert WATCHDOG.exists(), 'heartbeat watchdog is missing'
-    watchdog_text = WATCHDOG.read_text(encoding='utf-8')
-    assert "cron: '*/15 * * * *'" in watchdog_text, 'watchdog must remain on proven 15-minute clock'
+    watchdog = WATCHDOG.read_text(encoding='utf-8')
+    assert "cron: '*/15 * * * *'" in watchdog
 
-    assert DISPATCHER.exists(), 'fixed-model dispatcher is missing'
-    dispatcher_text = DISPATCHER.read_text(encoding='utf-8')
-    assert 'workflow_run:' in dispatcher_text
-    assert "workflows: ['Factory heartbeat watchdog']" in dispatcher_text
-    assert 'schedule:' not in dispatcher_text, 'dispatcher must not own an independent cron clock'
-    assert 'WATCHDOG_RUN_NUMBER' in dispatcher_text
-    assert 'slots=(0 15 30 45)' in dispatcher_text
-    assert 'workers=\'["6","32","39"]\'' in dispatcher_text
-    assert 'contents: read' in dispatcher_text and 'actions: write' in dispatcher_text
-    assert 'issues: write' in dispatcher_text and 'pull-requests: write' in dispatcher_text
-    assert 'gh workflow run free-model-factory-entry.yml' in dispatcher_text
-    assert 'matrix:' not in dispatcher_text
-    assert "'.github/scripts/free-model-factory-worker.sh'" in dispatcher_text, (
-        'worker repairs must trigger an immediate post-merge fleet smoke'
-    )
+    dispatcher = DISPATCHER.read_text(encoding='utf-8')
+    assert 'workflow_run:' not in dispatcher
+    assert 'schedule:' in dispatcher
+    for minute in SCHEDULE_MINUTES:
+        assert f"cron: '{minute} * * * *'" in dispatcher
+    assert 'SCHEDULE_EXPR: ${{ github.event.schedule }}' in dispatcher
+    assert 'elif [[ "$EVENT_NAME" == schedule ]]; then' in dispatcher
+    assert 'minute="${SCHEDULE_EXPR%% *}"' in dispatcher
+    assert 'workers=\'["6","39","46"]\'' in dispatcher
+    assert 'gh workflow run free-model-factory-entry.yml' in dispatcher
+    assert "'.github/scripts/free-model-factory-worker.sh'" in dispatcher
+    assert "'.github/scripts/kilo-auto-factory-run.sh'" in dispatcher
     for required in (
-        'if [[ "$EVENT_NAME" == push ]]',
         'queued in_progress',
-        '--json databaseId,headSha',
-        'select(.headSha != $sha)',
         'gh run cancel "$run_id"',
-    ):
-        assert required in dispatcher_text, f'fixed-model deployment fence missing: {required}'
-
-    # GitHub can terminate a cancelled runner before its EXIT trap runs. The
-    # deploy fence must therefore wait for terminal cancellation and recover
-    # only that run's worker leases from the registry heartbeat.
-    for required in (
-        'heartbeat_worker_for_run',
-        'issues/1093/comments?per_page=100',
-        'Run: " + $run + "$"',
-        'Worker: opencode-free-model-factory-',
-        '--json status,conclusion',
-        'for _ in {1..90}',
-        '[[ "$conclusion" != cancelled ]]',
         'release_cancelled_worker_leases',
-        'issues?state=open&labels=factory%3A${worker}&per_page=100',
         'factory:unowned',
-        'gh api --method PUT',
         'another worker already owns it',
         'takeover observed',
     ):
-        assert required in dispatcher_text, f'cancelled-run handoff invariant missing: {required}'
-    assert "owner_pattern='^factory:(local|([1-9]|[1-3][0-9]|4[0-6]))$'" in dispatcher_text, (
-        'cancelled-run recovery must recognize every active fixed-model owner without treating unowned as a takeover'
-    )
+        assert required in dispatcher, f'deployment/lease fence missing: {required}'
 
-    assert ENTRY.exists(), 'dispatchable fixed-model entry workflow is missing'
-    entry_text = ENTRY.read_text(encoding='utf-8')
-    assert 'workflow_dispatch:' in entry_text
-    assert 'uses: ./.github/workflows/free-model-factory-run.yml' in entry_text
-    assert 'worker: ${{ inputs.worker }}' in entry_text
-    assert 'secrets: inherit' in entry_text
-    assert 'concurrency:' not in entry_text, (
-        'entry wrapper must not compete with the reusable runner for the same concurrency group'
-    )
+    entry = ENTRY.read_text(encoding='utf-8')
+    assert 'workflow_dispatch:' in entry
+    assert 'uses: ./.github/workflows/free-model-factory-run.yml' in entry
+    assert 'secrets: inherit' in entry
     for permission in ENTRY_PERMISSIONS:
-        assert permission in entry_text
+        assert permission in entry
 
-    for retired in RETIRED_SCHEDULERS:
-        assert not retired.exists(), f'obsolete scheduler still exists: {retired}'
+    runner = RUNNER.read_text(encoding='utf-8')
+    assert 'group: fixed-model-factory-${{ inputs.worker }}' in runner
+    assert 'cancel-in-progress: false' in runner
+    assert 'opencode-free)' in runner and 'runtime_model="opencode/${model}"' in runner
+    assert 'OPENCODE_API_KEY' not in runner
+    assert 'kilo-auto)' in runner and 'runtime_model="kilo/${model}"' in runner
+    assert "KILO_VERSION: '7.4.22'" in runner
+    assert 'Smoke Kilo Auto Free through Kilo CLI' in runner
+    assert 'PR_REBASE_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}' in runner
+    assert 'x-access-token:${PR_REBASE_TOKEN}' in runner
 
-    runner = Path('.github/workflows/free-model-factory-run.yml')
-    worker = Path('.github/scripts/free-model-factory-worker.sh')
-    assert runner.exists() and worker.exists()
-    runner_text = runner.read_text(encoding='utf-8')
-    assert 'group: fixed-model-factory-${{ inputs.worker }}' in runner_text, (
-        'reusable runner must serialize each fixed-model worker lane'
-    )
-    assert 'cancel-in-progress: false' in runner_text, (
-        'same-worker sessions should serialize; factory-runtime deploys cancel stale revisions explicitly'
-    )
-    assert 'opencode-free)' in runner_text
-    assert 'runtime_model="opencode/${model}"' in runner_text
-    assert "branch_suffix='opencode-free'" in runner_text
-    assert 'OPENCODE_API_KEY' not in runner_text, 'direct OpenCode Free must remain keyless'
-    assert all(source not in runner_text for source in ('kilo)', 'llm7)', 'ovhcloud)', 'zen)'))
-    assert 'secrets.PR_REBASE_TOKEN' in runner_text, (
-        'factory pushes must use PR_REBASE_TOKEN so pull_request workflows are not stuck in action_required'
-    )
-    assert 'PR_REBASE_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}' in runner_text
-    assert 'GH_TOKEN: ${{ github.token }}' in runner_text, (
-        'gh API/labels must keep using GITHUB_TOKEN; PR_REBASE_TOKEN is push-only'
-    )
-    assert 'x-access-token:${PR_REBASE_TOKEN}' in runner_text, (
-        'git remote must authenticate pushes with PR_REBASE_TOKEN'
-    )
+    kilo_text = KILO_HELPER.read_text(encoding='utf-8')
+    for required in (
+        'unset KILO_API_KEY KILOCODE_API_KEY',
+        'kilo run -m "$RUNTIME_MODEL" --auto --format json',
+        'requested_route=kilo-auto/free',
+        'step_finish',
+        'non-zero cost',
+    ):
+        assert required in kilo_text, f'Kilo free-route invariant missing: {required}'
 
-    worker_text = worker.read_text(encoding='utf-8')
-    assert 'rotate_model' not in worker_text
-    assert 'Do not switch models' in worker_text
-    assert 'reject_out_of_scope_diff' in worker_text, (
-        'factories must fail closed on out-of-scope diffs before push'
-    )
-    assert 'fixed-model-guard.py' in worker_text, (
-        'pre-push scope enforcement must use the deterministic fixed-model guard'
-    )
+    guard = GUARD.read_text(encoding='utf-8')
+    assert 'factory-control-out-of-scope' in guard and 'is_factory_control_path' in guard
 
-    guard = Path('.github/scripts/fixed-model-guard.py')
-    assert guard.exists()
-    guard_text = guard.read_text(encoding='utf-8')
-    assert 'factory-control-out-of-scope' in guard_text
-    assert 'is_factory_control_path' in guard_text
-
-    # Ownership is a next-action lease, never a permanent reservation. A worker
-    # must hand its claims back when a scheduled session ends so another lane can
-    # continue them on the next heartbeat.
+    worker = WORKER.read_text(encoding='utf-8')
+    assert PRIMITIVES.exists(), 'tracked worker primitives are missing'
+    primitives = PRIMITIVES.read_text(encoding='utf-8')
+    assert "source <(sed '/^ensure_owner_label$/,$d' .github/scripts/free-model-factory-worker-primitives.sh)" in worker
     for required in (
         'release_owned_targets',
-        'previous-run-stale-lease',
-        'session-end-handoff',
-        'factory:unowned',
         'comic-pile-factory-implement-claim-v3',
         'comic-pile-factory-claim-released-v3',
-        'current_owner_is_self',
         'issue_has_open_factory_pr',
+        'reject_out_of_scope_diff',
+        'fixed-model-guard.py',
+        "[[ \"$SOURCE\" == 'kilo-auto' ]]",
+        "[[ \"$SOURCE\" != 'kilo-auto' ]]",
+        '.github/scripts/kilo-auto-factory-run.sh',
+        'Do not switch models',
     ):
-        assert required in worker_text, f'fixed-model lease invariant missing: {required}'
-    assert '--arg prefix "factory/${WORKER}-"' not in worker_text, (
-        'branch provenance must not act as a permanent ownership lease'
-    )
-    assert 'preserving ownership state and selecting other work' not in worker_text, (
-        'stable PR handoffs must release ownership for cross-worker takeover'
-    )
-    assert 'issue_has_open_factory_pr "$candidate" && continue' in worker_text, (
-        'issues with an open linked factory PR must not be selected as fresh implementation work'
-    )
-    assert 'issue_has_open_factory_pr "$number" && return 1' in worker_text, (
-        'issue claim must recheck for an open linked PR to close the selection race'
-    )
-    assert 'current_owner_is_self "$issue"' in worker_text, (
-        'PR handoff must not revoke an issue lease already taken by another worker'
+        assert required in primitives, f'inherited worker primitive missing: {required}'
+
+    for required in (
+        'choose_ranked_issues',
+        'issue_is_executable',
+        'issue_has_open_blocker',
+        'dependencies/blocked_by',
+        "claim_from_pool 'user-bug'",
+        "claim_from_pool 'bug'",
+        "claim_from_pool 'product'",
+        'ralph-priority:critical',
+        'ralph-priority:high',
+        'issue_has_open_factory_pr "$issue" && return 1',
+        'release_owned_targets \'previous-run-stale-lease\'',
+        'session-end-handoff',
+        'no-persisted-change-handoff',
+        'leased unowned PR',
+        'stage_trusted_kilo_helper',
+        'TRUSTED_KILO_HELPER',
+        'daily Chromium discovery owns backlog replenishment',
+    ):
+        assert required in worker, f'shared-pool invariant missing: {required}'
+    assert "for selector in 'user-reported bug' 'bug' 'ralph-task'" not in worker
+    assert 'choose_backlog_zero_child' not in worker
+    assert 'issues/679/sub_issues' not in worker
+    assert 'claim_issue "$candidate"' in worker
+    assert 'gh workflow run chromium-discovery.yml' not in worker
+    assert 'trigger_backlog_zero_discovery' not in worker
+    assert_in_order(
+        worker,
+        "claim_from_pool 'user-bug'",
+        "claim_from_pool 'bug'",
+        "claim_from_pool 'product'",
+        'done < <(choose_unowned_pr)',
+        'daily Chromium discovery owns backlog replenishment',
     )
 
-    # Product work wins over generic PR orbiting. If ordinary work is genuinely
-    # unavailable, the worker must select an executable child of the Chromium
-    # backlog-zero epic rather than claim the non-executable #679 container or
-    # report a clean idle heartbeat.
-    issue_selection = worker_text.index("for selector in 'user-reported bug' 'bug' 'ralph-task'")
-    unowned_pr_selection = worker_text.index('done < <(choose_unowned_pr)')
-    assert issue_selection < unowned_pr_selection, 'new product issues must outrank generic unowned PRs'
-    assert 'issues/679/sub_issues' in worker_text, 'fallback must inspect executable #679 children'
-    assert 'choose_backlog_zero_issue' not in worker_text, '#679 epic itself is not executable'
-    assert 'including #679; ending this session cleanly' not in worker_text, (
-        'no-work must not masquerade as a successful productive heartbeat'
-    )
+    discovery = DISCOVERY.read_text(encoding='utf-8')
+    for required in (
+        'schedule:',
+        "cron: '23 9 * * *'",
+        'workflow_dispatch:',
+        'fail-fast: false',
+        'if: always()',
+        'retention-days: 30',
+        'playwright-report/',
+        'test-results/',
+        'discovery-artifacts/backend.log',
+        'discovery-artifacts/run-metadata.json',
+        'Classify persisted Chromium failures',
+        'actions/download-artifact@v5',
+        'classify-chromium-discovery.py',
+        'issues: write',
+    ):
+        assert required in discovery, f'daily discovery invariant missing: {required}'
+    assert 'cancel-in-progress: false' in discovery
+    assert '\n  push:\n' not in discovery
 
-    print('Validated 41 fixed model factories on the proven 15-minute watchdog clock.')
-    for minute in BATCH_MINUTES:
-        print(f'  :{minute:02d} -> {actual_batch_counts[minute]} workers')
+    playwright = PLAYWRIGHT_CONFIG.read_text(encoding='utf-8')
+    for required in (
+        "outputFile: '../test-results/results.json'",
+        "trace: 'retain-on-failure'",
+        "screenshot: 'only-on-failure'",
+        "video: 'retain-on-failure'",
+        "retries: process.env.CI ? 2 : 0",
+    ):
+        assert required in playwright, f'Playwright failure-evidence invariant missing: {required}'
+
+    classifier = DISCOVERY_CLASSIFIER.read_text(encoding='utf-8')
+    for required in (
+        'chromium-discovery-failure:',
+        'e2e-discovered',
+        'e2e-infrastructure',
+        'factory:unowned',
+        'ralph-status:pending',
+        'results.json',
+        'GITHUB_RUN_ID',
+        'GITHUB_SHA',
+        'args = ["issue", "create"',
+        'run_gh(*args)',
+    ):
+        assert required in classifier, f'discovery classifier invariant missing: {required}'
+    assert re.search(
+        r'run_gh\(\s*"issue",\s*"comment"',
+        classifier,
+    ), 'discovery classifier issue comment call missing'
+
+    print('Validated 28 external factory lanes, staggered scheduling, shared-pool selection, and daily Chromium discovery.')
+    for minute in SCHEDULE_MINUTES:
+        print(f'  :{minute:02d} -> {counts[minute]} workers')
     for source, count in EXPECTED_SOURCE_COUNTS.items():
         print(f'  {source}: {count}')
 

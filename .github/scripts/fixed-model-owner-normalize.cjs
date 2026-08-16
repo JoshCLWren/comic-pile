@@ -23,8 +23,19 @@ async function normalize({ github, context, core }) {
     per_page: 100,
   });
   const names = labels.map(label => label.name);
+  const numericOwners = names.filter(name => /^factory:[1-9][0-9]?$/.test(name));
 
-  let worker = pr.head?.ref?.match(WORKER_BRANCH_RE)?.[1] || '';
+  // A current lease is authoritative. Branch names record provenance only and
+  // must not steal a PR back after another factory adopts it.
+  let worker = numericOwners.length === 1 ? numericOwners[0].split(':')[1] : '';
+
+  // An explicit handoff to unowned is also authoritative. Do not resurrect a
+  // historical owner from the branch name or an older ownership marker.
+  if (!worker && names.includes('factory:unowned')) {
+    core.info(`Preserving factory:unowned on PR #${number}`);
+    return;
+  }
+
   if (!worker) {
     const comments = await github.paginate(github.rest.issues.listComments, {
       owner: context.repo.owner,
@@ -36,10 +47,7 @@ async function normalize({ github, context, core }) {
       for (const match of (comment.body || '').matchAll(MARKER_RE)) worker = match[1];
     }
   }
-  if (!worker) {
-    const numericOwners = names.filter(name => /^factory:[1-9][0-9]?$/.test(name));
-    if (numericOwners.length === 1) worker = numericOwners[0].split(':')[1];
-  }
+  if (!worker) worker = pr.head?.ref?.match(WORKER_BRANCH_RE)?.[1] || '';
   if (!worker) return;
 
   const owner = `factory:${worker}`;

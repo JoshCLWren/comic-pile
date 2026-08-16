@@ -28,7 +28,10 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Run factory visibility regression tests
-        run: node --test .github/scripts/factory-visibility.test.cjs
+        run: >-
+          node --test
+          .github/scripts/factory-visibility.test.cjs
+          .github/scripts/fixed-model-owner-normalize.test.cjs
 
       - name: Synchronize factory owner and stage labels
         uses: actions/github-script@v7

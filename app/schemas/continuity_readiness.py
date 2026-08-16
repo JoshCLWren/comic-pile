@@ -38,3 +38,41 @@ class ContinuityReadinessResponse(BaseModel):
     is_readable: bool
     evaluated_issue_id: int | None = None
     blockers: list[ContinuityBlocker] = Field(default_factory=list)
+
+
+ContinuityChainNodeType = Literal["issue", "crossover"]
+ContinuityChainDiagnosticCode = Literal[
+    "cycle_detected",
+    "depth_limit_exceeded",
+    "node_limit_exceeded",
+]
+
+
+class ContinuityChainNode(BaseModel):
+    """One structured node along a prerequisite chain."""
+
+    node_type: ContinuityChainNodeType
+    node_id: int
+    label: str
+    is_readable: bool
+
+
+class ContinuityChainDiagnostic(BaseModel):
+    """One structured traversal failure that does not require text parsing."""
+
+    code: ContinuityChainDiagnosticCode
+    node_type: ContinuityChainNodeType
+    node_id: int
+    limit: int | None = None
+
+
+class ContinuityChainResponse(BaseModel):
+    """Bounded transitive prerequisite chains for one requested node."""
+
+    node_type: ContinuityReadinessNodeType
+    node_id: int
+    evaluated_issue_id: int | None = None
+    direct_blockers: list[ContinuityBlocker] = Field(default_factory=list)
+    chains: list[list[ContinuityChainNode]] = Field(default_factory=list)
+    readable_prerequisites: list[ContinuityChainNode] = Field(default_factory=list)
+    diagnostics: list[ContinuityChainDiagnostic] = Field(default_factory=list)

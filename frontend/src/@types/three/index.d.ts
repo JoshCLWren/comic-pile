@@ -38,6 +38,8 @@ declare module 'three' {
   export class PerspectiveCamera {
     constructor(fov: number, aspect: number, near: number, far: number)
     position: Vector3
+    aspect: number
+    updateProjectionMatrix(): void
   }
 
   export class WebGLRenderer {

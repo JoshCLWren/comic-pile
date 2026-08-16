@@ -1,243 +1,88 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-WORKER="${FACTORY_WORKER:?FACTORY_WORKER is required}"
-SOURCE="${FACTORY_SOURCE:?FACTORY_SOURCE is required}"
-MODEL="${FACTORY_MODEL:?FACTORY_MODEL is required}"
-RUNTIME_MODEL="${FACTORY_RUNTIME_MODEL:?FACTORY_RUNTIME_MODEL is required}"
-DISPLAY="${FACTORY_DISPLAY:-$MODEL}"
-BRANCH_SUFFIX="${FACTORY_BRANCH_SUFFIX:-free-model}"
-OWNER="factory:${WORKER}"
-WORKER_ID="opencode-free-model-factory-${WORKER}"
-BUDGET_SECONDS="${FACTORY_BUDGET_SECONDS:-6000}"
-MAX_AGENT_ATTEMPTS="${FREE_MODEL_AGENT_MAX_ATTEMPTS:-2}"
-TRANSIENT_BACKOFF_SECONDS="${FREE_MODEL_TRANSIENT_BACKOFF_SECONDS:-20}"
-STARTED="$(date +%s)"
-DEADLINE=$((STARTED + BUDGET_SECONDS))
-OWNER_RE='^factory:(unowned|local|[1-9][0-9]*)$'
-STAGE_RE='^factory:(building|review|changes-requested|ci|ready|blocked)$'
-SKIP_PRS=()
+# Preserve the worker's public fail-fast contract before loading shared
+# primitives. Guard tests intentionally exercise these checks in isolation.
+: "${FACTORY_WORKER:?FACTORY_WORKER is required}"
+: "${FACTORY_SOURCE:?FACTORY_SOURCE is required}"
+: "${FACTORY_MODEL:?FACTORY_MODEL is required}"
+: "${FACTORY_RUNTIME_MODEL:?FACTORY_RUNTIME_MODEL is required}"
 
-log() { printf '[factory:%s][source:%s][model:%s] %s\n' "$WORKER" "$SOURCE" "$MODEL" "$*"; }
-remaining() { echo $((DEADLINE - $(date +%s))); }
-contains_skip_pr() {
-  local needle="$1" item
-  for item in "${SKIP_PRS[@]:-}"; do
-    [[ "$item" == "$needle" ]] && return 0
-  done
-  return 1
+# These four tiny bridges preserve the existing regression harness, which
+# extracts named helper functions directly from this file. In the real worker
+# they are immediately replaced when the tracked primitives are sourced below.
+# In the isolated harness, each bridge loads the exact tracked definition and
+# then tail-calls it. This keeps security tests pointed at the real helpers.
+stage_trusted_guard() {
+  local primitives definition
+  primitives="$(dirname "${WORKER:-${BASH_SOURCE[0]}}")/free-model-factory-worker-primitives.sh"
+  [[ -f "$primitives" ]] || primitives="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/free-model-factory-worker-primitives.sh"
+  definition="$(sed -n '/^stage_trusted_guard() {/,/^}/p' "$primitives")"
+  unset -f stage_trusted_guard
+  eval "$definition"
+  stage_trusted_guard "$@"
 }
 
-replace_labels() {
-  local number="$1" owner="$2" stage="$3"
-  local labels target
-  labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
-  target="$(jq -c --arg owner "$owner" --arg stage "$stage" --arg owner_re "$OWNER_RE" --arg stage_re "$STAGE_RE" '
-    map(select((test($owner_re)|not) and (test($stage_re)|not) and . != "factory"))
-    + ["factory", $owner, $stage] | unique' <<< "$labels")"
-  gh api --method PUT "repos/${GITHUB_REPOSITORY}/issues/${number}/labels" \
-    --input - <<< "{\"labels\":${target}}" >/dev/null
+conflict_markers_present() {
+  local primitives definition
+  primitives="$(dirname "${WORKER:-${BASH_SOURCE[0]}}")/free-model-factory-worker-primitives.sh"
+  [[ -f "$primitives" ]] || primitives="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/free-model-factory-worker-primitives.sh"
+  definition="$(sed -n '/^conflict_markers_present() {/,/^}/p' "$primitives")"
+  unset -f conflict_markers_present
+  eval "$definition"
+  conflict_markers_present "$@"
 }
 
-current_stage() {
-  local number="$1" fallback="$2" labels stage
-  labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
-  stage="$(jq -r --arg stage_re "$STAGE_RE" '[.[] | select(test($stage_re))][0] // empty' <<< "$labels")"
-  if [[ -n "$stage" ]]; then printf '%s\n' "$stage"; else printf '%s\n' "$fallback"; fi
+branch_folded_main_commits() {
+  local primitives definition
+  primitives="$(dirname "${WORKER:-${BASH_SOURCE[0]}}")/free-model-factory-worker-primitives.sh"
+  [[ -f "$primitives" ]] || primitives="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/free-model-factory-worker-primitives.sh"
+  definition="$(sed -n '/^branch_folded_main_commits() {/,/^}/p' "$primitives")"
+  unset -f branch_folded_main_commits
+  eval "$definition"
+  branch_folded_main_commits "$@"
 }
 
-current_owner_is_self() {
-  local number="$1" labels
-  labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
-  jq -e --arg owner "$OWNER" 'index($owner) != null' >/dev/null <<< "$labels"
+unclean_git_state_json() {
+  local primitives definition
+  primitives="$(dirname "${WORKER:-${BASH_SOURCE[0]}}")/free-model-factory-worker-primitives.sh"
+  [[ -f "$primitives" ]] || primitives="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/free-model-factory-worker-primitives.sh"
+  definition="$(sed -n '/^unclean_git_state_json() {/,/^}/p' "$primitives")"
+  unset -f unclean_git_state_json
+  eval "$definition"
+  unclean_git_state_json "$@"
 }
 
-release_target() {
-  local number="$1" fallback_stage="$2" reason="$3" target_kind="${4:-target}"
-  local stage epoch marker
-  stage="$(current_stage "$number" "$fallback_stage")"
-  replace_labels "$number" 'factory:unowned' "$stage"
-  epoch="$(date +%s)"
-  marker="<!-- comic-pile-factory-claim-released-v3:${target_kind}-${number}:${WORKER_ID}:${epoch}:${reason} -->"
-  gh issue comment "$number" --body "$marker" >/dev/null 2>&1 || true
-  log "released ${target_kind} #${number} to factory:unowned at ${stage} (${reason})"
-}
+# Reuse the proven persistence/guard/provider/lease primitives as a tracked
+# repository file, stopping before its legacy main loop. The selector/session
+# loop below is the canonical shared-pool implementation.
+source <(sed '/^ensure_owner_label$/,$d' .github/scripts/free-model-factory-worker-primitives.sh)
 
-release_owned_targets() {
-  local reason="$1" number stage
-  while IFS= read -r number; do
-    [[ -n "$number" ]] || continue
-    stage="$(current_stage "$number" 'factory:building')"
-    release_target "$number" "$stage" "$reason" 'issue'
-  done < <(gh issue list --state open --limit 300 --label "$OWNER" --json number --jq '.[].number')
-
-  while IFS= read -r number; do
-    [[ -n "$number" ]] || continue
-    stage="$(current_stage "$number" 'factory:review')"
-    release_target "$number" "$stage" "$reason" 'pr'
-  done < <(gh pr list --state open --limit 200 --label "$OWNER" --json number --jq '.[].number')
-}
-
-linked_issue_from_branch() {
-  sed -nE 's#^factory/[0-9]+-([0-9]+)-.*$#\1#p' <<< "$1"
-}
-
-issue_has_open_factory_pr() {
-  local issue="$1"
-  gh pr list --state open --limit 300 --json headRefName,body | jq -e --arg issue "$issue" '
-    any(.[];
-      (.headRefName | test("^factory/[0-9]+-" + $issue + "-"))
-      or (.headRefName | test("^factory/" + $issue + "-"))
-      or ((.body // "") | test("(?im)(closes|fixes|resolves|implements|part of)[[:space:]]+#" + $issue + "([^0-9]|$)"))
-    )' >/dev/null
-}
-
-release_pr_and_issue() {
-  local pr="$1" branch="$2" stage="$3" reason="$4" issue state
-  release_target "$pr" "$stage" "$reason" 'pr'
-  issue="$(linked_issue_from_branch "$branch")"
-  if [[ -n "$issue" ]]; then
-    state="$(gh issue view "$issue" --json state --jq .state 2>/dev/null || true)"
-    if [[ "$state" == 'OPEN' ]] && current_owner_is_self "$issue"; then
-      release_target "$issue" "$stage" "$reason" 'issue'
-    fi
+# A PR branch may predate the Kilo integration entirely. Stage the backend
+# runner from trusted main before any checkout so cross-worker takeover never
+# executes a missing or stale branch copy, mirroring the trusted guard model.
+stage_trusted_kilo_helper() {
+  [[ "$SOURCE" == 'kilo-auto' ]] || return 0
+  TRUSTED_KILO_HELPER="${TRUSTED_KILO_HELPER:-}"
+  if [[ -z "$TRUSTED_KILO_HELPER" ]]; then
+    TRUSTED_KILO_HELPER="$(mktemp /tmp/comic-pile-kilo-auto-run.XXXXXX.sh)"
   fi
+  cp .github/scripts/kilo-auto-factory-run.sh "$TRUSTED_KILO_HELPER"
+  chmod +x "$TRUSTED_KILO_HELPER"
 }
 
-ensure_owner_label() {
-  if ! gh api "repos/${GITHUB_REPOSITORY}/labels/factory%3A${WORKER}" >/dev/null 2>&1; then
-    gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" \
-      -f name="$OWNER" \
-      -f color='5319e7' \
-      -f description="Owned by fixed-model Factory ${WORKER}: ${DISPLAY}" >/dev/null
-    log "created ${OWNER}"
-  fi
-}
-
-choose_existing_pr() {
-  gh pr list --state open --limit 200 --json number,labels,updatedAt | jq -r \
-    --arg owner "$OWNER" '
-      map(select(([.labels[].name] | index($owner)) != null))
-      | sort_by(.updatedAt)
-      | .[].number'
-}
-
-choose_unowned_pr() {
-  gh pr list --state open --limit 200 --label 'factory:unowned' --json number,isDraft,updatedAt | jq -r '
-    map(select(.isDraft == false)) | sort_by(.updatedAt) | .[].number'
-}
-
-choose_issue() {
-  local labels=("$@") candidate
-  local args=(issue list --state open --limit 300 --json number,labels,createdAt)
-  local label
-  for label in "${labels[@]}"; do args+=(--label "$label"); done
-  while IFS= read -r candidate; do
-    [[ -n "$candidate" ]] || continue
-    issue_has_open_factory_pr "$candidate" && continue
-    printf '%s\n' "$candidate"
-  done < <(gh "${args[@]}" | jq -r --arg owner_re "$OWNER_RE" '
-    map(select(.number != 679 and .number != 1093 and .number != 1109))
-    | map(select((([.labels[].name | select(test($owner_re) and . != "factory:unowned")] | length) == 0)))
-    | sort_by(.createdAt) | reverse | .[].number')
-}
-
-choose_backlog_zero_child() {
-  gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/679/sub_issues?per_page=100" 2>/dev/null \
-    | jq -s -r --arg owner_re "$OWNER_RE" '
-      add
-      | map(select(.state == "open"))
-      | map(select((([.labels[].name | select(test($owner_re) and . != "factory:unowned")] | length) == 0)))
-      | sort_by(.number)
-      | .[].number' || true
-}
-
-claim_issue() {
-  local number="$1" labels target epoch marker
-  issue_has_open_factory_pr "$number" && return 1
-  labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
-  if jq -e --arg owner_re "$OWNER_RE" \
-    '[.[] | select(test($owner_re) and . != "factory:unowned")] | length > 0' \
-    >/dev/null <<< "$labels"; then
-    return 1
-  fi
-  target="$(jq -c --arg owner "$OWNER" --arg owner_re "$OWNER_RE" --arg stage_re "$STAGE_RE" '
-    map(select((test($owner_re)|not) and (test($stage_re)|not) and . != "factory"))
-    + ["factory", $owner, "factory:building"] | unique' <<< "$labels")"
-  gh api --method PUT "repos/${GITHUB_REPOSITORY}/issues/${number}/labels" \
-    --input - <<< "{\"labels\":${target}}" >/dev/null
-  epoch="$(date +%s)"
-  marker="<!-- comic-pile-factory-implement-claim-v3:issue-${number}:${WORKER_ID}:${epoch}:attempt-1 -->"
-  gh issue comment "$number" --body "$marker" >/dev/null 2>&1 || true
-}
-
-claim_unowned_pr() {
-  local number="$1" labels owner_count
-  labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
-  jq -e 'index("factory:unowned") != null' >/dev/null <<< "$labels" || return 1
-  owner_count="$(jq -r --arg owner_re "$OWNER_RE" \
-    '[.[] | select(test($owner_re) and . != "factory:unowned")] | length' <<< "$labels")"
-  [[ "$owner_count" == "0" ]] || return 1
-
-  replace_labels "$number" "$OWNER" 'factory:review'
-  labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
-  jq -e --arg owner "$OWNER" 'index($owner) != null' >/dev/null <<< "$labels" || return 1
-
-  gh issue comment "$number" --body "$(printf '<!-- free-model-factory-owner:%s -->\nFactory %s adopted this unowned PR with fixed model %s via %s.\n' \
-    "$WORKER" "$WORKER" "$MODEL" "$SOURCE")" >/dev/null
-}
-
-checkout_target() {
-  local mode="$1" number="$2" branch="$3"
-  git fetch --prune origin
-  git switch --detach origin/main >/dev/null 2>&1 || true
-  git reset --hard origin/main >/dev/null
-  git clean -fd >/dev/null
-  if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
-    git fetch origin "$branch:$branch" --force
-    git switch "$branch"
-    git reset --hard "origin/$branch" >/dev/null
-  else
-    git switch -C "$branch" origin/main
-  fi
-  log "checked out ${mode} #${number} on ${branch}"
-}
-
-current_head_review_blockers() {
-  local pr="$1" head="$2"
-  local changes unresolved
-  changes="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${pr}/reviews?per_page=100" \
-    | jq -s --arg head "$head" '[.[][] | select(.state == "CHANGES_REQUESTED" and .commit_id == $head)] | length')"
-  [[ "$changes" == "0" ]] || return 1
-  unresolved="$(gh api graphql -F owner='JoshCLWren' -F name='comic-pile' -F number="$pr" \
-    -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}}}}}' \
-    --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length')"
-  [[ "$unresolved" == "0" ]]
-}
-
-machine_merge_gates_pass() {
-  local pr="$1" expected_head="$2" info head
-  info="$(gh pr view "$pr" --json state,isDraft,mergeable,headRefOid)"
-  [[ "$(jq -r .state <<< "$info")" == "OPEN" ]] || return 1
-  [[ "$(jq -r .isDraft <<< "$info")" == "false" ]] || return 1
-  [[ "$(jq -r .mergeable <<< "$info")" == "MERGEABLE" ]] || return 1
-  head="$(jq -r .headRefOid <<< "$info")"
-  [[ "$head" == "$expected_head" ]] || return 1
-  gh pr checks "$pr" --required >/tmp/factory-required-checks 2>&1 || return 1
-  current_head_review_blockers "$pr" "$head" || return 1
-}
-
-is_transient_agent_failure() {
-  local status="$1"
-  [[ "$status" == "124" ]] && return 0
-  grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' \
-    "/tmp/opencode-factory-${WORKER}.log"
-}
-
+# Keep the established OpenCode/NVIDIA implementation untouched. Kilo needs a
+# small override only so it invokes the trusted helper staged from main.
+eval "$(declare -f run_agent | sed '1s/^run_agent /legacy_run_agent /')"
 run_agent() {
   local mode="$1" number="$2" timeout_seconds="$3"
   local target mission prompt status=0
-  if [[ "$mode" == "pr" ]]; then
+  if [[ "$SOURCE" != 'kilo-auto' ]]; then
+    legacy_run_agent "$@"
+    return $?
+  fi
+
+  if [[ "$mode" == 'pr' ]]; then
     target="pull request #${number}"
     mission="Resume this PR. Inspect the exact current head, required CI, review submissions, and every inline review thread. Fix closure-critical defects and resolve or concretely rebut actionable threads. If no edits are required, decide whether the PR fully completes its declared scope and is safe to merge. End your final response with FACTORY_GATE_READY only when no semantic blocker remains; otherwise end with FACTORY_GATE_NOT_READY."
   else
@@ -245,104 +90,98 @@ run_agent() {
     mission="Implement the full closure-critical acceptance contract for this issue with code and focused tests. Do not stop at planning or optional polish."
   fi
 
-  prompt="You are fixed-model OpenCode Factory ${WORKER} for JoshCLWren/comic-pile. Durable worker ID: ${WORKER_ID}. Source: ${SOURCE}. Pinned model: ${MODEL}. Runtime model: ${RUNTIME_MODEL}. Assigned target: ${target}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, docs/CHATGPT_FACTORY_PROMPT.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Follow the canonical product-first factory policy. ${mission} Work only on the assigned target during this agent invocation. Edit the checked-out branch, run focused validation, and use gh/GitHub when needed for review context. Do not commit or push; the wrapper persists changes. Do not switch models, providers, or routes. A provider failure is a result for this model lane, not permission to fall back to another model. Do not enable auto-merge, push main, touch production databases, or alter automation schedules."
+  prompt="You are external-model Factory ${WORKER} for JoshCLWren/comic-pile. Durable worker ID: ${WORKER_ID}. Source: ${SOURCE}. Requested model or route: ${MODEL}. Runtime selector: ${RUNTIME_MODEL}. Assigned target: ${target}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, docs/CHATGPT_FACTORY_PROMPT.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Follow the canonical product-first factory policy. ${mission} Work only on the assigned target during this agent invocation. Edit the checked-out branch, run focused validation, and use gh/GitHub when needed for review context. Do not commit or push; the wrapper persists changes. Do not switch models, providers, or routes. A provider failure is a result for this lane, not permission to fall back to another paid or unrequested route. Do not enable auto-merge, push main, touch production databases, or alter automation schedules."
 
-  timeout --signal=TERM --kill-after=30s "${timeout_seconds}s" \
-    opencode run -m "$RUNTIME_MODEL" --agent build --auto --dir "$GITHUB_WORKSPACE" \
-    --title "ComicPile Factory ${WORKER} · ${DISPLAY}" "$prompt" \
-    2>&1 | tee "/tmp/opencode-factory-${WORKER}.log"
-  status=${PIPESTATUS[0]}
+  set +e
+  bash "$TRUSTED_KILO_HELPER" \
+    "$timeout_seconds" \
+    "ComicPile Factory ${WORKER} · ${DISPLAY}" \
+    "$prompt" \
+    "/tmp/opencode-factory-${WORKER}.log"
+  status=$?
+  set -e
   return "$status"
 }
 
-target_scope_text() {
-  local mode="$1" number="$2" issue title body
-  if [[ "$mode" == 'issue' ]]; then
-    gh issue view "$number" --json title,body --jq '{title,body}'
-    return 0
-  fi
-  title="$(gh pr view "$number" --json title --jq .title)"
-  body="$(gh pr view "$number" --json body --jq .body)"
-  issue="$(linked_issue_from_branch "$(gh pr view "$number" --json headRefName --jq .headRefName)")"
-  if [[ -n "$issue" ]]; then
-    title="$(gh issue view "$issue" --json title --jq .title)"
-    body="$(gh issue view "$issue" --json body --jq .body)"
-  fi
-  jq -nc --arg title "$title" --arg body "$body" '{title:$title,body:$body}'
+priority_rank_jq='def priority_rank:
+  ([.labels[].name] // []) as $labels
+  | if ($labels | index("ralph-priority:critical")) then 4
+    elif ($labels | index("ralph-priority:high")) then 3
+    elif ($labels | index("ralph-priority:medium")) then 2
+    elif ($labels | index("ralph-priority:low")) then 1
+    else 0 end;'
+
+issue_has_open_blocker() {
+  local issue="$1" blockers
+  blockers="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${issue}/dependencies/blocked_by?per_page=100" 2>/dev/null \
+    | jq -s '[.[][]? | select(.state == "open")] | length' 2>/dev/null || true)"
+  [[ "${blockers:-0}" != "0" ]]
 }
 
-changed_paths_json() {
-  local base_ref="$1"
-  {
-    git diff --name-only --relative "$base_ref"
-    git ls-files --others --exclude-standard
-  } | jq -R -s 'split("\n") | map(select(length > 0)) | unique'
+issue_is_executable() {
+  local issue="$1" metadata title
+  metadata="$(gh issue view "$issue" --json title,labels --jq '{title,labels:[.labels[].name]}')" || return 1
+  title="$(jq -r .title <<< "$metadata")"
+
+  # Operational registries and explicit grouping documents are not product
+  # implementation tickets. Everything else remains eligible unless current
+  # ownership, a native dependency, or an open implementation PR proves it is
+  # not executable now.
+  [[ "$issue" != "1093" && "$issue" != "1109" ]] || return 1
+  [[ ! "$title" =~ ^(Epic:|PRD:) ]] || return 1
+  jq -e '
+    (.labels | index("factory:blocked") | not)
+    and (.labels | index("ralph-status:blocked") | not)
+  ' >/dev/null <<< "$metadata" || return 1
+  issue_has_open_factory_pr "$issue" && return 1
+  issue_has_open_blocker "$issue" && return 1
+  return 0
 }
 
-reject_out_of_scope_diff() {
-  local mode="$1" number="$2" base_ref="$3" scope previous latest decision reason
-  scope="$(target_scope_text "$mode" "$number")"
-  if [[ "$mode" == 'pr' ]]; then
-    previous="$(gh api "repos/${GITHUB_REPOSITORY}/compare/$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${number}" --jq .base.sha)...${base_ref}" \
-      --jq '[.files[]?.filename] | unique')"
-  else
-    previous='[]'
-  fi
-  latest="$(changed_paths_json "$base_ref")"
-  decision="$(python3 .github/scripts/fixed-model-guard.py \
-    --previous-json "$previous" \
-    --latest-json "$latest" \
-    --title "$(jq -r .title <<< "$scope")" \
-    --body "$(jq -r .body <<< "$scope")")"
-  if [[ "$(jq -r .reject <<< "$decision")" != true ]]; then
-    return 0
-  fi
-  reason="$(jq -r .reason <<< "$decision")"
-  log "rejecting out-of-scope ${mode} #${number} diff before push (${reason}): $(jq -c .factory_control_files <<< "$decision")"
-  git reset --hard "$base_ref" >/dev/null
-  git clean -fd >/dev/null
+choose_ranked_issues() {
+  local mode="$1" candidate
+  while IFS= read -r candidate; do
+    [[ -n "$candidate" ]] || continue
+    issue_is_executable "$candidate" || continue
+    printf '%s\n' "$candidate"
+  done < <(
+    gh issue list --state open --limit 300 --json number,title,labels,createdAt \
+      | jq -r --arg mode "$mode" --arg owner_re "$OWNER_RE" "$priority_rank_jq
+        map(select(.number != 1093 and .number != 1109))
+        | map(select((([.labels[].name | select(test(\$owner_re) and . != \"factory:unowned\")] | length) == 0)))
+        | map(select(
+            if \$mode == \"user-bug\" then
+              ([.labels[].name] | index(\"user-reported\")) != null and
+              ([.labels[].name] | index(\"bug\")) != null
+            elif \$mode == \"bug\" then
+              ([.labels[].name] | index(\"bug\")) != null
+            else true end
+          ))
+        | sort_by([priority_rank, .createdAt]) | reverse | .[].number"
+  )
+}
+
+claim_from_pool() {
+  local mode="$1" candidate
+  while IFS= read -r candidate; do
+    [[ -n "$candidate" ]] || continue
+    if claim_issue "$candidate"; then
+      NUMBER="$candidate"
+      MODE='issue'
+      BRANCH="factory/${WORKER}-${NUMBER}-${BRANCH_SUFFIX}"
+      log "leased executable ${mode} issue #${NUMBER} from the shared factory pool"
+      return 0
+    fi
+  done < <(choose_ranked_issues "$mode")
   return 1
 }
 
-persist_issue_pr() {
-  local number="$1" branch="$2" pr title body base_ref
-  [[ -n "$(git status --porcelain)" ]] || return 1
-  base_ref="$(git rev-parse HEAD)"
-  if ! reject_out_of_scope_diff 'issue' "$number" "$base_ref"; then
-    return 1
-  fi
-  git add -A >&2
-  git commit -m "factory: advance #${number} with ${DISPLAY}" >&2
-  git push --set-upstream origin "$branch" >&2
-  pr="$(gh pr list --state open --head "$branch" --json number --jq '.[0].number // empty')"
-  if [[ -z "$pr" ]]; then
-    title="$(gh issue view "$number" --json title --jq .title)"
-    body="$(printf 'Closes #%s.\n\nModel: %s\nSource: %s\nWorker: %s\n\nProduced by fixed-model Factory %s (%s). Normal ComicPile exact-head factory merge gates apply.\n' \
-      "$number" "$MODEL" "$SOURCE" "$WORKER_ID" "$WORKER" "$DISPLAY")"
-    gh pr create --base main --head "$branch" --title "$title" --body "$body" >/tmp/factory-pr-url
-    pr="$(gh pr list --state open --head "$branch" --json number --jq '.[0].number')"
-  fi
-  replace_labels "$pr" "$OWNER" 'factory:review'
-  echo "$pr"
-}
-
-persist_pr_changes() {
-  local pr="$1" branch="$2" base_ref
-  [[ -n "$(git status --porcelain)" ]] || return 1
-  base_ref="$(git rev-parse HEAD)"
-  if ! reject_out_of_scope_diff 'pr' "$pr" "$base_ref"; then
-    return 1
-  fi
-  git add -A
-  git commit -m "factory: advance PR #${pr} with ${DISPLAY}"
-  git push origin "$branch"
-  replace_labels "$pr" "$OWNER" 'factory:review'
-}
-
 ensure_owner_label
+stage_trusted_guard
+stage_trusted_kilo_helper
 release_owned_targets 'previous-run-stale-lease'
 trap 'release_owned_targets session-end-handoff || true' EXIT
-log "starting fixed-model session with runtime ${RUNTIME_MODEL}; budget ${BUDGET_SECONDS}s"
+log "starting shared-pool fixed-model session with runtime ${RUNTIME_MODEL}; budget ${BUDGET_SECONDS}s"
 
 while (( $(remaining) > 480 )); do
   MODE=''
@@ -358,21 +197,12 @@ while (( $(remaining) > 480 )); do
     break
   done < <(choose_existing_pr)
 
-  if [[ -z "$NUMBER" ]]; then
-    for selector in 'user-reported bug' 'bug' 'ralph-task'; do
-      read -r -a labels <<< "$selector"
-      while IFS= read -r candidate; do
-        [[ -n "$candidate" ]] || continue
-        if claim_issue "$candidate"; then
-          NUMBER="$candidate"
-          MODE='issue'
-          BRANCH="factory/${WORKER}-${NUMBER}-${BRANCH_SUFFIX}"
-          break 2
-        fi
-      done < <(choose_issue "${labels[@]}")
-    done
-  fi
+  if [[ -z "$NUMBER" ]]; then claim_from_pool 'user-bug' || true; fi
+  if [[ -z "$NUMBER" ]]; then claim_from_pool 'bug' || true; fi
+  if [[ -z "$NUMBER" ]]; then claim_from_pool 'product' || true; fi
 
+  # Cross-worker PR continuation is part of the same shared pool, but a random
+  # existing branch does not outrank a fresh executable product issue.
   if [[ -z "$NUMBER" ]]; then
     while IFS= read -r candidate; do
       [[ -n "$candidate" ]] || continue
@@ -381,27 +211,14 @@ while (( $(remaining) > 480 )); do
         NUMBER="$candidate"
         MODE='pr'
         BRANCH="$(gh pr view "$NUMBER" --json headRefName --jq .headRefName)"
-        log "adopted unowned PR #${NUMBER} on ${BRANCH}"
+        log "leased unowned PR #${NUMBER} on ${BRANCH} for cross-worker continuation"
         break
       fi
     done < <(choose_unowned_pr)
   fi
 
   if [[ -z "$NUMBER" ]]; then
-    while IFS= read -r candidate; do
-      [[ -n "$candidate" ]] || continue
-      if claim_issue "$candidate"; then
-        NUMBER="$candidate"
-        MODE='issue'
-        BRANCH="factory/${WORKER}-${NUMBER}-${BRANCH_SUFFIX}"
-        log "ordinary executable backlog unavailable; entering required #679 child #${NUMBER}"
-        break
-      fi
-    done < <(choose_backlog_zero_child)
-  fi
-
-  if [[ -z "$NUMBER" ]]; then
-    log 'no selectable ordinary target or unowned #679 child is currently available; refusing to report this as productive work'
+    log 'shared executable backlog is empty for this session; daily Chromium discovery owns backlog replenishment'
     break
   fi
 
@@ -454,24 +271,25 @@ while (( $(remaining) > 480 )); do
       release_target "$pr" 'factory:review' 'pr-opened-handoff' 'pr'
       SKIP_PRS+=("$pr")
     elif (( transient_failure == 1 )); then
-      log "issue #${NUMBER} produced no changes because the pinned model was interrupted; releasing without marking the issue blocked"
+      log "issue #${NUMBER} produced no changes because the model was interrupted; releasing the lease"
       release_target "$NUMBER" 'factory:building' 'transient-model-interruption' 'issue'
     else
-      log "issue #${NUMBER} produced no changes; releasing as blocked/unowned"
-      release_target "$NUMBER" 'factory:blocked' 'no-persisted-change' 'issue'
+      log "issue #${NUMBER} produced no persisted change; releasing the lease for another worker/model attempt"
+      release_target "$NUMBER" 'factory:building' 'no-persisted-change-handoff' 'issue'
     fi
     continue
   fi
 
   if persist_pr_changes "$NUMBER" "$BRANCH"; then
-    log "pushed repairs to PR #${NUMBER}; review/CI must refresh"
+    log "pushed repairs to PR #${NUMBER}; releasing for review/CI/cross-worker continuation"
     release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'repairs-pushed-handoff'
     SKIP_PRS+=("$NUMBER")
     continue
   fi
 
   current="$(git rev-parse HEAD)"
-  if grep -q 'FACTORY_GATE_READY' "/tmp/opencode-factory-${WORKER}.log" && \
+  if [[ "$SOURCE" != 'kilo-auto' ]] && \
+    grep -q 'FACTORY_GATE_READY' "/tmp/opencode-factory-${WORKER}.log" && \
     machine_merge_gates_pass "$NUMBER" "$current"; then
     log "all exact-head gates passed for PR #${NUMBER}; merging ${current}"
     gh pr merge "$NUMBER" --merge --match-head-commit "$current" --delete-branch
@@ -487,10 +305,8 @@ while (( $(remaining) > 480 )); do
   fi
 
   if (( transient_failure == 1 )); then
-    log "PR #${NUMBER} was interrupted transiently with no persisted edits; releasing the lease and selecting other work"
     release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'transient-model-interruption'
   else
-    log "PR #${NUMBER} is not merge-eligible now; releasing the lease for cross-worker takeover"
     release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'not-merge-eligible-handoff'
   fi
   SKIP_PRS+=("$NUMBER")

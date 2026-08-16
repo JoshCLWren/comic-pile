@@ -16,16 +16,7 @@ LEGACY_PIPELINE = ROOT / "scripts/opencode_pipeline.sh"
 
 
 def require(text: str, needle: str, source: Path) -> None:
-    """Require one invariant string in a policy source.
-
-    Args:
-        text: Complete source text to inspect.
-        needle: Required invariant text.
-        source: Source path used in the failure message.
-
-    Returns:
-        None.
-    """
+    """Require one invariant string in a policy source."""
     if needle in {"Version: 22", "FACTORY POLICY V22"}:
         pattern = rf"(?<![A-Za-z0-9]){re.escape(needle)}(?![A-Za-z0-9])"
         present = re.search(pattern, text) is not None
@@ -36,16 +27,7 @@ def require(text: str, needle: str, source: Path) -> None:
 
 
 def forbid(text: str, needle: str, source: Path) -> None:
-    """Reject one known contradictory policy string.
-
-    Args:
-        text: Complete source text to inspect.
-        needle: Forbidden contradictory text.
-        source: Source path used in the failure message.
-
-    Returns:
-        None.
-    """
+    """Reject one known contradictory policy string."""
     if needle in text:
         raise SystemExit(f"{source}: forbidden policy drift found: {needle!r}")
 
@@ -68,43 +50,36 @@ def require_order(text: str, before: str, after: str, source: Path) -> None:
 
 
 def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
-    """Validate all factory control-plane texts against canonical invariants.
-
-    Args:
-        policy: Canonical autonomous factory policy text.
-        protocol: GitHub issue execution protocol text.
-        entrypoint: Combined local factory wrappers and scheduled prompt text.
-
-    Returns:
-        None.
-    """
+    """Validate factory control-plane texts against canonical invariants."""
     for needle in (
         "Version: 22",
-        "Release notes are asynchronous post-merge infrastructure",
-        "Implementation workers must not create, repair, or require `docs/changelog.d` fragments",
-        "They are not runtime truth",
         "Drive the open issue backlog to zero",
-        "An empty or blocked ordinary backlog is never an idle condition",
-        "If no ordinary executable issue can be selected, do not declare the factory idle.",
-        "Blocked work never authorizes a worker to pause or disable itself.",
-        "Never pause, disable, suspend, or stop a scheduled factory because the ordinary backlog is blocked or empty.",
+        "Factory ownership is a connection-pool lock around the next action",
+        "Cross-worker takeover and merge are allowed",
+        "release the lease when active work stops",
+        "truthful no-work completion",
+        "Ordinary factories must not launch the complete discovery suite",
+        "The complete maintained Chromium Playwright suite is a separate scheduled discovery system",
+        "run once daily and remain manually dispatchable",
+        "retain Playwright traces, screenshots, video",
+        "machine-readable JSON results",
+        "upload failure evidence under `if: always()`",
+        "deduplicate repeated failures across daily runs",
+        "A newer discovery run must not cancel an in-flight run",
+        "When a factory fixes an E2E-discovered product defect, keep or strengthen focused regression coverage",
         "The highest-priority unclaimed open issue labeled both `user-reported` and `bug`",
         "The highest-priority unclaimed reproducible E2E-discovered product `bug` issue",
         "When fewer than four substantive implementation PRs are open",
         "At most one implementation worker may own an issue",
         "Existing open PRs are not automatically higher priority than unclaimed issues.",
+        "Release notes are asynchronous post-merge infrastructure",
+        "Implementation workers must not create, repair, or require `docs/changelog.d` fragments",
         "fetch review submissions and all current inline review threads",
-        "ignore only clearly non-actionable status noise",
-        "classify every actionable finding as fixed, demonstrably outdated",
         "A worker's own review conclusion does not silently override existing human or bot feedback.",
         "Workers may merge a PR without asking again only after all of these gates are satisfied",
         "the worker supplies the exact expected head SHA",
+        "Formal GitHub `APPROVED` state is not a required merge gate",
         "Never enable auto-merge.",
-        "Issue #679 is excluded from ordinary executable-backlog selection",
-        "restore the maintained Chromium Playwright CI suite",
-        "create one focused issue per independent reproducible product defect",
-        "preserve `user-reported` only for bugs actually reported by a user",
-        "Firefox and WebKit may be run manually",
         "Never push directly to `main`.",
         "Never create or convert a draft PR unless Josh explicitly requests a draft.",
         "## Durable resume packet",
@@ -118,6 +93,8 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
 
     forbid_marker(policy, "Version: 21", POLICY)
     forbid_marker(policy, "Version: 220", POLICY)
+    forbid(policy, "#679", POLICY)
+    forbid(policy, "backlog-zero checkpoint", POLICY)
     require_order(
         policy,
         "The highest-priority unclaimed open issue labeled both `user-reported` and `bug`",
@@ -143,27 +120,22 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
 
     for obsolete in (
         "## User-facing changelog gate",
-        "Every product, behavior, deployment, operational, or factory-tooling PR must update",
-        "exactly one isolated Markdown fragment",
-        "Changelog: not user-facing",
-        "A missing required changelog entry is an actionable review defect",
         "HONEST STAGE FAST PATH",
         "Planning PRs are encouraged",
         "Always split large PRs into stages",
-        "A heartbeat may stop after one substantive commit",
-        "Do not start a new issue while an owned issue has executable remaining work.",
         "Prefer finishing already-started issues over starting new ones.",
-        "ready PR awaiting Josh's explicit merge authorization",
+        "Do not start a new issue while an owned issue has executable remaining work.",
         "Never merge.",
-        "Never merge or enable auto-merge without Josh explicitly authorizing that merge.",
-        "full configured end-to-end test coverage",
         "full configured E2E matrix",
-        "repair the backlog in the current PR rather than recording only the worker's own change",
     ):
         forbid(policy, obsolete, POLICY)
 
     for needle in (
         "docs/AUTONOMOUS_FACTORY_POLICY.md",
+        "daily Chromium discovery",
+        "Discovery failures must preserve traces, screenshots, video, JSON results, backend logs, and run metadata",
+        "Reproducible product failures become focused `bug` issues",
+        "Ordinary factories do not launch the complete discovery suite",
         "Never create a draft pull request unless Josh explicitly requests a draft.",
         "Before pass, readiness, or merge, inspect the exact current head SHA",
         "An unresolved actionable correctness, security, ownership, data-integrity, migration, concurrency, recovery, or test-validity finding blocks readiness and merge.",
@@ -174,48 +146,26 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "Autonomous factory workers may merge",
     ):
         require(protocol, needle, PROTOCOL)
-
-    for obsolete in (
-        "Autonomous factory workers may merge whenever CI is green.",
-        "Autonomous factory workers may ignore unresolved review findings.",
-        "Autonomous factory workers must wait for Josh's explicit authorization for every merge.",
-        "Auto-merge may be enabled after CI starts.",
-    ):
-        forbid(protocol, obsolete, PROTOCOL)
+    forbid(protocol, "#679", PROTOCOL)
 
     for needle in (
         "docs/AUTONOMOUS_FACTORY_POLICY.md",
         "Drive the open issue backlog to zero",
         "Release notes are post-merge infrastructure",
         "database-backed release ledger",
-        "newest unclaimed open issue labeled both `user-reported` and `bug`",
-        "reproducible E2E-discovered",
-        "fewer than four substantive implementation PRs",
-        "fetch all current-SHA review submissions and inline review threads",
-        "ignore only status noise, summaries, release notes, rate-limit notices",
-        "classify every actionable finding as fixed, demonstrably outdated",
+        "highest-priority unclaimed open issue labeled both `user-reported` and `bug`",
+        "reproducible E2E-discovered product bugs",
+        "full maintained Chromium discovery suite is an independent daily workflow",
+        "preserves traces, screenshots, video, JSON results, backend logs, and run metadata",
+        "Never launch the full discovery suite merely because your current work pool is empty",
+        "record a truthful no-work completion",
+        "factory:unowned",
         "exact expected head SHA",
         "Never enable auto-merge",
-        "Issue #679 is deferred",
-        "Chromium Playwright E2E suite",
-        "Create one GitHub issue per independent reproducible Chromium product defect",
-        "Firefox and WebKit are optional diagnostics",
-        "Never create or convert a draft PR unless Josh explicitly",
         "Never treat an empty or blocked backlog as a reason to self-pause or self-disable.",
         "Only Josh, or an interactive session acting on Josh's direct instruction, may pause or disable this factory.",
-        "comic-pile-factory-review-claim-v2",
-        "comic-pile-factory-fix-claim-v3",
-        "comic-pile-factory-ready-v2",
     ):
         require(entrypoint, needle, ENTRYPOINT)
-
-    require_order(
-        entrypoint,
-        "newest unclaimed open issue labeled both `user-reported` and `bug`",
-        "reproducible E2E-discovered",
-        ENTRYPOINT,
-    )
-    require(entrypoint, "newest first within equal priority", ENTRYPOINT)
 
     for obsolete in (
         "Treat the generated changelog as part of the completion contract",
@@ -226,15 +176,10 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "HONEST STAGE FAST PATH",
         "Prefer finishing already-started issues over starting new ones.",
         "Do not start a new issue while an owned issue has executable remaining work.",
-        "ready PR awaiting Josh's explicit merge authorization",
         "Never merge.",
-        "Never merge or enable auto-merge without Josh explicitly authorizing that merge.",
         "merge the pull request after CI",
-        "merge whenever CI is green",
         "ignore unresolved review threads",
-        "full configured E2E matrix",
         "Firefox + WebKit + Chromium",
-        "Treat docs/changelog.md as part of the completion contract",
         "core.hooksPath=/dev/null",
         "commit even if tests are not fully passing",
         "commit even if not fully passing",
@@ -243,11 +188,7 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
 
 
 def validate_local_guidance() -> None:
-    """Validate every local and scheduled factory entry point independently.
-
-    Returns:
-        None.
-    """
+    """Validate local and scheduled factory entry points independently."""
     for source in (SCHEDULED_PROMPT, HEARTBEAT_ENTRYPOINT, NEXT_TASK_PROMPT, ISSUE_SKILL):
         text = source.read_text(encoding="utf-8")
         require(text, "factory-resume:v1", source)
@@ -259,10 +200,12 @@ def validate_local_guidance() -> None:
     forbid_marker(scheduled, "Version: 220", SCHEDULED_PROMPT)
     forbid_marker(scheduled, "FACTORY POLICY V21", SCHEDULED_PROMPT)
     forbid_marker(scheduled, "FACTORY POLICY V220", SCHEDULED_PROMPT)
+    forbid(scheduled, "#679", SCHEDULED_PROMPT)
     require(scheduled, "Release notes are post-merge infrastructure", SCHEDULED_PROMPT)
     require(scheduled, "one full atomic label-set replacement", SCHEDULED_PROMPT)
     require(scheduled, "At the start of every scheduled run", SCHEDULED_PROMPT)
     require(scheduled, "Heartbeat telemetry never counts as substantive progress", SCHEDULED_PROMPT)
+    require(scheduled, "independent daily workflow", SCHEDULED_PROMPT)
 
     next_task = NEXT_TASK_PROMPT.read_text(encoding="utf-8")
     require(next_task, "only\n  after the PR merges", NEXT_TASK_PROMPT)
@@ -277,11 +220,7 @@ def validate_local_guidance() -> None:
 
 
 def read_entrypoint_text() -> str:
-    """Read local orchestration prompts and the scheduled ChatGPT prompt template.
-
-    Returns:
-        The combined wrapper, heartbeat, and scheduled prompt source text.
-    """
+    """Read local orchestration prompts and the scheduled ChatGPT prompt template."""
     return "\n".join(
         (
             ENTRYPOINT.read_text(encoding="utf-8"),
@@ -292,11 +231,7 @@ def read_entrypoint_text() -> str:
 
 
 def main() -> None:
-    """Read checked-in policy sources and validate their alignment.
-
-    Returns:
-        None.
-    """
+    """Read checked-in policy sources and validate their alignment."""
     validate_texts(
         POLICY.read_text(encoding="utf-8"),
         PROTOCOL.read_text(encoding="utf-8"),

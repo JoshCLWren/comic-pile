@@ -661,7 +661,8 @@
               "item_read",
               "all_members_read",
               "checkpoint",
-              "selected_members_read"
+              "selected_members_read",
+              "converged"
             ],
             "title": "Satisfaction Type",
             "type": "string"
@@ -697,6 +698,149 @@
           "satisfaction_type"
         ],
         "title": "ContinuityBlocker",
+        "type": "object"
+      },
+      "ContinuityChainDiagnostic": {
+        "description": "One structured traversal failure that does not require text parsing.",
+        "properties": {
+          "code": {
+            "enum": [
+              "cycle_detected",
+              "depth_limit_exceeded",
+              "node_limit_exceeded"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "integer"
+          },
+          "node_type": {
+            "enum": [
+              "issue",
+              "crossover"
+            ],
+            "title": "Node Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "node_type",
+          "node_id"
+        ],
+        "title": "ContinuityChainDiagnostic",
+        "type": "object"
+      },
+      "ContinuityChainNode": {
+        "description": "One structured node along a prerequisite chain.",
+        "properties": {
+          "is_readable": {
+            "title": "Is Readable",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "integer"
+          },
+          "node_type": {
+            "enum": [
+              "issue",
+              "crossover"
+            ],
+            "title": "Node Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "node_type",
+          "node_id",
+          "label",
+          "is_readable"
+        ],
+        "title": "ContinuityChainNode",
+        "type": "object"
+      },
+      "ContinuityChainResponse": {
+        "description": "Bounded transitive prerequisite chains for one requested node.",
+        "properties": {
+          "chains": {
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/ContinuityChainNode"
+              },
+              "type": "array"
+            },
+            "title": "Chains",
+            "type": "array"
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityChainDiagnostic"
+            },
+            "title": "Diagnostics",
+            "type": "array"
+          },
+          "direct_blockers": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityBlocker"
+            },
+            "title": "Direct Blockers",
+            "type": "array"
+          },
+          "evaluated_issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluated Issue Id"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "integer"
+          },
+          "node_type": {
+            "enum": [
+              "issue",
+              "thread",
+              "crossover"
+            ],
+            "title": "Node Type",
+            "type": "string"
+          },
+          "readable_prerequisites": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityChainNode"
+            },
+            "title": "Readable Prerequisites",
+            "type": "array"
+          }
+        },
+        "required": [
+          "node_type",
+          "node_id"
+        ],
+        "title": "ContinuityChainResponse",
         "type": "object"
       },
       "ContinuityPlanLane": {
@@ -968,6 +1112,14 @@
             ],
             "title": "Checkpoint Issue Id"
           },
+          "convergence_targets": {
+            "items": {
+              "$ref": "#/components/schemas/ConvergenceTarget"
+            },
+            "maxItems": 250,
+            "title": "Convergence Targets",
+            "type": "array"
+          },
           "note": {
             "anyOf": [
               {
@@ -985,7 +1137,8 @@
               "item_read",
               "all_members_read",
               "checkpoint",
-              "selected_members_read"
+              "selected_members_read",
+              "converged"
             ],
             "title": "Satisfaction Type",
             "type": "string"
@@ -1049,6 +1202,13 @@
             ],
             "title": "Checkpoint Issue Id"
           },
+          "convergence_targets": {
+            "items": {
+              "$ref": "#/components/schemas/ConvergenceTarget"
+            },
+            "title": "Convergence Targets",
+            "type": "array"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -1074,7 +1234,8 @@
               "item_read",
               "all_members_read",
               "checkpoint",
-              "selected_members_read"
+              "selected_members_read",
+              "converged"
             ],
             "title": "Satisfaction Type",
             "type": "string"
@@ -1129,12 +1290,37 @@
           "target_id",
           "satisfaction_type",
           "checkpoint_issue_id",
+          "convergence_targets",
           "selected_member_issue_ids",
           "note",
           "created_at",
           "updated_at"
         ],
         "title": "ContinuityRuleResponse",
+        "type": "object"
+      },
+      "ConvergenceTarget": {
+        "description": "A single node a converged continuity rule waits for.",
+        "properties": {
+          "id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Id",
+            "type": "integer"
+          },
+          "type": {
+            "enum": [
+              "issue",
+              "crossover"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "id"
+        ],
+        "title": "ConvergenceTarget",
         "type": "object"
       },
       "DependencyCreate": {
@@ -7213,6 +7399,55 @@
           }
         ],
         "summary": "Update Continuity Rule",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "continuity"
+        ]
+      }
+    },
+    "/api/v1/continuity/chains": {
+      "post": {
+        "description": "Resolve bounded transitive prerequisite chains, currently readable prerequisites, and structured traversal diagnostics for one owned node.",
+        "operationId": "get_continuity_chains_api_v1_continuity_chains_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinuityReadinessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityChainResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Continuity Chains",
         "tags": [
           "dependencies",
           "dependencies",

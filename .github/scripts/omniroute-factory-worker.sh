@@ -116,7 +116,8 @@ checkout_target() {
   else
     git switch -C "$branch" origin/main
   fi
-  log "checked out ${mode} #${number} on ${branch}"
+  EXPECTED_HEAD="$(git rev-parse HEAD)"
+  log "checked out ${mode} #${number} on ${branch} at ${EXPECTED_HEAD}"
 }
 
 current_head_review_blockers() {
@@ -184,9 +185,38 @@ smoke_agent() {
   log 'OpenCode smoke succeeded without modifying the worktree'
 }
 
+reject_unclean_git_state() {
+  # Fail closed before persistence: a model-created merge, rebase, cherry-pick,
+  # revert, or unresolved conflict must never be committed or pushed by the
+  # wrapper. The model is instructed not to commit; any HEAD movement away from
+  # the checked-out target means the model merged or rebased main.
+  local marker
+  marker="$(git rev-parse -q --verify MERGE_HEAD 2>/dev/null || true)"
+  [[ -z "$marker" ]] || { log 'rejecting persistence: merge in progress (MERGE_HEAD)'; return 1; }
+  marker="$(git rev-parse -q --verify CHERRY_PICK_HEAD 2>/dev/null || true)"
+  [[ -z "$marker" ]] || { log 'rejecting persistence: cherry-pick in progress'; return 1; }
+  marker="$(git rev-parse -q --verify REVERT_HEAD 2>/dev/null || true)"
+  [[ -z "$marker" ]] || { log 'rejecting persistence: revert in progress'; return 1; }
+  [[ -z "$(git ls-files -u)" ]] || { log 'rejecting persistence: unmerged index entries'; return 1; }
+  if git diff --name-only --diff-filter=ACMRTUXB HEAD | xargs -r grep -lE '^(<<<<<<< |>>>>>>> |=======$)' 2>/dev/null | grep -q .; then
+    log 'rejecting persistence: conflict markers in changed files'
+    return 1
+  fi
+  if [[ "$(git rev-parse HEAD)" != "$EXPECTED_HEAD" ]]; then
+    log 'rejecting persistence: HEAD moved away from the checked-out target (model merge/rebase/commit)'
+    return 1
+  fi
+  return 0
+}
+
 persist_issue_pr() {
   local number="$1" branch="$2" pr title body
   [[ -n "$(git status --porcelain)" ]] || return 1
+  if ! reject_unclean_git_state; then
+    git reset --hard "$EXPECTED_HEAD" >/dev/null
+    git clean -fd >/dev/null
+    return 1
+  fi
   git add -A
   git commit -m "factory: advance #${number} with OmniRoute"
   git push --set-upstream origin "$branch"
@@ -205,6 +235,11 @@ persist_issue_pr() {
 persist_pr_changes() {
   local pr="$1" branch="$2"
   [[ -n "$(git status --porcelain)" ]] || return 1
+  if ! reject_unclean_git_state; then
+    git reset --hard "$EXPECTED_HEAD" >/dev/null
+    git clean -fd >/dev/null
+    return 1
+  fi
   git add -A
   git commit -m "factory: advance PR #${pr} with OmniRoute"
   git push origin "$branch"

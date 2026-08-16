@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react'
+import { act, render } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import * as THREE from 'three'
 import Dice3D, { getFaceRotation, getProjectedCenterOffsetPx } from '../components/Dice3D'
@@ -15,6 +15,7 @@ const diceMock = vi.hoisted(() => ({
   geometryCounts: [] as number[],
   geometryDisposals: 0,
   materialDisposals: 0,
+  setSizeCalls: [] as Array<[number, number]>,
   lastMesh: null as { rotation: { x: number; y: number; z: number; set: ReturnType<typeof vi.fn> } } | null,
 }))
 
@@ -93,9 +94,13 @@ vi.mock('three', () => {
   }
   class PerspectiveCamera {
     position: { set: ReturnType<typeof vi.fn> }
+    aspect: number
+    updateProjectionMatrix: ReturnType<typeof vi.fn>
 
     constructor() {
       this.position = { set: vi.fn() }
+      this.aspect = 1
+      this.updateProjectionMatrix = vi.fn()
     }
   }
   class WebGLRenderer {
@@ -105,7 +110,9 @@ vi.mock('three', () => {
       if (diceMock.failRenderer) throw new Error('WebGL unavailable')
       this.domElement = document.createElement('canvas')
     }
-    setSize() {}
+    setSize(width: number, height: number) {
+      diceMock.setSizeCalls.push([width, height])
+    }
     setPixelRatio() {}
     setClearColor() {}
     render() {}
@@ -220,6 +227,7 @@ beforeEach(() => {
   diceMock.geometryCounts = []
   diceMock.geometryDisposals = 0
   diceMock.materialDisposals = 0
+  diceMock.setSizeCalls = []
   diceMock.lastMesh = null
   diceMock.throwBox = false
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
@@ -395,4 +403,58 @@ it('completes a settled face animation callback', () => {
   rerender(<Dice3D sides={6} value={2} onRollComplete={onRollComplete} />)
   nextFrame?.(1)
   expect(onRollComplete).toHaveBeenCalled()
+})
+
+it('resizes the renderer when a hidden container becomes visible', () => {
+  let resizeCallback: ResizeObserverCallback | undefined
+  const observe = vi.fn()
+  const disconnect = vi.fn()
+  class ResizeObserverMock {
+    constructor(callback: ResizeObserverCallback) {
+      resizeCallback = callback
+    }
+    observe = observe
+    disconnect = disconnect
+    unobserve = vi.fn()
+  }
+  vi.stubGlobal('ResizeObserver', ResizeObserverMock)
+
+  const { container, unmount } = render(<Dice3D sides={4} value={1} />)
+  const dieContainer = container.querySelector('.dice-3d') as HTMLDivElement
+  expect(observe).toHaveBeenCalledWith(dieContainer)
+
+  // Mounted while hidden: zero-sized container must not resize the renderer.
+  Object.defineProperty(dieContainer, 'clientWidth', { configurable: true, value: 0 })
+  Object.defineProperty(dieContainer, 'clientHeight', { configurable: true, value: 0 })
+  act(() => {
+    resizeCallback?.([], {} as ResizeObserver)
+  })
+  expect(diceMock.setSizeCalls.at(-1)).toEqual([200, 200])
+
+  // Revealed at a smaller size: the renderer must track the container instead
+  // of staying at the mount-time fallback size.
+  Object.defineProperty(dieContainer, 'clientWidth', { configurable: true, value: 40 })
+  Object.defineProperty(dieContainer, 'clientHeight', { configurable: true, value: 40 })
+  act(() => {
+    resizeCallback?.([], {} as ResizeObserver)
+  })
+  expect(diceMock.setSizeCalls.at(-1)).toEqual([40, 40])
+
+  // A repeat callback at the same size must be a no-op.
+  const callsAfterFirstResize = diceMock.setSizeCalls.length
+  act(() => {
+    resizeCallback?.([], {} as ResizeObserver)
+  })
+  expect(diceMock.setSizeCalls).toHaveLength(callsAfterFirstResize)
+
+  unmount()
+  expect(disconnect).toHaveBeenCalled()
+})
+
+it('skips resize observation when ResizeObserver is unavailable', () => {
+  vi.stubGlobal('ResizeObserver', undefined)
+
+  const { unmount } = render(<Dice3D sides={4} value={1} />)
+
+  unmount()
 })
