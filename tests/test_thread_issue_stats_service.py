@@ -48,6 +48,7 @@ async def _make_thread(
             if first_issue is None:
                 first_issue = issue
         await async_db.flush()
+        assert first_issue is not None
         thread.next_unread_issue_id = first_issue.id
         await async_db.flush()
     return thread

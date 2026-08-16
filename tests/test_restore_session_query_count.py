@@ -49,6 +49,7 @@ async def _seed_migrated_session(
             async_db.add(issue)
             if first_issue is None:
                 first_issue = issue
+        assert first_issue is not None
         thread.next_unread_issue_id = first_issue.id
     await async_db.flush()
     await create_session_start_snapshot(async_db, session)
