@@ -3,9 +3,10 @@ from __future__ import annotations
 import os
 import re
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Iterable
+from typing import Any
 NON_EXECUTABLE_ISSUES = {679, 1093, 1109}
 
 OWNER_RE = re.compile('^factory:(?:unowned|local|[1-9]|[1-3][0-9]|4[0-6])$')
@@ -17,6 +18,7 @@ STAGE_LABELS = {'factory:building', 'factory:review', 'factory:changes-requested
 INFRA_LABELS = {'infrastructure', 'e2e-infrastructure', 'policy-change', 'docs', 'documentation', 'quality-control'}
 
 BLOCKED_LABELS = {'factory:blocked', 'ralph-status:blocked', 'wontfix', 'invalid', 'duplicate'}
+
 
 def env_positive_int(name: str, default: int) -> int:
     """Return a positive integer environment setting or its safe default."""
@@ -35,8 +37,10 @@ def env_positive_int(name: str, default: int) -> int:
 
 LOCAL_LEASE_TTL_SECONDS = env_positive_int('FACTORY_LOCAL_LEASE_TTL_SECONDS', 3600)
 
+
 @dataclass(frozen=True)
 class Candidate:
+    """A ranked unit of executable factory work."""
     kind: str
     number: int
     lane: int
@@ -45,9 +49,12 @@ class Candidate:
     linked_issue: int | None = None
 
     def sort_key(self) -> tuple[int, int, float, int]:
+        """Return the deterministic queue ordering key."""
         return (self.lane, -self.priority, -parse_time(self.created_at), -self.number)
 
+
 def parse_time(value: str | None) -> float:
+    """Parse an ISO timestamp into a sortable epoch value."""
     if not value:
         return 0.0
     try:
@@ -55,7 +62,9 @@ def parse_time(value: str | None) -> float:
     except ValueError:
         return 0.0
 
+
 def labels_of(item: dict[str, Any]) -> set[str]:
+    """Return the normalized label names from a GitHub item."""
     result: set[str] = set()
     for label in item.get('labels') or []:
         name = label.get('name') if isinstance(label, dict) else label
@@ -63,14 +72,18 @@ def labels_of(item: dict[str, Any]) -> set[str]:
             result.add(str(name))
     return result
 
+
 def owner_of(labels: Iterable[str]) -> str | None:
+    """Return the active factory owner represented by a label set."""
     owners = [label for label in labels if OWNER_RE.fullmatch(label)]
     active = [label for label in owners if label != 'factory:unowned']
     if active:
         return sorted(active)[0]
     return 'factory:unowned' if 'factory:unowned' in owners else None
 
+
 def priority_rank(labels: Iterable[str]) -> int:
+    """Map explicit priority labels to a deterministic numeric rank."""
     labels = set(labels)
     if 'ralph-priority:critical' in labels or 'priority:P0' in labels:
         return 4
@@ -82,13 +95,17 @@ def priority_rank(labels: Iterable[str]) -> int:
         return 1
     return 0
 
+
 def linked_issue_from_branch(branch: str | None) -> int | None:
+    """Extract an issue number from the canonical factory branch shape."""
     if not branch:
         return None
     match = re.match('^factory/\\d+-(\\d+)-', branch)
     return int(match.group(1)) if match else None
 
+
 def provenance_lane(labels: set[str]) -> int:
+    """Return the deterministic assignment lane for a label set."""
     if 'e2e-discovered' in labels:
         return 4
     if labels & INFRA_LABELS:
@@ -97,10 +114,14 @@ def provenance_lane(labels: set[str]) -> int:
         return 1
     return 3
 
+
 def item_is_unowned(labels: set[str]) -> bool:
+    """Return whether a label set has no active factory owner."""
     return owner_of(labels) in (None, 'factory:unowned')
 
+
 def issue_is_static_candidate(issue: dict[str, Any], suppressing_pr_issues: set[int]) -> bool:
+    """Return whether an issue is structurally eligible for assignment."""
     number = int(issue['number'])
     labels = labels_of(issue)
     title = str(issue.get('title') or '')
@@ -114,7 +135,9 @@ def issue_is_static_candidate(issue: dict[str, Any], suppressing_pr_issues: set[
         return False
     return item_is_unowned(labels)
 
+
 def pr_is_static_candidate(pr: dict[str, Any], issue_map: dict[int, dict[str, Any]]) -> bool:
+    """Return whether a pull request is structurally eligible for repair."""
     if pr.get('isDraft'):
         return False
     labels = labels_of(pr)
@@ -132,6 +155,7 @@ def pr_is_static_candidate(pr: dict[str, Any], issue_map: dict[int, dict[str, An
             return False
     return True
 
+
 def pr_suppresses_issue_candidate(pr: dict[str, Any], issue_map: dict[int, dict[str, Any]]) -> bool:
     """Return whether this PR should stand in for its linked issue in the queue.
 
@@ -144,7 +168,9 @@ def pr_suppresses_issue_candidate(pr: dict[str, Any], issue_map: dict[int, dict[
         return True
     return pr_is_static_candidate(pr, issue_map)
 
+
 def build_candidates(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -> list[Candidate]:
+    """Build and rank executable issue and pull-request candidates."""
     issue_map = {int(issue['number']): issue for issue in issues}
     suppressing_pr_issues = {linked for pr in prs if (linked := linked_issue_from_branch(pr.get('headRefName'))) is not None and pr_suppresses_issue_candidate(pr, issue_map)}
     candidates: list[Candidate] = []
@@ -166,11 +192,14 @@ def build_candidates(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) ->
         candidates.append(Candidate(kind='pr', number=int(pr['number']), lane=lane, priority=priority_rank(labels), created_at=str(pr.get('createdAt') or ''), linked_issue=linked))
     return sorted(candidates, key=Candidate.sort_key)
 
+
 def plan_distinct_assignments(candidates: list[Candidate], workers: list[str]) -> dict[str, Candidate]:
     """Pure helper used by regression coverage for one dispatcher batch."""
-    return {worker: candidate for worker, candidate in zip(workers, candidates)}
+    return dict(zip(workers, candidates, strict=False))
+
 
 def lease_is_stale(owner: str, *, active_fixed_workers: set[int], latest_activity_epoch: int | None, now_epoch: int, local_ttl_seconds: int=LOCAL_LEASE_TTL_SECONDS) -> bool:
+    """Return whether a factory lease can be proven stale."""
     if owner == 'factory:local':
         return latest_activity_epoch is not None and now_epoch - latest_activity_epoch > local_ttl_seconds
     match = FIXED_OWNER_RE.fullmatch(owner)
