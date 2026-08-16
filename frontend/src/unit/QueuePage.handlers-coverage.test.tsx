@@ -257,7 +257,7 @@ it('covers queue sorting, filtering, empty states, and router edit state', async
      await user.click(screen.getByRole('button', { name: 'A-Z' }))
      await user.click(screen.getByRole('button', { name: 'New' }))
      await user.type(screen.getByPlaceholderText('Search...'), 'missing')
-     expect(screen.getByText('No threads match your search')).toBeInTheDocument()
+     expect(screen.getByText('No active threads match your search')).toBeInTheDocument()
      await user.clear(screen.getByPlaceholderText('Search...'))
      expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument()
 

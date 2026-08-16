@@ -56,13 +56,13 @@ it('sorts alphabetically and by created date', () => {
      )
     expect(alphabetical.current.sortedThreads.map((t) => t.title)).toEqual(['Alpha', 'Zeta'])
 
-const { result: created } = renderHook(() =>
-       useQueueFilters([oldest, newest], 'created'),
-     )
+    const { result: created } = renderHook(() =>
+      useQueueFilters([oldest, newest], 'created'),
+    )
     expect(created.current.sortedThreads.map((t) => t.id)).toEqual([2, 1])
   })
 
-it('returns all active threads sorted by position when searchQuery is provided (search is handled on backend)', () => {
+it('returns all active threads sorted by position since search is handled on backend', () => {
      const threads = [
        makeThread({ id: 1, title: 'Saga', queue_position: 1 }),
        makeThread({ id: 2, title: 'Descender', queue_position: 2 }),
@@ -71,7 +71,7 @@ it('returns all active threads sorted by position when searchQuery is provided (
      expect(result.current.filteredThreads.map((t) => t.id)).toEqual([1, 2])
    })
 
-it('treats a blank search query as no filter', () => {
+it('returns all active threads when no search filter applied', () => {
      const threads = [
        makeThread({ id: 1, title: 'Saga', queue_position: 1 }),
        makeThread({ id: 2, title: 'Descender', queue_position: 2 }),

@@ -26,7 +26,7 @@ export function QueueList({
   if (isSearching && filteredThreads.length === 0) {
     return (
       <div className="text-center text-stone-500" data-testid="queue-search-empty">
-        No threads match your search
+        No active threads match your search
       </div>
     )
   }

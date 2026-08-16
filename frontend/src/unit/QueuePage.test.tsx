@@ -399,9 +399,32 @@ it('filters and sorts active threads while preserving completed threads', async 
    await user.click(screen.getByRole('button', { name: 'A-Z' }))
    const cards = screen.getAllByTestId('queue-thread-item')
    expect(cards[0]).toHaveTextContent('Alpha')
-   await user.type(screen.getByPlaceholderText('Search...'), 'missing')
-   expect(screen.getByText('No threads match your search')).toBeInTheDocument()
- })
+  await user.type(screen.getByPlaceholderText('Search...'), 'missing')
+    expect(screen.getByText('No active threads match your search')).toBeInTheDocument()
+  })
+
+  it('shows correct empty state when search matches only completed threads', async () => {
+    const user = userEvent.setup()
+    mockedUseQueueThreads.mockImplementation((searchTerm: string) => {
+      let data: Thread[] = []
+      if (searchTerm === 'done') {
+        data = [
+          { id: 2, title: 'Done', format: 'Comic', status: 'completed', queue_position: 0, issues_remaining: 0, created_at: '2023-01-01', notes: 'Finished' },
+        ]
+      }
+      return {
+        data,
+        isPending: false,
+        isError: false,
+        refetch: vi.fn(),
+        nextPageToken: null,
+        loadMore: vi.fn(),
+      }
+    })
+    render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+    await user.type(screen.getByPlaceholderText('Search...'), 'done')
+    expect(screen.getByText('No active threads match your search')).toBeInTheDocument()
+  })
 
 it('creates a simple issue range and marks the requested issues read', async () => {
   const user = userEvent.setup()
