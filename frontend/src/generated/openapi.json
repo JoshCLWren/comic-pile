@@ -661,7 +661,8 @@
               "item_read",
               "all_members_read",
               "checkpoint",
-              "selected_members_read"
+              "selected_members_read",
+              "converged"
             ],
             "title": "Satisfaction Type",
             "type": "string"
@@ -1111,6 +1112,14 @@
             ],
             "title": "Checkpoint Issue Id"
           },
+          "convergence_targets": {
+            "items": {
+              "$ref": "#/components/schemas/ConvergenceTarget"
+            },
+            "maxItems": 250,
+            "title": "Convergence Targets",
+            "type": "array"
+          },
           "note": {
             "anyOf": [
               {
@@ -1128,7 +1137,8 @@
               "item_read",
               "all_members_read",
               "checkpoint",
-              "selected_members_read"
+              "selected_members_read",
+              "converged"
             ],
             "title": "Satisfaction Type",
             "type": "string"
@@ -1192,6 +1202,13 @@
             ],
             "title": "Checkpoint Issue Id"
           },
+          "convergence_targets": {
+            "items": {
+              "$ref": "#/components/schemas/ConvergenceTarget"
+            },
+            "title": "Convergence Targets",
+            "type": "array"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -1217,7 +1234,8 @@
               "item_read",
               "all_members_read",
               "checkpoint",
-              "selected_members_read"
+              "selected_members_read",
+              "converged"
             ],
             "title": "Satisfaction Type",
             "type": "string"
@@ -1272,12 +1290,37 @@
           "target_id",
           "satisfaction_type",
           "checkpoint_issue_id",
+          "convergence_targets",
           "selected_member_issue_ids",
           "note",
           "created_at",
           "updated_at"
         ],
         "title": "ContinuityRuleResponse",
+        "type": "object"
+      },
+      "ConvergenceTarget": {
+        "description": "A single node a converged continuity rule waits for.",
+        "properties": {
+          "id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Id",
+            "type": "integer"
+          },
+          "type": {
+            "enum": [
+              "issue",
+              "crossover"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "id"
+        ],
+        "title": "ConvergenceTarget",
         "type": "object"
       },
       "CrossoverTemplateAdoptRequest": {

@@ -81,6 +81,7 @@ def _rule(
     target_id: int,
     satisfaction_type: str,
     checkpoint_issue_id: int | None = None,
+    convergence_targets: list[dict[str, object]] | None = None,
 ) -> ContinuityRule:
     """Build a continuity rule for readiness tests."""
     return ContinuityRule(
@@ -91,6 +92,7 @@ def _rule(
         target_id=target_id,
         satisfaction_type=satisfaction_type,
         checkpoint_issue_id=checkpoint_issue_id,
+        convergence_targets=convergence_targets,
     )
 
 
@@ -725,3 +727,135 @@ async def test_selected_member_collection_is_bounded(
         "code": "continuity_graph_too_large",
         "limit": 1,
     }
+
+
+@pytest.mark.asyncio
+async def test_converged_gate_blocks_until_all_targets_read(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """A converged rule stays blocked while any target is unread, then clears.
+
+    Args:
+        auth_client: Authenticated API client fixture.
+        async_db: Async database session fixture.
+
+    Returns:
+        None.
+    """
+    user = await get_or_create_user_async(async_db)
+    source_thread, source_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="converge-source", issue_count=1
+    )
+    branch_a_thread, branch_a_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="converge-a", issue_count=1
+    )
+    branch_b_thread, branch_b_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="converge-b", issue_count=1
+    )
+    _target_thread, target_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="converge-target", issue_count=1
+    )
+    async_db.add(
+        _rule(
+            user_id=user.id,
+            source_type="issue",
+            source_id=source_issues[0].id,
+            target_type="issue",
+            target_id=target_issues[0].id,
+            satisfaction_type="converged",
+            convergence_targets=[
+                {"type": "issue", "id": branch_a_issues[0].id},
+                {"type": "issue", "id": branch_b_issues[0].id},
+            ],
+        )
+    )
+    await async_db.commit()
+
+    blocked = await auth_client.post(
+        "/api/v1/continuity/readiness",
+        json={"node_type": "issue", "node_id": target_issues[0].id},
+    )
+    assert blocked.status_code == 200, blocked.text
+    assert blocked.json()["is_readable"] is False
+    blocker = blocked.json()["blockers"][0]
+    assert blocker["satisfaction_type"] == "converged"
+    assert set(blocker["causing_issue_ids"]) == {branch_a_issues[0].id, branch_b_issues[0].id}
+
+    branch_a_issues[0].status = "read"
+    branch_b_issues[0].status = "read"
+    await async_db.commit()
+
+    ready = await auth_client.post(
+        "/api/v1/continuity/readiness",
+        json={"node_type": "issue", "node_id": target_issues[0].id},
+    )
+    assert ready.status_code == 200
+    assert ready.json()["is_readable"] is True
+    assert ready.json()["blockers"] == []
+
+
+@pytest.mark.asyncio
+async def test_converged_gate_with_crossover_target_blocks_until_members_read(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """A converged rule keyed on a crossover stays blocked until its members read.
+
+    Args:
+        auth_client: Authenticated API client fixture.
+        async_db: Async database session fixture.
+
+    Returns:
+        None.
+    """
+    user = await get_or_create_user_async(async_db)
+    source_thread, source_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="converge-x-source", issue_count=1
+    )
+    branch_thread, branch_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="converge-x-branch", issue_count=2
+    )
+    _target_thread, target_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="converge-x-target", issue_count=1
+    )
+    crossover = await _make_group(
+        async_db,
+        user_id=user.id,
+        suffix="converge-x",
+        issue_ids=[branch_issues[0].id, branch_issues[1].id],
+    )
+    async_db.add(
+        _rule(
+            user_id=user.id,
+            source_type="issue",
+            source_id=source_issues[0].id,
+            target_type="issue",
+            target_id=target_issues[0].id,
+            satisfaction_type="converged",
+            convergence_targets=[{"type": "crossover", "id": crossover.id}],
+        )
+    )
+    await async_db.commit()
+
+    blocked = await auth_client.post(
+        "/api/v1/continuity/readiness",
+        json={"node_type": "issue", "node_id": target_issues[0].id},
+    )
+    assert blocked.status_code == 200, blocked.text
+    assert blocked.json()["is_readable"] is False
+    blocker = blocked.json()["blockers"][0]
+    assert blocker["satisfaction_type"] == "converged"
+    assert set(blocker["causing_member_issue_ids"]) == {branch_issues[0].id, branch_issues[1].id}
+
+    branch_issues[0].status = "read"
+    branch_issues[1].status = "read"
+    await async_db.commit()
+
+    ready = await auth_client.post(
+        "/api/v1/continuity/readiness",
+        json={"node_type": "issue", "node_id": target_issues[0].id},
+    )
+    assert ready.status_code == 200
+    assert ready.json()["is_readable"] is True
+    assert ready.json()["blockers"] == []
