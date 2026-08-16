@@ -945,7 +945,7 @@ async def _build_series_info(
     db: AsyncSession, user_id: int, issue: Issue, thread: Thread
 ) -> SeriesInfo:
     """Build series identity and aggregate rating information."""
-    from app.models.external_identity import IssueExternalIdentityMapping, ThreadExternalSeriesMapping
+    from app.models.external_identity import IssueExternalIdentityMapping, ThreadExternalSeriesMapping, ExternalIdentity
     from app.schemas.reader_context import LocalChainIssue as LocalChainIssueSchema
 
     mapping_result = await db.execute(
@@ -997,6 +997,7 @@ async def _build_series_info(
         )
     )
     issue_mappings = list(issue_mapping_result.scalars().all())
+    _ = issue_mappings
 
     ratings_result = await db.execute(
         select(Event)

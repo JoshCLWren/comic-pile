@@ -1699,6 +1699,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/continuity-plans/{plan_id}/reading-orders/project": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Plan Projection
+         * @description Apply a projection atomically after a successful preview.
+         *
+         *     The confirm endpoint re-computes the projection and rejects the request
+         *     if any conflict is detected. A failed or cancelled projection leaves
+         *     both the plan and the reading order unchanged because all mutations are
+         *     performed in a single transaction that rolls back on any error.
+         */
+        post: operations["confirm_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Plan Projection
+         * @description Preview a deterministic projection without mutating any resource.
+         *
+         *     The preview is recomputed from the persisted plan JSON on every call so
+         *     that callers always see the current state, even after concurrent edits.
+         *     Duplicate thread references, missing owned threads, and non-thread
+         *     nodes are reported as conflicts before any mutation is permitted.
+         */
+        post: operations["preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/continuity-rules/": {
         parameters: {
             query?: never;
@@ -1985,6 +2035,26 @@ export interface paths {
          * @description List all incoming and outgoing dependency edges for a specific issue.
          */
         get: operations["list_issue_dependencies_api_v1_issues__issue_id__dependencies_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/issues/{issue_id}/reader-context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Reader Context
+         * @description Get bounded reader context for the active roll issue.
+         */
+        get: operations["get_reader_context_api_v1_issues__issue_id__reader_context_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4010,6 +4080,66 @@ export interface components {
             source_type: "issue" | "crossover";
         };
         /**
+         * ContinuityChainDiagnostic
+         * @description One structured traversal failure that does not require text parsing.
+         */
+        ContinuityChainDiagnostic: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "cycle_detected" | "depth_limit_exceeded" | "node_limit_exceeded";
+            /** Limit */
+            limit?: number | null;
+            /** Node Id */
+            node_id: number;
+            /**
+             * Node Type
+             * @enum {string}
+             */
+            node_type: "issue" | "crossover";
+        };
+        /**
+         * ContinuityChainNode
+         * @description One structured node along a prerequisite chain.
+         */
+        ContinuityChainNode: {
+            /** Is Readable */
+            is_readable: boolean;
+            /** Label */
+            label: string;
+            /** Node Id */
+            node_id: number;
+            /**
+             * Node Type
+             * @enum {string}
+             */
+            node_type: "issue" | "crossover";
+        };
+        /**
+         * ContinuityChainResponse
+         * @description Bounded transitive prerequisite chains for one requested node.
+         */
+        ContinuityChainResponse: {
+            /** Chains */
+            chains?: components["schemas"]["ContinuityChainNode"][][];
+            /** Diagnostics */
+            diagnostics?: components["schemas"]["ContinuityChainDiagnostic"][];
+            /** Direct Blockers */
+            direct_blockers?: components["schemas"]["ContinuityBlocker"][];
+            /** Evaluated Issue Id */
+            evaluated_issue_id?: number | null;
+            /** Node Id */
+            node_id: number;
+            /**
+             * Node Type
+             * @enum {string}
+             */
+            node_type: "issue" | "thread" | "crossover";
+            /** Readable Prerequisites */
+            readable_prerequisites?: components["schemas"]["ContinuityChainNode"][];
+        };
+        /**
          * ContinuityPlanChainNode
          * @description One labeled issue or crossover step in a plan prerequisite chain.
          */
@@ -4344,6 +4474,42 @@ export interface components {
              * @enum {string}
              */
             type: "issue" | "crossover";
+        };
+        /**
+         * CrossoverInfo
+         * @description Exact crossover context for the current issue.
+         */
+        CrossoverInfo: {
+            /** Applies To Current Issue */
+            applies_to_current_issue: boolean;
+            /** Average Rating */
+            average_rating?: number | null;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            next_member?: components["schemas"]["LocalChainIssue"] | null;
+            /** Ratings Count */
+            ratings_count: number;
+            /** Read Count */
+            read_count: number;
+        };
+        /**
+         * CrossoverMemberInfo
+         * @description Information about a crossover member issue.
+         */
+        CrossoverMemberInfo: {
+            /** Issue Id */
+            issue_id: number;
+            /** Issue Number */
+            issue_number: string;
+            /** Rating */
+            rating?: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "read" | "unread";
         };
         /**
          * CrossoverTemplateAdoptRequest
@@ -4892,6 +5058,68 @@ export interface components {
             thread_id: number;
         };
         /**
+         * LocalChainEdge
+         * @description One persisted one-hop dependency/continuity edge touching the neighborhood.
+         */
+        LocalChainEdge: {
+            /** Dependency Id */
+            dependency_id: number;
+            /** Note */
+            note?: string | null;
+            /** Source Issue Id */
+            source_issue_id: number;
+            /** Source Issue Number */
+            source_issue_number: string;
+            /** Source Thread Id */
+            source_thread_id: number;
+            /** Source Thread Title */
+            source_thread_title: string;
+            /** Target Issue Id */
+            target_issue_id: number;
+            /** Target Issue Number */
+            target_issue_number: string;
+            /** Target Thread Id */
+            target_thread_id: number;
+            /** Target Thread Title */
+            target_thread_title: string;
+        };
+        /**
+         * LocalChainIssue
+         * @description One issue in the local same-thread neighborhood.
+         */
+        LocalChainIssue: {
+            /** Crossover Memberships */
+            crossover_memberships?: components["schemas"]["CrossoverMemberInfo"][];
+            /** Issue Id */
+            issue_id: number;
+            /** Issue Number */
+            issue_number: string;
+            /** Position */
+            position: number;
+            /** Rating */
+            rating?: number | null;
+            /**
+             * Relation
+             * @enum {string}
+             */
+            relation: "previous" | "current" | "next" | "future";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "read" | "unread";
+        };
+        /**
+         * LocalChainResponse
+         * @description Bounded local reading chain around the current issue.
+         */
+        LocalChainResponse: {
+            /** Edges */
+            edges?: components["schemas"]["LocalChainEdge"][];
+            /** Issues */
+            issues?: components["schemas"]["LocalChainIssue"][];
+        };
+        /**
          * MigrateToIssuesRequest
          * @description Schema for migrating thread to issue tracking.
          */
@@ -5049,6 +5277,18 @@ export interface components {
             issues_to_add: number;
             /** Thread Id */
             thread_id: number;
+        };
+        /**
+         * ReaderContextResponse
+         * @description Complete reader context for the active roll issue.
+         */
+        ReaderContextResponse: {
+            /** Crossovers */
+            crossovers?: components["schemas"]["CrossoverInfo"][];
+            /** Issue Id */
+            issue_id: number;
+            local_chain: components["schemas"]["LocalChainResponse"];
+            series: components["schemas"]["SeriesInfo"];
         };
         /**
          * ReadingOrderItemResponse
@@ -5534,6 +5774,32 @@ export interface components {
             title: string;
             /** Total Issues */
             total_issues?: number | null;
+        };
+        /**
+         * SeriesInfo
+         * @description Series identity and aggregate rating information.
+         */
+        SeriesInfo: {
+            /** Average Rating */
+            average_rating?: number | null;
+            /** Canonical Series Id */
+            canonical_series_id?: string | null;
+            /** Highest Rating */
+            highest_rating?: number | null;
+            /**
+             * Identity Source
+             * @enum {string}
+             */
+            identity_source: "comicvine" | "unavailable";
+            /** Lowest Rating */
+            lowest_rating?: number | null;
+            previous_issue?: components["schemas"]["LocalChainIssue"] | null;
+            /** Ratings Count */
+            ratings_count: number;
+            /** Recent Ratings */
+            recent_ratings?: components["schemas"]["LocalChainIssue"][];
+            /** Series Name */
+            series_name?: string | null;
         };
         /**
          * SessionDetailsResponse
@@ -7662,6 +7928,76 @@ export interface operations {
             };
         };
     };
+    confirm_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingOrderProjectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingOrderProjectionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingOrderProjectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingOrderProjectionPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_continuity_rules_api_v1_continuity_rules__get: {
         parameters: {
             query?: never;
@@ -8203,6 +8539,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IssueDependenciesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_reader_context_api_v1_issues__issue_id__reader_context_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReaderContextResponse"];
                 };
             };
             /** @description Validation Error */

@@ -710,6 +710,149 @@
         "title": "ContinuityBlocker",
         "type": "object"
       },
+      "ContinuityChainDiagnostic": {
+        "description": "One structured traversal failure that does not require text parsing.",
+        "properties": {
+          "code": {
+            "enum": [
+              "cycle_detected",
+              "depth_limit_exceeded",
+              "node_limit_exceeded"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "integer"
+          },
+          "node_type": {
+            "enum": [
+              "issue",
+              "crossover"
+            ],
+            "title": "Node Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "node_type",
+          "node_id"
+        ],
+        "title": "ContinuityChainDiagnostic",
+        "type": "object"
+      },
+      "ContinuityChainNode": {
+        "description": "One structured node along a prerequisite chain.",
+        "properties": {
+          "is_readable": {
+            "title": "Is Readable",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "integer"
+          },
+          "node_type": {
+            "enum": [
+              "issue",
+              "crossover"
+            ],
+            "title": "Node Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "node_type",
+          "node_id",
+          "label",
+          "is_readable"
+        ],
+        "title": "ContinuityChainNode",
+        "type": "object"
+      },
+      "ContinuityChainResponse": {
+        "description": "Bounded transitive prerequisite chains for one requested node.",
+        "properties": {
+          "chains": {
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/ContinuityChainNode"
+              },
+              "type": "array"
+            },
+            "title": "Chains",
+            "type": "array"
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityChainDiagnostic"
+            },
+            "title": "Diagnostics",
+            "type": "array"
+          },
+          "direct_blockers": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityBlocker"
+            },
+            "title": "Direct Blockers",
+            "type": "array"
+          },
+          "evaluated_issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluated Issue Id"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "integer"
+          },
+          "node_type": {
+            "enum": [
+              "issue",
+              "thread",
+              "crossover"
+            ],
+            "title": "Node Type",
+            "type": "string"
+          },
+          "readable_prerequisites": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityChainNode"
+            },
+            "title": "Readable Prerequisites",
+            "type": "array"
+          }
+        },
+        "required": [
+          "node_type",
+          "node_id"
+        ],
+        "title": "ContinuityChainResponse",
+        "type": "object"
+      },
       "ContinuityPlanChainNode": {
         "description": "One labeled issue or crossover step in a plan prerequisite chain.",
         "properties": {
@@ -1454,6 +1597,100 @@
           "id"
         ],
         "title": "ConvergenceTarget",
+        "type": "object"
+      },
+      "CrossoverInfo": {
+        "description": "Exact crossover context for the current issue.",
+        "properties": {
+          "applies_to_current_issue": {
+            "title": "Applies To Current Issue",
+            "type": "boolean"
+          },
+          "average_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Rating"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "next_member": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LocalChainIssue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ratings_count": {
+            "title": "Ratings Count",
+            "type": "integer"
+          },
+          "read_count": {
+            "title": "Read Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "applies_to_current_issue",
+          "ratings_count",
+          "read_count"
+        ],
+        "title": "CrossoverInfo",
+        "type": "object"
+      },
+      "CrossoverMemberInfo": {
+        "description": "Information about a crossover member issue.",
+        "properties": {
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "issue_number": {
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          },
+          "status": {
+            "enum": [
+              "read",
+              "unread"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number",
+          "status"
+        ],
+        "title": "CrossoverMemberInfo",
         "type": "object"
       },
       "CrossoverTemplateAdoptRequest": {
@@ -2793,6 +3030,156 @@
         "title": "IssueResponse",
         "type": "object"
       },
+      "LocalChainEdge": {
+        "description": "One persisted one-hop dependency/continuity edge touching the neighborhood.",
+        "properties": {
+          "dependency_id": {
+            "title": "Dependency Id",
+            "type": "integer"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "source_issue_id": {
+            "title": "Source Issue Id",
+            "type": "integer"
+          },
+          "source_issue_number": {
+            "title": "Source Issue Number",
+            "type": "string"
+          },
+          "source_thread_id": {
+            "title": "Source Thread Id",
+            "type": "integer"
+          },
+          "source_thread_title": {
+            "title": "Source Thread Title",
+            "type": "string"
+          },
+          "target_issue_id": {
+            "title": "Target Issue Id",
+            "type": "integer"
+          },
+          "target_issue_number": {
+            "title": "Target Issue Number",
+            "type": "string"
+          },
+          "target_thread_id": {
+            "title": "Target Thread Id",
+            "type": "integer"
+          },
+          "target_thread_title": {
+            "title": "Target Thread Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dependency_id",
+          "source_issue_id",
+          "target_issue_id",
+          "source_issue_number",
+          "target_issue_number",
+          "source_thread_id",
+          "target_thread_id",
+          "source_thread_title",
+          "target_thread_title"
+        ],
+        "title": "LocalChainEdge",
+        "type": "object"
+      },
+      "LocalChainIssue": {
+        "description": "One issue in the local same-thread neighborhood.",
+        "properties": {
+          "crossover_memberships": {
+            "items": {
+              "$ref": "#/components/schemas/CrossoverMemberInfo"
+            },
+            "title": "Crossover Memberships",
+            "type": "array"
+          },
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "issue_number": {
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          },
+          "relation": {
+            "enum": [
+              "previous",
+              "current",
+              "next",
+              "future"
+            ],
+            "title": "Relation",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "read",
+              "unread"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number",
+          "position",
+          "status",
+          "relation"
+        ],
+        "title": "LocalChainIssue",
+        "type": "object"
+      },
+      "LocalChainResponse": {
+        "description": "Bounded local reading chain around the current issue.",
+        "properties": {
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/LocalChainEdge"
+            },
+            "maxItems": 20,
+            "title": "Edges",
+            "type": "array"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/LocalChainIssue"
+            },
+            "maxItems": 5,
+            "title": "Issues",
+            "type": "array"
+          }
+        },
+        "title": "LocalChainResponse",
+        "type": "object"
+      },
       "MigrateToIssuesRequest": {
         "description": "Schema for migrating thread to issue tracking.",
         "properties": {
@@ -3110,6 +3497,35 @@
           "issues_to_add"
         ],
         "title": "ReactivateRequest",
+        "type": "object"
+      },
+      "ReaderContextResponse": {
+        "description": "Complete reader context for the active roll issue.",
+        "properties": {
+          "crossovers": {
+            "items": {
+              "$ref": "#/components/schemas/CrossoverInfo"
+            },
+            "title": "Crossovers",
+            "type": "array"
+          },
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "local_chain": {
+            "$ref": "#/components/schemas/LocalChainResponse"
+          },
+          "series": {
+            "$ref": "#/components/schemas/SeriesInfo"
+          }
+        },
+        "required": [
+          "issue_id",
+          "series",
+          "local_chain"
+        ],
+        "title": "ReaderContextResponse",
         "type": "object"
       },
       "ReadingOrderItemResponse": {
@@ -4322,6 +4738,101 @@
           "snoozed_count"
         ],
         "title": "RollResponse",
+        "type": "object"
+      },
+      "SeriesInfo": {
+        "description": "Series identity and aggregate rating information.",
+        "properties": {
+          "average_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Rating"
+          },
+          "canonical_series_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Series Id"
+          },
+          "highest_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Highest Rating"
+          },
+          "identity_source": {
+            "enum": [
+              "comicvine",
+              "unavailable"
+            ],
+            "title": "Identity Source",
+            "type": "string"
+          },
+          "lowest_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lowest Rating"
+          },
+          "previous_issue": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LocalChainIssue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ratings_count": {
+            "title": "Ratings Count",
+            "type": "integer"
+          },
+          "recent_ratings": {
+            "items": {
+              "$ref": "#/components/schemas/LocalChainIssue"
+            },
+            "title": "Recent Ratings",
+            "type": "array"
+          },
+          "series_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series Name"
+          }
+        },
+        "required": [
+          "identity_source",
+          "ratings_count"
+        ],
+        "title": "SeriesInfo",
         "type": "object"
       },
       "SessionDetailsResponse": {
@@ -8037,6 +8548,126 @@
         ]
       }
     },
+    "/api/v1/continuity-plans/{plan_id}/reading-orders/project": {
+      "post": {
+        "description": "Apply a projection atomically after a successful preview.\n\nThe confirm endpoint re-computes the projection and rejects the request\nif any conflict is detected. A failed or cancelled projection leaves\nboth the plan and the reading order unchanged because all mutations are\nperformed in a single transaction that rolls back on any error.",
+        "operationId": "confirm_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "title": "Plan Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingOrderProjectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingOrderProjectionResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Confirm Plan Projection",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "reading-orders"
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview": {
+      "post": {
+        "description": "Preview a deterministic projection without mutating any resource.\n\nThe preview is recomputed from the persisted plan JSON on every call so\nthat callers always see the current state, even after concurrent edits.\nDuplicate thread references, missing owned threads, and non-thread\nnodes are reported as conflicts before any mutation is permitted.",
+        "operationId": "preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "title": "Plan Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingOrderProjectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingOrderProjectionPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Plan Projection",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "reading-orders"
+        ]
+      }
+    },
     "/api/v1/continuity-rules/": {
       "get": {
         "description": "List the authenticated user's continuity rules.",
@@ -8891,6 +9522,55 @@
         "tags": [
           "dependencies",
           "dependencies"
+        ]
+      }
+    },
+    "/api/v1/issues/{issue_id}/reader-context": {
+      "get": {
+        "description": "Get bounded reader context for the active roll issue.",
+        "operationId": "get_reader_context_api_v1_issues__issue_id__reader_context_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "title": "Issue Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReaderContextResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Reader Context",
+        "tags": [
+          "issues",
+          "issues"
         ]
       }
     },
