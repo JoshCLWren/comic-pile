@@ -149,8 +149,8 @@ def _before_cursor_execute(
     # Mark checkout start time on the connection record if available
     try:
         conn_record = getattr(connection, "_connection_record", None)
-if conn_record is not None:
-                    conn_record._comic_pile_last_query_started = time.perf_counter()
+        if conn_record is not None:
+            conn_record._comic_pile_last_query_started = time.perf_counter()
     except Exception:
         pass
     del cursor, statement, parameters, executemany
