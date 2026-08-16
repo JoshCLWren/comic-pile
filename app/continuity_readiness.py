@@ -195,7 +195,7 @@ async def _load_snapshot(db: AsyncSession, user_id: int) -> _GraphSnapshot:
         ).items()
     }
 
-    return _GraphSnapshot(
+    snapshot = _GraphSnapshot(
         threads=threads,
         issues=issues,
         groups=groups,
@@ -205,6 +205,15 @@ async def _load_snapshot(db: AsyncSession, user_id: int) -> _GraphSnapshot:
         thread_issue_ids=thread_issue_ids,
         selected_member_issue_ids=selected_member_issue_ids,
     )
+    # Cache the snapshot in the session's info dict for reuse within the same request
+    if db.info is None:
+        db.info = {}
+    cache = db.info.get(SNAPSHOT_SESSION_KEY)
+    if cache is None:
+        cache = {}
+        db.info[SNAPSHOT_SESSION_KEY] = cache
+    cache[user_id] = snapshot
+    return snapshot
 
 
 def _group_issue_ids(group_id: int, snapshot: _GraphSnapshot) -> list[int]:
