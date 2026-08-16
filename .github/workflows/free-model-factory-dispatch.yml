@@ -39,7 +39,87 @@ permissions:
 jobs:
   dispatch:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      checks: read
+      contents: write
+      issues: write
+      pull-requests: write
     steps:
+      - name: Drain exact-head ready factory PRs
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+
+          current_head_review_blockers() {
+            local pr="$1" head="$2" changes unresolved
+            changes="$(gh api --paginate \
+              "repos/${GITHUB_REPOSITORY}/pulls/${pr}/reviews?per_page=100" \
+              | jq -s --arg head "$head" \
+                '[.[][] | select(.state == "CHANGES_REQUESTED" and .commit_id == $head)] | length')"
+            [[ "$changes" == "0" ]] || return 1
+
+            unresolved="$(gh api graphql \
+              -F owner="${GITHUB_REPOSITORY_OWNER}" \
+              -F name="${GITHUB_REPOSITORY#*/}" \
+              -F number="$pr" \
+              -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}}}}}' \
+              --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length')"
+            [[ "$unresolved" == "0" ]]
+          }
+
+          ready_to_merge() {
+            local pr="$1" expected_head="$2" info head
+            info="$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" \
+              --json state,isDraft,mergeable,headRefOid)"
+            [[ "$(jq -r .state <<< "$info")" == "OPEN" ]] || return 1
+            [[ "$(jq -r .isDraft <<< "$info")" == "false" ]] || return 1
+            [[ "$(jq -r .mergeable <<< "$info")" == "MERGEABLE" ]] || return 1
+            head="$(jq -r .headRefOid <<< "$info")"
+            [[ "$head" == "$expected_head" ]] || return 1
+            gh pr checks "$pr" --repo "$GITHUB_REPOSITORY" --required >/tmp/factory-ready-checks 2>&1 || return 1
+            current_head_review_blockers "$pr" "$head"
+          }
+
+          mapfile -t ready_prs < <(
+            gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 100 \
+              --label 'factory:ready' \
+              --json number,isDraft,headRefOid \
+              --jq '.[] | select(.isDraft == false) | [.number, .headRefOid] | @tsv'
+          )
+
+          if (( ${#ready_prs[@]} == 0 )); then
+            echo 'No factory:ready PRs to drain'
+            exit 0
+          fi
+
+          for candidate in "${ready_prs[@]}"; do
+            IFS=$'\t' read -r pr head <<< "$candidate"
+            [[ -n "$pr" && -n "$head" ]] || continue
+
+            if ! ready_to_merge "$pr" "$head"; then
+              echo "PR #${pr} is labeled ready but exact-head gates are no longer satisfied; leaving it open"
+              continue
+            fi
+
+            echo "Merging ready PR #${pr} at ${head}"
+            if gh pr merge "$pr" --repo "$GITHUB_REPOSITORY" \
+              --merge --match-head-commit "$head"; then
+              echo "Merged ready PR #${pr}"
+              continue
+            fi
+
+            state="$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" --json state --jq .state 2>/dev/null || true)"
+            if [[ "$state" == "MERGED" ]]; then
+              echo "PR #${pr} was merged concurrently"
+            else
+              echo "Unable to merge ready PR #${pr}; it will be retried on the next dispatcher tick" >&2
+            fi
+          done
+
       - uses: actions/checkout@v6
         with:
           ref: main
