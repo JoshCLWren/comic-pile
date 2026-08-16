@@ -318,8 +318,11 @@ def test_issues_keeps_real_references_after_version_step_markers(monkeypatch, ca
 
 
 def test_issues_excludes_parenthesized_version_step_markers(monkeypatch, capsys):
-    """Parenthesized or bracket-quoted version-step patterns must not be linked issues
-    while real references in the same text are preserved."""
+    """Assert parenthesised or bracketed markers are excluded.
+
+    Parenthesized or bracket-quoted version-step patterns must not be linked
+    issues, while real references in the same text are preserved.
+    """
     def fake_github_request(url: str):
         return {
             "number": 100,

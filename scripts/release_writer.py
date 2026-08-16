@@ -309,8 +309,10 @@ def _preceding_word(text: str, position: int) -> str:
 
 
 def _is_inside_version_delimiter(text: str, match_start: int) -> bool:
-    """Return True when the issue number is immediately preceded by a
-    parenthesised or bracket-quoted version-step pattern such as '(v1.2)' or '[v4]'.
+    """Return True when the issue number is immediately preceded by a delimited marker.
+
+    The detected marker is a parenthesised or bracket-quoted version-step
+    pattern such as '(v1.2)' or '[v4]'.
 
     The caller has already passed the basic word-based pre-filter; this check
     catches bracket-quoted tokens that the standard word splitter cannot see.
