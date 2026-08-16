@@ -1,15 +1,14 @@
 """Tests for bounded liveness, dependency-health, and warm-up behavior."""
 
 import asyncio
-from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import health
-from app.models import Event
 from app.startup_diagnostics import StartupSnapshot
 
 
@@ -258,7 +257,7 @@ def _make_mock_request(invocation: int = 1) -> MagicMock:
 async def test_warm_endpoint_handler_disabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Verify warm endpoint handler returns no_activity when disabled.
+    """Verify the warm endpoint handler is not registered when disabled.
 
     Args:
         monkeypatch: Pytest fixture for setting environment variables.
@@ -273,16 +272,7 @@ async def test_warm_endpoint_handler_disabled(
 
     importlib.reload(health_module)
 
-    mock_request = _make_mock_request()
-    mock_db = AsyncMock()
-
-    result = await health_module.warm_endpoint(mock_request, mock_db)
-
-    assert result.status == "no_activity"
-    assert result.has_active_session is False
-    assert result.request_count_today == 0
-    assert result.instance.request_count == 0
-    assert result.instance.process_start_time_ns == 0
+    assert not hasattr(health_module, "warm_endpoint")
 
 
 @pytest.mark.asyncio
@@ -308,7 +298,7 @@ async def test_warm_endpoint_handler_enabled_no_activity(
 
     mock_request = _make_mock_request(invocation=5)
     mock_db = AsyncMock()
-    mock_result = AsyncMock()
+    mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = None
     mock_db.execute.return_value = mock_result
 
@@ -347,7 +337,7 @@ async def test_warm_endpoint_handler_with_recent_activity(
 
     mock_request = _make_mock_request(invocation=10)
     mock_db = AsyncMock()
-    mock_result = AsyncMock()
+    mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = datetime.now(UTC)
     mock_db.execute.return_value = mock_result
 
@@ -380,13 +370,13 @@ async def test_warm_endpoint_handler_rate_limit_exceeded(
 
     importlib.reload(health_module)
 
-    # Request count exceeds the limit
-    mock_request = _make_mock_request(invocation=10)
+    # Request count exceeds the clamped daily limit (minimum is 100)
+    mock_request = _make_mock_request(invocation=200)
     mock_db = AsyncMock()
 
     result = await health_module.warm_endpoint(mock_request, mock_db)
 
     assert result.status == "no_activity"
     assert result.has_active_session is False
-    assert result.request_count_today == 10
-    assert result.instance.request_count == 10
+    assert result.request_count_today == 200
+    assert result.instance.request_count == 200

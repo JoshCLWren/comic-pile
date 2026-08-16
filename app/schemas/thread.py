@@ -75,6 +75,12 @@ class QueueThreadListItem(BaseModel):
     created_at: datetime
 
 
+class SetCurrentIssueRequest(BaseModel):
+    """Schema for atomically setting the current issue of a thread."""
+
+    issue_id: int = Field(..., gt=0, description="Issue to set as the current issue")
+
+
 class ReactivateRequest(BaseModel):
     """Schema for reactivating a completed thread."""
 

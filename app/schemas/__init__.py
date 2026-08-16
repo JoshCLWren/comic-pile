@@ -46,6 +46,7 @@ from app.schemas.thread import (
     QueueThreadListItem,
     QueueThreadListResponse,
     ReactivateRequest,
+    SetCurrentIssueRequest,
     ThreadCreate,
     ThreadDetail,
     ThreadListResponse,
@@ -69,6 +70,7 @@ __all__ = [
     "QueueThreadListItem",
     "QueueThreadListResponse",
     "ReactivateRequest",
+    "SetCurrentIssueRequest",
     # Dependency
     "DependencyCreate",
     "DependencyResponse",

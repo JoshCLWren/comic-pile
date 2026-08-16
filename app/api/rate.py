@@ -276,6 +276,7 @@ async def rate_thread(
         "manual_die": current_session.manual_die,
         "current_die": current_die,
         "pending_thread_id": current_session.pending_thread_id,
+        "pending_issue_id": current_session.pending_issue_id,
         "pending_thread_updated_at": current_session.pending_thread_updated_at.isoformat()
         if current_session.pending_thread_updated_at
         else None,
@@ -473,6 +474,7 @@ async def rate_thread(
         current_session.snoozed_thread_ids = None
 
     current_session.pending_thread_id = None
+    current_session.pending_issue_id = None
     current_session.pending_thread_updated_at = None
 
     await db.flush()

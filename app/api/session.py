@@ -64,19 +64,43 @@ async def _invalidate_session_caches(user_id: int) -> None:
 
 
 async def _fetch_thread_issue_metadata(
-    thread: Thread, db: AsyncSession
+    thread: Thread,
+    db: AsyncSession,
+    *,
+    session_pending_issue_id: int | None = None,
 ) -> tuple[int | None, str | None]:
     """Fetch issue metadata for a thread.
+
+    The session's pending issue takes precedence when it still resolves to an
+    unread issue in this thread, so the Roll screen honors the authoritative
+    issue identity recorded by roll and correction flows. Otherwise the
+    thread's next unread issue is used.
 
     Args:
         thread: The thread to fetch issue metadata for.
         db: Database session.
+        session_pending_issue_id: Optional session pending issue ID to honor.
 
     Returns:
-        Tuple of (issue_id, issue_number) for the thread's next unread issue,
-        or (None, None) if the thread doesn't use issue tracking or has no next issue.
+        Tuple of (issue_id, issue_number) for the thread's current issue,
+        or (None, None) if the thread doesn't use issue tracking or has no
+        current issue.
     """
-    if not thread.uses_issue_tracking() or not thread.next_unread_issue_id:
+    if not thread.uses_issue_tracking():
+        return None, None
+
+    if session_pending_issue_id is not None:
+        pending_result = await db.execute(
+            select(Issue).where(
+                Issue.id == session_pending_issue_id,
+                Issue.thread_id == thread.id,
+            )
+        )
+        pending_issue = pending_result.scalar_one_or_none()
+        if pending_issue is not None and pending_issue.status == "unread":
+            return pending_issue.id, pending_issue.issue_number
+
+    if not thread.next_unread_issue_id:
         return None, None
 
     issue_result = await db.execute(select(Issue).where(Issue.id == thread.next_unread_issue_id))
@@ -126,7 +150,9 @@ async def get_session_with_thread_safe(
         pending_thread = pending_result.scalar_one_or_none()
         if pending_thread:
             issues_remaining = await pending_thread.get_issues_remaining(db)
-            issue_id, issue_number = await _fetch_thread_issue_metadata(pending_thread, db)
+            issue_id, issue_number = await _fetch_thread_issue_metadata(
+                pending_thread, db, session_pending_issue_id=session.pending_issue_id
+            )
             return session, ActiveThreadInfo(
                 id=pending_thread.id,
                 title=pending_thread.title,
@@ -147,7 +173,9 @@ async def get_session_with_thread_safe(
         thread = await db.get(Thread, event.selected_thread_id)
         if thread and thread.user_id == session.user_id:
             issues_remaining = await thread.get_issues_remaining(db)
-            issue_id, issue_number = await _fetch_thread_issue_metadata(thread, db)
+            issue_id, issue_number = await _fetch_thread_issue_metadata(
+                thread, db, session_pending_issue_id=session.pending_issue_id
+            )
             return session, ActiveThreadInfo(
                 id=thread.id,
                 title=thread.title,

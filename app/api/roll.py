@@ -134,6 +134,7 @@ async def roll_dice(
 
     if current_session:
         current_session.pending_thread_id = selected_thread_id
+        current_session.pending_issue_id = selected_thread_issue_id
         current_session.pending_thread_updated_at = datetime.now(UTC)
 
     await db.commit()
@@ -174,6 +175,7 @@ async def dismiss_pending_roll(
     """
     current_session = await get_or_create(db, user_id=current_user.id, existing_user=current_user)
     current_session.pending_thread_id = None
+    current_session.pending_issue_id = None
     current_session.pending_thread_updated_at = None
     await db.commit()
 
@@ -272,6 +274,7 @@ async def override_roll(
     db.add(event)
 
     current_session.pending_thread_id = override_thread_id
+    current_session.pending_issue_id = override_thread_issue_id
     current_session.pending_thread_updated_at = datetime.now(UTC)
 
     await db.commit()

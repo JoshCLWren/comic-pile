@@ -26,6 +26,7 @@ from app.schemas import (
     QueueThreadListResponse,
     ReactivateRequest,
     RollResponse,
+    SetCurrentIssueRequest,
     ThreadCreate,
     ThreadDetail,
     ThreadResponse,
@@ -683,6 +684,7 @@ async def set_pending_thread(
     db.add(event)
 
     current_session.pending_thread_id = thread_id_int
+    current_session.pending_issue_id = thread_issue_id
     current_session.pending_thread_updated_at = datetime.now(UTC)
 
     if thread_id_int in snoozed_ids:
@@ -711,6 +713,89 @@ async def set_pending_thread(
         total_issues=thread_total_issues,
         reading_progress=thread_reading_progress,
     )
+
+
+@router.post("/{thread_id}/set-current-issue", response_model=ThreadResponse)
+async def set_current_issue(
+    thread_id: int,
+    request: SetCurrentIssueRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> ThreadResponse:
+    """Atomically correct the current issue for a thread.
+
+    Marks every issue before the target as read (preserving existing read
+    timestamps) and the target plus every later issue as unread, so the
+    thread's reading position never contradicts its read/unread state. The
+    thread's next unread issue and the active session's pending issue are
+    updated in the same transaction.
+
+    Args:
+        thread_id: The thread ID to correct.
+        request: Request with the target issue ID.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        ThreadResponse with the corrected reading position.
+
+    Raises:
+        HTTPException: If the thread is not found, does not use issue
+            tracking, or the target issue does not belong to the thread.
+    """
+    thread = await get_owned_thread_or_404(db, current_user.id, thread_id, for_update=True)
+
+    if not thread.uses_issue_tracking():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Thread {thread_id} does not use issue tracking",
+        )
+
+    all_issues_result = await db.execute(
+        select(Issue)
+        .where(Issue.thread_id == thread_id)
+        .order_by(Issue.position, Issue.id)
+        .with_for_update()
+    )
+    all_issues = all_issues_result.scalars().all()
+
+    target_index = next(
+        (index for index, issue in enumerate(all_issues) if issue.id == request.issue_id),
+        None,
+    )
+    if target_index is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Issue {request.issue_id} is not in thread {thread_id}",
+        )
+
+    now = datetime.now(UTC)
+    for index, issue in enumerate(all_issues):
+        if index < target_index:
+            if issue.status != "read":
+                issue.status = "read"
+                issue.read_at = now
+        else:
+            issue.status = "unread"
+            issue.read_at = None
+
+    thread.next_unread_issue_id = request.issue_id
+    thread.issues_remaining = len(all_issues) - target_index
+    thread.reading_progress = "in_progress"
+    thread.status = "active"
+    thread.last_activity_at = now
+
+    current_session = await get_or_create(db, user_id=current_user.id)
+    current_session.pending_issue_id = request.issue_id
+    if current_session.pending_thread_id is None:
+        current_session.pending_thread_id = thread_id
+        current_session.pending_thread_updated_at = now
+
+    await db.commit()
+    await invalidate_user_view(current_user.id)
+
+    await db.refresh(thread)
+    return await thread_to_response(thread, db)
 
 
 @router.put("/{thread_id}/test-backdate", response_model=ThreadResponse)
