@@ -406,8 +406,13 @@ async def roll_bootstrap(
             Thread.format,
             Thread.next_unread_issue_id.label("issue_id"),
             Issue.issue_number,
+            DependencyGroup.name.label("route_label"),
         )
-        .outerjoin(Issue, and_(Issue.id == Thread.next_unread_issue_id, Issue.status == "unread"))
+        .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
+        .outerjoin(DependencyGroupMembership, 
+                   (DependencyGroupMembership.thread_id == Thread.id) | 
+                   (DependencyGroupMembership.issue_id == Thread.next_unread_issue_id))
+        .join(DependencyGroup, DependencyGroupMembership.group_id == DependencyGroup.id)
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
         .where(Thread.queue_position >= 1)
