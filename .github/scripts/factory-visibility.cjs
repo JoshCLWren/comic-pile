@@ -68,6 +68,11 @@ function ownerFor(worker) {
   return 'factory:unowned';
 }
 
+function durablePrOwner(current) {
+  return ['factory:local', ...WORKER_OWNER_LABELS.slice(5)]
+    .find(label => current.has(label)) || null;
+}
+
 function stageFrom(body) {
   if (/comic-pile-factory-needs-human-v\d+:/.test(body)) return 'factory:blocked';
   if (/comic-pile-factory-ready-v\d+:/.test(body)) return 'factory:ready';
@@ -230,15 +235,13 @@ async function reconcile({ github, context }) {
     if (!isFactory) return;
 
     const current = await currentLabels(github, context, pullRequest.number);
-    const externalOwner = WORKER_OWNER_LABELS
-      .slice(5)
-      .find(label => current.has(label));
+    const prLocalOwner = durablePrOwner(current);
 
     await reconcileLabels(github, context, pullRequest.number, {
-      // Fixed-model workers write their durable PR owner before review workflows
-      // refresh visibility. Preserve that stronger PR-local signal even when the
-      // linked issue has since been released for other work.
-      owner: externalOwner || await ownerFromLinkedIssue(github, context, pullRequest),
+      // Local and fixed-model workers write durable PR-local ownership before
+      // review workflows refresh visibility. Preserve that stronger signal even
+      // when the linked issue has since been released for other work.
+      owner: prLocalOwner || await ownerFromLinkedIssue(github, context, pullRequest),
       stage: 'factory:review',
     });
     return;
@@ -280,6 +283,7 @@ async function reconcile({ github, context }) {
 
 module.exports = reconcile;
 module.exports._test = {
+  durablePrOwner,
   ownerFor,
   reconcileLabels,
   withRetry,
