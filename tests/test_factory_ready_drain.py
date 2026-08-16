@@ -30,3 +30,10 @@ def test_pr_ci_cancels_superseded_heads_without_canceling_main() -> None:
 
     assert 'group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}' in ci
     assert "cancel-in-progress: ${{ github.event_name == 'pull_request' }}" in ci
+
+
+def test_repair_guard_cancels_superseded_pr_heads() -> None:
+    guard = Path('.github/workflows/fixed-model-pr-repair-guard.yml').read_text(encoding='utf-8')
+
+    assert 'group: fixed-model-pr-repair-guard-${{ github.event.pull_request.number || github.ref }}' in guard
+    assert 'cancel-in-progress: true' in guard
