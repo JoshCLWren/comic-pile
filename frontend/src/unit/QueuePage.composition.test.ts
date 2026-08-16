@@ -48,6 +48,15 @@ describe('QueuePage composition boundaries', () => {
     expect(source).toMatch(/import \{ useQueueThreadActions \}/)
   })
 
+  it('wires bounded Queue pagination into a visible incremental control', () => {
+    expect(source).toMatch(/nextPageToken/)
+    expect(source).toMatch(/loadMore/)
+    expect(source).toMatch(/data-testid="queue-load-more"/)
+    expect(source).toMatch(/onClick=\{\(\) => void loadMore\(\)\.catch/)
+    expect(source).toMatch(/isPending && threads === null/)
+    expect(source).toMatch(/Load more threads/)
+  })
+
   it('stays under 350 lines so it remains a thin route composition', () => {
     const lineCount = source.split('\n').length
     expect(lineCount).toBeLessThan(350)
