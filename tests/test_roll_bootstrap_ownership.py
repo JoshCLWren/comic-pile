@@ -80,6 +80,57 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
     ]
 
 
+@pytest.mark.asyncio
+async def test_bootstrap_roll_pool_is_never_paginated_below_current_die(monkeypatch):
+    """A d100 bootstrap may return all 100 eligible faces instead of a smaller summary page."""
+    current_session = SimpleNamespace(
+        id=55,
+        manual_die=100,
+        pending_thread_id=None,
+        snoozed_thread_ids=[],
+    )
+    current_user = SimpleNamespace(id=7)
+    pool_rows = [
+        SimpleNamespace(
+            id=index,
+            title=f"Thread {index}",
+            format="ongoing",
+            issue_id=None,
+            issue_number=None,
+        )
+        for index in range(1, 101)
+    ]
+
+    monkeypatch.setattr(
+        roll_api,
+        "get_or_create",
+        AsyncMock(return_value=current_session),
+    )
+    monkeypatch.setattr(
+        roll_api,
+        "get_session_with_thread_safe",
+        AsyncMock(return_value=(current_session, None)),
+    )
+    monkeypatch.setattr(roll_api, "get_current_die", AsyncMock(return_value=100))
+
+    db = AsyncMock()
+    db.execute.side_effect = [
+        _Result(rows=pool_rows),
+        _Result(rows=[]),
+        _Result(scalar_value=0),
+        _Result(rows=[]),
+        _Result(scalar_value=0),
+    ]
+
+    response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
+
+    pool_statement = db.execute.await_args_list[0].args[0]
+    compiled = str(pool_statement.compile(compile_kwargs={"literal_binds": True}))
+    assert "LIMIT 100" in compiled
+    assert response.current_die == 100
+    assert len(response.roll_pool) == 100
+
+
 def test_bootstrap_schema_bounds_summary_lists_without_losing_counts():
     """Keep the HTTP payload bounded while preserving complete summary counts."""
     summaries = [

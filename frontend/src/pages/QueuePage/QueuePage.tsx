@@ -28,7 +28,14 @@ export default function QueuePage() {
   const [sortBy, setSortBy] = useState<QueueSortBy>('position')
   const [searchQuery, setSearchQuery] = useState('')
 
-  const { data: threads, isPending, refetch } = useQueueThreads('')
+  const {
+    data: threads,
+    isPending,
+    isError,
+    refetch,
+    nextPageToken,
+    loadMore,
+  } = useQueueThreads('')
   const { data: session, refetch: refetchSession } = useSession()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
@@ -152,7 +159,9 @@ export default function QueuePage() {
   const mobileAddEnabled = !modals.isAnyModalOpen
   const shuffleDisabled = activeThreads.length < 2
 
-  if (isPending) {
+  // Keep already-rendered rows visible while an additional page loads, but
+  // preserve the full-screen initial loading state before Queue has any data.
+  if (isPending && !threads?.length) {
     return <LoadingSpinner fullScreen />
   }
 
@@ -193,6 +202,28 @@ export default function QueuePage() {
           threads={completedThreads}
           onReactivate={modals.openReactivateModal}
         />
+
+        {nextPageToken && (
+          <div className="px-2 flex flex-col items-center gap-2" data-testid="queue-pagination">
+            {isError && threads !== null && (
+              <p role="alert" className="text-sm text-red-400 text-center">
+                Couldn&apos;t load the next batch of threads. Try again.
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => void loadMore().catch(() => undefined)}
+              disabled={isPending}
+              className="min-h-[44px] px-6 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-xs font-black uppercase tracking-widest text-amber-400 hover:bg-amber-500/20 disabled:opacity-50 disabled:cursor-wait transition-colors"
+              data-testid="queue-load-more"
+            >
+              {isPending ? 'Loading more threads…' : 'Load more threads'}
+            </button>
+            <p className="text-[10px] text-stone-500 uppercase tracking-wider text-center">
+              More threads are available beyond the currently loaded page.
+            </p>
+          </div>
+        )}
 
         <QueueModals
           openModal={modals.openModal}
