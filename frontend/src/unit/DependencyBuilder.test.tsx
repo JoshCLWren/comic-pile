@@ -219,4 +219,50 @@ describe('DependencyBuilder issue selection', () => {
     const readCalls = mockedIssuesApi.list.mock.calls.filter((c) => c[1]?.status === 'read')
     expect(readCalls).toHaveLength(0)
   })
+
+  it('creates a dependency with explicitly selected issues rather than next unread', async () => {
+    mockedIssuesApi.list.mockImplementation(async (threadId: number) => {
+      if (threadId === PREREQ_THREAD.id) {
+        return buildListResponse([
+          makeIssue({ id: 201, thread_id: PREREQ_THREAD.id, issue_number: '1' }),
+          makeIssue({ id: 202, thread_id: PREREQ_THREAD.id, issue_number: '2' }),
+          makeIssue({ id: 203, thread_id: PREREQ_THREAD.id, issue_number: '3' }),
+        ])
+      }
+      return buildListResponse([
+        makeIssue({ id: 101, thread_id: TARGET_THREAD.id, issue_number: '1' }),
+        makeIssue({ id: 102, thread_id: TARGET_THREAD.id, issue_number: '2' }),
+        makeIssue({ id: 103, thread_id: TARGET_THREAD.id, issue_number: '3' }),
+      ])
+    })
+    mockedDependenciesApi.createDependency.mockResolvedValue({} as never)
+
+    const user = userEvent.setup()
+    renderBuilder()
+    await selectPrerequisiteThread()
+
+    const sourceSelect = (await screen.findByLabelText(/Prerequisite issue/i)) as HTMLSelectElement
+    const targetSelect = screen.getByLabelText(/Target issue/i) as HTMLSelectElement
+
+    // Auto-selection picks the first unread issue (#1) in both dropdowns.
+    expect(sourceSelect.value).toBe('201')
+    expect(targetSelect.value).toBe('101')
+
+    // Select a later pair so the dependency uses the explicit selection.
+    await user.selectOptions(sourceSelect, '203')
+    await user.selectOptions(targetSelect, '102')
+
+    await user.click(
+      screen.getByRole('button', { name: /Block issue #2 with: Prereq Thread #3/ })
+    )
+
+    await waitFor(() => {
+      expect(mockedDependenciesApi.createDependency).toHaveBeenCalledWith({
+        sourceType: 'issue',
+        sourceId: 203,
+        targetType: 'issue',
+        targetId: 102,
+      })
+    })
+  })
 })

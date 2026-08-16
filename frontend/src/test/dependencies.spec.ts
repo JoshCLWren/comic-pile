@@ -302,19 +302,36 @@ test.describe('Dependencies', () => {
       await authenticatedPage.waitForSelector('#source-issue', { state: 'visible', timeout: 5000 })
       await authenticatedPage.waitForSelector('#target-issue', { state: 'visible', timeout: 5000 })
 
+      // Both dropdowns auto-select the first unread issue (#1).
+      await expect.poll(async () => authenticatedPage.locator('#source-issue option:checked').textContent()).toBe('#1')
+      await expect.poll(async () => authenticatedPage.locator('#target-issue option:checked').textContent()).toBe('#1')
+
+      // Choose a later pair so the dependency proves it uses the explicitly
+      // selected issues rather than the auto-selected next unread.
       await authenticatedPage.selectOption('#source-issue', { index: 2 })
       await authenticatedPage.selectOption('#target-issue', { index: 2 })
+      await expect.poll(async () => authenticatedPage.locator('#source-issue option:checked').textContent()).toBe('#2')
+      await expect.poll(async () => authenticatedPage.locator('#target-issue option:checked').textContent()).toBe('#2')
 
-      await authenticatedPage
+      // The action button reflects the selected issue pair, not a bare "Block issue".
+      const blockButton = authenticatedPage
         .locator('#comic-pile-overlay-root-dialog')
-        .getByRole('button', { name: 'Block issue', exact: true })
-        .click()
+        .getByRole('button', { name: 'Block issue #2 with: Source Comic #2' })
+      await expect(blockButton).toBeEnabled()
 
-      await authenticatedPage.waitForResponse(
+      const dependencyCreated = authenticatedPage.waitForResponse(
         (response) => response.url().includes('/api/v1/dependencies/') && response.request().method() === 'POST' && response.status() < 300
       )
+      await blockButton.click()
+      await dependencyCreated
 
-      await expect(authenticatedPage.locator('text=This thread is blocked by')).toBeVisible()
+      // The created dependency row must reference the selected issues (#2),
+      // not the auto-selected next unread (#1).
+      await expect(
+        authenticatedPage
+          .locator('#comic-pile-overlay-root-dialog')
+          .getByText('Source Comic #2 → Target Comic #2')
+      ).toBeVisible()
     })
 
     test('validation: both issues must be selected', async ({ authenticatedPage }) => {
