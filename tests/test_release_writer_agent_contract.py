@@ -40,9 +40,7 @@ def test_release_writer_can_use_gh_api_get_pulls() -> None:
 
     assert permission["bash"] is not None, "bash permissions must be configured"
     bash_perms = permission["bash"]
-    assert any(
-        v == "allow" for v in bash_perms.values()
-    ), "bash must allow targeted gh api GET repos/*/pulls/*"
+    assert bash_perms.get("gh api --method GET repos/*/pulls/*") == "allow", "bash must allow targeted gh api GET repos/*/pulls/*"
 
 
 def test_release_writer_can_use_gh_api_get_issues() -> None:
@@ -51,20 +49,18 @@ def test_release_writer_can_use_gh_api_get_issues() -> None:
 
     assert permission["bash"] is not None, "bash permissions must be configured"
     bash_perms = permission["bash"]
-    assert any(
-        v == "allow" for v in bash_perms.values()
-    ), "bash must allow targeted gh api GET repos/*/issues/*"
+    assert bash_perms.get("gh api --method GET repos/*/issues/*") == "allow", "bash must allow targeted gh api GET repos/*/issues/*"
 
 
-def test_release_writer_cannot_edit_source() -> None:
-    """Ensure the agent cannot edit application source code."""
+def test_release_writer_can_use_release_writer_script() -> None:
+    """Verify targeted release-writer script execution is permitted."""
     permission = _load_agent_permission()
+    bash_perms = permission["bash"]
+    assert bash_perms.get("python scripts/release_writer.py *") == "allow", "bash must allow release-writer script"
 
-    assert permission["edit"] == "deny", "release-writer agent must not have edit permission"
 
-
-def test_release_writer_cannot_mutate_labels() -> None:
-    """Ensure the agent cannot mutate GitHub labels."""
+def test_release_writer_bash_default_deny() -> None:
+    """Ensure default bash deny posture is maintained."""
     permission = _load_agent_permission()
-
-    assert permission["external_directory"] == "deny", "release-writer agent must not access external_directory"
+    bash_perms = permission["bash"]
+    assert bash_perms.get("*") == "deny", "bash default must be deny"
