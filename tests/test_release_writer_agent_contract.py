@@ -53,20 +53,20 @@ def test_release_writer_can_use_gh_api_get_issues() -> None:
 
     assert permission["bash"] is not None, "bash permissions must be configured"
     bash_perms = permission["bash"]
-assert any(
-    v == "allow" for v in bash_perms.values()
-), "bash must allow targeted gh api GET repos/*/issues/*"
+    assert any(
+        v == "allow" for v in bash_perms.values()
+    ), "bash must allow targeted gh api GET repos/*/issues/*"
 
 
 def test_release_writer_cannot_edit_source() -> None:
     """Ensure the agent cannot edit application source code."""
     permission = _load_agent_permission()
 
-    assert permission["edit"] is False, "release-writer agent must not have edit permission"
+    assert permission["edit"] == "deny", "release-writer agent must not have edit permission"
 
 
 def test_release_writer_cannot_mutate_labels() -> None:
     """Ensure the agent cannot mutate GitHub labels."""
     permission = _load_agent_permission()
 
-    assert permission["external_directory"] is False, "release-writer agent must not access external_directory"
+    assert permission["external_directory"] == "deny", "release-writer agent must not access external_directory"
