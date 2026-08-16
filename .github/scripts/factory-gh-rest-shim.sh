@@ -63,7 +63,7 @@ if [[ "$command_group" == issue && "$command_name" == list ]]; then
       .[][]
       | select(.pull_request == null)
       | select([.labels[]?.name] as $item_labels
-          | all($labels[] as $wanted; ($item_labels | index($wanted)) != null))
+          | ($labels | all(. as $wanted | ($item_labels | index($wanted)) != null)))
       | {
           number,
           title,
@@ -92,7 +92,7 @@ if [[ "$command_group" == pr && "$command_name" == list ]]; then
     [
       .[][]
       | select([.labels[]?.name] as $item_labels
-          | all($labels[] as $wanted; ($item_labels | index($wanted)) != null))
+          | ($labels | all(. as $wanted | ($item_labels | index($wanted)) != null)))
       | {
           number,
           title,
