@@ -103,6 +103,7 @@ async def test_roll_recovery_preserves_original_and_recommends_readable_leaf(
         source_id=100,
         source_label="Prerequisite #1",
         satisfaction_type="item_read",
+        blocker_type="item_unread",
         causing_issue_ids=[100],
     )
     readable_leaf = ContinuityTraversalNode(
