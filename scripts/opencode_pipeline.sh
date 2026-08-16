@@ -1722,7 +1722,7 @@ print('\n'.join(str(n) for n in ready))
                         rm -rf "$wt_path/node_modules" "$wt_path/frontend/node_modules" 2>/dev/null || true
                         if timeout 30s git -C "$wt_path" fetch origin main >> "$MERGER_LOG" 2>&1 && \
                             if [[ "$STRATEGY" == "rebase" ]]; then \
-                                timeout 30s git -C "$wt_path" rebase origin/main >> "$MERGER_LOG" 2>&1; \
+                                timeout 30s git -C "$wt_path" rebase origin/main -X theirs >> "$MERGER_LOG" 2>&1; \
                             else \
                                 timeout 30s git -C "$wt_path" merge origin/main --no-edit -X theirs >> "$MERGER_LOG" 2>&1; \
                             fi && \
@@ -1740,7 +1740,7 @@ print('\n'.join(str(n) for n in ready))
                     rm -rf "$tmpwt/node_modules" "$tmpwt/frontend/node_modules" 2>/dev/null || true
                     if timeout 30s git -C "$tmpwt" fetch origin main >> "$MERGER_LOG" 2>&1 && \
                         if [[ "$STRATEGY" == "rebase" ]]; then \
-                            timeout 30s git -C "$tmpwt" rebase origin/main >> "$MERGER_LOG" 2>&1; \
+                            timeout 30s git -C "$tmpwt" rebase origin/main -X theirs >> "$MERGER_LOG" 2>&1; \
                         else \
                             timeout 30s git -C "$tmpwt" merge origin/main --no-edit -X theirs >> "$MERGER_LOG" 2>&1; \
                         fi && \

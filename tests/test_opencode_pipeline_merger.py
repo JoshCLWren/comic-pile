@@ -46,6 +46,10 @@ def test_rebranch_on_rebase_strategy(pipeline_script: str) -> None:
         "rebase origin/main must appear before merge origin/main --no-edit -X theirs "
         "in the worktree block to ensure rebase runs when STRATEGY=rebase"
     )
+    assert "rebase origin/main -X theirs" in pipeline_script[rebase_pos : rebase_pos + 80], (
+        "The worktree rebase path must include -X theirs so conflicting PRs are "
+        "auto-resolved instead of aborting the rebase"
+    )
 
 
 def test_rebranch_on_scratch_worktree(pipeline_script: str) -> None:
@@ -63,4 +67,12 @@ def test_rebranch_on_scratch_worktree(pipeline_script: str) -> None:
     assert rebase_pos < merge_pos, (
         "rebase origin/main must appear before merge origin/main --no-edit -X theirs "
         "in the scratch worktree block"
+    )
+    assert "rebase origin/main -X theirs" in pipeline_script[rebase_pos : rebase_pos + 80], (
+        "The scratch worktree rebase path must include -X theirs so conflicting PRs are "
+        "auto-resolved instead of aborting the rebase"
+    )
+    assert 'log_warn "merger — rebase failed for $branch (scratch)"' in pipeline_script, (
+        "The rebase-failure log message must be distinguishable from the non-rebase "
+        "merge-failure path so operators can tell which strategy failed"
     )
