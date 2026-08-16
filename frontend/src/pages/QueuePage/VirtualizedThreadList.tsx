@@ -70,9 +70,8 @@ export default function VirtualizedThreadList<T>({
 }: VirtualizedThreadListProps<T>) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
-  const [containerHeight, setContainerHeight] = useState(0)
   // Default to 1; useLayoutEffect below is the single source of truth
-  // for both dynamic and prop-driven column counts (Finding #6).
+  // for dynamic and prop-driven column counts (Finding #6).
   const [columnCount, setColumnCount] = useState(1)
 
   // Read the initial wrapper dimensions synchronously to avoid a
@@ -81,7 +80,6 @@ export default function VirtualizedThreadList<T>({
   // explicitColumnCount is not needed.
   useLayoutEffect(() => {
     if (wrapperRef.current) {
-      setContainerHeight(wrapperRef.current.offsetHeight)
       if (explicitColumnCount !== undefined) {
         setColumnCount(Math.max(1, explicitColumnCount))
       } else {
@@ -102,7 +100,6 @@ export default function VirtualizedThreadList<T>({
       rafId = requestAnimationFrame(() => {
         rafId = null
         for (const entry of entries) {
-          setContainerHeight(entry.contentRect.height)
           if (explicitColumnCount === undefined) {
             setColumnCount(getColumnCount(entry.contentRect.width))
           }
@@ -211,7 +208,7 @@ export default function VirtualizedThreadList<T>({
       // Use dvh (dynamic viewport height) instead of vh for mobile browser chrome.
       // The 14rem offset accounts for the header (~8rem), sort/search bar (~3rem),
       // padding/spacing (~3rem). ResizeObserver handles orientation changes.
-      style={{ height: containerHeight || 'calc(100dvh - 14rem)' }}
+      style={{ height: 'calc(100dvh - 14rem)' }}
     >
       <div
         ref={scrollRef}
