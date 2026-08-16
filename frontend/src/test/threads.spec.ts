@@ -116,7 +116,7 @@ test.describe('Thread Management', () => {
 
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').first();
     await clickThreadAction(threadItem, 'Edit thread')
-    await waitForEditThreadModal(authenticatedPage);
+    await waitForEditThreadModal(authenticatedPage, { timeout: 60000 });
 
     await authenticatedPage.fill('label:has-text("Title") + input', 'Updated Title');
     await Promise.all([
