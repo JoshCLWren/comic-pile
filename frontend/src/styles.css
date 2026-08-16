@@ -282,6 +282,15 @@ body {
   border-radius: 0.75rem;
 }
 
+/* Promote the queue card foreground to its own compositing layer with a stable
+   identity 3D transform. Without this, vertical mobile scrolling can leave the
+   resting card content visually shifted by iOS/Safari subpixel scroll repaints.
+   The baseline transform keeps the foreground pinned at matrix(1, 0, 0, 1, 0, 0). */
+.queue-card-foreground {
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+}
+
 .modal-card {
   background: rgba(17, 14, 10, 0.95);
   border: 1px solid var(--glass-border);

@@ -150,7 +150,7 @@ export default function QueueThreadCard({
         </div>
       </div>
 
-      <div className="pl-8 md:pl-[2.75rem]">
+      <div className="queue-card-foreground pl-8 md:pl-[2.75rem]">
         <p className="text-xs text-stone-500 uppercase tracking-widest font-bold">{thread.format}</p>
         {thread.notes && <p className="text-xs text-stone-400 mt-2">{thread.notes}</p>}
         {thread.issues_remaining !== null && (
