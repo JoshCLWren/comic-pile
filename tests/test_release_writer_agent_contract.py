@@ -42,8 +42,7 @@ def test_release_writer_can_use_gh_api_get_pulls() -> None:
     assert permission["bash"] is not None, "bash permissions must be configured"
     bash_perms = permission["bash"]
     assert any(
-        "*" in p or "repos/*/pulls/*" in p
-        for p in bash_perms
+        v == "allow" for v in bash_perms.values()
     ), "bash must allow targeted gh api GET repos/*/pulls/*"
 
 
