@@ -5,6 +5,8 @@ on:
     paths:
       - '.github/free-model-factories.tsv'
       - '.github/scripts/free-model-factory-worker.sh'
+      - '.github/scripts/factory-visibility.cjs'
+      - '.github/scripts/factory-visibility*.test.cjs'
       - '.github/scripts/fixed-model-owner-normalize.cjs'
       - '.github/scripts/validate-free-model-factories.py'
       - '.github/workflows/free-model-factory-*.yml'
@@ -25,6 +27,12 @@ jobs:
         run: python .github/scripts/validate-free-model-factories.py
       - name: Parse fixed-model workflow YAML
         run: ruby -e 'require "yaml"; ARGV.each { |f| YAML.parse_file(f) }' .github/workflows/free-model-factory-*.yml
+      - name: Run factory visibility lease regressions
+        run: >-
+          node --test
+          .github/scripts/factory-visibility.test.cjs
+          .github/scripts/factory-visibility-owner.test.cjs
+          .github/scripts/fixed-model-owner-normalize.test.cjs
       - name: Check JavaScript helper syntax
         run: node --check .github/scripts/fixed-model-owner-normalize.cjs
       - name: Check shell worker syntax
