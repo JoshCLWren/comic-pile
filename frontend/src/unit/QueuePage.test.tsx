@@ -10,12 +10,18 @@ import {
   useReactivateThread,
   useUpdateThread,
 } from '../hooks/useThread'
-import { useBugReportRestore } from '../contexts/useBugReportRestore'
-import { useMoveToBack, useMoveToFront, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../hooks/useQueue'
+import {
+  useMoveToBack,
+  useMoveToFront,
+  useMoveToPosition,
+  useQueueThreads,
+  useShuffleQueue,
+} from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
-import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
-import { dependenciesApi, threadsApi } from '../services/api'
+import { useSnooze, useUnsnooze } from '../hooks/useSnooze
+import { threadsApi, dependenciesApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
+import type { Thread } from '../types'
 
 vi.mock('../hooks/useThread', () => ({
   useCreateThread: vi.fn(),
@@ -369,22 +375,33 @@ describe('Keyboard Accessibility', () => {
 })
 
 it('filters and sorts active threads while preserving completed threads', async () => {
-  const user = userEvent.setup()
-  mockedUseQueueThreads.mockReturnValue({
-    data: [
-      { id: 1, title: 'Zeta', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1, created_at: '2024-01-01' },
-      { id: 2, title: 'Alpha', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 2, created_at: '2025-01-01' },
-      { id: 3, title: 'Done', format: 'Comic', status: 'completed', queue_position: 0, issues_remaining: 0, created_at: '2023-01-01', notes: 'Finished' },
-    ], isLoading: false, refetch: vi.fn(),
-  })
-  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  expect(screen.getByText('Done')).toBeInTheDocument()
-  await user.click(screen.getByRole('button', { name: 'A-Z' }))
-  const cards = screen.getAllByTestId('queue-thread-item')
-  expect(cards[0]).toHaveTextContent('Alpha')
-  await user.type(screen.getByPlaceholderText('Search...'), 'missing')
-  expect(screen.getByText('No threads match your search')).toBeInTheDocument()
-})
+    const user = userEvent.setup()
+    mockedUseQueueThreads.mockImplementation((searchTerm: string) => {
+      let data: Thread[] = []
+      if (searchTerm !== 'missing') {
+        data = [
+          { id: 1, title: 'Zeta', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1, created_at: '2024-01-01' },
+          { id: 2, title: 'Alpha', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 2, created_at: '2025-01-01' },
+          { id: 3, title: 'Done', format: 'Comic', status: 'completed', queue_position: 0, issues_remaining: 0, created_at: '2023-01-01', notes: 'Finished' },
+        ]
+      }
+      return {
+        data,
+        isPending: false,
+        isError: false,
+        refetch: vi.fn(),
+        nextPageToken: null,
+        loadMore: vi.fn(),
+      }
+   })
+   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+   expect(screen.getByText('Done')).toBeInTheDocument()
+   await user.click(screen.getByRole('button', { name: 'A-Z' }))
+   const cards = screen.getAllByTestId('queue-thread-item')
+   expect(cards[0]).toHaveTextContent('Alpha')
+   await user.type(screen.getByPlaceholderText('Search...'), 'missing')
+   expect(screen.getByText('No threads match your search')).toBeInTheDocument()
+ })
 
 it('creates a simple issue range and marks the requested issues read', async () => {
   const user = userEvent.setup()

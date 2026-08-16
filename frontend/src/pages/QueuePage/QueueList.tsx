@@ -7,6 +7,7 @@ interface QueueListProps {
   filteredThreads: Thread[]
   reorderError: string | null
   renderItem: (thread: Thread, index: number) => ReactNode
+  isSearching: boolean
 }
 
 /**
@@ -20,19 +21,20 @@ export function QueueList({
   filteredThreads,
   reorderError,
   renderItem,
+  isSearching,
 }: QueueListProps) {
-  if (activeThreads.length === 0) {
+  if (isSearching && filteredThreads.length === 0) {
     return (
-      <div className="text-center text-stone-500" data-testid="queue-empty">
-        No active threads in queue
+      <div className="text-center text-stone-500" data-testid="queue-search-empty">
+        No threads match your search
       </div>
     )
   }
 
-  if (filteredThreads.length === 0) {
+  if (activeThreads.length === 0) {
     return (
-      <div className="text-center text-stone-500" data-testid="queue-search-empty">
-        No threads match your search
+      <div className="text-center text-stone-500" data-testid="queue-empty">
+        No active threads in queue
       </div>
     )
   }

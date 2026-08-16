@@ -27,15 +27,16 @@ export default function QueuePage() {
   const navigate = useNavigate()
   const [sortBy, setSortBy] = useState<QueueSortBy>('position')
   const [searchQuery, setSearchQuery] = useState('')
+const isSearching = searchQuery.trim() !== ''
 
-  const {
-    data: threads,
-    isPending,
-    isError,
-    refetch,
-    nextPageToken,
-    loadMore,
-  } = useQueueThreads('')
+const {
+     data: threads,
+     isPending,
+     isError,
+     refetch,
+     nextPageToken,
+     loadMore,
+   } = useQueueThreads(searchQuery)
   const { data: session, refetch: refetchSession } = useSession()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
@@ -43,11 +44,10 @@ export default function QueuePage() {
   const moveToPositionMutation = useMoveToPosition()
   const shuffleQueueMutation = useShuffleQueue()
 
-  const { activeThreads, completedThreads, filteredThreads } = useQueueFilters(
-    threads,
-    searchQuery,
-    sortBy,
-  )
+const { activeThreads, completedThreads, filteredThreads } = useQueueFilters(
+     threads,
+     sortBy,
+   )
 
   const navigateToRoll = useCallback(
     (_thread: Thread, response: unknown) => {
@@ -191,12 +191,13 @@ export default function QueuePage() {
           </button>
         )}
 
-        <QueueList
-          activeThreads={activeThreads}
-          filteredThreads={filteredThreads}
-          reorderError={actions.reorderError}
-          renderItem={renderThreadCard}
-        />
+<QueueList
+           activeThreads={activeThreads}
+           filteredThreads={filteredThreads}
+           reorderError={actions.reorderError}
+           renderItem={renderThreadCard}
+           isSearching={isSearching}
+         />
 
         <CompletedThreadsSection
           threads={completedThreads}
