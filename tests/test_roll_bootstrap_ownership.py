@@ -1,12 +1,18 @@
 """Ownership and response-contract coverage for the Roll bootstrap endpoint."""
 
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from httpx import AsyncClient
+from sqlalchemy import event
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.api import roll as roll_api
+from app.models import DependencyGroup, DependencyGroupMembership, Issue, Thread
 from app.schemas import RollBootstrapResponse, RollBootstrapThread
+from tests.conftest import get_or_create_user_async
 
 
 class _Result:
@@ -174,102 +180,203 @@ def test_bootstrap_schema_bounds_summary_lists_without_losing_counts():
 
 
 @pytest.mark.asyncio
-async def test_bootstrap_pool_includes_threads_without_route_labels(monkeypatch):
+async def test_bootstrap_pool_includes_threads_without_route_labels(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
     """Pool must not exclude threads that have no dependency group membership.
 
-    Regression guard: the pool query uses an outer join on DependencyGroup so
-    threads without route labels must still appear in the roll pool.
+    Regression guard against the chained-outerjoin construction that dropped
+    threads without memberships; this runs real SQL through the async
+    PostgreSQL fixture so the join semantics are actually exercised.
     """
-    current_session = SimpleNamespace(
-        id=55,
-        manual_die=None,
-        pending_thread_id=None,
-        snoozed_thread_ids=[],
-    )
-    current_user = SimpleNamespace(id=7)
-
-    monkeypatch.setattr(
-        roll_api, "get_or_create", AsyncMock(return_value=current_session)
-    )
-    monkeypatch.setattr(
-        roll_api,
-        "get_session_with_thread_safe",
-        AsyncMock(return_value=(current_session, None)),
-    )
-    monkeypatch.setattr(roll_api, "get_current_die", AsyncMock(return_value=6))
-
-    pool_row = SimpleNamespace(
-        id=10,
+    user = await get_or_create_user_async(async_db)
+    thread = Thread(
+        user_id=user.id,
         title="No Route",
         format="Comic",
-        issue_id=None,
-        issue_number=None,
-        route_label=None,
+        issues_remaining=3,
+        queue_position=1,
+        status="active",
+        created_at=datetime.now(UTC),
     )
+    async_db.add(thread)
+    await async_db.commit()
 
-    db = AsyncMock()
-    db.execute.side_effect = [
-        _Result(rows=[pool_row]),
-        _Result(rows=[]),   # snoozed (empty ids)
-        _Result(scalar_value=0),  # blocked count
-        _Result(rows=[]),   # blocked threads
-        _Result(scalar_value=0),  # stale count
-    ]
+    response = await auth_client.get("/api/roll/bootstrap")
+    assert response.status_code == 200
+    pool = response.json()["roll_pool"]
 
-    response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
-
-    assert len(response.roll_pool) == 1
-    assert response.roll_pool[0].id == 10
-    assert response.roll_pool[0].route_labels == []
+    matching = [item for item in pool if item["id"] == thread.id]
+    assert len(matching) == 1
+    assert matching[0]["route_labels"] == []
 
 
 @pytest.mark.asyncio
-async def test_bootstrap_pool_deduplicates_threads_with_multiple_memberships(
-    monkeypatch,
-):
-    """A thread with two route-label memberships must appear once in the pool.
+async def test_bootstrap_pool_aggregates_membership_labels_once(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Aggregate route labels from thread- and issue-level memberships.
 
-    Regression guard: the pool query outer-joining DependencyGroup can return
-    multiple rows per thread; application code must deduplicate them.
+    Labels must deduplicate, stay user-scoped, and never drop membership-less
+    threads. Runs against the real async PostgreSQL fixture so the correlated
+    label subquery's user scoping and single-row-per-thread semantics are
+    verified.
     """
-    current_session = SimpleNamespace(
-        id=55,
-        manual_die=None,
-        pending_thread_id=None,
-        snoozed_thread_ids=[],
-    )
-    current_user = SimpleNamespace(id=7)
+    user = await get_or_create_user_async(async_db)
+    other_user = await get_or_create_user_async(async_db, username="foreign_owner")
 
-    monkeypatch.setattr(
-        roll_api, "get_or_create", AsyncMock(return_value=current_session)
+    multi = Thread(
+        user_id=user.id,
+        title="Multi Group",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=1,
+        status="active",
+        created_at=datetime.now(UTC),
     )
-    monkeypatch.setattr(
-        roll_api,
-        "get_session_with_thread_safe",
-        AsyncMock(return_value=(current_session, None)),
+    issue_level = Thread(
+        user_id=user.id,
+        title="Issue Level",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=2,
+        status="active",
+        created_at=datetime.now(UTC),
     )
-    monkeypatch.setattr(roll_api, "get_current_die", AsyncMock(return_value=6))
+    no_membership = Thread(
+        user_id=user.id,
+        title="No Route",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=3,
+        status="active",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add_all([multi, issue_level, no_membership])
+    await async_db.flush()
 
-    row_a = SimpleNamespace(
-        id=10, title="Multi", format="Ongoing", issue_id=None,
-        issue_number=None, route_label="Alpha",
+    multi_issue = Issue(
+        thread_id=multi.id,
+        issue_number="1",
+        position=1,
+        status="unread",
     )
-    row_b = SimpleNamespace(
-        id=10, title="Multi", format="Ongoing", issue_id=None,
-        issue_number=None, route_label="Beta",
+    next_issue = Issue(
+        thread_id=issue_level.id,
+        issue_number="3",
+        position=1,
+        status="unread",
     )
+    async_db.add_all([multi_issue, next_issue])
+    await async_db.flush()
+    multi.next_unread_issue_id = multi_issue.id
+    issue_level.next_unread_issue_id = next_issue.id
 
-    db = AsyncMock()
-    db.execute.side_effect = [
-        _Result(rows=[row_a, row_b]),
-        _Result(rows=[]),
-        _Result(scalar_value=0),
-        _Result(rows=[]),
-        _Result(scalar_value=0),
+    alpha = DependencyGroup(user_id=user.id, name="Alpha")
+    beta = DependencyGroup(user_id=user.id, name="Beta")
+    gamma = DependencyGroup(user_id=user.id, name="Gamma")
+    foreign = DependencyGroup(user_id=other_user.id, name="Foreign")
+    async_db.add_all([alpha, beta, gamma, foreign])
+    await async_db.flush()
+
+    async_db.add_all(
+        [
+            DependencyGroupMembership(group_id=alpha.id, thread_id=multi.id),
+            DependencyGroupMembership(group_id=beta.id, thread_id=multi.id),
+            DependencyGroupMembership(group_id=alpha.id, issue_id=multi_issue.id),
+            DependencyGroupMembership(group_id=gamma.id, issue_id=next_issue.id),
+            DependencyGroupMembership(group_id=foreign.id, thread_id=multi.id),
+        ]
+    )
+    await async_db.commit()
+
+    response = await auth_client.get("/api/roll/bootstrap")
+    assert response.status_code == 200
+    pool = {item["id"]: item for item in response.json()["roll_pool"]}
+
+    assert pool[multi.id]["title"] == "Multi Group"
+    assert sorted(pool[multi.id]["route_labels"]) == ["Alpha", "Beta"]
+    assert pool[issue_level.id]["route_labels"] == ["Gamma"]
+    assert pool[no_membership.id]["route_labels"] == []
+    all_labels = {label for item in pool.values() for label in item["route_labels"]}
+    assert "Foreign" not in all_labels
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_pool_query_count_is_constant(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    db_engine: AsyncEngine,
+) -> None:
+    """Bootstrap SELECT count must not scale with pool rows or memberships.
+
+    Regression guard: route labels are fetched by a correlated subquery inside
+    the single pool query, so the endpoint performs no separate per-thread or
+    per-membership label query and no route_result round trip.
+    """
+    user = await get_or_create_user_async(async_db)
+
+    response = await auth_client.get("/api/roll/bootstrap")
+    assert response.status_code == 200
+
+    async def _add_pool(thread_count: int, groups_per_thread: int) -> None:
+        for position in range(1, thread_count + 1):
+            thread = Thread(
+                user_id=user.id,
+                title=f"Thread {position}",
+                format="Comic",
+                issues_remaining=3,
+                queue_position=position,
+                status="active",
+                created_at=datetime.now(UTC),
+            )
+            async_db.add(thread)
+            await async_db.flush()
+            for group_index in range(groups_per_thread):
+                group = DependencyGroup(
+                    user_id=user.id,
+                    name=f"Group {position}-{group_index}",
+                )
+                async_db.add(group)
+                await async_db.flush()
+                async_db.add(
+                    DependencyGroupMembership(
+                        group_id=group.id,
+                        thread_id=thread.id,
+                    )
+                )
+
+    async def _capture_selects() -> list[str]:
+        statements: list[str] = []
+
+        def _capture(conn, cursor, statement, parameters, context, executemany):
+            if statement.lstrip().upper().startswith("SELECT"):
+                statements.append(statement)
+
+        event.listen(db_engine.sync_engine, "before_cursor_execute", _capture)
+        try:
+            response = await auth_client.get("/api/roll/bootstrap")
+        finally:
+            event.remove(db_engine.sync_engine, "before_cursor_execute", _capture)
+        assert response.status_code == 200
+        return statements
+
+    await _add_pool(1, 0)
+    await async_db.flush()
+    small_pool_selects = await _capture_selects()
+
+    await _add_pool(10, 3)
+    await async_db.flush()
+    large_pool_selects = await _capture_selects()
+
+    assert len(large_pool_selects) == len(small_pool_selects)
+
+    label_selects = [
+        statement
+        for statement in large_pool_selects
+        if "dependency_group_memberships" in statement
     ]
-
-    response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
-
-    assert len(response.roll_pool) == 1
-    assert response.roll_pool[0].id == 10
-    assert sorted(response.roll_pool[0].route_labels) == ["Alpha", "Beta"]
+    assert len(label_selects) == 1
+    assert "array_agg" in label_selects[0]

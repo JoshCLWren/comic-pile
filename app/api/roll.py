@@ -6,7 +6,8 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import func, select, or_
+from sqlalchemy import Text, func, or_, select
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
 
@@ -399,6 +400,24 @@ async def roll_bootstrap(
         pending_thread_title=pending_thread_title,
     )
 
+    route_labels_subq = (
+        select(
+            func.array_agg(func.distinct(DependencyGroup.name)),
+        )
+        .select_from(DependencyGroupMembership)
+        .join(DependencyGroup, DependencyGroup.id == DependencyGroupMembership.group_id)
+        .where(
+            or_(
+                DependencyGroupMembership.thread_id == Thread.id,
+                DependencyGroupMembership.issue_id == Thread.next_unread_issue_id,
+            ),
+            DependencyGroup.user_id == user_id,
+        )
+        .correlate(Thread)
+        .scalar_subquery()
+        .cast(ARRAY(Text))
+    )
+
     pool_query = (
         select(
             Thread.id,
@@ -406,24 +425,9 @@ async def roll_bootstrap(
             Thread.format,
             Thread.next_unread_issue_id.label("issue_id"),
             Issue.issue_number,
-            DependencyGroup.name.label("route_label"),
+            route_labels_subq.label("route_labels"),
         )
         .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
-        .outerjoin(
-            DependencyGroupMembership,
-    def _get_dependencies(threads):
-        # Correlated subquery to handle threads with no dependency groups
-        pool = [
-            {
-                'thread_id': t.id,
-                'format': t.format,
-                'route_label': db.session.query(DependencyGroup.label)
-                             .filter(DependencyGroupMembership.thread_id == t.id)
-                             .scalar()
-            }
-            for t in threads
-        ]
-        .outerjoin(DependencyGroup, DependencyGroupMembership.group_id == DependencyGroup.id)
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
         .where(Thread.queue_position >= 1)
@@ -439,22 +443,17 @@ async def roll_bootstrap(
     pool_result = await db.execute(pool_query)
     pool_rows = pool_result.all()
 
-    thread_seen: dict[int, RollBootstrapThread] = {}
-    for row in pool_rows:
-        if row.id in thread_seen:
-            existing = thread_seen[row.id]
-            if row.route_label and row.route_label not in existing.route_labels:
-                existing.route_labels.append(row.route_label)
-        else:
-            thread_seen[row.id] = RollBootstrapThread(
-                id=row.id,
-                title=row.title,
-                format=row.format,
-                issue_id=row.issue_id,
-                issue_number=row.issue_number,
-                route_labels=[row.route_label] if row.route_label else [],
-            )
-    roll_pool = list(thread_seen.values())
+    roll_pool = [
+        RollBootstrapThread(
+            id=row.id,
+            title=row.title,
+            format=row.format,
+            issue_id=row.issue_id,
+            issue_number=row.issue_number,
+            route_labels=list(row.route_labels or []),
+        )
+        for row in pool_rows
+    ]
 
     snoozed_threads: list[RollBootstrapThread] = []
     if snoozed_ids:
