@@ -25,6 +25,9 @@ MAX_GRAPH_RULES = 5_000
 MAX_GRAPH_SELECTED_MEMBERS = 10_000
 
 
+SNAPSHOT_SESSION_KEY = "continuity_readiness_snapshot"
+
+
 @dataclass(frozen=True)
 class _GraphSnapshot:
     """User-owned continuity data loaded in a bounded set of queries."""
@@ -37,6 +40,8 @@ class _GraphSnapshot:
     rules_by_target: dict[tuple[str, int], tuple[ContinuityRule, ...]]
     thread_issue_ids: dict[int, tuple[int, ...]]
     selected_member_issue_ids: dict[int, tuple[int, ...]]
+    query_count: int = 0
+    rows_loaded: int = 0
 
 
 def _too_large(limit: int) -> HTTPException:
@@ -91,7 +96,21 @@ def _group_rows[T](rows: list[T], key: Callable[[T], int]) -> dict[int, tuple[T,
 
 
 async def _load_snapshot(db: AsyncSession, user_id: int) -> _GraphSnapshot:
-    """Load the authenticated user's direct-readiness graph without per-row queries."""
+    """Load the authenticated user's direct-readiness graph without per-row queries.
+
+    The snapshot is cached on the session (``db.info``) so that multiple
+    continuity calculations within the same request reuse the same bounded
+    load rather than repeating the full query sequence.
+    """
+    session_cache = db.info.get(SNAPSHOT_SESSION_KEY) if db.info else {}
+    if session_cache is None:
+        session_cache = {}
+    cached = session_cache.get(user_id)
+    if cached is not None:
+        return cached  # type: ignore[return-value]
+
+    query_count = 0
+    rows_loaded = 0
     thread_result = await db.execute(
         select(Thread)
         .where(Thread.user_id == user_id)
