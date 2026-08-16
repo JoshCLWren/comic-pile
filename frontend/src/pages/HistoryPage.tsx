@@ -115,6 +115,15 @@ export default function HistoryPage() {
                     </div>
                   )}
 
+                  {session.last_rating !== null && session.last_rating !== undefined && (
+                    <div className="text-sm space-y-1">
+                      <p className="font-black text-amber-400 flex items-center gap-1">
+                        <span>⭐</span>
+                        <span>Rating: {session.last_rating.toFixed(1)}</span>
+                      </p>
+                    </div>
+                  )}
+
                   {session.ended_at && (
                     <div className="flex items-center gap-2 text-[9px] font-black text-stone-500 uppercase tracking-widest">
                       {duration && (

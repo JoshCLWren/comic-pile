@@ -151,6 +151,7 @@ export interface SessionSummary {
   ladder_path: string | null;
   active_thread: SessionThread | null;
   last_rolled_result: number | null;
+  last_rating: number | null;
   current_die: number | null;
   snapshot_count: number | null;
 }

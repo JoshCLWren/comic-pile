@@ -179,6 +179,7 @@ class SessionListItem(BaseModel):
     active_thread: ActiveThreadInfo | None
     current_die: int
     last_rolled_result: int | None
+    last_rating: float | None = None
     has_restore_point: bool
     snapshot_count: int
 

@@ -36,7 +36,7 @@ from comic_pile.session import get_current_die, get_or_create, is_active
 router = APIRouter(tags=["sessions"])
 
 
-def _to_session_list_item(sr: SessionResponse) -> SessionListItem:
+def _to_session_list_item(sr: SessionResponse, last_rating: float | None = None) -> SessionListItem:
     """Convert a full SessionResponse to a narrow SessionListItem.
 
     Deliberately drops snoozed_thread_ids, snoozed_threads, and pending_thread_id
@@ -53,6 +53,7 @@ def _to_session_list_item(sr: SessionResponse) -> SessionListItem:
         active_thread=sr.active_thread,
         current_die=sr.current_die,
         last_rolled_result=sr.last_rolled_result,
+        last_rating=last_rating,
         has_restore_point=sr.has_restore_point,
         snapshot_count=sr.snapshot_count,
     )
@@ -500,6 +501,21 @@ async def list_sessions(
 
     projection = project_session_history_events(session_ids, history_events)
 
+    # Fetch latest rating for each session from "rate" events
+    rate_events_result = await db.execute(
+        select(Event)
+        .where(Event.session_id.in_(session_ids))
+        .where(Event.type == "rate")
+        .where(Event.rating.is_not(None))
+        .order_by(Event.session_id, Event.timestamp.desc(), Event.id.desc())
+    )
+    rate_events = rate_events_result.scalars().all()
+
+    latest_ratings: dict[int, float] = {}
+    for event in rate_events:
+        if event.session_id is not None and event.session_id not in latest_ratings:
+            latest_ratings[event.session_id] = event.rating
+
     snapshot_count_result = await db.execute(
         select(Snapshot.session_id, func.count())
         .where(Snapshot.session_id.in_(session_ids))
@@ -577,6 +593,7 @@ async def list_sessions(
     for session in sessions_to_return:
         active_thread = active_threads_dict.get(session.id)
         snapshot_count_num = snapshot_counts.get(session.id, 0)
+        last_rating = latest_ratings.get(session.id)
 
         sr = SessionResponse(
             id=session.id,
@@ -593,7 +610,7 @@ async def list_sessions(
             snapshot_count=snapshot_count_num,
             pending_thread_id=session.pending_thread_id,
         )
-        responses.append(_to_session_list_item(sr))
+        responses.append(_to_session_list_item(sr, last_rating))
 
     next_page_token = None
     if has_more and sessions_to_return:
