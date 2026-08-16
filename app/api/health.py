@@ -8,20 +8,50 @@ import os
 import secrets
 import time
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache import cache
 from app.database import get_db
+from app.models import Event
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])
 DEPENDENCY_TIMEOUT_SECONDS = 2.0
+
+
+def _get_heartbeat_max_requests() -> int:
+    """Get the maximum requests allowed per day for the warm endpoint."""
+    raw_value = os.getenv("WARM_ENDPOINT_MAX_DAILY_REQUESTS", "1000")
+    try:
+        return max(100, min(10000, int(raw_value)))
+    except ValueError:
+        return 1000
+
+
+def _get_inactivity_threshold_seconds() -> int:
+    """Get the inactivity threshold in seconds for stopping heartbeats."""
+    raw_value = os.getenv("WARM_ENDPOINT_INACTIVITY_SECONDS", "1800")
+    try:
+        return max(60, min(86400, int(raw_value)))
+    except ValueError:
+        return 1800
+
+
+def _is_warm_endpoint_enabled() -> bool:
+    """Check if the warm endpoint is enabled."""
+    return os.getenv("WARM_ENDPOINT_ENABLED", "false").lower() == "true"
+
+
+def _is_heartbeat_within_limits(request_count: int) -> bool:
+    """Check if the heartbeat is within the daily request limit."""
+    return request_count <= _get_heartbeat_max_requests()
 
 
 class DependencyProbe(BaseModel):
@@ -38,6 +68,25 @@ class DependencyHealthResponse(BaseModel):
     database: DependencyProbe
     cache: DependencyProbe
     total_duration_ms: float
+
+
+class WarmInstanceDiagnostics(BaseModel):
+    """Instance-level diagnostics for Vercel warm endpoint."""
+
+    instance_id: str
+    process_start_time_ns: int
+    request_count: int
+    startup_time_ms: float | None = None
+    process_age_ms: float | None = None
+
+
+class WarmResponse(BaseModel):
+    """Response from the warm endpoint for instance reuse tracking."""
+
+    status: Literal["warming", "cold", "no_activity"]
+    instance: WarmInstanceDiagnostics
+    has_active_session: bool
+    request_count_today: int
 
 
 async def _authorize_operational_probe(
@@ -222,3 +271,117 @@ async def legacy_health() -> dict[str, str]:
         Stable liveness response.
     """
     return {"status": "alive"}
+
+
+_instance_id: str | None = None
+
+
+def _get_instance_id() -> str:
+    """Get or create a stable instance ID for process lifetime.
+
+    This ID is created once at module import and persists for the process lifetime,
+    allowing Vercel to measure instance reuse across requests.
+
+    Returns:
+        A stable instance identifier string.
+    """
+    global _instance_id
+    if _instance_id is None:
+        _instance_id = f"instance-{secrets.token_urlsafe(8)}"
+    return _instance_id
+
+
+async def _check_recent_activity(db: AsyncSession) -> bool:
+    """Check if there's recent session activity within the inactivity threshold.
+
+    Args:
+        db: Database session.
+
+    Returns:
+        True if recent activity exists, False otherwise.
+    """
+    threshold_seconds = _get_inactivity_threshold_seconds()
+    cutoff_time = datetime.now(UTC) - timedelta(seconds=threshold_seconds)
+
+    result = await db.execute(
+        select(func.max(Event.timestamp)).where(Event.timestamp >= cutoff_time)
+    )
+    last_event_time = result.scalar_one_or_none()
+    return last_event_time is not None
+
+
+if _is_warm_endpoint_enabled():
+
+    @router.get(
+        "/v1/instance/warm",
+        response_model=WarmResponse,
+        include_in_schema=False,
+    )
+    async def warm_endpoint(
+        request: Request,
+        db: AsyncSession = Depends(get_db),
+    ) -> WarmResponse:
+        """Minimal warm endpoint for Vercel Fluid Compute instance reuse.
+
+        This endpoint is designed to be lightweight - it does almost no CPU work
+        and returns quickly. It includes instance diagnostics to measure
+        Vercel instance reuse.
+
+        The endpoint checks for recent activity and only returns a "warming"
+        status when activity is detected. Otherwise, it returns "no_activity"
+        to indicate the instance should be allowed to scale down.
+
+        Guardrails:
+        - Hard maximum daily request limit to prevent runaway workloads
+        - Configurable inactivity threshold for stopping unnecessary pings
+
+        Returns:
+            WarmResponse with instance diagnostics and activity status.
+        """
+        if not _is_warm_endpoint_enabled():
+            return WarmResponse(
+                status="no_activity",
+                instance=WarmInstanceDiagnostics(
+                    instance_id=_get_instance_id(),
+                    process_start_time_ns=0,
+                    request_count=0,
+                ),
+                has_active_session=False,
+                request_count_today=0,
+            )
+
+        instance_id = _get_instance_id()
+        snapshot = request.state.startup_snapshot
+        request_count = snapshot.invocation
+
+        if not _is_heartbeat_within_limits(request_count):
+            logger.warning(
+                "Warm endpoint request limit exceeded: %d > %d",
+                request_count,
+                _get_heartbeat_max_requests(),
+            )
+            return WarmResponse(
+                status="no_activity",
+                instance=WarmInstanceDiagnostics(
+                    instance_id=instance_id,
+                    process_start_time_ns=snapshot.process_started_at_ns,
+                    request_count=request_count,
+                ),
+                has_active_session=False,
+                request_count_today=request_count,
+            )
+
+        has_activity = await _check_recent_activity(db)
+
+        return WarmResponse(
+            status="warming" if has_activity else "no_activity",
+            instance=WarmInstanceDiagnostics(
+                instance_id=instance_id,
+                process_start_time_ns=snapshot.process_started_at_ns,
+                request_count=request_count,
+                startup_time_ms=snapshot.startup_duration_ms,
+                process_age_ms=snapshot.process_age_ms,
+            ),
+            has_active_session=has_activity,
+            request_count_today=request_count,
+        )
