@@ -4,11 +4,11 @@ import { createThread, gotoQueue, waitForThreadInQueue } from './helpers'
 function isFullThreadListGet(method: string, url: string): boolean {
   if (method !== 'GET') return false
   const parsed = new URL(url)
-  return parsed.pathname === '/api/threads/' || parsed.pathname === '/api/threads'
+  return parsed.pathname === '/api/v1/threads/' || parsed.pathname === '/api/v1/threads'
 }
 
 function isSessionGet(method: string, url: string): boolean {
-  return method === 'GET' && new URL(url).pathname === '/api/sessions/current/'
+  return method === 'GET' && new URL(url).pathname === '/api/v1/sessions/current/'
 }
 
 test.describe('Queue snooze request sequence', () => {
@@ -48,7 +48,7 @@ test.describe('Queue snooze request sequence', () => {
     await Promise.all([
       authenticatedPage.waitForResponse(response =>
         response.request().method() === 'POST' &&
-        new URL(response.url()).pathname === '/api/snooze/' &&
+        new URL(response.url()).pathname === '/api/v1/snooze/' &&
         response.ok(),
       ),
       queueCard.getByRole('button', { name: 'Snooze', exact: true }).click(),
@@ -62,7 +62,7 @@ test.describe('Queue snooze request sequence', () => {
     await Promise.all([
       authenticatedPage.waitForResponse(response =>
         response.request().method() === 'POST' &&
-        new URL(response.url()).pathname === `/api/snooze/${id}/unsnooze` &&
+        new URL(response.url()).pathname === `/api/v1/snooze/${id}/unsnooze` &&
         response.ok(),
       ),
       queueCard.getByRole('button', { name: 'Unsnooze', exact: true }).click(),
