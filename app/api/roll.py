@@ -136,11 +136,11 @@ async def roll_dice(
         current_session.pending_thread_id = selected_thread_id
         current_session.pending_thread_updated_at = datetime.now(UTC)
 
+        snoozed_count = len(snoozed_ids)
+        offset = snoozed_count
     await db.commit()
     await _invalidate_session_caches(current_user.id)
 
-    snoozed_count = len(snoozed_ids)
-    offset = snoozed_count
 
     return RollResponse(
         thread_id=selected_thread_id,
