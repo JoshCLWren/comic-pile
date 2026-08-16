@@ -53,7 +53,7 @@ describe('QueuePage composition boundaries', () => {
     expect(source).toMatch(/loadMore/)
     expect(source).toMatch(/data-testid="queue-load-more"/)
     expect(source).toMatch(/onClick=\{\(\) => void loadMore\(\)\.catch/)
-    expect(source).toMatch(/isPending && threads === null/)
+    expect(source).toMatch(/isPending && !threads\?\.length/)
     expect(source).toMatch(/Load more threads/)
   })
 
