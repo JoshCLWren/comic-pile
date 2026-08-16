@@ -92,12 +92,18 @@ def _log_pool_state(pool: Pool, event_name: str) -> None:
 
 @event.listens_for(async_engine.sync_engine.pool, "checkout")
 def _on_checkout(dbapi_connection: object, connection_record: object, connection_proxy: object) -> None:
-    """Record pool checkout timing and state."""
+    """Record pool checkout state.
+
+    The ``_comic_pile_checkout_started`` timestamp is stamped by
+    ``_before_cursor_execute`` *after* the connection is handed out, so the
+    elapsed value here represents idle-in-pool time since the last query
+    started on this connection — not checkout latency.
+    """
     del dbapi_connection, connection_proxy
     checkout_started = getattr(connection_record, "_comic_pile_checkout_started", None)
     if isinstance(checkout_started, float):
         elapsed_ms = (time.perf_counter() - checkout_started) * 1000
-        logger.info("pool_checkout duration_ms=%.2f", elapsed_ms)
+        logger.info("pool_checkout idle_ms=%.2f", elapsed_ms)
     _log_pool_state(async_engine.sync_engine.pool, "checkout")
 
 
