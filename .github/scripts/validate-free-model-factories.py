@@ -19,6 +19,7 @@ PLAYWRIGHT_CONFIG = Path('frontend/playwright.config.ts')
 WORKER = Path('.github/scripts/free-model-factory-worker.sh')
 PRIMITIVES = Path('.github/scripts/free-model-factory-worker-primitives.sh')
 CONTROLLER = Path('.github/scripts/factory-work-controller.py')
+POLICY = Path('.github/scripts/factory_work_policy.py')
 KILO_HELPER = Path('.github/scripts/kilo-auto-factory-run.sh')
 GUARD = Path('.github/scripts/fixed-model-guard.py')
 EXPECTED_WORKERS = set(range(6, 25)) | {29} | set(range(39, 47))
@@ -175,24 +176,30 @@ def main() -> None:
         assert forbidden not in worker, f'worker still owns repo-wide selection/merge behavior: {forbidden}'
     assert 'gh workflow run chromium-discovery.yml' not in worker
 
+    assert POLICY.exists(), 'tracked factory ranking policy module is missing'
     controller = CONTROLLER.read_text(encoding='utf-8')
+    policy = POLICY.read_text(encoding='utf-8')
     for required in (
-        'class Candidate:',
-        'def build_candidates(',
+        'from factory_work_policy import',
         'def reconcile_stale_leases(',
         'def active_fixed_workers(',
         'def assign_candidate(',
         'def release_worker(',
-        '"e2e-discovered"',
-        'return 4',
-        'return 5',
-        'factory:ready',
-        'LOCAL_LEASE_TTL_SECONDS',
         'latest_lease_activity_epoch',
         'queued',
         'in_progress',
     ):
-        assert required in controller, f'factory controller invariant missing: {required}'
+        assert required in controller, f'factory controller runtime invariant missing: {required}'
+    for required in (
+        'class Candidate:',
+        'def build_candidates(',
+        "'e2e-discovered'",
+        'return 4',
+        'return 5',
+        'factory:ready',
+        'LOCAL_LEASE_TTL_SECONDS',
+    ):
+        assert required in policy, f'factory ranking/lease policy invariant missing: {required}'
 
     discovery = DISCOVERY.read_text(encoding='utf-8')
     for required in (
