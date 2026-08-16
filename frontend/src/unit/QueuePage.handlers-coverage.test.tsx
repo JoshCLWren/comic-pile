@@ -237,33 +237,33 @@ describe('QueuePage callback coverage', () => {
     expect(mocks.mutate).not.toHaveBeenCalled()
   })
 
-it('covers queue sorting, filtering, empty states, and router edit state', async () => {
-     const user = userEvent.setup()
-     vi.mocked(useQueueThreads).mockImplementation((searchTerm) => {
-       let data = []
-       if (searchTerm !== 'missing') {
-         data = [
-           { ...thread, title: 'Zeta', created_at: '2024-01-01' },
-           { ...thread, id: 3, title: 'Alpha', queue_position: 2, created_at: '2025-01-01' },
-         ]
-       }
-       return {
-         data: data as never,
-         isPending: false,
-         refetch: mocks.refetch,
-       } as never
-     })
-     renderPage()
-     await user.click(screen.getByRole('button', { name: 'A-Z' }))
-     await user.click(screen.getByRole('button', { name: 'New' }))
-     await user.type(screen.getByPlaceholderText('Search...'), 'missing')
-     expect(screen.getByText('No active threads match your search')).toBeInTheDocument()
-     await user.clear(screen.getByPlaceholderText('Search...'))
-     expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument()
+  it('covers queue sorting, filtering, empty states, and router edit state', async () => {
+    const user = userEvent.setup()
+    vi.mocked(useQueueThreads).mockImplementation((searchTerm) => {
+      let data: { id: number; title: string; format: string; status: string; queue_position: number; issues_remaining: number; total_issues: null; created_at: string; is_blocked?: boolean; blocking_reasons?: never[]; notes?: string }[] = []
+      if (searchTerm !== 'missing') {
+        data = [
+          { ...thread, title: 'Zeta', created_at: '2024-01-01' },
+          { ...thread, id: 3, title: 'Alpha', queue_position: 2, created_at: '2025-01-01' },
+        ]
+      }
+      return {
+        data: data as never,
+        isPending: false,
+        refetch: mocks.refetch,
+      } as never
+    })
+    renderPage()
+    await user.click(screen.getByRole('button', { name: 'A-Z' }))
+    await user.click(screen.getByRole('button', { name: 'New' }))
+    await user.type(screen.getByPlaceholderText('Search...'), 'missing')
+    expect(screen.getByText('No active threads match your search')).toBeInTheDocument()
+    await user.clear(screen.getByPlaceholderText('Search...'))
+    expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument()
 
-     render(<MemoryRouter initialEntries={[{ pathname: '/queue', state: { editThreadId: 1 } }]}><QueuePage /></MemoryRouter>)
-     await waitFor(() => expect(screen.getByRole('heading', { name: /edit thread/i })).toBeInTheDocument())
-   })
+    render(<MemoryRouter initialEntries={[{ pathname: '/queue', state: { editThreadId: 1 } }]}><QueuePage /></MemoryRouter>)
+    await waitFor(() => expect(screen.getByRole('heading', { name: /edit thread/i })).toBeInTheDocument())
+  })
 
   it('exercises controlled form fields and modal close callbacks', async () => {
     const user = userEvent.setup()

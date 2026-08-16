@@ -20,7 +20,7 @@ function makeThread(overrides: Partial<Thread>): Thread {
 }
 
 describe('useQueueFilters', () => {
-it('partitions active and completed threads and defaults to position sort', () => {
+  it('partitions active and completed threads and defaults to position sort', () => {
     const active1 = makeThread({ id: 1, title: 'Alpha', queue_position: 2 })
     const active2 = makeThread({ id: 2, title: 'Beta', queue_position: 1 })
     const completed = makeThread({

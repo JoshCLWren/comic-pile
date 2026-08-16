@@ -381,9 +381,9 @@ describe('Keyboard Accessibility', () => {
       let data: Thread[] = []
       if (searchTerm !== 'missing') {
         data = [
-          { id: 1, title: 'Zeta', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1, total_issues: null, created_at: '2024-01-01' },
-          { id: 2, title: 'Alpha', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 2, total_issues: null, created_at: '2025-01-01' },
-          { id: 3, title: 'Done', format: 'Comic', status: 'completed', queue_position: 0, issues_remaining: 0, total_issues: null, created_at: '2023-01-01', notes: 'Finished' },
+          { id: 1, title: 'Zeta', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1, total_issues: null, created_at: '2024-01-01', is_blocked: false, blocking_reasons: [] },
+          { id: 2, title: 'Alpha', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 2, total_issues: null, created_at: '2025-01-01', is_blocked: false, blocking_reasons: [] },
+          { id: 3, title: 'Done', format: 'Comic', status: 'completed', queue_position: 0, issues_remaining: 0, total_issues: null, created_at: '2023-01-01', notes: 'Finished', is_blocked: false, blocking_reasons: [] },
         ]
       }
       return {
@@ -410,7 +410,7 @@ describe('Keyboard Accessibility', () => {
       let data: Thread[] = []
       if (searchTerm === 'done') {
         data = [
-          { id: 2, title: 'Done', format: 'Comic', status: 'completed', queue_position: 0, issues_remaining: 0, created_at: '2023-01-01', notes: 'Finished', is_blocked: false, blocking_reasons: [] },
+          { id: 2, title: 'Done', format: 'Comic', status: 'completed', queue_position: 0, issues_remaining: 0, total_issues: null, created_at: '2023-01-01', notes: 'Finished', is_blocked: false, blocking_reasons: [] },
         ]
       }
       return {
