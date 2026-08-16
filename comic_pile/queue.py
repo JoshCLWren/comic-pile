@@ -497,7 +497,7 @@ async def get_roll_pool_rows(
         query = query.where(Thread.id.not_in(snoozed_ids))
 
     result = await db.execute(query)
-    return list(result.all())
+    return [(row[0], row[1], row[2]) for row in result]
 
 
 async def get_stale_threads(user_id: int, db: AsyncSession, days: int = 7) -> list[Thread]:

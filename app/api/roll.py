@@ -28,8 +28,8 @@ from app.schemas import (
     RollRequest,
     RollResponse,
 )
-from comic_pile.queue import get_roll_pool, get_roll_pool_rows
-from comic_pile.session import get_current_die, get_current_die_for_session, get_or_create
+from comic_pile.queue import get_roll_pool_rows
+from comic_pile.session import get_current_die_for_session, get_or_create
 
 router = APIRouter(tags=["roll"])
 

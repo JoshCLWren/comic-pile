@@ -25,6 +25,9 @@ class _Result:
     def first(self):
         return self._rows[0] if self._rows else None
 
+    def scalars(self):
+        return self
+
 
 @pytest.mark.asyncio
 async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
@@ -48,7 +51,11 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
         "get_session_with_thread_safe",
         AsyncMock(return_value=(current_session, None)),
     )
-    monkeypatch.setattr(roll_api, "get_current_die", AsyncMock(return_value=4))
+    monkeypatch.setattr(
+        roll_api,
+        "get_current_die_for_session",
+        AsyncMock(return_value=4),
+    )
 
     db = AsyncMock()
     db.execute.side_effect = [
