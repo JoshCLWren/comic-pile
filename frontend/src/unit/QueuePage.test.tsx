@@ -139,7 +139,7 @@ beforeEach(() => {
   } as never)
 })
 
-it('renders queue items and opens create modal', async () => {
+  it('renders queue items and opens create modal', async () => {
   const user = userEvent.setup()
   render(
     <BrowserRouter>
@@ -158,7 +158,7 @@ it('renders queue items and opens create modal', async () => {
   expect(screen.getByRole('heading', { name: /create thread/i })).toBeInTheDocument()
 })
 
-it('registers a restore target while the create modal is open', async () => {
+  it('registers a restore target while the create modal is open', async () => {
   const user = userEvent.setup()
   const restoreState = {
     setRestoreAction: vi.fn(),
@@ -186,7 +186,7 @@ it('registers a restore target while the create modal is open', async () => {
   })
 })
 
-it('shuffles the queue from the header control', async () => {
+  it('shuffles the queue from the header control', async () => {
   const mockRefetch = vi.fn()
   const mockShuffle = { mutate: vi.fn(), isPending: false }
   mockedUseQueueThreads.mockReturnValue({
@@ -375,7 +375,7 @@ describe('Keyboard Accessibility', () => {
   })
 })
 
-it('filters and sorts active threads while preserving completed threads', async () => {
+  it('filters and sorts active threads while preserving completed threads', async () => {
     const user = userEvent.setup()
     mockedUseQueueThreads.mockImplementation((searchTerm: string) => {
       let data: Thread[] = []
@@ -394,13 +394,13 @@ it('filters and sorts active threads while preserving completed threads', async 
         nextPageToken: null,
         loadMore: vi.fn(),
       }
-   })
-   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-   expect(screen.getByText('Done')).toBeInTheDocument()
-   await user.click(screen.getByRole('button', { name: 'A-Z' }))
-   const cards = screen.getAllByTestId('queue-thread-item')
-   expect(cards[0]).toHaveTextContent('Alpha')
-  await user.type(screen.getByPlaceholderText('Search...'), 'missing')
+    })
+    render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+    expect(screen.getByText('Done')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'A-Z' }))
+    const cards = screen.getAllByTestId('queue-thread-item')
+    expect(cards[0]).toHaveTextContent('Alpha')
+    await user.type(screen.getByPlaceholderText('Search...'), 'missing')
     expect(screen.getByText('No active threads match your search')).toBeInTheDocument()
   })
 
@@ -410,7 +410,7 @@ it('filters and sorts active threads while preserving completed threads', async 
       let data: Thread[] = []
       if (searchTerm === 'done') {
         data = [
-          { id: 2, title: 'Done', format: 'Comic', status: 'completed', queue_position: 0, issues_remaining: 0, created_at: '2023-01-01', notes: 'Finished' },
+          { id: 2, title: 'Done', format: 'Comic', status: 'completed', queue_position: 0, issues_remaining: 0, created_at: '2023-01-01', notes: 'Finished', is_blocked: false, blocking_reasons: [] },
         ]
       }
       return {
@@ -427,7 +427,7 @@ it('filters and sorts active threads while preserving completed threads', async 
     expect(screen.getByText('No active threads match your search')).toBeInTheDocument()
   })
 
-it('creates a simple issue range and marks the requested issues read', async () => {
+  it('creates a simple issue range and marks the requested issues read', async () => {
   const user = userEvent.setup()
   const create = vi.fn().mockResolvedValue({ id: 44 })
   mockedUseCreateThread.mockReturnValue({ mutate: create, isPending: false })
@@ -443,7 +443,7 @@ it('creates a simple issue range and marks the requested issues read', async () 
   await waitFor(() => expect(create).toHaveBeenCalled())
 })
 
-it('opens edit, reposition, dependency, and completed reactivation flows', async () => {
+  it('opens edit, reposition, dependency, and completed reactivation flows', async () => {
   const user = userEvent.setup()
   const refetch = vi.fn()
   mockedUseQueueThreads.mockReturnValue({ data: [
@@ -468,7 +468,7 @@ it('opens edit, reposition, dependency, and completed reactivation flows', async
   expect(refetch).toHaveBeenCalled()
 })
 
-it('renders loading and empty queue states', () => {
+  it('renders loading and empty queue states', () => {
   mockedUseQueueThreads.mockReturnValue({ data: undefined, isPending: true, refetch: vi.fn() })
   const { rerender } = render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   expect(screen.getByRole('status')).toBeInTheDocument()
@@ -477,7 +477,7 @@ it('renders loading and empty queue states', () => {
   expect(screen.getByText('No active threads in queue')).toBeInTheDocument()
 })
 
-it('prevents reading blocked threads and reports delete failures', async () => {
+  it('prevents reading blocked threads and reports delete failures', async () => {
   const user = userEvent.setup()
   const deleteMutation = { mutate: vi.fn().mockRejectedValue(new Error('delete failed')), isPending: false }
   mockedUseDeleteThread.mockReturnValue(deleteMutation)
@@ -490,7 +490,7 @@ it('prevents reading blocked threads and reports delete failures', async () => {
   await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('delete failed')))
 })
 
-it('supports created-date sorting and drag reorder failure feedback', async () => {
+  it('supports created-date sorting and drag reorder failure feedback', async () => {
   const user = userEvent.setup()
   const move = { mutate: vi.fn().mockRejectedValue(new Error('reorder failed')), isPending: false }
   mockedUseMoveToPosition.mockReturnValue(move)
@@ -510,7 +510,7 @@ it('supports created-date sorting and drag reorder failure feedback', async () =
   await waitFor(() => expect(move.mutate).toHaveBeenCalled())
 })
 
-it('executes every queue action-menu operation', async () => {
+  it('executes every queue action-menu operation', async () => {
   const user = userEvent.setup()
   const front = vi.fn().mockResolvedValue(undefined)
   const back = vi.fn().mockResolvedValue(undefined)
@@ -546,7 +546,7 @@ it('executes every queue action-menu operation', async () => {
   await user.click(screen.getByTestId('position-slider-cancel'))
 })
 
-it('reports queue mutation failures and invalid reposition requests', async () => {
+  it('reports queue mutation failures and invalid reposition requests', async () => {
   const user = userEvent.setup()
   mockedUseMoveToFront.mockReturnValue({ mutate: vi.fn().mockRejectedValue(new Error('front failed')), isPending: false })
   mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn().mockRejectedValue(new Error('shuffle failed')), isPending: false })
@@ -567,7 +567,7 @@ it('reports queue mutation failures and invalid reposition requests', async () =
   await user.click(screen.getByTestId('position-slider-confirm'))
 })
 
-it('creates a literal issue range and reports create failures', async () => {
+  it('creates a literal issue range and reports create failures', async () => {
   const user = userEvent.setup()
   const create = vi.fn().mockResolvedValue({ id: 55 })
   mockedUseCreateThread.mockReturnValue({ mutate: create, isPending: false })
@@ -589,7 +589,7 @@ it('creates a literal issue range and reports create failures', async () => {
   await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('create failed')))
 })
 
-it('uses thread blocked state without loading dependency details, and handles edit failure', async () => {
+  it('uses thread blocked state without loading dependency details, and handles edit failure', async () => {
   const user = userEvent.setup()
   const update = vi.fn().mockRejectedValue(new Error('update failed'))
   mockedUseUpdateThread.mockReturnValue({ mutate: update, isPending: false })
@@ -607,7 +607,7 @@ it('uses thread blocked state without loading dependency details, and handles ed
   await waitFor(() => expect(update).toHaveBeenCalled())
 })
 
-it('covers drag cancellation and successful repositioning', async () => {
+  it('covers drag cancellation and successful repositioning', async () => {
   const user = userEvent.setup()
   const move = vi.fn().mockResolvedValue(undefined)
   const refetch = vi.fn()
@@ -629,7 +629,7 @@ it('covers drag cancellation and successful repositioning', async () => {
   expect(refetch).toHaveBeenCalled()
 })
 
-it('creates complex ranges and marks the requested issues read', async () => {
+  it('creates complex ranges and marks the requested issues read', async () => {
   const user = userEvent.setup()
   const create = vi.fn().mockResolvedValue({ id: 77 })
   mockedUseCreateThread.mockReturnValue({ mutate: create, isPending: false })
@@ -645,7 +645,7 @@ it('creates complex ranges and marks the requested issues read', async () => {
   expect(mockedIssuesApi.markRead).toHaveBeenCalledWith(12)
 })
 
-it('creates a later single issue without requiring earlier issues', async () => {
+  it('creates a later single issue without requiring earlier issues', async () => {
   const user = userEvent.setup()
   const create = vi.fn().mockResolvedValue({ id: 78 })
   mockedIssuesApi.markRead.mockClear()
@@ -672,7 +672,7 @@ it('creates a later single issue without requiring earlier issues', async () => 
   expect(mockedIssuesApi.markRead).not.toHaveBeenCalled()
 })
 
-it('handles reactivation success and failure from completed threads', async () => {
+  it('handles reactivation success and failure from completed threads', async () => {
   const user = userEvent.setup()
   const reactivate = vi.fn().mockResolvedValue({})
   mockedUseReactivateThread.mockReturnValue({ mutate: reactivate, isPending: false })
@@ -691,7 +691,7 @@ it('handles reactivation success and failure from completed threads', async () =
   await waitFor(() => expect(screen.getByRole('heading', { name: /reactivate thread/i })).toBeInTheDocument())
 })
 
-it('uses the virtualized queue without loading hidden blocked-thread reasons', async () => {
+  it('uses the virtualized queue without loading hidden blocked-thread reasons', async () => {
   vi.stubGlobal('ResizeObserver', class {
     observe() {}
     unobserve() {}
