@@ -19,9 +19,12 @@ test.describe('Thread Management', () => {
     await authenticatedPage.fill('label:has-text("Title") + input', 'Saga');
     await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
     await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1-10');
+    // The queue UI posts to the versioned thread endpoint (`/api/v1/threads/`,
+    // see frontend/src/services/api.ts). Match either the legacy or versioned
+    // collection URL so the wait resolves on the real request.
     await Promise.all([
       authenticatedPage.waitForResponse((response) =>
-        response.url().includes('/api/threads/') &&
+        /\/api\/(v\d+\/)?threads\//.test(response.url()) &&
         response.request().method() === 'POST' &&
         response.status() < 300
       ),
@@ -47,9 +50,11 @@ test.describe('Thread Management', () => {
       await authenticatedPage.fill('label:has-text("Title") + input', thread.title);
       await authenticatedPage.selectOption('label:has-text("Format") + select', thread.format);
       await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1-10');
+      // Match the versioned thread collection URL so the wait resolves on
+      // the real POST to `/api/v1/threads/` (see frontend/src/services/api.ts).
       await Promise.all([
         authenticatedPage.waitForResponse((response) =>
-          response.url().includes('/api/threads/') &&
+          /\/api\/(v\d+\/)?threads\//.test(response.url()) &&
           response.request().method() === 'POST' &&
           response.status() < 300
         ),
@@ -119,9 +124,11 @@ test.describe('Thread Management', () => {
     await waitForEditThreadModal(authenticatedPage);
 
     await authenticatedPage.fill('label:has-text("Title") + input', 'Updated Title');
+    // The queue UI PUTs to the versioned thread endpoint (see
+    // `frontend/src/services/api.ts`). Match the versioned item URL.
     await Promise.all([
       authenticatedPage.waitForResponse((response) =>
-        response.url().includes('/api/threads/') &&
+        /\/api\/(v\d+\/)?threads\/\d+/.test(response.url()) &&
         response.request().method() === 'PUT' &&
         response.status() < 300
       ),
@@ -145,13 +152,21 @@ test.describe('Thread Management', () => {
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'To Be Deleted' });
     await threadItem.waitFor({ state: 'visible', timeout: 5000 });
     const menu = await openThreadActions(threadItem)
-    await Promise.all([
+    // The queue UI issues DELETE to the versioned thread endpoint
+    // (`/api/v1/threads/<id>`, see frontend/src/services/api.ts). The previous
+    // `includes('/api/threads/')` substring never matched that URL, so this
+    // waitForResponse hung until the 30s test timeout even though the delete
+    // itself succeeded. Match either the legacy (`/api/threads/<id>`) or the
+    // versioned (`/api/v1/threads/<id>`) endpoint so the wait resolves on the
+    // real request, and confirm the backend accepted it (204 No Content).
+    const [deleteResponse] = await Promise.all([
       authenticatedPage.waitForResponse((response) =>
-        response.url().includes('/api/threads/') &&
+        /\/api\/(v\d+\/)?threads\/\d+/.test(response.url()) &&
         response.request().method() === 'DELETE'
       ),
       menu.getByRole('menuitem', { name: 'Delete thread' }).click(),
     ]);
+    expect(deleteResponse.status()).toBe(204);
     await authenticatedPage.reload({ waitUntil: 'domcontentloaded' });
     await expect(authenticatedPage.getByRole('heading', { name: 'Read Queue' })).toBeVisible();
 
