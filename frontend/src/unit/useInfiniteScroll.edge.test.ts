@@ -1,10 +1,13 @@
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll'
 
 class MockIntersectionObserver {
   static instances: MockIntersectionObserver[] = []
   callback: IntersectionObserverCallback
+  root: Element | Document | null = null
+  rootMargin = ''
+  thresholds: readonly number[] = []
 
   constructor(callback: IntersectionObserverCallback) {
     this.callback = callback
@@ -26,6 +29,19 @@ class MockIntersectionObserver {
   takeRecords(): IntersectionObserverEntry[] {
     return []
   }
+}
+
+function ScrollSentinel({
+  onLoadMore,
+  hasMore,
+  isLoading,
+}: {
+  onLoadMore: () => void
+  hasMore: boolean
+  isLoading: boolean
+}) {
+  const { sentinelRef } = useInfiniteScroll({ onLoadMore, hasMore, isLoading })
+  return <div ref={sentinelRef} data-testid="sentinel" />
 }
 
 const intersectingEntry = (isIntersecting: boolean) =>
@@ -66,61 +82,57 @@ describe('useInfiniteScroll edge-triggering', () => {
 
   it('fires onLoadMore once on the initial intersecting observe', async () => {
     const onLoadMore = vi.fn()
-    renderHook(() => useInfiniteScroll({ onLoadMore, hasMore: true, isLoading: false }))
+    render(<ScrollSentinel onLoadMore={onLoadMore} hasMore={true} isLoading={false} />)
     await flushObserver()
 
     const observer = getObserver()
-    act(() => observer.callback([intersectingEntry(true)], observer))
+    act(() => observer.callback([intersectingEntry(true)], observer as unknown as IntersectionObserver))
 
     expect(onLoadMore).toHaveBeenCalledTimes(1)
   })
 
   it('does not re-fire when the sentinel stays intersecting without leaving', async () => {
     const onLoadMore = vi.fn()
-    renderHook(() => useInfiniteScroll({ onLoadMore, hasMore: true, isLoading: false }))
+    render(<ScrollSentinel onLoadMore={onLoadMore} hasMore={true} isLoading={false} />)
     await flushObserver()
 
     const observer = getObserver()
-    act(() => observer.callback([intersectingEntry(true)], observer))
-    act(() => observer.callback([intersectingEntry(true)], observer))
+    act(() => observer.callback([intersectingEntry(true)], observer as unknown as IntersectionObserver))
+    act(() => observer.callback([intersectingEntry(true)], observer as unknown as IntersectionObserver))
 
     expect(onLoadMore).toHaveBeenCalledTimes(1)
   })
 
   it('fires again only after the sentinel leaves and re-enters the viewport', async () => {
     const onLoadMore = vi.fn()
-    renderHook(() => useInfiniteScroll({ onLoadMore, hasMore: true, isLoading: false }))
+    render(<ScrollSentinel onLoadMore={onLoadMore} hasMore={true} isLoading={false} />)
     await flushObserver()
 
     const observer = getObserver()
-    act(() => observer.callback([intersectingEntry(true)], observer))
-    act(() => observer.callback([intersectingEntry(false)], observer))
-    act(() => observer.callback([intersectingEntry(true)], observer))
+    act(() => observer.callback([intersectingEntry(true)], observer as unknown as IntersectionObserver))
+    act(() => observer.callback([intersectingEntry(false)], observer as unknown as IntersectionObserver))
+    act(() => observer.callback([intersectingEntry(true)], observer as unknown as IntersectionObserver))
 
     expect(onLoadMore).toHaveBeenCalledTimes(2)
   })
 
   it('does not re-fire after the observer is recreated by a dependency change', async () => {
     const onLoadMore = vi.fn()
-    const { rerender } = renderHook(
-      ({ isLoading }: { isLoading: boolean }) =>
-        useInfiniteScroll({ onLoadMore, hasMore: true, isLoading }),
-      { initialProps: { isLoading: false } },
+    const { rerender } = render(
+      <ScrollSentinel onLoadMore={onLoadMore} hasMore={true} isLoading={false} />,
     )
     await flushObserver()
 
     const first = getObserver()
-    act(() => first.callback([intersectingEntry(true)], first))
+    act(() => first.callback([intersectingEntry(true)], first as unknown as IntersectionObserver))
     expect(onLoadMore).toHaveBeenCalledTimes(1)
 
-    // Simulate a page load completing: isLoading flips true then false,
-    // which recreates the observer (the situation that caused duplicate prefetch).
-    rerender({ isLoading: true })
-    rerender({ isLoading: false })
+    rerender(<ScrollSentinel onLoadMore={onLoadMore} hasMore={true} isLoading={true} />)
+    rerender(<ScrollSentinel onLoadMore={onLoadMore} hasMore={true} isLoading={false} />)
     await flushObserver()
 
     const second = getObserver()
-    act(() => second.callback([intersectingEntry(true)], second))
+    act(() => second.callback([intersectingEntry(true)], second as unknown as IntersectionObserver))
 
     expect(onLoadMore).toHaveBeenCalledTimes(1)
   })
