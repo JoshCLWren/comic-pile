@@ -171,3 +171,105 @@ def test_bootstrap_schema_bounds_summary_lists_without_losing_counts():
     assert len(response.blocked_threads) == response.summary_limit
     assert response.snoozed_count == 25
     assert response.blocked_count == 25
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_pool_includes_threads_without_route_labels(monkeypatch):
+    """Pool must not exclude threads that have no dependency group membership.
+
+    Regression guard: the pool query uses an outer join on DependencyGroup so
+    threads without route labels must still appear in the roll pool.
+    """
+    current_session = SimpleNamespace(
+        id=55,
+        manual_die=None,
+        pending_thread_id=None,
+        snoozed_thread_ids=[],
+    )
+    current_user = SimpleNamespace(id=7)
+
+    monkeypatch.setattr(
+        roll_api, "get_or_create", AsyncMock(return_value=current_session)
+    )
+    monkeypatch.setattr(
+        roll_api,
+        "get_session_with_thread_safe",
+        AsyncMock(return_value=(current_session, None)),
+    )
+    monkeypatch.setattr(roll_api, "get_current_die", AsyncMock(return_value=6))
+
+    pool_row = SimpleNamespace(
+        id=10,
+        title="No Route",
+        format="Comic",
+        issue_id=None,
+        issue_number=None,
+        route_label=None,
+    )
+
+    db = AsyncMock()
+    db.execute.side_effect = [
+        _Result(rows=[pool_row]),
+        _Result(rows=[]),   # snoozed (empty ids)
+        _Result(scalar_value=0),  # blocked count
+        _Result(rows=[]),   # blocked threads
+        _Result(scalar_value=0),  # stale count
+    ]
+
+    response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
+
+    assert len(response.roll_pool) == 1
+    assert response.roll_pool[0].id == 10
+    assert response.roll_pool[0].route_labels == []
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_pool_deduplicates_threads_with_multiple_memberships(
+    monkeypatch,
+):
+    """A thread with two route-label memberships must appear once in the pool.
+
+    Regression guard: the pool query outer-joining DependencyGroup can return
+    multiple rows per thread; application code must deduplicate them.
+    """
+    current_session = SimpleNamespace(
+        id=55,
+        manual_die=None,
+        pending_thread_id=None,
+        snoozed_thread_ids=[],
+    )
+    current_user = SimpleNamespace(id=7)
+
+    monkeypatch.setattr(
+        roll_api, "get_or_create", AsyncMock(return_value=current_session)
+    )
+    monkeypatch.setattr(
+        roll_api,
+        "get_session_with_thread_safe",
+        AsyncMock(return_value=(current_session, None)),
+    )
+    monkeypatch.setattr(roll_api, "get_current_die", AsyncMock(return_value=6))
+
+    row_a = SimpleNamespace(
+        id=10, title="Multi", format="Ongoing", issue_id=None,
+        issue_number=None, route_label="Alpha",
+    )
+    row_b = SimpleNamespace(
+        id=10, title="Multi", format="Ongoing", issue_id=None,
+        issue_number=None, route_label="Beta",
+    )
+
+    db = AsyncMock()
+    db.execute.side_effect = [
+        _Result(rows=[row_a, row_b]),
+        _Result(rows=[]),
+        _Result(scalar_value=0),
+        _Result(rows=[]),
+        _Result(scalar_value=0),
+    ]
+
+    response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
+
+    assert len(response.roll_pool) == 1
+    assert response.roll_pool[0].id == 10
+    assert sorted(response.roll_pool[0].route_labels) == ["Alpha", "Beta"]

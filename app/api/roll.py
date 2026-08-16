@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
 
@@ -409,10 +409,12 @@ async def roll_bootstrap(
             DependencyGroup.name.label("route_label"),
         )
         .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
-        .outerjoin(DependencyGroupMembership, 
-                   (DependencyGroupMembership.thread_id == Thread.id) | 
-                   (DependencyGroupMembership.issue_id == Thread.next_unread_issue_id))
-        .join(DependencyGroup, DependencyGroupMembership.group_id == DependencyGroup.id)
+        .outerjoin(
+            DependencyGroupMembership,
+            (DependencyGroupMembership.thread_id == Thread.id)
+            | (DependencyGroupMembership.issue_id == Thread.next_unread_issue_id),
+        )
+        .outerjoin(DependencyGroup, DependencyGroupMembership.group_id == DependencyGroup.id)
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
         .where(Thread.queue_position >= 1)
@@ -427,44 +429,23 @@ async def roll_bootstrap(
 
     pool_result = await db.execute(pool_query)
     pool_rows = pool_result.all()
-    route_labels_by_thread: dict[int, list[str]] = {}
-    if pool_rows:
-        thread_ids = [row.id for row in pool_rows]
-        issue_to_thread = {row.issue_id: row.id for row in pool_rows if row.issue_id is not None}
-        route_result = await db.execute(
-            select(
-                DependencyGroupMembership.thread_id,
-                DependencyGroupMembership.issue_id,
-                DependencyGroup.name,
-            )
-            .join(DependencyGroup)
-            .where(
-                DependencyGroup.user_id == user_id,
-                or_(
-                    DependencyGroupMembership.thread_id.in_(thread_ids),
-                    DependencyGroupMembership.issue_id.in_(list(issue_to_thread)),
-                ),
-            )
-            .order_by(DependencyGroup.name, DependencyGroup.id)
-        )
-        for membership in route_result.all():
-            thread_id = membership.thread_id or issue_to_thread.get(membership.issue_id)
-            if thread_id is not None:
-                labels = route_labels_by_thread.setdefault(thread_id, [])
-                if membership.name not in labels:
-                    labels.append(membership.name)
 
-    roll_pool = [
-        RollBootstrapThread(
-            id=row.id,
-            title=row.title,
-            format=row.format,
-            issue_id=row.issue_id,
-            issue_number=row.issue_number,
-            route_labels=route_labels_by_thread.get(row.id, []),
-        )
-        for row in pool_rows
-    ]
+    thread_seen: dict[int, RollBootstrapThread] = {}
+    for row in pool_rows:
+        if row.id in thread_seen:
+            existing = thread_seen[row.id]
+            if row.route_label and row.route_label not in existing.route_labels:
+                existing.route_labels.append(row.route_label)
+        else:
+            thread_seen[row.id] = RollBootstrapThread(
+                id=row.id,
+                title=row.title,
+                format=row.format,
+                issue_id=row.issue_id,
+                issue_number=row.issue_number,
+                route_labels=[row.route_label] if row.route_label else [],
+            )
+    roll_pool = list(thread_seen.values())
 
     snoozed_threads: list[RollBootstrapThread] = []
     if snoozed_ids:
