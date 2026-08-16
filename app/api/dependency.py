@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.cache import TTL, cached
+from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
 from app.models import Dependency, Issue, Thread
 from app.models.user import User
@@ -25,6 +26,705 @@ from app.schemas.dependency import (
     IssueDependenciesResponse,
     IssueDependencyEdge,
     ThreadConnectedResponse,
+    ThreadDependenciesResponse,
     ThreadDependencyOrderCheckResponse,
-    ThreadDependencyResponse,
-    ThreadConnectedResponse,
+)
+from comic_pile.dependencies import (
+    detect_circular_dependency,
+    get_blocked_thread_ids,
+    get_blocking_explanations,
+    get_blocking_explanations_batch,
+    get_dependency_order_conflicts,
+    refresh_user_blocked_status,
+)
+
+
+class _ConnectedThreadEntry(TypedDict):
+    """Internal structure for tracking connected threads during deduplication."""
+
+    thread_id: int
+    title: str
+    types: set[str]
+    dependency_ids: set[int]
+
+
+router = APIRouter(tags=["dependencies"])
+
+
+async def _invalidate_dependency_caches(user_id: int) -> None:
+    """Invalidate dependency-derived views with one bounded user generation bump."""
+    await invalidate_user_view(user_id)
+
+
+async def enrich_dependencies(deps: list[Dependency], db: AsyncSession) -> list[DependencyResponse]:
+    """Batch-enrich dependencies with human-readable labels.
+
+    Collects all referenced issue/thread IDs, fetches them in bulk,
+    then builds DependencyResponse objects from the lookup dicts.
+    """
+    if not deps:
+        return []
+
+    # Collect all IDs we need to look up
+    issue_ids: set[int] = set()
+    thread_ids: set[int] = set()
+    for dep in deps:
+        if dep.source_issue_id is not None:
+            issue_ids.add(dep.source_issue_id)
+        if dep.target_issue_id is not None:
+            issue_ids.add(dep.target_issue_id)
+
+    # Bulk fetch issues
+    issue_map: dict[int, Issue] = {}
+    if issue_ids:
+        result = await db.execute(select(Issue).where(Issue.id.in_(issue_ids)))
+        for issue in result.scalars():
+            issue_map[issue.id] = issue
+            # We'll also need the parent threads for issue labels
+            thread_ids.add(issue.thread_id)
+
+    # Bulk fetch threads
+    thread_map: dict[int, Thread] = {}
+    if thread_ids:
+        result = await db.execute(select(Thread).where(Thread.id.in_(thread_ids)))
+        for thread in result.scalars():
+            thread_map[thread.id] = thread
+
+    # Build enriched responses
+    responses: list[DependencyResponse] = []
+    for dep in deps:
+        source_label: str | None = None
+        target_label: str | None = None
+        source_issue_thread_id: int | None = None
+        target_issue_thread_id: int | None = None
+
+        if dep.source_issue_id is not None:
+            source_issue = issue_map.get(dep.source_issue_id)
+            if source_issue:
+                source_issue_thread_id = source_issue.thread_id
+                source_thread = thread_map.get(source_issue.thread_id)
+                if source_thread:
+                    source_label = f"{source_thread.title} #{source_issue.issue_number}"
+
+        if dep.target_issue_id is not None:
+            target_issue = issue_map.get(dep.target_issue_id)
+            if target_issue:
+                target_issue_thread_id = target_issue.thread_id
+                target_thread = thread_map.get(target_issue.thread_id)
+                if target_thread:
+                    target_label = f"{target_thread.title} #{target_issue.issue_number}"
+
+        response = DependencyResponse.model_validate(dep, from_attributes=True)
+        response.source_label = source_label
+        response.target_label = target_label
+        response.source_issue_thread_id = source_issue_thread_id
+        response.target_issue_thread_id = target_issue_thread_id
+        response.source_thread_id = source_issue_thread_id
+        response.target_thread_id = target_issue_thread_id
+        response.is_issue_level = True
+        responses.append(response)
+
+    return responses
+
+
+@router.get("/dependencies/blocked", response_model=list[int])
+async def get_all_blocked_thread_ids(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> list[int]:
+    """Return all currently blocked thread IDs for the current user."""
+    blocked_ids = await get_blocked_thread_ids(current_user.id, db)
+    return sorted(blocked_ids)
+
+
+@router.get("/threads/{thread_id}/dependencies", response_model=ThreadDependenciesResponse)
+@cached(ttl=TTL.MEDIUM)
+async def list_thread_dependencies(
+    thread_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> ThreadDependenciesResponse:
+    """List dependencies where a thread blocks others and where it is blocked."""
+    thread = await db.get(Thread, thread_id)
+    if not thread or thread.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Thread {thread_id} not found",
+        )
+
+    source_issue = Issue.__table__.alias("source_issue")
+    target_issue = Issue.__table__.alias("target_issue")
+
+    blocking_result = await db.execute(
+        select(Dependency)
+        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
+        .where(source_issue.c.thread_id == thread_id)
+    )
+    blocked_by_result = await db.execute(
+        select(Dependency)
+        .join(target_issue, Dependency.target_issue_id == target_issue.c.id)
+        .where(target_issue.c.thread_id == thread_id)
+    )
+
+    blocking_deps = blocking_result.scalars().all()
+    blocked_by_deps = blocked_by_result.scalars().all()
+
+    all_deps = list(blocking_deps) + list(blocked_by_deps)
+    enriched = await enrich_dependencies(all_deps, db)
+    blocking_count = len(blocking_deps)
+
+    return ThreadDependenciesResponse(
+        blocking=enriched[:blocking_count],
+        blocked_by=enriched[blocking_count:],
+    )
+
+
+@router.get("/issues/{issue_id}/dependencies", response_model=IssueDependenciesResponse)
+@cached(ttl=TTL.MEDIUM)
+async def list_issue_dependencies(
+    issue_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> IssueDependenciesResponse:
+    """List all incoming and outgoing dependency edges for a specific issue."""
+    issue = await db.get(Issue, issue_id)
+    if not issue:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue {issue_id} not found",
+        )
+
+    thread = await db.get(Thread, issue.thread_id)
+    if not thread or thread.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue {issue_id} not found",
+        )
+
+    incoming_result = await db.execute(
+        select(Dependency).where(Dependency.target_issue_id == issue_id)
+    )
+    incoming_deps = incoming_result.scalars().all()
+
+    outgoing_result = await db.execute(
+        select(Dependency).where(Dependency.source_issue_id == issue_id)
+    )
+    outgoing_deps = outgoing_result.scalars().all()
+
+    all_deps = list(incoming_deps) + list(outgoing_deps)
+
+    issue_ids: set[int] = set()
+    thread_ids: set[int] = {issue.thread_id}
+    for dep in all_deps:
+        if dep.source_issue_id is not None:
+            issue_ids.add(dep.source_issue_id)
+        if dep.target_issue_id is not None:
+            issue_ids.add(dep.target_issue_id)
+
+    issue_map: dict[int, Issue] = {}
+    if issue_ids:
+        result = await db.execute(select(Issue).where(Issue.id.in_(issue_ids)))
+        for issue_obj in result.scalars():
+            issue_map[issue_obj.id] = issue_obj
+            thread_ids.add(issue_obj.thread_id)
+
+    thread_map: dict[int, Thread] = {}
+    if thread_ids:
+        result = await db.execute(select(Thread).where(Thread.id.in_(thread_ids)))
+        for thread_obj in result.scalars():
+            thread_map[thread_obj.id] = thread_obj
+
+    incoming_edges: list[IssueDependencyEdge] = []
+    outgoing_edges: list[IssueDependencyEdge] = []
+
+    for dep in incoming_deps:
+        if dep.source_issue_id is not None:
+            source_issue = issue_map.get(dep.source_issue_id)
+            if source_issue:
+                source_thread = thread_map.get(source_issue.thread_id)
+                if source_thread and source_thread.user_id == current_user.id:
+                    incoming_edges.append(
+                        IssueDependencyEdge(
+                            dependency_id=dep.id,
+                            source_issue_id=source_issue.id,
+                            source_issue_number=source_issue.issue_number,
+                            source_thread_id=source_thread.id,
+                            source_thread_title=source_thread.title,
+                        )
+                    )
+
+    for dep in outgoing_deps:
+        if dep.target_issue_id is not None:
+            target_issue = issue_map.get(dep.target_issue_id)
+            if target_issue:
+                target_thread = thread_map.get(target_issue.thread_id)
+                if target_thread and target_thread.user_id == current_user.id:
+                    outgoing_edges.append(
+                        IssueDependencyEdge(
+                            dependency_id=dep.id,
+                            source_issue_id=target_issue.id,
+                            source_issue_number=target_issue.issue_number,
+                            source_thread_id=target_thread.id,
+                            source_thread_title=target_thread.title,
+                        )
+                    )
+
+    return IssueDependenciesResponse(
+        issue_id=issue_id,
+        incoming=incoming_edges,
+        outgoing=outgoing_edges,
+    )
+
+
+@router.post("/threads/{thread_id}:getBlockingInfo", response_model=BlockingExplanation)
+@cached(ttl=TTL.SHORT)
+async def get_thread_blocking_info(
+    thread_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> BlockingExplanation:
+    """Return blocked status and human-readable blocking reasons for a thread."""
+    thread = await db.get(Thread, thread_id)
+    if not thread or thread.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Thread {thread_id} not found",
+        )
+
+    blocked_ids = await get_blocked_thread_ids(current_user.id, db)
+    if thread_id not in blocked_ids:
+        return BlockingExplanation(is_blocked=False, blocking_reasons=[])
+
+    reasons = await get_blocking_explanations(thread_id, current_user.id, db)
+    return BlockingExplanation(is_blocked=True, blocking_reasons=reasons)
+
+
+@router.post("/threads:getBlockingInfo", response_model=BatchBlockingExplanationResponse)
+@cached(ttl=TTL.SHORT)
+async def get_threads_blocking_info(
+    request: BatchBlockingExplanationRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> BatchBlockingExplanationResponse:
+    """Return blocked status and human-readable blocking reasons for multiple threads."""
+    thread_count = await db.scalar(
+        select(func.count()).select_from(Thread).where(
+            Thread.id.in_(request.thread_ids),
+            Thread.user_id == current_user.id,
+        )
+    )
+    if thread_count != len(request.thread_ids):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="One or more threads not found",
+        )
+
+    blocked_ids = await get_blocked_thread_ids(current_user.id, db)
+    reasons_map = await get_blocking_explanations_batch(
+        request.thread_ids, current_user.id, db
+    )
+
+    result: dict[int, BlockingExplanation] = {}
+    for tid in request.thread_ids:
+        if tid in blocked_ids:
+            result[tid] = BlockingExplanation(
+                is_blocked=True,
+                blocking_reasons=reasons_map.get(tid, []),
+            )
+        else:
+            result[tid] = BlockingExplanation(
+                is_blocked=False,
+                blocking_reasons=[],
+            )
+
+    return BatchBlockingExplanationResponse(threads=result)
+
+
+@router.post(
+    "/dependencies/", response_model=DependencyResponse, status_code=status.HTTP_201_CREATED
+)
+async def create_dependency(
+    dependency_data: DependencyCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> DependencyResponse:
+    """Create a hard-block dependency between owned threads or owned issues."""
+    if dependency_data.source_type != dependency_data.target_type:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Mixed thread/issue dependencies are not supported",
+        )
+
+    if dependency_data.source_id == dependency_data.target_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot create dependency on self",
+        )
+
+    if dependency_data.source_type == "thread":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Thread-level dependencies are no longer supported. "
+                "Create an issue-level dependency instead: use the last issue "
+                "of the source thread and the first issue of the target thread."
+            ),
+        )
+    else:
+        source_issue = await db.get(Issue, dependency_data.source_id)
+        target_issue = await db.get(Issue, dependency_data.target_id)
+        if not source_issue or not target_issue:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Issue not found",
+            )
+
+        source_thread = await db.get(Thread, source_issue.thread_id)
+        target_thread = await db.get(Thread, target_issue.thread_id)
+        if (
+            not source_thread
+            or source_thread.user_id != current_user.id
+            or not target_thread
+            or target_thread.user_id != current_user.id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Issue not found",
+            )
+
+        if await detect_circular_dependency(
+            dependency_data.source_id, dependency_data.target_id, "issue", db
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot create dependency: would create circular dependency",
+            )
+
+        warning: str | None = None
+        if target_thread.next_unread_issue_id is not None:
+            next_unread_issue = await db.get(Issue, target_thread.next_unread_issue_id)
+            if next_unread_issue is not None and target_issue.position < next_unread_issue.position:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"Target issue #{target_issue.issue_number} has already been read"
+                        f" in {target_thread.title} (current next unread:"
+                        f" #{next_unread_issue.issue_number}). This dependency would"
+                        f" never activate. Did you mean to target issue"
+                        f" #{next_unread_issue.issue_number}?"
+                    ),
+                )
+            if next_unread_issue is not None and target_issue.position > next_unread_issue.position:
+                issues_ahead = target_issue.position - next_unread_issue.position
+                issue_word = "issue" if issues_ahead == 1 else "issues"
+                warning = (
+                    f"Target issue #{target_issue.issue_number} is not yet the next"
+                    f" unread (current next unread: #{next_unread_issue.issue_number})."
+                    f" This dependency will block when the target thread reaches it in"
+                    f" {issues_ahead} {issue_word}."
+                )
+
+        dependency = Dependency(
+            source_issue_id=dependency_data.source_id,
+            target_issue_id=dependency_data.target_id,
+        )
+
+    existing = await db.execute(
+        select(Dependency).where(
+            Dependency.source_issue_id == dependency_data.source_id,
+            Dependency.target_issue_id == dependency_data.target_id,
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Dependency already exists",
+        )
+
+    db.add(dependency)
+
+    await refresh_user_blocked_status(current_user.id, db)
+
+    try:
+        await db.commit()
+    except IntegrityError as err:
+        await db.rollback()
+        if "uq_dependency_issue_edge" in str(err.orig):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Dependency already exists",
+            ) from err
+        raise
+
+    await db.refresh(dependency)
+    await _invalidate_dependency_caches(current_user.id)
+
+    response = (await enrich_dependencies([dependency], db))[0]
+    response.warning = warning
+    return response
+
+
+@router.get("/dependencies/{dependency_id}", response_model=DependencyResponse)
+@cached(ttl=TTL.MEDIUM)
+async def get_dependency(
+    dependency_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> DependencyResponse:
+    """Fetch a single dependency owned by the current user."""
+    dependency = await db.get(Dependency, dependency_id)
+    if not dependency:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Dependency {dependency_id} not found",
+        )
+    if not await _is_dependency_owned_by_user(dependency, current_user.id, db):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Dependency {dependency_id} not found",
+        )
+    return (await enrich_dependencies([dependency], db))[0]
+
+
+@router.patch("/dependencies/{dependency_id}", response_model=DependencyResponse)
+async def update_dependency_note(
+    dependency_id: int,
+    data: DependencyNoteUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> DependencyResponse:
+    """Update the note on a dependency owned by the current user."""
+    dependency = await db.get(Dependency, dependency_id)
+    if not dependency:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Dependency {dependency_id} not found",
+        )
+    if not await _is_dependency_owned_by_user(dependency, current_user.id, db):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Dependency {dependency_id} not found",
+        )
+
+    dependency.note = data.note
+    await db.commit()
+    await db.refresh(dependency)
+    await _invalidate_dependency_caches(current_user.id)
+
+    return (await enrich_dependencies([dependency], db))[0]
+
+
+@router.delete("/dependencies/{dependency_id}")
+async def delete_dependency(
+    dependency_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """Delete a dependency and refresh denormalized blocked flags."""
+    dependency = await db.get(Dependency, dependency_id)
+    if not dependency:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Dependency {dependency_id} not found",
+        )
+    if not await _is_dependency_owned_by_user(dependency, current_user.id, db):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Dependency {dependency_id} not found",
+        )
+
+    await db.delete(dependency)
+    await refresh_user_blocked_status(current_user.id, db)
+    await db.commit()
+    await _invalidate_dependency_caches(current_user.id)
+    return {"message": "Dependency deleted"}
+
+
+@router.get(
+    "/threads/{thread_id}/dependency-order-check",
+    response_model=ThreadDependencyOrderCheckResponse,
+)
+@cached(ttl=TTL.MEDIUM)
+async def check_thread_dependency_order(
+    thread_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> ThreadDependencyOrderCheckResponse:
+    """Check for conflicts between dependency order and issue position order.
+
+    Returns a list of conflicts where dependencies imply issue X should come
+    before issue Y, but the current position order disagrees.
+    """
+    thread = await db.get(Thread, thread_id)
+    if not thread or thread.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Thread {thread_id} not found",
+        )
+
+    raw_conflicts = await get_dependency_order_conflicts(thread_id, current_user.id, db)
+
+    conflicts: list[DependencyOrderConflict] = []
+    for conflict in raw_conflicts:
+        conflict_obj = DependencyOrderConflict(
+            issue_id=conflict["issue_id"],
+            issue_number=conflict["issue_number"],
+            position=conflict["position"],
+            dependency_requires_before=[
+                DependencyOrderRequirement(**req) for req in conflict["dependency_requires_before"]
+            ],
+            conflict=conflict["conflict"],
+        )
+        conflicts.append(conflict_obj)
+
+    return ThreadDependencyOrderCheckResponse(thread_id=thread_id, conflicts=conflicts)
+
+
+@router.get(
+    "/threads/{thread_id}/connected",
+    response_model=ThreadConnectedResponse,
+)
+@cached(ttl=TTL.MEDIUM)
+async def get_thread_connected_threads(
+    thread_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> ThreadConnectedResponse:
+    """Return threads connected to this one via dependencies.
+
+    When you are reading a thread, this tells you which other threads
+    are part of the same dependency web so you know there's a relationship.
+    """
+    thread = await db.get(Thread, thread_id)
+    if not thread or thread.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Thread {thread_id} not found",
+        )
+
+    source_issue = Issue.__table__.alias("source_issue")
+    target_issue = Issue.__table__.alias("target_issue")
+
+    blocking_result = await db.execute(
+        select(Dependency)
+        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
+        .where(source_issue.c.thread_id == thread_id)
+    )
+    blocked_by_result = await db.execute(
+        select(Dependency)
+        .join(target_issue, Dependency.target_issue_id == target_issue.c.id)
+        .where(target_issue.c.thread_id == thread_id)
+    )
+
+    blocking_deps = list(blocking_result.scalars().all())
+    blocked_by_deps = list(blocked_by_result.scalars().all())
+    all_deps = blocking_deps + blocked_by_deps
+    if not all_deps:
+        return ThreadConnectedResponse(thread_id=thread_id, connected_threads=[])
+
+    issue_ids = set()
+    for dep in all_deps:
+        if dep.source_issue_id is not None:
+            issue_ids.add(dep.source_issue_id)
+        if dep.target_issue_id is not None:
+            issue_ids.add(dep.target_issue_id)
+
+    issue_map: dict[int, Issue] = {}
+    thread_ids: set[int] = set()
+    if issue_ids:
+        result = await db.execute(
+            select(Issue).where(Issue.id.in_(issue_ids))
+        )
+        for issue_obj in result.scalars():
+            issue_map[issue_obj.id] = issue_obj
+            thread_ids.add(issue_obj.thread_id)
+
+    thread_map: dict[int, Thread] = {}
+    if thread_ids:
+        result = await db.execute(
+            select(Thread).where(Thread.id.in_(thread_ids)).where(Thread.user_id == current_user.id)
+        )
+        for thread_obj in result.scalars():
+            thread_map[thread_obj.id] = thread_obj
+
+    # Track unique connected threads by thread_id, aggregating connection types.
+    connected_by_thread: dict[int, _ConnectedThreadEntry] = {}
+
+    for dep in blocking_deps:
+        if dep.target_issue_id is not None:
+            target_issue_obj = issue_map.get(dep.target_issue_id)
+            if target_issue_obj:
+                target_thread_obj = thread_map.get(target_issue_obj.thread_id)
+                if target_thread_obj and target_issue_obj.thread_id != thread_id:
+                    tid = target_thread_obj.id
+                    if tid not in connected_by_thread:
+                        connected_by_thread[tid] = {
+                            "thread_id": tid,
+                            "title": target_thread_obj.title,
+                            "types": {"blocks"},
+                            "dependency_ids": {dep.id},
+                        }
+                    else:
+                        connected_by_thread[tid]["types"].add("blocks")
+                        connected_by_thread[tid]["dependency_ids"].add(dep.id)
+
+    for dep in blocked_by_deps:
+        if dep.source_issue_id is not None:
+            source_issue_obj = issue_map.get(dep.source_issue_id)
+            if source_issue_obj:
+                source_thread_obj = thread_map.get(source_issue_obj.thread_id)
+                if source_thread_obj and source_issue_obj.thread_id != thread_id:
+                    tid = source_thread_obj.id
+                    if tid not in connected_by_thread:
+                        connected_by_thread[tid] = {
+                            "thread_id": tid,
+                            "title": source_thread_obj.title,
+                            "types": {"blocked_by"},
+                            "dependency_ids": {dep.id},
+                        }
+                    else:
+                        connected_by_thread[tid]["types"].add("blocked_by")
+                        connected_by_thread[tid]["dependency_ids"].add(dep.id)
+
+    connected: list[ConnectedThreadInfo] = []
+    for entry in connected_by_thread.values():
+        types = entry["types"]
+        if types == {"blocks"}:
+            connection_type = "blocks"
+        elif types == {"blocked_by"}:
+            connection_type = "blocked_by"
+        else:
+            connection_type = "blocks & blocked_by"
+        connected.append(ConnectedThreadInfo(
+            thread_id=entry["thread_id"],
+            title=entry["title"],
+            connection_type=connection_type,
+            dependency_id=min(entry["dependency_ids"]),
+        ))
+
+    return ThreadConnectedResponse(thread_id=thread_id, connected_threads=connected)
+
+
+async def _is_dependency_owned_by_user(
+    dependency: Dependency,
+    user_id: int,
+    db: AsyncSession,
+) -> bool:
+    """Return whether a dependency belongs to the given user.
+
+    Args:
+        dependency: Dependency row to validate ownership for.
+        user_id: Authenticated user ID to compare against.
+        db: Database session used for related Issue lookups.
+
+    Returns:
+        True when the dependency belongs to the user; otherwise False.
+        Ownership is checked through source_issue_id -> thread.user_id.
+    """
+    if dependency.source_issue_id is not None:
+        source_issue = await db.get(Issue, dependency.source_issue_id)
+        if not source_issue:
+            return False
+        source_thread = await db.get(Thread, source_issue.thread_id)
+        return bool(source_thread and source_thread.user_id == user_id)
+    return False
