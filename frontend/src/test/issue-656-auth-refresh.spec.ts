@@ -25,7 +25,8 @@ test('recovers authentication when /auth/me initially returns missing-bearer 403
   })
 
   let meRequestCount = 0
-  await page.route('**/api/auth/me', async (route) => {
+  let refreshRequestCount = 0
+  await page.route('**/api/v1/auth/me', async (route) => {
     meRequestCount += 1
     if (meRequestCount === 1) {
       await route.fulfill({
@@ -37,6 +38,10 @@ test('recovers authentication when /auth/me initially returns missing-bearer 403
     }
     await route.continue()
   })
+  await page.route('**/api/v1/auth/refresh', async (route) => {
+    refreshRequestCount += 1
+    await route.continue()
+  })
 
   await page.goto('/')
 
@@ -44,4 +49,6 @@ test('recovers authentication when /auth/me initially returns missing-bearer 403
   await expect(page.getByText(user.username, { exact: true })).toBeVisible()
   await expect(page.getByText('Not authenticated', { exact: true })).toHaveCount(0)
   expect(meRequestCount).toBeGreaterThanOrEqual(2)
+  // The missing-bearer 403 must trigger a silent token refresh that recovers the session.
+  expect(refreshRequestCount).toBeGreaterThanOrEqual(1)
 })
