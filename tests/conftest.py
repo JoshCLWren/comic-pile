@@ -7,6 +7,11 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
+
+@pytest.fixture(scope="session")
+def worker_id() -> str:
+    return "master"
+
 from dotenv import load_dotenv
 from filelock import FileLock
 
@@ -344,16 +349,7 @@ async def clear_test_cache() -> AsyncIterator[None]:
 
 
 def get_test_database_url() -> str:
-    """Get test database URL from environment (PostgreSQL only)."""
-    test_db_url = os.getenv("TEST_DATABASE_URL")
-    if test_db_url:
-        return test_db_url
-
-    database_url = os.getenv("DATABASE_URL")
-    if database_url and database_url.startswith("postgresql"):
-        return database_url
-
-    # Fallback to an in‑memory SQLite database for local testing when no PostgreSQL URL is provided.
+    """Return in‑memory SQLite URL for tests."""
     return "sqlite+aiosqlite:///test.db"
 
 
