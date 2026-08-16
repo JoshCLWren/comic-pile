@@ -142,6 +142,7 @@ describe('RollPage parent handlers', () => {
       .find((button) => button.textContent?.includes('Snooze') && !button.textContent?.includes('toggle'))
     if (!snoozeAction) throw new Error('Snooze action not found')
     await user.click(snoozeAction)
+    expect(spies.snooze).toHaveBeenCalledWith(1)
     await openActions()
     await user.click(screen.getByRole('button', { name: /edit thread/i }))
     expect(spies.navigate).toHaveBeenCalledWith('/queue', { state: { editThreadId: 1 } })
@@ -363,6 +364,7 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('button', { name: 'update low rating' }))
     await user.click(screen.getByRole('button', { name: 'snooze rating' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Roll the dice' })).toBeInTheDocument())
+    expect(spies.snooze).toHaveBeenCalledWith(1)
 
     spies.snooze.mockRejectedValueOnce(new Error('snooze failed'))
     await user.click(screen.getByRole('button', { name: 'thread' }))

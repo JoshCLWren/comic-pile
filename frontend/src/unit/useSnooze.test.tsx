@@ -102,6 +102,49 @@ describe('snooze hooks', () => {
     expect(snooze.result.current.isError).toBe(false)
   })
 
+  it('replays an expired-token snooze once when the expected pending thread is passed', async () => {
+    const authFailure = {
+      response: { status: 401, data: { detail: 'Invalid or expired token' } },
+    }
+    protectedRollMutationApi.snooze
+      .mockRejectedValueOnce(authFailure)
+      .mockResolvedValueOnce(undefined)
+    protectedRollMutationApi.bootstrap.mockResolvedValue(bootstrapState(7, 12))
+    const reconciled = vi.fn()
+    window.addEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
+
+    try {
+      const snooze = renderHook(() => useSnooze())
+      await act(async () => await snooze.result.current.mutate(7))
+
+      expect(protectedRollMutationApi.snooze).toHaveBeenCalledTimes(2)
+      expect(protectedRollMutationApi.bootstrap).toHaveBeenCalledTimes(1)
+      expect(rollBootstrapApi.get).toHaveBeenCalledTimes(1)
+      expect(invalidateCurrentSessionAfterSnooze).toHaveBeenCalledWith(queryClient)
+      expect(snooze.result.current.isError).toBe(false)
+      expect(reconciled).toHaveBeenCalledTimes(2)
+    } finally {
+      window.removeEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
+    }
+  })
+
+  it('does not recover an expired-token snooze without an expected pending thread', async () => {
+    const authFailure = {
+      response: { status: 401, data: { detail: 'Invalid or expired token' } },
+    }
+    protectedRollMutationApi.snooze.mockRejectedValue(authFailure)
+    const snooze = renderHook(() => useSnooze())
+
+    await act(async () => {
+      await expect(snooze.result.current.mutate()).rejects.toBe(authFailure)
+    })
+    await waitFor(() => expect(snooze.result.current.isError).toBe(true))
+
+    expect(protectedRollMutationApi.snooze).toHaveBeenCalledTimes(1)
+    expect(protectedRollMutationApi.bootstrap).not.toHaveBeenCalled()
+    expect(invalidateCurrentSessionAfterSnooze).not.toHaveBeenCalled()
+  })
+
   it('retries a failed post-snooze refresh once and publishes authoritative state', async () => {
     const refreshFailure = new Error('bootstrap unavailable')
     rollBootstrapApi.get

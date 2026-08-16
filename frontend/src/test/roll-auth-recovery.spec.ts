@@ -47,7 +47,9 @@ async function injectExpiredMutationOnce(
 test.describe('Roll mutation authentication recovery', () => {
   test('retries an expired-token rating once without losing or duplicating it', async ({
     authenticatedWithThreadsPage,
+    allowExpectedBrowserFailures,
   }) => {
+    allowExpectedBrowserFailures.allow({ category: 'console', message: '/api/v1/rate/' });
     await openPendingThread(authenticatedWithThreadsPage);
     const getCounts = await injectExpiredMutationOnce(authenticatedWithThreadsPage, '/api/v1/rate/');
 
@@ -63,7 +65,9 @@ test.describe('Roll mutation authentication recovery', () => {
 
   test('retries an expired-token snooze once without a login detour', async ({
     authenticatedWithThreadsPage,
+    allowExpectedBrowserFailures,
   }) => {
+    allowExpectedBrowserFailures.allow({ category: 'console', message: '/api/v1/snooze/' });
     await openPendingThread(authenticatedWithThreadsPage);
     const getCounts = await injectExpiredMutationOnce(authenticatedWithThreadsPage, '/api/v1/snooze/');
 

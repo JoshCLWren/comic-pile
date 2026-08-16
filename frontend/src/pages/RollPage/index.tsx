@@ -294,7 +294,7 @@ export default function RollPage() {
           if (isSnoozed) {
             await unsnoozeMutation.mutate(selectedThread!.id)
           } else {
-            await snoozeMutation.mutate()
+            await snoozeMutation.mutate(selectedThread!.id)
           }
           await refetchBootstrap()
           break
@@ -548,7 +548,7 @@ export default function RollPage() {
 
   async function handleSnooze() {
     try {
-      await snoozeMutation.mutate()
+      await snoozeMutation.mutate(activeRatingThread?.id ?? undefined)
       await refetchBootstrap()
       setIsRolling(false)
       setIsRatingView(false)
