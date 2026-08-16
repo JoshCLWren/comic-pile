@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.continuity_chains as chains
 from app.continuity_chains import resolve_continuity_chains
-from app.continuity_readiness import _load_snapshot
+from app.continuity_readiness import SNAPSHOT_SESSION_KEY, _load_snapshot
 from app.models.continuity_rule import ContinuityRule
 from app.models.issue import Issue
 from app.models.thread import Thread
@@ -248,12 +248,19 @@ async def test_snapshot_caching_prevents_duplicate_loads(async_db: AsyncSession)
     )
     await async_db.commit()
 
-    # First call loads the snapshot
+    # First call loads the snapshot and writes it to the session cache
     snapshot1 = await _load_snapshot(async_db, user.id)
     assert snapshot1.query_count == 6  # 6 bounded queries
     assert snapshot1.rows_loaded > 0
 
-    # Second call should return cached snapshot (same object identity)
+    # Verify the snapshot was cached in the session's info dict
+    assert SNAPSHOT_SESSION_KEY in async_db.info
+    session_cache = async_db.info[SNAPSHOT_SESSION_KEY]
+    assert user.id in session_cache
+    assert session_cache[user.id] is snapshot1
+
+    # Second call should return the cached snapshot (proven by object identity,
+    # which differs from an equivalent-but-distinct reload only if the cache works)
     snapshot2 = await _load_snapshot(async_db, user.id)
     assert snapshot2 is snapshot1
     assert snapshot2.query_count == snapshot1.query_count
