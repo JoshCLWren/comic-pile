@@ -404,7 +404,7 @@ export const test = base.extend<TestFixtures>({
        password: 'TestPass123!',
      };
 
-     const { accessToken } = await registerWithRetry(request, testUser);
+const { accessToken, refreshToken } = await registerWithRetry(request, testUser);
 
      await page.addInitScript((token: string) => {
        localStorage.setItem('auth_token', token);
