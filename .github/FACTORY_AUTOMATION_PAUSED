@@ -1,5 +1,0 @@
-Factory automation is intentionally paused for queue-drain evaluation.
-
-Paused by Josh on 2026-08-16 during incident #1393.
-
-Resume only after reviewing the drained Actions queue and factory state.

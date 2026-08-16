@@ -56,10 +56,6 @@ if [[ "$command_group" == issue && "$command_name" == list ]]; then
   if ! parse_list_args repo state limit jq_expr labels "$@"; then
     exec "$REAL_GH" "${original[@]}"
   fi
-  if [[ -f .github/FACTORY_AUTOMATION_PAUSED ]]; then
-    emit_with_optional_jq '[]' "$jq_expr"
-    exit 0
-  fi
   pages="$("$REAL_GH" api --paginate --slurp "repos/${repo}/issues?state=${state}&per_page=100")"
   labels_json="$(printf '%s\n' "${labels[@]:-}" | jq -Rsc 'split("\n") | map(select(length > 0))')"
   payload="$(jq -c --argjson labels "$labels_json" --argjson limit "$limit" '
@@ -89,10 +85,6 @@ if [[ "$command_group" == pr && "$command_name" == list ]]; then
   labels=()
   if ! parse_list_args repo state limit jq_expr labels "$@"; then
     exec "$REAL_GH" "${original[@]}"
-  fi
-  if [[ -f .github/FACTORY_AUTOMATION_PAUSED ]]; then
-    emit_with_optional_jq '[]' "$jq_expr"
-    exit 0
   fi
   pages="$("$REAL_GH" api --paginate --slurp "repos/${repo}/pulls?state=${state}&per_page=100")"
   labels_json="$(printf '%s\n' "${labels[@]:-}" | jq -Rsc 'split("\n") | map(select(length > 0))')"
