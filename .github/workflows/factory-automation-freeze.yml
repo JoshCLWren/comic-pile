@@ -69,14 +69,15 @@ jobs:
 
           for workflow in "${workflows[@]}"; do
             echo "Freezing $workflow"
-            for status in queued in_progress waiting pending requested; do
-              gh run list --repo "$GITHUB_REPOSITORY" --workflow "$workflow" --status "$status" --limit 100 \
-                --json databaseId --jq '.[].databaseId' 2>/dev/null \
-                | while IFS= read -r run_id; do
-                    [[ -n "$run_id" ]] || continue
-                    echo "Cancelling $workflow run $run_id"
-                    gh run cancel "$run_id" --repo "$GITHUB_REPOSITORY" || true
-                  done
+            for status in queued in_progress; do
+              while IFS= read -r run_id; do
+                [[ -n "$run_id" ]] || continue
+                echo "Cancelling $workflow run $run_id"
+                gh run cancel "$run_id" --repo "$GITHUB_REPOSITORY" || true
+              done < <(
+                gh run list --repo "$GITHUB_REPOSITORY" --workflow "$workflow" --status "$status" --limit 100 \
+                  --json databaseId --jq '.[].databaseId'
+              )
             done
             gh api --method PUT \
               "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/disable"
