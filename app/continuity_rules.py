@@ -76,15 +76,34 @@ async def ensure_owned_continuity_rule_references(
     referenced_issue_ids = set(payload.selected_member_issue_ids)
     if payload.checkpoint_issue_id is not None:
         referenced_issue_ids.add(payload.checkpoint_issue_id)
-    if not referenced_issue_ids:
+    referenced_group_ids: set[int] = set()
+    for target in payload.convergence_targets:
+        if target.type == "issue":
+            referenced_issue_ids.add(target.id)
+        else:
+            referenced_group_ids.add(target.id)
+    if not referenced_issue_ids and not referenced_group_ids:
         return
 
-    result = await db.execute(
-        select(Issue.id)
-        .join(Thread, Thread.id == Issue.thread_id)
-        .where(Issue.id.in_(referenced_issue_ids), Thread.user_id == user_id)
-    )
-    owned_issue_ids = set(result.scalars())
-    missing_issue_ids = sorted(referenced_issue_ids - owned_issue_ids)
-    if missing_issue_ids:
-        raise HTTPException(status_code=404, detail=f"Issue {missing_issue_ids[0]} not found")
+    if referenced_issue_ids:
+        result = await db.execute(
+            select(Issue.id)
+            .join(Thread, Thread.id == Issue.thread_id)
+            .where(Issue.id.in_(referenced_issue_ids), Thread.user_id == user_id)
+        )
+        owned_issue_ids = set(result.scalars())
+        missing_issue_ids = sorted(referenced_issue_ids - owned_issue_ids)
+        if missing_issue_ids:
+            raise HTTPException(status_code=404, detail=f"Issue {missing_issue_ids[0]} not found")
+
+    if referenced_group_ids:
+        group_result = await db.execute(
+            select(DependencyGroup.id).where(
+                DependencyGroup.id.in_(referenced_group_ids),
+                DependencyGroup.user_id == user_id,
+            )
+        )
+        owned_group_ids = set(group_result.scalars())
+        missing_group_ids = sorted(referenced_group_ids - owned_group_ids)
+        if missing_group_ids:
+            raise HTTPException(status_code=404, detail=f"Crossover {missing_group_ids[0]} not found")
