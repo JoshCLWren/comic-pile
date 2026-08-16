@@ -97,7 +97,7 @@ export default function QueueThreadCard({
   return (
     <div
       data-testid="queue-thread-item"
-      className={`queue-thread-card glass-card h-full p-3 md:p-4 space-y-2 md:space-y-3 group cursor-pointer transition-all hover:border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${isDragOver ? 'border-amber-400/60' : ''} ${isBlocked ? 'border-red-400/30 bg-red-500/5' : ''}`}
+      className={`queue-thread-card glass-card h-full p-3 md:p-4 space-y-2 md:space-y-3 group cursor-pointer transition-all overflow-hidden hover:border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${isDragOver ? 'border-amber-400/60' : ''} ${isBlocked ? 'border-red-400/30 bg-red-500/5' : ''}`}
       role="link"
       tabIndex={0}
       aria-label={`Open ${thread.title} details`}
