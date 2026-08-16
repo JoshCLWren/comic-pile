@@ -40,6 +40,10 @@ test.describe('Thread Management', () => {
       { title: 'Wonder Woman', format: 'Comics' },
     ];
 
+    const createModal = authenticatedPage.getByRole('dialog').filter({
+      has: authenticatedPage.getByRole('heading', { name: 'Create Thread' }),
+    });
+
     for (const thread of threads) {
       await authenticatedPage.click('button:has-text("Add Thread")');
       await authenticatedPage.waitForSelector('label:has-text("Title") + input', { state: 'visible', timeout: 5000 });
@@ -56,11 +60,15 @@ test.describe('Thread Management', () => {
         authenticatedPage.click('button[type="submit"]'),
       ]);
       await waitForThreadInQueue(authenticatedPage, thread.title);
-      
-      const closeButton = authenticatedPage.locator('button[aria-label="Close"], button:has-text("×"), button:has-text("Cancel")').first();
-      if (await closeButton.count() > 0) {
-        await closeButton.click();
-      }
+
+      // A successful create closes the modal on its own (handleCreateSubmit ->
+      // closeCreateModal). Assert that it is gone before the next iteration
+      // instead of racing to click a close button: the previous implementation
+      // did `if (count() > 0) click()`, but the modal tears down concurrently
+      // with the queue re-render, so `count()` could observe the closing dialog
+      // while the subsequent `.click()` waited out the full action timeout on a
+      // detaching element — the source of the 30s "Test timeout exceeded" flake.
+      await expect(createModal).toBeHidden();
     }
 
     for (const thread of threads) {
