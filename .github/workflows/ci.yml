@@ -473,7 +473,7 @@ jobs:
               echo "PostgreSQL is ready"
               exit 0
             fi
-            echo "Waiting for backend... ($i/30)"
+            echo "Waiting for PostgreSQL... ($i/30)"
             sleep 2
             i=$((i + 1))
           done
