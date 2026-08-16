@@ -96,6 +96,154 @@ class ContinuityPlanResponse(ContinuityPlanWrite):
     updated_at: datetime
 
 
+TemplateRole = Literal["core", "context/prelude", "epilogue", "unknown"]
+TemplateConfidence = Literal["high", "medium", "low"]
+
+
+class CrossoverTemplateItemPreview(BaseModel):
+    """Suggested crossover member with full provenance and advisory metadata."""
+
+    issue_id: int
+    suggested_position: int
+    role: TemplateRole
+    confidence: TemplateConfidence
+    explanation: str
+    source_paths: tuple[str, ...]
+    target_story_arc_id: str | None
+
+
+class CrossoverTemplateConflictPreview(BaseModel):
+    """A pair whose reading-order evidence disagrees across source lists."""
+
+    first_issue_id: int
+    second_issue_id: int
+    source_paths: tuple[str, ...]
+
+
+class CrossoverTemplateParallelCandidatePreview(CrossoverTemplateConflictPreview):
+    """Advisory pair that may represent parallel branches."""
+
+
+class CrossoverTemplateSerialSpinePreview(BaseModel):
+    """Same-thread issue order preserved as advisory series structure."""
+
+    thread_id: int
+    issue_ids: tuple[int, ...]
+    source_paths: tuple[str, ...]
+    explanation: str
+
+
+class CrossoverTemplateIntersectionPreview(BaseModel):
+    """Consistent cross-thread ordering observation, never a hard dependency."""
+
+    first_issue_id: int
+    second_issue_id: int
+    source_paths: tuple[str, ...]
+    explanation: str
+
+
+class CrossoverTemplateUnresolvedMatchPreview(BaseModel):
+    """A source entry that could not be matched to a ComicPile issue."""
+
+    source_path: str
+    position: int
+    series_name: str
+    issue_number: str
+    reason: str
+
+
+class DerivedCrossoverTemplatePreview(BaseModel):
+    """Non-blocking preview of a derived external crossover template."""
+
+    items: list[CrossoverTemplateItemPreview]
+    conflicts: list[CrossoverTemplateConflictPreview] = Field(default_factory=list)
+    parallel_candidates: list[CrossoverTemplateParallelCandidatePreview] = (
+        Field(default_factory=list)
+    )
+    serial_spines: list[CrossoverTemplateSerialSpinePreview] = Field(default_factory=list)
+    intersections: list[CrossoverTemplateIntersectionPreview] = Field(default_factory=list)
+    unresolved: list[CrossoverTemplateUnresolvedMatchPreview] = Field(default_factory=list)
+
+
+class CrossoverTemplatePreviewRequest(BaseModel):
+    """Request to preview a derived crossover template from persisted CBL evidence."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _validate_no_bool_and_positive_pre_conversion(cls, values: object) -> object:
+        """Reject boolean items and empty source_list_ids before Pydantic casts.
+
+        Args:
+            values: Raw input mapping supplied to the Pydantic model.
+
+        Returns:
+            The input mapping, unchanged.
+        """
+        if not isinstance(values, dict):
+            return values
+        raw_ids = values.get("source_list_ids")
+        if not isinstance(raw_ids, (list, tuple)) or len(raw_ids) == 0:
+            raise ValueError("source_list_ids must not be empty")
+        for v in raw_ids:
+            if isinstance(v, bool):
+                raise ValueError("source_list_ids must contain positive integers")
+        return values
+
+    source_list_ids: tuple[TemplateSourceListId, ...] = Field(min_length=1)
+    target_story_arc_id: str | None = None
+
+    @model_validator(mode="after")
+    def validate_positive_ids(self) -> CrossoverTemplatePreviewRequest:
+        """Validate that all source_list_ids are positive non-boolean integers."""
+        for item_id in self.source_list_ids:
+            if isinstance(item_id, bool) or not isinstance(item_id, int) or item_id <= 0:
+                raise ValueError("source_list_ids must contain positive integers")
+        return self
+
+
+class CrossoverTemplateAdoptRequest(BaseModel):
+    """Adopt an external template into an editable continuity plan."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _validate_no_bool_and_positive_pre_conversion(cls, values: object) -> object:
+        """Reject boolean items and empty source_list_ids before Pydantic casts.
+
+        Args:
+            values: Raw input mapping supplied to the Pydantic model.
+
+        Returns:
+            The input mapping, unchanged.
+        """
+        if not isinstance(values, dict):
+            return values
+        raw_ids = values.get("source_list_ids")
+        if not isinstance(raw_ids, (list, tuple)) or len(raw_ids) == 0:
+            raise ValueError("source_list_ids must not be empty")
+        for v in raw_ids:
+            if isinstance(v, bool):
+                raise ValueError("source_list_ids must contain positive integers")
+        return values
+
+    source_list_ids: tuple[TemplateSourceListId, ...] = Field(min_length=1)
+    target_story_arc_id: str | None = None
+    plan_name: str = Field(min_length=1, max_length=200)
+    ordering_mode: PlanOrderingMode = "informational"
+    lane_id: str = Field(min_length=1, max_length=80, default="imported")
+    lane_name: str = Field(min_length=1, max_length=120, default="Imported")
+    issue_node_id_prefix: str = Field(min_length=1, max_length=40, default="tpl-")
+
+    @model_validator(mode="after")
+    def validate_positive_ids(self) -> CrossoverTemplateAdoptRequest:
+        """Validate that all source_list_ids are positive non-boolean integers."""
+        if any(
+            isinstance(item_id, bool) or not isinstance(item_id, int) or item_id <= 0
+            for item_id in self.source_list_ids
+        ):
+            raise ValueError("source_list_ids must contain positive integers")
+        return self
+
+
 class ContinuityPlanChainNode(BaseModel):
     """One labeled issue or crossover step in a plan prerequisite chain."""
 
