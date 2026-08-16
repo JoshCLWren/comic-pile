@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
 
@@ -411,8 +411,8 @@ async def roll_bootstrap(
         .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
         .outerjoin(
             DependencyGroupMembership,
-            (DependencyGroupMembership.thread_id == Thread.id)
-            | (DependencyGroupMembership.issue_id == Thread.next_unread_issue_id),
+            or_(DependencyGroupMembership.thread_id == Thread.id,
+                DependencyGroupMembership.issue_id == Thread.next_unread_issue_id),
         )
         .outerjoin(DependencyGroup, DependencyGroupMembership.group_id == DependencyGroup.id)
         .where(Thread.user_id == user_id)
