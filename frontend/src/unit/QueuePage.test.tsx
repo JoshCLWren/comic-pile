@@ -22,6 +22,7 @@ import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { threadsApi, dependenciesApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 import type { Thread } from '../types'
+import { useBugReportRestore } from '../contexts/useBugReportRestore'
 
 vi.mock('../hooks/useThread', () => ({
   useCreateThread: vi.fn(),
@@ -94,7 +95,7 @@ beforeEach(() => {
   vi.stubGlobal('alert', vi.fn())
   mockedUseQueueThreads.mockReturnValue({
     data: [
-      { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5 },
+      { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] },
       { id: 2, title: 'Descender', format: 'Comic', status: 'completed', issues_remaining: 0 },
     ],
     isPending: false,
@@ -190,7 +191,7 @@ it('shuffles the queue from the header control', async () => {
   const mockShuffle = { mutate: vi.fn(), isPending: false }
   mockedUseQueueThreads.mockReturnValue({
     data: [
-      { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5 },
+      { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] },
       { id: 3, title: 'Spawn', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 7 },
       { id: 2, title: 'Descender', format: 'Comic', status: 'completed', issues_remaining: 0 },
     ],
@@ -299,7 +300,7 @@ describe('Visible action Snooze/Unsnooze', () => {
     })
     mockedUseQueueThreads.mockReturnValue({
       data: [
-        { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5 },
+        { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] },
       ],
       isLoading: false,
       refetch: mockRefetch,
@@ -334,7 +335,7 @@ describe('Visible action Snooze/Unsnooze', () => {
     })
     mockedUseQueueThreads.mockReturnValue({
       data: [
-        { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5 },
+        { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] },
       ],
       isLoading: false,
       refetch: mockRefetch,
@@ -380,9 +381,9 @@ it('filters and sorts active threads while preserving completed threads', async 
       let data: Thread[] = []
       if (searchTerm !== 'missing') {
         data = [
-          { id: 1, title: 'Zeta', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1, created_at: '2024-01-01' },
-          { id: 2, title: 'Alpha', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 2, created_at: '2025-01-01' },
-          { id: 3, title: 'Done', format: 'Comic', status: 'completed', queue_position: 0, issues_remaining: 0, created_at: '2023-01-01', notes: 'Finished' },
+          { id: 1, title: 'Zeta', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1, total_issues: null, created_at: '2024-01-01' },
+          { id: 2, title: 'Alpha', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 2, total_issues: null, created_at: '2025-01-01' },
+          { id: 3, title: 'Done', format: 'Comic', status: 'completed', queue_position: 0, issues_remaining: 0, total_issues: null, created_at: '2023-01-01', notes: 'Finished' },
         ]
       }
       return {
@@ -480,7 +481,7 @@ it('prevents reading blocked threads and reports delete failures', async () => {
   const user = userEvent.setup()
   const deleteMutation = { mutate: vi.fn().mockRejectedValue(new Error('delete failed')), isPending: false }
   mockedUseDeleteThread.mockReturnValue(deleteMutation)
-  mockedUseQueueThreads.mockReturnValue({ data: [{ id: 1, title: 'Blocked', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 2, is_blocked: true }], isPending: false, refetch: vi.fn() })
+  mockedUseQueueThreads.mockReturnValue({ data: [{ id: 1, title: 'Blocked', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 2, is_blocked: true, total_issues: null, blocking_reasons: [] }], isPending: false, refetch: vi.fn() })
   vi.stubGlobal('confirm', vi.fn(() => true))
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await user.click(screen.getByLabelText('Read'))
