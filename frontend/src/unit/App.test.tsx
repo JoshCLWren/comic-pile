@@ -413,6 +413,7 @@ describe('anonymous no-token probe suppression', () => {
     expect(mockApiGet).toHaveBeenCalledWith('/v1/auth/me', {
       timeout: 15000,
       skipAuthRedirect: true,
+      skipErrorLogging: true,
     })
     expect(mockSetAccessToken).toHaveBeenCalledWith('ssr-token')
   })

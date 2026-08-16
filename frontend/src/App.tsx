@@ -143,6 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const response = await api.get<AuthUser>('/v1/auth/me', {
           timeout: AUTH_BOOTSTRAP_TIMEOUT_MS,
           skipAuthRedirect: true,
+          skipErrorLogging: true,
         })
         if (isMounted) {
           setUser(response)

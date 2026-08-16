@@ -85,6 +85,7 @@ describe('AuthProvider transient recovery', () => {
     expect(mocks.get).toHaveBeenLastCalledWith('/v1/auth/me', {
       timeout: 15000,
       skipAuthRedirect: true,
+      skipErrorLogging: true,
     })
   })
 

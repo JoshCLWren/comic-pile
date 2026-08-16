@@ -71,7 +71,7 @@ export default function ResumeRecovery({
           }
           setRecoveryState('idle')
           return
-         } catch (error) {
+        } catch (error) {
           if (attempt === MAX_RESUME_ATTEMPTS) {
             console.error(`ComicPile resume validation failed:`, resumeErrorSummary(error))
           }
