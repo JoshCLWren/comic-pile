@@ -5,3 +5,4 @@ export { useRoll, useOverrideRoll, useDismissPending, useSetDie, useClearManualD
 export { useSession, useSessions, useSessionDetails, useSessionSnapshots, useRestoreSessionStart } from './useSession'
 export { useUndo, useSnapshots } from './useUndo'
 export { useSnooze } from './useSnooze'
+export { usePingHeartbeat } from './usePingHeartbeat'

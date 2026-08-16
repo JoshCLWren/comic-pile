@@ -13,6 +13,7 @@ import api, { clearAccessToken, setAccessToken, getAccessToken } from './service
 import { isDefinitiveAuthenticationFailure } from './services/authFailure'
 import type { AuthTokens, AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
+import { usePingHeartbeat } from './hooks'
 import type { DiagnosticData } from './hooks/useDiagnostics'
 import { ToastProvider } from './contexts/ToastProvider'
 import { CacheProvider } from './contexts/CacheContext'
@@ -276,6 +277,7 @@ function AuthResumeBoundary({ children }: { children: ReactNode }) {
 }
 
 function App() {
+  usePingHeartbeat()
   return <BrowserRouter><QueryClientProvider client={queryClient}><BugReportRestoreProvider><ToastProvider><CacheProvider><AuthProvider><AuthResumeBoundary><AppRoutes /></AuthResumeBoundary></AuthProvider></CacheProvider></ToastProvider></BugReportRestoreProvider></QueryClientProvider></BrowserRouter>
 }
 
