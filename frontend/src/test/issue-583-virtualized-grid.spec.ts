@@ -100,6 +100,7 @@ test.describe('Responsive multi-column virtualized grid (#583-C)', () => {
     // Scroll the list container far down
     await list.evaluate((el) => {
       el.scrollTop = 2000;
+      el.dispatchEvent(new Event('scroll', { bubbles: true }));
     });
 
     // Wait deterministically for the virtualizer to render a different range.
