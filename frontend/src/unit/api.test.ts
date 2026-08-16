@@ -354,3 +354,24 @@ it('preserves queued request headers and avoids redirecting skipped refresh fail
     response: { status: 401 },
   })).rejects.toThrow('skipped refresh')
 })
+
+describe('skipErrorLogging', () => {
+  const createError = (overrides: Record<string, unknown> = {}) =>
+    ({ config: { url: '/v1/auth/me', ...overrides }, response: { status: 503, statusText: 'Service Unavailable' } }) as never
+
+  it('logs API Error for non-suppressed 503 responses', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const error503 = createError()
+    await expect(responseInterceptor(error503)).rejects.toEqual(error503)
+    expect(consoleError).toHaveBeenCalledWith('API Error:', error503)
+    consoleError.mockRestore()
+  })
+
+  it('suppresses the generic API Error console log when skipErrorLogging is set', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const error503 = createError({ skipErrorLogging: true })
+    await expect(responseInterceptor(error503)).rejects.toEqual(error503)
+    expect(consoleError).not.toHaveBeenCalled()
+    consoleError.mockRestore()
+  })
+})

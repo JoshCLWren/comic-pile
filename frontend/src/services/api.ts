@@ -32,6 +32,7 @@ type ApiRequestConfig<D = unknown> = AxiosRequestConfig<D> & {
   _retry?: boolean
   _queued?: boolean
   skipAuthRedirect?: boolean
+  skipErrorLogging?: boolean
 }
 
 interface ApiClient extends Omit<AxiosInstance, 'request' | 'get' | 'delete' | 'head' | 'post' | 'put' | 'patch'> {
@@ -261,7 +262,9 @@ rawApi.interceptors.response.use(
       }
     }
 
-    console.error('API Error:', error)
+    if (!originalRequest.skipErrorLogging) {
+      console.error('API Error:', error)
+    }
     return Promise.reject(error)
   },
 )

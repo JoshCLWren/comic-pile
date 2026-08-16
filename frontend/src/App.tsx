@@ -83,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await api.get<AuthUser>('/v1/auth/me', {
         timeout,
         skipAuthRedirect: true,
+        skipErrorLogging: true,
       })
       setUser(response)
       setIsAuthenticated(true)
@@ -100,11 +101,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           const tokens = await api.post<AuthTokens>('/v1/auth/refresh', undefined, {
             skipAuthRedirect: true,
+            skipErrorLogging: true,
           })
           setAccessToken(tokens.access_token)
           const response = await api.get<AuthUser>('/v1/auth/me', {
             timeout,
             skipAuthRedirect: true,
+            skipErrorLogging: true,
           })
           setUser(response)
           setIsAuthenticated(true)

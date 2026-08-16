@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import axios from 'axios'
 import { queryClient } from '../query/queryClient'
 
 const RESUME_REQUEST_TIMEOUT_MS = 15000
@@ -16,6 +17,16 @@ interface ResumeRecoveryProps {
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds))
+}
+
+function resumeErrorSummary(error: unknown): string {
+  if (axios.isAxiosError(error) && error.response) {
+    return `${error.response.status} ${error.response.statusText}`
+  }
+  if (error instanceof Error) {
+    return error.message
+  }
+  return 'unknown error'
 }
 
 export default function ResumeRecovery({
@@ -60,8 +71,10 @@ export default function ResumeRecovery({
           }
           setRecoveryState('idle')
           return
-        } catch (error) {
-          console.error(`ComicPile resume validation failed (attempt ${attempt})`, error)
+         } catch (error) {
+          if (attempt === MAX_RESUME_ATTEMPTS) {
+            console.error(`ComicPile resume validation failed:`, resumeErrorSummary(error))
+          }
           if (attempt < MAX_RESUME_ATTEMPTS) {
             await delay(RESUME_RETRY_DELAY_MS)
           }

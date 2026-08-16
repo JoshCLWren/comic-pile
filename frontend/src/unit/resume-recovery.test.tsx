@@ -34,11 +34,14 @@ function renderRecovery() {
 }
 
 describe('ResumeRecovery', () => {
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
+
   beforeEach(() => {
     revalidateSession.mockReset()
     recoverSession.mockReset()
     invalidateQueries.mockReset()
     setVisibilityState('visible')
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
   afterEach(() => {
@@ -59,9 +62,10 @@ describe('ResumeRecovery', () => {
     await waitFor(() => expect(invalidateQueries).toHaveBeenCalledOnce())
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument())
     expect(recoverSession).not.toHaveBeenCalled()
+    expect(consoleErrorSpy).not.toHaveBeenCalled()
   })
 
-  it('keeps the application visible and offers recovery after bounded retries fail', async () => {
+  it('logs console error only once on the final failed attempt', async () => {
     vi.useFakeTimers()
     revalidateSession.mockRejectedValue(new Error('network suspended'))
 
@@ -73,10 +77,42 @@ describe('ResumeRecovery', () => {
     })
 
     expect(revalidateSession).toHaveBeenCalledTimes(2)
+    expect(consoleErrorSpy).toHaveBeenCalledTimes(1)
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'ComicPile resume validation failed:',
+      'network suspended',
+    )
     expect(screen.getByText('Last usable screen')).toBeInTheDocument()
     expect(screen.getByRole('alert')).toHaveTextContent('ComicPile could not reconnect')
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reload' })).toBeInTheDocument()
+  })
+
+  it('logs a concise status summary instead of the full error object on 503', async () => {
+    vi.useFakeTimers()
+    const axiosError = Object.assign(new Error('Request failed with status code 503'), {
+      isAxiosError: true,
+      response: { status: 503, statusText: 'Service Unavailable' },
+    })
+    revalidateSession.mockRejectedValue(axiosError)
+
+    renderRecovery()
+    dispatchPageShow(true)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000)
+    })
+
+    expect(revalidateSession).toHaveBeenCalledTimes(2)
+    expect(consoleErrorSpy).toHaveBeenCalledTimes(1)
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'ComicPile resume validation failed:',
+      '503 Service Unavailable',
+    )
+    expect(consoleErrorSpy).not.toHaveBeenCalledWith(
+      'ComicPile resume validation failed:',
+      axiosError,
+    )
   })
 
   it('runs an explicit auth recovery immediately even inside the automatic throttle window', async () => {
@@ -93,6 +129,7 @@ describe('ResumeRecovery', () => {
       await vi.advanceTimersByTimeAsync(750)
     })
     expect(screen.getByRole('alert')).toHaveTextContent('ComicPile could not reconnect')
+    expect(consoleErrorSpy).toHaveBeenCalledTimes(1)
 
     now.mockReturnValue(10_500)
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
