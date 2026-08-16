@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Literal, Self
 
@@ -9,6 +10,24 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 ReleaseVisibility = Literal["public", "internal"]
 ReleaseStatus = Literal["draft", "published", "retracted"]
+
+_MARKDOWN_LINK_PATTERN = re.compile(r"\[([^\]]+)\]\((https?:\/\/[^)]+)\)")
+_BACKTICK_PATTERN = re.compile(r"`([^`]+)`")
+_MIN_PUBLIC_CONTENT = {"category": 2, "title": 4, "summary": 12}
+
+
+def _display_length(value: object) -> int:
+    """Return the visible length of release copy after stripping Markdown formatting.
+
+    Args:
+        value: Raw release copy that may contain Markdown links or backticks.
+
+    Returns:
+        The number of visible characters in the stripped text.
+    """
+    text = _MARKDOWN_LINK_PATTERN.sub(r"\1", str(value))
+    text = _BACKTICK_PATTERN.sub(r"\1", text)
+    return len(text.strip())
 
 
 class ReleaseUpsertRequest(BaseModel):
@@ -43,6 +62,29 @@ class ReleaseUpsertRequest(BaseModel):
         """
         if self.source_pr_number is None and self.source_merge_sha is None:
             raise ValueError("source_pr_number or source_merge_sha is required")
+        return self
+
+    @model_validator(mode="after")
+    def validate_meaningful_content(self) -> Self:
+        """Validate that public published releases have meaningful content.
+
+        Args:
+            self: Validated release publication request.
+
+        Returns:
+            The validated request with meaningful content checks applied.
+
+        Raises:
+            ValueError: If public published content is placeholder-sized.
+        """
+        if self.status != "published" or self.visibility != "public":
+            return self
+        for field_name, minimum in _MIN_PUBLIC_CONTENT.items():
+            if _display_length(getattr(self, field_name)) < minimum:
+                raise ValueError(
+                    f"{field_name} must contain meaningful release content "
+                    f"(at least {minimum} visible characters)"
+                )
         return self
 
 

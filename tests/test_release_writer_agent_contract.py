@@ -62,7 +62,7 @@ def test_release_writer_helper_documents_all_commands() -> None:
     """Every documented helper command must exist in the release-writer script."""
     helper_text = RELEASE_WRITER_HELPER.read_text(encoding="utf-8")
     agent_text = RELEASE_WRITER_AGENT.read_text(encoding="utf-8")
-    for command in ("recent", "check", "publish", "skip", "pr", "files", "issues"):
+    for command in ("recent", "check", "publish", "skip", "retract", "pr", "files", "issues"):
         assert f'command == "{command}"' in helper_text, f"missing {command} handler"
         assert f"release_writer.py {command}" in agent_text, f"missing {command} docs"
 
