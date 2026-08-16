@@ -34,8 +34,8 @@ async function openRatingView(page: import('@playwright/test').Page): Promise<vo
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#root')).toBeVisible();
 
-  const firstThreadCard = page.locator('[role="button"]').filter({
-    has: page.locator('p.font-black'),
+  const firstThreadCard = page.locator('[role="link"]').filter({
+    has: page.locator('span.font-black'),
   }).first();
   await expect(firstThreadCard).toBeVisible({ timeout: 10000 });
   await firstThreadCard.click();
