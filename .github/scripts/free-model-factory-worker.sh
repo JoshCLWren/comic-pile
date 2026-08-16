@@ -102,26 +102,44 @@ run_agent() {
 
 select_controller_assignment() {
   local -a prs=() issues=()
+  local pr_json issue_json pr_numbers issue_numbers
   local pr branch linked_issue issue
 
-  mapfile -t prs < <(
-    gh pr list --state open --limit 200 --label "$OWNER" \
-      --json number,labels \
-      --jq '.[] | select(([.labels[].name] | index("factory:ready")) == null) | .number'
-  )
+  if ! pr_json="$(gh pr list --state open --limit 200 --label "$OWNER" --json number,labels)"; then
+    log "unable to query controller-leased PRs for ${OWNER}"
+    return 3
+  fi
+  if ! pr_numbers="$(jq -r '.[] | select(([.labels[].name] | index("factory:ready")) == null) | .number' <<< "$pr_json")"; then
+    log "unable to parse controller-leased PRs for ${OWNER}"
+    return 3
+  fi
+  mapfile -t prs < <(printf '%s' "$pr_numbers")
 
   if (( ${#prs[@]} > 1 )); then
     log "controller invariant failed: ${OWNER} owns multiple open PRs (${prs[*]})"
     return 2
   fi
 
-  mapfile -t issues < <(
-    gh issue list --state open --limit 300 --label "$OWNER" --json number --jq '.[].number'
-  )
+  if ! issue_json="$(gh issue list --state open --limit 300 --label "$OWNER" --json number)"; then
+    log "unable to query controller-leased issues for ${OWNER}"
+    return 3
+  fi
+  if ! issue_numbers="$(jq -r '.[].number' <<< "$issue_json")"; then
+    log "unable to parse controller-leased issues for ${OWNER}"
+    return 3
+  fi
+  mapfile -t issues < <(printf '%s' "$issue_numbers")
 
   if (( ${#prs[@]} == 1 )); then
     pr="${prs[0]}"
-    branch="$(gh pr view "$pr" --json headRefName --jq .headRefName)"
+    if ! branch="$(gh pr view "$pr" --json headRefName --jq .headRefName)"; then
+      log "unable to resolve branch for controller-leased PR #${pr}"
+      return 3
+    fi
+    if [[ -z "$branch" ]]; then
+      log "controller-leased PR #${pr} returned an empty branch"
+      return 3
+    fi
     linked_issue="$(linked_issue_from_branch "$branch")"
 
     for issue in "${issues[@]:-}"; do
@@ -173,7 +191,7 @@ if (( assignment_status == 1 )); then
 fi
 
 if (( assignment_status != 0 )); then
-  release_owned_targets 'ambiguous-controller-assignment' || true
+  release_owned_targets 'controller-assignment-read-failed' || true
   exit "$assignment_status"
 fi
 

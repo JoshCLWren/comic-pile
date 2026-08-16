@@ -19,10 +19,12 @@ from datetime import datetime
 from typing import Any, Iterable
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
-LOCAL_LEASE_TTL_SECONDS = int(os.environ.get("FACTORY_LOCAL_LEASE_TTL_SECONDS", "3600"))
 NON_EXECUTABLE_ISSUES = {679, 1093, 1109}
 
 OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-3][0-9]|4[0-6])$")
+# Factories 1-5 are scheduled ChatGPT workers. The fixed-model entry workflow
+# only owns 6-46, so this controller must respect 1-5 leases but never infer
+# their liveness from fixed-model Actions runs.
 FIXED_OWNER_RE = re.compile(r"^factory:(?P<worker>[6-9]|[1-3][0-9]|4[0-6])$")
 STAGE_LABELS = {
     "factory:building",
@@ -55,6 +57,32 @@ LEASE_ACTIVITY_PATTERNS = (
 TRUSTED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
 
 
+def env_positive_int(name: str, default: int) -> int:
+    """Return a positive integer environment setting or its safe default."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        print(
+            f"[factory-controller] ignoring non-numeric {name}={raw!r}; using {default}",
+            file=sys.stderr,
+        )
+        return default
+    if value <= 0:
+        print(
+            f"[factory-controller] ignoring non-positive {name}={raw!r}; using {default}",
+            file=sys.stderr,
+        )
+        return default
+    return value
+
+
+LOCAL_LEASE_TTL_SECONDS = env_positive_int("FACTORY_LOCAL_LEASE_TTL_SECONDS", 3600)
+GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
+
+
 @dataclass(frozen=True)
 class Candidate:
     kind: str
@@ -65,6 +93,8 @@ class Candidate:
     linked_issue: int | None = None
 
     def sort_key(self) -> tuple[int, int, float, int]:
+        # This preserves the fleet's established newest-first tie break. The
+        # canonical policy explicitly requires it for equal-priority user bugs.
         return (self.lane, -self.priority, -parse_time(self.created_at), -self.number)
 
 
@@ -112,9 +142,10 @@ def priority_rank(labels: Iterable[str]) -> int:
 def linked_issue_from_branch(branch: str | None) -> int | None:
     if not branch:
         return None
+    # Canonical fixed-model branches are factory/<worker>-<issue>-<suffix>.
+    # Do not guess that factory/<n>-<suffix> encodes an issue because the
+    # worker-side parser does not support that ambiguous shape either.
     match = re.match(r"^factory/\d+-(\d+)-", branch)
-    if not match:
-        match = re.match(r"^factory/(\d+)(?:-|$)", branch)
     return int(match.group(1)) if match else None
 
 
@@ -193,439 +224,4 @@ def build_candidates(
     }
     candidates: list[Candidate] = []
 
-    for issue in issues:
-        if not issue_is_static_candidate(issue, suppressing_pr_issues):
-            continue
-        labels = labels_of(issue)
-        candidates.append(
-            Candidate(
-                kind="issue",
-                number=int(issue["number"]),
-                lane=provenance_lane(labels),
-                priority=priority_rank(labels),
-                created_at=str(issue.get("createdAt") or ""),
-            )
-        )
-
-    for pr in prs:
-        if not pr_is_static_candidate(pr, issue_map):
-            continue
-        linked = linked_issue_from_branch(pr.get("headRefName"))
-        labels = set(labels_of(pr))
-        if linked is not None and linked in issue_map:
-            labels |= labels_of(issue_map[linked])
-        lane = provenance_lane(labels)
-        if lane == 1:
-            # Existing repair/finish work directly landing a user-reported bug
-            # sits immediately after fresh user-reported bug implementation.
-            lane = 2
-        candidates.append(
-            Candidate(
-                kind="pr",
-                number=int(pr["number"]),
-                lane=lane,
-                priority=priority_rank(labels),
-                created_at=str(pr.get("createdAt") or ""),
-                linked_issue=linked,
-            )
-        )
-
-    return sorted(candidates, key=Candidate.sort_key)
-
-
-def plan_distinct_assignments(
-    candidates: list[Candidate], workers: list[str]
-) -> dict[str, Candidate]:
-    """Pure helper used by regression coverage for one dispatcher batch."""
-    return {worker: candidate for worker, candidate in zip(workers, candidates)}
-
-
-def lease_is_stale(
-    owner: str,
-    *,
-    active_fixed_workers: set[int],
-    latest_activity_epoch: int | None,
-    now_epoch: int,
-    local_ttl_seconds: int = LOCAL_LEASE_TTL_SECONDS,
-) -> bool:
-    if owner == "factory:local":
-        # Never reap local merely from label age. Require a trusted lease marker
-        # so the controller has positive evidence that the local lease existed
-        # and then stopped receiving progress.
-        return (
-            latest_activity_epoch is not None
-            and now_epoch - latest_activity_epoch > local_ttl_seconds
-        )
-    match = FIXED_OWNER_RE.fullmatch(owner)
-    if match:
-        return int(match.group("worker")) not in active_fixed_workers
-    return False
-
-
-def run_gh(args: list[str], *, input_json: Any | None = None, check: bool = True) -> str:
-    command = ["gh", *args]
-    proc = subprocess.run(
-        command,
-        input=None if input_json is None else json.dumps(input_json),
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-    )
-    if check and proc.returncode:
-        raise RuntimeError(
-            f"{' '.join(command)} failed ({proc.returncode}): {proc.stderr.strip()}"
-        )
-    return proc.stdout
-
-
-def gh_json(args: list[str], *, input_json: Any | None = None) -> Any:
-    output = run_gh(args, input_json=input_json)
-    return json.loads(output) if output.strip() else None
-
-
-def list_issues() -> list[dict[str, Any]]:
-    return gh_json(
-        [
-            "issue",
-            "list",
-            "--repo",
-            REPO,
-            "--state",
-            "open",
-            "--limit",
-            "1000",
-            "--json",
-            "number,title,labels,createdAt,updatedAt",
-        ]
-    )
-
-
-def list_prs() -> list[dict[str, Any]]:
-    return gh_json(
-        [
-            "pr",
-            "list",
-            "--repo",
-            REPO,
-            "--state",
-            "open",
-            "--limit",
-            "500",
-            "--json",
-            "number,title,labels,headRefName,createdAt,updatedAt,isDraft",
-        ]
-    )
-
-
-def target_json(number: int) -> dict[str, Any]:
-    return gh_json(["api", f"repos/{REPO}/issues/{number}"])
-
-
-def replace_factory_labels(number: int, owner: str, stage: str | None = None) -> None:
-    target = target_json(number)
-    current = [label["name"] for label in target.get("labels", [])]
-    existing_stage = next((label for label in current if label in STAGE_LABELS), None)
-    stage = stage or existing_stage or "factory:building"
-    labels = [
-        label
-        for label in current
-        if not OWNER_RE.fullmatch(label)
-        and label not in STAGE_LABELS
-        and label != "factory"
-    ]
-    labels.extend(["factory", owner, stage])
-    run_gh(
-        ["api", "--method", "PUT", f"repos/{REPO}/issues/{number}/labels", "--input", "-"],
-        input_json={"labels": sorted(set(labels))},
-    )
-
-
-def issue_has_open_blocker(number: int) -> bool:
-    try:
-        blockers = gh_json(
-            ["api", f"repos/{REPO}/issues/{number}/dependencies/blocked_by?per_page=100"]
-        )
-    except RuntimeError:
-        # Dependency uncertainty must not cause the controller to claim work it
-        # cannot prove executable.
-        return True
-    return any(item.get("state") == "open" for item in blockers or [])
-
-
-def required_checks_failed(pr_number: int) -> bool:
-    proc = subprocess.run(
-        [
-            "gh",
-            "pr",
-            "checks",
-            str(pr_number),
-            "--repo",
-            REPO,
-            "--required",
-            "--json",
-            "state",
-        ],
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-    )
-    if not proc.stdout.strip():
-        return False
-    try:
-        checks = json.loads(proc.stdout)
-    except json.JSONDecodeError:
-        return False
-    failure_states = {
-        "FAILURE",
-        "ERROR",
-        "CANCELLED",
-        "TIMED_OUT",
-        "ACTION_REQUIRED",
-        "STARTUP_FAILURE",
-    }
-    return any(str(check.get("state", "")).upper() in failure_states for check in checks)
-
-
-def candidate_is_live_executable(candidate: Candidate) -> bool:
-    if candidate.kind == "issue":
-        return not issue_has_open_blocker(candidate.number)
-    target = target_json(candidate.number)
-    labels = {label["name"] for label in target.get("labels", [])}
-    if "factory:ci" in labels:
-        return required_checks_failed(candidate.number)
-    # Review/changes-requested/building/unclassified PR work is executable: the
-    # worker can inspect the exact head and either repair it or prove it ready.
-    return True
-
-
-def target_still_unowned(number: int) -> bool:
-    labels = {label["name"] for label in target_json(number).get("labels", [])}
-    return item_is_unowned(labels) and not bool(labels & BLOCKED_LABELS)
-
-
-def assign_candidate(candidate: Candidate, worker: str) -> bool:
-    owner = f"factory:{worker}"
-    numbers = [candidate.number]
-    if candidate.kind == "pr" and candidate.linked_issue is not None:
-        try:
-            issue = target_json(candidate.linked_issue)
-        except RuntimeError:
-            issue = None
-        if issue and issue.get("state") == "open":
-            numbers.insert(0, candidate.linked_issue)
-
-    # Dispatcher serialization protects fixed-vs-fixed selection. This final
-    # read also protects against a local/interactive takeover between ranking
-    # and mutation.
-    for number in numbers:
-        if not target_still_unowned(number):
-            return False
-
-    claimed: list[int] = []
-    try:
-        for number in numbers:
-            replace_factory_labels(number, owner, "factory:building")
-            claimed.append(number)
-    except Exception:
-        for number in claimed:
-            try:
-                replace_factory_labels(number, "factory:unowned")
-            except Exception:
-                pass
-        raise
-    return True
-
-
-def flatten_pages(pages: Any) -> list[dict[str, Any]]:
-    result: list[dict[str, Any]] = []
-    for page in pages or []:
-        if isinstance(page, list):
-            result.extend(item for item in page if isinstance(item, dict))
-        elif isinstance(page, dict):
-            result.append(page)
-    return result
-
-
-def latest_lease_activity_epoch(number: int) -> int | None:
-    try:
-        pages = gh_json(
-            ["api", "--paginate", "--slurp", f"repos/{REPO}/issues/{number}/comments?per_page=100"]
-        )
-    except RuntimeError:
-        return None
-    latest: int | None = None
-    for comment in flatten_pages(pages):
-        if comment.get("author_association") not in TRUSTED_ASSOCIATIONS:
-            continue
-        body = str(comment.get("body") or "")
-        for pattern in LEASE_ACTIVITY_PATTERNS:
-            for match in pattern.findall(body):
-                epoch = int(match)
-                latest = epoch if latest is None else max(latest, epoch)
-    return latest
-
-
-def active_fixed_workers() -> set[int]:
-    workers: set[int] = set()
-    runs: list[dict[str, Any]] = []
-    for status in ("queued", "in_progress"):
-        response = gh_json(
-            [
-                "api",
-                f"repos/{REPO}/actions/workflows/free-model-factory-entry.yml/runs?status={status}&per_page=100",
-            ]
-        )
-        runs.extend((response or {}).get("workflow_runs", []))
-
-    # New entry runs encode the worker in run-name, so even queued runs are
-    # authoritative before their heartbeat step executes.
-    unresolved_run_ids: set[str] = set()
-    for run in runs:
-        title = str(run.get("display_title") or run.get("name") or "")
-        match = re.search(r"\bFactory\s+(\d+)\b", title)
-        if match:
-            workers.add(int(match.group(1)))
-        else:
-            run_id = str(run.get("id") or "")
-            if run_id:
-                unresolved_run_ids.add(run_id)
-
-    if unresolved_run_ids:
-        pages = gh_json(
-            ["api", "--paginate", "--slurp", f"repos/{REPO}/issues/1093/comments?per_page=100"]
-        )
-        for comment in flatten_pages(pages):
-            if comment.get("author_association") not in TRUSTED_ASSOCIATIONS:
-                continue
-            body = str(comment.get("body") or "")
-            run_match = re.search(r"(?m)^Run:\s*(\d+)\s*$", body)
-            worker_match = re.search(
-                r"(?m)^Worker:\s*opencode-free-model-factory-(\d+)\s*$", body
-            )
-            if run_match and worker_match and run_match.group(1) in unresolved_run_ids:
-                workers.add(int(worker_match.group(1)))
-    return workers
-
-
-def owned_targets(
-    issues: list[dict[str, Any]] | None = None,
-    prs: list[dict[str, Any]] | None = None,
-) -> list[tuple[int, str]]:
-    targets: list[tuple[int, str]] = []
-    issue_items = list_issues() if issues is None else issues
-    pr_items = list_prs() if prs is None else prs
-    for item in [*issue_items, *pr_items]:
-        owner = owner_of(labels_of(item))
-        if owner and owner != "factory:unowned":
-            targets.append((int(item["number"]), owner))
-    return targets
-
-
-def reconcile_stale_leases(now_epoch: int | None = None) -> list[int]:
-    now_epoch = int(time.time()) if now_epoch is None else now_epoch
-    active = active_fixed_workers()
-    released: list[int] = []
-    for number, owner in owned_targets():
-        activity = latest_lease_activity_epoch(number) if owner == "factory:local" else None
-        if not lease_is_stale(
-            owner,
-            active_fixed_workers=active,
-            latest_activity_epoch=activity,
-            now_epoch=now_epoch,
-        ):
-            continue
-        replace_factory_labels(number, "factory:unowned")
-        released.append(number)
-        print(
-            f"[factory-controller] released stale {owner} lease on #{number}",
-            file=sys.stderr,
-        )
-    return released
-
-
-def worker_has_active_lease(worker: str) -> bool:
-    owner = f"factory:{worker}"
-    return any(current_owner == owner for _, current_owner in owned_targets())
-
-
-def assign(worker: str) -> Candidate | None:
-    if not re.fullmatch(r"(?:[6-9]|[1-3][0-9]|4[0-6])", worker):
-        raise SystemExit(f"unsupported fixed-model worker: {worker}")
-
-    # A worker with a live lease is already busy. Do not queue a second target
-    # behind it and do not revive affinity to the existing target.
-    if worker_has_active_lease(worker):
-        print(
-            f"[factory-controller] Factory {worker} already has an active lease; skipping dispatch",
-            file=sys.stderr,
-        )
-        return None
-
-    candidates = build_candidates(list_issues(), list_prs())
-    for candidate in candidates:
-        if not candidate_is_live_executable(candidate):
-            continue
-        if assign_candidate(candidate, worker):
-            print(
-                f"[factory-controller] assigned {candidate.kind} #{candidate.number} "
-                f"lane={candidate.lane} priority={candidate.priority} to Factory {worker}",
-                file=sys.stderr,
-            )
-            return candidate
-    return None
-
-
-def release_worker(worker: str) -> list[int]:
-    owner = f"factory:{worker}"
-    released: list[int] = []
-    for number, current_owner in owned_targets():
-        if current_owner != owner:
-            continue
-        replace_factory_labels(number, "factory:unowned")
-        released.append(number)
-    return released
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(dest="command", required=True)
-    subparsers.add_parser("reconcile")
-
-    assign_parser = subparsers.add_parser("assign")
-    assign_parser.add_argument("--worker", required=True)
-
-    release_parser = subparsers.add_parser("release")
-    release_parser.add_argument("--worker", required=True)
-
-    args = parser.parse_args()
-
-    if args.command == "reconcile":
-        print(json.dumps({"released": reconcile_stale_leases()}))
-        return 0
-
-    if args.command == "assign":
-        candidate = assign(args.worker)
-        if candidate is None:
-            print(json.dumps({"kind": "none"}))
-            return 0
-        print(
-            json.dumps(
-                {
-                    "kind": candidate.kind,
-                    "number": candidate.number,
-                    "lane": candidate.lane,
-                    "priority": candidate.priority,
-                    "linked_issue": candidate.linked_issue,
-                }
-            )
-        )
-        return 0
-
-    print(json.dumps({"released": release_worker(args.worker)}))
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+    for is²È="25Ý¹•È°ÍÑ…”¤(€€€€€€€€€€€¥˜¹½ÐÑ…É•Ñ}½Ý¹•‘}‰ä¡¹Õµ‰•È°½Ý¹•È¤è(€€€€€€€€€€€€€€€É•±•…Í•}Ù•É¥™¥•‘}±…¥µÌ¡±…¥µ•¤(€€€€€€€€€€€€€€€É•ÑÕÉ¸…±Í”(€€€€€€€€€€€±…¥µ•¹…ÁÁ•¹¡¹Õµ‰•È¤(€€€•á•ÁÐá•ÁÑ¥½¸è(€€€€€€€É•±•…Í•}Ù•É¥™¥•‘}±…¥µÌ¡±…¥µ•¤(€€€€€€€É…¥Í”(€€€É•ÑÕÉ¸QÉÕ”(()‘•˜™±…ÑÑ•¹}Á…•Ì¡Á…•Ìè¹ä¤€´ø±¥ÍÑm‘¥ÑmÍÑÈ°¹åutè(€€€É•ÍÕ±Ðè±¥ÍÑm‘¥ÑmÍÑÈ°¹åut€ômt(€€€™½ÈÁ…”¥¸Á…•Ì½Èmtè(€€€€€€€¥˜¥Í¥¹ÍÑ…¹”¡Á…”°±¥ÍÐ¤è(€€€€€€€€€€€É•ÍÕ±Ð¹•áÑ•¹¡¥Ñ•´™½È¥Ñ•´¥¸Á…”¥˜¥Í¥¹ÍÑ…¹”¡¥Ñ•´°‘¥Ð¤¤(€€€€€€€•±¥˜¥Í¥¹ÍÑ…¹”¡Á…”°‘¥Ð¤è(€€€€€€€€€€€É•ÍÕ±Ð¹…ÁÁ•¹¡Á…”¤(€€€É•ÑÕÉ¸É•ÍÕ±Ð(()‘•˜±…Ñ•ÍÑ}±•…Í•}…Ñ¥Ù¥Ñå}•Á½ ¡¹Õµ‰•Èè¥¹Ð¤€´ø¥¹Ðð9½¹”è(€€€ÑÉäè(€€€€€€€Á…•Ì€ô¡}©Í½¸ (€€€€€€€€€€€l‰…Á¤ˆ°€ˆ´µÁ…¥¹…Ñ”ˆ°€ˆ´µÍ±ÕÉÀˆ°˜‰É•Á½Ì½íIA=ô½¥ÍÍÕ•Ì½í¹Õµ‰•Éô½½µµ•¹ÑÌýÁ•É}Á…”ôÄÀÀ‰t(€€€€€€€€¤(€€€•á•ÁÐIÕ¹Ñ¥µ•ÉÉ½Èè(€€€€€€€É•ÑÕÉ¸9½¹”(€€€±…Ñ•ÍÐè¥¹Ðð9½¹”€ô9½¹”(€€€™½È½µµ•¹Ð¥¸™±…ÑÑ•¹}Á…•Ì¡Á…•Ì¤è(€€€€€€€¥˜½µµ•¹Ð¹•Ð ‰…ÕÑ¡½É}…ÍÍ½¥…Ñ¥½¸ˆ¤¹½Ð¥¸QIUMQ}MM=%Q%=9Lè(€€€€€€€€€€€½¹Ñ¥¹Õ”(€€€€€€€‰½‘ä€ôÍÑÈ¡½µµ•¹Ð¹•Ð ‰‰½‘äˆ¤½È€ˆˆ¤(€€€€€€€™½ÈÁ…ÑÑ•É¸¥¸1M}Q%Y%Qe}AQQI9Lè(€€€€€€€€€€€™½Èµ…Ñ ¥¸Á…ÑÑ•É¸¹™¥¹‘…±°¡‰½‘ä¤è(€€€€€€€€€€€€€€€•Á½ €ô¥¹Ð¡µ…Ñ ¤(€€€€€€€€€€€€€€€±…Ñ•ÍÐ€ô•Á½ ¥˜±…Ñ•ÍÐ¥Ì9½¹”•±Í”µ…à¡±…Ñ•ÍÐ°•Á½ ¤(€€€É•ÑÕÉ¸±…Ñ•ÍÐ(()‘•˜…Ñ¥Ù•}™¥á•‘}Ý½É­•ÉÌ ¤€´øÍ•Ñm¥¹Ñtè(€€€Ý½É­•ÉÌèÍ•Ñm¥¹Ñt€ôÍ•Ð ¤(€€€ÉÕ¹Ìè±¥ÍÑm‘¥ÑmÍÑÈ°¹åut€ômt(€€€™½ÈÍÑ…ÑÕÌ¥¸€ ‰ÅÕ•Õ•ˆ°€‰¥¹}ÁÉ½É•ÍÌˆ¤è(€€€€€€€Á…•Ì€ô¡}©Í½¸ (€€€€€€€€€€€l(€€€€€€€€€€€€€€€€‰…Á¤ˆ°(€€€€€€€€€€€€€€€€ˆ´µÁ…¥¹…Ñ”ˆ°(€€€€€€€€€€€€€€€€ˆ´µÍ±ÕÉÀˆ°(€€€€€€€€€€€€€€€˜‰É•Á½Ì½íIA=ô½…Ñ¥½¹Ì½Ý½É­™±½ÝÌ½™É•”µµ½‘•°µ™…Ñ½Éäµ•¹ÑÉä¹åµ°½ÉÕ¹ÌýÍÑ…ÑÕÌõíÍÑ…ÑÕÍô™Á•É}Á…”ôÄÀÀˆ°(€€€€€€€€€€€t(€€€€€€€€¤(€€€€€€€™½ÈÁ…”¥¸Á…•Ì½Èmtè(€€€€€€€€€€€¥˜¥Í¥¹ÍÑ…¹”¡Á…”°‘¥Ð¤è(€€€€€€€€€€€€€€€ÉÕ¹Ì¹•áÑ•¹¡Á…”¹•Ð ‰Ý½É­™±½Ý}ÉÕ¹Ìˆ°mt¤¤((€€€€Œ9•Ü•¹ÑÉäÉÕ¹Ì•¹½‘”Ñ¡”Ý½É­•È¥¸ÉÕ¸µ¹…µ”°Í¼•Ù•¸ÅÕ•Õ•ÉÕ¹Ì…É”(€€€€Œ…ÕÑ¡½É¥Ñ…Ñ¥Ù”‰•™½É”Ñ¡•¥È¡•…ÉÑ‰•…ÐÍÑ•À•á•ÕÑ•Ì¸(€€€Õ¹É•Í½±Ù•‘}ÉÕ¹}¥‘ÌèÍ•ÑmÍÑÉt€ôÍ•Ð ¤(€€€™½ÈÉÕ¸¥¸ÉÕ¹Ìè(€€€€€€€Ñ¥Ñ±”€ôÍÑÈ¡ÉÕ¸¹•Ð ‰‘¥ÍÁ±…å}Ñ¥Ñ±”ˆ¤½ÈÉÕ¸¹•Ð ‰¹…µ”ˆ¤½È€ˆˆ¤(€€€€€€€µ…Ñ €ôÉ”¹Í•…É ¡È‰q‰…Ñ½ÉåqÌ¬¡q¬¥qˆˆ°Ñ¥Ñ±”¤(€€€€€€€¥˜µ…Ñ è(€€€€€€€€€€€Ý½É­•ÉÌ¹…‘¡¥¹Ð¡µ…Ñ ¹É½ÕÀ Ä¤¤¤(€€€€€€€•±Í”è(€€€€€€€€€€€ÉÕ¹}¥€ôÍÑÈ¡ÉÕ¸¹•Ð ‰¥ˆ¤½È€ˆˆ¤(€€€€€€€€€€€¥˜ÉÕ¹}¥è(€€€€€€€€€€€€€€€Õ¹É•Í½±Ù•‘}ÉÕ¹}¥‘Ì¹…‘¡ÉÕ¹}¥¤((€€€¥˜Õ¹É•Í½±Ù•‘}ÉÕ¹}¥‘Ìè(€€€€€€€Á…•Ì€ô¡}©Í½¸ (€€€€€€€€€€€l‰…Á¤ˆ°€ˆ´µÁ…¥¹…Ñ”ˆ°€ˆ´µÍ±ÕÉÀˆ°˜‰É•Á½Ì½íIA=ô½¥ÍÍÕ•Ì¼ÄÀäÌ½½µµ•¹ÑÌýÁ•É}Á…”ôÄÀÀ‰t(€€€€€€€€¤(€€€€€€€™½È½µµ•¹Ð¥¸™±…ÑÑ•¹}Á…•Ì¡Á…•Ì¤è(€€€€€€€€€€€¥˜½µµ•¹Ð¹•Ð ‰…ÕÑ¡½É}…ÍÍ½¥…Ñ¥½¸ˆ¤¹½Ð¥¸QIUMQ}MM=%Q%=9Lè(€€€€€€€€€€€€€€€½¹Ñ¥¹Õ”(€€€€€€€€€€€‰½‘ä€ôÍÑÈ¡½µµ•¹Ð¹•Ð ‰‰½‘äˆ¤½È€ˆˆ¤(€€€€€€€€€€€ÉÕ¹}µ…Ñ €ôÉ”¹Í•…É ¡Èˆ ý´¥yIÕ¸éqÌ¨¡q¬¥qÌ¨ˆ°‰½‘ä¤(€€€€€€€€€€€Ý½É­•É}µ…Ñ €ôÉ”¹Í•…É  (€€€€€€€€€€€€€€€Èˆ ý´¥y]½É­•ÈéqÌ©½Á•¹½‘”µ™É•”µµ½‘•°µ™…Ñ½Éä´¡q¬¥qÌ¨ˆ°‰½‘ä(€€€€€€€€€€€€¤(€€€€€€€€€€€¥˜ÉÕ¹}µ…Ñ …¹Ý½É­•É}µ…Ñ …¹ÉÕ¹}µ…Ñ ¹É½ÕÀ Ä¤¥¸Õ¹É•Í½±Ù•‘}ÉÕ¹}¥‘Ìè(€€€€€€€€€€€€€€€Ý½É­•ÉÌ¹…‘¡¥¹Ð¡Ý½É­•É}µ…Ñ ¹É½ÕÀ Ä¤¤¤(€€€€€€€€€€€€€€€Õ¹É•Í½±Ù•‘}ÉÕ¹}¥‘Ì¹‘¥Í…É¡ÉÕ¹}µ…Ñ ¹É½ÕÀ Ä¤¤((€€€¥˜Õ¹É•Í½±Ù•‘}ÉÕ¹}¥‘Ìè(€€€€€€€É…¥Í”IÕ¹Ñ¥µ•ÉÉ½È (€€€€€€€€€€€€‰Õ¹…‰±”Ñ¼É•Í½±Ù”Ý½É­•È¥‘•¹Ñ¥Ñä™½È…Ñ¥Ù”™¥á•µµ½‘•°ÉÕ¹Ìè€ˆ(€€€€€€€€€€€€¬€ˆ°€ˆ¹©½¥¸¡Í½ÉÑ•¡Õ¹É•Í½±Ù•‘}ÉÕ¹}¥‘Ì¤¤(€€€€€€€€¤(€€€É•ÑÕÉ¸Ý½É­•ÉÌ(()‘•˜½Ý¹•‘}Ñ…É•ÑÌ (€€€¥ÍÍÕ•Ìè±¥ÍÑm‘¥ÑmÍÑÈ°¹åutð9½¹”€ô9½¹”°(€€€ÁÉÌè±¥ÍÑm‘¥ÑmÍÑÈ°¹åutð9½¹”€ô9½¹”°(¤€´ø±¥ÍÑmÑÕÁ±•m¥¹Ð°ÍÑÉutè(€€€Ñ…É•ÑÌè±¥ÍÑmÑÕÁ±•m¥¹Ð°ÍÑÉut€ômt(€€€¥ÍÍÕ•}¥Ñ•µÌ€ô±¥ÍÑ}¥ÍÍÕ•Ì ¤¥˜¥ÍÍÕ•Ì¥Ì9½¹”•±Í”¥ÍÍÕ•Ì(€€€ÁÉ}¥Ñ•µÌ€ô±¥ÍÑ}ÁÉÌ ¤¥˜ÁÉÌ¥Ì9½¹”•±Í”ÁÉÌ(€€€™½È¥Ñ•´¥¸l©¥ÍÍÕ•}¥Ñ•µÌ°€©ÁÉ}¥Ñ•µÍtè(€€€€€€€½Ý¹•È€ô½Ý¹•É}½˜¡±…‰•±Í}½˜¡¥Ñ•´¤¤(€€€€€€€¥˜½Ý¹•È…¹½Ý¹•È€„ô€‰™…Ñ½ÉäéÕ¹½Ý¹•ˆè(€€€€€€€€€€€Ñ…É•ÑÌ¹…ÁÁ•¹ ¡¥¹Ð¡¥Ñ•µl‰¹Õµ‰•È‰t¤°½Ý¹•È¤¤(€€€É•ÑÕÉ¸Ñ…É•ÑÌ(()‘•˜É•½¹¥±•}ÍÑ…±•}±•…Í•Ì¡¹½Ý}•Á½ è¥¹Ðð9½¹”€ô9½¹”¤€´ø±¥ÍÑm¥¹Ñtè(€€€¹½Ý}•Á½ €ô¥¹Ð¡Ñ¥µ”¹Ñ¥µ” ¤¤¥˜¹½Ý}•Á½ ¥Ì9½¹”•±Í”¹½Ý}•Á½ (€€€€Œ…¥°±½Í•¥˜…Ñ¥Ù”µÉÕ¸‘¥Í½Ù•Éä¥Ì¥¹½µÁ±•Ñ”¸É•½¹¥±¥…Ñ¥½¸(€€€€Œ™…¥±ÕÉ”¥ÌÍ…™•ÈÑ¡…¸ÍÑ•…±¥¹œÝ½É¬™É½´„±¥Ù”•á•ÕÑ½È¸(€€€…Ñ¥Ù”€ô…Ñ¥Ù•}™¥á•‘}Ý½É­•ÉÌ ¤(€€€É•±•…Í•è±¥ÍÑm¥¹Ñt€ômt(€€€™½È¹Õµ‰•È°½Ý¹•È¥¸½Ý¹•‘}Ñ…É•ÑÌ ¤è(€€€€€€€…Ñ¥Ù¥Ñä€ô±…Ñ•ÍÑ}±•…Í•}…Ñ¥Ù¥Ñå}•Á½ ¡¹Õµ‰•È¤¥˜½Ý¹•È€ôô€‰™…Ñ½Éäé±½…°ˆ•±Í”9½¹”(€€€€€€€¥˜¹½Ð±•…Í•}¥Í}ÍÑ…±” (€€€€€€€€€€€½Ý¹•È°(€€€€€€€€€€€…Ñ¥Ù•}™¥á•‘}Ý½É­•ÉÌõ…Ñ¥Ù”°(€€€€€€€€€€€±…Ñ•ÍÑ}…Ñ¥Ù¥Ñå}•Á½ õ…Ñ¥Ù¥Ñä°(€€€€€€€€€€€¹½Ý}•Á½ õ¹½Ý}•Á½ °(€€€€€€€€¤è(€€€€€€€€€€€½¹Ñ¥¹Õ”(€€€€€€€É•Á±…•}™…Ñ½Éå}±…‰•±Ì¡¹Õµ‰•È°€‰™…Ñ½ÉäéÕ¹½Ý¹•ˆ¤(€€€€€€€É•±•…Í•¹…ÁÁ•¹¡¹Õµ‰•È¤(€€€€€€€ÁÉ¥¹Ð (€€€€€€€€€€€˜‰m™…Ñ½Éäµ½¹ÑÉ½±±•ÉtÉ•±•…Í•ÍÑ…±”í½Ý¹•Éô±•…Í”½¸€í¹Õµ‰•Éôˆ°(€€€€€€€€€€€™¥±”õÍåÌ¹ÍÑ‘•ÉÈ°(€€€€€€€€¤(€€€É•ÑÕÉ¸É•±•…Í•(()‘•˜Ý½É­•É}¡…Í}…Ñ¥Ù•}±•…Í”¡Ý½É­•ÈèÍÑÈ¤€´ø‰½½°è(€€€½Ý¹•È€ô˜‰™…Ñ½ÉäéíÝ½É­•Éôˆ(€€€É•ÑÕÉ¸…¹ä¡ÕÉÉ•¹Ñ}½Ý¹•È€ôô½Ý¹•È™½È|°ÕÉÉ•¹Ñ}½Ý¹•È¥¸½Ý¹•‘}Ñ…É•ÑÌ ¤¤(()‘•˜…ÍÍ¥¸¡Ý½É­•ÈèÍÑÈ¤€´ø…¹‘¥‘…Ñ”ð9½¹”è(€€€¥˜¹½ÐÉ”¹™Õ±±µ…Ñ ¡Èˆ üélØ´åuñlÄ´ÍulÀ´åuðÑlÀ´Ùt¤ˆ°Ý½É­•È¤è(€€€€€€€É…¥Í”MåÍÑ•µá¥Ð¡˜‰Õ¹ÍÕÁÁ½ÉÑ•™¥á•µµ½‘•°Ý½É­•ÈèíÝ½É­•Éôˆ¤((€€€€ŒÝ½É­•ÈÝ¥Ñ „±¥Ù”±•…Í”¥Ì…±É•…‘ä‰ÕÍä¸¼¹½ÐÅÕ•Õ”„Í•½¹Ñ…É•Ð(€€€€Œ‰•¡¥¹¥Ð…¹‘¼¹½ÐÉ•Ù¥Ù”…™™¥¹¥ÑäÑ¼Ñ¡”•á¥ÍÑ¥¹œÑ…É•Ð¸(€€€¥˜Ý½É­•É}¡…Í}…Ñ¥Ù•}±•…Í”¡Ý½É­•È¤è(€€€€€€€ÁÉ¥¹Ð (€€€€€€€€€€€˜‰m™…Ñ½Éäµ½¹ÑÉ½±±•Ét…Ñ½ÉäíÝ½É­•Éô…±É•…‘ä¡…Ì…¸…Ñ¥Ù”±•…Í”ìÍ­¥ÁÁ¥¹œ‘¥ÍÁ…Ñ ˆ°(€€€€€€€€€€€™¥±”õÍåÌ¹ÍÑ‘•ÉÈ°(€€€€€€€€¤(€€€€€€€É•ÑÕÉ¸9½¹”((€€€…¹‘¥‘…Ñ•Ì€ô‰Õ¥±‘}…¹‘¥‘…Ñ•Ì¡±¥ÍÑ}¥ÍÍÕ•Ì ¤°±¥ÍÑ}ÁÉÌ ¤¤(€€€™½È…¹‘¥‘…Ñ”¥¸…¹‘¥‘…Ñ•Ìè(€€€€€€€¥˜¹½Ð…¹‘¥‘…Ñ•}¥Í}±¥Ù•}•á•ÕÑ…‰±”¡…¹‘¥‘…Ñ”¤è(€€€€€€€€€€€½¹Ñ¥¹Õ”(€€€€€€€¥˜…ÍÍ¥¹}…¹‘¥‘…Ñ”¡…¹‘¥‘…Ñ”°Ý½É­•È¤è(€€€€€€€€€€€ÁÉ¥¹Ð (€€€€€€€€€€€€€€€˜‰m™…Ñ½Éäµ½¹ÑÉ½±±•Ét…ÍÍ¥¹•í…¹‘¥‘…Ñ”¹­¥¹‘ô€í…¹‘¥‘…Ñ”¹¹Õµ‰•Éô€ˆ(€€€€€€€€€€€€€€€˜‰±…¹”õí…¹‘¥‘…Ñ”¹±…¹•ôÁÉ¥½É¥Ñäõí…¹‘¥‘…Ñ”¹ÁÉ¥½É¥ÑåôÑ¼…Ñ½ÉäíÝ½É­•Éôˆ°(€€€€€€€€€€€€€€€™¥±”õÍåÌ¹ÍÑ‘•ÉÈ°(€€€€€€€€€€€€¤(€€€€€€€€€€€É•ÑÕÉ¸…¹‘¥‘…Ñ”(€€€É•ÑÕÉ¸9½¹”(()‘•˜É•±•…Í•}Ý½É­•È¡Ý½É­•ÈèÍÑÈ¤€´ø±¥ÍÑm¥¹Ñtè(€€€½Ý¹•È€ô˜‰™…Ñ½ÉäéíÝ½É­•Éôˆ(€€€É•±•…Í•è±¥ÍÑm¥¹Ñt€ômt(€€€™½È¹Õµ‰•È°ÕÉÉ•¹Ñ}½Ý¹•È¥¸½Ý¹•‘}Ñ…É•ÑÌ ¤è(€€€€€€€¥˜ÕÉÉ•¹Ñ}½Ý¹•È€„ô½Ý¹•Èè(€€€€€€€€€€€½¹Ñ¥¹Õ”(€€€€€€€É•Á±…•}™…Ñ½Éå}±…‰•±Ì¡¹Õµ‰•È°€‰™…Ñ½ÉäéÕ¹½Ý¹•ˆ¤(€€€€€€€É•±•…Í•¹…ÁÁ•¹¡¹Õµ‰•È¤(€€€É•ÑÕÉ¸É•±•…Í•(()‘•˜µ…¥¸ ¤€´ø¥¹Ðè(€€€Á…ÉÍ•È€ô…ÉÁ…ÉÍ”¹ÉÕµ•¹ÑA…ÉÍ•È ¤(€€€ÍÕ‰Á…ÉÍ•ÉÌ€ôÁ…ÉÍ•È¹…‘‘}ÍÕ‰Á…ÉÍ•ÉÌ¡‘•ÍÐô‰½µµ…¹ˆ°É•ÅÕ¥É•õQÉÕ”¤(€€€ÍÕ‰Á…ÉÍ•ÉÌ¹…‘‘}Á…ÉÍ•È ‰É•½¹¥±”ˆ¤((€€€…ÍÍ¥¹}Á…ÉÍ•È€ôÍÕ‰Á…ÉÍ•ÉÌ¹…‘‘}Á…ÉÍ•È ‰…ÍÍ¥¸ˆ¤(€€€…ÍÍ¥¹}Á…ÉÍ•È¹…‘‘}…ÉÕµ•¹Ð ˆ´µÝ½É­•Èˆ°É•ÅÕ¥É•õQÉÕ”¤((€€€É•±•…Í•}Á…ÉÍ•È€ôÍÕ‰Á…ÉÍ•ÉÌ¹…‘‘}Á…ÉÍ•È ‰É•±•…Í”ˆ¤(€€€É•±•…Í•}Á…ÉÍ•È¹…‘‘}…ÉÕµ•¹Ð ˆ´µÝ½É­•Èˆ°É•ÅÕ¥É•õQÉÕ”¤((€€€…ÉÌ€ôÁ…ÉÍ•È¹Á…ÉÍ•}…ÉÌ ¤((€€€¥˜…ÉÌ¹½µµ…¹€ôô€‰É•½¹¥±”ˆè(€€€€€€€ÁÉ¥¹Ð¡©Í½¸¹‘ÕµÁÌ¡ì‰É•±•…Í•ˆèÉ•½¹¥±•}ÍÑ…±•}±•…Í•Ì ¥ô¤¤(€€€€€€€É•ÑÕÉ¸€À((€€€¥˜…ÉÌ¹½µµ…¹€ôô€‰…ÍÍ¥¸ˆè(€€€€€€€…¹‘¥‘…Ñ”€ô…ÍÍ¥¸¡…ÉÌ¹Ý½É­•È¤(€€€€€€€¥˜…¹‘¥‘…Ñ”¥Ì9½¹”è(€€€€€€€€€€€ÁÉ¥¹Ð¡©Í½¸¹‘ÕµÁÌ¡ì‰­¥¹ˆè€‰¹½¹”‰ô¤¤(€€€€€€€€€€€É•ÑÕÉ¸€À(€€€€€€€ÁÉ¥¹Ð (€€€€€€€€€€€©Í½¸¹‘ÕµÁÌ (€€€€€€€€€€€€€€€ì(€€€€€€€€€€€€€€€€€€€€‰­¥¹ˆè…¹‘¥‘…Ñ”¹­¥¹°(€€€€€€€€€€€€€€€€€€€€‰¹Õµ‰•Èˆè…¹‘¥‘…Ñ”¹¹Õµ‰•È°(€€€€€€€€€€€€€€€€€€€€‰±…¹”ˆè…¹‘¥‘…Ñ”¹±…¹”°(€€€€€€€€€€€€€€€€€€€€‰ÁÉ¥½É¥Ñäˆè…¹‘¥‘…Ñ”¹ÁÉ¥½É¥Ñä°(€€€€€€€€€€€€€€€€€€€€‰±¥¹­•‘}¥ÍÍÕ”ˆè…¹‘¥‘…Ñ”¹±¥¹­•‘}¥ÍÍÕ”°(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€¤(€€€€€€€€¤(€€€€€€€É•ÑÕÉ¸€À((€€€ÁÉ¥¹Ð¡©Í½¸¹‘ÕµÁÌ¡ì‰É•±•…Í•ˆèÉ•±•…Í•}Ý½É­•È¡…ÉÌ¹Ý½É­•È¥ô¤¤(€€€É•ÑÕÉ¸€À(()¥˜}}¹…µ•}|€ôô€‰}}µ…¥¹}|ˆè(€€€É…¥Í”MåÍÑ•µá¥Ð¡µ…¥¸ ¤¤(

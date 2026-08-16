@@ -208,12 +208,23 @@ jobs:
             local worker="$1"
             local assignment kind attempt=1
 
-            assignment="$(python3 "$controller" assign --worker "$worker")"
-            kind="$(jq -r '.kind' <<< "$assignment")"
-            if [[ "$kind" == 'none' ]]; then
-              echo "Factory ${worker}: no executable control-plane assignment"
-              return 0
+            if ! assignment="$(python3 "$controller" assign --worker "$worker")"; then
+              echo "Factory ${worker}: controller assignment failed" >&2
+              return 1
             fi
+            kind="$(jq -r '.kind // empty' <<< "$assignment" 2>/dev/null || true)"
+            case "$kind" in
+              none)
+                echo "Factory ${worker}: no executable control-plane assignment"
+                return 0
+                ;;
+              issue|pr) ;;
+              *)
+                echo "Factory ${worker}: unusable controller response: ${assignment:-<empty>}" >&2
+                python3 "$controller" release --worker "$worker" || true
+                return 1
+                ;;
+            esac
 
             echo "Factory ${worker} assignment: ${assignment}"
             while (( attempt <= 3 )); do
