@@ -6,7 +6,8 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import Text, func, or_, select
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
 
@@ -399,6 +400,24 @@ async def roll_bootstrap(
         pending_thread_title=pending_thread_title,
     )
 
+    route_labels_subq = (
+        select(
+            func.array_agg(func.distinct(DependencyGroup.name)),
+        )
+        .select_from(DependencyGroupMembership)
+        .join(DependencyGroup, DependencyGroup.id == DependencyGroupMembership.group_id)
+        .where(
+            or_(
+                DependencyGroupMembership.thread_id == Thread.id,
+                DependencyGroupMembership.issue_id == Thread.next_unread_issue_id,
+            ),
+            DependencyGroup.user_id == user_id,
+        )
+        .correlate(Thread)
+        .scalar_subquery()
+        .cast(ARRAY(Text))
+    )
+
     pool_query = (
         select(
             Thread.id,
@@ -406,8 +425,9 @@ async def roll_bootstrap(
             Thread.format,
             Thread.next_unread_issue_id.label("issue_id"),
             Issue.issue_number,
+            route_labels_subq.label("route_labels"),
         )
-        .outerjoin(Issue, and_(Issue.id == Thread.next_unread_issue_id, Issue.status == "unread"))
+        .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
         .where(Thread.queue_position >= 1)
@@ -422,32 +442,6 @@ async def roll_bootstrap(
 
     pool_result = await db.execute(pool_query)
     pool_rows = pool_result.all()
-    route_labels_by_thread: dict[int, list[str]] = {}
-    if pool_rows:
-        thread_ids = [row.id for row in pool_rows]
-        issue_to_thread = {row.issue_id: row.id for row in pool_rows if row.issue_id is not None}
-        route_result = await db.execute(
-            select(
-                DependencyGroupMembership.thread_id,
-                DependencyGroupMembership.issue_id,
-                DependencyGroup.name,
-            )
-            .join(DependencyGroup)
-            .where(
-                DependencyGroup.user_id == user_id,
-                or_(
-                    DependencyGroupMembership.thread_id.in_(thread_ids),
-                    DependencyGroupMembership.issue_id.in_(list(issue_to_thread)),
-                ),
-            )
-            .order_by(DependencyGroup.name, DependencyGroup.id)
-        )
-        for membership in route_result.all():
-            thread_id = membership.thread_id or issue_to_thread.get(membership.issue_id)
-            if thread_id is not None:
-                labels = route_labels_by_thread.setdefault(thread_id, [])
-                if membership.name not in labels:
-                    labels.append(membership.name)
 
     roll_pool = [
         RollBootstrapThread(
@@ -456,7 +450,7 @@ async def roll_bootstrap(
             format=row.format,
             issue_id=row.issue_id,
             issue_number=row.issue_number,
-            route_labels=route_labels_by_thread.get(row.id, []),
+            route_labels=list(row.route_labels or []),
         )
         for row in pool_rows
     ]
