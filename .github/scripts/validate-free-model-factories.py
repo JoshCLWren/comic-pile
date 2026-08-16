@@ -153,7 +153,7 @@ def main() -> None:
     for required in (
         'select_controller_assignment',
         'no control-plane assignment is leased to this worker',
-        'ambiguous-controller-assignment',
+        'controller-assignment-read-failed',
         'session-end-handoff',
         'no-persisted-change-handoff',
         'stage_trusted_kilo_helper',
