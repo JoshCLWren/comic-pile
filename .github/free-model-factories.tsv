@@ -1,29 +1,29 @@
 # worker	source	model	minute	scheduler	display_name
-6	nvidia	z-ai/glm-5.2	0	watchdog	GLM 5.2
-7	nvidia	moonshotai/kimi-k2.6	15	watchdog	Kimi K2.6
-8	nvidia	deepseek-ai/deepseek-v4-flash-0731	30	watchdog	DeepSeek V4 Flash
-9	nvidia	stepfun-ai/step-3.7-flash	45	watchdog	Step 3.7 Flash
-10	nvidia	nvidia/nemotron-3-ultra-550b-a55b	0	watchdog	Nemotron 3 Ultra
-11	nvidia	poolside/laguna-xs-2.1	15	watchdog	Laguna XS 2.1
-12	nvidia	openai/gpt-oss-120b	30	watchdog	GPT OSS 120B
-13	nvidia	mistralai/mistral-small-4-119b-2603	45	watchdog	Mistral Small 4 119B
-14	nvidia	minimaxai/minimax-m3	0	watchdog	MiniMax M3
-15	nvidia	mistralai/mistral-nemotron	15	watchdog	Mistral Nemotron
-16	nvidia	nvidia/nemotron-3-super-120b-a12b	30	watchdog	Nemotron 3 Super
-17	nvidia	nvidia/nemotron-3-nano-omni-30b-a3b-reasoning	45	watchdog	Nemotron 3 Omni
-18	nvidia	nvidia/llama-3.3-nemotron-super-49b-v1.5	0	watchdog	Llama 3.3 Nemotron Super 49B
-19	nvidia	nvidia/nemotron-3-nano-30b-a3b	15	watchdog	Nemotron Nano 30B
-20	nvidia	openai/gpt-oss-20b	30	watchdog	GPT OSS 20B
-21	nvidia	google/gemma-4-31b-it	45	watchdog	Gemma 4 31B
-22	nvidia	mistralai/mistral-large-2-instruct	0	watchdog	Mistral Large 2
-23	nvidia	nvidia/nvidia-nemotron-nano-9b-v2	15	watchdog	Nemotron Nano 9B v2
-24	nvidia	meta/llama-3.3-70b-instruct	30	watchdog	Llama 3.3 70B
-29	nvidia	thinkingmachines/inkling	45	watchdog	Inkling
-39	opencode-free	big-pickle	15	watchdog	OpenCode Big Pickle
-40	opencode-free	deepseek-v4-flash-free	30	watchdog	OpenCode DeepSeek V4 Flash Free
-41	opencode-free	mimo-v2.5-free	45	watchdog	OpenCode MiMo V2.5 Free
-42	opencode-free	nemotron-3-ultra-free	0	watchdog	OpenCode Nemotron 3 Ultra Free
-43	opencode-free	laguna-s-2.1-free	15	watchdog	OpenCode Laguna S 2.1 Free
-44	opencode-free	hy3-free	30	watchdog	OpenCode Tencent Hy3 Free
-45	opencode-free	nemotron-3.5-lightning-free	45	watchdog	OpenCode Nemotron 3.5 Lightning Free
-46	kilo-auto	kilo-auto/free	0	watchdog	Kilo Auto Free · Forge
+6	nvidia	z-ai/glm-5.2	0	dispatcher	GLM 5.2
+7	nvidia	moonshotai/kimi-k2.6	5	dispatcher	Kimi K2.6
+8	nvidia	deepseek-ai/deepseek-v4-flash-0731	10	dispatcher	DeepSeek V4 Flash
+9	nvidia	stepfun-ai/step-3.7-flash	15	dispatcher	Step 3.7 Flash
+10	nvidia	nvidia/nemotron-3-ultra-550b-a55b	20	dispatcher	Nemotron 3 Ultra
+11	nvidia	poolside/laguna-xs-2.1	25	dispatcher	Laguna XS 2.1
+12	nvidia	openai/gpt-oss-120b	30	dispatcher	GPT OSS 120B
+13	nvidia	mistralai/mistral-small-4-119b-2603	35	dispatcher	Mistral Small 4 119B
+14	nvidia	minimaxai/minimax-m3	40	dispatcher	MiniMax M3
+15	nvidia	mistralai/mistral-nemotron	45	dispatcher	Mistral Nemotron
+16	nvidia	nvidia/nemotron-3-super-120b-a12b	50	dispatcher	Nemotron 3 Super
+17	nvidia	nvidia/nemotron-3-nano-omni-30b-a3b-reasoning	55	dispatcher	Nemotron 3 Omni
+18	nvidia	nvidia/llama-3.3-nemotron-super-49b-v1.5	0	dispatcher	Llama 3.3 Nemotron Super 49B
+19	nvidia	nvidia/nemotron-3-nano-30b-a3b	5	dispatcher	Nemotron Nano 30B
+20	nvidia	openai/gpt-oss-20b	10	dispatcher	GPT OSS 20B
+21	nvidia	google/gemma-4-31b-it	15	dispatcher	Gemma 4 31B
+22	nvidia	mistralai/mistral-large-2-instruct	20	dispatcher	Mistral Large 2
+23	nvidia	nvidia/nvidia-nemotron-nano-9b-v2	25	dispatcher	Nemotron Nano 9B v2
+24	nvidia	meta/llama-3.3-70b-instruct	30	dispatcher	Llama 3.3 70B
+29	nvidia	thinkingmachines/inkling	35	dispatcher	Inkling
+39	opencode-free	big-pickle	40	dispatcher	OpenCode Big Pickle
+40	opencode-free	deepseek-v4-flash-free	45	dispatcher	OpenCode DeepSeek V4 Flash Free
+41	opencode-free	mimo-v2.5-free	50	dispatcher	OpenCode MiMo V2.5 Free
+42	opencode-free	nemotron-3-ultra-free	55	dispatcher	OpenCode Nemotron 3 Ultra Free
+43	opencode-free	laguna-s-2.1-free	0	dispatcher	OpenCode Laguna S 2.1 Free
+44	opencode-free	hy3-free	5	dispatcher	OpenCode Tencent Hy3 Free
+45	opencode-free	nemotron-3.5-lightning-free	10	dispatcher	OpenCode Nemotron 3.5 Lightning Free
+46	kilo-auto	kilo-auto/free	15	dispatcher	Kilo Auto Free · Forge
