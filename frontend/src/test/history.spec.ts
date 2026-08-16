@@ -5,7 +5,7 @@ import { SELECTORS, setRangeInput, submitRatingAndWaitForRateResponse, navigateT
 async function readThreadFromQueue(page: Page, rating: string): Promise<void> {
   await navigateToRatePage(page);
   await setRangeInput(page, SELECTORS.rate.ratingInput, rating);
-  await submitRatingAndWaitForRateResponse(page, () => page.click('button:has-text("Save & Continue")'));
+  await submitRatingAndWaitForRateResponse(page, () => page.click(SELECTORS.rate.submitButton));
   await expect(page.locator('#root')).toBeVisible();
 }
 
@@ -22,12 +22,10 @@ test.describe('History Page', () => {
     await authenticatedWithThreadsPage.goto('/history');
 
     const sessionsList = authenticatedWithThreadsPage.locator(SELECTORS.history.sessionsList);
-    await expect(async () => {
-      const count = await sessionsList.count();
-      if (count > 0) {
-        await expect(sessionsList.first()).toBeVisible();
-      }
-    }).toPass({ timeout: 5000 });
+    await expect(sessionsList).toBeVisible();
+    const sessionItems = sessionsList.getByRole('listitem');
+    await expect(sessionItems.first()).toBeVisible();
+    expect(await sessionItems.count()).toBeGreaterThan(0);
   });
 
   test('should show session details including die size and threads', async ({ authenticatedWithThreadsPage }) => {
