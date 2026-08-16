@@ -4,11 +4,11 @@ from collections.abc import Collection
 from datetime import UTC, datetime, timedelta
 import logging
 import random
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 
-from app.models import Thread
+from app.models import Issue, Thread
 
 logger = logging.getLogger(__name__)
 
@@ -448,6 +448,54 @@ async def get_roll_pool(
 
     result = await db.execute(query)
     return list(result.scalars().all())
+
+
+async def get_roll_pool_rows(
+    user_id: int,
+    db: AsyncSession,
+    snoozed_ids: list[int] | None = None,
+) -> list[tuple[Thread, int, str | None]]:
+    """Get the active roll pool enriched with issue-tracking read state.
+
+    Each row carries the Thread, the number of unread issues, and the
+    next-unread-issue number. Folding the unread count and issue metadata into
+    the pool query removes per-thread round trips from the roll selection path.
+
+    Args:
+        user_id: The user ID to filter threads by.
+        db: The database session.
+        snoozed_ids: Optional list of thread IDs to exclude from the pool.
+
+    Returns:
+        List of ``(Thread, unread_count, next_issue_number)`` tuples ordered by
+        queue position.
+    """
+    unread_counts = (
+        select(Issue.thread_id.label("thread_id"), func.count(Issue.id).label("unread_count"))
+        .where(Issue.status == "unread")
+        .group_by(Issue.thread_id)
+        .subquery()
+    )
+    query = (
+        select(
+            Thread,
+            func.coalesce(unread_counts.c.unread_count, 0).label("unread_count"),
+            Issue.issue_number.label("next_issue_number"),
+        )
+        .outerjoin(unread_counts, unread_counts.c.thread_id == Thread.id)
+        .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .where(Thread.queue_position >= 1)
+        .where(Thread.is_blocked.is_(False))
+        .order_by(Thread.queue_position)
+    )
+
+    if snoozed_ids:
+        query = query.where(Thread.id.not_in(snoozed_ids))
+
+    result = await db.execute(query)
+    return list(result.all())
 
 
 async def get_stale_threads(user_id: int, db: AsyncSession, days: int = 7) -> list[Thread]:
