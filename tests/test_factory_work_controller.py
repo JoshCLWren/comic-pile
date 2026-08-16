@@ -33,6 +33,7 @@ def pr(
     branch: str,
     *labels: str,
     created: str = "2026-08-16T12:00:00Z",
+    draft: bool = False,
 ):
     return {
         "number": number,
@@ -40,7 +41,7 @@ def pr(
         "labels": [{"name": label} for label in labels],
         "headRefName": branch,
         "createdAt": created,
-        "isDraft": False,
+        "isDraft": draft,
     }
 
 
@@ -116,18 +117,54 @@ def test_user_bug_pr_repair_inherits_priority_without_worker_affinity() -> None:
 
     candidates = controller.build_candidates(issues, prs)
 
-    # The open PR suppresses duplicate issue implementation and is ranked by
-    # the linked user-report provenance, not by the worker number in its branch.
+    # The executable PR suppresses duplicate issue implementation and is ranked
+    # by linked provenance, not by the worker number in its branch.
     assert [(candidate.kind, candidate.number, candidate.lane) for candidate in candidates] == [
         ("pr", 1401, 2),
         ("issue", 402, 3),
     ]
 
 
-def test_ready_pr_is_reserved_for_merge_controller() -> None:
+def test_draft_pr_does_not_make_linked_issue_disappear() -> None:
     controller = load_controller()
     candidates = controller.build_candidates(
-        [],
+        [issue(411, "bug", "user-reported", "factory:unowned")],
+        [
+            pr(
+                1411,
+                "factory/27-411-fix",
+                "factory",
+                "factory:unowned",
+                draft=True,
+            )
+        ],
+    )
+
+    assert [(candidate.kind, candidate.number) for candidate in candidates] == [("issue", 411)]
+
+
+def test_blocked_pr_does_not_make_unblocked_linked_issue_disappear() -> None:
+    controller = load_controller()
+    candidates = controller.build_candidates(
+        [issue(412, "bug", "user-reported", "factory:unowned")],
+        [
+            pr(
+                1412,
+                "factory/27-412-fix",
+                "factory",
+                "factory:unowned",
+                "factory:blocked",
+            )
+        ],
+    )
+
+    assert [(candidate.kind, candidate.number) for candidate in candidates] == [("issue", 412)]
+
+
+def test_ready_pr_is_reserved_for_merge_controller_and_suppresses_duplicate_issue() -> None:
+    controller = load_controller()
+    candidates = controller.build_candidates(
+        [issue(501, "bug", "user-reported", "factory:unowned")],
         [
             pr(
                 1501,
@@ -176,6 +213,18 @@ def test_local_lease_requires_explicit_stale_activity_evidence() -> None:
         now_epoch=10_000,
         local_ttl_seconds=8_100,
     )
+
+
+def test_busy_fixed_worker_is_not_given_a_second_assignment(monkeypatch) -> None:
+    controller = load_controller()
+    monkeypatch.setattr(controller, "worker_has_active_lease", lambda worker: True)
+    monkeypatch.setattr(
+        controller,
+        "list_issues",
+        lambda: (_ for _ in ()).throw(AssertionError("must not rank new work")),
+    )
+
+    assert controller.assign("13") is None
 
 
 def test_one_dispatch_batch_plans_distinct_targets() -> None:
