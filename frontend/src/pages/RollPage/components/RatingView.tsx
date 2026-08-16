@@ -130,15 +130,15 @@ export function RatingView({
             </p>
           ) : null}
 
-          <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-bold text-stone-500">
-            {totalIssues && issueNumber != null ? (
-              <span>Issue {issueNumber} of {totalIssues}</span>
-            ) : null}
-            {totalIssues && issueNumber != null ? <span aria-hidden="true">·</span> : null}
-            <span>{progress}% series progress</span>
-            <span aria-hidden="true">·</span>
-            <span>{issuesRemaining} left</span>
-          </div>
+<div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-bold text-stone-500">
+             {totalIssues && issueNumber != null ? (
+               <span>Issue {issueNumber} of {totalIssues}</span>
+             ) : null}
+             {totalIssues && issueNumber != null ? <span aria-hidden="true">·</span> : null}
+             <span>{progress}% complete</span>
+             <span aria-hidden="true">·</span>
+             <span>{issuesRemaining} issues left</span>
+           </div>
         </div>
 
         <ContinuityReadinessSummary issueId={issueId} />
