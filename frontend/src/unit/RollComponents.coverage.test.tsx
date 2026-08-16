@@ -165,7 +165,7 @@ describe('RatingView', () => {
     />)
     expect(screen.getByText('Loading…')).toBeInTheDocument()
     expect(screen.getByText('Main order')).toBeInTheDocument()
-    expect(screen.getByText('0 left')).toBeInTheDocument()
+    expect(screen.getByText('0 issues left')).toBeInTheDocument()
   })
 
   it('renders alternate rating, progress, and order boundaries', async () => {
