@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the deterministic free-model factory roster and shared-pool worker."""
+"""Validate the deterministic free-model factory roster and control plane."""
 
 from __future__ import annotations
 
@@ -18,6 +18,8 @@ DISCOVERY_CLASSIFIER = Path('.github/scripts/classify-chromium-discovery.py')
 PLAYWRIGHT_CONFIG = Path('frontend/playwright.config.ts')
 WORKER = Path('.github/scripts/free-model-factory-worker.sh')
 PRIMITIVES = Path('.github/scripts/free-model-factory-worker-primitives.sh')
+CONTROLLER = Path('.github/scripts/factory-work-controller.py')
+POLICY = Path('.github/scripts/factory_work_policy.py')
 KILO_HELPER = Path('.github/scripts/kilo-auto-factory-run.sh')
 GUARD = Path('.github/scripts/fixed-model-guard.py')
 EXPECTED_WORKERS = set(range(6, 25)) | {29} | set(range(39, 47))
@@ -35,15 +37,8 @@ SCHEDULE_MINUTES = tuple(range(0, 60, 5))
 ENTRY_PERMISSIONS = ('contents: write', 'issues: write', 'pull-requests: write', 'actions: write', 'checks: read')
 
 
-def assert_in_order(text: str, *needles: str) -> None:
-    """Assert that the final call-site occurrence of each marker is ordered."""
-    positions = [text.rfind(needle) for needle in needles]
-    assert all(position >= 0 for position in positions), f'missing ordered marker: {needles}'
-    assert positions == sorted(positions), f'expected ordering: {needles}'
-
-
 def main() -> None:
-    """Validate roster, runtime, lease, shared-pool, and discovery invariants."""
+    """Validate roster, runtime, lease, assignment, and discovery invariants."""
     with MANIFEST.open(newline='', encoding='utf-8') as handle:
         rows = list(csv.DictReader(
             (line for line in handle if not line.startswith('# worker')),
@@ -87,20 +82,28 @@ def main() -> None:
     assert 'minute="${SCHEDULE_EXPR%% *}"' in dispatcher
     assert 'workers=\'["6","39","46"]\'' in dispatcher
     assert 'gh workflow run free-model-factory-entry.yml' in dispatcher
+    assert "'.github/scripts/factory-work-controller.py'" in dispatcher
     assert "'.github/scripts/free-model-factory-worker.sh'" in dispatcher
     assert "'.github/scripts/kilo-auto-factory-run.sh'" in dispatcher
     for required in (
+        'group: fixed-model-factory-dispatch',
         'queued in_progress',
         'gh run cancel "$run_id"',
         'release_cancelled_worker_leases',
         'factory:unowned',
         'another worker already owns it',
         'takeover observed',
+        'python3 "$controller" reconcile',
+        'python3 "$controller" assign --worker "$worker"',
+        'python3 "$controller" release --worker "$worker"',
+        'while (( attempt <= 3 ))',
+        'later workers were still attempted',
     ):
-        assert required in dispatcher, f'deployment/lease fence missing: {required}'
+        assert required in dispatcher, f'deployment/assignment fence missing: {required}'
 
     entry = ENTRY.read_text(encoding='utf-8')
     assert 'workflow_dispatch:' in entry
+    assert 'run-name: Factory ${{ inputs.worker }} · fixed-model entry' in entry
     assert 'uses: ./.github/workflows/free-model-factory-run.yml' in entry
     assert 'secrets: inherit' in entry
     for permission in ENTRY_PERMISSIONS:
@@ -149,39 +152,54 @@ def main() -> None:
         assert required in primitives, f'inherited worker primitive missing: {required}'
 
     for required in (
-        'choose_ranked_issues',
-        'issue_is_executable',
-        'issue_has_open_blocker',
-        'dependencies/blocked_by',
-        "claim_from_pool 'user-bug'",
-        "claim_from_pool 'bug'",
-        "claim_from_pool 'product'",
-        'ralph-priority:critical',
-        'ralph-priority:high',
-        'issue_has_open_factory_pr "$issue" && return 1',
-        'release_owned_targets \'previous-run-stale-lease\'',
+        'select_controller_assignment',
+        'no control-plane assignment is leased to this worker',
+        'controller-assignment-read-failed',
         'session-end-handoff',
         'no-persisted-change-handoff',
-        'leased unowned PR',
         'stage_trusted_kilo_helper',
         'TRUSTED_KILO_HELPER',
-        'daily Chromium discovery owns backlog replenishment',
+        'handing it to the merge controller',
+        "'factory:ready' 'exact-head-ready-handoff'",
     ):
-        assert required in worker, f'shared-pool invariant missing: {required}'
-    assert "for selector in 'user-reported bug' 'bug' 'ralph-task'" not in worker
-    assert 'choose_backlog_zero_child' not in worker
-    assert 'issues/679/sub_issues' not in worker
-    assert 'claim_issue "$candidate"' in worker
-    assert 'gh workflow run chromium-discovery.yml' not in worker
-    assert 'trigger_backlog_zero_discovery' not in worker
-    assert_in_order(
-        worker,
+        assert required in worker, f'controller-assigned worker invariant missing: {required}'
+    for forbidden in (
+        'choose_existing_pr',
+        'choose_ranked_issues',
         "claim_from_pool 'user-bug'",
         "claim_from_pool 'bug'",
         "claim_from_pool 'product'",
-        'done < <(choose_unowned_pr)',
-        'daily Chromium discovery owns backlog replenishment',
-    )
+        'leased unowned PR',
+        'gh pr merge "$NUMBER"',
+        'trigger_backlog_zero_discovery',
+    ):
+        assert forbidden not in worker, f'worker still owns repo-wide selection/merge behavior: {forbidden}'
+    assert 'gh workflow run chromium-discovery.yml' not in worker
+
+    assert POLICY.exists(), 'tracked factory ranking policy module is missing'
+    controller = CONTROLLER.read_text(encoding='utf-8')
+    policy = POLICY.read_text(encoding='utf-8')
+    for required in (
+        'from factory_work_policy import',
+        'def reconcile_stale_leases(',
+        'def active_fixed_workers(',
+        'def assign_candidate(',
+        'def release_worker(',
+        'latest_lease_activity_epoch',
+        'queued',
+        'in_progress',
+    ):
+        assert required in controller, f'factory controller runtime invariant missing: {required}'
+    for required in (
+        'class Candidate:',
+        'def build_candidates(',
+        "'e2e-discovered'",
+        'return 4',
+        'return 5',
+        'factory:ready',
+        'LOCAL_LEASE_TTL_SECONDS',
+    ):
+        assert required in policy, f'factory ranking/lease policy invariant missing: {required}'
 
     discovery = DISCOVERY.read_text(encoding='utf-8')
     for required in (
@@ -233,7 +251,7 @@ def main() -> None:
         classifier,
     ), 'discovery classifier issue comment call missing'
 
-    print('Validated 28 external factory lanes, staggered scheduling, shared-pool selection, and daily Chromium discovery.')
+    print('Validated 28 external factory lanes, centralized assignment, staggered scheduling, and daily Chromium discovery.')
     for minute in SCHEDULE_MINUTES:
         print(f'  :{minute:02d} -> {counts[minute]} workers')
     for source, count in EXPECTED_SOURCE_COUNTS.items():
