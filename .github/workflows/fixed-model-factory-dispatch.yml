@@ -23,7 +23,7 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/free-model-factory-dispatch.yml'
+      - '.github/workflows/fixed-model-factory-dispatch.yml'
       - '.github/workflows/free-model-factory-entry.yml'
       - '.github/workflows/free-model-factory-run.yml'
       - '.github/scripts/factory-work-controller.py'
