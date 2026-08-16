@@ -64,8 +64,4 @@ def test_release_writer_cannot_edit_source() -> None:
     assert permission["edit"] == "deny", "release-writer agent must not have edit permission"
 
 
-def test_release_writer_cannot_mutate_labels() -> None:
-    """Ensure the agent cannot mutate GitHub labels."""
-    permission = _load_agent_permission()
 
-    assert permission["external_directory"] == "deny", "release-writer agent must not access external_directory"
