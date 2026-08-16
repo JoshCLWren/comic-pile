@@ -28,7 +28,7 @@ from app.schemas.session import SnoozedThreadInfo
 from app.services.ownership import get_owned_session_or_404
 from app.services.session_history_projection import project_session_history_events
 from comic_pile.dependencies import refresh_user_blocked_status
-from comic_pile.session import get_or_create, is_active
+from comic_pile.session import get_or_create, is_active, get_current_die
 
 router = APIRouter(tags=["sessions"])
 
