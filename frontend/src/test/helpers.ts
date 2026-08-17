@@ -251,29 +251,65 @@ export async function createThread(
             },
           });
 
-          if (issuesResponse.ok()) {
-            issueSuccess = true;
-            
-            // If issues_remaining is 0, mark all issues as read
-            if (threadData.issues_remaining === 0 && threadId) {
-              const issuesListResponse = await page.request.get(`/api/v1/threads/${threadId}/issues`, {
-                headers: {
-                  ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-                },
-              });
-              
-              if (issuesListResponse.ok()) {
-                const issuesData = await issuesListResponse.json();
-                for (const issue of issuesData.issues) {
-                  await page.request.post(`/api/v1/issues/${issue.id}:markRead`, {
-                    headers: {
-                      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-                      'X-CSRF-Token': csrfToken,
-                    },
-                  });
-                }
-              }
-            }
+if (issuesResponse.ok()) {
+                       issueSuccess = true;
+                       
+                       // If issues_remaining is 0, mark all issues as read
+                       if (threadData.issues_remaining === 0 && threadId) {
+                           const issuesListResponse = await page.request.get(`/api/v1/threads/${threadId}/issues`, {
+                               headers: {
+                                   ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                               },
+                           });
+                           
+                           if (issuesListResponse.ok()) {
+                               const issuesData = await issuesListResponse.json();
+                               for (const issue of issuesData.issues) {
+                                   await page.request.post(`/api/v1/issues/${issue.id}:markRead`, {
+                                       headers: {
+                                           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                                           'X-CSRF-Token': csrfToken,
+                                       },
+                                   });
+                               }
+                           }
+                       }
+                       
+                       // If we have a partial read (some issues read, some unread), mark the appropriate number of early issues as read
+                       if (threadData.issues_remaining > 0 && 
+                           threadData.total_issues !== undefined && 
+                           threadData.issues_remaining < threadData.total_issues && 
+                           threadId) {
+                           const numToMarkRead = threadData.total_issues - threadData.issues_remaining;
+                           if (numToMarkRead > 0) {
+                               // Fetch the issues list to get the actual issue IDs
+                               const issuesListResponse = await page.request.get(`/api/v1/threads/${threadId}/issues`, {
+                                   headers: {
+                                       ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                                   },
+                               });
+                               
+                               if (issuesListResponse.ok()) {
+                                   const issuesData = await issuesListResponse.json();
+                                   // Sort by issue number to ensure we get issues in order
+                                   const sortedIssues = [...issuesData.issues].sort((a, b) => 
+                                       parseInt(a.issue_number) - parseInt(b.issue_number)
+                                   );
+                                   // Take the first numToMarkRead issues (the earliest ones)
+                                   const issuesToMark = sortedIssues.slice(0, numToMarkRead);
+                                   for (const issue of issuesToMark) {
+                                       await page.request.post(`/api/v1/issues/${issue.id}:markRead`, {
+                                           headers: {
+                                               ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                                               'X-CSRF-Token': csrfToken,
+                                           },
+                                       });
+                                   }
+                               } else {
+                                   throw new Error(`Failed to fetch issues list: ${issuesListResponse.status()}`);
+                               }
+                           }
+                       }
           } else if (issuesResponse.status() === 429) {
             issueAttempts++;
             await new Promise(resolve => setTimeout(resolve, 1000));
