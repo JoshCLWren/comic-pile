@@ -49,12 +49,15 @@ test.describe('Issue #688: Roll rating modal stacking and pointer interception',
     await authenticatedWithThreadsPage.getByRole('button', { name: 'Read Now' }).click()
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 })
 
-    // Open a second thread's dialog on top of the rating panel.
-    const otherPoolThread = authenticatedWithThreadsPage
-      .locator('[data-roll-pool] [role="button"]')
-      .nth(1)
-    await otherPoolThread.click()
-    await expect(authenticatedWithThreadsPage.getByRole('dialog')).toBeVisible()
+    // The roll pool is intentionally hidden while the rating panel is open, so
+    // a thread dialog is reached through the rating view's Edit control instead.
+    await expect(authenticatedWithThreadsPage.locator('[data-roll-pool]')).toHaveCount(0)
+
+    // Open a thread dialog on top of the rating panel.
+    const editButton = authenticatedWithThreadsPage.locator('button[aria-label="Correct issue number"]')
+    await expect(editButton).toBeVisible({ timeout: 5000 })
+    await editButton.click()
+    await expect(authenticatedWithThreadsPage.getByRole('dialog', { name: /Correct Issue Number/i })).toBeVisible()
 
     // Escape dismisses only the dialog, leaving the rating panel intact.
     await authenticatedWithThreadsPage.keyboard.press('Escape')

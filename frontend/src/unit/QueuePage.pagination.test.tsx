@@ -1,5 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { render, screen } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { BrowserRouter } from 'react-router-dom'
 import QueuePage from '../pages/QueuePage'
@@ -116,7 +115,7 @@ it('shows the initial full-screen loader before any queue data exists', () => {
   expect(screen.queryByTestId('queue-list')).not.toBeInTheDocument()
 })
 
-it('keeps loaded rows visible and disables pagination while another page is loading', () => {
+it('keeps loaded rows visible while another page is loading', () => {
   mockedUseQueueThreads.mockReturnValue({
     data: [thread],
     isPending: true,
@@ -129,13 +128,11 @@ it('keeps loaded rows visible and disables pagination while another page is load
   renderQueue()
 
   expect(screen.getByText('Saga')).toBeInTheDocument()
-  expect(screen.getByTestId('queue-load-more')).toBeDisabled()
-  expect(screen.getByTestId('queue-load-more')).toHaveTextContent('Loading more threads…')
+  expect(screen.getByTestId('queue-loading-more')).toBeInTheDocument()
 })
 
-it('loads the next page from the visible pagination control and absorbs request rejection', async () => {
-  const user = userEvent.setup()
-  const loadMore = vi.fn().mockRejectedValue(new Error('next page unavailable'))
+it('loads the next page automatically when the infinite-scroll sentinel enters view', () => {
+  const loadMore = vi.fn().mockResolvedValue(undefined)
   mockedUseQueueThreads.mockReturnValue({
     data: [thread],
     isPending: false,
@@ -147,11 +144,19 @@ it('loads the next page from the visible pagination control and absorbs request 
 
   renderQueue()
 
-  const button = screen.getByTestId('queue-load-more')
-  expect(button).toHaveTextContent('Load more threads')
-  await user.click(button)
+  expect(screen.getByTestId('queue-infinite-scroll-sentinel')).toBeInTheDocument()
 
-  await waitFor(() => expect(loadMore).toHaveBeenCalledTimes(1))
+  const MockIntersectionObserver = globalThis.IntersectionObserver as unknown as {
+    instances: Array<{ callback: IntersectionObserverCallback }>
+  }
+  const observer = MockIntersectionObserver.instances.at(-1)
+  expect(observer).toBeDefined()
+  observer?.callback(
+    [{ isIntersecting: true }] as unknown as IntersectionObserverEntry[],
+    {} as IntersectionObserver,
+  )
+
+  expect(loadMore).toHaveBeenCalledTimes(1)
 })
 
 it('shows an incremental-load error without discarding the loaded queue', () => {
@@ -167,7 +172,8 @@ it('shows an incremental-load error without discarding the loaded queue', () => 
   renderQueue()
 
   expect(screen.getByText('Saga')).toBeInTheDocument()
-  expect(screen.getByRole('alert')).toHaveTextContent("Couldn't load the next batch of threads. Try again.")
+  expect(screen.getByRole('alert')).toHaveTextContent("Couldn't load the next batch of threads.")
+  expect(screen.getByTestId('queue-load-more-retry')).toBeInTheDocument()
 })
 
 it('does not show an incremental error before the queue has produced a data snapshot', () => {
@@ -183,5 +189,4 @@ it('does not show an incremental error before the queue has produced a data snap
   renderQueue()
 
   expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-  expect(screen.getByTestId('queue-load-more')).toBeEnabled()
 })
