@@ -138,20 +138,68 @@ test('ignores an auth failure that arrives after the provider unmounts', async (
 })
 
 test('loads each retained authenticated lazy route', async () => {
-  mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
-  const routes = {
-    '/queue': 'queue-page',
-    '/history': 'history-page',
-    '/sessions/1': 'session-page',
-    '/help': 'help-page',
-    '/thread/1': 'thread-detail-page',
-  }
-  for (const [path, testId] of Object.entries(routes)) {
-    const { unmount } = renderWithAuth(path)
-    await waitFor(() => expect(screen.getByTestId(testId)).toBeInTheDocument())
-    unmount()
-  }
-})
+   mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
+   const routes = {
+     '/queue': 'queue-page',
+     '/history': 'history-page',
+     '/sessions/1': 'session-page',
+     '/help': 'help-page',
+     '/thread/1': 'thread-detail-page',
+   }
+   for (const [path, testId] of Object.entries(routes)) {
+     const { unmount } = renderWithAuth(path)
+     await waitFor(() => expect(screen.getByTestId(testId)).toBeInTheDocument())
+     unmount()
+   }
+ })
+
+ test('Roll route gets wide layout while other routes get normal layout', async () => {
+   mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
+
+   // Test Roll route (/) - should have wide layout
+   const rollView = renderWithAuth('/')
+   await waitFor(() => expect(screen.getByTestId('roll-page')).toBeInTheDocument())
+   
+   // Check that main element has wide layout classes
+   const mainElement = rollView.container.querySelector('main')
+   expect(mainElement).toBeInTheDocument()
+   expect(mainElement).toHaveClass('flex-1')
+   expect(mainElement).toHaveClass('container')
+   expect(mainElement).toHaveClass('mx-auto')
+   expect(mainElement).toHaveClass('px-3')
+   expect(mainElement).toHaveClass('md:px-4')
+   expect(mainElement).toHaveClass('py-4')
+   expect(mainElement).toHaveClass('md:py-6')
+   expect(mainElement).toHaveClass('max-w-lg')
+   expect(mainElement).toHaveClass('md:max-w-2xl')
+   expect(mainElement).toHaveClass('lg:max-w-4xl')
+   expect(mainElement).toHaveClass('xl:max-w-5xl')
+   expect(mainElement).toHaveClass('2xl:max-w-[96rem]') // Wide mode class
+   expect(mainElement).toHaveClass('pb-28')
+   rollView.unmount()
+
+   // Test Queue route (/queue) - should have normal layout
+   const queueView = renderWithAuth('/queue')
+   await waitFor(() => expect(screen.getByTestId('queue-page')).toBeInTheDocument())
+   
+   // Check that main element has normal layout classes (without 2xl:max-w-[96rem])
+   const queueMainElement = queueView.container.querySelector('main')
+   expect(queueMainElement).toBeInTheDocument()
+   expect(queueMainElement).toHaveClass('flex-1')
+   expect(queueMainElement).toHaveClass('container')
+   expect(queueMainElement).toHaveClass('mx-auto')
+   expect(queueMainElement).toHaveClass('px-3')
+   expect(queueMainElement).toHaveClass('md:px-4')
+   expect(queueMainElement).toHaveClass('py-4')
+   expect(queueMainElement).toHaveClass('md:py-6')
+   expect(queueMainElement).toHaveClass('max-w-lg')
+   expect(queueMainElement).toHaveClass('md:max-w-2xl')
+   expect(queueMainElement).toHaveClass('lg:max-w-4xl')
+   expect(queueMainElement).toHaveClass('xl:max-w-5xl')
+   expect(queueMainElement).not.toHaveClass('2xl:max-w-[96rem]') // Should NOT have wide mode class
+   expect(queueMainElement).toHaveClass('pb-28')
+   queueView.unmount()
+ })
 
 test('redirects the retired analytics route to Roll', async () => {
   mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })

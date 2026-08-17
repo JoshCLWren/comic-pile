@@ -221,8 +221,12 @@ function PublicRoute({ children }: { children: ReactNode }) {
   return children
 }
 
-function AuthenticatedLayout({ children, onBugReportSubmit }: { children: ReactNode; onBugReportSubmit: BugReportSubmit }) {
-  return <div className="flex min-h-screen" data-app-shell-ready><main className="flex-1 container mx-auto px-3 md:px-4 py-4 md:py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-28">{children}</main><Navigation onBugReportSubmit={onBugReportSubmit} /></div>
+function AuthenticatedLayout({ children, onBugReportSubmit, wide = false }: { children: ReactNode; onBugReportSubmit: BugReportSubmit; wide?: boolean }) {
+  const widthClasses = wide 
+    ? "flex-1 container mx-auto px-3 md:px-4 py-4 md:py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-[96rem] pb-28"
+    : "flex-1 container mx-auto px-3 md:px-4 py-4 md:py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-28";
+  
+  return <div className="flex min-h-screen" data-app-shell-ready><main className={widthClasses}>{children}</main><Navigation onBugReportSubmit={onBugReportSubmit} /></div>
 }
 
 function PublicLayout({ children, onBugReportSubmit }: { children: ReactNode; onBugReportSubmit: BugReportSubmit }) {
@@ -249,7 +253,7 @@ function AppRoutes() {
         <Route path="/register" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><RegisterPage /></PublicLayout></PublicRoute>} />
         <Route path="/rate" element={<Navigate to="/" replace />} />
         <Route path="/analytics" element={<Navigate to="/" replace />} />
-        <Route path="/" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><RollPage /></AuthenticatedLayout></ProtectedRoute>} />
+        <Route path="/" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit} wide><RollPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/queue" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><QueuePage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/thread/:id" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><ThreadDetailView /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/history" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><HistoryPage /></AuthenticatedLayout></ProtectedRoute>} />
