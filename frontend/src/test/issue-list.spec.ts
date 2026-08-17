@@ -210,7 +210,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
       authenticatedPage.waitForResponse(async (response) => {
         const url = response.url();
         const method = response.request().method();
-        const isThreadCreate = url.includes('/api/threads/') && method === 'POST' && response.status() < 300;
+        const isThreadCreate = url.includes('/api/v1/threads/') && method === 'POST' && response.status() < 300;
         const isIssueCreate = url.includes('/api/v1/threads/') && url.includes('/issues') && method === 'POST' && response.status() < 300;
         return isThreadCreate || isIssueCreate;
       }),
@@ -281,7 +281,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
       authenticatedPage.waitForResponse(async (response) => {
         const url = response.url();
         const method = response.request().method();
-        const isThreadCreate = url.includes('/api/threads/') && method === 'POST' && response.status() < 300;
+        const isThreadCreate = url.includes('/api/v1/threads/') && method === 'POST' && response.status() < 300;
         const isIssueCreate = url.includes('/api/v1/threads/') && url.includes('/issues') && method === 'POST' && response.status() < 300;
         return isThreadCreate || isIssueCreate;
       }),
