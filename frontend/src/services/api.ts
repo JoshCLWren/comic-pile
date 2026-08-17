@@ -261,7 +261,10 @@ rawApi.interceptors.response.use(
       }
     }
 
-    console.error('API Error:', error)
+    const status = error.response?.status
+    if (status !== 503) {
+      console.error('API Error:', error)
+    }
     return Promise.reject(error)
   },
 )
