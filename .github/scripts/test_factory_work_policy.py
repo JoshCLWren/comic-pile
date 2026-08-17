@@ -17,6 +17,8 @@ def factory_pr(
     stage: str = "factory:review",
     worker: int = 20,
     linked_issue: int | None = None,
+    mergeable: str = "MERGEABLE",
+    merge_state: str = "CLEAN",
 ) -> dict[str, object]:
     issue = linked_issue if linked_issue is not None else 9000 + number
     return {
@@ -27,6 +29,8 @@ def factory_pr(
         "headRefName": f"factory/{worker}-{issue}-test",
         "body": f"Worker: opencode-free-model-factory-{worker}",
         "createdAt": "2026-08-17T00:00:00Z",
+        "mergeable": mergeable,
+        "mergeStateStatus": merge_state,
     }
 
 
@@ -41,6 +45,33 @@ def issue(number: int, *extra_labels: str) -> dict[str, object]:
 
 
 class CompletionFirstOrderingTests(unittest.TestCase):
+    def test_conflicted_pr_beats_ci_changes_and_review(self) -> None:
+        candidates = [
+            Candidate("pr", 1, 3, 0, "", stage="factory:review"),
+            Candidate("pr", 2, 3, 0, "", stage="factory:changes-requested"),
+            Candidate("pr", 3, 3, 0, "", stage="factory:ci"),
+            Candidate("pr", 4, 3, 0, "", stage="factory:review", conflicted=True),
+        ]
+        self.assertEqual(
+            [item.number for item in order_candidates_for_worker(candidates, "9")],
+            [4, 3, 2, 1],
+        )
+
+    def test_build_candidates_marks_github_conflict_state(self) -> None:
+        candidates = build_candidates(
+            [],
+            [factory_pr(5, mergeable="CONFLICTING", merge_state="DIRTY")],
+        )
+        self.assertEqual(len(candidates), 1)
+        self.assertTrue(candidates[0].conflicted)
+
+    def test_dirty_merge_state_is_enough_to_mark_conflict(self) -> None:
+        candidates = build_candidates(
+            [],
+            [factory_pr(5, mergeable="UNKNOWN", merge_state="DIRTY")],
+        )
+        self.assertTrue(candidates[0].conflicted)
+
     def test_review_pr_beats_ordinary_issue_for_non_review_worker(self) -> None:
         candidates = [
             Candidate("issue", 1, 3, 4, "2026-08-17T00:00:00Z"),
