@@ -34,6 +34,19 @@ body {
   --text-dim: #6b5f50;
   --mobile-nav-height: 3.5rem;
   --desktop-nav-height: 5rem;
+
+  /* Pillar cockpit semantic tokens — warm classic defaults */
+  --pillar-page-bg: var(--bg-main);
+  --pillar-panel-bg: rgba(255, 255, 255, 0.04);
+  --pillar-panel-border: rgba(255, 255, 255, 0.08);
+  --pillar-comic-accent: #d4890e;
+  --pillar-reading-accent: #0e94aa;
+  --pillar-your-accent: #9333ea;
+  --pillar-primary-action: #d4890e;
+  --pillar-danger: #c0392b;
+  --pillar-text-primary: #e8d5b0;
+  --pillar-text-muted: #a0937e;
+  --pillar-glow: rgba(212, 137, 14, 0.25);
 }
 
 /* Keep mobile form controls inside their containers and at the iOS no-zoom font threshold. */
@@ -378,4 +391,131 @@ body {
   .animate-fade-in {
     animation: none;
   }
+}
+
+/* Roll cockpit three-pillar grid */
+.pillar-cockpit {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 768px) {
+  .pillar-cockpit {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.8fr);
+    gap: 1rem;
+  }
+
+  .pillar-cockpit > .pillar-comic {
+    grid-row: 1;
+    grid-column: 1;
+  }
+
+  .pillar-cockpit > .pillar-reading {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
+  .pillar-cockpit > .pillar-your {
+    grid-row: 2;
+    grid-column: 2;
+  }
+
+  .pillar-cockpit > .pillar-actions {
+    grid-row: 2;
+    grid-column: 1;
+    align-self: end;
+  }
+}
+
+@media (min-width: 1280px) {
+  .pillar-cockpit {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 2.5fr) minmax(0, 1.5fr);
+    gap: 1rem;
+  }
+
+  .pillar-cockpit > .pillar-comic {
+    grid-row: 1;
+    grid-column: 1;
+  }
+
+  .pillar-cockpit > .pillar-reading {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
+  .pillar-cockpit > .pillar-your {
+    grid-row: 1;
+    grid-column: 3;
+  }
+
+  .pillar-cockpit > .pillar-actions {
+    grid-row: 2;
+    grid-column: 1 / -1;
+  }
+}
+
+/* Pillar panel surface */
+.pillar-panel {
+  background: var(--pillar-panel-bg);
+  border: 1px solid var(--pillar-panel-border);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@media (min-width: 768px) {
+  .pillar-panel {
+    padding: 1rem;
+    gap: 1rem;
+  }
+}
+
+/* Pillar numbered header strip */
+.pillar-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.625rem;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.pillar-header .pillar-number {
+  opacity: 0.5;
+}
+
+/* Comic pillar accent rail */
+.pillar-comic .pillar-panel {
+  border-color: color-mix(in srgb, var(--pillar-comic-accent) 25%, transparent);
+}
+
+.pillar-comic .pillar-header {
+  background: color-mix(in srgb, var(--pillar-comic-accent) 8%, transparent);
+  color: var(--pillar-comic-accent);
+}
+
+/* Reading context pillar accent rail */
+.pillar-reading .pillar-panel {
+  border-color: color-mix(in srgb, var(--pillar-reading-accent) 25%, transparent);
+}
+
+.pillar-reading .pillar-header {
+  background: color-mix(in srgb, var(--pillar-reading-accent) 8%, transparent);
+  color: var(--pillar-reading-accent);
+}
+
+/* Your context pillar accent rail */
+.pillar-your .pillar-panel {
+  border-color: color-mix(in srgb, var(--pillar-your-accent) 25%, transparent);
+}
+
+.pillar-your .pillar-header {
+  background: color-mix(in srgb, var(--pillar-your-accent) 8%, transparent);
+  color: var(--pillar-your-accent);
 }

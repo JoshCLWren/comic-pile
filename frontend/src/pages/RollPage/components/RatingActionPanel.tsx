@@ -1,0 +1,63 @@
+interface RatingActionPanelProps {
+  issuesRemaining: number
+  rateIsPending: boolean
+  snoozeIsPending: boolean
+  dismissIsPending: boolean
+  errorMessage: string
+  onSubmitRating: (finishSession: boolean) => void
+  onSnooze: () => void
+  onCancel: () => void
+}
+
+export function RatingActionPanel({
+  issuesRemaining,
+  rateIsPending,
+  snoozeIsPending,
+  dismissIsPending,
+  errorMessage,
+  onSubmitRating,
+  onSnooze,
+  onCancel,
+}: RatingActionPanelProps) {
+  return (
+    <div className="pillar-actions">
+      <div
+        className="rating-actions sticky bottom-0 -mx-3 space-y-2 border-t border-white/10 bg-[#1a1410]/95 px-3 pt-3 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] backdrop-blur md:static md:-mx-4 md:px-4 md:pb-3"
+        data-testid="rating-actions"
+      >
+        {errorMessage ? (
+          <div id="error-message" className="text-center text-[10px] font-bold text-rose-500" role="alert">
+            {errorMessage}
+          </div>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => onSubmitRating(false)}
+          disabled={rateIsPending}
+          data-testid="save-and-continue"
+          className="w-full rounded-xl border border-amber-600/50 bg-amber-600/25 py-3.5 text-xs font-black uppercase tracking-[0.15em] transition hover:bg-amber-600/35 focus:ring-2 focus:ring-amber-500 disabled:opacity-50 active:scale-[0.98]"
+        >
+          {rateIsPending ? 'Saving…' : issuesRemaining === 1 ? 'Mark read & complete' : 'Mark read & save'}
+        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onSnooze}
+            disabled={snoozeIsPending}
+            className="min-h-11 flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
+          >
+            {snoozeIsPending ? 'Snoozing…' : 'Snooze'}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={dismissIsPending}
+            className="min-h-11 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-400 transition hover:bg-white/10 focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
+          >
+            Cancel roll
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
