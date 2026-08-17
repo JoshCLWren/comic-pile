@@ -309,13 +309,13 @@ fi
 
 review_log="/tmp/opencode-factory-${WORKER}.log"
 verdict=''
-if grep -Eq '^FACTORY_GATE_READY[[:space:]]*$' "$review_log"; then
-  verdict='approve'
-elif grep -Eq '^FACTORY_GATE_REJECT[[:space:]]*$' "$review_log"; then
-  verdict='reject'
-elif grep -Eq '^FACTORY_GATE_NOT_READY[[:space:]]*$' "$review_log"; then
-  verdict='repair'
-fi
+last_token="$(grep -E '^FACTORY_GATE_(READY|REJECT|NOT_READY)[[:space:]]*$' "$review_log" \
+  | tail -n 1 | tr -d '[:space:]' || true)"
+case "$last_token" in
+  FACTORY_GATE_READY) verdict='approve' ;;
+  FACTORY_GATE_REJECT) verdict='reject' ;;
+  FACTORY_GATE_NOT_READY) verdict='repair' ;;
+esac
 
 if [[ -z "$verdict" ]]; then
   log "review model did not emit a recognized terminal verdict for PR #${NUMBER}; leaving it in review"
