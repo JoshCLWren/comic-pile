@@ -9,6 +9,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from factory_review_policy import (
+    producer_worker_from_pr as producer_worker_from_values,
+)
+
 NON_EXECUTABLE_ISSUES = {679, 1093, 1109}
 
 OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-3][0-9]|4[0-6])$")
@@ -22,6 +26,14 @@ STAGE_LABELS = {
     "factory:ready",
     "factory:blocked",
 }
+STAGE_PRECEDENCE = (
+    "factory:blocked",
+    "factory:ready",
+    "factory:review",
+    "factory:changes-requested",
+    "factory:ci",
+    "factory:building",
+)
 INFRA_LABELS = {
     "infrastructure",
     "e2e-infrastructure",
@@ -37,11 +49,6 @@ BLOCKED_LABELS = {
     "invalid",
     "duplicate",
 }
-
-BRANCH_PRODUCER_RE = re.compile(r"^factory/(?P<worker>\d+)-\d+-")
-BODY_PRODUCER_RE = re.compile(
-    r"(?m)^Worker:\s*opencode-free-model-factory-(?P<worker>\d+)\s*$"
-)
 
 
 def env_positive_int(name: str, default: int) -> int:
@@ -139,19 +146,17 @@ def linked_issue_from_branch(branch: str | None) -> int | None:
 
 
 def producer_worker_from_pr(pr: dict[str, Any]) -> str | None:
-    """Recover producer identity from durable branch/body provenance."""
-    branch = str(pr.get("headRefName") or "")
-    match = BRANCH_PRODUCER_RE.match(branch)
-    if match:
-        return match.group("worker")
-    body = str(pr.get("body") or "")
-    match = BODY_PRODUCER_RE.search(body)
-    return match.group("worker") if match else None
+    """Recover producer identity using the shared review provenance policy."""
+    return producer_worker_from_values(
+        branch=str(pr.get("headRefName") or ""),
+        body=str(pr.get("body") or ""),
+    )
 
 
 def stage_of(labels: Iterable[str]) -> str | None:
-    """Return the current factory lifecycle stage from a label set."""
-    return next((label for label in labels if label in STAGE_LABELS), None)
+    """Return the deterministic current factory lifecycle stage."""
+    present = set(labels)
+    return next((label for label in STAGE_PRECEDENCE if label in present), None)
 
 
 def provenance_lane(labels: set[str]) -> int:
