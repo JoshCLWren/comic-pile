@@ -84,7 +84,10 @@ def _series(metadata: dict[str, object]) -> tuple[int | None, str | None]:
     return _integer(metadata.get("volume_id")), _string(metadata.get("volume_name"))
 
 
-async def _confirmed_identity(db: AsyncSession, issue_id: int) -> ExternalIdentity | None:
+async def _confirmed_identity(
+    db: AsyncSession,
+    issue_id: int,
+) -> ExternalIdentity | None:
     """Return the confirmed ComicVine issue identity for an owned issue.
 
     Args:
@@ -222,7 +225,10 @@ async def _relevant_crossover_groups(
     """
     result = await db.execute(
         select(DependencyGroup)
-        .join(DependencyGroupMembership, DependencyGroupMembership.group_id == DependencyGroup.id)
+.join(
+            DependencyGroupMembership,
+            DependencyGroupMembership.group_id == DependencyGroup.id,
+        )
         .where(
             DependencyGroup.user_id == user_id,
             or_(
@@ -397,7 +403,9 @@ def _build_crossovers(
         ]
         next_member: ReaderContextCrossoverNextMember | None = None
         if same_thread_future:
-            nearest = min(same_thread_future, key=lambda member: (member.position, member.id))
+nearest = min(
+                 same_thread_future, key=lambda member: (member.position, member.id)
+             )
             next_member = ReaderContextCrossoverNextMember(
                 issue_id=nearest.id,
                 issue_number=nearest.issue_number,
@@ -440,6 +448,10 @@ def _build_local_issues(
         Bounded, position-ordered local-chain issues.
     """
     issues: list[ReaderContextLocalIssue] = []
+    group_member_sets: dict[int, set[int]] = {}
+    for group_id, members in members_by_group.items():
+        group_member_sets[group_id] = {member.id for member in members}
+
     for candidate in neighborhood:
         if candidate.position < current_position:
             relation = "previous"
@@ -452,7 +464,7 @@ def _build_local_issues(
         memberships = [
             ReaderContextCrossoverMembership(id=group.id, name=group.name)
             for group in groups
-            if candidate.id in {member.id for member in members_by_group.get(group.id, [])}
+if candidate.id in group_member_sets.get(group.id, set())
         ]
         rating = effective[candidate.id][0] if candidate.id in effective else None
         issues.append(
@@ -580,7 +592,7 @@ async def get_reader_context(
         [group.id for group in groups],
     )
 
-    rating_issue_ids = {candidate.id for candidate in series_issues}
+rating_issue_ids: set[int] = {candidate.id for candidate in series_issues}
     rating_issue_ids.update(candidate.id for candidate in neighborhood)
     if previous_issue is not None:
         rating_issue_ids.add(previous_issue.id)

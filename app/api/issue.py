@@ -62,7 +62,10 @@ async def get_issue_comicvine_intelligence(
     return await get_issue_intelligence(db, issue_id, current_user.id)
 
 
-@router.get("/issues/{issue_id}/reader-context", response_model=ReaderContextResponse)
+@router.get(
+    "/issues/{issue_id}/reader-context",
+    response_model=ReaderContextResponse,
+)
 async def get_issue_reader_context(
     issue_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
