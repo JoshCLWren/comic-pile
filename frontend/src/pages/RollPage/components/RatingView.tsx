@@ -50,7 +50,7 @@ export function RatingView({
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
 
   return (
-    <div className="relative z-10 p-3 md:p-4">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div className="pillar-cockpit">
         <ComicPillar
           activeRatingThread={activeRatingThread}
