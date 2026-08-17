@@ -923,8 +923,6 @@ async def test_set_current_issue_updates_session_pending_issue(
     auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
 ) -> None:
     """Test that session.pending_issue_id is updated."""
-    from app.models import Session as SessionModel
-    from sqlalchemy import select
     from comic_pile.session import resolve_current_session
     
     thread_id = sample_data["threads"][1].id  # Batman thread
