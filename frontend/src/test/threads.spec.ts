@@ -21,13 +21,13 @@ test.describe('Thread Management', () => {
     await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1-10');
     await Promise.all([
       authenticatedPage.waitForResponse((response) =>
-        response.url().includes('/api/threads/') &&
+        response.url().includes('/api/v1/threads/') &&
         response.request().method() === 'POST' &&
         response.status() < 300
       ),
       authenticatedPage.click('button[type="submit"]'),
     ]);
-    
+
     await waitForThreadInQueue(authenticatedPage, 'Saga');
   });
 
@@ -49,7 +49,7 @@ test.describe('Thread Management', () => {
       await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1-10');
       await Promise.all([
         authenticatedPage.waitForResponse((response) =>
-          response.url().includes('/api/threads/') &&
+          response.url().includes('/api/v1/threads/') &&
           response.request().method() === 'POST' &&
           response.status() < 300
         ),
@@ -121,7 +121,7 @@ test.describe('Thread Management', () => {
     await authenticatedPage.fill('label:has-text("Title") + input', 'Updated Title');
     await Promise.all([
       authenticatedPage.waitForResponse((response) =>
-        response.url().includes('/api/threads/') &&
+        response.url().includes('/api/v1/threads/') &&
         response.request().method() === 'PUT' &&
         response.status() < 300
       ),
@@ -147,7 +147,7 @@ test.describe('Thread Management', () => {
     const menu = await openThreadActions(threadItem)
     await Promise.all([
       authenticatedPage.waitForResponse((response) =>
-        response.url().includes('/api/threads/') &&
+        response.url().includes('/api/v1/threads/') &&
         response.request().method() === 'DELETE'
       ),
       menu.getByRole('menuitem', { name: 'Delete thread' }).click(),

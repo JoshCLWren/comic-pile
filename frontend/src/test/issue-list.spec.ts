@@ -210,7 +210,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
       authenticatedPage.waitForResponse(async (response) => {
         const url = response.url();
         const method = response.request().method();
-        const isThreadCreate = url.includes('/api/threads/') && method === 'POST' && response.status() < 300;
+        const isThreadCreate = url.includes('/api/v1/threads/') && method === 'POST' && response.status() < 300;
         const isIssueCreate = url.includes('/api/v1/threads/') && url.includes('/issues') && method === 'POST' && response.status() < 300;
         return isThreadCreate || isIssueCreate;
       }),
@@ -224,7 +224,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
     let testThread: any = null;
     let attempts = 0;
     while (!testThread && attempts < 5) {
-      const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
+      const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/v1/threads/');
       expect(response.ok()).toBeTruthy();
       const threads = extractThreadsFromResponse(await response.json());
       testThread = findByTitle(threads, uniqueTitle);
@@ -281,7 +281,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
       authenticatedPage.waitForResponse(async (response) => {
         const url = response.url();
         const method = response.request().method();
-        const isThreadCreate = url.includes('/api/threads/') && method === 'POST' && response.status() < 300;
+        const isThreadCreate = url.includes('/api/v1/threads/') && method === 'POST' && response.status() < 300;
         const isIssueCreate = url.includes('/api/v1/threads/') && url.includes('/issues') && method === 'POST' && response.status() < 300;
         return isThreadCreate || isIssueCreate;
       }),
@@ -295,7 +295,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
     let testThread: any = null;
     let attempts = 0;
     while (!testThread && attempts < 5) {
-      const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
+      const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/v1/threads/');
       expect(response.ok()).toBeTruthy();
       const threads = extractThreadsFromResponse(await response.json());
       testThread = findByTitle(threads, uniqueTitle);
