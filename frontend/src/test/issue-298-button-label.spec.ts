@@ -2,7 +2,7 @@ import { test, expect } from './fixtures';
 import { createThread, setRangeInput, SELECTORS } from './helpers';
 
 test.describe('Issue #298 - Button Label on Last Issue', () => {
-  test('should display "Save & Complete" when rating the last issue', async ({ authenticatedWithThreadsPage }) => {
+  test('should display "Mark read & complete" when rating the last issue', async ({ authenticatedWithThreadsPage }) => {
     const token = await authenticatedWithThreadsPage.evaluate(() => 
       localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
     );
@@ -45,16 +45,16 @@ test.describe('Issue #298 - Button Label on Last Issue', () => {
     // Verify we're on the rating view
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible();
 
-    // Check that the submit button shows "Save & Complete" (not "Save & Continue")
-    const submitButton = authenticatedWithThreadsPage.locator('button:has-text("Save & Complete")');
+    // Check that the submit button shows "Mark read & complete" (not "Mark read & save")
+    const submitButton = authenticatedWithThreadsPage.locator('button:has-text("Mark read & complete")');
     await expect(submitButton).toBeVisible();
 
-    // Verify the old button text is NOT present
-    const oldButton = authenticatedWithThreadsPage.locator('button:has-text("Save & Continue")');
-    await expect(oldButton).toHaveCount(0);
+    // Verify the other button text is NOT present
+    const otherButton = authenticatedWithThreadsPage.locator('button:has-text("Mark read & save")');
+    await expect(otherButton).toHaveCount(0);
   });
 
-  test('should display "Save & Continue" when multiple issues remain', async ({ authenticatedWithThreadsPage }) => {
+  test('should display "Mark read & save" when multiple issues remain', async ({ authenticatedWithThreadsPage }) => {
     const token = await authenticatedWithThreadsPage.evaluate(() => 
       localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
     );
@@ -97,12 +97,12 @@ test.describe('Issue #298 - Button Label on Last Issue', () => {
     // Verify we're on the rating view
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible();
 
-    // Check that the submit button shows "Save & Continue" (not "Save & Complete")
-    const submitButton = authenticatedWithThreadsPage.locator('button:has-text("Save & Continue")');
+    // Check that the submit button shows "Mark read & save" (not "Mark read & complete")
+    const submitButton = authenticatedWithThreadsPage.locator('button:has-text("Mark read & save")');
     await expect(submitButton).toBeVisible();
 
-    // Verify the new button text is NOT present
-    const newButton = authenticatedWithThreadsPage.locator('button:has-text("Save & Complete")');
-    await expect(newButton).toHaveCount(0);
+    // Verify the other button text is NOT present
+    const otherButton = authenticatedWithThreadsPage.locator('button:has-text("Mark read & complete")');
+    await expect(otherButton).toHaveCount(0);
   });
 });
