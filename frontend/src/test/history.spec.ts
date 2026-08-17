@@ -5,7 +5,7 @@ import { SELECTORS, setRangeInput, submitRatingAndWaitForRateResponse, navigateT
 async function readThreadFromQueue(page: Page, rating: string): Promise<void> {
   await navigateToRatePage(page);
   await setRangeInput(page, SELECTORS.rate.ratingInput, rating);
-  await submitRatingAndWaitForRateResponse(page, () => page.click('button:has-text("Save & Continue")'));
+  await submitRatingAndWaitForRateResponse(page, () => page.click('[data-testid="save-and-continue"]'));
   await expect(page.locator('#root')).toBeVisible();
 }
 
@@ -35,7 +35,7 @@ test.describe('History Page', () => {
 
     await authenticatedWithThreadsPage.goto('/history');
 
-    const sessionItem = authenticatedWithThreadsPage.locator('.session-item, .history-item');
+    const sessionItem = authenticatedWithThreadsPage.locator('[role="listitem"]');
     await expect(async () => {
       const count = await sessionItem.count();
       if (count > 0) {
@@ -142,14 +142,14 @@ test.describe('History Page', () => {
     await expect(async () => {
       const count = await deleteButton.count();
       if (count > 0) {
-        const initialCount = await authenticatedPage.locator('.session-item, .history-item').count();
+        const initialCount = await authenticatedPage.locator('[role="listitem"]').count();
 
         if (initialCount > 0) {
           authenticatedPage.on('dialog', dialog => dialog.accept());
           await deleteButton.first().click();
           await expect(authenticatedPage.locator('#root')).toBeVisible();
 
-          const newCount = await authenticatedPage.locator('.session-item, .history-item').count();
+          const newCount = await authenticatedPage.locator('[role="listitem"]').count();
           expect(newCount).toBeLessThanOrEqual(initialCount);
         }
       }
@@ -167,7 +167,7 @@ test.describe('History Page', () => {
         await loadMoreButton.first().click();
         await expect(authenticatedPage.locator('#root')).toBeVisible();
 
-        const newCount = await authenticatedPage.locator('.session-item, [role="listitem"]').count();
+        const newCount = await authenticatedPage.locator('[role="listitem"]').count();
         expect(newCount).toBeGreaterThan(0);
       }
     }).toPass({ timeout: 5000 });
