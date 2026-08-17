@@ -62,7 +62,18 @@ export function ContinuityReadinessSummary({ issueId }: ContinuityReadinessSumma
     )
   }
 
-  if (readiness.is_readable) return null
+  if (readiness.is_readable) {
+    return (
+      <section
+        aria-labelledby="readiness-heading"
+        className="rounded-2xl border border-emerald-700/30 bg-emerald-900/10 p-3"
+      >
+        <h3 id="readiness-heading" className="text-xs font-black text-emerald-300">
+          Ready to read
+        </h3>
+      </section>
+    )
+  }
 
   return (
     <section
