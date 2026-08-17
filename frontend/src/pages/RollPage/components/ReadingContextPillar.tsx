@@ -13,6 +13,10 @@ interface ReadingContextPillarProps {
   issueId: number | null
   readingOrders: ReadingOrder[]
   connectedThreads: ConnectedThreadInfo[]
+  currentDie: number
+  rolledResult: number | null
+  hasValidRolledResult: boolean
+  poolSize: number
 }
 
 export function ReadingContextPillar({
@@ -20,6 +24,10 @@ export function ReadingContextPillar({
   issueId,
   readingOrders,
   connectedThreads,
+  currentDie,
+  rolledResult,
+  hasValidRolledResult,
+  poolSize,
 }: ReadingContextPillarProps) {
   const [readerContext, setReaderContext] = useState<ReaderContextResponse | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -87,11 +95,14 @@ export function ReadingContextPillar({
   }
 
   const currentIssue = readerContext?.local_chain.issues.find(i => i.relation === 'current')
-  const previousIssues = readerContext?.local_chain.issues.filter(i => i.relation === 'previous') ?? []
-  const nextIssues = readerContext?.local_chain.issues.filter(i => ['next', 'future'].includes(i.relation)) ?? []
   const edges = readerContext?.local_chain.edges ?? []
   const crossovers = readerContext?.crossovers ?? []
   const series = readerContext?.series
+  const totalIssues = activeRatingThread?.total_issues ?? null
+  const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
+  const progress = totalIssues && issueNumber != null
+    ? Math.round(((Number(issueNumber) - 1) / totalIssues) * 100)
+    : 0
 
   return (
     <section aria-labelledby="reading-context-heading" className="space-y-4 p-4 md:p-6">
@@ -100,6 +111,16 @@ export function ReadingContextPillar({
       </h2>
 
       <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 md:p-4 space-y-4">
+        {hasValidRolledResult && (
+          <div className="rounded-xl border border-amber-700/30 bg-amber-900/10 p-3">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-400 mb-2">Roll Result</p>
+            <p className="text-lg font-black text-amber-300">
+              Rolled {rolledResult} on d{currentDie}
+              {currentDie > poolSize ? ` · {poolSize} eligible` : ''}
+            </p>
+          </div>
+        )}
+
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs font-black text-stone-200">
@@ -109,6 +130,11 @@ export function ReadingContextPillar({
             {currentIssue && (
               <p className="mt-1 text-[11px] font-bold text-stone-400">
                 Issue {currentIssue.issue_number} of {series?.ratings_count ?? '—'} · Position {currentIssue.position}
+              </p>
+            )}
+            {totalIssues && issueNumber != null && (
+              <p className="mt-1 text-[11px] font-bold text-stone-400">
+                {progress}% complete · {issuesRemaining} left
               </p>
             )}
           </div>
@@ -125,7 +151,7 @@ export function ReadingContextPillar({
 
         {series && series.identity_source === 'comicvine' && (
           <div className="rounded-xl border border-amber-700/30 bg-amber-900/10 p-3 space-y-2">
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-400">Series Analytics</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-400">Series Progress</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-center">
               <div>
                 <p className="text-2xl font-black text-amber-300">{series.average_rating?.toFixed(2) ?? '—'}</p>
@@ -162,9 +188,9 @@ export function ReadingContextPillar({
                 >
                   <span className="font-bold">{crossover.name}</span>
                   {crossover.applies_to_current_issue ? (
-                    <span className="ml-1.5 text-rose-400">⟶ CURRENT</span>
+                    <span className="ml-1.5 text-rose-400" aria-label="Applies to current issue">⟶ CURRENT</span>
                   ) : crossover.next_member ? (
-                    <span className="ml-1.5 text-amber-400">→ #{crossover.next_member.issue_number}</span>
+                    <span className="ml-1.5 text-amber-400" aria-label={`Next crossover member is issue ${crossover.next_member.issue_number}`}>→ #{crossover.next_member.issue_number}</span>
                   ) : null}
                   <span className="ml-1.5 text-stone-500">({crossover.read_count}/{crossover.ratings_count})</span>
                 </div>

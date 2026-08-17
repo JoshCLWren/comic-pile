@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import IssueCorrectionDialog from '../../../components/IssueCorrectionDialog'
-import ContinuityCorrectionDialog from '../../../components/ContinuityCorrectionDialog'
 import Tooltip from '../../../components/Tooltip'
 import type { ReadingOrder } from '../../../services/api-reading-orders'
 import type { ConnectedThreadInfo } from '../../../types'
@@ -59,7 +58,6 @@ export function RatingView({
   onRefreshThread,
 }: RatingViewProps) {
   const [isCorrectionDialogOpen, setIsCorrectionDialogOpen] = useState(false)
-  const [isContinuityDialogOpen, setIsContinuityDialogOpen] = useState(false)
   const [isRouteExplanationOpen, setIsRouteExplanationOpen] = useState(false)
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
   const threadTitle = activeRatingThread?.title ?? 'Loading…'
@@ -143,33 +141,6 @@ export function RatingView({
 
         <ContinuityReadinessSummary issueId={issueId} />
       </section>
-
-      {connectedThreads.length > 0 ? (
-        <section aria-labelledby="connected-heading" className="rounded-2xl border border-blue-800/30 bg-blue-950/15 p-3">
-          <div className="flex items-center justify-between gap-2">
-            <h3 id="connected-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-400">
-              Verified dependency connections
-            </h3>
-            <button
-              type="button"
-              onClick={() => setIsContinuityDialogOpen(true)}
-              className="text-[10px] font-bold text-blue-400 hover:text-blue-300 transition-colors"
-            >
-              Correct continuity
-            </button>
-          </div>
-          <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Connected threads">
-            {connectedThreads.map((connectedThread) => (
-              <li
-                key={`${connectedThread.thread_id}-${connectedThread.dependency_id}`}
-                className="rounded-full border border-blue-800/40 bg-blue-900/20 px-2.5 py-1 text-[10px] font-bold text-blue-200"
-              >
-                {connectedThread.title}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
 
       <ReadingOrderGroups threadId={activeRatingThread?.id} />
 
@@ -321,22 +292,6 @@ export function RatingView({
           onClose={() => setIsCorrectionDialogOpen(false)}
           onSuccess={() => {
             setIsCorrectionDialogOpen(false)
-            onRefreshThread()
-          }}
-        />
-      ) : null}
-
-      {activeRatingThread ? (
-        <ContinuityCorrectionDialog
-          isOpen={isContinuityDialogOpen}
-          threadId={activeRatingThread.id}
-          issueId={issueId}
-          issueNumber={issueNumber}
-          threadTitle={activeRatingThread.title}
-          connectedThreads={connectedThreads}
-          onClose={() => setIsContinuityDialogOpen(false)}
-          onSuccess={() => {
-            setIsContinuityDialogOpen(false)
             onRefreshThread()
           }}
         />
