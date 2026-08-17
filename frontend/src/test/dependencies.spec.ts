@@ -492,7 +492,7 @@ test.describe('Dependencies', () => {
   })
 
   test.describe('Mobile dependency management', () => {
-    test('mobile dependency button opens modal at 375px viewport', async ({ authenticatedPage }) => {
+    test('mobile dependency menu action opens modal at 375px viewport', async ({ authenticatedPage }) => {
       // Set mobile viewport
       await authenticatedPage.setViewportSize({ width: 375, height: 667 })
 
@@ -506,16 +506,19 @@ test.describe('Dependencies', () => {
       await authenticatedPage.goto('/queue')
       await expect(authenticatedPage.locator('#root')).toBeVisible()
 
-      // Mobile dependency button should be visible at 375px
-      const mobileButton = authenticatedPage.getByTestId('mobile-dependency-action').first()
-      await expect(mobileButton).toBeVisible()
-
-      // Click mobile dependency button
-      await mobileButton.click()
+      // Dependencies are reached through the shared thread action menu
+      // ("Manage dependencies"), which is available at the 375px mobile viewport.
+      const threadCard = authenticatedPage
+        .locator('#queue-container .glass-card')
+        .filter({ hasText: 'Mobile Dep Test' })
+        .first()
+      await clickThreadAction(threadCard, 'Manage dependencies')
 
       // Modal should be open
       const modal = authenticatedPage.getByRole('dialog')
       await expect(modal).toBeVisible()
+      // The dependency workflow should be fully usable at the narrow viewport.
+      await expect(authenticatedPage.locator('#search-prereq-thread')).toBeVisible()
 
       // Modal should not have horizontal overflow
       const modalBox = modal.locator('> div').first()
@@ -547,9 +550,12 @@ test.describe('Dependencies', () => {
       const fab = authenticatedPage.getByRole('button', { name: 'Add Thread' })
       await expect(fab).toBeVisible()
 
-      // Open dependency modal
-      const mobileButton = authenticatedPage.getByTestId('mobile-dependency-action').first()
-      await mobileButton.click()
+      // Open the dependency modal via the shared thread action menu.
+      const threadCard = authenticatedPage
+        .locator('#queue-container .glass-card')
+        .filter({ hasText: 'FAB Test Thread' })
+        .first()
+      await clickThreadAction(threadCard, 'Manage dependencies')
 
       // Modal should be open
       await expect(authenticatedPage.getByRole('dialog')).toBeVisible()
