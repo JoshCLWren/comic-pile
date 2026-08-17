@@ -44,7 +44,7 @@ bench_one() {
   local name="$1"
   local path="$2"
 
-  curl --silent --show-error --output /dev/null \
+  curl --silent --show-error --fail --output /dev/null \
     -H "Authorization: Bearer $ACCESS_TOKEN" \
     -w "$name status=%{http_code} total=%{time_total}s\n" \
     "$BASE$path"
@@ -75,7 +75,7 @@ bench_one "releases       " "/api/v1/releases/"
 echo
 echo "=== roll/bootstrap sequential, 20 requests ==="
 for _ in $(seq 1 20); do
-  curl --silent --show-error --output /dev/null \
+  curl --silent --show-error --fail --output /dev/null \
     -H "Authorization: Bearer $ACCESS_TOKEN" \
     -w '%{time_total}\n' \
     "$BASE/api/v1/roll/bootstrap"
@@ -86,7 +86,7 @@ echo
 echo "=== roll/bootstrap concurrency 5, 30 requests ==="
 export ACCESS_TOKEN BASE
 seq 1 30 | xargs -P 5 -I{} bash -c '
-  curl --silent --show-error --output /dev/null \
+  curl --silent --show-error --fail --output /dev/null \
     -H "Authorization: Bearer $ACCESS_TOKEN" \
     -w "%{time_total}\n" \
     "$BASE/api/v1/roll/bootstrap"
@@ -96,7 +96,7 @@ summarize /tmp/comicpile-bootstrap-c5.txt
 echo
 echo "=== roll/bootstrap concurrency 10, 30 requests ==="
 seq 1 30 | xargs -P 10 -I{} bash -c '
-  curl --silent --show-error --output /dev/null \
+  curl --silent --show-error --fail --output /dev/null \
     -H "Authorization: Bearer $ACCESS_TOKEN" \
     -w "%{time_total}\n" \
     "$BASE/api/v1/roll/bootstrap"
