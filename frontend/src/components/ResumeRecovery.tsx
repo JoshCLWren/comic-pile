@@ -61,7 +61,6 @@ export default function ResumeRecovery({
           setRecoveryState('idle')
           return
         } catch (error) {
-          console.error(`ComicPile resume validation failed (attempt ${attempt})`, error)
           if (attempt < MAX_RESUME_ATTEMPTS) {
             await delay(RESUME_RETRY_DELAY_MS)
           }
