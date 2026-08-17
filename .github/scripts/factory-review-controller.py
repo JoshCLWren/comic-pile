@@ -22,6 +22,8 @@ from factory_review_policy import (  # noqa: E402
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-3][0-9]|4[0-6])$")
+FIXED_WORKER_RE = re.compile(r"^(?:[6-9]|[1-3][0-9]|4[0-6])$")
+HEAD_RE = re.compile(r"^[0-9a-f]{40}$")
 STAGE_LABELS = {
     "factory:building",
     "factory:review",
@@ -30,7 +32,6 @@ STAGE_LABELS = {
     "factory:ready",
     "factory:blocked",
 }
-FIXED_WORKER_RE = re.compile(r"^(?:[6-9]|[1-3][0-9]|4[0-6])$")
 GH_TIMEOUT_SECONDS = 120
 
 
@@ -66,17 +67,6 @@ def gh_json(args: list[str], *, input_json: object | None = None) -> object | No
     return json.loads(output) if output.strip() else None
 
 
-def labels_of_pr(pr: dict[str, Any]) -> set[str]:
-    """Return normalized PR labels."""
-    labels: set[str] = set()
-    for label in pr.get("labels") or []:
-        if isinstance(label, dict) and label.get("name"):
-            labels.add(str(label["name"]))
-        elif isinstance(label, str):
-            labels.add(label)
-    return labels
-
-
 def pr_json(pr_number: int) -> dict[str, Any]:
     """Fetch authoritative current PR state."""
     return cast(
@@ -100,18 +90,28 @@ def target_json(number: int) -> dict[str, Any]:
     return cast(dict[str, Any], gh_json(["api", f"repos/{REPO}/issues/{number}"]))
 
 
+def labels_of(item: dict[str, Any]) -> set[str]:
+    """Return normalized label names from a GitHub payload."""
+    labels: set[str] = set()
+    for label in item.get("labels") or []:
+        if isinstance(label, dict) and label.get("name"):
+            labels.add(str(label["name"]))
+        elif isinstance(label, str):
+            labels.add(label)
+    return labels
+
+
 def replace_factory_labels(number: int, owner: str, stage: str) -> None:
-    """Atomically replace factory owner/stage labels on one issue-compatible target."""
-    target = target_json(number)
-    current = [str(label["name"]) for label in target.get("labels", [])]
-    labels = [
+    """Atomically replace factory owner/stage labels on one target."""
+    current = labels_of(target_json(number))
+    labels = {
         label
         for label in current
         if not OWNER_RE.fullmatch(label)
         and label not in STAGE_LABELS
         and label != "factory"
-    ]
-    labels.extend(["factory", owner, stage])
+    }
+    labels.update({"factory", owner, stage})
     run_gh(
         [
             "api",
@@ -121,7 +121,7 @@ def replace_factory_labels(number: int, owner: str, stage: str) -> None:
             "--input",
             "-",
         ],
-        input_json={"labels": sorted(set(labels))},
+        input_json={"labels": sorted(labels)},
     )
 
 
@@ -145,7 +145,7 @@ def flatten_pages(value: object | None) -> list[dict[str, Any]]:
 
 
 def review_comment_bodies(pr_number: int) -> list[str]:
-    """Return comment bodies that can contain controller semantic attestations."""
+    """Return action-authored comments that may contain review attestations."""
     pages = gh_json(
         [
             "api",
@@ -181,7 +181,7 @@ def post_review_comment(
     reviewer: str,
     verdict: str,
     excerpt: str,
-    note: str = "",
+    note: str,
 ) -> None:
     """Persist semantic findings and controller audit metadata."""
     parts: list[str] = []
@@ -250,34 +250,25 @@ def current_head_review_blockers(pr_number: int, head: str) -> bool:
 def mechanical_merge_gates_pass(pr_number: int, expected_head: str) -> bool:
     """Re-check exact-head mechanical gates without trusting model output."""
     info = pr_json(pr_number)
-    if str(info.get("state")) != "OPEN":
-        return False
-    if bool(info.get("isDraft")):
+    if str(info.get("state")) != "OPEN" or bool(info.get("isDraft")):
         return False
     if str(info.get("mergeable")) != "MERGEABLE":
         return False
     head = str(info.get("headRefOid") or "")
-    if not head or head != expected_head:
+    if head != expected_head:
         return False
     checks = run_gh(
         ["pr", "checks", str(pr_number), "--repo", REPO, "--required"],
         check=False,
     )
-    if checks.returncode:
-        return False
-    return current_head_review_blockers(pr_number, head)
+    return checks.returncode == 0 and current_head_review_blockers(pr_number, head)
 
 
 def target_owned_by_worker(number: int, worker: str) -> bool:
-    """Return whether the target is currently leased to exactly this worker."""
-    labels = {
-        str(label["name"])
-        for label in target_json(number).get("labels", [])
-        if isinstance(label, dict) and label.get("name")
-    }
+    """Return whether exactly this fixed worker currently owns a target."""
     active = {
         label
-        for label in labels
+        for label in labels_of(target_json(number))
         if OWNER_RE.fullmatch(label) and label != "factory:unowned"
     }
     return active == {f"factory:{worker}"}
@@ -291,7 +282,7 @@ def transition_pr_and_linked_issue(
     pr_stage: str,
     issue_stage: str | None = None,
 ) -> None:
-    """Release a reviewed PR and its linked issue to controller-owned lifecycle state."""
+    """Release a reviewed PR and its linked issue to controller-owned state."""
     replace_factory_labels(pr_number, "factory:unowned", pr_stage)
     issue = linked_issue_from_branch(branch)
     if issue is None:
@@ -300,22 +291,51 @@ def transition_pr_and_linked_issue(
         state = target_json(issue)
     except RuntimeError:
         return
-    if state.get("state") != "open":
-        return
-    if not target_owned_by_worker(issue, worker):
+    if state.get("state") != "open" or not target_owned_by_worker(issue, worker):
         return
     replace_factory_labels(issue, "factory:unowned", issue_stage or pr_stage)
 
 
 def validate_review_lease(pr_number: int, worker: str, pr: dict[str, Any]) -> None:
-    """Reject review state changes that are not backed by the current lease."""
+    """Reject review state changes not backed by the current worker lease."""
     if str(pr.get("state")) != "OPEN":
         raise RuntimeError(f"PR #{pr_number} is not open")
-    labels = labels_of_pr(pr)
+    labels = labels_of(pr)
     if "factory:review" not in labels:
         raise RuntimeError(f"PR #{pr_number} is not in factory:review")
     if f"factory:{worker}" not in labels or not target_owned_by_worker(pr_number, worker):
         raise RuntimeError(f"PR #{pr_number} is not exclusively leased to Factory {worker}")
+
+
+def return_to_review(
+    *,
+    pr_number: int,
+    branch: str,
+    worker: str,
+    reviewer: str,
+    verdict: str,
+    excerpt: str,
+    note: str,
+    status: str,
+    head: str,
+    producer: str | None,
+) -> dict[str, Any]:
+    """Record a non-authoritative result and safely release its lease."""
+    post_review_comment(
+        pr_number=pr_number,
+        marker=None,
+        reviewer=reviewer,
+        verdict=verdict,
+        excerpt=excerpt,
+        note=note,
+    )
+    transition_pr_and_linked_issue(
+        pr_number=pr_number,
+        branch=branch,
+        worker=worker,
+        pr_stage="factory:review",
+    )
+    return {"status": status, "head": head, "producer": producer}
 
 
 def handle_review(
@@ -323,31 +343,69 @@ def handle_review(
     worker: str,
     pr_number: int,
     verdict: str,
+    reviewed_head: str,
     review_log: str | None,
 ) -> dict[str, Any]:
-    """Interpret semantic model output under controller-owned repository authority."""
+    """Interpret model review output under controller-owned repository authority."""
     if not FIXED_WORKER_RE.fullmatch(worker):
         raise RuntimeError(f"unsupported fixed-model reviewer: {worker}")
     if verdict not in {"approve", "repair", "reject"}:
         raise RuntimeError(f"unsupported semantic verdict: {verdict}")
+    if not HEAD_RE.fullmatch(reviewed_head):
+        raise RuntimeError("reviewed head must be a full lowercase Git SHA")
 
     pr = pr_json(pr_number)
     validate_review_lease(pr_number, worker, pr)
     branch = str(pr.get("headRefName") or "")
-    head = str(pr.get("headRefOid") or "")
-    if not re.fullmatch(r"[0-9a-f]{40}", head):
+    current_head = str(pr.get("headRefOid") or "")
+    if not HEAD_RE.fullmatch(current_head):
         raise RuntimeError(f"PR #{pr_number} has an invalid current head")
     producer = producer_worker_from_pr(branch=branch, body=str(pr.get("body") or ""))
     excerpt = review_excerpt(review_log)
 
-    if verdict == "repair":
-        marker = review_marker(
-            pr=pr_number,
-            head=head,
+    if current_head != reviewed_head:
+        return return_to_review(
+            pr_number=pr_number,
+            branch=branch,
+            worker=worker,
             reviewer=worker,
-            producer=producer,
             verdict=verdict,
+            excerpt=excerpt,
+            note=(
+                f"Verdict ignored because the reviewed checkout {reviewed_head} no longer "
+                f"matches current head {current_head}. The new head requires fresh review."
+            ),
+            status="stale-head",
+            head=current_head,
+            producer=producer,
         )
+
+    if producer is not None and producer == worker and verdict in {"approve", "reject"}:
+        return return_to_review(
+            pr_number=pr_number,
+            branch=branch,
+            worker=worker,
+            reviewer=worker,
+            verdict=verdict,
+            excerpt=excerpt,
+            note=(
+                "Verdict ignored because the reviewer is the producing factory. "
+                "A different factory must independently review this exact head."
+            ),
+            status="self-review-blocked",
+            head=reviewed_head,
+            producer=producer,
+        )
+
+    marker = review_marker(
+        pr=pr_number,
+        head=reviewed_head,
+        reviewer=worker,
+        producer=producer,
+        verdict=verdict,
+    )
+
+    if verdict == "repair":
         post_review_comment(
             pr_number=pr_number,
             marker=marker,
@@ -362,16 +420,9 @@ def handle_review(
             worker=worker,
             pr_stage="factory:changes-requested",
         )
-        return {"status": "repair", "head": head, "producer": producer}
+        return {"status": "repair", "head": reviewed_head, "producer": producer}
 
     if verdict == "reject":
-        marker = review_marker(
-            pr=pr_number,
-            head=head,
-            reviewer=worker,
-            producer=producer,
-            verdict=verdict,
-        )
         post_review_comment(
             pr_number=pr_number,
             marker=marker,
@@ -379,7 +430,7 @@ def handle_review(
             verdict=verdict,
             excerpt=excerpt,
             note=(
-                "The reviewer classified this factory PR as unsalvageable. "
+                "The independent reviewer classified this factory PR as unsalvageable. "
                 "The linked issue remains available for a clean implementation."
             ),
         )
@@ -391,43 +442,12 @@ def handle_review(
             issue_stage="factory:building",
         )
         run_gh(["pr", "close", str(pr_number), "--repo", REPO])
-        return {"status": "rejected", "head": head, "producer": producer}
-
-    if producer is not None and producer == worker:
-        post_review_comment(
-            pr_number=pr_number,
-            marker=None,
-            reviewer=worker,
-            verdict=verdict,
-            excerpt=excerpt,
-            note=(
-                "Approval was ignored because the reviewer is the producing factory. "
-                "A different factory must review this exact head."
-            ),
-        )
-        transition_pr_and_linked_issue(
-            pr_number=pr_number,
-            branch=branch,
-            worker=worker,
-            pr_stage="factory:review",
-        )
-        return {
-            "status": "self-review-blocked",
-            "head": head,
-            "producer": producer,
-        }
+        return {"status": "rejected", "head": reviewed_head, "producer": producer}
 
     prior_approvers = current_head_approvers(
         review_comment_bodies(pr_number),
         pr=pr_number,
-        head=head,
-    )
-    marker = review_marker(
-        pr=pr_number,
-        head=head,
-        reviewer=worker,
-        producer=producer,
-        verdict=verdict,
+        head=reviewed_head,
     )
     post_review_comment(
         pr_number=pr_number,
@@ -435,17 +455,17 @@ def handle_review(
         reviewer=worker,
         verdict=verdict,
         excerpt=excerpt,
-        note="Semantic approval is scoped to this exact PR head.",
+        note="Semantic approval is scoped to this exact reviewed PR head.",
     )
 
-    mechanical = mechanical_merge_gates_pass(pr_number, head)
-    current = pr_json(pr_number)
-    current_head = str(current.get("headRefOid") or "")
+    mechanical = mechanical_merge_gates_pass(pr_number, reviewed_head)
+    latest = pr_json(pr_number)
+    latest_head = str(latest.get("headRefOid") or "")
     authorized = approval_can_promote(
         producer=producer,
         reviewer=worker,
-        reviewed_head=head,
-        current_head=current_head,
+        reviewed_head=reviewed_head,
+        current_head=latest_head,
         verdict=verdict,
         mechanical_gates_passed=mechanical,
         prior_approvers=prior_approvers,
@@ -454,29 +474,23 @@ def handle_review(
         note = (
             "Historical producer provenance is unavailable, so one additional "
             "distinct factory approval is required for this exact head."
-            if producer is None and mechanical
+            if producer is None and mechanical and latest_head == reviewed_head
             else "Approval did not satisfy all controller-side exact-head and mechanical gates."
         )
-        post_review_comment(
+        result = return_to_review(
             pr_number=pr_number,
-            marker=None,
+            branch=branch,
+            worker=worker,
             reviewer=worker,
             verdict=verdict,
             excerpt="",
             note=note,
+            status="approved-not-ready",
+            head=latest_head or reviewed_head,
+            producer=producer,
         )
-        transition_pr_and_linked_issue(
-            pr_number=pr_number,
-            branch=branch,
-            worker=worker,
-            pr_stage="factory:review",
-        )
-        return {
-            "status": "approved-not-ready",
-            "head": head,
-            "producer": producer,
-            "mechanical": mechanical,
-        }
+        result["mechanical"] = mechanical
+        return result
 
     transition_pr_and_linked_issue(
         pr_number=pr_number,
@@ -486,18 +500,17 @@ def handle_review(
     )
     return {
         "status": "ready",
-        "head": head,
+        "head": reviewed_head,
         "producer": producer,
         "mechanical": True,
     }
 
 
 def authorize_ready(pr_number: int) -> dict[str, Any]:
-    """Validate that a ready PR still has semantic authorization for its current head."""
+    """Validate that a ready PR still has authorization for its current head."""
     pr = pr_json(pr_number)
     branch = str(pr.get("headRefName") or "")
     head = str(pr.get("headRefOid") or "")
-    labels = labels_of_pr(pr)
     producer = producer_worker_from_pr(branch=branch, body=str(pr.get("body") or ""))
     approvers = current_head_approvers(
         review_comment_bodies(pr_number),
@@ -506,7 +519,8 @@ def authorize_ready(pr_number: int) -> dict[str, Any]:
     )
     authorized = (
         str(pr.get("state")) == "OPEN"
-        and "factory:ready" in labels
+        and "factory:ready" in labels_of(pr)
+        and HEAD_RE.fullmatch(head) is not None
         and head_has_authorized_approval(producer=producer, approvers=approvers)
     )
     if authorized:
@@ -517,7 +531,7 @@ def authorize_ready(pr_number: int) -> dict[str, Any]:
             "approvers": sorted(approvers),
         }
 
-    if str(pr.get("state")) == "OPEN" and "factory:ready" in labels:
+    if str(pr.get("state")) == "OPEN" and "factory:ready" in labels_of(pr):
         replace_factory_labels(pr_number, "factory:unowned", "factory:review")
         issue = linked_issue_from_branch(branch)
         if issue is not None:
@@ -525,14 +539,12 @@ def authorize_ready(pr_number: int) -> dict[str, Any]:
                 issue_target = target_json(issue)
             except RuntimeError:
                 issue_target = None
-            if issue_target and issue_target.get("state") == "open":
-                issue_labels = {
-                    str(label["name"])
-                    for label in issue_target.get("labels", [])
-                    if isinstance(label, dict) and label.get("name")
-                }
-                if "factory:ready" in issue_labels:
-                    replace_factory_labels(issue, "factory:unowned", "factory:review")
+            if (
+                issue_target
+                and issue_target.get("state") == "open"
+                and "factory:ready" in labels_of(issue_target)
+            ):
+                replace_factory_labels(issue, "factory:unowned", "factory:review")
 
     return {
         "authorized": False,
@@ -550,6 +562,7 @@ def main() -> int:
     review = subparsers.add_parser("review")
     review.add_argument("--worker", required=True)
     review.add_argument("--pr", type=int, required=True)
+    review.add_argument("--reviewed-head", required=True)
     review.add_argument(
         "--verdict",
         choices=("approve", "repair", "reject"),
@@ -566,6 +579,7 @@ def main() -> int:
             worker=args.worker,
             pr_number=args.pr,
             verdict=args.verdict,
+            reviewed_head=args.reviewed_head,
             review_log=args.review_log,
         )
     else:
