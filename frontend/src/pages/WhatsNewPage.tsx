@@ -22,6 +22,8 @@ function releasedAtTimestamp(release: Release) {
 export function releaseDisplayText(text: string) {
   return text
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '$1')
+    .replace(/https?:\/\/github\.com\/[^\s)}\u2019"]+/g, '')
+    .replace(/\s{2,}/g, ' ')
     .replace(/`([^`]+)`/g, '$1')
     .trim()
 }
