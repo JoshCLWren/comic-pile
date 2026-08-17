@@ -31,6 +31,8 @@ from app.schemas.roll import (
     RollBootstrapThread,
     RollRequest,
     RollResponse,
+    SetCurrentIssueRequest,
+    SetCurrentIssueResponse,
 )
 from app.schemas.session import (
     ActiveThreadInfo,
@@ -91,6 +93,8 @@ __all__ = [
     "OverrideRequest",
     "RollBootstrapThread",
     "RollBootstrapResponse",
+    "SetCurrentIssueRequest",
+    "SetCurrentIssueResponse",
     # Rate
     "RateRequest",
     # Session
