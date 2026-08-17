@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -70,11 +71,12 @@ def _fake_checks_gh(
     """Create a gh stand-in for required-check normalization tests."""
     fake = tmp_path / "gh-checks-real"
     protected_json = "true" if protected else "false"
+    checks_shell = shlex.quote(checks_message)
     fake.write_text(
         f"""#!/usr/bin/env bash
 set -Eeuo pipefail
 if [[ "$1" == pr && "$2" == checks ]]; then
-  printf '%s\\n' {checks_message!r} >&2
+  printf '%s\\n' {checks_shell} >&2
   exit {checks_status}
 fi
 if [[ "$1" == api && "$2" == repos/JoshCLWren/comic-pile/pulls/1390 ]]; then
@@ -255,7 +257,7 @@ def test_successful_required_checks_pass_through(tmp_path: Path) -> None:
 def test_dispatcher_and_worker_install_rest_shim() -> None:
     """Both control-plane assignment and lease consumption use the REST shim."""
     dispatcher = (
-        REPO_ROOT / ".github/workflows/free-model-factory-dispatch.yml"
+        REPO_ROOT / ".github/workflows/fixed-model-factory-dispatch.yml"
     ).read_text(encoding="utf-8")
     worker = (
         REPO_ROOT / ".github/scripts/free-model-factory-worker.sh"
