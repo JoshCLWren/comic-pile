@@ -96,7 +96,7 @@ run_agent() {
 
   if [[ "$mode" == 'pr' ]]; then
     target="pull request #${number}"
-    mission="Resume this PR. Inspect the exact current head, required CI, review submissions, and every inline review thread. Fix closure-critical defects and resolve or concretely rebut actionable threads. If no edits are required, decide whether the PR fully completes its declared scope and is safe to merge. End your final response with FACTORY_GATE_READY only when no semantic blocker remains; otherwise end with FACTORY_GATE_NOT_READY."
+    mission="Resume this PR. Inspect the exact current head, required CI, review submissions, and every inline review thread. Fix closure-critical defects and resolve or concretely rebut actionable threads. If no edits are required, decide whether the PR fully completes its declared scope and is safe to merge. End your final response with FACTORY_GATE_READY only for semantic approval, FACTORY_GATE_REJECT only when the PR is clearly unsalvageable, contaminated, obsolete, duplicate, or fundamentally incomplete, otherwise end with FACTORY_GATE_NOT_READY."
   else
     target="issue #${number}"
     mission="Implement the full closure-critical acceptance contract for this issue with code and focused tests. Do not stop at planning or optional polish."
@@ -280,20 +280,40 @@ if persist_pr_changes "$NUMBER" "$BRANCH"; then
   exit 0
 fi
 
-current="$(git rev-parse HEAD)"
-if [[ "$SOURCE" != 'kilo-auto' ]] && \
-  grep -q 'FACTORY_GATE_READY' "/tmp/opencode-factory-${WORKER}.log" && \
-  machine_merge_gates_pass "$NUMBER" "$current"; then
-  log "all exact-head gates passed for PR #${NUMBER}; handing it to the merge controller"
-  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:ready' 'exact-head-ready-handoff'
+if (( transient_failure == 1 )); then
+  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'transient-model-interruption'
   log "assignment complete; remaining budget $(remaining)s"
   exit 0
 fi
 
-if (( transient_failure == 1 )); then
-  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'transient-model-interruption'
-else
-  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'not-ready-handoff'
+if (( agent_status != 0 )); then
+  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'review-agent-failed'
+  log "assignment complete; remaining budget $(remaining)s"
+  exit 0
 fi
+
+review_log="/tmp/opencode-factory-${WORKER}.log"
+verdict=''
+if grep -Eq '^FACTORY_GATE_READY[[:space:]]*$' "$review_log"; then
+  verdict='approve'
+elif grep -Eq '^FACTORY_GATE_REJECT[[:space:]]*$' "$review_log"; then
+  verdict='reject'
+elif grep -Eq '^FACTORY_GATE_NOT_READY[[:space:]]*$' "$review_log"; then
+  verdict='repair'
+fi
+
+if [[ -z "$verdict" ]]; then
+  log "review model did not emit a recognized terminal verdict for PR #${NUMBER}; leaving it in review"
+  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'missing-semantic-verdict'
+  log "assignment complete; remaining budget $(remaining)s"
+  exit 0
+fi
+
+log "submitting ${verdict} semantic verdict for PR #${NUMBER} to the trusted review controller"
+python3 .github/scripts/factory-review-controller.py review \
+  --worker "$WORKER" \
+  --pr "$NUMBER" \
+  --verdict "$verdict" \
+  --review-log "$review_log"
 
 log "assignment complete; remaining budget $(remaining)s"
