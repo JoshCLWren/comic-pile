@@ -35,7 +35,7 @@ def run_gh(args: list[str], *, input_json: object | None = None, check: bool = T
 
 
 def gh_json(args: list[str], *, input_json: object | None = None) -> object | None:
-    """Run GitHub CLI and decode its JSON output."""
+    """Run GitHub CLI and decode JSON stdout."""
     output = run_gh(args, input_json=input_json)
     return json.loads(output) if output.strip() else None
 
@@ -46,8 +46,8 @@ def list_issues() -> list[dict[str, Any]]:
 
 
 def list_prs() -> list[dict[str, Any]]:
-    """List open pull requests visible to the assignment controller."""
-    return cast(list[dict[str, Any]], gh_json(['pr', 'list', '--repo', REPO, '--state', 'open', '--limit', '500', '--json', 'number,title,body,labels,headRefName,createdAt,updatedAt,isDraft']))
+    """List open pull requests including current mergeability."""
+    return cast(list[dict[str, Any]], gh_json(['pr', 'list', '--repo', REPO, '--state', 'open', '--limit', '500', '--json', 'number,title,body,labels,headRefName,createdAt,updatedAt,isDraft,mergeable,mergeStateStatus']))
 
 
 def target_json(number: int) -> dict[str, Any]:
@@ -103,6 +103,8 @@ def candidate_is_live_executable(candidate: Candidate) -> bool:
         return not issue_has_open_blocker(candidate.number)
     target = target_json(candidate.number)
     labels = {label['name'] for label in target.get('labels', [])}
+    if candidate.conflicted:
+        return True
     if 'factory:ci' in labels:
         return required_checks_failed(candidate.number)
     return True
@@ -147,7 +149,12 @@ def assign_candidate(candidate: Candidate, worker: str) -> bool:
     claimed: list[int] = []
     try:
         for number in numbers:
-            stage = 'factory:building' if candidate.kind == 'issue' else None
+            if candidate.kind == 'issue':
+                stage = 'factory:building'
+            elif candidate.conflicted:
+                stage = 'factory:changes-requested'
+            else:
+                stage = None
             replace_factory_labels(number, owner, stage)
             if not target_owned_by(number, owner):
                 release_verified_claims(claimed)
@@ -268,7 +275,8 @@ def assign(worker: str) -> Candidate | None:
         if not candidate_is_live_executable(candidate):
             continue
         if assign_candidate(candidate, worker):
-            print(f'[factory-controller] assigned {candidate.kind} #{candidate.number} lane={candidate.lane} priority={candidate.priority} to Factory {worker}', file=sys.stderr)
+            reason = ' conflict-repair' if candidate.conflicted else ''
+            print(f'[factory-controller] assigned {candidate.kind} #{candidate.number} lane={candidate.lane} priority={candidate.priority}{reason} to Factory {worker}', file=sys.stderr)
             return candidate
     return None
 
@@ -303,7 +311,7 @@ def main() -> int:
         if candidate is None:
             print(json.dumps({'kind': 'none'}))
             return 0
-        print(json.dumps({'kind': candidate.kind, 'number': candidate.number, 'lane': candidate.lane, 'priority': candidate.priority, 'linked_issue': candidate.linked_issue}))
+        print(json.dumps({'kind': candidate.kind, 'number': candidate.number, 'lane': candidate.lane, 'priority': candidate.priority, 'linked_issue': candidate.linked_issue, 'conflicted': candidate.conflicted}))
         return 0
     print(json.dumps({'released': release_worker(args.worker)}))
     return 0

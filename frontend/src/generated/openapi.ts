@@ -1699,6 +1699,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/continuity-plans/{plan_id}/reading-orders/project": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Plan Projection
+         * @description Apply a projection atomically after a successful preview.
+         *
+         *     The confirm endpoint re-computes the projection and rejects the request
+         *     if any conflict is detected. A failed or cancelled projection leaves
+         *     both the plan and the reading order unchanged because all mutations are
+         *     performed in a single transaction that rolls back on any error.
+         */
+        post: operations["confirm_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Plan Projection
+         * @description Preview a deterministic projection without mutating any resource.
+         *
+         *     The preview is recomputed from the persisted plan JSON on every call so
+         *     that callers always see the current state, even after concurrent edits.
+         *     Duplicate thread references, missing owned threads, and non-thread
+         *     nodes are reported as conflicts before any mutation is permitted.
+         */
+        post: operations["preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/continuity-rules/": {
         parameters: {
             query?: never;
@@ -2450,6 +2500,26 @@ export interface paths {
         get: operations["get_release_api_v1_releases__release_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/releases/{release_id}/retract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retract Release
+         * @description Retract a release so it leaves the public What's New list.
+         */
+        post: operations["retract_release_api_v1_releases__release_id__retract_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4008,6 +4078,66 @@ export interface components {
              * @enum {string}
              */
             source_type: "issue" | "crossover";
+        };
+        /**
+         * ContinuityChainDiagnostic
+         * @description One structured traversal failure that does not require text parsing.
+         */
+        ContinuityChainDiagnostic: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "cycle_detected" | "depth_limit_exceeded" | "node_limit_exceeded";
+            /** Limit */
+            limit?: number | null;
+            /** Node Id */
+            node_id: number;
+            /**
+             * Node Type
+             * @enum {string}
+             */
+            node_type: "issue" | "crossover";
+        };
+        /**
+         * ContinuityChainNode
+         * @description One structured node along a prerequisite chain.
+         */
+        ContinuityChainNode: {
+            /** Is Readable */
+            is_readable: boolean;
+            /** Label */
+            label: string;
+            /** Node Id */
+            node_id: number;
+            /**
+             * Node Type
+             * @enum {string}
+             */
+            node_type: "issue" | "crossover";
+        };
+        /**
+         * ContinuityChainResponse
+         * @description Bounded transitive prerequisite chains for one requested node.
+         */
+        ContinuityChainResponse: {
+            /** Chains */
+            chains?: components["schemas"]["ContinuityChainNode"][][];
+            /** Diagnostics */
+            diagnostics?: components["schemas"]["ContinuityChainDiagnostic"][];
+            /** Direct Blockers */
+            direct_blockers?: components["schemas"]["ContinuityBlocker"][];
+            /** Evaluated Issue Id */
+            evaluated_issue_id?: number | null;
+            /** Node Id */
+            node_id: number;
+            /**
+             * Node Type
+             * @enum {string}
+             */
+            node_type: "issue" | "thread" | "crossover";
+            /** Readable Prerequisites */
+            readable_prerequisites?: components["schemas"]["ContinuityChainNode"][];
         };
         /**
          * ContinuityPlanChainNode
@@ -7662,6 +7792,76 @@ export interface operations {
             };
         };
     };
+    confirm_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingOrderProjectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingOrderProjectionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingOrderProjectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingOrderProjectionPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_continuity_rules_api_v1_continuity_rules__get: {
         parameters: {
             query?: never;
@@ -8874,6 +9074,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicReleaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retract_release_api_v1_releases__release_id__retract_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-release-writer-token"?: string | null;
+            };
+            path: {
+                release_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseResponse"];
                 };
             };
             /** @description Validation Error */

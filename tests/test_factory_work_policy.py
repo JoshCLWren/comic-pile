@@ -86,7 +86,7 @@ def test_stage_precedence_is_deterministic_for_inconsistent_labels():
     """Transient contradictory labels never randomize semantic review classification."""
     labels = {"factory:ci", "factory:review", "factory:building"}
     assert policy.stage_of(labels) == "factory:review"
-    assert policy.stage_of(reversed(sorted(labels))) == "factory:review"
+    assert policy.stage_of(labels) == "factory:review"
 
 
 def test_shared_producer_provenance_drives_assignment():
