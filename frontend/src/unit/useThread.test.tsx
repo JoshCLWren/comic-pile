@@ -1,6 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import axios from 'axios'
-import { CacheProvider } from '../contexts/CacheContext'
 import type { Thread } from '../types'
 import { beforeEach, expect, it, vi } from 'vitest'
 import {
@@ -9,7 +8,6 @@ import {
   useReactivateThread,
   useStaleThreads,
   useThread,
-  useThreads,
   useUpdateThread,
 } from '../hooks/useThread'
 import { threadsApi } from '../services/api'
@@ -36,19 +34,6 @@ beforeEach(() => {
   mockedThreadsApi.update.mockResolvedValue({} as never)
   mockedThreadsApi.delete.mockResolvedValue(undefined as never)
   mockedThreadsApi.reactivate.mockResolvedValue({} as never)
-})
-
-it('loads threads data', async () => {
-  const { result } = renderHook(() => useThreads(), { wrapper: CacheProvider })
-
-  await waitFor(() => expect(result.current.data).toEqual([{ id: 1 }]))
-  expect(mockedThreadsApi.list).toHaveBeenCalled()
-})
-
-it('supports the string search signature without a cache provider', async () => {
-  const { result } = renderHook(() => useThreads(' saga '))
-  await waitFor(() => expect(result.current.data).toEqual([{ id: 1 }]))
-  expect(mockedThreadsApi.list).toHaveBeenCalledWith({ search: 'saga', page_size: 200 }, undefined)
 })
 
 it('loads thread details and stale list', async () => {
@@ -92,17 +77,7 @@ it('creates, updates, deletes, and reactivates threads', async () => {
   expect(mockedThreadsApi.reactivate).toHaveBeenCalledWith({ thread_id: 7, issues_to_add: 3 })
 })
 
-it('supports search pagination, explicit refetch, empty ids, and failures', async () => {
-  mockedThreadsApi.list
-    .mockResolvedValueOnce({ threads: [{ id: 1 }], next_page_token: 'next' } as never)
-    .mockResolvedValueOnce({ threads: [{ id: 2 }], next_page_token: null } as never)
-  const { result } = renderHook(() => useThreads({ searchTerm: '  saga ' }), { wrapper: CacheProvider })
-  await waitFor(() => expect(result.current.data).toHaveLength(2))
-  expect(mockedThreadsApi.list).toHaveBeenCalledWith({ search: 'saga', page_size: 200 }, 'next')
-  mockedThreadsApi.list.mockResolvedValueOnce({ threads: [{ id: 9 }], next_page_token: 'later' } as never)
-  await act(async () => result.current.refetch('page'))
-  expect(result.current.nextPageToken).toBe('later')
-
+it('handles empty ids, detail failures, and stale failures', async () => {
   const empty = renderHook(() => useThread(null))
   expect(empty.result.current.isPending).toBe(false)
   mockedThreadsApi.get.mockRejectedValueOnce(new Error('missing'))
@@ -113,24 +88,6 @@ it('supports search pagination, explicit refetch, empty ids, and failures', asyn
   await waitFor(() => expect(stale.result.current.isError).toBe(true))
   mockedThreadsApi.listStale.mockResolvedValueOnce([] as never)
   await act(async () => stale.result.current.refetch())
-})
-
-it('reports and rethrows thread-list refetch failures', async () => {
-  const { result } = renderHook(() => useThreads(), { wrapper: CacheProvider })
-  await waitFor(() => expect(result.current.data).toEqual([{ id: 1 }]))
-
-  mockedThreadsApi.list.mockRejectedValueOnce(new Error('refetch failed'))
-  let refetchError: unknown
-  await act(async () => {
-    try {
-      await result.current.refetch()
-    } catch (error) {
-      refetchError = error
-    }
-  })
-  expect(refetchError).toBeInstanceOf(Error)
-  expect((refetchError as Error).message).toBe('refetch failed')
-  expect(result.current.isError).toBe(true)
 })
 
 it('marks all thread mutations as errors and resets pending state', async () => {
@@ -244,17 +201,4 @@ it('ignores late stale-thread results after unmount', async () => {
   const pending = renderHook(() => useStaleThreads(14))
   pending.unmount()
   await act(async () => resolveStale([{ id: 14 }] as never))
-})
-
-it('ignores late paginated thread results after unmount and supports blank options', async () => {
-  let resolveThreads!: (value: never) => void
-  mockedThreadsApi.list.mockImplementationOnce(() => new Promise((resolve) => { resolveThreads = resolve }))
-  const pending = renderHook(() => useThreads({ searchTerm: '   ' }))
-  pending.unmount()
-  await act(async () => resolveThreads({ threads: [], next_page_token: null } as never))
-
-  mockedThreadsApi.list.mockResolvedValueOnce({ threads: [], next_page_token: null } as never)
-  const blank = renderHook(() => useThreads(''))
-  await waitFor(() => expect(blank.result.current.data).toEqual([]))
-  expect(mockedThreadsApi.list).toHaveBeenLastCalledWith({ page_size: 200 }, undefined)
 })

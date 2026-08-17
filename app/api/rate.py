@@ -492,14 +492,5 @@ async def rate_thread(
 
     await invalidate_user_view(user_id)
 
-    result = await db.execute(
-        select(Thread).where(Thread.id == thread_id).where(Thread.user_id == user_id)
-    )
-    updated_thread = result.scalar_one_or_none()
-    if not updated_thread:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Thread {thread_id} not found",
-        )
-
-    return await thread_to_response(updated_thread, db)
+    await db.refresh(thread)
+    return await thread_to_response(thread, db)

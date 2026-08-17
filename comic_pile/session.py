@@ -9,7 +9,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_session_settings
-from app.models import Event, Issue, Session, Snapshot, Thread
+from app.models import Event, Issue, Session, Snapshot, Thread, User
 from app.performance_diagnostics import get_request_diagnostics
 from app.services.snapshot_contract import USES_ISSUE_TRACKING_KEY
 
@@ -264,10 +264,23 @@ async def create_session_start_snapshot(db: AsyncSession, session: Session) -> N
     await db.refresh(session)
 
 
-async def get_or_create(db: AsyncSession, user_id: int) -> Session:
-    """Get the authoritative active session or create one race-safely."""
-    from app.models import User
+async def get_or_create(
+    db: AsyncSession,
+    user_id: int,
+    *,
+    existing_user: User | None = None,
+) -> Session:
+    """Get the authoritative active session or create one race-safely.
 
+    Args:
+        db: Async database session used for current-session resolution.
+        user_id: User whose authoritative reading session should be resolved.
+        existing_user: Already-loaded User owned by the same transaction. When
+            provided, the redundant user lookup is skipped.
+
+    Returns:
+        The authoritative current Session, creating one when none exists.
+    """
     max_retries = 3
     initial_delay = 0.1
     retries = 0
@@ -276,8 +289,10 @@ async def get_or_create(db: AsyncSession, user_id: int) -> Session:
         try:
             start_die = _start_die()
 
-            user_result = await db.execute(select(User).where(User.id == user_id))
-            user = user_result.scalar_one_or_none()
+            user = existing_user
+            if user is None:
+                user_result = await db.execute(select(User).where(User.id == user_id))
+                user = user_result.scalar_one_or_none()
             if not user:
                 user = User(id=user_id, username=f"user_{user_id}")
                 db.add(user)
@@ -378,3 +393,35 @@ async def get_current_die(session_id: int, db: AsyncSession) -> int:
         return last_die_event.die_after
 
     return session.start_die if session else start_die
+
+
+async def get_current_die_for_session(session: Session, db: AsyncSession) -> int:
+    """Get the current die using an already-loaded session object.
+
+    Callers that hold the authoritative session in the transaction avoid the
+    redundant session re-read performed by :func:`get_current_die`. Only the
+    latest die-changing event still needs a query.
+
+    Args:
+        session: Already-loaded authoritative session object.
+        db: Async database session used for the die-event lookup.
+
+    Returns:
+        The manual die, the latest die-changing event's die, or the session
+        start die.
+    """
+    if session.manual_die:
+        return session.manual_die
+
+    result = await db.execute(
+        select(Event)
+        .where(Event.session_id == session.id)
+        .where(Event.type.in_(("rate", "snooze", "undo")))
+        .where(Event.die_after.is_not(None))
+        .order_by(Event.timestamp.desc(), Event.id.desc())
+    )
+    last_die_event = result.scalars().first()
+    if last_die_event and last_die_event.die_after is not None:
+        return last_die_event.die_after
+
+    return session.start_die

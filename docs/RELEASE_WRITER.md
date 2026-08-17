@@ -21,4 +21,6 @@ Release publication is deliberately asynchronous. A release-writer failure recor
 
 Before retrying a source, the release writer checks `/api/v1/releases/source` with repository, PR number, and merge SHA. Existing matching records are left alone. A 409 source-identity conflict is treated as an error and is never silently overwritten.
 
+The release-writer agent gathers merged-PR context through `scripts/release_writer.py` read-only subcommands (`pr`, `files`, `issues`) rather than raw `gh api` calls, so the GitHub read surface stays inside the credential-holding helper and the agent stays structurally read-only.
+
 Public changes are validated by `scripts/release_writer.py` before being sent to the release API. Strictly internal changes are emitted as an explicit machine-readable `internal`/`skipped` classification in the workflow log instead of forcing a public What's New entry.

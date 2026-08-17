@@ -27,6 +27,7 @@ from app.api import (
     debug,
     dependency,
     issue,
+    metrics,
     queue,
     rate,
     reading_orders,
@@ -49,6 +50,7 @@ from app.database import get_db
 from app.exception_handlers import register_exception_handlers
 from app.lifecycle import init_database
 from app.middleware import limiter, SecurityHeadersMiddleware
+from app.middleware.performance import PerformanceMiddleware, compute_startup_duration
 from app.middleware.request_logging import add_request_logging_middleware
 from app.safe_logging import safe_connection_metadata
 
@@ -163,6 +165,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     )
 
     app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(PerformanceMiddleware)
 
     @app.middleware("http")
     async def csrf_middleware(request: Request, call_next):
@@ -191,6 +194,11 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
         return await call_next(request)
 
+    # Expose the metrics router in every environment so production performance
+    # tracking (issue #834) and future regression checks can read startup
+    # telemetry. It returns only process startup epoch and duration.
+    app.include_router(metrics.router, prefix="/api", tags=["metrics"])
+
     # Error-only request logging (body redaction + environment-aware sanitization).
     add_request_logging_middleware(app, app_settings.environment)
 
@@ -198,6 +206,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     register_exception_handlers(app, app_settings)
 
     # API route prefix convention:
+
     # - Legacy resources remain available under /api/* as compatibility aliases.
     # - Retained client resources migrate to the versioned /api/v1/* surface.
     # - Retained auth, session, snooze, undo, roll, and rating resources have
@@ -414,6 +423,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     async def startup_event():
         """Initialize database and cache on application startup."""
         await init_database(app_settings.environment)
+        await compute_startup_duration()
 
         redis_settings = get_redis_settings()
         if redis_settings.is_configured:

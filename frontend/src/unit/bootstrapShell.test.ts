@@ -17,15 +17,15 @@ describe('startBootstrapShellLifecycle', () => {
     document.body.innerHTML = ''
   })
 
-  it('keeps the static shell while authentication is unresolved', async () => {
+  it('removes the static shell once the React auth-loading state mounts with the app-shell-ready marker', async () => {
     const root = document.getElementById('root') as HTMLElement
     const shell = document.getElementById('bootstrap-shell') as HTMLElement
 
     startBootstrapShellLifecycle(root, shell)
-    root.innerHTML = '<div>Checking authentication...</div>'
+    root.innerHTML = '<div class="flex min-h-screen items-center justify-center text-center" data-app-shell-ready>Checking authentication...</div>'
     await Promise.resolve()
 
-    expect(document.getElementById('bootstrap-shell')).toBe(shell)
+    expect(document.getElementById('bootstrap-shell')).toBeNull()
   })
 
   it('changes to a reconnecting message when bootstrap times out', () => {
@@ -92,5 +92,31 @@ describe('startBootstrapShellLifecycle', () => {
     const root = document.getElementById('root') as HTMLElement
 
     expect(() => startBootstrapShellLifecycle(root, null).disconnect()).not.toThrow()
+  })
+
+  it('hides the footer navigation while resuming or logging in (issue #1245)', async () => {
+    const root = document.getElementById('root') as HTMLElement
+    const shell = document.getElementById('bootstrap-shell') as HTMLElement
+    shell.innerHTML = `
+      <main>
+        <p data-bootstrap-status data-state="loading">Opening your reading desk and checking your session…</p>
+      </main>
+      <nav class="bootstrap-shell__nav" aria-label="ComicPile navigation loading">
+        <span aria-hidden="true">🎲</span>
+        <span aria-hidden="true">📚</span>
+        <span aria-hidden="true">📜</span>
+        <span aria-hidden="true">🔀</span>
+      </nav>
+    `
+
+    startBootstrapShellLifecycle(root, shell)
+
+    expect(shell.querySelector('.bootstrap-shell__nav')).not.toBeNull()
+
+    root.innerHTML = '<div class="flex min-h-screen items-center justify-center text-center" data-app-shell-ready>Checking authentication...</div>'
+    await Promise.resolve()
+
+    expect(document.getElementById('bootstrap-shell')).toBeNull()
+    expect(document.querySelector('.bootstrap-shell__nav')).toBeNull()
   })
 })

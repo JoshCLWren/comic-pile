@@ -1,5 +1,7 @@
 """Session API endpoints."""
 
+from __future__ import annotations
+
 import asyncio
 from datetime import UTC, datetime
 from typing import Annotated
@@ -27,6 +29,7 @@ from app.schemas import (
 from app.schemas.session import SnoozedThreadInfo
 from app.services.ownership import get_owned_session_or_404
 from app.services.session_history_projection import project_session_history_events
+from app.services.thread_issue_stats import load_next_issue_numbers, load_unread_counts
 from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.session import get_current_die, get_or_create, is_active
 
@@ -81,54 +84,6 @@ async def _fetch_thread_issue_metadata(
     if next_issue:
         return next_issue.id, next_issue.issue_number
     return None, None
-
-
-async def _bulk_unread_counts(threads: list[Thread], db: AsyncSession) -> dict[int, int]:
-    """Bulk-load unread issue counts for migrated threads in one grouped query.
-
-    Unmigrated threads (``total_issues`` null) fall back to their stored
-    ``issues_remaining`` value and are omitted from the returned map.
-
-    Args:
-        threads: Threads that may appear as an active thread in the History page.
-        db: Database session.
-
-    Returns:
-        Mapping of migrated thread ID to its unread issue count.
-    """
-    migrated_ids = [t.id for t in threads if t.uses_issue_tracking()]
-    if not migrated_ids:
-        return {}
-
-    result = await db.execute(
-        select(Issue.thread_id, func.count())
-        .where(Issue.thread_id.in_(migrated_ids))
-        .where(Issue.status == "unread")
-        .group_by(Issue.thread_id)
-    )
-    return {row[0]: row[1] for row in result.all()}
-
-
-async def _bulk_next_issue_numbers(threads: list[Thread], db: AsyncSession) -> dict[int, str]:
-    """Bulk-load next-unread issue numbers in one query.
-
-    Args:
-        threads: Threads that may appear as an active thread in the History page.
-        db: Database session.
-
-    Returns:
-        Mapping of issue ID to issue number for every referenced next-unread issue.
-    """
-    issue_ids = {
-        t.next_unread_issue_id
-        for t in threads
-        if t.uses_issue_tracking() and t.next_unread_issue_id is not None
-    }
-    if not issue_ids:
-        return {}
-
-    result = await db.execute(select(Issue.id, Issue.issue_number).where(Issue.id.in_(issue_ids)))
-    return {row[0]: row[1] for row in result.all()}
 
 
 async def get_session_with_thread_safe(
@@ -580,8 +535,8 @@ async def list_sessions(
         threads_result = await db.execute(select(Thread).where(Thread.id.in_(thread_ids)))
         threads_by_id = {t.id: t for t in threads_result.scalars().all()}
         threads = list(threads_by_id.values())
-        unread_counts = await _bulk_unread_counts(threads, db)
-        issue_numbers = await _bulk_next_issue_numbers(threads, db)
+        unread_counts = await load_unread_counts(threads, db)
+        issue_numbers = await load_next_issue_numbers(threads, db)
 
         for sid in session_ids:
             roll_event = projection.latest_roll_by_session.get(sid)
@@ -896,6 +851,7 @@ async def restore_session_start(
                     .where(Thread.user_id == current_user.id)
                 )
 
+            threads_to_recount: list[Thread] = []
             for thread_id, state in snapshot.thread_states.items():
                 thread_id_int = int(thread_id)
                 thread = await db.get(Thread, thread_id_int)
@@ -918,12 +874,7 @@ async def restore_session_start(
                     if "issue_states" in state and state["issue_states"] is not None:
                         await db.execute(delete(Issue).where(Issue.thread_id == thread_id_int))
 
-                        existing_positions_result = await db.execute(
-                            select(Issue.position).where(Issue.thread_id == thread_id_int)
-                        )
-                        existing_positions = existing_positions_result.scalars().all()
-                        max_position = max(existing_positions) if existing_positions else 0
-
+                        max_position = 0
                         for issue_state in state["issue_states"]:
                             position = issue_state.get("position", max_position + 1)
                             if position > max_position:
@@ -943,7 +894,8 @@ async def restore_session_start(
                         thread.total_issues = state.get("total_issues")
                         thread.next_unread_issue_id = state.get("next_unread_issue_id")
                         thread.reading_progress = state.get("reading_progress")
-                        thread.issues_remaining = await thread.get_issues_remaining(db)
+                        if thread.uses_issue_tracking():
+                            threads_to_recount.append(thread)
                     else:
                         # Clear migrated state when restoring to legacy
                         await db.execute(delete(Issue).where(Issue.thread_id == thread_id_int))
@@ -976,12 +928,7 @@ async def restore_session_start(
                     db.add(new_thread)
 
                     if "issue_states" in state and state["issue_states"] is not None:
-                        existing_positions_result = await db.execute(
-                            select(Issue.position).where(Issue.thread_id == thread_id_int)
-                        )
-                        existing_positions = existing_positions_result.scalars().all()
-                        max_position = max(existing_positions) if existing_positions else 0
-
+                        max_position = 0
                         for issue_state in state["issue_states"]:
                             position = issue_state.get("position", max_position + 1)
                             if position > max_position:
@@ -1001,9 +948,16 @@ async def restore_session_start(
                         new_thread.total_issues = state.get("total_issues")
                         new_thread.next_unread_issue_id = state.get("next_unread_issue_id")
                         new_thread.reading_progress = state.get("reading_progress")
-                        new_thread.issues_remaining = await new_thread.get_issues_remaining(db)
+                        if new_thread.uses_issue_tracking():
+                            threads_to_recount.append(new_thread)
                     else:
                         new_thread.issues_remaining = state.get("issues_remaining", 0)
+
+            if threads_to_recount:
+                await db.flush()
+                unread_counts = await load_unread_counts(threads_to_recount, db)
+                for thread_obj in threads_to_recount:
+                    thread_obj.issues_remaining = unread_counts.get(thread_obj.id, 0)
 
             if snapshot.session_state:
                 session.start_die = snapshot.session_state.get("start_die", session.start_die)

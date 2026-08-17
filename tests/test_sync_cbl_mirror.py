@@ -1,5 +1,9 @@
 """CLI tests for normalized CBL mirror synchronization."""
 
+from __future__ import annotations
+
+from __future__ import annotations
+
 import argparse
 import json
 from pathlib import Path

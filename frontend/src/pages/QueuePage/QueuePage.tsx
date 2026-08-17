@@ -2,8 +2,9 @@ import { useCallback, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import { useCreateThread, useReactivateThread, useThreads, useUpdateThread } from '../../hooks/useThread'
-import { useMoveToPosition, useShuffleQueue } from '../../hooks/useQueue'
+import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
+import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hooks/useThread'
+import { useMoveToPosition, useQueueThreads, useShuffleQueue } from '../../hooks/useQueue'
 import { useSession } from '../../hooks/useSession'
 import { PositionMenuProvider } from '../../contexts/PositionMenuProvider'
 import type { Thread } from '../../types'
@@ -27,8 +28,16 @@ export default function QueuePage() {
   const navigate = useNavigate()
   const [sortBy, setSortBy] = useState<QueueSortBy>('position')
   const [searchQuery, setSearchQuery] = useState('')
+  const isSearching = searchQuery.trim() !== ''
 
-  const { data: threads, isPending, refetch } = useThreads('')
+  const {
+    data: threads,
+    isPending,
+    isError,
+    refetch,
+    nextPageToken,
+    loadMore,
+  } = useQueueThreads(searchQuery)
   const { data: session, refetch: refetchSession } = useSession()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
@@ -38,7 +47,6 @@ export default function QueuePage() {
 
   const { activeThreads, completedThreads, filteredThreads } = useQueueFilters(
     threads,
-    searchQuery,
     sortBy,
   )
 
@@ -149,10 +157,22 @@ export default function QueuePage() {
     [actions, activeThreads, modals, navigate, session],
   )
 
+  const handleLoadMore = useCallback(() => {
+    void loadMore().catch(() => undefined)
+  }, [loadMore])
+
+  const { sentinelRef } = useInfiniteScroll({
+    onLoadMore: handleLoadMore,
+    hasMore: !!nextPageToken,
+    isLoading: isPending,
+  })
+
   const mobileAddEnabled = !modals.isAnyModalOpen
   const shuffleDisabled = activeThreads.length < 2
 
-  if (isPending) {
+  // Keep already-rendered rows visible while an additional page loads, but
+  // preserve the full-screen initial loading state before Queue has any data.
+  if (isPending && !threads?.length) {
     return <LoadingSpinner fullScreen />
   }
 
@@ -187,12 +207,44 @@ export default function QueuePage() {
           filteredThreads={filteredThreads}
           reorderError={actions.reorderError}
           renderItem={renderThreadCard}
+          isSearching={isSearching}
         />
 
         <CompletedThreadsSection
           threads={completedThreads}
           onReactivate={modals.openReactivateModal}
         />
+
+        {isError && threads !== null && (
+          <div role="alert" className="text-sm text-red-400 text-center px-2 space-y-2">
+            <p>Couldn&apos;t load the next batch of threads.</p>
+            {nextPageToken && (
+              <button
+                type="button"
+                onClick={handleLoadMore}
+                className="mx-auto block rounded-md bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-500 transition-colors"
+                data-testid="queue-load-more-retry"
+              >
+                Try again
+              </button>
+            )}
+          </div>
+        )}
+
+        {nextPageToken && (
+          <div
+            ref={sentinelRef}
+            className="h-4"
+            data-testid="queue-infinite-scroll-sentinel"
+            aria-hidden="true"
+          />
+        )}
+
+        {isPending && threads !== null && threads.length > 0 && (
+          <div className="px-2 flex justify-center py-4" data-testid="queue-loading-more">
+            <LoadingSpinner />
+          </div>
+        )}
 
         <QueueModals
           openModal={modals.openModal}

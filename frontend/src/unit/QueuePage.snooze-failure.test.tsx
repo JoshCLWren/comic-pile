@@ -5,20 +5,18 @@ import { BrowserRouter } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
-import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
+import { useMoveToBack, useMoveToFront, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import {
   useCreateThread,
   useDeleteThread,
   useReactivateThread,
-  useThreads,
   useUpdateThread,
 } from '../hooks/useThread'
 import QueuePage from '../pages/QueuePage'
 
 vi.mock('../hooks/useThread', () => ({
-  useThreads: vi.fn(),
   useCreateThread: vi.fn(),
   useUpdateThread: vi.fn(),
   useDeleteThread: vi.fn(),
@@ -29,6 +27,7 @@ vi.mock('../hooks/useQueue', () => ({
   useMoveToFront: vi.fn(),
   useMoveToBack: vi.fn(),
   useMoveToPosition: vi.fn(),
+  useQueueThreads: vi.fn(),
   useShuffleQueue: vi.fn(),
 }))
 
@@ -56,7 +55,7 @@ vi.mock('../contexts/useToast', () => ({
   useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
 }))
 
-const mockedUseThreads = vi.mocked(useThreads) as any
+const mockedUseQueueThreads = vi.mocked(useQueueThreads) as any
 const mockedUseSession = vi.mocked(useSession) as any
 const mockedUseSnooze = vi.mocked(useSnooze) as any
 const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
@@ -97,7 +96,7 @@ it('does not refresh session or threads when snooze fails', async () => {
     response: { data: { detail: 'Snooze unavailable' } },
   })
 
-  mockedUseThreads.mockReturnValue({
+  mockedUseQueueThreads.mockReturnValue({
     data: [
       {
         id: 1,
@@ -137,7 +136,7 @@ it('does not refresh session or threads when unsnooze fails', async () => {
     response: { data: { detail: 'Unsnooze unavailable' } },
   })
 
-  mockedUseThreads.mockReturnValue({
+  mockedUseQueueThreads.mockReturnValue({
     data: [
       {
         id: 1,
@@ -175,7 +174,7 @@ it('keeps snooze disabled before session data has loaded', async () => {
   const refetchSession = vi.fn().mockResolvedValue(undefined)
   const snooze = vi.fn().mockResolvedValue(undefined)
 
-  mockedUseThreads.mockReturnValue({
+  mockedUseQueueThreads.mockReturnValue({
     data: [
       {
         id: 1,

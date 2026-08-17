@@ -22,7 +22,8 @@ function relatedLabel(issue: ComicVineRelatedIssue): string {
   const identity = [issue.series_name, issue.issue_number ? `#${issue.issue_number}` : null]
     .filter(Boolean)
     .join(' ')
-  return identity || issue.name || `ComicVine issue ${issue.comicvine_issue_id}`
+  if (!identity) return issue.name || `ComicVine issue ${issue.comicvine_issue_id}`
+  return issue.name ? `${identity} - ${issue.name}` : identity
 }
 
 export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {

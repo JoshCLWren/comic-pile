@@ -31,7 +31,7 @@ describe('useQueueFilters', () => {
     })
 
     const { result } = renderHook(() =>
-      useQueueFilters([active1, active2, completed], '', 'position'),
+      useQueueFilters([active1, active2, completed], 'position'),
     )
 
     expect(result.current.activeThreads.map((t) => t.id)).toEqual([2, 1])
@@ -41,7 +41,7 @@ describe('useQueueFilters', () => {
   })
 
   it('returns empty arrays when the page query has no threads yet', () => {
-    const { result } = renderHook(() => useQueueFilters(undefined, '', 'position'))
+    const { result } = renderHook(() => useQueueFilters(undefined, 'position'))
     expect(result.current.activeThreads).toEqual([])
     expect(result.current.completedThreads).toEqual([])
     expect(result.current.filteredThreads).toEqual([])
@@ -52,31 +52,31 @@ describe('useQueueFilters', () => {
     const newest = makeThread({ id: 2, title: 'Alpha', queue_position: 1, created_at: '2025-01-01' })
 
     const { result: alphabetical } = renderHook(() =>
-      useQueueFilters([oldest, newest], '', 'alphabetical'),
+      useQueueFilters([oldest, newest], 'alphabetical'),
     )
     expect(alphabetical.current.sortedThreads.map((t) => t.title)).toEqual(['Alpha', 'Zeta'])
 
     const { result: created } = renderHook(() =>
-      useQueueFilters([oldest, newest], '', 'created'),
+      useQueueFilters([oldest, newest], 'created'),
     )
     expect(created.current.sortedThreads.map((t) => t.id)).toEqual([2, 1])
   })
 
-  it('filters the active list by case-insensitive title match', () => {
+  it('returns all active threads sorted by position since search is handled on backend', () => {
     const threads = [
       makeThread({ id: 1, title: 'Saga', queue_position: 1 }),
       makeThread({ id: 2, title: 'Descender', queue_position: 2 }),
     ]
-    const { result } = renderHook(() => useQueueFilters(threads, '  DES  ', 'position'))
-    expect(result.current.filteredThreads.map((t) => t.id)).toEqual([2])
+    const { result } = renderHook(() => useQueueFilters(threads, 'position'))
+    expect(result.current.filteredThreads.map((t) => t.id)).toEqual([1, 2])
   })
 
-  it('treats a blank search query as no filter', () => {
+  it('returns all active threads when no search filter applied', () => {
     const threads = [
       makeThread({ id: 1, title: 'Saga', queue_position: 1 }),
       makeThread({ id: 2, title: 'Descender', queue_position: 2 }),
     ]
-    const { result } = renderHook(() => useQueueFilters(threads, '   ', 'position'))
+    const { result } = renderHook(() => useQueueFilters(threads, 'position'))
     expect(result.current.filteredThreads.length).toBe(2)
   })
 })

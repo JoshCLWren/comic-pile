@@ -1,9 +1,9 @@
-import { act, renderHook } from '@testing-library/react'
-import { beforeEach, expect, it, vi } from 'vitest'
-import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
+import { act, renderHook, waitFor } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { useQueueThreads, useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
 import { invalidateAfterQueueMovement } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
-import { queueApi } from '../services/api'
+import { queueApi, threadsApi } from '../services/api'
 
 vi.mock('../services/api', () => ({
   queueApi: {
@@ -12,6 +12,9 @@ vi.mock('../services/api', () => ({
     moveToBack: vi.fn(),
     shuffle: vi.fn(),
   },
+  threadsApi: {
+    list: vi.fn(),
+  },
 }))
 
 vi.mock('../query/cacheEffects', () => ({
@@ -19,6 +22,7 @@ vi.mock('../query/cacheEffects', () => ({
 }))
 
 const mockedQueueApi = vi.mocked(queueApi)
+const mockedThreadsApi = vi.mocked(threadsApi)
 const mockedInvalidateAfterQueueMovement = vi.mocked(invalidateAfterQueueMovement)
 
 beforeEach(() => {
@@ -28,6 +32,100 @@ beforeEach(() => {
   mockedQueueApi.moveToBack.mockResolvedValue(undefined as never)
   mockedQueueApi.shuffle.mockResolvedValue(undefined as never)
   mockedInvalidateAfterQueueMovement.mockResolvedValue()
+  mockedThreadsApi.list.mockResolvedValue({ threads: [], next_page_token: null })
+})
+
+describe('useQueueThreads', () => {
+  it('fetches threads on mount with default page_size', async () => {
+    const { result } = renderHook(() => useQueueThreads())
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+
+    expect(mockedThreadsApi.list).toHaveBeenCalledWith(
+      expect.objectContaining({ page_size: 50 }),
+      undefined,
+    )
+    expect(result.current.data).toEqual([])
+    expect(result.current.nextPageToken).toBeNull()
+  })
+
+  it('passes search term when provided', async () => {
+    mockedThreadsApi.list.mockResolvedValue({
+      threads: [{ id: 1, title: 'Bat' } as never],
+      next_page_token: null,
+    })
+
+    const { result } = renderHook(() => useQueueThreads('bat'))
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+
+    expect(mockedThreadsApi.list).toHaveBeenCalledWith(
+      expect.objectContaining({ search: 'bat', page_size: 50 }),
+      undefined,
+    )
+    expect(result.current.data).toHaveLength(1)
+  })
+
+  it('does not include page_size when pageToken is supplied', async () => {
+    const { result } = renderHook(() => useQueueThreads())
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+
+    mockedThreadsApi.list.mockResolvedValue({
+      threads: [{ id: 2 } as never],
+      next_page_token: null,
+    })
+
+    await act(async () => {
+      await result.current.refetch('next-page')
+    })
+
+    expect(mockedThreadsApi.list).toHaveBeenLastCalledWith(undefined, 'next-page')
+  })
+
+  it('sets error state when API call fails', async () => {
+    mockedThreadsApi.list.mockRejectedValueOnce(new Error('network'))
+
+    const { result } = renderHook(() => useQueueThreads())
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(result.current.isPending).toBe(false)
+  })
+
+  it('loadMore fetches next page when token exists', async () => {
+    mockedThreadsApi.list
+      .mockResolvedValueOnce({
+        threads: [{ id: 1 } as never],
+        next_page_token: 'tok-2',
+      })
+      .mockResolvedValueOnce({
+        threads: [{ id: 2 } as never],
+        next_page_token: null,
+      })
+
+    const { result } = renderHook(() => useQueueThreads())
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+
+    await act(async () => {
+      await result.current.loadMore()
+    })
+
+    expect(mockedThreadsApi.list).toHaveBeenCalledTimes(2)
+    expect(result.current.data).toHaveLength(2)
+  })
+
+  it('loadMore is no-op when no next page token', async () => {
+    const { result } = renderHook(() => useQueueThreads())
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+
+    await act(async () => {
+      await result.current.loadMore()
+    })
+
+    expect(mockedThreadsApi.list).toHaveBeenCalledTimes(1)
+  })
 })
 
 it('moves queue position and reconciles only queue-owned read models', async () => {

@@ -12,7 +12,7 @@ from comic_pile.dependencies import (
     detect_circular_dependency,
 )
 from comic_pile.queue import get_roll_pool
-from comic_pile.session import get_or_create, get_current_die
+from comic_pile.session import get_or_create, get_current_die, get_current_die_for_session
 
 
 @pytest.mark.asyncio
@@ -283,3 +283,86 @@ async def test_detect_circular_dependency_empty_graph(
     """Test detect_circular_dependency with no dependencies returns False (dependencies.py:161-165)."""
     result = await detect_circular_dependency(1, 2, "issue", async_db)
     assert result is False
+
+
+@pytest.mark.asyncio
+async def test_get_current_die_for_session_manual_die_takes_precedence(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """get_current_die_for_session returns manual_die from session without re-reading it."""
+    session = SessionModel(
+        start_die=6,
+        manual_die=20,
+        user_id=default_user.id,
+        started_at=datetime.now(UTC),
+    )
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    die = await get_current_die_for_session(session, async_db)
+    assert die == 20
+
+
+@pytest.mark.asyncio
+async def test_get_current_die_for_session_latest_die_event_wins(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """get_current_die_for_session uses die_after from the most recent rate/snooze/undo event."""
+    session = SessionModel(
+        start_die=6,
+        user_id=default_user.id,
+        started_at=datetime.now(UTC),
+    )
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Rate Thread",
+        format="Comic",
+        issues_remaining=10,
+        queue_position=1,
+        status="active",
+        user_id=default_user.id,
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.commit()
+
+    stale_event = Event(
+        type="rate",
+        session_id=session.id,
+        thread_id=thread.id,
+        rating=3.0,
+        die_after=10,
+    )
+    latest_event = Event(
+        type="snooze",
+        session_id=session.id,
+        thread_id=thread.id,
+        die_after=30,
+    )
+    async_db.add_all([stale_event, latest_event])
+    await async_db.commit()
+
+    die = await get_current_die_for_session(session, async_db)
+    assert die == 30
+
+
+@pytest.mark.asyncio
+async def test_get_current_die_for_session_falls_back_to_start_die(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """get_current_die_for_session returns session.start_die when no manual die or die-changing event."""
+    session = SessionModel(
+        start_die=10,
+        user_id=default_user.id,
+        started_at=datetime.now(UTC),
+    )
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    die = await get_current_die_for_session(session, async_db)
+    assert die == 10

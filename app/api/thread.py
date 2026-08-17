@@ -9,7 +9,7 @@ import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +26,8 @@ from app.schemas import (
     QueueThreadListResponse,
     ReactivateRequest,
     RollResponse,
+    SetCurrentIssueRequest,
+    SetCurrentIssueResponse,
     ThreadCreate,
     ThreadDetail,
     ThreadResponse,
@@ -33,6 +35,7 @@ from app.schemas import (
 )
 from app.schemas.migration import MigrateToIssuesSimpleRequest
 from app.services.ownership import get_owned_thread_or_404
+from app.services.thread_issue_stats import load_next_issue_numbers, load_unread_counts
 from comic_pile.session import get_current_die, get_or_create
 
 router = APIRouter(tags=["threads"])
@@ -98,36 +101,10 @@ async def thread_to_response(
     )
 
 
-async def _bulk_issue_number_map(threads: list[Thread], db: AsyncSession) -> dict[int, str]:
-    """Batch-fetch issue numbers for all threads' next_unread_issue_id values."""
-    issue_ids = {t.next_unread_issue_id for t in threads if t.next_unread_issue_id is not None}
-    if not issue_ids:
-        return {}
-    result = await db.execute(select(Issue.id, Issue.issue_number).where(Issue.id.in_(issue_ids)))
-    return {row.id: row.issue_number for row in result}
-
-
-async def _bulk_issues_remaining(threads: list[Thread], db: AsyncSession) -> dict[int, int]:
-    """Bulk-fetch unread issue counts for all migrated threads in one query."""
-    migrated_ids = [t.id for t in threads if t.uses_issue_tracking()]
-    if not migrated_ids:
-        return {}
-    result = await db.execute(
-        select(Issue.thread_id, func.count())
-        .where(Issue.status == "unread")
-        .where(Issue.thread_id.in_(migrated_ids))
-        .group_by(Issue.thread_id),
-    )
-    counts: dict[int, int] = {}
-    for row in result:
-        counts[row[0]] = row[1]
-    return counts
-
-
 async def _threads_to_responses(threads: list[Thread], db: AsyncSession) -> list[ThreadResponse]:
     """Convert a list of Thread models to ThreadResponses with batched lookups."""
-    issue_map = await _bulk_issue_number_map(threads, db)
-    remaining_map = await _bulk_issues_remaining(threads, db)
+    issue_map = await load_next_issue_numbers(threads, db)
+    remaining_map = await load_unread_counts(threads, db)
     return [
         await thread_to_response(
             thread,
@@ -936,3 +913,114 @@ async def migrate_thread_to_issues_simple(
     await invalidate_user_view(current_user.id)
 
     return response
+
+
+@router.post("/{thread_id}:setCurrentIssue", response_model=SetCurrentIssueResponse)
+async def set_current_issue(
+    thread_id: int,
+    request: SetCurrentIssueRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> SetCurrentIssueResponse:
+    """Atomically correct the current issue for an active thread.
+
+    Marks every issue before the target as read, ensures the target is
+    unread, updates ``thread.next_unread_issue_id``, and pins
+    ``session.pending_issue_id`` so the active roll reflects the corrected
+    position immediately.
+
+    Args:
+        thread_id: The thread whose current issue should be corrected.
+        request: Target issue number.
+        current_user: Authenticated user.
+        db: Async database session.
+
+    Returns:
+        SetCurrentIssueResponse with the corrected thread and issue info.
+
+    Raises:
+        HTTPException: 404 if thread not found, 400 for validation errors.
+    """
+    thread = await get_owned_thread_or_404(db, current_user.id, thread_id)
+
+    if thread.status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Thread {thread_id} is not active",
+        )
+
+    if not thread.uses_issue_tracking():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Thread {thread_id} does not use issue tracking",
+        )
+
+    target_number = request.issue_number.strip()
+
+    result = await db.execute(
+        select(Issue)
+        .where(Issue.thread_id == thread_id)
+        .where(Issue.issue_number == target_number)
+    )
+    target_issue = result.scalar_one_or_none()
+
+    if not target_issue:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue '{target_number}' not found in thread {thread_id}",
+        )
+
+    result = await db.execute(
+        select(Issue)
+        .where(Issue.thread_id == thread_id)
+        .order_by(Issue.position)
+    )
+    all_issues = list(result.scalars().all())
+
+    now = datetime.now(UTC)
+    for issue in all_issues:
+        if issue.position < target_issue.position:
+            if issue.status != "read":
+                issue.status = "read"
+                issue.read_at = now
+        elif issue.position == target_issue.position:
+            if issue.status != "unread":
+                issue.status = "unread"
+                issue.read_at = None
+
+    thread.total_issues = len(all_issues)
+    thread.next_unread_issue_id = target_issue.id
+    thread.reading_progress = "in_progress"
+    thread.issues_remaining = await thread.get_issues_remaining(db)
+
+    target_issue_id = target_issue.id
+    target_issue_number = target_issue.issue_number
+
+    issues_remaining = thread.issues_remaining
+    total_issues = thread.total_issues
+    reading_progress = thread.reading_progress
+    queue_position = thread.queue_position
+    thread_title = thread.title
+    thread_format = thread.format
+
+    current_session = await get_or_create(db, user_id=current_user.id)
+    current_session.pending_thread_id = thread_id
+    current_session.pending_issue_id = target_issue_id
+    current_session.pending_thread_updated_at = now
+
+    await db.commit()
+    await invalidate_user_view(current_user.id)
+
+    return SetCurrentIssueResponse(
+        thread_id=thread_id,
+        title=thread_title,
+        format=thread_format,
+        issues_remaining=issues_remaining,
+        queue_position=queue_position,
+        issue_id=target_issue_id,
+        issue_number=target_issue_number,
+        next_issue_id=target_issue_id,
+        next_issue_number=target_issue_number,
+        total_issues=total_issues,
+        reading_progress=reading_progress,
+    )

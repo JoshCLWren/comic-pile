@@ -34,8 +34,8 @@ describe('ComicVineIssueCard', () => {
         comicvine_url: null,
         related_issues: [
           {
-            comicvine_issue_id: '101', series_name: 'Alpha', issue_number: '2', name: null,
-            cover_date: null, comicvine_url: null,
+            comicvine_issue_id: '101', series_name: 'Alpha', issue_number: '2',
+            name: 'Second Part: The Plot Thickens', cover_date: null, comicvine_url: null,
             comicpile_matches: [{ issue_id: 2, thread_id: 1, thread_title: 'Alpha', issue_number: '2', status: 'unread' }],
           },
           {
@@ -51,9 +51,55 @@ describe('ComicVineIssueCard', () => {
     fireEvent.click(screen.getByText('Comic details'))
     expect(screen.getByText('A bold beginning.')).toBeInTheDocument()
     expect(screen.getByText('Writer One')).toBeInTheDocument()
+    expect(screen.getByText('Alpha #2 - Second Part: The Plot Thickens')).toBeInTheDocument()
+    expect(screen.getByText('Beta #1')).toBeInTheDocument()
     expect(screen.getByText('Unread')).toBeInTheDocument()
     expect(screen.getByText('Missing')).toBeInTheDocument()
     expect(screen.getByText('1 in ComicPile · 1 missing')).toBeInTheDocument()
+  })
+
+  it('labels every story-arc issue with its series, number, and title', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '583',
+      comicvine_url: 'https://comicvine.example/583',
+      series_name: 'Fantastic Four',
+      series_id: 9,
+      issue_number: '583',
+      name: 'Three, Part One: In Latveria, the Flowers Bloom in Winter',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [{
+        comicvine_arc_id: 70,
+        name: 'Three',
+        comicvine_url: null,
+        related_issues: [
+          {
+            comicvine_issue_id: '584', series_name: 'Fantastic Four', issue_number: '584',
+            name: 'Three, Part Two: Congratulations, Mister Grimm. You`re Handsome Again!',
+            cover_date: null, comicvine_url: null, comicpile_matches: [],
+          },
+          {
+            comicvine_issue_id: '657', series_name: 'The Amazing Spider-Man', issue_number: '657',
+            name: 'Torch Song', cover_date: null, comicvine_url: null, comicpile_matches: [],
+          },
+          {
+            comicvine_issue_id: '28', series_name: 'Fantastic Four Adventures', issue_number: '28',
+            name: null, cover_date: null, comicvine_url: null, comicpile_matches: [],
+          },
+        ],
+      }],
+    })
+
+    render(<ComicVineIssueCard issueId={1} />)
+    expect(await screen.findByText('Three')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Comic details'))
+    expect(screen.getByText('Fantastic Four #584 - Three, Part Two: Congratulations, Mister Grimm. You`re Handsome Again!')).toBeInTheDocument()
+    expect(screen.getByText('The Amazing Spider-Man #657 - Torch Song')).toBeInTheDocument()
+    expect(screen.getByText('Fantastic Four Adventures #28')).toBeInTheDocument()
+    expect(screen.getByText('0 in ComicPile · 3 missing')).toBeInTheDocument()
   })
 
   it('renders nothing when the issue has no confirmed ComicVine mapping', async () => {

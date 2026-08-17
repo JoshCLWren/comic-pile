@@ -8,11 +8,24 @@ set -Eeuo pipefail
 : "${FACTORY_MODEL:?FACTORY_MODEL is required}"
 : "${FACTORY_RUNTIME_MODEL:?FACTORY_RUNTIME_MODEL is required}"
 
+# Factory selection and lease handoff must keep working even when GitHub's
+# GraphQL installation bucket is exhausted. Route the small set of gh list/view
+# reads used by the wrapper through REST while forwarding every other gh command
+# to the real CLI unchanged.
+install_factory_rest_gh() {
+  local real_gh shim_dir
+  real_gh="$(command -v gh)"
+  shim_dir="$(mktemp -d /tmp/comic-pile-factory-gh.XXXXXX)"
+  cp .github/scripts/factory-gh-rest-shim.sh "$shim_dir/gh"
+  chmod +x "$shim_dir/gh"
+  export FACTORY_REAL_GH="$real_gh"
+  export PATH="$shim_dir:$PATH"
+}
+install_factory_rest_gh
+
 # These four tiny bridges preserve the existing regression harness, which
 # extracts named helper functions directly from this file. In the real worker
 # they are immediately replaced when the tracked primitives are sourced below.
-# In the isolated harness, each bridge loads the exact tracked definition and
-# then tail-calls it. This keeps security tests pointed at the real helpers.
 stage_trusted_guard() {
   local primitives definition
   primitives="$(dirname "${WORKER:-${BASH_SOURCE[0]}}")/free-model-factory-worker-primitives.sh"
@@ -54,8 +67,7 @@ unclean_git_state_json() {
 }
 
 # Reuse the proven persistence/guard/provider/lease primitives as a tracked
-# repository file, stopping before its legacy main loop. The selector/session
-# loop below is the canonical shared-pool implementation.
+# repository file, stopping before its legacy main loop.
 source <(sed '/^ensure_owner_label$/,$d' .github/scripts/free-model-factory-worker-primitives.sh)
 
 # A PR branch may predate the Kilo integration entirely. Stage the backend
@@ -71,6 +83,20 @@ stage_trusted_kilo_helper() {
   chmod +x "$TRUSTED_KILO_HELPER"
 }
 
+# Semantic state transitions are more privileged than the reviewed branch.
+# Copy the controller and its pure policy module from trusted main before any
+# checkout_target switch so a stale or contaminated PR cannot replace the
+# authority code that interprets its model verdict.
+stage_trusted_review_controller() {
+  local trusted_dir
+  trusted_dir="$(mktemp -d /tmp/comic-pile-review-controller.XXXXXX)"
+  cp .github/scripts/factory-review-controller.py "$trusted_dir/factory-review-controller.py"
+  cp .github/scripts/factory_review_policy.py "$trusted_dir/factory_review_policy.py"
+  chmod +x "$trusted_dir/factory-review-controller.py"
+  TRUSTED_REVIEW_CONTROLLER="$trusted_dir/factory-review-controller.py"
+  export TRUSTED_REVIEW_CONTROLLER
+}
+
 # Keep the established OpenCode/NVIDIA implementation untouched. Kilo needs a
 # small override only so it invokes the trusted helper staged from main.
 eval "$(declare -f run_agent | sed '1s/^run_agent /legacy_run_agent /')"
@@ -84,7 +110,7 @@ run_agent() {
 
   if [[ "$mode" == 'pr' ]]; then
     target="pull request #${number}"
-    mission="Resume this PR. Inspect the exact current head, required CI, review submissions, and every inline review thread. Fix closure-critical defects and resolve or concretely rebut actionable threads. If no edits are required, decide whether the PR fully completes its declared scope and is safe to merge. End your final response with FACTORY_GATE_READY only when no semantic blocker remains; otherwise end with FACTORY_GATE_NOT_READY."
+    mission="Resume this PR. Inspect the exact current head, required CI, review submissions, and every inline review thread. Fix closure-critical defects and resolve or concretely rebut actionable threads. If no edits are required, decide whether the PR fully completes its declared scope and is safe to merge. End your final response with FACTORY_GATE_READY only for semantic approval, FACTORY_GATE_REJECT only when the PR is clearly unsalvageable, contaminated, obsolete, duplicate, or fundamentally incomplete, otherwise end with FACTORY_GATE_NOT_READY."
   else
     target="issue #${number}"
     mission="Implement the full closure-critical acceptance contract for this issue with code and focused tests. Do not stop at planning or optional polish."
@@ -103,213 +129,207 @@ run_agent() {
   return "$status"
 }
 
-priority_rank_jq='def priority_rank:
-  ([.labels[].name] // []) as $labels
-  | if ($labels | index("ralph-priority:critical")) then 4
-    elif ($labels | index("ralph-priority:high")) then 3
-    elif ($labels | index("ralph-priority:medium")) then 2
-    elif ($labels | index("ralph-priority:low")) then 1
-    else 0 end;'
+select_controller_assignment() {
+  local -a prs=() issues=()
+  local pr_json issue_json pr_numbers issue_numbers
+  local pr branch linked_issue issue
 
-issue_has_open_blocker() {
-  local issue="$1" blockers
-  blockers="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${issue}/dependencies/blocked_by?per_page=100" 2>/dev/null \
-    | jq -s '[.[][]? | select(.state == "open")] | length' 2>/dev/null || true)"
-  [[ "${blockers:-0}" != "0" ]]
-}
+  if ! pr_json="$(gh pr list --state open --limit 200 --label "$OWNER" --json number,labels)"; then
+    log "unable to query controller-leased PRs for ${OWNER}"
+    return 3
+  fi
+  if ! pr_numbers="$(jq -r '.[] | select(([.labels[].name] | index("factory:ready")) == null) | .number' <<< "$pr_json")"; then
+    log "unable to parse controller-leased PRs for ${OWNER}"
+    return 3
+  fi
+  mapfile -t prs < <(printf '%s' "$pr_numbers")
 
-issue_is_executable() {
-  local issue="$1" metadata title
-  metadata="$(gh issue view "$issue" --json title,labels --jq '{title,labels:[.labels[].name]}')" || return 1
-  title="$(jq -r .title <<< "$metadata")"
+  if (( ${#prs[@]} > 1 )); then
+    log "controller invariant failed: ${OWNER} owns multiple open PRs (${prs[*]})"
+    return 2
+  fi
 
-  # Operational registries and explicit grouping documents are not product
-  # implementation tickets. Everything else remains eligible unless current
-  # ownership, a native dependency, or an open implementation PR proves it is
-  # not executable now.
-  [[ "$issue" != "1093" && "$issue" != "1109" ]] || return 1
-  [[ ! "$title" =~ ^(Epic:|PRD:) ]] || return 1
-  jq -e '
-    (.labels | index("factory:blocked") | not)
-    and (.labels | index("ralph-status:blocked") | not)
-  ' >/dev/null <<< "$metadata" || return 1
-  issue_has_open_factory_pr "$issue" && return 1
-  issue_has_open_blocker "$issue" && return 1
-  return 0
-}
+  if ! issue_json="$(gh issue list --state open --limit 300 --label "$OWNER" --json number)"; then
+    log "unable to query controller-leased issues for ${OWNER}"
+    return 3
+  fi
+  if ! issue_numbers="$(jq -r '.[].number' <<< "$issue_json")"; then
+    log "unable to parse controller-leased issues for ${OWNER}"
+    return 3
+  fi
+  mapfile -t issues < <(printf '%s' "$issue_numbers")
 
-choose_ranked_issues() {
-  local mode="$1" candidate
-  while IFS= read -r candidate; do
-    [[ -n "$candidate" ]] || continue
-    issue_is_executable "$candidate" || continue
-    printf '%s\n' "$candidate"
-  done < <(
-    gh issue list --state open --limit 300 --json number,title,labels,createdAt \
-      | jq -r --arg mode "$mode" --arg owner_re "$OWNER_RE" "$priority_rank_jq
-        map(select(.number != 1093 and .number != 1109))
-        | map(select((([.labels[].name | select(test(\$owner_re) and . != \"factory:unowned\")] | length) == 0)))
-        | map(select(
-            if \$mode == \"user-bug\" then
-              ([.labels[].name] | index(\"user-reported\")) != null and
-              ([.labels[].name] | index(\"bug\")) != null
-            elif \$mode == \"bug\" then
-              ([.labels[].name] | index(\"bug\")) != null
-            else true end
-          ))
-        | sort_by([priority_rank, .createdAt]) | reverse | .[].number"
-  )
-}
-
-claim_from_pool() {
-  local mode="$1" candidate
-  while IFS= read -r candidate; do
-    [[ -n "$candidate" ]] || continue
-    if claim_issue "$candidate"; then
-      NUMBER="$candidate"
-      MODE='issue'
-      BRANCH="factory/${WORKER}-${NUMBER}-${BRANCH_SUFFIX}"
-      log "leased executable ${mode} issue #${NUMBER} from the shared factory pool"
-      return 0
+  if (( ${#prs[@]} == 1 )); then
+    pr="${prs[0]}"
+    if ! branch="$(gh pr view "$pr" --json headRefName --jq .headRefName)"; then
+      log "unable to resolve branch for controller-leased PR #${pr}"
+      return 3
     fi
-  done < <(choose_ranked_issues "$mode")
+    if [[ -z "$branch" ]]; then
+      log "controller-leased PR #${pr} returned an empty branch"
+      return 3
+    fi
+    linked_issue="$(linked_issue_from_branch "$branch")"
+
+    for issue in "${issues[@]:-}"; do
+      [[ -n "$issue" ]] || continue
+      if [[ -z "$linked_issue" || "$issue" != "$linked_issue" ]]; then
+        log "controller invariant failed: ${OWNER} owns PR #${pr} plus unrelated issue #${issue}"
+        return 2
+      fi
+    done
+
+    MODE='pr'
+    NUMBER="$pr"
+    BRANCH="$branch"
+    return 0
+  fi
+
+  if (( ${#issues[@]} == 1 )); then
+    MODE='issue'
+    NUMBER="${issues[0]}"
+    BRANCH="factory/${WORKER}-${NUMBER}-${BRANCH_SUFFIX}"
+    return 0
+  fi
+
+  if (( ${#issues[@]} > 1 )); then
+    log "controller invariant failed: ${OWNER} owns multiple open issues (${issues[*]})"
+    return 2
+  fi
+
   return 1
 }
 
 ensure_owner_label
 stage_trusted_guard
 stage_trusted_kilo_helper
-release_owned_targets 'previous-run-stale-lease'
+stage_trusted_review_controller
 trap 'release_owned_targets session-end-handoff || true' EXIT
-log "starting shared-pool fixed-model session with runtime ${RUNTIME_MODEL}; budget ${BUDGET_SECONDS}s"
 
-while (( $(remaining) > 480 )); do
-  MODE=''
-  NUMBER=''
-  BRANCH=''
+MODE=''
+NUMBER=''
+BRANCH=''
 
-  while IFS= read -r candidate; do
-    [[ -n "$candidate" ]] || continue
-    contains_skip_pr "$candidate" && continue
-    NUMBER="$candidate"
-    MODE='pr'
-    BRANCH="$(gh pr view "$NUMBER" --json headRefName --jq .headRefName)"
+set +e
+select_controller_assignment
+assignment_status=$?
+set -e
+
+if (( assignment_status == 1 )); then
+  log 'no control-plane assignment is leased to this worker; exiting without repo-wide selection'
+  exit 0
+fi
+
+if (( assignment_status != 0 )); then
+  release_owned_targets 'controller-assignment-read-failed' || true
+  exit "$assignment_status"
+fi
+
+log "executing control-plane assignment: ${MODE} #${NUMBER}; runtime ${RUNTIME_MODEL}; budget ${BUDGET_SECONDS}s"
+checkout_target "$MODE" "$NUMBER" "$BRANCH"
+
+available="$(remaining)"
+agent_timeout=$((available - 240))
+(( agent_timeout > 3000 )) && agent_timeout=3000
+if (( agent_timeout < 300 )); then
+  log 'insufficient remaining budget for assigned work'
+  exit 1
+fi
+
+agent_attempt=1
+agent_status=0
+transient_failure=0
+while :; do
+  set +e
+  run_agent "$MODE" "$NUMBER" "$agent_timeout"
+  agent_status=$?
+  set -e
+  log "agent exit status ${agent_status} for ${MODE} #${NUMBER}"
+
+  if (( agent_status == 0 )); then
+    transient_failure=0
     break
-  done < <(choose_existing_pr)
-
-  if [[ -z "$NUMBER" ]]; then claim_from_pool 'user-bug' || true; fi
-  if [[ -z "$NUMBER" ]]; then claim_from_pool 'bug' || true; fi
-  if [[ -z "$NUMBER" ]]; then claim_from_pool 'product' || true; fi
-
-  # Cross-worker PR continuation is part of the same shared pool, but a random
-  # existing branch does not outrank a fresh executable product issue.
-  if [[ -z "$NUMBER" ]]; then
-    while IFS= read -r candidate; do
-      [[ -n "$candidate" ]] || continue
-      contains_skip_pr "$candidate" && continue
-      if claim_unowned_pr "$candidate"; then
-        NUMBER="$candidate"
-        MODE='pr'
-        BRANCH="$(gh pr view "$NUMBER" --json headRefName --jq .headRefName)"
-        log "leased unowned PR #${NUMBER} on ${BRANCH} for cross-worker continuation"
-        break
-      fi
-    done < <(choose_unowned_pr)
+  fi
+  if ! is_transient_agent_failure "$agent_status"; then
+    transient_failure=0
+    break
   fi
 
-  if [[ -z "$NUMBER" ]]; then
-    log 'shared executable backlog is empty for this session; daily Chromium discovery owns backlog replenishment'
-    break
-  fi
+  transient_failure=1
+  log 'transient provider/runtime interruption on the pinned model; refusing to switch models'
+  [[ -z "$(git status --porcelain)" ]] || break
+  (( agent_attempt < MAX_AGENT_ATTEMPTS )) || break
+  (( $(remaining) > 600 )) || break
 
-  checkout_target "$MODE" "$NUMBER" "$BRANCH"
+  sleep_for="$TRANSIENT_BACKOFF_SECONDS"
+  max_sleep=$(( $(remaining) - 540 ))
+  (( sleep_for > max_sleep )) && sleep_for="$max_sleep"
+  (( sleep_for > 0 )) && sleep "$sleep_for"
+  agent_attempt=$((agent_attempt + 1))
   available="$(remaining)"
   agent_timeout=$((available - 240))
   (( agent_timeout > 3000 )) && agent_timeout=3000
-  (( agent_timeout < 300 )) && break
-
-  agent_attempt=1
-  agent_status=0
-  transient_failure=0
-  while :; do
-    set +e
-    run_agent "$MODE" "$NUMBER" "$agent_timeout"
-    agent_status=$?
-    set -e
-    log "agent exit status ${agent_status} for ${MODE} #${NUMBER}"
-
-    if (( agent_status == 0 )); then
-      transient_failure=0
-      break
-    fi
-    if ! is_transient_agent_failure "$agent_status"; then
-      transient_failure=0
-      break
-    fi
-
-    transient_failure=1
-    log 'transient provider/runtime interruption on the pinned model; refusing to switch models'
-    [[ -z "$(git status --porcelain)" ]] || break
-    (( agent_attempt < MAX_AGENT_ATTEMPTS )) || break
-    (( $(remaining) > 600 )) || break
-
-    sleep_for="$TRANSIENT_BACKOFF_SECONDS"
-    max_sleep=$(( $(remaining) - 540 ))
-    (( sleep_for > max_sleep )) && sleep_for="$max_sleep"
-    (( sleep_for > 0 )) && sleep "$sleep_for"
-    agent_attempt=$((agent_attempt + 1))
-    available="$(remaining)"
-    agent_timeout=$((available - 240))
-    (( agent_timeout > 3000 )) && agent_timeout=3000
-    (( agent_timeout >= 300 )) || break
-  done
-
-  if [[ "$MODE" == 'issue' ]]; then
-    if pr="$(persist_issue_pr "$NUMBER" "$BRANCH")"; then
-      log "opened/updated PR #${pr} for issue #${NUMBER}"
-      release_target "$NUMBER" 'factory:review' 'pr-opened-handoff' 'issue'
-      release_target "$pr" 'factory:review' 'pr-opened-handoff' 'pr'
-      SKIP_PRS+=("$pr")
-    elif (( transient_failure == 1 )); then
-      log "issue #${NUMBER} produced no changes because the model was interrupted; releasing the lease"
-      release_target "$NUMBER" 'factory:building' 'transient-model-interruption' 'issue'
-    else
-      log "issue #${NUMBER} produced no persisted change; releasing the lease for another worker/model attempt"
-      release_target "$NUMBER" 'factory:building' 'no-persisted-change-handoff' 'issue'
-    fi
-    continue
-  fi
-
-  if persist_pr_changes "$NUMBER" "$BRANCH"; then
-    log "pushed repairs to PR #${NUMBER}; releasing for review/CI/cross-worker continuation"
-    release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'repairs-pushed-handoff'
-    SKIP_PRS+=("$NUMBER")
-    continue
-  fi
-
-  current="$(git rev-parse HEAD)"
-  if [[ "$SOURCE" != 'kilo-auto' ]] && \
-    grep -q 'FACTORY_GATE_READY' "/tmp/opencode-factory-${WORKER}.log" && \
-    machine_merge_gates_pass "$NUMBER" "$current"; then
-    log "all exact-head gates passed for PR #${NUMBER}; merging ${current}"
-    gh pr merge "$NUMBER" --merge --match-head-commit "$current" --delete-branch
-    issue_number="$(linked_issue_from_branch "$BRANCH")"
-    if [[ -n "$issue_number" ]]; then
-      state="$(gh issue view "$issue_number" --json state --jq .state 2>/dev/null || true)"
-      if [[ "$state" == 'OPEN' ]]; then
-        gh issue close "$issue_number" --reason completed \
-          --comment "Closed after Factory ${WORKER} merged PR #${NUMBER} through the exact-head gates."
-      fi
-    fi
-    continue
-  fi
-
-  if (( transient_failure == 1 )); then
-    release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'transient-model-interruption'
-  else
-    release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'not-merge-eligible-handoff'
-  fi
-  SKIP_PRS+=("$NUMBER")
+  (( agent_timeout >= 300 )) || break
 done
 
-log "session complete; remaining budget $(remaining)s"
+if [[ "$MODE" == 'issue' ]]; then
+  if pr="$(persist_issue_pr "$NUMBER" "$BRANCH")"; then
+    log "opened/updated PR #${pr} for issue #${NUMBER}"
+    release_target "$NUMBER" 'factory:review' 'pr-opened-handoff' 'issue'
+    release_target "$pr" 'factory:review' 'pr-opened-handoff' 'pr'
+  elif (( transient_failure == 1 )); then
+    log "issue #${NUMBER} produced no changes because the model was interrupted; releasing the lease"
+    release_target "$NUMBER" 'factory:building' 'transient-model-interruption' 'issue'
+  else
+    log "issue #${NUMBER} produced no persisted change; releasing the lease for another worker/model attempt"
+    release_target "$NUMBER" 'factory:building' 'no-persisted-change-handoff' 'issue'
+  fi
+  log "assignment complete; remaining budget $(remaining)s"
+  exit 0
+fi
+
+if persist_pr_changes "$NUMBER" "$BRANCH"; then
+  log "pushed repairs to PR #${NUMBER}; releasing for exact-head review"
+  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'repairs-pushed-handoff'
+  log "assignment complete; remaining budget $(remaining)s"
+  exit 0
+fi
+
+if (( transient_failure == 1 )); then
+  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'transient-model-interruption'
+  log "assignment complete; remaining budget $(remaining)s"
+  exit 0
+fi
+
+if (( agent_status != 0 )); then
+  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'review-agent-failed'
+  log "assignment complete; remaining budget $(remaining)s"
+  exit 0
+fi
+
+review_log="/tmp/opencode-factory-${WORKER}.log"
+verdict=''
+last_token="$(grep -E '^FACTORY_GATE_(READY|REJECT|NOT_READY)[[:space:]]*$' "$review_log" \
+  | tail -n 1 | tr -d '[:space:]' || true)"
+case "$last_token" in
+  FACTORY_GATE_READY) verdict='approve' ;;
+  FACTORY_GATE_REJECT) verdict='reject' ;;
+  FACTORY_GATE_NOT_READY) verdict='repair' ;;
+esac
+
+if [[ -z "$verdict" ]]; then
+  log "review model did not emit a recognized terminal verdict for PR #${NUMBER}; leaving it in review"
+  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'missing-semantic-verdict'
+  log "assignment complete; remaining budget $(remaining)s"
+  exit 0
+fi
+
+log "submitting ${verdict} semantic verdict for PR #${NUMBER} at reviewed head ${EXPECTED_HEAD} to the trusted review controller"
+python3 "$TRUSTED_REVIEW_CONTROLLER" review \
+  --worker "$WORKER" \
+  --pr "$NUMBER" \
+  --reviewed-head "$EXPECTED_HEAD" \
+  --verdict "$verdict" \
+  --review-log "$review_log"
+
+log "assignment complete; remaining budget $(remaining)s"

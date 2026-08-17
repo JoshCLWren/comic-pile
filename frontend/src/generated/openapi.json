@@ -627,6 +627,15 @@
       "ContinuityBlocker": {
         "description": "One unsatisfied continuity rule blocking the requested node.",
         "properties": {
+          "blocker_type": {
+            "enum": [
+              "item_unread",
+              "members_unread",
+              "selected_members_unread"
+            ],
+            "title": "Blocker Type",
+            "type": "string"
+          },
           "causing_issue_ids": {
             "items": {
               "type": "integer"
@@ -695,57 +704,14 @@
           "source_type",
           "source_id",
           "source_label",
-          "satisfaction_type"
+          "satisfaction_type",
+          "blocker_type"
         ],
         "title": "ContinuityBlocker",
         "type": "object"
       },
-      "ContinuityChainDiagnostic": {
-        "description": "One structured traversal failure that does not require text parsing.",
-        "properties": {
-          "code": {
-            "enum": [
-              "cycle_detected",
-              "depth_limit_exceeded",
-              "node_limit_exceeded"
-            ],
-            "title": "Code",
-            "type": "string"
-          },
-          "limit": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Limit"
-          },
-          "node_id": {
-            "title": "Node Id",
-            "type": "integer"
-          },
-          "node_type": {
-            "enum": [
-              "issue",
-              "crossover"
-            ],
-            "title": "Node Type",
-            "type": "string"
-          }
-        },
-        "required": [
-          "code",
-          "node_type",
-          "node_id"
-        ],
-        "title": "ContinuityChainDiagnostic",
-        "type": "object"
-      },
-      "ContinuityChainNode": {
-        "description": "One structured node along a prerequisite chain.",
+      "ContinuityPlanChainNode": {
+        "description": "One labeled issue or crossover step in a plan prerequisite chain.",
         "properties": {
           "is_readable": {
             "title": "Is Readable",
@@ -774,73 +740,7 @@
           "label",
           "is_readable"
         ],
-        "title": "ContinuityChainNode",
-        "type": "object"
-      },
-      "ContinuityChainResponse": {
-        "description": "Bounded transitive prerequisite chains for one requested node.",
-        "properties": {
-          "chains": {
-            "items": {
-              "items": {
-                "$ref": "#/components/schemas/ContinuityChainNode"
-              },
-              "type": "array"
-            },
-            "title": "Chains",
-            "type": "array"
-          },
-          "diagnostics": {
-            "items": {
-              "$ref": "#/components/schemas/ContinuityChainDiagnostic"
-            },
-            "title": "Diagnostics",
-            "type": "array"
-          },
-          "direct_blockers": {
-            "items": {
-              "$ref": "#/components/schemas/ContinuityBlocker"
-            },
-            "title": "Direct Blockers",
-            "type": "array"
-          },
-          "evaluated_issue_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Evaluated Issue Id"
-          },
-          "node_id": {
-            "title": "Node Id",
-            "type": "integer"
-          },
-          "node_type": {
-            "enum": [
-              "issue",
-              "thread",
-              "crossover"
-            ],
-            "title": "Node Type",
-            "type": "string"
-          },
-          "readable_prerequisites": {
-            "items": {
-              "$ref": "#/components/schemas/ContinuityChainNode"
-            },
-            "title": "Readable Prerequisites",
-            "type": "array"
-          }
-        },
-        "required": [
-          "node_type",
-          "node_id"
-        ],
-        "title": "ContinuityChainResponse",
+        "title": "ContinuityPlanChainNode",
         "type": "object"
       },
       "ContinuityPlanLane": {
@@ -915,6 +815,239 @@
           "position"
         ],
         "title": "ContinuityPlanNode",
+        "type": "object"
+      },
+      "ContinuityPlanNodeReadiness": {
+        "description": "Live readiness of one visible node in a saved continuity plan.",
+        "properties": {
+          "blockers": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityBlocker"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "chains": {
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/ContinuityPlanChainNode"
+              },
+              "type": "array"
+            },
+            "title": "Chains",
+            "type": "array"
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanReadinessDiagnostic"
+            },
+            "title": "Diagnostics",
+            "type": "array"
+          },
+          "evaluated_issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluated Issue Id"
+          },
+          "is_complete": {
+            "title": "Is Complete",
+            "type": "boolean"
+          },
+          "is_readable": {
+            "title": "Is Readable",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "lane_id": {
+            "title": "Lane Id",
+            "type": "string"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "node_type": {
+            "enum": [
+              "issue",
+              "crossover",
+              "thread"
+            ],
+            "title": "Node Type",
+            "type": "string"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "readable_prerequisites": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanChainNode"
+            },
+            "title": "Readable Prerequisites",
+            "type": "array"
+          },
+          "ref_id": {
+            "title": "Ref Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "node_id",
+          "node_type",
+          "ref_id",
+          "lane_id",
+          "position",
+          "label",
+          "is_readable",
+          "is_complete"
+        ],
+        "title": "ContinuityPlanNodeReadiness",
+        "type": "object"
+      },
+      "ContinuityPlanReadinessDiagnostic": {
+        "description": "One structured plan-readiness failure that does not require text parsing.",
+        "properties": {
+          "code": {
+            "enum": [
+              "dangling_plan_reference",
+              "plan_cycle_detected",
+              "cycle_detected",
+              "depth_limit_exceeded",
+              "node_limit_exceeded"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "integer"
+          },
+          "node_type": {
+            "enum": [
+              "issue",
+              "crossover",
+              "thread"
+            ],
+            "title": "Node Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "node_type",
+          "node_id"
+        ],
+        "title": "ContinuityPlanReadinessDiagnostic",
+        "type": "object"
+      },
+      "ContinuityPlanReadinessResponse": {
+        "description": "Aggregate live readiness for every visible node of one owned plan.",
+        "properties": {
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "lanes": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanLane"
+            },
+            "title": "Lanes",
+            "type": "array"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanNodeReadiness"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "ordering_mode": {
+            "enum": [
+              "informational",
+              "strict_sequential"
+            ],
+            "title": "Ordering Mode",
+            "type": "string"
+          },
+          "plan_diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanReadinessDiagnostic"
+            },
+            "title": "Plan Diagnostics",
+            "type": "array"
+          },
+          "plan_id": {
+            "title": "Plan Id",
+            "type": "integer"
+          },
+          "plan_name": {
+            "title": "Plan Name",
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ContinuityPlanReadinessSummary"
+          }
+        },
+        "required": [
+          "plan_id",
+          "plan_name",
+          "ordering_mode",
+          "generated_at"
+        ],
+        "title": "ContinuityPlanReadinessResponse",
+        "type": "object"
+      },
+      "ContinuityPlanReadinessSummary": {
+        "description": "Deterministic state buckets for one saved plan.",
+        "properties": {
+          "blocked": {
+            "default": 0,
+            "title": "Blocked",
+            "type": "integer"
+          },
+          "complete": {
+            "default": 0,
+            "title": "Complete",
+            "type": "integer"
+          },
+          "readable": {
+            "default": 0,
+            "title": "Readable",
+            "type": "integer"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          },
+          "unavailable": {
+            "default": 0,
+            "title": "Unavailable",
+            "type": "integer"
+          }
+        },
+        "title": "ContinuityPlanReadinessSummary",
         "type": "object"
       },
       "ContinuityPlanResponse": {
@@ -1321,6 +1454,321 @@
           "id"
         ],
         "title": "ConvergenceTarget",
+        "type": "object"
+      },
+      "CrossoverTemplateAdoptRequest": {
+        "description": "Adopt an external template into an editable continuity plan.",
+        "properties": {
+          "issue_node_id_prefix": {
+            "default": "tpl-",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Issue Node Id Prefix",
+            "type": "string"
+          },
+          "lane_id": {
+            "default": "imported",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Lane Id",
+            "type": "string"
+          },
+          "lane_name": {
+            "default": "Imported",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Lane Name",
+            "type": "string"
+          },
+          "ordering_mode": {
+            "default": "informational",
+            "enum": [
+              "informational",
+              "strict_sequential"
+            ],
+            "title": "Ordering Mode",
+            "type": "string"
+          },
+          "plan_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Plan Name",
+            "type": "string"
+          },
+          "source_list_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 1,
+            "title": "Source List Ids",
+            "type": "array"
+          },
+          "target_story_arc_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Story Arc Id"
+          }
+        },
+        "required": [
+          "source_list_ids",
+          "plan_name"
+        ],
+        "title": "CrossoverTemplateAdoptRequest",
+        "type": "object"
+      },
+      "CrossoverTemplateConflictPreview": {
+        "description": "A pair whose reading-order evidence disagrees across source lists.",
+        "properties": {
+          "first_issue_id": {
+            "title": "First Issue Id",
+            "type": "integer"
+          },
+          "second_issue_id": {
+            "title": "Second Issue Id",
+            "type": "integer"
+          },
+          "source_paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Paths",
+            "type": "array"
+          }
+        },
+        "required": [
+          "first_issue_id",
+          "second_issue_id",
+          "source_paths"
+        ],
+        "title": "CrossoverTemplateConflictPreview",
+        "type": "object"
+      },
+      "CrossoverTemplateIntersectionPreview": {
+        "description": "Consistent cross-thread ordering observation, never a hard dependency.",
+        "properties": {
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "first_issue_id": {
+            "title": "First Issue Id",
+            "type": "integer"
+          },
+          "second_issue_id": {
+            "title": "Second Issue Id",
+            "type": "integer"
+          },
+          "source_paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Paths",
+            "type": "array"
+          }
+        },
+        "required": [
+          "first_issue_id",
+          "second_issue_id",
+          "source_paths",
+          "explanation"
+        ],
+        "title": "CrossoverTemplateIntersectionPreview",
+        "type": "object"
+      },
+      "CrossoverTemplateItemPreview": {
+        "description": "Suggested crossover member with full provenance and advisory metadata.",
+        "properties": {
+          "confidence": {
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "role": {
+            "enum": [
+              "core",
+              "context/prelude",
+              "epilogue",
+              "unknown"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "source_paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Paths",
+            "type": "array"
+          },
+          "suggested_position": {
+            "title": "Suggested Position",
+            "type": "integer"
+          },
+          "target_story_arc_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Story Arc Id"
+          }
+        },
+        "required": [
+          "issue_id",
+          "suggested_position",
+          "role",
+          "confidence",
+          "explanation",
+          "source_paths",
+          "target_story_arc_id"
+        ],
+        "title": "CrossoverTemplateItemPreview",
+        "type": "object"
+      },
+      "CrossoverTemplateParallelCandidatePreview": {
+        "description": "Advisory pair that may represent parallel branches.",
+        "properties": {
+          "first_issue_id": {
+            "title": "First Issue Id",
+            "type": "integer"
+          },
+          "second_issue_id": {
+            "title": "Second Issue Id",
+            "type": "integer"
+          },
+          "source_paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Paths",
+            "type": "array"
+          }
+        },
+        "required": [
+          "first_issue_id",
+          "second_issue_id",
+          "source_paths"
+        ],
+        "title": "CrossoverTemplateParallelCandidatePreview",
+        "type": "object"
+      },
+      "CrossoverTemplatePreviewRequest": {
+        "description": "Request to preview a derived crossover template from persisted CBL evidence.",
+        "properties": {
+          "source_list_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 1,
+            "title": "Source List Ids",
+            "type": "array"
+          },
+          "target_story_arc_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Story Arc Id"
+          }
+        },
+        "required": [
+          "source_list_ids"
+        ],
+        "title": "CrossoverTemplatePreviewRequest",
+        "type": "object"
+      },
+      "CrossoverTemplateSerialSpinePreview": {
+        "description": "Same-thread issue order preserved as advisory series structure.",
+        "properties": {
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "issue_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Issue Ids",
+            "type": "array"
+          },
+          "source_paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Paths",
+            "type": "array"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "thread_id",
+          "issue_ids",
+          "source_paths",
+          "explanation"
+        ],
+        "title": "CrossoverTemplateSerialSpinePreview",
+        "type": "object"
+      },
+      "CrossoverTemplateUnresolvedMatchPreview": {
+        "description": "A source entry that could not be matched to a ComicPile issue.",
+        "properties": {
+          "issue_number": {
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "series_name": {
+            "title": "Series Name",
+            "type": "string"
+          },
+          "source_path": {
+            "title": "Source Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_path",
+          "position",
+          "series_name",
+          "issue_number",
+          "reason"
+        ],
+        "title": "CrossoverTemplateUnresolvedMatchPreview",
         "type": "object"
       },
       "DependencyCreate": {
@@ -1812,6 +2260,58 @@
           "created_at"
         ],
         "title": "DependencyResponse",
+        "type": "object"
+      },
+      "DerivedCrossoverTemplatePreview": {
+        "description": "Non-blocking preview of a derived external crossover template.",
+        "properties": {
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/CrossoverTemplateConflictPreview"
+            },
+            "title": "Conflicts",
+            "type": "array"
+          },
+          "intersections": {
+            "items": {
+              "$ref": "#/components/schemas/CrossoverTemplateIntersectionPreview"
+            },
+            "title": "Intersections",
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CrossoverTemplateItemPreview"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "parallel_candidates": {
+            "items": {
+              "$ref": "#/components/schemas/CrossoverTemplateParallelCandidatePreview"
+            },
+            "title": "Parallel Candidates",
+            "type": "array"
+          },
+          "serial_spines": {
+            "items": {
+              "$ref": "#/components/schemas/CrossoverTemplateSerialSpinePreview"
+            },
+            "title": "Serial Spines",
+            "type": "array"
+          },
+          "unresolved": {
+            "items": {
+              "$ref": "#/components/schemas/CrossoverTemplateUnresolvedMatchPreview"
+            },
+            "title": "Unresolved",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "DerivedCrossoverTemplatePreview",
         "type": "object"
       },
       "DiagnosticError": {
@@ -2652,6 +3152,238 @@
         "title": "ReadingOrderItemResponse",
         "type": "object"
       },
+      "ReadingOrderListResponse": {
+        "description": "Response schema for listing all reading orders owned by a user.",
+        "properties": {
+          "reading_orders": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderSummary"
+            },
+            "title": "Reading Orders",
+            "type": "array"
+          }
+        },
+        "required": [
+          "reading_orders"
+        ],
+        "title": "ReadingOrderListResponse",
+        "type": "object"
+      },
+      "ReadingOrderProjectionConflict": {
+        "description": "A single conflict blocking a projection.",
+        "properties": {
+          "code": {
+            "pattern": "^(duplicate_thread|missing_thread|non_thread_node)$",
+            "title": "Code",
+            "type": "string"
+          },
+          "existing_positions": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Existing Positions",
+            "type": "array"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Id"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "node_id"
+        ],
+        "title": "ReadingOrderProjectionConflict",
+        "type": "object"
+      },
+      "ReadingOrderProjectionEntry": {
+        "description": "One row in a projected reading order preview.",
+        "properties": {
+          "position": {
+            "minimum": 1.0,
+            "title": "Position",
+            "type": "integer"
+          },
+          "source": {
+            "pattern": "^(existing|added|updated)$",
+            "title": "Source",
+            "type": "string"
+          },
+          "source_node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Node Id"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "thread_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Title"
+          }
+        },
+        "required": [
+          "thread_id",
+          "thread_title",
+          "position",
+          "source"
+        ],
+        "title": "ReadingOrderProjectionEntry",
+        "type": "object"
+      },
+      "ReadingOrderProjectionPreview": {
+        "description": "Response contract for the preview endpoint.",
+        "properties": {
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderProjectionConflict"
+            },
+            "title": "Conflicts",
+            "type": "array"
+          },
+          "dropped_node_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Dropped Node Ids",
+            "type": "array"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderProjectionEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "plan_id": {
+            "title": "Plan Id",
+            "type": "integer"
+          },
+          "plan_name": {
+            "title": "Plan Name",
+            "type": "string"
+          },
+          "plan_ordering_mode": {
+            "title": "Plan Ordering Mode",
+            "type": "string"
+          },
+          "reading_order_id": {
+            "title": "Reading Order Id",
+            "type": "integer"
+          },
+          "reading_order_name": {
+            "title": "Reading Order Name",
+            "type": "string"
+          },
+          "total_positions": {
+            "minimum": 0.0,
+            "title": "Total Positions",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_id",
+          "plan_name",
+          "plan_ordering_mode",
+          "reading_order_id",
+          "reading_order_name",
+          "entries",
+          "conflicts",
+          "total_positions"
+        ],
+        "title": "ReadingOrderProjectionPreview",
+        "type": "object"
+      },
+      "ReadingOrderProjectionRequest": {
+        "description": "Request contract for both preview and confirm endpoints.",
+        "properties": {
+          "reading_order_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Reading Order Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "reading_order_id"
+        ],
+        "title": "ReadingOrderProjectionRequest",
+        "type": "object"
+      },
+      "ReadingOrderProjectionResult": {
+        "description": "Response contract for the confirm endpoint.",
+        "properties": {
+          "added_count": {
+            "minimum": 0.0,
+            "title": "Added Count",
+            "type": "integer"
+          },
+          "kept_count": {
+            "minimum": 0.0,
+            "title": "Kept Count",
+            "type": "integer"
+          },
+          "plan_id": {
+            "title": "Plan Id",
+            "type": "integer"
+          },
+          "reading_order_id": {
+            "title": "Reading Order Id",
+            "type": "integer"
+          },
+          "total_positions": {
+            "minimum": 0.0,
+            "title": "Total Positions",
+            "type": "integer"
+          },
+          "updated_count": {
+            "minimum": 0.0,
+            "title": "Updated Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_id",
+          "reading_order_id",
+          "added_count",
+          "updated_count",
+          "kept_count",
+          "total_positions"
+        ],
+        "title": "ReadingOrderProjectionResult",
+        "type": "object"
+      },
       "ReadingOrderResponse": {
         "description": "Response schema for a reading order with items.",
         "properties": {
@@ -2698,6 +3430,41 @@
           "completed_items"
         ],
         "title": "ReadingOrderResponse",
+        "type": "object"
+      },
+      "ReadingOrderSummary": {
+        "description": "Compact reading order metadata for projection and picker surfaces.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "total_items": {
+            "default": 0,
+            "title": "Total Items",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ReadingOrderSummary",
         "type": "object"
       },
       "RefreshTokenRequest": {
@@ -5103,6 +5870,39 @@
         ]
       }
     },
+    "/api/metrics": {
+      "get": {
+        "description": "Return simple performance metrics.",
+        "operationId": "metrics_api_metrics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "title": "Response Metrics Api Metrics Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Metrics",
+        "tags": [
+          "metrics"
+        ]
+      }
+    },
     "/api/queue/shuffle/": {
       "post": {
         "description": "Randomize all active queue positions for the authenticated user.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    Empty response with HTTP 204 status.",
@@ -7177,6 +7977,66 @@
         ]
       }
     },
+    "/api/v1/continuity-plans/{plan_id}/readiness": {
+      "get": {
+        "description": "Return live readiness for every visible node of one owned plan.",
+        "operationId": "get_continuity_plan_readiness_api_v1_continuity_plans__plan_id__readiness_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "title": "Plan Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_chains",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Chains",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanReadinessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Continuity Plan Readiness",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "continuity-plans"
+        ]
+      }
+    },
     "/api/v1/continuity-rules/": {
       "get": {
         "description": "List the authenticated user's continuity rules.",
@@ -7501,6 +8361,104 @@
           "dependencies",
           "dependencies",
           "continuity"
+        ]
+      }
+    },
+    "/api/v1/crossover-templates/adopt": {
+      "post": {
+        "description": "Adopt an external template into an editable continuity plan. Defaults to informational mode so no hard rules are created until the user explicitly selects blocking semantics.",
+        "operationId": "adopt_crossover_template_api_v1_crossover_templates_adopt_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrossoverTemplateAdoptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Adopt Crossover Template",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "crossover-templates"
+        ]
+      }
+    },
+    "/api/v1/crossover-templates/preview": {
+      "post": {
+        "description": "Preview a derived crossover template from active CBL lists. Read-only: never mutates user data or continuity rules.",
+        "operationId": "preview_crossover_template_api_v1_crossover_templates_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrossoverTemplatePreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DerivedCrossoverTemplatePreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Crossover Template",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "crossover-templates"
         ]
       }
     },
@@ -8745,6 +9703,34 @@
           "dependencies",
           "dependencies",
           "reading-order-groups"
+        ]
+      }
+    },
+    "/api/v1/reading-orders/": {
+      "get": {
+        "description": "List reading orders owned by the current user, ordered by name.",
+        "operationId": "list_reading_orders_api_v1_reading_orders__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingOrderListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Reading Orders",
+        "tags": [
+          "reading-orders",
+          "reading-orders"
         ]
       }
     },

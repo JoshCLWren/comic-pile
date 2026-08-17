@@ -309,6 +309,7 @@ async def resolve_continuity_chains(
     user_id: int,
     node_type: ContinuityReadinessNodeType,
     node_id: int,
+    snapshot: _GraphSnapshot | None = None,
 ) -> ContinuityTraversalResult:
     """Resolve every bounded prerequisite chain to currently readable leaves.
 
@@ -317,11 +318,14 @@ async def resolve_continuity_chains(
         user_id: Authenticated owner whose continuity graph should be traversed.
         node_type: Requested issue, thread, or crossover type.
         node_id: Identifier of the requested owned node.
+        snapshot: Optional preloaded readiness graph to avoid a second bounded
+            full-library load when traversing multiple nodes in one request.
 
     Returns:
         Direct blockers, deterministic full chains, readable leaves, and diagnostics.
     """
-    snapshot = await _load_snapshot(db, user_id)
+    if snapshot is None:
+        snapshot = await _load_snapshot(db, user_id)
     evaluated_issue_id, blockers = _requested_blockers(node_type, node_id, snapshot)
     state = _TraversalState(visited_nodes=0, diagnostics=[])
     paths = _root_paths(blockers, snapshot, state)

@@ -1721,8 +1721,12 @@ print('\n'.join(str(n) for n in ready))
                         # Remove stray node_modules so git merge isn't blocked
                         rm -rf "$wt_path/node_modules" "$wt_path/frontend/node_modules" 2>/dev/null || true
                         if timeout 30s git -C "$wt_path" fetch origin main >> "$MERGER_LOG" 2>&1 && \
-                           timeout 30s git -C "$wt_path" merge origin/main --no-edit -X theirs >> "$MERGER_LOG" 2>&1 && \
-                           timeout 30s git -C "$wt_path" push origin "$branch" >> "$MERGER_LOG" 2>&1; then
+                            if [[ "$STRATEGY" == "rebase" ]]; then \
+                                timeout 30s git -C "$wt_path" rebase origin/main -X theirs >> "$MERGER_LOG" 2>&1; \
+                            else \
+                                timeout 30s git -C "$wt_path" merge origin/main --no-edit -X theirs >> "$MERGER_LOG" 2>&1; \
+                            fi && \
+                            timeout 30s git -C "$wt_path" push origin "$branch" >> "$MERGER_LOG" 2>&1; then
                             log_info "merger — rebased $branch onto main"
                         else
                             log_warn "merger — rebase failed for $branch (PR #$pr_num)"
@@ -1735,8 +1739,12 @@ print('\n'.join(str(n) for n in ready))
                 if git -C "$REPO_ROOT" worktree add "$tmpwt" "origin/$branch" --detach >> "$MERGER_LOG" 2>&1; then
                     rm -rf "$tmpwt/node_modules" "$tmpwt/frontend/node_modules" 2>/dev/null || true
                     if timeout 30s git -C "$tmpwt" fetch origin main >> "$MERGER_LOG" 2>&1 && \
-                       timeout 30s git -C "$tmpwt" merge origin/main --no-edit -X theirs >> "$MERGER_LOG" 2>&1 && \
-                       timeout 30s git -C "$tmpwt" push origin "HEAD:$branch" >> "$MERGER_LOG" 2>&1; then
+                        if [[ "$STRATEGY" == "rebase" ]]; then \
+                            timeout 30s git -C "$tmpwt" rebase origin/main -X theirs >> "$MERGER_LOG" 2>&1; \
+                        else \
+                            timeout 30s git -C "$tmpwt" merge origin/main --no-edit -X theirs >> "$MERGER_LOG" 2>&1; \
+                        fi && \
+                        timeout 30s git -C "$tmpwt" push origin "HEAD:$branch" >> "$MERGER_LOG" 2>&1; then
                         log_info "merger — rebased $branch onto main (scratch)"
                     else
                         log_warn "merger — rebase failed for $branch (scratch)"

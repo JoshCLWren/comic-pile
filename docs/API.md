@@ -30,6 +30,10 @@ do not introduce new bare `/api/*` routes. Non-production tooling routes
 (`debug`, `test`) are mounted under bare `/api/*` but only in non-production or
 test environments — they are intentional exceptions, not client APIs.
 
+The exact canonical families and the allowed legacy aliases are maintained in
+[`docs/API_V1_CANONICAL.md`](API_V1_CANONICAL.md) and enforced by
+`tests/test_api_v1_canonical_contract.py`.
+
 ---
 
 ## Threads

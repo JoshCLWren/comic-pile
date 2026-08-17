@@ -5,21 +5,26 @@ import { BrowserRouter } from 'react-router-dom'
 import QueuePage from '../pages/QueuePage'
 import { ToastProvider } from '../contexts/ToastProvider'
 import {
- useCreateThread,
- useDeleteThread,
- useReactivateThread,
- useThreads,
- useUpdateThread,
+  useCreateThread,
+  useDeleteThread,
+  useReactivateThread,
+  useUpdateThread,
 } from '../hooks/useThread'
-import { useBugReportRestore } from '../contexts/useBugReportRestore'
-import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
+import {
+  useMoveToBack,
+  useMoveToFront,
+  useMoveToPosition,
+  useQueueThreads,
+  useShuffleQueue,
+} from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
-import { dependenciesApi, threadsApi } from '../services/api'
+import { threadsApi, dependenciesApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
+import type { Thread } from '../types'
+import { useBugReportRestore } from '../contexts/useBugReportRestore'
 
 vi.mock('../hooks/useThread', () => ({
-  useThreads: vi.fn(),
   useCreateThread: vi.fn(),
   useUpdateThread: vi.fn(),
   useDeleteThread: vi.fn(),
@@ -30,6 +35,7 @@ vi.mock('../hooks/useQueue', () => ({
   useMoveToFront: vi.fn(),
   useMoveToBack: vi.fn(),
   useMoveToPosition: vi.fn(),
+  useQueueThreads: vi.fn(),
   useShuffleQueue: vi.fn(),
 }))
 
@@ -68,7 +74,7 @@ vi.mock('../contexts/useToast', () => ({
   useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
 }))
 
-const mockedUseThreads = vi.mocked(useThreads) as any
+const mockedUseQueueThreads = vi.mocked(useQueueThreads) as any
 const mockedUseCreateThread = vi.mocked(useCreateThread) as any
 const mockedUseUpdateThread = vi.mocked(useUpdateThread) as any
 const mockedUseDeleteThread = vi.mocked(useDeleteThread) as any
@@ -87,12 +93,12 @@ const mockedIssuesApi = vi.mocked(issuesApi) as any
 
 beforeEach(() => {
   vi.stubGlobal('alert', vi.fn())
-  mockedUseThreads.mockReturnValue({
+  mockedUseQueueThreads.mockReturnValue({
     data: [
-      { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5 },
+      { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] },
       { id: 2, title: 'Descender', format: 'Comic', status: 'completed', issues_remaining: 0 },
     ],
-    isLoading: false,
+    isPending: false,
     refetch: vi.fn(),
   })
   mockedUseCreateThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
@@ -133,7 +139,7 @@ beforeEach(() => {
   } as never)
 })
 
-it('renders queue items and opens create modal', async () => {
+  it('renders queue items and opens create modal', async () => {
   const user = userEvent.setup()
   render(
     <BrowserRouter>
@@ -152,7 +158,7 @@ it('renders queue items and opens create modal', async () => {
   expect(screen.getByRole('heading', { name: /create thread/i })).toBeInTheDocument()
 })
 
-it('registers a restore target while the create modal is open', async () => {
+  it('registers a restore target while the create modal is open', async () => {
   const user = userEvent.setup()
   const restoreState = {
     setRestoreAction: vi.fn(),
@@ -180,12 +186,12 @@ it('registers a restore target while the create modal is open', async () => {
   })
 })
 
-it('shuffles the queue from the header control', async () => {
+  it('shuffles the queue from the header control', async () => {
   const mockRefetch = vi.fn()
   const mockShuffle = { mutate: vi.fn(), isPending: false }
-  mockedUseThreads.mockReturnValue({
+  mockedUseQueueThreads.mockReturnValue({
     data: [
-      { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5 },
+      { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] },
       { id: 3, title: 'Spawn', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 7 },
       { id: 2, title: 'Descender', format: 'Comic', status: 'completed', issues_remaining: 0 },
     ],
@@ -292,9 +298,9 @@ describe('Visible action Snooze/Unsnooze', () => {
       data: { snoozed_threads: [], pending_thread_id: 1 },
       refetch: mockRefetchSession,
     })
-    mockedUseThreads.mockReturnValue({
+    mockedUseQueueThreads.mockReturnValue({
       data: [
-        { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5 },
+        { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] },
       ],
       isLoading: false,
       refetch: mockRefetch,
@@ -327,9 +333,9 @@ describe('Visible action Snooze/Unsnooze', () => {
       },
       refetch: mockRefetchSession,
     })
-    mockedUseThreads.mockReturnValue({
+    mockedUseQueueThreads.mockReturnValue({
       data: [
-        { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5 },
+        { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] },
       ],
       isLoading: false,
       refetch: mockRefetch,
@@ -369,30 +375,64 @@ describe('Keyboard Accessibility', () => {
   })
 })
 
-it('filters and sorts active threads while preserving completed threads', async () => {
-  const user = userEvent.setup()
-  mockedUseThreads.mockReturnValue({
-    data: [
-      { id: 1, title: 'Zeta', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1, created_at: '2024-01-01' },
-      { id: 2, title: 'Alpha', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 2, created_at: '2025-01-01' },
-      { id: 3, title: 'Done', format: 'Comic', status: 'completed', queue_position: 0, issues_remaining: 0, created_at: '2023-01-01', notes: 'Finished' },
-    ], isLoading: false, refetch: vi.fn(),
+  it('filters and sorts active threads while preserving completed threads', async () => {
+    const user = userEvent.setup()
+    mockedUseQueueThreads.mockImplementation((searchTerm: string) => {
+      let data: Thread[] = []
+      if (searchTerm !== 'missing') {
+        data = [
+          { id: 1, title: 'Zeta', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1, total_issues: null, created_at: '2024-01-01', is_blocked: false, blocking_reasons: [] },
+          { id: 2, title: 'Alpha', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 2, total_issues: null, created_at: '2025-01-01', is_blocked: false, blocking_reasons: [] },
+          { id: 3, title: 'Done', format: 'Comic', status: 'completed', queue_position: 0, issues_remaining: 0, total_issues: null, created_at: '2023-01-01', notes: 'Finished', is_blocked: false, blocking_reasons: [] },
+        ]
+      }
+      return {
+        data,
+        isPending: false,
+        isError: false,
+        refetch: vi.fn(),
+        nextPageToken: null,
+        loadMore: vi.fn(),
+      }
+    })
+    render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+    expect(screen.getByText('Done')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'A-Z' }))
+    const cards = screen.getAllByTestId('queue-thread-item')
+    expect(cards[0]).toHaveTextContent('Alpha')
+    await user.type(screen.getByPlaceholderText('Search...'), 'missing')
+    expect(screen.getByText('No active threads match your search')).toBeInTheDocument()
   })
-  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  expect(screen.getByText('Done')).toBeInTheDocument()
-  await user.click(screen.getByRole('button', { name: 'A-Z' }))
-  const cards = screen.getAllByTestId('queue-thread-item')
-  expect(cards[0]).toHaveTextContent('Alpha')
-  await user.type(screen.getByPlaceholderText('Search...'), 'missing')
-  expect(screen.getByText('No threads match your search')).toBeInTheDocument()
-})
 
-it('creates a simple issue range and marks the requested issues read', async () => {
+  it('shows correct empty state when search matches only completed threads', async () => {
+    const user = userEvent.setup()
+    mockedUseQueueThreads.mockImplementation((searchTerm: string) => {
+      let data: Thread[] = []
+      if (searchTerm === 'done') {
+        data = [
+          { id: 2, title: 'Done', format: 'Comic', status: 'completed', queue_position: 0, issues_remaining: 0, total_issues: null, created_at: '2023-01-01', notes: 'Finished', is_blocked: false, blocking_reasons: [] },
+        ]
+      }
+      return {
+        data,
+        isPending: false,
+        isError: false,
+        refetch: vi.fn(),
+        nextPageToken: null,
+        loadMore: vi.fn(),
+      }
+    })
+    render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+    await user.type(screen.getByPlaceholderText('Search...'), 'done')
+    expect(screen.getByText('No active threads match your search')).toBeInTheDocument()
+  })
+
+  it('creates a simple issue range and marks the requested issues read', async () => {
   const user = userEvent.setup()
   const create = vi.fn().mockResolvedValue({ id: 44 })
   mockedUseCreateThread.mockReturnValue({ mutate: create, isPending: false })
   mockedThreadsApi.setPending.mockResolvedValue({})
-  mockedUseThreads.mockReturnValue({ data: [], isLoading: false, refetch: vi.fn() })
+  mockedUseQueueThreads.mockReturnValue({ data: [], isLoading: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await user.click(screen.getAllByRole('button', { name: /add thread/i })[0])
   await user.type(screen.getByLabelText('Title'), 'New Series')
@@ -403,10 +443,10 @@ it('creates a simple issue range and marks the requested issues read', async () 
   await waitFor(() => expect(create).toHaveBeenCalled())
 })
 
-it('opens edit, reposition, dependency, and completed reactivation flows', async () => {
+  it('opens edit, reposition, dependency, and completed reactivation flows', async () => {
   const user = userEvent.setup()
   const refetch = vi.fn()
-  mockedUseThreads.mockReturnValue({ data: [
+  mockedUseQueueThreads.mockReturnValue({ data: [
     { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 3, total_issues: null, created_at: '2024-01-01' },
     { id: 2, title: 'Done', format: 'Comic', status: 'completed', issues_remaining: 0, created_at: '2023-01-01' },
   ], isLoading: false, refetch })
@@ -428,20 +468,20 @@ it('opens edit, reposition, dependency, and completed reactivation flows', async
   expect(refetch).toHaveBeenCalled()
 })
 
-it('renders loading and empty queue states', () => {
-  mockedUseThreads.mockReturnValue({ data: undefined, isPending: true, refetch: vi.fn() })
+  it('renders loading and empty queue states', () => {
+  mockedUseQueueThreads.mockReturnValue({ data: undefined, isPending: true, refetch: vi.fn() })
   const { rerender } = render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   expect(screen.getByRole('status')).toBeInTheDocument()
-  mockedUseThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
+  mockedUseQueueThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
   rerender(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   expect(screen.getByText('No active threads in queue')).toBeInTheDocument()
 })
 
-it('prevents reading blocked threads and reports delete failures', async () => {
+  it('prevents reading blocked threads and reports delete failures', async () => {
   const user = userEvent.setup()
   const deleteMutation = { mutate: vi.fn().mockRejectedValue(new Error('delete failed')), isPending: false }
   mockedUseDeleteThread.mockReturnValue(deleteMutation)
-  mockedUseThreads.mockReturnValue({ data: [{ id: 1, title: 'Blocked', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 2, is_blocked: true }], isPending: false, refetch: vi.fn() })
+  mockedUseQueueThreads.mockReturnValue({ data: [{ id: 1, title: 'Blocked', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 2, is_blocked: true, total_issues: null, blocking_reasons: [] }], isPending: false, refetch: vi.fn() })
   vi.stubGlobal('confirm', vi.fn(() => true))
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await user.click(screen.getByLabelText('Read'))
@@ -450,11 +490,11 @@ it('prevents reading blocked threads and reports delete failures', async () => {
   await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('delete failed')))
 })
 
-it('supports created-date sorting and drag reorder failure feedback', async () => {
+  it('supports created-date sorting and drag reorder failure feedback', async () => {
   const user = userEvent.setup()
   const move = { mutate: vi.fn().mockRejectedValue(new Error('reorder failed')), isPending: false }
   mockedUseMoveToPosition.mockReturnValue(move)
-  mockedUseThreads.mockReturnValue({ data: [
+  mockedUseQueueThreads.mockReturnValue({ data: [
     { id: 1, title: 'Old', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 1, created_at: '2024-01-01' },
     { id: 2, title: 'New', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1, created_at: '2025-01-01' },
   ], isPending: false, refetch: vi.fn() })
@@ -470,7 +510,7 @@ it('supports created-date sorting and drag reorder failure feedback', async () =
   await waitFor(() => expect(move.mutate).toHaveBeenCalled())
 })
 
-it('executes every queue action-menu operation', async () => {
+  it('executes every queue action-menu operation', async () => {
   const user = userEvent.setup()
   const front = vi.fn().mockResolvedValue(undefined)
   const back = vi.fn().mockResolvedValue(undefined)
@@ -479,7 +519,7 @@ it('executes every queue action-menu operation', async () => {
   mockedUseMoveToFront.mockReturnValue({ mutate: front, isPending: false })
   mockedUseMoveToBack.mockReturnValue({ mutate: back, isPending: false })
   mockedUseDeleteThread.mockReturnValue({ mutate: remove, isPending: false })
-  mockedUseThreads.mockReturnValue({
+  mockedUseQueueThreads.mockReturnValue({
     data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 4 }],
     isPending: false,
     refetch,
@@ -506,11 +546,11 @@ it('executes every queue action-menu operation', async () => {
   await user.click(screen.getByTestId('position-slider-cancel'))
 })
 
-it('reports queue mutation failures and invalid reposition requests', async () => {
+  it('reports queue mutation failures and invalid reposition requests', async () => {
   const user = userEvent.setup()
   mockedUseMoveToFront.mockReturnValue({ mutate: vi.fn().mockRejectedValue(new Error('front failed')), isPending: false })
   mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn().mockRejectedValue(new Error('shuffle failed')), isPending: false })
-  mockedUseThreads.mockReturnValue({ data: [
+  mockedUseQueueThreads.mockReturnValue({ data: [
     { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 1 },
     { id: 2, title: 'Spawn', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1 },
   ], isPending: false, refetch: vi.fn() })
@@ -527,11 +567,11 @@ it('reports queue mutation failures and invalid reposition requests', async () =
   await user.click(screen.getByTestId('position-slider-confirm'))
 })
 
-it('creates a literal issue range and reports create failures', async () => {
+  it('creates a literal issue range and reports create failures', async () => {
   const user = userEvent.setup()
   const create = vi.fn().mockResolvedValue({ id: 55 })
   mockedUseCreateThread.mockReturnValue({ mutate: create, isPending: false })
-  mockedUseThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
+  mockedUseQueueThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await user.click(screen.getAllByRole('button', { name: /add thread/i })[0])
   await user.type(screen.getByLabelText('Title'), 'Annuals')
@@ -549,11 +589,11 @@ it('creates a literal issue range and reports create failures', async () => {
   await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('create failed')))
 })
 
-it('uses thread blocked state without loading dependency details, and handles edit failure', async () => {
+  it('uses thread blocked state without loading dependency details, and handles edit failure', async () => {
   const user = userEvent.setup()
   const update = vi.fn().mockRejectedValue(new Error('update failed'))
   mockedUseUpdateThread.mockReturnValue({ mutate: update, isPending: false })
-  mockedUseThreads.mockReturnValue({ data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', is_blocked: true, queue_position: 1, issues_remaining: 2, total_issues: null }], isPending: false, refetch: vi.fn() })
+  mockedUseQueueThreads.mockReturnValue({ data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', is_blocked: true, queue_position: 1, issues_remaining: 2, total_issues: null }], isPending: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   expect(mockedDependenciesApi.listBlockedThreadIds).not.toHaveBeenCalled()
   expect(mockedDependenciesApi.getBlockingInfo).not.toHaveBeenCalled()
@@ -567,12 +607,12 @@ it('uses thread blocked state without loading dependency details, and handles ed
   await waitFor(() => expect(update).toHaveBeenCalled())
 })
 
-it('covers drag cancellation and successful repositioning', async () => {
+  it('covers drag cancellation and successful repositioning', async () => {
   const user = userEvent.setup()
   const move = vi.fn().mockResolvedValue(undefined)
   const refetch = vi.fn()
   mockedUseMoveToPosition.mockReturnValue({ mutate: move, isPending: false })
-  mockedUseThreads.mockReturnValue({ data: [
+  mockedUseQueueThreads.mockReturnValue({ data: [
     { id: 1, title: 'One', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 1 },
     { id: 2, title: 'Two', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1 },
   ], isPending: false, refetch })
@@ -589,11 +629,11 @@ it('covers drag cancellation and successful repositioning', async () => {
   expect(refetch).toHaveBeenCalled()
 })
 
-it('creates complex ranges and marks the requested issues read', async () => {
+  it('creates complex ranges and marks the requested issues read', async () => {
   const user = userEvent.setup()
   const create = vi.fn().mockResolvedValue({ id: 77 })
   mockedUseCreateThread.mockReturnValue({ mutate: create, isPending: false })
-  mockedUseThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
+  mockedUseQueueThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
   mockedIssuesApi.create.mockResolvedValue({ issues: [{ id: 11 }, { id: 12 }] })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await user.click(screen.getAllByRole('button', { name: /add thread/i })[0])
@@ -605,12 +645,12 @@ it('creates complex ranges and marks the requested issues read', async () => {
   expect(mockedIssuesApi.markRead).toHaveBeenCalledWith(12)
 })
 
-it('creates a later single issue without requiring earlier issues', async () => {
+  it('creates a later single issue without requiring earlier issues', async () => {
   const user = userEvent.setup()
   const create = vi.fn().mockResolvedValue({ id: 78 })
   mockedIssuesApi.markRead.mockClear()
   mockedUseCreateThread.mockReturnValue({ mutate: create, isPending: false })
-  mockedUseThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
+  mockedUseQueueThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
   mockedIssuesApi.create.mockResolvedValue({ issues: [{ id: 71, issue_number: '71' }] })
 
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
@@ -632,11 +672,11 @@ it('creates a later single issue without requiring earlier issues', async () => 
   expect(mockedIssuesApi.markRead).not.toHaveBeenCalled()
 })
 
-it('handles reactivation success and failure from completed threads', async () => {
+  it('handles reactivation success and failure from completed threads', async () => {
   const user = userEvent.setup()
   const reactivate = vi.fn().mockResolvedValue({})
   mockedUseReactivateThread.mockReturnValue({ mutate: reactivate, isPending: false })
-  mockedUseThreads.mockReturnValue({ data: [{ id: 2, title: 'Done', format: 'Comic', status: 'completed', issues_remaining: 0 }], isPending: false, refetch: vi.fn() })
+  mockedUseQueueThreads.mockReturnValue({ data: [{ id: 2, title: 'Done', format: 'Comic', status: 'completed', issues_remaining: 0 }], isPending: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await user.click(screen.getAllByRole('button', { name: /^reactivate$/i })[0])
   await user.selectOptions(screen.getAllByRole('combobox').at(-1)!, '2')
@@ -651,7 +691,7 @@ it('handles reactivation success and failure from completed threads', async () =
   await waitFor(() => expect(screen.getByRole('heading', { name: /reactivate thread/i })).toBeInTheDocument())
 })
 
-it('uses the virtualized queue without loading hidden blocked-thread reasons', async () => {
+  it('uses the virtualized queue without loading hidden blocked-thread reasons', async () => {
   vi.stubGlobal('ResizeObserver', class {
     observe() {}
     unobserve() {}
@@ -668,7 +708,7 @@ it('uses the virtualized queue without loading hidden blocked-thread reasons', a
     issues_remaining: 1,
     is_blocked: index === 0,
   }))
-  mockedUseThreads.mockReturnValue({ data: manyThreads, isPending: false, refetch: vi.fn() })
+  mockedUseQueueThreads.mockReturnValue({ data: manyThreads, isPending: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await waitFor(() => expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument())
   expect(screen.getByRole('list', { name: 'Thread queue' })).toBeInTheDocument()

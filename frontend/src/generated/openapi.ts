@@ -402,6 +402,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Metrics
+         * @description Return simple performance metrics.
+         */
+        get: operations["metrics_api_metrics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/queue/shuffle/": {
         parameters: {
             query?: never;
@@ -1659,6 +1679,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/continuity-plans/{plan_id}/readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Continuity Plan Readiness
+         * @description Return live readiness for every visible node of one owned plan.
+         */
+        get: operations["get_continuity_plan_readiness_api_v1_continuity_plans__plan_id__readiness_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/continuity-rules/": {
         parameters: {
             query?: never;
@@ -1745,6 +1785,46 @@ export interface paths {
          * @description Evaluate direct continuity readiness for one owned issue, thread, or crossover.
          */
         post: operations["get_continuity_readiness_api_v1_continuity_readiness_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/crossover-templates/adopt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Adopt Crossover Template
+         * @description Adopt an external template into an editable continuity plan. Defaults to informational mode so no hard rules are created until the user explicitly selects blocking semantics.
+         */
+        post: operations["adopt_crossover_template_api_v1_crossover_templates_adopt_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/crossover-templates/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Crossover Template
+         * @description Preview a derived crossover template from active CBL lists. Read-only: never mutates user data or continuity rules.
+         */
+        post: operations["preview_crossover_template_api_v1_crossover_templates_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2287,6 +2367,26 @@ export interface paths {
          * @description Remove one membership from an owned group.
          */
         delete: operations["remove_member_api_v1_reading_order_groups__group_id__members__member_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reading-orders/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Reading Orders
+         * @description List reading orders owned by the current user, ordered by name.
+         */
+        get: operations["list_reading_orders_api_v1_reading_orders__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3875,6 +3975,11 @@ export interface components {
          * @description One unsatisfied continuity rule blocking the requested node.
          */
         ContinuityBlocker: {
+            /**
+             * Blocker Type
+             * @enum {string}
+             */
+            blocker_type: "item_unread" | "members_unread" | "selected_members_unread";
             /** Causing Issue Ids */
             causing_issue_ids?: number[];
             /** Causing Member Issue Ids */
@@ -3905,30 +4010,10 @@ export interface components {
             source_type: "issue" | "crossover";
         };
         /**
-         * ContinuityChainDiagnostic
-         * @description One structured traversal failure that does not require text parsing.
+         * ContinuityPlanChainNode
+         * @description One labeled issue or crossover step in a plan prerequisite chain.
          */
-        ContinuityChainDiagnostic: {
-            /**
-             * Code
-             * @enum {string}
-             */
-            code: "cycle_detected" | "depth_limit_exceeded" | "node_limit_exceeded";
-            /** Limit */
-            limit?: number | null;
-            /** Node Id */
-            node_id: number;
-            /**
-             * Node Type
-             * @enum {string}
-             */
-            node_type: "issue" | "crossover";
-        };
-        /**
-         * ContinuityChainNode
-         * @description One structured node along a prerequisite chain.
-         */
-        ContinuityChainNode: {
+        ContinuityPlanChainNode: {
             /** Is Readable */
             is_readable: boolean;
             /** Label */
@@ -3940,29 +4025,6 @@ export interface components {
              * @enum {string}
              */
             node_type: "issue" | "crossover";
-        };
-        /**
-         * ContinuityChainResponse
-         * @description Bounded transitive prerequisite chains for one requested node.
-         */
-        ContinuityChainResponse: {
-            /** Chains */
-            chains?: components["schemas"]["ContinuityChainNode"][][];
-            /** Diagnostics */
-            diagnostics?: components["schemas"]["ContinuityChainDiagnostic"][];
-            /** Direct Blockers */
-            direct_blockers?: components["schemas"]["ContinuityBlocker"][];
-            /** Evaluated Issue Id */
-            evaluated_issue_id?: number | null;
-            /** Node Id */
-            node_id: number;
-            /**
-             * Node Type
-             * @enum {string}
-             */
-            node_type: "issue" | "thread" | "crossover";
-            /** Readable Prerequisites */
-            readable_prerequisites?: components["schemas"]["ContinuityChainNode"][];
         };
         /**
          * ContinuityPlanLane
@@ -3994,6 +4056,119 @@ export interface components {
             position: number;
             /** Ref Id */
             ref_id: number;
+        };
+        /**
+         * ContinuityPlanNodeReadiness
+         * @description Live readiness of one visible node in a saved continuity plan.
+         */
+        ContinuityPlanNodeReadiness: {
+            /** Blockers */
+            blockers?: components["schemas"]["ContinuityBlocker"][];
+            /** Chains */
+            chains?: components["schemas"]["ContinuityPlanChainNode"][][];
+            /** Diagnostics */
+            diagnostics?: components["schemas"]["ContinuityPlanReadinessDiagnostic"][];
+            /** Evaluated Issue Id */
+            evaluated_issue_id?: number | null;
+            /** Is Complete */
+            is_complete: boolean;
+            /** Is Readable */
+            is_readable: boolean;
+            /** Label */
+            label: string;
+            /** Lane Id */
+            lane_id: string;
+            /** Node Id */
+            node_id: string;
+            /**
+             * Node Type
+             * @enum {string}
+             */
+            node_type: "issue" | "crossover" | "thread";
+            /** Position */
+            position: number;
+            /** Readable Prerequisites */
+            readable_prerequisites?: components["schemas"]["ContinuityPlanChainNode"][];
+            /** Ref Id */
+            ref_id: number;
+        };
+        /**
+         * ContinuityPlanReadinessDiagnostic
+         * @description One structured plan-readiness failure that does not require text parsing.
+         */
+        ContinuityPlanReadinessDiagnostic: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "dangling_plan_reference" | "plan_cycle_detected" | "cycle_detected" | "depth_limit_exceeded" | "node_limit_exceeded";
+            /** Limit */
+            limit?: number | null;
+            /** Node Id */
+            node_id: number;
+            /**
+             * Node Type
+             * @enum {string}
+             */
+            node_type: "issue" | "crossover" | "thread";
+        };
+        /**
+         * ContinuityPlanReadinessResponse
+         * @description Aggregate live readiness for every visible node of one owned plan.
+         */
+        ContinuityPlanReadinessResponse: {
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Lanes */
+            lanes?: components["schemas"]["ContinuityPlanLane"][];
+            /** Nodes */
+            nodes?: components["schemas"]["ContinuityPlanNodeReadiness"][];
+            /**
+             * Ordering Mode
+             * @enum {string}
+             */
+            ordering_mode: "informational" | "strict_sequential";
+            /** Plan Diagnostics */
+            plan_diagnostics?: components["schemas"]["ContinuityPlanReadinessDiagnostic"][];
+            /** Plan Id */
+            plan_id: number;
+            /** Plan Name */
+            plan_name: string;
+            summary?: components["schemas"]["ContinuityPlanReadinessSummary"];
+        };
+        /**
+         * ContinuityPlanReadinessSummary
+         * @description Deterministic state buckets for one saved plan.
+         */
+        ContinuityPlanReadinessSummary: {
+            /**
+             * Blocked
+             * @default 0
+             */
+            blocked: number;
+            /**
+             * Complete
+             * @default 0
+             */
+            complete: number;
+            /**
+             * Readable
+             * @default 0
+             */
+            readable: number;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /**
+             * Unavailable
+             * @default 0
+             */
+            unavailable: number;
         };
         /**
          * ContinuityPlanResponse
@@ -4169,6 +4344,143 @@ export interface components {
              * @enum {string}
              */
             type: "issue" | "crossover";
+        };
+        /**
+         * CrossoverTemplateAdoptRequest
+         * @description Adopt an external template into an editable continuity plan.
+         */
+        CrossoverTemplateAdoptRequest: {
+            /**
+             * Issue Node Id Prefix
+             * @default tpl-
+             */
+            issue_node_id_prefix: string;
+            /**
+             * Lane Id
+             * @default imported
+             */
+            lane_id: string;
+            /**
+             * Lane Name
+             * @default Imported
+             */
+            lane_name: string;
+            /**
+             * Ordering Mode
+             * @default informational
+             * @enum {string}
+             */
+            ordering_mode: "informational" | "strict_sequential";
+            /** Plan Name */
+            plan_name: string;
+            /** Source List Ids */
+            source_list_ids: number[];
+            /** Target Story Arc Id */
+            target_story_arc_id?: string | null;
+        };
+        /**
+         * CrossoverTemplateConflictPreview
+         * @description A pair whose reading-order evidence disagrees across source lists.
+         */
+        CrossoverTemplateConflictPreview: {
+            /** First Issue Id */
+            first_issue_id: number;
+            /** Second Issue Id */
+            second_issue_id: number;
+            /** Source Paths */
+            source_paths: string[];
+        };
+        /**
+         * CrossoverTemplateIntersectionPreview
+         * @description Consistent cross-thread ordering observation, never a hard dependency.
+         */
+        CrossoverTemplateIntersectionPreview: {
+            /** Explanation */
+            explanation: string;
+            /** First Issue Id */
+            first_issue_id: number;
+            /** Second Issue Id */
+            second_issue_id: number;
+            /** Source Paths */
+            source_paths: string[];
+        };
+        /**
+         * CrossoverTemplateItemPreview
+         * @description Suggested crossover member with full provenance and advisory metadata.
+         */
+        CrossoverTemplateItemPreview: {
+            /**
+             * Confidence
+             * @enum {string}
+             */
+            confidence: "high" | "medium" | "low";
+            /** Explanation */
+            explanation: string;
+            /** Issue Id */
+            issue_id: number;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "core" | "context/prelude" | "epilogue" | "unknown";
+            /** Source Paths */
+            source_paths: string[];
+            /** Suggested Position */
+            suggested_position: number;
+            /** Target Story Arc Id */
+            target_story_arc_id: string | null;
+        };
+        /**
+         * CrossoverTemplateParallelCandidatePreview
+         * @description Advisory pair that may represent parallel branches.
+         */
+        CrossoverTemplateParallelCandidatePreview: {
+            /** First Issue Id */
+            first_issue_id: number;
+            /** Second Issue Id */
+            second_issue_id: number;
+            /** Source Paths */
+            source_paths: string[];
+        };
+        /**
+         * CrossoverTemplatePreviewRequest
+         * @description Request to preview a derived crossover template from persisted CBL evidence.
+         */
+        CrossoverTemplatePreviewRequest: {
+            /** Source List Ids */
+            source_list_ids: number[];
+            /** Target Story Arc Id */
+            target_story_arc_id?: string | null;
+        };
+        /**
+         * CrossoverTemplateSerialSpinePreview
+         * @description Same-thread issue order preserved as advisory series structure.
+         */
+        CrossoverTemplateSerialSpinePreview: {
+            /** Explanation */
+            explanation: string;
+            /** Issue Ids */
+            issue_ids: number[];
+            /** Source Paths */
+            source_paths: string[];
+            /** Thread Id */
+            thread_id: number;
+        };
+        /**
+         * CrossoverTemplateUnresolvedMatchPreview
+         * @description A source entry that could not be matched to a ComicPile issue.
+         */
+        CrossoverTemplateUnresolvedMatchPreview: {
+            /** Issue Number */
+            issue_number: string;
+            /** Position */
+            position: number;
+            /** Reason */
+            reason: string;
+            /** Series Name */
+            series_name: string;
+            /** Source Path */
+            source_path: string;
         };
         /**
          * DependencyCreate
@@ -4364,6 +4676,24 @@ export interface components {
             target_thread_id?: number | null;
             /** Warning */
             warning?: string | null;
+        };
+        /**
+         * DerivedCrossoverTemplatePreview
+         * @description Non-blocking preview of a derived external crossover template.
+         */
+        DerivedCrossoverTemplatePreview: {
+            /** Conflicts */
+            conflicts?: components["schemas"]["CrossoverTemplateConflictPreview"][];
+            /** Intersections */
+            intersections?: components["schemas"]["CrossoverTemplateIntersectionPreview"][];
+            /** Items */
+            items: components["schemas"]["CrossoverTemplateItemPreview"][];
+            /** Parallel Candidates */
+            parallel_candidates?: components["schemas"]["CrossoverTemplateParallelCandidatePreview"][];
+            /** Serial Spines */
+            serial_spines?: components["schemas"]["CrossoverTemplateSerialSpinePreview"][];
+            /** Unresolved */
+            unresolved?: components["schemas"]["CrossoverTemplateUnresolvedMatchPreview"][];
         };
         /**
          * DiagnosticError
@@ -4740,6 +5070,102 @@ export interface components {
             thread_title: string;
         };
         /**
+         * ReadingOrderListResponse
+         * @description Response schema for listing all reading orders owned by a user.
+         */
+        ReadingOrderListResponse: {
+            /** Reading Orders */
+            reading_orders: components["schemas"]["ReadingOrderSummary"][];
+        };
+        /**
+         * ReadingOrderProjectionConflict
+         * @description A single conflict blocking a projection.
+         */
+        ReadingOrderProjectionConflict: {
+            /** Code */
+            code: string;
+            /**
+             * Existing Positions
+             * @default []
+             */
+            existing_positions: number[];
+            /** Message */
+            message: string;
+            /** Node Id */
+            node_id: string;
+            /** Thread Id */
+            thread_id?: number | null;
+        };
+        /**
+         * ReadingOrderProjectionEntry
+         * @description One row in a projected reading order preview.
+         */
+        ReadingOrderProjectionEntry: {
+            /** Position */
+            position: number;
+            /** Source */
+            source: string;
+            /** Source Node Id */
+            source_node_id?: string | null;
+            /** Thread Id */
+            thread_id: number;
+            /** Thread Title */
+            thread_title: string | null;
+        };
+        /**
+         * ReadingOrderProjectionPreview
+         * @description Response contract for the preview endpoint.
+         */
+        ReadingOrderProjectionPreview: {
+            /** Conflicts */
+            conflicts: components["schemas"]["ReadingOrderProjectionConflict"][];
+            /**
+             * Dropped Node Ids
+             * @default []
+             */
+            dropped_node_ids: string[];
+            /** Entries */
+            entries: components["schemas"]["ReadingOrderProjectionEntry"][];
+            /** Plan Id */
+            plan_id: number;
+            /** Plan Name */
+            plan_name: string;
+            /** Plan Ordering Mode */
+            plan_ordering_mode: string;
+            /** Reading Order Id */
+            reading_order_id: number;
+            /** Reading Order Name */
+            reading_order_name: string;
+            /** Total Positions */
+            total_positions: number;
+        };
+        /**
+         * ReadingOrderProjectionRequest
+         * @description Request contract for both preview and confirm endpoints.
+         */
+        ReadingOrderProjectionRequest: {
+            /** Reading Order Id */
+            reading_order_id: number;
+        };
+        /**
+         * ReadingOrderProjectionResult
+         * @description Response contract for the confirm endpoint.
+         */
+        ReadingOrderProjectionResult: {
+            /** Added Count */
+            added_count: number;
+            /** Kept Count */
+            kept_count: number;
+            /** Plan Id */
+            plan_id: number;
+            /** Reading Order Id */
+            reading_order_id: number;
+            /** Total Positions */
+            total_positions: number;
+            /** Updated Count */
+            updated_count: number;
+        };
+        /**
          * ReadingOrderResponse
          * @description Response schema for a reading order with items.
          */
@@ -4758,6 +5184,23 @@ export interface components {
             /** Name */
             name: string;
             /** Total Items */
+            total_items: number;
+        };
+        /**
+         * ReadingOrderSummary
+         * @description Compact reading order metadata for projection and picker surfaces.
+         */
+        ReadingOrderSummary: {
+            /** Description */
+            description?: string | null;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /**
+             * Total Items
+             * @default 0
+             */
             total_items: number;
         };
         /**
@@ -5843,6 +6286,28 @@ export interface operations {
                 content: {
                     "application/json": {
                         [key: string]: string;
+                    };
+                };
+            };
+        };
+    };
+    metrics_api_metrics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: number | null;
                     };
                 };
             };
@@ -7164,6 +7629,39 @@ export interface operations {
             };
         };
     };
+    get_continuity_plan_readiness_api_v1_continuity_plans__plan_id__readiness_get: {
+        parameters: {
+            query?: {
+                include_chains?: boolean;
+            };
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityPlanReadinessResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_continuity_rules_api_v1_continuity_rules__get: {
         parameters: {
             query?: never;
@@ -7365,6 +7863,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ContinuityReadinessResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adopt_crossover_template_api_v1_crossover_templates_adopt_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrossoverTemplateAdoptRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityPlanResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_crossover_template_api_v1_crossover_templates_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrossoverTemplatePreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DerivedCrossoverTemplatePreview"];
                 };
             };
             /** @description Validation Error */
@@ -8166,6 +8730,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_reading_orders_api_v1_reading_orders__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingOrderListResponse"];
                 };
             };
         };

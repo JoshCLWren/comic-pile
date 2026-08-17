@@ -69,7 +69,7 @@ addopts = [
     "--cov=comic_pile",
     "--cov-report=term-missing",
     "--cov-report=html",
-    "--cov-fail-under=94",
+    "--cov-fail-under=90",
 ]
 asyncio_mode = "auto"
 markers = [

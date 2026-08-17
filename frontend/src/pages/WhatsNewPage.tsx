@@ -26,6 +26,10 @@ export function releaseDisplayText(text: string) {
     .trim()
 }
 
+export function isDisplayableRelease(release: Release): boolean {
+  return releaseDisplayText(release.title).length > 1
+}
+
 export function sortReleasesNewestFirst(releases: Release[]): Release[] {
   return [...releases].sort((left, right) => {
     const timestampDifference = releasedAtTimestamp(right) - releasedAtTimestamp(left)
@@ -184,27 +188,31 @@ export default function WhatsNewPage() {
 
       {!loading && releases.length > 0 && (
         <div className="space-y-6">
-          {days.map(day => (
-            <section
-              key={day.key}
-              aria-labelledby={`release-day-${day.key}`}
-              className="rounded-2xl border border-stone-800 bg-stone-950/60 p-5"
-            >
-              <div className="mb-4 border-b border-stone-800 pb-3">
-                <h2 id={`release-day-${day.key}`} className="text-2xl font-black text-stone-100">
-                  {day.label}
-                </h2>
-                <p className="mt-1 text-sm text-stone-400">
-                  {day.releases.length} {day.releases.length === 1 ? 'update' : 'updates'} published this day.
-                </p>
-              </div>
-              <div className="space-y-3">
-                {day.releases.map(release => (
-                  <ReleaseCard key={release.id} release={release} />
-                ))}
-              </div>
-            </section>
-          ))}
+          {days.map(day => {
+            const visibleReleases = day.releases.filter(isDisplayableRelease)
+            if (visibleReleases.length === 0) return null
+            return (
+              <section
+                key={day.key}
+                aria-labelledby={`release-day-${day.key}`}
+                className="rounded-2xl border border-stone-800 bg-stone-950/60 p-5"
+              >
+                <div className="mb-4 border-b border-stone-800 pb-3">
+                  <h2 id={`release-day-${day.key}`} className="text-2xl font-black text-stone-100">
+                    {day.label}
+                  </h2>
+                  <p className="mt-1 text-sm text-stone-400">
+                    {visibleReleases.length} {visibleReleases.length === 1 ? 'update' : 'updates'} published this day.
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  {visibleReleases.map(release => (
+                    <ReleaseCard key={release.id} release={release} />
+                  ))}
+                </div>
+              </section>
+            )
+          })}
 
           {hasMore && (
             <div className="flex justify-center">

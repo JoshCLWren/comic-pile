@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.continuity_chains as chains
 from app.continuity_chains import resolve_continuity_chains
+from app.continuity_readiness import SNAPSHOT_SESSION_KEY, _load_snapshot
 from app.models.continuity_rule import ContinuityRule
 from app.models.issue import Issue
 from app.models.thread import Thread
@@ -227,3 +228,126 @@ async def test_large_branching_graph_resolves_with_stable_order(async_db: AsyncS
     assert [path[0].node_id for path in result.chains] == expected_ids
     assert [node.node_id for node in result.readable_prerequisites] == expected_ids
     assert result.diagnostics == ()
+
+
+@pytest.mark.asyncio
+async def test_snapshot_caching_prevents_duplicate_loads(async_db: AsyncSession) -> None:
+    """Multiple continuity calculations in one session reuse the same snapshot."""
+    user = await get_or_create_user_async(async_db)
+    issue_a = await _make_issue(async_db, user_id=user.id, suffix="cache-a")
+    issue_b = await _make_issue(async_db, user_id=user.id, suffix="cache-b")
+    async_db.add(
+        ContinuityRule(
+            user_id=user.id,
+            source_type="issue",
+            source_id=issue_b.id,
+            target_type="issue",
+            target_id=issue_a.id,
+            satisfaction_type="item_read",
+        )
+    )
+    await async_db.commit()
+
+    # First call loads the snapshot and writes it to the session cache
+    snapshot1 = await _load_snapshot(async_db, user.id)
+    assert snapshot1.query_count == 6  # 6 bounded queries
+    assert snapshot1.rows_loaded > 0
+
+    # Verify the snapshot was cached in the session's info dict
+    assert SNAPSHOT_SESSION_KEY in async_db.info
+    session_cache = async_db.info[SNAPSHOT_SESSION_KEY]
+    assert user.id in session_cache
+    assert session_cache[user.id] is snapshot1
+
+    # Second call should return the cached snapshot (proven by object identity,
+    # which differs from an equivalent-but-distinct reload only if the cache works)
+    snapshot2 = await _load_snapshot(async_db, user.id)
+    assert snapshot2 is snapshot1
+    assert snapshot2.query_count == snapshot1.query_count
+    assert snapshot2.rows_loaded == snapshot1.rows_loaded
+
+    # Verify traversal also uses cached snapshot
+    result = await resolve_continuity_chains(
+        async_db,
+        user_id=user.id,
+        node_type="issue",
+        node_id=issue_a.id,
+    )
+    assert result.direct_blockers[0].source_id == issue_b.id
+
+
+@pytest.mark.asyncio
+async def test_snapshot_query_count_matches_bounded_queries(async_db: AsyncSession) -> None:
+    """Snapshot query count matches the expected number of bounded queries."""
+    user = await get_or_create_user_async(async_db)
+    issue_a = await _make_issue(async_db, user_id=user.id, suffix="count-a")
+    issue_b = await _make_issue(async_db, user_id=user.id, suffix="count-b")
+    async_db.add(
+        ContinuityRule(
+            user_id=user.id,
+            source_type="issue",
+            source_id=issue_b.id,
+            target_type="issue",
+            target_id=issue_a.id,
+            satisfaction_type="item_read",
+        )
+    )
+    await async_db.commit()
+
+    snapshot = await _load_snapshot(async_db, user.id)
+    # 6 queries: threads, issues, groups, memberships, rules, selected_members
+    assert snapshot.query_count == 6
+    # At minimum we loaded the two threads, two issues, and one rule
+    assert snapshot.rows_loaded >= 5
+
+
+@pytest.mark.asyncio
+async def test_snapshot_cache_is_per_user(async_db: AsyncSession) -> None:
+    """Snapshot cache is keyed by user_id and does not leak across users."""
+    user1 = await get_or_create_user_async(async_db, username="cache_test_user1")
+    user2 = await get_or_create_user_async(async_db, username="cache_test_user2")
+    issue1 = await _make_issue(async_db, user_id=user1.id, suffix="user1")
+    issue2 = await _make_issue(async_db, user_id=user2.id, suffix="user2")
+    await async_db.commit()
+
+    snapshot1 = await _load_snapshot(async_db, user1.id)
+    snapshot2 = await _load_snapshot(async_db, user2.id)
+
+    assert snapshot1 is not snapshot2
+    assert issue1.id in snapshot1.issues
+    assert issue1.id not in snapshot2.issues
+    assert issue2.id in snapshot2.issues
+    assert issue2.id not in snapshot1.issues
+
+
+@pytest.mark.asyncio
+async def test_large_graph_query_count_does_not_grow_with_node_count(
+    async_db: AsyncSession,
+) -> None:
+    """Query count stays constant (6) regardless of graph size within bounds."""
+    user = await get_or_create_user_async(async_db)
+    target = await _make_issue(async_db, user_id=user.id, suffix="growth-target")
+    prerequisites = [
+        await _make_issue(async_db, user_id=user.id, suffix=f"growth-{index}")
+        for index in range(50)
+    ]
+    async_db.add_all(
+        [
+            ContinuityRule(
+                user_id=user.id,
+                source_type="issue",
+                source_id=issue.id,
+                target_type="issue",
+                target_id=target.id,
+                satisfaction_type="item_read",
+            )
+            for issue in prerequisites
+        ]
+    )
+    await async_db.commit()
+
+    snapshot = await _load_snapshot(async_db, user.id)
+    # Query count should remain 6 even with 50 prerequisite issues
+    assert snapshot.query_count == 6
+    # Rows loaded grows with data but query count is bounded
+    assert snapshot.rows_loaded >= 52  # 50 issues + target + at least 1 thread
