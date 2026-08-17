@@ -46,18 +46,6 @@ function ThemeConsumer() {
   )
 }
 
-function mockAuthAndGetUser(preferencesResponse: { theme: string } = { theme: 'classic' }) {
-  mockApiGet.mockImplementation((url: string) => {
-    if (url.includes('/auth/me')) {
-      return Promise.resolve({ username: 'testuser' })
-    }
-    if (url.includes('/preferences')) {
-      return Promise.resolve(preferencesResponse)
-    }
-    return Promise.resolve({})
-  })
-}
-
 function renderWithTheme(entry = '/') {
   return render(
     <MemoryRouter initialEntries={[entry]}>
