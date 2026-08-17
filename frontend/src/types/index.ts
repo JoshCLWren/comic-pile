@@ -473,3 +473,54 @@ export interface RollResponse {
 export interface BugReportResponse {
   issue_url: string
 }
+
+export interface RecentRatingEntry {
+  rating: number
+  rated_at: string
+  thread_id: number
+  thread_title: string
+}
+
+export interface PreviousIssueInfo {
+  issue_id: number
+  issue_number: string
+  thread_id: number
+  thread_title: string
+  effective_rating: number | null
+  is_read: boolean
+}
+
+export interface CanonicalSeriesInfo {
+  identity_source: string
+  average_rating: number | null
+  rated_count: number
+  previous_issue: PreviousIssueInfo | null
+  recent_ratings: RecentRatingEntry[]
+  highest_rating: number | null
+  lowest_rating: number | null
+}
+
+export interface CrossoverNodeInfo {
+  node_type: 'thread' | 'issue'
+  node_id: number
+  thread_id: number | null
+  issue_id: number | null
+  issue_number: string | null
+  thread_title: string | null
+  is_read: boolean
+}
+
+export interface CrossoverAnalyticsInfo {
+  group_id: number
+  group_name: string
+  average_rating: number | null
+  rated_count: number
+  read_count: number
+  node_count: number
+  nodes: CrossoverNodeInfo[]
+}
+
+export interface ReaderContextResponse {
+  canonical_series: CanonicalSeriesInfo | null
+  crossover_panel: CrossoverAnalyticsInfo[]
+}

@@ -3,7 +3,12 @@ import IssueCorrectionDialog from '../../../components/IssueCorrectionDialog'
 import ContinuityCorrectionDialog from '../../../components/ContinuityCorrectionDialog'
 import Tooltip from '../../../components/Tooltip'
 import type { ReadingOrder } from '../../../services/api-reading-orders'
-import type { ConnectedThreadInfo } from '../../../types'
+import type {
+  CanonicalSeriesInfo,
+  ConnectedThreadInfo,
+  CrossoverAnalyticsInfo,
+  ReaderContextResponse,
+} from '../../../types'
 import { RATING_THRESHOLD, getProgressPercentage } from '../utils'
 import type { RatingThread } from '../types'
 import { ComicVineIssueCard } from './ComicVineIssueCard'
@@ -31,6 +36,7 @@ interface RatingViewProps {
   dismissIsPending: boolean
   readingOrders: ReadingOrder[]
   connectedThreads: ConnectedThreadInfo[]
+  readerContext: ReaderContextResponse | null
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
   onSnooze: () => void
@@ -52,6 +58,7 @@ export function RatingView({
   dismissIsPending,
   readingOrders,
   connectedThreads,
+  readerContext,
   onUpdateRating,
   onSubmitRating,
   onSnooze,
@@ -169,6 +176,107 @@ export function RatingView({
             ))}
           </ul>
         </section>
+      ) : null}
+
+      {readerContext != null ? (
+        <>
+          {readerContext.canonical_series != null ? (
+            <section aria-labelledby="series-heading" className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 space-y-2">
+              <h3 id="series-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
+                {readerContext.canonical_series.identity_source === 'unavailable'
+                  ? 'Canonical series history unavailable'
+                  : 'Canonical series'}
+              </h3>
+              {readerContext.canonical_series.identity_source !== 'unavailable' && (
+                <>
+                  <div className="flex items-baseline gap-x-2 gap-y-1">
+                    <span className="text-lg font-black text-stone-100">
+                      {readerContext.canonical_series.average_rating != null
+                        ? readerContext.canonical_series.average_rating.toFixed(2)
+                        : '—'}
+                    </span>
+                    <span className="text-[10px] font-bold text-stone-500">
+                      {readerContext.canonical_series.rated_count} rated
+                    </span>
+                  </div>
+                  {readerContext.canonical_series.previous_issue != null && (
+                    <div className="text-[11px] font-bold text-stone-400">
+                      <span>Previous: {readerContext.canonical_series.previous_issue.thread_title}
+                        {' #'}{readerContext.canonical_series.previous_issue.issue_number}</span>
+                      {readerContext.canonical_series.previous_issue.effective_rating != null && (
+                        <span className="ml-1.5 text-stone-300">
+                          ({readerContext.canonical_series.previous_issue.effective_rating.toFixed(1)})
+                          {readerContext.canonical_series.previous_issue.is_read ? ' · read' : ''}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {readerContext.canonical_series.recent_ratings.length > 0 && (
+                    <div className="space-y-0.5">
+                      {readerContext.canonical_series.recent_ratings.map((entry, idx) => (
+                        <div key={`${entry.thread_id}-${idx}`} className="flex items-baseline gap-x-2 text-[11px]">
+                          <span className="font-black text-stone-200">{entry.rating.toFixed(1)}</span>
+                          <span className="truncate font-bold text-stone-400">{entry.thread_title}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-x-3 text-[10px] font-bold text-stone-500">
+                    {readerContext.canonical_series.highest_rating != null && (
+                      <span>High {readerContext.canonical_series.highest_rating.toFixed(1)}</span>
+                    )}
+                    {readerContext.canonical_series.lowest_rating != null && (
+                      <span>Low {readerContext.canonical_series.lowest_rating.toFixed(1)}</span>
+                    )}
+                  </div>
+                </>
+              )}
+            </section>
+          ) : null}
+
+          {readerContext.crossover_panel.length > 0 ? (
+            <section aria-labelledby="crossovers-heading" className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 space-y-3">
+              <h3 id="crossovers-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
+                Crossovers
+              </h3>
+              <ul className="space-y-2" aria-label="Crossover memberships">
+                {readerContext.crossover_panel.map((crossover) => (
+                  <li key={crossover.group_id} className="rounded-xl border border-white/10 bg-black/20 p-2.5 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="truncate text-xs font-black text-stone-200">{crossover.group_name}</p>
+                      <span className="shrink-0 text-[10px] font-bold text-stone-500">
+                        {crossover.read_count}/{crossover.node_count} read
+                      </span>
+                    </div>
+                    <div className="flex items-baseline gap-x-2">
+                      <span className="text-sm font-black text-stone-100">
+                        {crossover.average_rating != null ? crossover.average_rating.toFixed(2) : '—'}
+                      </span>
+                      <span className="text-[10px] font-bold text-stone-500">
+                        {crossover.rated_count} rated
+                      </span>
+                    </div>
+                    <ul className="mt-1 flex flex-wrap gap-1">
+                      {crossover.nodes.map((node) => (
+                        <li
+                          key={node.node_id}
+                          className={`rounded-full border px-2 py-0.5 text-[9px] font-bold ${
+                            node.is_read
+                              ? 'border-amber-700/40 bg-amber-900/15 text-amber-300'
+                              : 'border-white/10 bg-white/5 text-stone-400'
+                          }`}
+                          title={node.thread_title ?? `Issue ${node.issue_number}`}
+                        >
+                          {node.thread_title ?? (node.issue_number ? `#${node.issue_number}` : '—')}
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+        </>
       ) : null}
 
       <ReadingOrderGroups threadId={activeRatingThread?.id} />

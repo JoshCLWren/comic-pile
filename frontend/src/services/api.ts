@@ -408,6 +408,11 @@ export const comicVineApi = {
     api.get<ComicVineIssueIntelligence | null>(`/v1/issues/${issueId}/comicvine`),
 }
 
+export const readerContextApi = {
+  get: (issueId: number) =>
+    api.get<ReaderContextResponse>(`/v1/issues/${issueId}/reader-context`),
+}
+
 export const tasksApi = {
   getMetrics: () => api.get<AnalyticsMetrics>('/analytics/metrics'),
 }

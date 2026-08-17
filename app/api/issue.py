@@ -16,17 +16,24 @@ from app.database import get_db
 from app.models import Event, Issue, Thread
 from app.models.user import User
 from app.schemas import (
+    CanonicalSeriesInfo,
+    CrossoverAnalyticsInfo,
+    CrossoverNodeInfo,
     IssueCreateRange,
     IssueListResponse,
     IssueMoveRequest,
     IssueOrderValidationResponse,
     IssueReorderRequest,
     IssueResponse,
+    PreviousIssueInfo,
+    ReaderContextResponse,
+    RecentRatingEntry,
 )
 from app.schemas.comicvine import ComicVineIssueIntelligence
 from app.services.comicvine_intelligence import get_issue_intelligence
 from app.utils.issue_parser import parse_issue_ranges
 from app.services.ownership import get_owned_issue_or_404, get_owned_thread_or_404
+from app.services.reader_context import build_reader_context
 from comic_pile.dependencies import (
     refresh_user_blocked_status,
     validate_position_dependency_consistency,
@@ -565,6 +572,40 @@ async def get_issue(
     issue = await get_owned_issue_or_404(db, current_user.id, issue_id)
 
     return issue_to_response(issue)
+
+
+@router.get(
+    "/issues/{issue_id}/reader-context",
+    response_model=ReaderContextResponse,
+)
+@cached(ttl=TTL.SHORT)
+async def get_issue_reader_context(
+    issue_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> ReaderContextResponse:
+    """Return canonical series and crossover analytics for a single issue.
+
+    Provides bounded reader-context data that surfaces personal reading
+    history without influencing the rating decision.
+
+    Args:
+        issue_id: The ComicPile issue identifier.
+        current_user: The authenticated owner of the issue.
+        db: Async database session.
+
+    Returns:
+        ReaderContextResponse with canonical series statistics and
+        applicable crossover analytics. When no confirmed canonical
+        series identity exists, ``identity_source`` is set to
+        ``"unavailable"`` and ``canonical_series`` carries no numeric
+        stats so the frontend can render an honest gap state.
+
+    Raises:
+        HTTPException: If the issue is not found or not owned by the user.
+    """
+    context = await build_reader_context(issue_id, current_user.id, db)
+    return context
 
 
 @router.post("/issues/{issue_id}:move", status_code=status.HTTP_204_NO_CONTENT)

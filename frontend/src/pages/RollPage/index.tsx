@@ -18,7 +18,7 @@ import {
 } from '../../hooks/useRoll'
 import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../../hooks/useQueue'
-import { useRate } from '../../hooks'
+import { useRate, useReaderContext } from '../../hooks'
 import { threadsApi, dependenciesApi } from '../../services/api'
 import { readingOrdersApi } from '../../services/api-reading-orders'
 import { getApiErrorStatus, getApiErrorDetail } from '../../utils/apiError'
@@ -69,6 +69,9 @@ export default function RollPage() {
 
   const [readingOrders, setReadingOrders] = useState<import('../../services/api-reading-orders').ReadingOrder[]>([])
   const [connectedThreads, setConnectedThreads] = useState<ConnectedThreadInfo[]>([])
+
+  const issueId = activeRatingThread?.issue_id ?? activeRatingThread?.next_issue_id
+  const { data: readerContext } = useReaderContext(issueId)
 
   const { data: bootstrap, refetch: refetchBootstrap, isPending: isBootstrapLoading, isError: isBootstrapError, error: bootstrapError } = useRollBootstrap()
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
@@ -807,6 +810,7 @@ export default function RollPage() {
                 dismissIsPending={dismissPendingMutation.isPending}
                 readingOrders={readingOrders}
                 connectedThreads={connectedThreads}
+                readerContext={readerContext}
                 onUpdateRating={updateRatingUI}
                 onSubmitRating={handleSubmitRating}
                 onSnooze={handleSnooze}

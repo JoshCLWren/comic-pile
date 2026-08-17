@@ -78,3 +78,66 @@ class IssueOrderValidationResponse(BaseModel):
     """Schema for reporting in-thread dependency ordering conflicts."""
 
     warnings: list[str]
+
+
+class PreviousIssueInfo(BaseModel):
+    """Schema for the previous issue in canonical series context."""
+
+    issue_id: int
+    issue_number: str
+    thread_id: int
+    thread_title: str
+    effective_rating: float | None = None
+    is_read: bool = False
+
+
+class RecentRatingEntry(BaseModel):
+    """Schema for a single recent rating entry in canonical series context."""
+
+    rating: float
+    rated_at: str
+    thread_id: int
+    thread_title: str
+
+
+class CanonicalSeriesInfo(BaseModel):
+    """Schema for canonical series analytics context."""
+
+    identity_source: str = "unavailable"
+    average_rating: float | None = None
+    rated_count: int = 0
+    previous_issue: PreviousIssueInfo | None = None
+    recent_ratings: list[RecentRatingEntry] = []
+    highest_rating: float | None = None
+    lowest_rating: float | None = None
+
+
+class CrossoverNodeInfo(BaseModel):
+    """Schema for one participation node in a crossover group."""
+
+    node_type: str
+    node_id: int
+    thread_id: int | None = None
+    issue_id: int | None = None
+    issue_number: str | None = None
+    thread_title: str | None = None
+    is_read: bool = False
+
+
+class CrossoverAnalyticsInfo(BaseModel):
+    """Schema for crossover analytics in reader context."""
+
+    group_id: int
+    group_name: str
+    average_rating: float | None = None
+    rated_count: int = 0
+    read_count: int = 0
+    node_count: int = 0
+    nodes: list[CrossoverNodeInfo] = []
+
+
+class ReaderContextResponse(BaseModel):
+    """Schema for reader-context analytics on a single issue."""
+
+    canonical_series: CanonicalSeriesInfo | None = None
+    crossover_panel: list[CrossoverAnalyticsInfo] = []

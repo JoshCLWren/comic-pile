@@ -14,6 +14,9 @@ from app.schemas.dependency import (
     ThreadDependenciesResponse,
 )
 from app.schemas.issue import (
+    CanonicalSeriesInfo,
+    CrossoverAnalyticsInfo,
+    CrossoverNodeInfo,
     IssueCreate,
     IssueCreateRange,
     IssueListResponse,
@@ -22,6 +25,9 @@ from app.schemas.issue import (
     IssueReorderRequest,
     IssueResponse,
     IssueUpdate,
+    PreviousIssueInfo,
+    ReaderContextResponse,
+    RecentRatingEntry,
 )
 from app.schemas.migration import MigrateToIssuesRequest
 from app.schemas.rate import RateRequest
@@ -83,6 +89,12 @@ __all__ = [
     "IssueResponse",
     "IssueListResponse",
     "IssueOrderValidationResponse",
+    "ReaderContextResponse",
+    "CanonicalSeriesInfo",
+    "CrossoverAnalyticsInfo",
+    "CrossoverNodeInfo",
+    "PreviousIssueInfo",
+    "RecentRatingEntry",
     # Migration
     "MigrateToIssuesRequest",
     # Roll
