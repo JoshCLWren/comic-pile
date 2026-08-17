@@ -50,7 +50,7 @@ vi.mock('../hooks/useQueue', () => ({
   useMoveToBack: () => ({ mutate: vi.fn(), isPending: false }),
   useShuffleQueue: () => ({ mutate: vi.fn(), isPending: false }),
 }))
-vi.mock('../hooks', () => ({ useRate: () => ({ mutate: vi.fn(), isPending: false }) }))
+vi.mock('../hooks', () => ({ useRate: () => ({ mutate: vi.fn(), isPending: false }), useReaderContext: () => ({ data: null, isLoading: false, error: null, refetch: () => {} }) }))
 vi.mock('../services/api', () => ({
   threadsApi: {
     list: spies.list,

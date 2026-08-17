@@ -40,7 +40,7 @@ vi.mock('../hooks/useRoll', () => ({
 }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: () => ({ mutate: spies.snooze, isPending: false }), useUnsnooze: () => ({ mutate: spies.unsnooze, isPending: false }) }))
 vi.mock('../hooks/useQueue', () => ({ useMoveToFront: () => ({ mutate: spies.moveFront, isPending: false }), useMoveToBack: () => ({ mutate: spies.moveBack, isPending: false }), useShuffleQueue: () => ({ mutate: spies.shuffle, isPending: false }) }))
-vi.mock('../hooks', () => ({ useRate: () => ({ mutate: spies.rate, isPending: false }) }))
+vi.mock('../hooks', () => ({ useRate: () => ({ mutate: spies.rate, isPending: false }), useReaderContext: () => ({ data: null, isLoading: false, error: null, refetch: () => {} }) }))
 vi.mock('../services/api', () => ({ threadsApi: { setPending: spies.setPending, list: vi.fn().mockResolvedValue({ threads: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active' }], next_page_token: null }) }, dependenciesApi: { getConnectedThreads: relatedApi.connectedThreads, getBlockingInfo: relatedApi.blockingInfo } }))
 vi.mock('../services/api-reading-orders', () => ({ readingOrdersApi: { getForThread: relatedApi.readingOrders } }))
 vi.mock('../components/LazyDice3D', () => ({

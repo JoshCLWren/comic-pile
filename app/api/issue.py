@@ -16,18 +16,13 @@ from app.database import get_db
 from app.models import Event, Issue, Thread
 from app.models.user import User
 from app.schemas import (
-    CanonicalSeriesInfo,
-    CrossoverAnalyticsInfo,
-    CrossoverNodeInfo,
     IssueCreateRange,
     IssueListResponse,
     IssueMoveRequest,
     IssueOrderValidationResponse,
     IssueReorderRequest,
     IssueResponse,
-    PreviousIssueInfo,
     ReaderContextResponse,
-    RecentRatingEntry,
 )
 from app.schemas.comicvine import ComicVineIssueIntelligence
 from app.services.comicvine_intelligence import get_issue_intelligence

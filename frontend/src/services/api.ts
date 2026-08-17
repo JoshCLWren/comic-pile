@@ -14,6 +14,7 @@ import type {
   DependencyCreatePayload,
   IssueDependenciesResponse,
   ReactivateThreadPayload,
+  ReaderContextResponse,
   RollResponse,
   SessionCurrent,
   SessionDetails,

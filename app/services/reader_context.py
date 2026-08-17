@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
-from datetime import UTC, datetime
-from typing import Annotated
+from datetime import datetime
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import selectinload
@@ -25,6 +23,7 @@ from app.schemas.issue import (
     CrossoverNodeInfo,
     PreviousIssueInfo,
     ReaderContextResponse,
+    RecentRatingEntry,
 )
 
 
@@ -81,7 +80,7 @@ async def _get_owned_issue(
 ) -> Issue | None:
     result = await db.execute(
         select(Issue)
-        .options(selectinload(Issue.thread))  # type: ignore[attr-defined]
+        .options(selectinload(Issue.thread))
         .join(Thread, Issue.thread_id == Thread.id)
         .where(Issue.id == issue_id, Thread.user_id == user_id)
     )
@@ -141,7 +140,7 @@ async def _build_canonical_series(
         ratings_rows = list(ratings_result.all())
 
     effective_ratings: dict[int, float] = {}
-    for rating_val, ts, t_id, _title in ratings_rows:
+    for rating_val, _ts, t_id, _title in ratings_rows:
         if t_id not in effective_ratings:
             effective_ratings[t_id] = rating_val
 
@@ -294,7 +293,7 @@ async def _build_crossover_panel(
     for group_id in sorted(applicable_group_ids):
         memberships_result = await db.execute(
             select(DependencyGroupMembership)
-            .options(selectinload(DependencyGroupMembership.group))  # type: ignore[attr-defined]
+            .options(selectinload(DependencyGroupMembership.group))
             .where(
                 DependencyGroupMembership.group_id == group_id,
                 (
@@ -318,6 +317,8 @@ async def _build_crossover_panel(
                 node_issue_ids.add(ms.issue_id)
 
         nodes: list[CrossoverNodeInfo] = []
+        thread_rows: dict[int, str] = {}
+        issue_rows: dict[int, tuple[str, int, str]] = {}
 
         if node_thread_ids:
             threads_result = await db.execute(
@@ -332,7 +333,7 @@ async def _build_crossover_panel(
                 select(Issue.id, Issue.issue_number, Issue.thread_id, Issue.status)
                 .where(Issue.id.in_(list(node_issue_ids)))
             )
-            issue_rows: dict[int, tuple[str, int, str]] = {
+            issue_rows = {
                 row.id: (row.issue_number, row.thread_id, row.status)
                 for row in issues_result
             }
