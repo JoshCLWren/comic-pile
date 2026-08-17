@@ -122,15 +122,15 @@ async def test_list_threads_stale_cursor_rejected_when_search_changes(
     sample_data: dict,
 ) -> None:
     """API returns HTTP 400 when a cursor bound to one search is reused with a different search."""
-    # Get first page searching for "superman" to acquire a token bound to that search
-    response = await auth_client.get("/api/threads/?page_size=2&search=superman")
+    # Get first page searching for "a" (multi-match) to acquire a token bound to that search
+    response = await auth_client.get("/api/threads/?page_size=2&search=a")
     assert response.status_code == 200
     token = response.json()["next_page_token"]
     assert token is not None
 
     # Reusing token with a different search must be rejected
     response = await auth_client.get(
-        "/api/threads/?page_size=2&search=batman&page_token=" + token,
+        "/api/threads/?page_size=2&search=b&page_token=" + token,
     )
     assert response.status_code == 400
     assert "does not match" in response.json()["detail"]
@@ -140,8 +140,7 @@ async def test_list_threads_stale_cursor_rejected_when_search_changes(
 async def test_list_threads_position_sort_paginates(auth_client: AsyncClient, sample_data: dict) -> None:
     """Two-page position-sorted cursor round-trip returns contiguous window with no overlap or gap."""
     threads = sample_data["threads"]
-    active_threads = [t for t in threads if t["status"] == "active"]
-    assert len(active_threads) >= 4, "Need at least 4 active threads for this test"
+    assert len(threads) >= 4, "Need at least 4 threads for this test"
 
     page_size = 2
 
@@ -164,11 +163,10 @@ async def test_list_threads_position_sort_paginates(auth_client: AsyncClient, sa
     ids_page2 = {t["id"] for t in data2["threads"]}
     assert ids_page1.isdisjoint(ids_page2)
 
-    # Pages ordered by position
+    # Pages ordered by position across all threads (Queue returns active and
+    # completed threads; the UI splits them client-side)
     all_ids = [t["id"] for t in data1["threads"] + data2["threads"]]
-    expected = sorted({t.id for t in active_threads}, key=lambda tid: next(
-        t.queue_position for t in active_threads if t.id == tid
-    ))[: page_size * 2]
+    expected = [t.id for t in sorted(threads, key=lambda t: t.queue_position)][: page_size * 2]
     assert all_ids == expected
 
 
@@ -208,11 +206,12 @@ async def test_list_threads_title_sort_paginates(auth_client: AsyncClient, sampl
     # No overlap
     assert set(titles_page1).isdisjoint(set(titles_page2))
 
-    # Together they should cover 4 active threads alphabetically
+    # Together the first two pages cover the first page_size*2 threads by title
+    # across all threads (Queue returns active and completed threads)
     combined = titles_page1 + titles_page2
-    expected_sorted = sorted(
-        [t.title for t in sample_data["threads"] if t["status"] == "active"]
-    )
+    expected_sorted = [
+        t.title for t in sorted(sample_data["threads"], key=lambda t: t.title)
+    ][:4]
     assert combined == expected_sorted
 
 
@@ -263,7 +262,7 @@ async def test_list_threads_ownership_isolation(
     assert token1 is not None
     # Must not include any of user2's threads
     ids_page1 = {t["id"] for t in data1["threads"]}
-    assert not any(t["id"] in ids_page1 for t in other_threads)
+    assert not any(t.id in ids_page1 for t in other_threads)
 
     # Using the cursor — still only first user's threads
     response2 = await auth_client.get(
@@ -272,7 +271,7 @@ async def test_list_threads_ownership_isolation(
     assert response2.status_code == 200
     data2 = response2.json()
     ids_page2 = {t["id"] for t in data2["threads"]}
-    assert not any(t["id"] in ids_page2 for t in other_threads)
+    assert not any(t.id in ids_page2 for t in other_threads)
 
     # Combined pages must not contain any user2 thread
     all_returned_ids = ids_page1 | ids_page2
@@ -286,28 +285,16 @@ async def test_list_threads_cursor_rejected_when_search_changes(
     sample_data: dict,
 ) -> None:
     """API rejects a cursor whose embedded search does not match the current request search."""
-    # Create thread with unique title for clear search filtering
-    response = await auth_client.post(
-        "/api/threads/",
-        json={
-            "title": "Zebra Stripes",
-            "format": "Ongoing",
-            "issues_remaining": 2,
-            "queue_position": 100,
-        },
-    )
-    assert response.status_code == 201
-
-    # Acquire a cursor via a search that matches no threads (empty result + next token
-    # only exists when results fill a page; use >page_size)
-    # Use a search yielding a small result set; get next token by using page_size=1
-    response_first = await auth_client.get("/api/threads/?search=zebra&page_size=1&sort=title")
+    # Acquire a cursor via a search that matches several threads; page_size=1 leaves a
+    # next page so a token bound to that search is produced.
+    response_first = await auth_client.get("/api/threads/?search=a&page_size=1&sort=title")
     assert response_first.status_code == 200
     token = response_first.json()["next_page_token"]
+    assert token is not None
 
     # Change the search — token must be rejected
     response_changed = await auth_client.get(
-        "/api/threads/?search=bman&page_size=1&sort=title&page_token=" + token,
+        "/api/threads/?search=b&page_size=1&sort=title&page_token=" + token,
     )
     assert response_changed.status_code == 400
     assert "does not match" in response_changed.json()["detail"]
