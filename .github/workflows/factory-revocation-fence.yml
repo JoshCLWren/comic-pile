@@ -1,0 +1,48 @@
+name: Factory Revocation Fence
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  verify-factory-lease:
+    if: startsWith(github.event.pull_request.head.ref, 'factory/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject PRs from revoked factory assignments
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -Eeuo pipefail
+
+          # Canonical fixed-model branches are factory/<worker>-<issue>-<suffix>.
+          if [[ ! "$HEAD_REF" =~ ^factory/([0-9]+)-([0-9]+)- ]]; then
+            echo "Factory-looking branch does not use the fixed-model branch contract: $HEAD_REF"
+            exit 0
+          fi
+
+          worker="${BASH_REMATCH[1]}"
+          issue="${BASH_REMATCH[2]}"
+          owner="factory:${worker}"
+
+          issue_state="$(gh api "repos/${REPOSITORY}/issues/${issue}" --jq .state 2>/dev/null || true)"
+          labels="$(gh api "repos/${REPOSITORY}/issues/${issue}/labels?per_page=100" --jq '[.[].name]' 2>/dev/null || printf '[]')"
+
+          if [[ "$issue_state" == "open" ]] && jq -e --arg owner "$owner" 'index($owner) != null' >/dev/null <<< "$labels"; then
+            echo "Lease is current: ${owner} still owns issue #${issue}."
+            exit 0
+          fi
+
+          echo "Rejecting stale factory PR #${PR_NUMBER}: ${owner} no longer owns open issue #${issue}."
+          gh api --method PATCH "repos/${REPOSITORY}/pulls/${PR_NUMBER}" -f state=closed >/dev/null
+          gh api --method POST "repos/${REPOSITORY}/issues/${PR_NUMBER}/comments" \
+            -f body="Closed automatically by the Factory Revocation Fence. This PR came from ${HEAD_REF}, but ${owner} no longer owns open issue #${issue}. The assignment was revoked or superseded before persistence, so this branch cannot re-enter the active factory queue." >/dev/null
