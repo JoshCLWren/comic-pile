@@ -410,116 +410,110 @@ const [isSavingNote, setIsSavingNote] = useState(false)
     }
   }
 
-  async function handleCreateDependency() {
-    if (!thread?.id || !selectedThreadId) return
+async function handleCreateDependency() {
+  if (!thread?.id || !selectedThreadId) return
 
-    const targetHasIssueTracking = thread.total_issues !== null && thread.total_issues !== undefined
-    if (!targetHasIssueTracking) {
-      setError('Target thread must be migrated to issue tracking before adding issue dependencies.')
-      return
+  const targetHasIssueTracking = thread.total_issues !== null && thread.total_issues !== undefined
+  if (!targetHasIssueTracking) {
+    setError('Target thread must be migrated to issue tracking before adding issue dependencies.')
+    return
+  }
+
+  if (!sourceIssueId || !targetIssueId) {
+    setError('Both prerequisite issue and target issue must be selected.')
+    return
+  }
+
+  setIsSaving(true)
+  setError('')
+  try {
+    const result = await dependenciesApi.createDependency({
+      sourceType: 'issue',
+      sourceId: sourceIssueId,
+      targetType: 'issue',
+      targetId: targetIssueId,
+    })
+    if (result.warning) {
+      toast.showToast(result.warning, 'warning')
     }
+    setSearchQuery('')
+    setSearchResults([])
+    setSelectedThreadId(null)
+    setSourceIssueId(null)
+    setTargetIssueId(null)
+    setSourceIssues([])
+    setTargetIssues([])
+    await loadDependencies()
+    await refreshGraphIfVisible()
+    await onChanged?.()
+  } catch (saveError: unknown) {
+    setError(getApiErrorDetail(saveError))
+  } finally {
+    setIsSaving(false)
+  }
+}
 
-    if (!sourceIssueId || !targetIssueId) {
-      setError('Both prerequisite issue and target issue must be selected.')
-      return
-    }
+async function handleDeleteDependency(dependencyId: number) {
+  setError('')
+  try {
+    // Find the dependency to delete
+    const dependencyToDelete = [...dependencies.blocking, ...dependencies.blocked_by].find(
+      (dep) => dep.id === dependencyId
+    )
 
-    setIsSaving(true)
-    setError('')
-    try {
-      const result = await dependenciesApi.createDependency({
-        sourceType: 'issue',
-        sourceId: sourceIssueId,
-        targetType: 'issue',
-        targetId: targetIssueId,
-      })
-      if (result.warning) {
-        toast.showToast(result.warning, 'warning')
+    if (!dependencyToDelete) return
+
+    // Show undo toast with action button
+    const message = dependencyToDelete.source_label && dependencyToDelete.target_label
+      ? `${dependencyToDelete.source_label} → ${dependencyToDelete.target_label}`
+      : `Dependency #${dependencyId}`
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        await dependenciesApi.deleteDependency(dependencyId)
+        setPendingDeletion(null)
+        await loadDependencies()
+        await refreshGraphIfVisible()
+        await onChanged?.()
+      } catch (deleteError: unknown) {
+        setError(getApiErrorDetail(deleteError))
+        // Restore the dependency if deletion fails
+        await loadDependencies()
       }
-      setSearchQuery('')
-      setSearchResults([])
-      setSelectedThreadId(null)
-      setSourceIssueId(null)
-      setTargetIssueId(null)
-      setSourceIssues([])
-      setTargetIssues([])
-      await loadDependencies()
-      await refreshGraphIfVisible()
-      onChanged?.()
-    } catch (saveError: unknown) {
-      setError(getApiErrorDetail(saveError))
-    } finally {
-      setIsSaving(false)
-    }
-  }
+    }, 5000)
 
-  async function handleDeleteDependency(dependencyId: number) {
-    setError('')
-    try {
-      // Find the dependency to delete
-      const dependencyToDelete = [...dependencies.blocking, ...dependencies.blocked_by].find(
-        (dep) => dep.id === dependencyId
-      )
-
-      if (!dependencyToDelete) return
-
-      // Optimistic UI: remove immediately
-      setDependencies((prev) => ({
-        blocking: prev.blocking.filter((dep) => dep.id !== dependencyId),
-        blocked_by: prev.blocked_by.filter((dep) => dep.id !== dependencyId),
-      }))
-
-      // Show undo toast with action button
-      const message = dependencyToDelete.source_label && dependencyToDelete.target_label
-        ? `${dependencyToDelete.source_label} → ${dependencyToDelete.target_label}`
-        : `Dependency #${dependencyId}`
-
-      const timeoutId = setTimeout(async () => {
-        try {
-          await dependenciesApi.deleteDependency(dependencyId)
+    // Show toast and capture its ID
+    const toastId = toast.showToast(
+      `${message} removed.`,
+      'info',
+      {
+        label: 'Undo',
+        onClick: () => {
+          clearTimeout(timeoutId)
           setPendingDeletion(null)
-          await loadDependencies()
-          await refreshGraphIfVisible()
-          onChanged?.()
-        } catch (deleteError: unknown) {
-          setError(getApiErrorDetail(deleteError))
-          // Restore the dependency if deletion fails
-          await loadDependencies()
+
+          // Restore the dependency
+          setDependencies((prev) => ({
+            blocking: [...prev.blocking, dependencyToDelete],
+            blocked_by: [...prev.blocked_by, dependencyToDelete],
+          }))
+
+          toast.removeToast(toastId)
         }
-      }, 5000)
+      }
+    )
 
-      // Show toast and capture its ID
-      const toastId = toast.showToast(
-        `${message} removed.`,
-        'info',
-        {
-          label: 'Undo',
-          onClick: () => {
-            clearTimeout(timeoutId)
-            setPendingDeletion(null)
-
-            // Restore the dependency
-            setDependencies((prev) => ({
-              blocking: [...prev.blocking, dependencyToDelete],
-              blocked_by: [...prev.blocked_by, dependencyToDelete],
-            }))
-
-            toast.removeToast(toastId)
-          }
-        }
-      )
-
-      // Store pending deletion for undo
-      setPendingDeletion({
-        dependencyId,
-        dependencyData: dependencyToDelete,
-        timeoutId,
-        toastId,
-      })
-    } catch (deleteError: unknown) {
-      setError(getApiErrorDetail(deleteError))
-    }
+    // Store pending deletion for undo
+    setPendingDeletion({
+      dependencyId,
+      dependencyData: dependencyToDelete,
+      timeoutId,
+      toastId,
+    })
+  } catch (deleteError: unknown) {
+    setError(getApiErrorDetail(deleteError))
   }
+}
 
   async function handleSaveNote(dependencyId: number) {
     setIsSavingNote(true)
