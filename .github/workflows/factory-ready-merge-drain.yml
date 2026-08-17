@@ -1,0 +1,151 @@
+name: Factory Ready Merge Drain
+
+on:
+  schedule:
+    - cron: '2-57/5 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/factory-ready-merge-drain.yml'
+      - '.github/scripts/factory-review-controller.py'
+      - '.github/scripts/factory_review_policy.py'
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  checks: read
+
+concurrency:
+  group: factory-ready-merge-drain
+  cancel-in-progress: false
+
+jobs:
+  merge-ready:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Drain exact-head ready factory PRs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          review_controller='.github/scripts/factory-review-controller.py'
+
+          current_head_review_blockers() {
+            local pr="$1" head="$2" changes unresolved
+            changes="$(gh api --paginate \
+              "repos/${GITHUB_REPOSITORY}/pulls/${pr}/reviews?per_page=100" \
+              | jq -s --arg head "$head" \
+                '[.[][] | select(.state == "CHANGES_REQUESTED" and .commit_id == $head)] | length')"
+            [[ "$changes" == "0" ]] || return 1
+
+            unresolved="$(gh api graphql \
+              -F owner="${GITHUB_REPOSITORY_OWNER}" \
+              -F name="${GITHUB_REPOSITORY#*/}" \
+              -F number="$pr" \
+              -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}}}}}' \
+              --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length')"
+            [[ "$unresolved" == "0" ]]
+          }
+
+          required_checks_pass() {
+            local pr="$1" output_file="$RUNNER_TEMP/required-checks-${pr}.json"
+            local error_file="$RUNNER_TEMP/required-checks-${pr}.err"
+            local status
+
+            set +e
+            gh pr checks "$pr" --repo "$GITHUB_REPOSITORY" --required --json state \
+              >"$output_file" 2>"$error_file"
+            status=$?
+            set -e
+
+            if [[ -s "$output_file" ]] && ! jq -e 'length == 0' "$output_file" >/dev/null 2>&1; then
+              if jq -e 'all(.[]; (.state | ascii_upcase) == "SUCCESS")' "$output_file" >/dev/null; then
+                return 0
+              fi
+              echo "Required checks for PR #${pr} are not all successful" >&2
+              cat "$output_file" >&2
+              return 1
+            fi
+
+            if (( status == 0 )); then
+              return 0
+            fi
+
+            if grep -Eqi 'no checks reported|no required checks' "$error_file"; then
+              echo "PR #${pr} has no configured/reported required checks; continuing with exact-head semantic gates"
+              return 0
+            fi
+
+            echo "Unable to verify required checks for PR #${pr}" >&2
+            cat "$error_file" >&2 || true
+            return 1
+          }
+
+          mapfile -t ready_prs < <(
+            gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 200 \
+              --label 'factory:ready' \
+              --json number,isDraft,headRefOid \
+              --jq '.[] | select(.isDraft == false) | [.number, .headRefOid] | @tsv'
+          )
+
+          if (( ${#ready_prs[@]} == 0 )); then
+            echo 'No factory:ready PRs to drain'
+            exit 0
+          fi
+
+          for candidate in "${ready_prs[@]}"; do
+            IFS=$'\t' read -r pr expected_head <<< "$candidate"
+            [[ -n "$pr" && -n "$expected_head" ]] || continue
+
+            authorization="$(python3 "$review_controller" authorized --pr "$pr")" || {
+              echo "Unable to verify semantic authorization for PR #${pr}; leaving it open" >&2
+              continue
+            }
+            [[ "$(jq -r '.authorized // false' <<< "$authorization")" == 'true' ]] || {
+              echo "PR #${pr} lacks semantic authorization; leaving it open"
+              continue
+            }
+            [[ "$(jq -r '.head // empty' <<< "$authorization")" == "$expected_head" ]] || {
+              echo "PR #${pr} authorization is stale; leaving it open"
+              continue
+            }
+
+            info="$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" \
+              --json state,isDraft,mergeable,headRefOid)"
+            [[ "$(jq -r .state <<< "$info")" == "OPEN" ]] || continue
+            [[ "$(jq -r .isDraft <<< "$info")" == "false" ]] || continue
+            [[ "$(jq -r .mergeable <<< "$info")" == "MERGEABLE" ]] || {
+              echo "PR #${pr} is not mergeable; leaving it open"
+              continue
+            }
+            head="$(jq -r .headRefOid <<< "$info")"
+            [[ "$head" == "$expected_head" ]] || {
+              echo "PR #${pr} head changed; leaving it open for fresh review"
+              continue
+            }
+
+            required_checks_pass "$pr" || continue
+            current_head_review_blockers "$pr" "$head" || {
+              echo "PR #${pr} has current-head review blockers; leaving it open"
+              continue
+            }
+
+            echo "Merging semantically authorized ready PR #${pr} at ${head}"
+            if gh pr merge "$pr" --repo "$GITHUB_REPOSITORY" \
+              --merge --match-head-commit "$head"; then
+              echo "Merged ready PR #${pr}"
+              continue
+            fi
+
+            state="$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" --json state --jq .state 2>/dev/null || true)"
+            [[ "$state" == "MERGED" ]] || {
+              echo "Unable to merge ready PR #${pr}; it will retry on the next drain" >&2
+            }
+          done
