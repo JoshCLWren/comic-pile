@@ -4,6 +4,8 @@ import axios from 'axios'
 import BugReportButton from './BugReportButton'
 import type { ReportType } from './BugReportModal'
 import { useAuth } from '../App'
+import { useTheme, THEME_IDS, THEME_LABELS } from '../contexts/ThemeProvider'
+import type { ThemeId } from '../contexts/ThemeProvider'
 import api from '../services/api'
 import type { AuthUser } from '../types'
 import type { DiagnosticData } from '../hooks/useDiagnostics'
@@ -22,6 +24,7 @@ interface NavigationProps {
 export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   const location = useLocation()
   const { isAuthenticated, logout } = useAuth()
+  const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
   const [username, setUsername] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -71,7 +74,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   }, [isAuthenticated, logout])
 
   const isActive = (path: string) => location.pathname === path
-  const isMoreRoute = ['/continuity-plans', '/whats-new', '/help', '/glossary'].some((path) =>
+  const isMoreRoute = ['/continuity-plans', '/whats-new', '/help', '/glossary', '/appearance'].some((path) =>
     location.pathname === path || location.pathname.startsWith(`${path}/`),
   )
 
@@ -102,8 +105,30 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
       {isMoreOpen && (
         <nav ref={moreMenuRef} id="secondary-navigation" aria-label="More pages" className="fixed bottom-16 right-3 z-50 w-56 rounded-2xl border border-stone-700 bg-stone-950 p-2 shadow-2xl md:bottom-24 md:right-6">
           <Link to="/continuity-plans" className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-stone-100 hover:bg-stone-800"><span aria-hidden="true">🧭</span><span>Continuity Planner</span></Link>
-          <Link to="/whats-new" className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-stone-100 hover:bg-stone-800"><span aria-hidden="true">✨</span><span>What’s New</span></Link>
+          <Link to="/whats-new" className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-stone-100 hover:bg-stone-800"><span aria-hidden="true">✨</span><span>What's New</span></Link>
           <Link to="/help" className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-stone-100 hover:bg-stone-800"><span aria-hidden="true">❓</span><span>Help</span></Link>
+          <div className="border-t border-stone-800 pt-2 mt-1">
+            <div className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-stone-500">Appearance</div>
+            <div role="radiogroup" aria-label="Theme selection" className="space-y-0.5">
+              {THEME_IDS.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={theme === id}
+                  onClick={() => { void setTheme(id) }}
+                  className={`flex min-h-10 w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-sm font-semibold transition-colors ${
+                    theme === id
+                      ? 'bg-white/10 text-stone-100'
+                      : 'text-stone-400 hover:bg-stone-800 hover:text-stone-200'
+                  }`}
+                >
+                  <span className={`inline-block h-3 w-3 rounded-full border-2 ${theme === id ? 'border-amber-400 bg-amber-400' : 'border-stone-600'}`} aria-hidden="true" />
+                  <span>{THEME_LABELS[id]}</span>
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="space-y-1 border-t border-stone-800 pt-2 md:hidden">
             <BugReportButton onSubmit={onBugReportSubmit} variant="nav" />
             <button type="button" onClick={handleLogout} className="flex min-h-12 w-full items-center gap-3 rounded-xl px-4 py-3 text-left font-bold text-red-300 hover:bg-stone-800">
@@ -115,7 +140,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
 
       <div className="fixed right-4 top-4 z-50 hidden items-center gap-3 md:flex">
         {isLoading ? <span className="hidden md:inline text-xs text-stone-500 font-medium px-2 py-1">Loading...</span> : hasError ? <span className="hidden md:inline text-xs text-amber-500 font-medium px-2 py-1" title="Failed to load user data">User</span> : username ? <span className="hidden md:inline text-xs text-stone-400 font-medium px-2 py-1">{username}</span> : null}
-        <button onClick={handleLogout} className="px-2 py-1.5 md:px-3 text-xs font-bold uppercase tracking-widest text-red-400 hover:text-red-300 bg-[#110e0a]/60 hover:bg-[#110e0a]/80 rounded-lg transition-colors" aria-label="Log out"><span className="md:hidden" aria-hidden="true">⎋</span><span className="hidden md:inline">Log Out</span></button>
+        <button onClick={handleLogout} className="px-2 py-1.5 md:px-3 text-xs font-bold uppercase tracking-widest text-red-400 hover:text-red-300 rounded-lg transition-colors" style={{ background: 'var(--theme-surface-overlay)' }} aria-label="Log out"><span className="md:hidden" aria-hidden="true">⎋</span><span className="hidden md:inline">Log Out</span></button>
       </div>
     </>
   )

@@ -2,11 +2,157 @@
 @import "./styles.css";
 @import "./layout.css";
 
-:root {
+/* ─── Semantic theme tokens ─── */
+/* Each theme overrides these CSS custom properties.
+   Components consume the tokens, not hard-coded palette values. */
+
+:root,
+[data-theme="classic"] {
+  /* Page / background */
+  --theme-page-bg: #1a1410;
+  --theme-page-bg-deep: #110e0a;
+  --theme-page-gradient: radial-gradient(circle at top left, #2a2018 0%, #1a1410 40%, #110e0a 100%);
+
+  /* Panel surface */
+  --theme-surface: rgba(255, 255, 255, 0.04);
+  --theme-surface-raised: rgba(255, 255, 255, 0.07);
+  --theme-surface-overlay: rgba(17, 14, 10, 0.95);
+
+  /* Primary action */
   --theme-primary: #d6890e;
   --theme-primary-light: #f0b429;
-  --theme-bg-dark: #110e0a;
-  --theme-bg-card: rgba(255, 255, 255, 0.05);
+  --theme-primary-dim: rgba(212, 137, 14, 0.12);
+
+  /* Comic identity accent */
+  --theme-comic-accent: #d6890e;
+
+  /* Continuity accent */
+  --theme-continuity-accent: #a78b5c;
+
+  /* Personal-context accent */
+  --theme-personal-accent: #c4956a;
+
+  /* Danger / cancel */
+  --theme-danger: #c0392b;
+
+  /* Text */
+  --theme-text-primary: #e8d5b0;
+  --theme-text-muted: #a0937e;
+  --theme-text-dim: #6b5f50;
+
+  /* Border / glow */
+  --theme-border: rgba(255, 255, 255, 0.08);
+  --theme-border-strong: rgba(255, 255, 255, 0.15);
+  --theme-glow: rgba(212, 137, 14, 0.25);
+
+  /* Legacy aliases — keep existing code working while migration proceeds */
+  --bg-main: var(--theme-page-bg);
+  --bg-darker: var(--theme-page-bg-deep);
+  --accent-primary: var(--theme-primary);
+  --accent-red: var(--theme-danger);
+  --accent-amber: var(--theme-primary);
+  --glass-bg: var(--theme-surface);
+  --glass-border: var(--theme-border);
+  --text-primary: var(--theme-text-primary);
+  --text-muted: var(--theme-text-muted);
+  --text-dim: var(--theme-text-dim);
+
+  --theme-bg-dark: var(--theme-page-bg-deep);
+  --theme-bg-card: var(--theme-surface);
+}
+
+/* ─── ink-gold ─── */
+[data-theme="ink-gold"] {
+  --theme-page-bg: #161210;
+  --theme-page-bg-deep: #0e0c09;
+  --theme-page-gradient: radial-gradient(circle at top left, #201a14 0%, #161210 40%, #0e0c09 100%);
+
+  --theme-surface: rgba(255, 255, 255, 0.035);
+  --theme-surface-raised: rgba(255, 255, 255, 0.06);
+  --theme-surface-overlay: rgba(14, 12, 9, 0.95);
+
+  --theme-primary: #c49a0a;
+  --theme-primary-light: #e0b420;
+  --theme-primary-dim: rgba(196, 154, 10, 0.10);
+
+  --theme-comic-accent: #c49a0a;
+  --theme-continuity-accent: #8a7a50;
+  --theme-personal-accent: #b08a5a;
+
+  --theme-danger: #a83229;
+
+  --theme-text-primary: #ddd0b0;
+  --theme-text-muted: #908060;
+  --theme-text-dim: #5a5040;
+
+  --theme-border: rgba(255, 255, 255, 0.06);
+  --theme-border-strong: rgba(255, 255, 255, 0.12);
+  --theme-glow: rgba(196, 154, 10, 0.20);
+
+  --bg-main: var(--theme-page-bg);
+  --bg-darker: var(--theme-page-bg-deep);
+  --accent-primary: var(--theme-primary);
+  --accent-red: var(--theme-danger);
+  --accent-amber: var(--theme-primary);
+  --glass-bg: var(--theme-surface);
+  --glass-border: var(--theme-border);
+  --text-primary: var(--theme-text-primary);
+  --text-muted: var(--theme-text-muted);
+  --text-dim: var(--theme-text-dim);
+
+  --theme-bg-dark: var(--theme-page-bg-deep);
+  --theme-bg-card: var(--theme-surface);
+}
+
+/* ─── command-center ─── */
+[data-theme="command-center"] {
+  --theme-page-bg: #08080c;
+  --theme-page-bg-deep: #040406;
+  --theme-page-gradient: radial-gradient(circle at top left, #0c0c14 0%, #08080c 40%, #040406 100%);
+
+  --theme-surface: rgba(255, 255, 255, 0.04);
+  --theme-surface-raised: rgba(255, 255, 255, 0.07);
+  --theme-surface-overlay: rgba(4, 4, 6, 0.95);
+
+  --theme-primary: #d4a017;
+  --theme-primary-light: #f0c040;
+  --theme-primary-dim: rgba(212, 160, 23, 0.14);
+
+  /* Amber / gold comic identity rail */
+  --theme-comic-accent: #d4a017;
+  /* Cyan / teal reading-context rail */
+  --theme-continuity-accent: #22b8cf;
+  /* Violet / purple personal-context rail */
+  --theme-personal-accent: #a855f7;
+
+  --theme-danger: #dc2626;
+
+  --theme-text-primary: #f5f0e8;
+  --theme-text-muted: #a09888;
+  --theme-text-dim: #605848;
+
+  --theme-border: rgba(255, 255, 255, 0.08);
+  --theme-border-strong: rgba(255, 255, 255, 0.18);
+  --theme-glow: rgba(212, 160, 23, 0.30);
+
+  /* Luminous border accent for command-center */
+  --theme-glow-continuity: rgba(34, 184, 207, 0.25);
+  --theme-glow-personal: rgba(168, 85, 247, 0.25);
+  --theme-glow-comic: rgba(212, 160, 23, 0.25);
+
+  --bg-main: var(--theme-page-bg);
+  --bg-darker: var(--theme-page-bg-deep);
+  --accent-primary: var(--theme-primary);
+  --accent-red: var(--theme-danger);
+  --accent-amber: var(--theme-primary);
+  --glass-bg: var(--theme-surface);
+  --glass-border: var(--theme-border);
+  --text-primary: var(--theme-text-primary);
+  --text-muted: var(--theme-text-muted);
+  --text-dim: var(--theme-text-dim);
+
+  --theme-bg-dark: var(--theme-page-bg-deep);
+  --theme-bg-card: var(--theme-surface);
 }
 
 .marquee-runner {

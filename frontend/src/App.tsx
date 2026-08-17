@@ -17,6 +17,7 @@ import type { DiagnosticData } from './hooks/useDiagnostics'
 import { ToastProvider } from './contexts/ToastProvider'
 import { CacheProvider } from './contexts/CacheContext'
 import { BugReportRestoreProvider } from './contexts/BugReportRestoreContext'
+import { ThemeProvider } from './contexts/ThemeProvider'
 import './index.css'
 
 declare global {
@@ -276,7 +277,7 @@ function AuthResumeBoundary({ children }: { children: ReactNode }) {
 }
 
 function App() {
-  return <BrowserRouter><QueryClientProvider client={queryClient}><BugReportRestoreProvider><ToastProvider><CacheProvider><AuthProvider><AuthResumeBoundary><AppRoutes /></AuthResumeBoundary></AuthProvider></CacheProvider></ToastProvider></BugReportRestoreProvider></QueryClientProvider></BrowserRouter>
+  return <BrowserRouter><QueryClientProvider client={queryClient}><BugReportRestoreProvider><ToastProvider><CacheProvider><AuthProvider><ThemeProvider><AuthResumeBoundary><AppRoutes /></AuthResumeBoundary></ThemeProvider></AuthProvider></CacheProvider></ToastProvider></BugReportRestoreProvider></QueryClientProvider></BrowserRouter>
 }
 
 export { AppRoutes }

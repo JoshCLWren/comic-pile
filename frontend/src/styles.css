@@ -62,13 +62,8 @@ body {
 }
 
 body {
-  background: radial-gradient(
-    circle at top left,
-    #2a2018 0%,
-    var(--bg-main) 40%,
-    var(--bg-darker) 100%
-  );
-  color: var(--text-primary);
+  background: var(--theme-page-gradient);
+  color: var(--theme-text-primary);
   font-family: 'Outfit', sans-serif;
 }
 
@@ -254,8 +249,8 @@ body {
   left: 0;
   right: 0;
   z-index: 40;
-  background: rgba(17, 14, 10, 0.95);
-  border-top: 1px solid var(--glass-border);
+  background: var(--theme-surface-overlay);
+  border-top: 1px solid var(--theme-border);
   padding-bottom: env(safe-area-inset-bottom);
 }
 
@@ -268,8 +263,8 @@ body {
 }
 
 .nav-item.active {
-  color: var(--text-primary);
-  background: rgba(212, 137, 14, 0.12);
+  color: var(--theme-text-primary);
+  background: var(--theme-primary-dim);
 }
 
 .nav-item.active .nav-label {
@@ -277,14 +272,14 @@ body {
 }
 
 .glass-card {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border);
   border-radius: 0.75rem;
 }
 
 .modal-card {
-  background: rgba(17, 14, 10, 0.95);
-  border: 1px solid var(--glass-border);
+  background: var(--theme-surface-overlay);
+  border: 1px solid var(--theme-border);
   border-radius: 0.5rem;
   box-shadow:
     0 20px 25px -5px rgba(0, 0, 0, 0.3),

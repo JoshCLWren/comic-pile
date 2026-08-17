@@ -28,6 +28,7 @@ from app.api import (
     dependency,
     issue,
     metrics,
+    preferences,
     queue,
     rate,
     reading_orders,
@@ -223,6 +224,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(bug_report.router, prefix="/api/bug-reports", tags=["bug-reports"])
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
+    app.include_router(preferences.router, prefix="/api/v1/users", tags=["preferences"])
     app.include_router(thread.router, prefix="/api/threads", tags=["threads"])
     app.include_router(thread.router, prefix="/api/v1/threads", tags=["threads"])
     if app_settings.environment != "production":
