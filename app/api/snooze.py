@@ -19,7 +19,7 @@ from app.schemas import ActiveThreadInfo, SessionResponse
 from app.schemas.session import SnoozedThreadInfo
 from comic_pile.dice_ladder import step_up
 from comic_pile.queue import move_to_safe_position
-from comic_pile.session import get_current_die
+from comic_pile.session import get_current_die_for_session
 
 logger = logging.getLogger(__name__)
 
@@ -64,25 +64,52 @@ async def get_active_thread_info(
     )
 
 
-async def build_session_response(session: SessionModel, db: AsyncSession) -> SessionResponse:
+async def build_session_response(
+    session: SessionModel,
+    db: AsyncSession,
+    *,
+    current_die: int | None = None,
+    active_thread_id: int | None = None,
+    active_thread_info: ActiveThreadInfo | None = None,
+    ladder_path: str | None = None,
+    snapshot_count: int | None = None,
+) -> SessionResponse:
     """Build a SessionResponse from a session model.
+
+    When pre-loaded values are provided, avoids redundant database queries.
+    Callers that already computed die, active thread, or ladder path should
+    pass them in to reduce round trips.
 
     Args:
         session: The session model.
         db: Database session.
+        current_die: Pre-computed current die value (skips get_current_die query).
+        active_thread_id: Pre-fetched active thread ID (skips event lookup).
+        active_thread_info: Pre-fetched active thread info (skips thread lookup).
+        ladder_path: Pre-computed ladder path string (skips event re-read).
+        snapshot_count: Pre-computed snapshot count (skips COUNT query).
 
     Returns:
         A SessionResponse with all required fields populated.
     """
-    _, active_thread = await get_active_thread_info(session.id, db)
+    if active_thread_id is not None and active_thread_info is None:
+        thread = await db.get(Thread, active_thread_id)
+        if thread:
+            active_thread_info = ActiveThreadInfo(
+                id=thread.id,
+                title=thread.title,
+                format=thread.format,
+                issues_remaining=thread.issues_remaining,
+                queue_position=thread.queue_position,
+            )
 
-    result = await db.execute(
-        select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session.id)
-    )
-    snapshot_count = result.scalar() or 0
+    if snapshot_count is None:
+        result = await db.execute(
+            select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session.id)
+        )
+        snapshot_count = result.scalar() or 0
 
     snoozed_ids = session.snoozed_thread_ids or []
-    # ensure only integer ids for safe IN clause
     filtered_ids = [sid for sid in snoozed_ids if isinstance(sid, int)]
     snoozed_ids = filtered_ids
     snoozed_threads: list[SnoozedThreadInfo] = []
@@ -95,6 +122,11 @@ async def build_session_response(session: SessionModel, db: AsyncSession) -> Ses
             if thread_id in threads_by_id
         ]
 
+    if current_die is None:
+        current_die = await get_current_die_for_session(session, db)
+    if ladder_path is None:
+        ladder_path = await build_ladder_path(session.id, db)
+
     return SessionResponse(
         id=session.id,
         started_at=session.started_at,
@@ -102,10 +134,10 @@ async def build_session_response(session: SessionModel, db: AsyncSession) -> Ses
         start_die=session.start_die,
         manual_die=session.manual_die,
         user_id=session.user_id,
-        ladder_path=await build_ladder_path(session.id, db),
-        active_thread=active_thread,
-        current_die=await get_current_die(session.id, db),
-        last_rolled_result=active_thread.last_rolled_result if active_thread else None,
+        ladder_path=ladder_path,
+        active_thread=active_thread_info,
+        current_die=current_die,
+        last_rolled_result=active_thread_info.last_rolled_result if active_thread_info else None,
         has_restore_point=snapshot_count > 0,
         snapshot_count=snapshot_count,
         snoozed_thread_ids=snoozed_ids,
@@ -166,7 +198,7 @@ async def snooze_thread(
     pending_thread_id = current_session.pending_thread_id
     current_session_id = current_session.id
 
-    current_die = await get_current_die(current_session_id, db)
+    current_die = await get_current_die_for_session(current_session, db)
     new_die = step_up(current_die)
 
     await move_to_safe_position(
@@ -200,13 +232,27 @@ async def snooze_thread(
     current_session.pending_thread_id = None
     current_session.pending_thread_updated_at = None
 
+    # Pre-compute response values before commit to avoid re-querying.
+    _, pre_active_thread = await get_active_thread_info(current_session_id, db)
+    pre_ladder_path = await build_ladder_path(current_session_id, db)
+    result = await db.execute(
+        select(func.count()).select_from(Snapshot).where(Snapshot.session_id == current_session_id)
+    )
+    pre_snapshot_count = result.scalar() or 0
+
     await db.commit()
 
     await invalidate_user_view(current_user.id)
 
-    await db.refresh(current_session)
-
-    return await build_session_response(current_session, db)
+    return await build_session_response(
+        current_session,
+        db,
+        current_die=new_die,
+        active_thread_id=pre_active_thread.id if pre_active_thread else None,
+        active_thread_info=pre_active_thread,
+        ladder_path=pre_ladder_path,
+        snapshot_count=pre_snapshot_count,
+    )
 
 
 @router.post("/{thread_id}/unsnooze", response_model=SessionResponse)
@@ -250,9 +296,19 @@ async def unsnooze_thread(
     )
     db.add(event)
 
+    pre_ladder_path = await build_ladder_path(current_session.id, db)
+    result = await db.execute(
+        select(func.count()).select_from(Snapshot).where(Snapshot.session_id == current_session.id)
+    )
+    pre_snapshot_count = result.scalar() or 0
+
     await db.commit()
 
     await invalidate_user_view(current_user.id)
 
-    await db.refresh(current_session)
-    return await build_session_response(current_session, db)
+    return await build_session_response(
+        current_session,
+        db,
+        ladder_path=pre_ladder_path,
+        snapshot_count=pre_snapshot_count,
+    )

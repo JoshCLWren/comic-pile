@@ -24,7 +24,7 @@ from app.services.snapshot_contract import (
     SNAPSHOT_VERSION_KEY,
     USES_ISSUE_TRACKING_KEY,
 )
-from comic_pile.session import get_current_die
+from comic_pile.session import get_current_die_for_session
 
 router = APIRouter(tags=["undo"])
 
@@ -401,33 +401,58 @@ async def undo_to_snapshot(
             await _record_undo_event(db, snapshot, session_id)
             if is_delta:
                 await db.delete(snapshot)
-            await db.commit()
-            await db.refresh(session)
 
-            await invalidate_user_view(current_user.id)
+            # Pre-compute response values before commit to avoid post-commit
+            # re-reads that trigger MissingGreenlet errors on expired objects.
+            pre_ladder_path = await build_ladder_path(session_id, db)
+            pre_current_die = await get_current_die_for_session(session, db)
 
-            result = await db.execute(
+            # Snapshot count after this undo operation.
+            if is_delta:
+                # Delta undo deletes the snapshot, so count decreases by 1.
+                count_result = await db.execute(
+                    select(func.count())
+                    .select_from(Snapshot)
+                    .where(Snapshot.session_id == session_id)
+                )
+                pre_snapshot_count = (count_result.scalar() or 0) - 1
+            else:
+                count_result = await db.execute(
+                    select(func.count())
+                    .select_from(Snapshot)
+                    .where(Snapshot.session_id == session_id)
+                )
+                pre_snapshot_count = count_result.scalar() or 0
+
+            # Active thread info from latest roll event.
+            event_result = await db.execute(
                 select(Event)
                 .where(Event.session_id == session_id)
                 .where(Event.type == "roll")
                 .where(Event.selected_thread_id.is_not(None))
                 .order_by(Event.timestamp.desc(), Event.id.desc())
             )
-            active_thread = result.scalars().first()
+            pre_active_event = event_result.scalars().first()
 
-            thread = None
-            if active_thread and active_thread.selected_thread_id:
-                thread = await db.get(Thread, active_thread.selected_thread_id)
-                if thread is not None:
-                    await db.refresh(thread)
+            pre_thread = None
+            pre_active_info = None
+            if pre_active_event and pre_active_event.selected_thread_id:
+                pre_thread = await db.get(Thread, pre_active_event.selected_thread_id)
+                if pre_thread is not None:
+                    pre_active_info = ActiveThreadInfo(
+                        id=pre_thread.id,
+                        title=pre_thread.title,
+                        format=pre_thread.format,
+                        issues_remaining=pre_thread.issues_remaining,
+                        queue_position=pre_thread.queue_position,
+                        last_rolled_result=pre_active_event.result,
+                    )
 
-            result = await db.execute(
-                select(func.count())
-                .select_from(Snapshot)
-                .where(Snapshot.session_id == session_id)
-            )
-            snapshot_count = result.scalar() or 0
+            await db.commit()
 
+            await invalidate_user_view(current_user.id)
+
+            # Build response from pre-computed values (no post-commit re-reads).
             return SessionResponse(
                 id=session_id,
                 started_at=session.started_at,
@@ -435,21 +460,12 @@ async def undo_to_snapshot(
                 start_die=session.start_die,
                 manual_die=session.manual_die,
                 user_id=session.user_id,
-                ladder_path=await build_ladder_path(session_id, db),
-                active_thread=ActiveThreadInfo(
-                    id=thread.id,
-                    title=thread.title,
-                    format=thread.format,
-                    issues_remaining=thread.issues_remaining,
-                    queue_position=thread.queue_position,
-                    last_rolled_result=active_thread.result if active_thread else None,
-                )
-                if thread
-                else None,
-                current_die=await get_current_die(session_id, db),
-                last_rolled_result=active_thread.result if active_thread else None,
-                has_restore_point=snapshot_count > 0,
-                snapshot_count=snapshot_count,
+                ladder_path=pre_ladder_path,
+                active_thread=pre_active_info,
+                current_die=pre_current_die,
+                last_rolled_result=pre_active_event.result if pre_active_event else None,
+                has_restore_point=pre_snapshot_count > 0,
+                snapshot_count=pre_snapshot_count,
             )
         except OperationalError as error:
             if "deadlock" not in str(error).lower():

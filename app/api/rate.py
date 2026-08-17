@@ -7,7 +7,6 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.thread import thread_to_response
 from app.auth import get_current_user
 from app.cache_invalidation import invalidate_user_view
 from app.config import get_rating_settings
@@ -27,7 +26,7 @@ from app.services.snapshot_contract import (
 from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.dice_ladder import step_down, step_up
 from comic_pile.queue import move_to_back, move_to_front, move_to_safe_position
-from comic_pile.session import get_current_die
+from comic_pile.session import get_current_die_for_session
 
 router = APIRouter()
 
@@ -270,7 +269,7 @@ async def rate_thread(
 
     thread_id = thread.id
     pre_thread_state = await _capture_thread_pre_state(thread, db)
-    current_die = await get_current_die(current_session_id, db)
+    current_die = await get_current_die_for_session(current_session, db)
     pre_session_state = {
         "start_die": current_session.start_die,
         "manual_die": current_session.manual_die,
@@ -475,6 +474,34 @@ async def rate_thread(
     current_session.pending_thread_id = None
     current_session.pending_thread_updated_at = None
 
+    # Extract response values before commit to avoid post-commit re-reads
+    # that trigger MissingGreenlet errors on expired session objects.
+    resp_id = thread.id
+    resp_title = thread.title
+    resp_format = thread.format
+    resp_queue_position = thread.queue_position
+    resp_status = thread.status
+    resp_last_rating = thread.last_rating
+    resp_last_activity_at = thread.last_activity_at
+    resp_notes = thread.notes
+    resp_is_test = thread.is_test
+    resp_is_blocked = thread.is_blocked
+    resp_created_at = thread.created_at
+    resp_total_issues = thread.total_issues
+    resp_reading_progress = thread.reading_progress
+    resp_next_unread_issue_id = thread.next_unread_issue_id
+
+    if thread.uses_issue_tracking():
+        resp_issues_remaining = await thread.get_issues_remaining(db)
+    else:
+        resp_issues_remaining = thread.issues_remaining
+
+    resp_next_unread_issue_number: str | None = None
+    if resp_next_unread_issue_id is not None:
+        next_issue = await db.get(Issue, resp_next_unread_issue_id)
+        if next_issue:
+            resp_next_unread_issue_number = next_issue.issue_number
+
     await db.flush()
     await snapshot_thread_states(
         db,
@@ -492,5 +519,22 @@ async def rate_thread(
 
     await invalidate_user_view(user_id)
 
-    await db.refresh(thread)
-    return await thread_to_response(thread, db)
+    return ThreadResponse(
+        id=resp_id,
+        title=resp_title,
+        format=resp_format,
+        issues_remaining=resp_issues_remaining,
+        queue_position=resp_queue_position,
+        status=resp_status,
+        last_rating=resp_last_rating,
+        last_activity_at=resp_last_activity_at,
+        notes=resp_notes,
+        is_test=resp_is_test,
+        is_blocked=resp_is_blocked,
+        created_at=resp_created_at,
+        total_issues=resp_total_issues,
+        reading_progress=resp_reading_progress,
+        next_unread_issue_id=resp_next_unread_issue_id,
+        next_unread_issue_number=resp_next_unread_issue_number,
+        blocking_reasons=[],
+    )
