@@ -28,7 +28,6 @@ from app.api import (
     dependency,
     issue,
     metrics,
-    preferences,
     queue,
     rate,
     reading_orders,
@@ -38,6 +37,7 @@ from app.api import (
     test_helpers,
     thread,
     undo,
+    preferences,
 )
 from app.cache import cache
 from app.config import get_app_settings, get_database_settings, get_redis_settings
@@ -224,7 +224,6 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(bug_report.router, prefix="/api/bug-reports", tags=["bug-reports"])
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
-    app.include_router(preferences.router, prefix="/api/v1/users", tags=["preferences"])
     app.include_router(thread.router, prefix="/api/threads", tags=["threads"])
     app.include_router(thread.router, prefix="/api/v1/threads", tags=["threads"])
     if app_settings.environment != "production":
@@ -241,6 +240,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(snooze.router, prefix="/api/v1/snooze", tags=["snooze"])
     app.include_router(undo.router, prefix="/api/undo", tags=["undo"])
     app.include_router(undo.router, prefix="/api/v1/undo", tags=["undo"])
+    app.include_router(preferences.router, prefix="/api/v1", tags=["users"])
     app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
     if os.getenv("TEST_ENVIRONMENT") == "true":
         app.include_router(test_helpers.router, prefix="/api", tags=["test"])

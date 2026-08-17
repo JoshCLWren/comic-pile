@@ -20,6 +20,7 @@ from app.models.session import Session
 from app.models.snapshot import Snapshot
 from app.models.thread import Thread
 from app.models.user import User
+from app.models.user_preferences import UserPreferences
 
 __all__ = [
     "CBLSource",
@@ -45,4 +46,5 @@ __all__ = [
     "Thread",
     "ThreadExternalSeriesMapping",
     "User",
+    "UserPreferences",
 ]

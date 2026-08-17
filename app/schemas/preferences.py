@@ -1,28 +1,37 @@
-"""User preferences schemas for request/response validation."""
+"""Schemas for the authenticated user preferences API (issue #1398)."""
 
-from enum import StrEnum
+from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from typing import Literal
 
+from pydantic import BaseModel, ConfigDict
 
-class ThemeId(StrEnum):
-    """Supported theme identifiers."""
+from app.constants import DEFAULT_THEME
 
-    CLASSIC = "classic"
-    INK_GOLD = "ink-gold"
-    COMMAND_CENTER = "command-center"
-
-
-DEFAULT_THEME = ThemeId.CLASSIC
+ThemeId = Literal["classic", "ink-gold", "command-center"]
 
 
 class UserPreferencesResponse(BaseModel):
-    """Response schema for user preferences."""
+    """Current preference values for the authenticated user.
 
-    theme: ThemeId = Field(default=DEFAULT_THEME, description="Current theme identifier")
+    Attributes:
+        theme: The user's selected visual theme id. Resolves to ``classic``
+            when no preference row has been persisted yet.
+        user_id: Owning user id, always matching the authenticated principal.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    theme: ThemeId = DEFAULT_THEME
+    user_id: int
 
 
-class UserPreferencesUpdate(BaseModel):
-    """Request schema for updating user preferences."""
+class UserPreferencesPatchRequest(BaseModel):
+    """Partial update of the authenticated user's preferences.
 
-    theme: ThemeId = Field(description="Theme identifier to apply")
+    Attributes:
+        theme: Optional theme id to apply. When omitted, the current theme
+            is left unchanged. Unknown values are rejected by validation.
+    """
+
+    theme: ThemeId | None = None

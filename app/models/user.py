@@ -6,7 +6,6 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, Integer, String, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -15,6 +14,7 @@ if TYPE_CHECKING:
     from app.models.revoked_token import RevokedToken
     from app.models.session import Session
     from app.models.thread import Thread
+    from app.models.user_preferences import UserPreferences
 
 
 class User(Base):
@@ -28,7 +28,6 @@ class User(Base):
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    preferences: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
@@ -41,4 +40,7 @@ class User(Base):
     )
     revoked_tokens: Mapped[list[RevokedToken]] = relationship(
         "RevokedToken", back_populates="user", cascade="all, delete-orphan", lazy="raise"
+    )
+    preferences: Mapped[UserPreferences | None] = relationship(
+        "UserPreferences", back_populates="user", uselist=False, lazy="raise"
     )
