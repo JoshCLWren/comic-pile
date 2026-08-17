@@ -1,3 +1,4 @@
+// API client for ComicPile frontend
 import axios, {
   type AxiosError,
   type AxiosInstance,
@@ -84,14 +85,12 @@ function getCookieValue(name: string): string | null {
   if (typeof document === 'undefined' || !document.cookie) {
     return null
   }
-
   const prefix = `${encodeURIComponent(name)}=`
   for (const cookie of document.cookie.split('; ')) {
     if (cookie.startsWith(prefix)) {
       return decodeURIComponent(cookie.slice(prefix.length))
     }
   }
-
   return null
 }
 
@@ -104,7 +103,6 @@ function shouldAttachCsrfToken(config: InternalAxiosRequestConfig): boolean {
   if (!CSRF_PROTECTED_METHODS.has(method)) {
     return false
   }
-
   return !AUTH_ENDPOINT_PATHS.has(getRequestPathname(config.url ?? ''))
 }
 
@@ -113,7 +111,6 @@ async function ensureCsrfToken(): Promise<string | null> {
   if (existingToken) {
     return existingToken
   }
-
   if (!csrfTokenPromise) {
     csrfTokenPromise = api
       .get<{ csrf_token: string }>('/v1/auth/csrf', { skipAuthRedirect: true } as ApiRequestConfig)
@@ -122,7 +119,6 @@ async function ensureCsrfToken(): Promise<string | null> {
         csrfTokenPromise = null
       })
   }
-
   return csrfTokenPromise
 }
 
@@ -135,15 +131,11 @@ function redirectToLogin(): void {
   if (isOnAuthPage() || isRedirectingToLogin) {
     return
   }
-
   isRedirectingToLogin = true
-
   clearAccessToken()
-
   setTimeout(() => {
     isRedirectingToLogin = false
   }, 5000)
-
   window.location.href = '/login'
 }
 
@@ -151,11 +143,9 @@ function isAuthenticationFailure(error: AxiosError): boolean {
   if (error.response?.status === 401) {
     return true
   }
-
   if (error.response?.status !== 403) {
     return false
   }
-
   const responseData = error.response.data as { detail?: unknown } | undefined
   return responseData?.detail === 'Not authenticated'
 }
@@ -164,18 +154,15 @@ rawApi.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
     const token = getAccessToken()
     config.headers = config.headers ?? {}
-
     if (token) {
       ;(config.headers as Record<string, string>).Authorization = `Bearer ${token}`
     }
-
     if (shouldAttachCsrfToken(config)) {
       const csrfToken = await ensureCsrfToken()
       if (csrfToken) {
         ;(config.headers as Record<string, string>)[CSRF_HEADER_NAME] = csrfToken
       }
     }
-
     return config
   },
   (error: unknown) => Promise.reject(error),
@@ -198,19 +185,16 @@ rawApi.interceptors.response.use(
   (response) => response.data,
   async (error: AxiosError) => {
     const originalRequest = (error.config ?? {}) as ApiRequestConfig
-
     if (!error.response) {
       console.error('Network Error:', error.message)
       return Promise.reject(new Error('Network error. Please check your connection and try again.'))
     }
-
     if (error.response.status === 400) {
       console.error('API Validation Error Details:', {
         status: error.response.status,
         data: error.response.data,
       })
     }
-
     if (isAuthenticationFailure(error) && !originalRequest._retry) {
       const requestPathname = getRequestPathname(originalRequest.url ?? '')
       if (AUTH_ENDPOINT_PATHS.has(requestPathname)) {
@@ -219,50 +203,40 @@ rawApi.interceptors.response.use(
         }
         return Promise.reject(error)
       }
-
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject, config: originalRequest })
-        }).then((token) => token).catch((err) => {
-          if ((err as AxiosError)?.response?.status === 401) {
-            return Promise.reject(error)
-          }
-          return Promise.reject(err)
         })
+          .then((token) => token)
+          .catch((err) => {
+            if ((err as AxiosError)?.response?.status === 401) {
+              return Promise.reject(error)
+            }
+            return Promise.reject(err)
+          })
       }
-
       originalRequest._retry = true
       isRefreshing = true
-
       try {
         const response = originalRequest.skipAuthRedirect
           ? await api.post<AuthTokens>('/v1/auth/refresh', undefined, { skipAuthRedirect: true })
           : await api.post<AuthTokens>('/v1/auth/refresh')
-
         const { access_token } = response
         setAccessToken(access_token)
-
         processQueue(null, access_token)
         isRefreshing = false
-
         originalRequest.headers = originalRequest.headers ?? {}
         ;(originalRequest.headers as Record<string, string>).Authorization = `Bearer ${access_token}`
         return api.request(originalRequest)
       } catch (refreshError) {
         processQueue(refreshError, null)
         isRefreshing = false
-        if (
-          !originalRequest.skipAuthRedirect &&
-          isAuthenticationFailure(refreshError as AxiosError)
-        ) {
+        if (!originalRequest.skipAuthRedirect && isAuthenticationFailure(refreshError as AxiosError)) {
           redirectToLogin()
         }
         return Promise.reject(refreshError)
       }
     }
-
-    // 5xx responses are server-side / transient (for example a serverless cold start)
-    // and should not read as a client error in the console during background reconnects.
     if (error.response && error.response.status >= 500 && error.response.status < 600) {
       console.warn('API request failed with server error:', error.response.status)
     } else {
@@ -298,137 +272,4 @@ export const threadsApi = {
 
 export const rollApi = {
   roll: () => api.post<RollResponse>('/v1/roll/'),
-  override: (data: { thread_id: number }) => api.post<RollResponse, { thread_id: number }>('/v1/roll/override', data),
-  dismissPending: () => api.post<void>('/v1/roll/dismiss-pending'),
-  reroll: () => api.post<RollResponse>('/v1/roll/'),
-  setDie: (die: number) => api.post<void>('/v1/roll/set-die', null, { params: { die } }),
-  clearManualDie: () => api.post<void>('/v1/roll/clear-manual-die'),
-}
-
-export const rateApi = {
-  rate: (data: { thread_id: number; rating: number; issues_read?: number; finish_session?: boolean; issue_number?: string }) =>
-    api.post<Thread, { thread_id: number; rating: number; issues_read?: number; finish_session?: boolean; issue_number?: string }>('/v1/rate/', data),
-}
-
-export const sessionApi = {
-  list: async (params?: Record<string, unknown>, pageToken?: string | null): Promise<SessionListResponse> => {
-    const queryParams: Record<string, unknown> = { ...(params ?? {}) };
-    if (pageToken) {
-      queryParams.page_token = pageToken;
-    }
-    const response = await api.get<SessionListResponse>('/v1/sessions/', {
-      params: Object.keys(queryParams).length ? queryParams : undefined,
-    })
-    return response
-  },
-  get: (id: number) => api.get<SessionSummary>(`/v1/sessions/${id}`),
-  getCurrent: () => api.get<SessionCurrent>('/v1/sessions/current/'),
-  getDetails: (id: number | string) => api.get<SessionDetails>(`/v1/sessions/${id}/details`),
-  getSnapshots: (id: number | string) => api.get<SessionSnapshotsResponse>(`/v1/sessions/${id}/snapshots`),
-  restoreSessionStart: (id: number | string) => api.post<void>(`/v1/sessions/${id}/restore-session-start`),
-}
-
-export const queueApi = {
-  moveToPosition: (id: number, position: number) =>
-    api.put<void, { new_position: number }>(`/v1/queue/threads/${id}/position/`, { new_position: position }),
-  moveToFront: (id: number) => api.put<void>(`/v1/queue/threads/${id}/front/`),
-  moveToBack: (id: number) => api.put<void>(`/v1/queue/threads/${id}/back/`),
-  shuffle: () => api.post<void>('/v1/queue/shuffle/'),
-}
-
-export const undoApi = {
-  undo: (sessionId: number | string, snapshotId: number | string) =>
-    api.post<void>(`/v1/undo/${sessionId}/undo/${snapshotId}`),
-  listSnapshots: (sessionId: number | string) => api.get<SessionSnapshotsResponse>(`/v1/undo/${sessionId}/snapshots`),
-}
-
-export const dependenciesApi = {
-  listBlockedThreadIds: () => api.get<number[]>('/v1/dependencies/blocked'),
-  listThreadDependencies: (threadId: number) =>
-    api.get<ThreadDependenciesResponse>(`/v1/threads/${threadId}/dependencies`),
-  getIssueDependencies: (issueId: number) =>
-    api.get<IssueDependenciesResponse>(`/v1/issues/${issueId}/dependencies`),
-  getBlockingInfo: (threadId: number) =>
-    api.post<BlockingInfoResponse>(`/v1/threads/${threadId}:getBlockingInfo`),
-  getConnectedThreads: (threadId: number) =>
-    api.get<ConnectedDependenciesResponse>(`/v1/threads/${threadId}/connected`),
-  createDependency: ({ sourceType = 'thread', sourceId, targetType = 'thread', targetId }: DependencyCreatePayload) =>
-    api.post<Dependency, { source_type: 'thread' | 'issue'; source_id: number; target_type: 'thread' | 'issue'; target_id: number }>('/v1/dependencies/', {
-      source_type: sourceType,
-      source_id: sourceId,
-      target_type: targetType,
-      target_id: targetId,
-    }),
-  deleteDependency: (dependencyId: number) => api.delete<void>(`/v1/dependencies/${dependencyId}`),
-  updateDependency: (dependencyId: number, note: string | null) =>
-    api.patch<Dependency, { note: string | null }>(`/v1/dependencies/${dependencyId}`, { note }),
-}
-
-export interface ComicVineCreator {
-  name: string
-  roles: string[]
-}
-
-export interface ComicVineComicPileMatch {
-  issue_id: number
-  thread_id: number
-  thread_title: string
-  issue_number: string
-  status: 'read' | 'unread'
-}
-
-export interface ComicVineRelatedIssue {
-  comicvine_issue_id: string
-  series_name: string | null
-  issue_number: string | null
-  name: string | null
-  cover_date: string | null
-  comicvine_url: string | null
-  comicpile_matches: ComicVineComicPileMatch[]
-}
-
-export interface ComicVineStoryArc {
-  comicvine_arc_id: number
-  name: string
-  comicvine_url: string | null
-  related_issues: ComicVineRelatedIssue[]
-}
-
-export interface ComicVineIssueIntelligence {
-  comicvine_issue_id: string
-  comicvine_url: string | null
-  series_name: string | null
-  series_id: number | null
-  issue_number: string | null
-  name: string | null
-  description: string | null
-  image_url: string | null
-  cover_date: string | null
-  store_date: string | null
-  creators: ComicVineCreator[]
-  story_arcs: ComicVineStoryArc[]
-}
-
-export const comicVineApi = {
-  getIssueIntelligence: (issueId: number) =>
-    api.get<ComicVineIssueIntelligence | null>(`/v1/issues/${issueId}/comicvine`),
-}
-
-export const tasksApi = {
-  getMetrics: () => api.get<AnalyticsMetrics>('/analytics/metrics'),
-}
-
-export const snoozeApi = {
-  snooze: () => api.post<void>('/v1/snooze/'),
-  unsnooze: (threadId: number) => api.post<void>(`/v1/snooze/${threadId}/unsnooze`),
-}
-
-export const migrationApi = {
-  migrateThread: (threadId: number, data: { last_issue_read: number; total_issues: number }) =>
-    api.post<Thread, { last_issue_read: number; total_issues: number }>(`/v1/threads/${threadId}:migrateToIssues`, data),
-}
-
-export const bugReportsApi = {
-  create: (data: { title: string; description: string; diagnostics?: unknown }) =>
-    api.post<BugReportResponse>('/bug-reports/', data),
 }
