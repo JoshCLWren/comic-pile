@@ -55,6 +55,8 @@ cat > "$ENV_DIR/benchmark.env.example" <<'EOF'
 ENVIRONMENT=staging
 WEB_CONCURRENCY=2
 CACHE_ENABLED=false
+# configure-env.sh generates one shared SECRET_KEY for all Uvicorn workers.
+SECRET_KEY=generated-by-configure-env.sh
 DATABASE_URL=postgresql://USER:PASSWORD@HOST/neondb
 EOF
 chmod 0640 "$ENV_DIR/benchmark.env.example"
