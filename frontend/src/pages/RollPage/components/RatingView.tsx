@@ -50,7 +50,6 @@ export function RatingView({
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
 
   return (
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div className="pillar-cockpit">
         <ComicPillar
           activeRatingThread={activeRatingThread}
@@ -87,6 +86,5 @@ export function RatingView({
           onCancel={onCancel}
         />
       </div>
-    </div>
   )
 }
