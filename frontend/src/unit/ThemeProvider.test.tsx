@@ -46,12 +46,19 @@ function ThemeConsumer() {
   )
 }
 
-function renderWithTheme(entry = '/') {
-  // Auth /me call
-  mockApiGet.mockResolvedValueOnce({ username: 'testuser' })
-  // Preferences call - defaults to classic
-  mockApiGet.mockResolvedValueOnce({ theme: 'classic' })
+function mockAuthAndGetUser(preferencesResponse: { theme: string } = { theme: 'classic' }) {
+  mockApiGet.mockImplementation((url: string) => {
+    if (url.includes('/auth/me')) {
+      return Promise.resolve({ username: 'testuser' })
+    }
+    if (url.includes('/preferences')) {
+      return Promise.resolve(preferencesResponse)
+    }
+    return Promise.resolve({})
+  })
+}
 
+function renderWithTheme(entry = '/') {
   return render(
     <MemoryRouter initialEntries={[entry]}>
       <AuthProvider>
@@ -66,7 +73,6 @@ function renderWithTheme(entry = '/') {
 }
 
 test('defaults to classic when no preferences exist', async () => {
-  mockApiGet.mockReset()
   mockApiGet.mockResolvedValueOnce({ username: 'testuser' })
   mockApiGet.mockResolvedValueOnce({ theme: 'classic' })
   renderWithTheme()
@@ -78,7 +84,6 @@ test('defaults to classic when no preferences exist', async () => {
 })
 
 test('applies server theme on load', async () => {
-  mockApiGet.mockReset()
   mockApiGet.mockResolvedValueOnce({ username: 'testuser' })
   mockApiGet.mockResolvedValueOnce({ theme: 'ink-gold' })
   renderWithTheme()
@@ -86,12 +91,12 @@ test('applies server theme on load', async () => {
   await waitFor(() => {
     expect(screen.getByTestId('loaded').textContent).toBe('true')
   })
+  console.log('DEBUG - mockApiGet calls:', mockApiGet.mock.calls.map(c => c[0]))
   expect(screen.getByTestId('theme').textContent).toBe('ink-gold')
   expect(document.documentElement.getAttribute('data-theme')).toBe('ink-gold')
 })
 
 test('falls back to classic on preferences fetch failure', async () => {
-  mockApiGet.mockReset()
   mockApiGet.mockResolvedValueOnce({ username: 'testuser' })
   mockApiGet.mockRejectedValueOnce(new Error('network'))
   renderWithTheme()
@@ -103,7 +108,6 @@ test('falls back to classic on preferences fetch failure', async () => {
 })
 
 test('setTheme applies immediately and patches server', async () => {
-  mockApiGet.mockReset()
   mockApiGet.mockResolvedValueOnce({ username: 'testuser' })
   mockApiGet.mockResolvedValueOnce({ theme: 'classic' })
   mockApiPatch.mockResolvedValueOnce({ theme: 'command-center' })
@@ -125,7 +129,6 @@ test('setTheme applies immediately and patches server', async () => {
 })
 
 test('reverts on server failure', async () => {
-  mockApiGet.mockReset()
   mockApiGet.mockResolvedValueOnce({ username: 'testuser' })
   mockApiGet.mockResolvedValueOnce({ theme: 'classic' })
   mockApiPatch.mockRejectedValueOnce(new Error('fail'))

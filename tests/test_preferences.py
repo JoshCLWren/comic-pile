@@ -2,7 +2,6 @@
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class TestPreferences:
@@ -60,7 +59,7 @@ class TestPreferences:
 
     @pytest.mark.asyncio
     async def test_all_themes_supported(
-        self, auth_client: AsyncClient, async_db: AsyncSession
+        self, auth_client: AsyncClient
     ) -> None:
         """All three supported themes can be set and read."""
         for theme in ("classic", "ink-gold", "command-center"):

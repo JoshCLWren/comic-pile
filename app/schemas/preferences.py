@@ -1,11 +1,11 @@
 """User preferences schemas for request/response validation."""
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-class ThemeId(str, Enum):
+class ThemeId(StrEnum):
     """Supported theme identifiers."""
 
     CLASSIC = "classic"
