@@ -137,7 +137,9 @@ export function RatingView({
             {totalIssues && issueNumber != null ? <span aria-hidden="true">·</span> : null}
             <span>{progress}% complete</span>
             <span aria-hidden="true">·</span>
-            <span>{issuesRemaining} left</span>
+            <span>
+              {issuesRemaining} issue{issuesRemaining === 1 ? '' : 's'} left
+            </span>
           </div>
         </div>
 
