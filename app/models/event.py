@@ -93,6 +93,7 @@ class Event(Base):
             id.desc(),
         ),
         Index("ix_event_session_type_die_after", "session_id", "type", "die_after"),
+        Index("ix_event_type_issue_id", "type", "issue_id"),
     )
 
     session: Mapped[Session | None] = relationship(

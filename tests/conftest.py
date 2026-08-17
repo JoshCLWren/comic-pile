@@ -60,6 +60,12 @@ def set_test_environment() -> Iterator[None]:
         os.environ["TEST_ENVIRONMENT"] = original_value
 
 
+@pytest.fixture(scope="session")
+def worker_id() -> str:
+    """Provide a worker ID for test coordination."""
+    return "master"
+
+
 @pytest.fixture(autouse=True)
 def enable_rate_limiting_for_tests(request: pytest.FixtureRequest) -> Iterator[None]:
     """Enable rate limiting only for the dedicated rate-limit test module."""
