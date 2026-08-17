@@ -983,9 +983,10 @@ async def set_current_issue(
             if issue.status != "read":
                 issue.status = "read"
                 issue.read_at = now
-
-    target_issue.status = "unread"
-    target_issue.read_at = None
+        elif issue.position >= target_issue.position:
+            if issue.status != "unread":
+                issue.status = "unread"
+                issue.read_at = None
 
     thread.total_issues = len(all_issues)
     thread.next_unread_issue_id = target_issue.id

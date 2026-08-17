@@ -708,3 +708,245 @@ async def test_bulk_issues_remaining_no_n_plus_one(
     assert len(captured) < 15, (
         f"Expected bounded query count (<15), got {len(captured)}: {captured}"
     )
+
+
+@pytest.mark.asyncio
+async def test_set_current_issue_forward_correction(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
+    """Test forward correction: move current issue from #6 to #8."""
+    # sample_data has Batman (thread_id=2) with issues 1-5 read, 6-10 unread
+    # next_unread_issue_id is issue 6 (position 6)
+    thread_id = sample_data["threads"][1].id  # Batman thread
+    
+    # Verify initial state: issue 6 is next unread
+    from sqlalchemy import select
+    from app.models import Issue
+    result = await async_db.execute(
+        select(Issue).where(Issue.thread_id == thread_id).order_by(Issue.position)
+    )
+    issues = list(result.scalars().all())
+    assert issues[5].issue_number == "6"  # position 6 (0-indexed = 5)
+    assert issues[5].status == "unread"
+    assert issues[7].issue_number == "8"  # position 8 (0-indexed = 7)
+    assert issues[7].status == "unread"
+    
+    # Correct current issue to #8
+    response = await auth_client.post(
+        f"/api/v1/threads/{thread_id}:setCurrentIssue",
+        json={"issue_number": "8"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    
+    # Verify response
+    assert data["thread_id"] == thread_id
+    assert data["issue_number"] == "8"
+    assert data["next_issue_number"] == "8"
+    assert data["issues_remaining"] == 3  # issues 8, 9, 10 unread
+    
+    # Verify database state: issues 1-7 should be read, 8-10 unread
+    await async_db.refresh(sample_data["threads"][1])
+    result = await async_db.execute(
+        select(Issue).where(Issue.thread_id == thread_id).order_by(Issue.position)
+    )
+    issues = list(result.scalars().all())
+    
+    # Issues 1-7 (positions 1-7) should be read
+    for i in range(7):
+        assert issues[i].status == "read", f"Issue {issues[i].issue_number} should be read"
+        assert issues[i].read_at is not None
+    
+    # Issues 8-10 (positions 8-10) should be unread
+    for i in range(7, 10):
+        assert issues[i].status == "unread", f"Issue {issues[i].issue_number} should be unread"
+        assert issues[i].read_at is None
+    
+    # next_unread_issue_id should point to issue 8
+    assert sample_data["threads"][1].next_unread_issue_id == issues[7].id
+
+
+@pytest.mark.asyncio
+async def test_set_current_issue_backward_correction(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
+    """Test backward correction: move current issue from #6 to #3."""
+    # First, set current to #6 (it's already #6 in sample_data, but let's move to #8 first then back to #3)
+    thread_id = sample_data["threads"][1].id  # Batman thread
+    
+    # First move to #8
+    response = await auth_client.post(
+        f"/api/v1/threads/{thread_id}:setCurrentIssue",
+        json={"issue_number": "8"}
+    )
+    assert response.status_code == 200
+    
+    # Now move backward to #3
+    response = await auth_client.post(
+        f"/api/v1/threads/{thread_id}:setCurrentIssue",
+        json={"issue_number": "3"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    
+    # Verify response
+    assert data["thread_id"] == thread_id
+    assert data["issue_number"] == "3"
+    assert data["next_issue_number"] == "3"
+    assert data["issues_remaining"] == 8  # issues 3-10 unread
+    
+    # Verify database state: issues 1-2 should be read, 3-10 unread
+    from sqlalchemy import select
+    from app.models import Issue
+    await async_db.refresh(sample_data["threads"][1])
+    result = await async_db.execute(
+        select(Issue).where(Issue.thread_id == thread_id).order_by(Issue.position)
+    )
+    issues = list(result.scalars().all())
+    
+    # Issues 1-2 (positions 1-2) should be read
+    for i in range(2):
+        assert issues[i].status == "read", f"Issue {issues[i].issue_number} should be read"
+        assert issues[i].read_at is not None
+    
+    # Issues 3-10 (positions 3-10) should be unread
+    for i in range(2, 10):
+        assert issues[i].status == "unread", f"Issue {issues[i].issue_number} should be unread"
+        assert issues[i].read_at is None
+    
+    # next_unread_issue_id should point to issue 3
+    assert sample_data["threads"][1].next_unread_issue_id == issues[2].id
+
+
+@pytest.mark.asyncio
+async def test_set_current_issue_thread_not_found(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Test 404 when thread doesn't exist."""
+    response = await auth_client.post(
+        "/api/v1/threads/99999:setCurrentIssue",
+        json={"issue_number": "1"}
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_set_current_issue_not_active_thread(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
+    """Test 400 when thread is not active."""
+    # Wonder Woman thread (id=3) is completed
+    thread_id = sample_data["threads"][2].id
+    
+    response = await auth_client.post(
+        f"/api/v1/threads/{thread_id}:setCurrentIssue",
+        json={"issue_number": "1"}
+    )
+    assert response.status_code == 400
+    assert "not active" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_set_current_issue_no_issue_tracking(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
+    """Test 400 when thread doesn't use issue tracking."""
+    # Superman thread (id=1) doesn't have total_issues set
+    thread_id = sample_data["threads"][0].id
+    
+    response = await auth_client.post(
+        f"/api/v1/threads/{thread_id}:setCurrentIssue",
+        json={"issue_number": "1"}
+    )
+    assert response.status_code == 400
+    assert "does not use issue tracking" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_set_current_issue_nonexistent_issue(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
+    """Test 404 when issue number doesn't exist in thread."""
+    thread_id = sample_data["threads"][1].id  # Batman thread
+    
+    response = await auth_client.post(
+        f"/api/v1/threads/{thread_id}:setCurrentIssue",
+        json={"issue_number": "999"}
+    )
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_set_current_issue_other_user_thread(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Test 404 when thread belongs to another user."""
+    from app.models import User, Thread
+    
+    # Create another user with a different username
+    other_user = User(
+        username="otheruser",
+        id=999,
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(other_user)
+    await async_db.flush()
+    await async_db.refresh(other_user)
+    
+    # Create thread for other user
+    other_thread = Thread(
+        title="Other's Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=other_user.id,
+        total_issues=5,
+        reading_progress="in_progress",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(other_thread)
+    await async_db.flush()
+    await async_db.refresh(other_thread)
+    
+    # Try to access from current user
+    response = await auth_client.post(
+        f"/api/v1/threads/{other_thread.id}:setCurrentIssue",
+        json={"issue_number": "1"}
+    )
+    assert response.status_code == 404  # get_owned_thread_or_404 returns 404 for other user's thread
+
+
+@pytest.mark.asyncio
+async def test_set_current_issue_updates_session_pending_issue(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
+    """Test that session.pending_issue_id is updated."""
+    from app.models import Session as SessionModel
+    from sqlalchemy import select
+    from comic_pile.session import resolve_current_session
+    
+    thread_id = sample_data["threads"][1].id  # Batman thread
+    
+    # Get the authoritative current session (what get_or_create would return)
+    session = await resolve_current_session(async_db, sample_data["user"].id)
+    assert session is not None
+    original_session_id = session.id
+    
+    # Correct to issue #8
+    response = await auth_client.post(
+        f"/api/v1/threads/{thread_id}:setCurrentIssue",
+        json={"issue_number": "8"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    
+    # Verify session was updated
+    await async_db.refresh(session)
+    target_issue = data["issue_id"]
+    assert session.pending_issue_id == target_issue
+    assert session.pending_thread_updated_at is not None
+    assert session.id == original_session_id
+
+
