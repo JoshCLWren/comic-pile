@@ -138,6 +138,15 @@ export default function QueueThreadCard({
           </div>
         </div>
         <div className="flex items-center gap-1">
+          <button
+            type="button"
+            data-testid="mobile-dependency-action"
+            aria-label="Manage dependencies"
+            onClick={(e) => { e.stopPropagation(); onDependencies(); }}
+            className="md:hidden text-stone-400 hover:text-stone-200 text-lg px-1 py-1"
+          >
+            ⛓
+          </button>
           <PositionMenu
             thread={thread}
             onMoveToFront={() => onMoveToFront()}
