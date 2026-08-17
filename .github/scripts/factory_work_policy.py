@@ -53,6 +53,7 @@ class Candidate:
     linked_issue: int | None = None
     stage: str | None = None
     producer_worker: str | None = None
+    conflicted: bool = False
 
     def sort_key(self) -> tuple[int, int, float, int]:
         """Return the deterministic queue ordering key."""
@@ -160,6 +161,13 @@ def factory_pr_wip_count(prs: Iterable[dict[str, Any]]) -> int:
     return count
 
 
+def pr_is_conflicted(pr: dict[str, Any]) -> bool:
+    """Return whether GitHub reports the current PR head as merge-conflicted."""
+    mergeable = str(pr.get('mergeable') or '').upper()
+    merge_state = str(pr.get('mergeStateStatus') or '').upper()
+    return mergeable == 'CONFLICTING' or merge_state == 'DIRTY'
+
+
 def issue_is_static_candidate(issue: dict[str, Any], suppressing_pr_issues: set[int]) -> bool:
     """Return whether an issue is structurally eligible for assignment."""
     number = int(issue['number'])
@@ -262,6 +270,7 @@ def build_candidates(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) ->
                 linked_issue=linked,
                 stage=stage_of(pr_labels),
                 producer_worker=producer_worker_from_pr(pr),
+                conflicted=pr_is_conflicted(pr),
             )
         )
     return sorted(candidates, key=Candidate.sort_key)
@@ -282,7 +291,7 @@ def candidate_is_independent_for_worker(candidate: Candidate, worker: str) -> bo
 
 
 def order_candidates_for_worker(candidates: list[Candidate], worker: str) -> list[Candidate]:
-    """Drain existing PRs before starting new issue implementation."""
+    """Drain merge conflicts and other existing PR work before new issues."""
     eligible = [
         candidate
         for candidate in candidates
@@ -291,16 +300,18 @@ def order_candidates_for_worker(candidates: list[Candidate], worker: str) -> lis
 
     def work_class(candidate: Candidate) -> int:
         if candidate.kind == 'pr':
-            if candidate.stage == 'factory:ci':
+            if candidate.conflicted:
                 return 0
-            if candidate.stage == 'factory:changes-requested':
+            if candidate.stage == 'factory:ci':
                 return 1
-            if candidate.stage == 'factory:review':
+            if candidate.stage == 'factory:changes-requested':
                 return 2
-            return 3
-        if candidate.lane == 1:
+            if candidate.stage == 'factory:review':
+                return 3
             return 4
-        return 5
+        if candidate.lane == 1:
+            return 5
+        return 6
 
     return sorted(
         eligible,
