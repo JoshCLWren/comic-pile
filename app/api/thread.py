@@ -235,21 +235,28 @@ async def list_threads(
                     )
                 )
             elif cursor.sort == "title":
-                # Title-based cursor: filter by title > cursor_value, with id tie-breaker
+                # Title-based cursor: filter by title > pivot_title, id tie-breaker
                 cursor_title = cursor.values[0] if cursor.values else ""
+                cursor_id = int(cursor.values[1]) if len(cursor.values) > 1 else 0
                 query = query.where(
                     or_(
                         Thread.title > cursor_title,
-                        (Thread.title == cursor_title) & (Thread.id > int(cursor.values[1]) if len(cursor.values) > 1 else True),
+                        (Thread.title == cursor_title) & (Thread.id > cursor_id),
                     )
                 )
             elif cursor.sort == "created":
-                # Created-based cursor: filter by created_at > cursor_value, with id tie-breaker
-                cursor_created = cursor.values[0] if cursor.values else ""
+                # Created-based cursor: filter by created_at > pivot_time, id tie-breaker
+                cursor_created_str = cursor.values[0] if cursor.values else ""
+                cursor_id = int(cursor.values[1]) if len(cursor.values) > 1 else 0
+                try:
+                    from datetime import datetime as dt
+                    cursor_created = dt.fromisoformat(cursor_created_str)
+                except ValueError:
+                    cursor_created = dt.min.replace(tzinfo=UTC)
                 query = query.where(
                     or_(
                         Thread.created_at > cursor_created,
-                        (Thread.created_at == cursor_created) & (Thread.id > int(cursor.values[1]) if len(cursor.values) > 1 else True),
+                        (Thread.created_at == cursor_created) & (Thread.id > cursor_id),
                     )
                 )
         except ValueError as e:
@@ -282,11 +289,16 @@ async def list_threads(
     # Convert full ThreadResponse to narrow QueueThreadListItem for list views
     queue_items = [_to_queue_list_item(tr) for tr in thread_responses]
 
-    # Set next_page_token using encode_queue_cursor for sort-aware cursor
+    # Set next_page_token using sort-specific cursor values
     next_token = None
     if has_more and threads_to_return:
         last = threads_to_return[-1]
-        cursor_values = (str(last.queue_position), str(last.id))
+        if sort == "position":
+            cursor_values = (str(last.queue_position), str(last.id))
+        elif sort == "title":
+            cursor_values = (str(last.title), str(last.id))
+        elif sort == "created":
+            cursor_values = (last.created_at.isoformat(), str(last.id))
         next_token = encode_queue_cursor(
             QueueCursor(sort=sort, search=normalized_search or "", values=cursor_values)
         )
