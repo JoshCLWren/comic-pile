@@ -8,6 +8,17 @@
       "**/*": false
     }
   },
+  "functions": {
+    "api/index.py": {
+      "excludeFiles": "{node_modules/**,static/**,docs/**,**/*.md,**/*.log}"
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/ping",
+      "schedule": "*/10 * * * *"
+    }
+  ],
   "builds": [
     {
       "src": "api/index.py",

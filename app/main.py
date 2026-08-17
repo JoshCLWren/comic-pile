@@ -28,6 +28,7 @@ from app.api import (
     dependency,
     issue,
     metrics,
+    ping,
     queue,
     rate,
     reading_orders,
@@ -198,6 +199,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     # tracking (issue #834) and future regression checks can read startup
     # telemetry. It returns only process startup epoch and duration.
     app.include_router(metrics.router, prefix="/api", tags=["metrics"])
+    app.include_router(ping.router, prefix="/api", tags=["ping"])
 
     # Error-only request logging (body redaction + environment-aware sanitization).
     add_request_logging_middleware(app, app_settings.environment)
