@@ -36,6 +36,7 @@ function ratingView(overrides: Record<string, unknown> = {}) {
       reading_progress: 'in_progress',
       issue_id: 100,
       next_issue_id: 101,
+      queue_position: 0,
     },
     currentDie: 6,
     rolledResult: 3,
@@ -92,20 +93,32 @@ describe('RatingView action panel (issue #1406)', () => {
     expect(screen.getByText('More focused next roll')).toBeInTheDocument()
   })
 
-  it('shows step-up consequence for rating below threshold', () => {
-    render(ratingView({ currentDie: 6, predictedDie: 8, rating: 3.0 }))
-    expect(screen.getByText('d6 → d8')).toBeInTheDocument()
-    expect(screen.getByText('More variety next roll')).toBeInTheDocument()
-  })
-
-  it('shows step-down consequence for rating at or above threshold', () => {
-    render(ratingView({ currentDie: 6, predictedDie: 4, rating: RATING_THRESHOLD }))
+it('shows step-up consequence for rating below threshold', () => {
+    render(ratingView({ currentDie: 6, predictedDie: 4, rating: 3.0, activeRatingThread: {
+      id: 1, title: 'Saga', format: 'Comic', issues_remaining: 5, total_issues: 10,
+      issue_number: '3', next_issue_number: '4', reading_progress: 'in_progress',
+      issue_id: 100, next_issue_id: 101, queue_position: 0,
+    } }))
     expect(screen.getByText('d6 → d4')).toBeInTheDocument()
     expect(screen.getByText('More focused next roll')).toBeInTheDocument()
   })
 
+it('shows step-down consequence for rating at or above threshold', () => {
+    render(ratingView({ currentDie: 6, predictedDie: 8, rating: RATING_THRESHOLD, activeRatingThread: {
+      id: 1, title: 'Saga', format: 'Comic', issues_remaining: 5, total_issues: 10,
+      issue_number: '3', next_issue_number: '4', reading_progress: 'in_progress',
+      issue_id: 100, next_issue_id: 101, queue_position: 0,
+    } }))
+    expect(screen.getByText('d6 → d8')).toBeInTheDocument()
+    expect(screen.getByText('More variety next roll')).toBeInTheDocument()
+  })
+
   it('shows boundary die same when rating is neutral', () => {
-    render(ratingView({ currentDie: 6, predictedDie: 6, rating: 3.0 }))
+    render(ratingView({ currentDie: 6, predictedDie: 6, rating: 3.0, activeRatingThread: {
+      id: 1, title: 'Saga', format: 'Comic', issues_remaining: 5, total_issues: 10,
+      issue_number: '3', next_issue_number: '4', reading_progress: 'in_progress',
+      issue_id: 100, next_issue_id: 101, queue_position: 0,
+    } }))
     expect(screen.getByText('d6 → d6')).toBeInTheDocument()
     expect(screen.getByText('Die stays the same')).toBeInTheDocument()
   })
@@ -120,7 +133,7 @@ describe('RatingView action panel (issue #1406)', () => {
       activeRatingThread: {
         id: 1, title: 'Saga', format: 'Comic', issues_remaining: 1, total_issues: 10,
         issue_number: '10', next_issue_number: null, reading_progress: 'in_progress',
-        issue_id: 100, next_issue_id: null,
+        issue_id: 100, next_issue_id: null, queue_position: 0,
       },
     }))
     expect(screen.getByRole('button', { name: /mark read & complete/i })).toBeInTheDocument()
@@ -131,7 +144,7 @@ describe('RatingView action panel (issue #1406)', () => {
       activeRatingThread: {
         id: 1, title: 'Saga', format: 'Comic', issues_remaining: 1, total_issues: 10,
         issue_number: '10', next_issue_number: null, reading_progress: 'in_progress',
-        issue_id: 100, next_issue_id: null,
+        issue_id: 100, next_issue_id: null, queue_position: 0,
       },
     }))
     expect(screen.getByText(/This is the last issue in the thread/)).toBeInTheDocument()
