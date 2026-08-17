@@ -178,4 +178,67 @@ if [[ "$command_group" == issue && "$command_name" == view ]]; then
   exit 0
 fi
 
+# `gh pr checks --required` exits 1 both when required checks fail and when
+# GitHub reports that a PR simply has no checks. The latter is not a failed
+# gate when the base branch is explicitly unprotected. Normalize only that
+# narrow case so the controller and dispatcher share the same fail-closed
+# interpretation without weakening protected-branch behavior.
+if [[ "$command_group" == pr && "$command_name" == checks ]]; then
+  set +e
+  checks_output="$("$REAL_GH" "${original[@]}" 2>&1)"
+  checks_status=$?
+  set -e
+
+  if (( checks_status == 0 )); then
+    [[ -z "$checks_output" ]] || printf '%s\n' "$checks_output"
+    exit 0
+  fi
+
+  is_required=0
+  repo="${GITHUB_REPOSITORY:-}"
+  number=''
+  for (( index=2; index < ${#original[@]}; index++ )); do
+    arg="${original[$index]}"
+    case "$arg" in
+      --required)
+        is_required=1 ;;
+      --repo)
+        if (( index + 1 < ${#original[@]} )); then
+          repo="${original[$((index + 1))]}"
+          index=$((index + 1))
+        fi
+        ;;
+      *)
+        if [[ -z "$number" && "$arg" =~ ^[0-9]+$ ]]; then
+          number="$arg"
+        fi
+        ;;
+    esac
+  done
+
+  no_checks=0
+  if grep -Eq '^no (required )?checks reported on the .+ branch$' <<< "$checks_output"; then
+    no_checks=1
+  fi
+
+  if (( is_required == 1 && no_checks == 1 )) && [[ -n "$repo" && -n "$number" ]]; then
+    if pr_raw="$("$REAL_GH" api "repos/${repo}/pulls/${number}" 2>/dev/null)"; then
+      base_ref="$(jq -r '.base.ref // empty' <<< "$pr_raw")"
+      if [[ -n "$base_ref" ]]; then
+        encoded_base="$(jq -rn --arg value "$base_ref" '$value | @uri')"
+        if branch_raw="$("$REAL_GH" api "repos/${repo}/branches/${encoded_base}" 2>/dev/null)"; then
+          protected="$(jq -r '.protected // true' <<< "$branch_raw")"
+          if [[ "$protected" == false ]]; then
+            echo "factory gh REST shim: no required checks configured on unprotected base ${base_ref}; treating required-check gate as satisfied" >&2
+            exit 0
+          fi
+        fi
+      fi
+    fi
+  fi
+
+  [[ -z "$checks_output" ]] || printf '%s\n' "$checks_output" >&2
+  exit "$checks_status"
+fi
+
 exec "$REAL_GH" "${original[@]}"
