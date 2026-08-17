@@ -85,14 +85,23 @@ export default function VirtualizedThreadList<T>({
       if (explicitColumnCount !== undefined) {
         setColumnCount(Math.max(1, explicitColumnCount))
       } else {
-        setColumnCount(getColumnCount(wrapperRef.current.offsetWidth))
+        const containerWidth = wrapperRef.current.offsetWidth
+        setColumnCount(getColumnCount(containerWidth))
+        // Fallback: force single-column mode at mobile viewport widths
+        // to ensure consistent rendering across all viewport sizes.
+        // This compensates for cases where container width measurement
+        // may not correctly reflect the intended breakpoint due to
+        // app layout max-width constraints and padding.
+        if (typeof window !== 'undefined' && window.innerWidth < 768) {
+          setColumnCount(1)
+        }
       }
     }
   }, [explicitColumnCount])
 
   // Reactive container height and column count via ResizeObserver,
   // throttled with requestAnimationFrame to prevent layout thrashing.
-  useEffect(() => {
+useEffect(() => {
     const wrapper = wrapperRef.current!
 
     let rafId: number | null = null
@@ -104,7 +113,14 @@ export default function VirtualizedThreadList<T>({
         for (const entry of entries) {
           setContainerHeight(entry.contentRect.height)
           if (explicitColumnCount === undefined) {
-            setColumnCount(getColumnCount(entry.contentRect.width))
+            const columnCountFromWidth = getColumnCount(entry.contentRect.width)
+            // Fallback: force single-column mode at mobile viewport widths
+            // to ensure consistent rendering across all viewport sizes.
+            if (typeof window !== 'undefined' && window.innerWidth < 768) {
+              setColumnCount(1)
+            } else {
+              setColumnCount(columnCountFromWidth)
+            }
           }
         }
       })
