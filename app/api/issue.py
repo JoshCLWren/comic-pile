@@ -599,6 +599,7 @@ async def get_issue_reader_context(
     Raises:
         HTTPException: If the issue is not found or not owned by the user.
     """
+    await get_owned_issue_or_404(db, current_user.id, issue_id)
     context = await build_reader_context(issue_id, current_user.id, db)
     return context
 

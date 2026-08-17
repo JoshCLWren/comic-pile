@@ -254,6 +254,7 @@ async def _get_previous_issue(
 ) -> PreviousIssueInfo | None:
     prev_result = await db.execute(
         select(Issue)
+        .options(selectinload(Issue.thread))
         .where(
             Issue.thread_id == thread_id,
             Issue.id != current_issue_id,
@@ -346,7 +347,7 @@ async def _build_crossover_panel(
                 nodes.append(
                     CrossoverNodeInfo(
                         node_type="thread",
-                        node_id=ms.membership_id,
+                        node_id=ms.id,
                         thread_id=ms.thread_id,
                         thread_title=thread_title_val,
                         is_read=False,
@@ -362,7 +363,7 @@ async def _build_crossover_panel(
                     nodes.append(
                         CrossoverNodeInfo(
                             node_type="issue",
-                            node_id=ms.membership_id,
+                            node_id=ms.id,
                             thread_id=parent_thread_id,
                             issue_id=ms.issue_id,
                             issue_number=issue_number_val,
