@@ -1,15 +1,14 @@
 """Tests for bounded liveness, dependency-health, and warm-up behavior."""
 
 import asyncio
-from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import health
-from app.models import Event
 from app.startup_diagnostics import StartupSnapshot
 
 
