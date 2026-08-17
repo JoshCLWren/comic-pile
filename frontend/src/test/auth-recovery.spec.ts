@@ -8,8 +8,11 @@ test('Retry explicitly refreshes auth after automatic resume recovery fails', as
   let meAttempts = 0
   let refreshAttempts = 0
 
+  // After the #1386 fix, auth calls use skipErrorLogging so the axios
+  // interceptor no longer emits verbose "API Error: AxiosError: ..." for 503s.
+  // ResumeRecovery still logs a concise summary on the final failed attempt,
+  // which we allow. Any "API Error:" 503 log is an unexpected regression.
   allowExpectedBrowserFailures.allow(
-    { category: 'console', message: '503' },
     { category: 'console', message: 'ComicPile resume validation failed' },
   )
 
