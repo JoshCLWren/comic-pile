@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from app.models.revoked_token import RevokedToken
     from app.models.session import Session
     from app.models.thread import Thread
+    from app.models.user_preferences import UserPreferences
 
 
 class User(Base):
@@ -39,4 +40,7 @@ class User(Base):
     )
     revoked_tokens: Mapped[list[RevokedToken]] = relationship(
         "RevokedToken", back_populates="user", cascade="all, delete-orphan", lazy="raise"
+    )
+    preferences: Mapped[UserPreferences | None] = relationship(
+        "UserPreferences", back_populates="user", uselist=False, lazy="raise"
     )

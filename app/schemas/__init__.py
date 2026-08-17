@@ -24,6 +24,7 @@ from app.schemas.issue import (
     IssueUpdate,
 )
 from app.schemas.migration import MigrateToIssuesRequest
+from app.schemas.preferences import ThemeId, UserPreferencesPatchRequest, UserPreferencesResponse
 from app.schemas.rate import RateRequest
 from app.schemas.roll import (
     OverrideRequest,
@@ -87,6 +88,10 @@ __all__ = [
     "IssueOrderValidationResponse",
     # Migration
     "MigrateToIssuesRequest",
+    # Preferences
+    "ThemeId",
+    "UserPreferencesResponse",
+    "UserPreferencesPatchRequest",
     # Roll
     "RollRequest",
     "RollResponse",
