@@ -358,28 +358,56 @@ async def create_thread(
 
     while retries < max_retries:
         try:
-            result = await db.execute(
-                select(Thread.queue_position)
-                .where(Thread.user_id == current_user.id)
-                .order_by(Thread.queue_position.desc())
-            )
-            max_position = result.scalar() or 0
-            new_thread = Thread(
-                title=thread_data.title,
-                format=thread_data.format,
-                issues_remaining=thread_data.issues_remaining,
-                total_issues=thread_data.total_issues,
-                queue_position=max_position + 1,
-                user_id=current_user.id,
-                notes=thread_data.notes,
-                is_test=thread_data.is_test,
-            )
-            db.add(new_thread)
-            await db.commit()
-            await db.refresh(new_thread)
+        # Determine next queue position
+        result = await db.execute(
+            select(Thread.queue_position)
+            .where(Thread.user_id == current_user.id)
+            .order_by(Thread.queue_position.desc())
+        )
+        max_position = result.scalar() or 0
+        # Extract fields before commit to avoid post-commit lazy loading issues
+        title = thread_data.title
+        format_ = thread_data.format
+        issues_remaining = thread_data.issues_remaining
+        total_issues = thread_data.total_issues
+        notes = thread_data.notes
+        is_test = thread_data.is_test
 
-            await invalidate_user_view(current_user.id)
-            return await thread_to_response(new_thread, db)
+        new_thread = Thread(
+            title=title,
+            format=format_,
+            issues_remaining=issues_remaining,
+            total_issues=total_issues,
+            queue_position=max_position + 1,
+            user_id=current_user.id,
+            notes=notes,
+            is_test=is_test,
+        )
+        db.add(new_thread)
+        await db.commit()
+        await db.refresh(new_thread)
+
+        await invalidate_user_view(current_user.id)
+        # Build response without accessing lazy attributes post-commit
+        return ThreadResponse(
+            id=new_thread.id,
+            title=title,
+            format=format_,
+            issues_remaining=issues_remaining,
+            queue_position=new_thread.queue_position,
+            status=new_thread.status,
+            last_rating=new_thread.last_rating,
+            last_activity_at=new_thread.last_activity_at,
+            notes=notes,
+            is_test=is_test,
+            is_blocked=new_thread.is_blocked,
+            created_at=new_thread.created_at,
+            total_issues=total_issues,
+            reading_progress=new_thread.reading_progress,
+            next_unread_issue_id=new_thread.next_unread_issue_id,
+            next_unread_issue_number=None,
+            blocking_reasons=[],
+        )
         except OperationalError as e:
             if "deadlock" in str(e).lower():
                 await db.rollback()
