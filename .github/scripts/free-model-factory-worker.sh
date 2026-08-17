@@ -83,6 +83,20 @@ stage_trusted_kilo_helper() {
   chmod +x "$TRUSTED_KILO_HELPER"
 }
 
+# Semantic state transitions are more privileged than the reviewed branch.
+# Copy the controller and its pure policy module from trusted main before any
+# checkout_target switch so a stale or contaminated PR cannot replace the
+# authority code that interprets its model verdict.
+stage_trusted_review_controller() {
+  local trusted_dir
+  trusted_dir="$(mktemp -d /tmp/comic-pile-review-controller.XXXXXX)"
+  cp .github/scripts/factory-review-controller.py "$trusted_dir/factory-review-controller.py"
+  cp .github/scripts/factory_review_policy.py "$trusted_dir/factory_review_policy.py"
+  chmod +x "$trusted_dir/factory-review-controller.py"
+  TRUSTED_REVIEW_CONTROLLER="$trusted_dir/factory-review-controller.py"
+  export TRUSTED_REVIEW_CONTROLLER
+}
+
 # Keep the established OpenCode/NVIDIA implementation untouched. Kilo needs a
 # small override only so it invokes the trusted helper staged from main.
 eval "$(declare -f run_agent | sed '1s/^run_agent /legacy_run_agent /')"
@@ -96,7 +110,7 @@ run_agent() {
 
   if [[ "$mode" == 'pr' ]]; then
     target="pull request #${number}"
-    mission="Resume this PR. Inspect the exact current head, required CI, review submissions, and every inline review thread. Fix closure-critical defects and resolve or concretely rebut actionable threads. If no edits are required, decide whether the PR fully completes its declared scope and is safe to merge. End your final response with FACTORY_GATE_READY only when no semantic blocker remains; otherwise end with FACTORY_GATE_NOT_READY."
+    mission="Resume this PR. Inspect the exact current head, required CI, review submissions, and every inline review thread. Fix closure-critical defects and resolve or concretely rebut actionable threads. If no edits are required, decide whether the PR fully completes its declared scope and is safe to merge. End your final response with FACTORY_GATE_READY only for semantic approval, FACTORY_GATE_REJECT only when the PR is clearly unsalvageable, contaminated, obsolete, duplicate, or fundamentally incomplete, otherwise end with FACTORY_GATE_NOT_READY."
   else
     target="issue #${number}"
     mission="Implement the full closure-critical acceptance contract for this issue with code and focused tests. Do not stop at planning or optional polish."
@@ -189,6 +203,7 @@ select_controller_assignment() {
 ensure_owner_label
 stage_trusted_guard
 stage_trusted_kilo_helper
+stage_trusted_review_controller
 trap 'release_owned_targets session-end-handoff || true' EXIT
 
 MODE=''
@@ -280,20 +295,41 @@ if persist_pr_changes "$NUMBER" "$BRANCH"; then
   exit 0
 fi
 
-current="$(git rev-parse HEAD)"
-if [[ "$SOURCE" != 'kilo-auto' ]] && \
-  grep -q 'FACTORY_GATE_READY' "/tmp/opencode-factory-${WORKER}.log" && \
-  machine_merge_gates_pass "$NUMBER" "$current"; then
-  log "all exact-head gates passed for PR #${NUMBER}; handing it to the merge controller"
-  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:ready' 'exact-head-ready-handoff'
+if (( transient_failure == 1 )); then
+  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'transient-model-interruption'
   log "assignment complete; remaining budget $(remaining)s"
   exit 0
 fi
 
-if (( transient_failure == 1 )); then
-  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'transient-model-interruption'
-else
-  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'not-ready-handoff'
+if (( agent_status != 0 )); then
+  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'review-agent-failed'
+  log "assignment complete; remaining budget $(remaining)s"
+  exit 0
 fi
+
+review_log="/tmp/opencode-factory-${WORKER}.log"
+verdict=''
+last_token="$(grep -E '^FACTORY_GATE_(READY|REJECT|NOT_READY)[[:space:]]*$' "$review_log" \
+  | tail -n 1 | tr -d '[:space:]' || true)"
+case "$last_token" in
+  FACTORY_GATE_READY) verdict='approve' ;;
+  FACTORY_GATE_REJECT) verdict='reject' ;;
+  FACTORY_GATE_NOT_READY) verdict='repair' ;;
+esac
+
+if [[ -z "$verdict" ]]; then
+  log "review model did not emit a recognized terminal verdict for PR #${NUMBER}; leaving it in review"
+  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'missing-semantic-verdict'
+  log "assignment complete; remaining budget $(remaining)s"
+  exit 0
+fi
+
+log "submitting ${verdict} semantic verdict for PR #${NUMBER} at reviewed head ${EXPECTED_HEAD} to the trusted review controller"
+python3 "$TRUSTED_REVIEW_CONTROLLER" review \
+  --worker "$WORKER" \
+  --pr "$NUMBER" \
+  --reviewed-head "$EXPECTED_HEAD" \
+  --verdict "$verdict" \
+  --review-log "$review_log"
 
 log "assignment complete; remaining budget $(remaining)s"

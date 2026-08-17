@@ -10,7 +10,7 @@ import sys
 import time
 from typing import Any, cast
 sys.path.insert(0, os.path.dirname(__file__))
-from factory_work_policy import (BLOCKED_LABELS, OWNER_RE, STAGE_LABELS, Candidate, build_candidates, env_positive_int, item_is_unowned, labels_of, lease_is_stale, linked_issue_from_branch, owner_of, plan_distinct_assignments)
+from factory_work_policy import (BLOCKED_LABELS, OWNER_RE, STAGE_LABELS, Candidate, build_candidates, env_positive_int, item_is_unowned, labels_of, lease_is_stale, linked_issue_from_branch, order_candidates_for_worker, owner_of, plan_distinct_assignments)
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
 LEASE_ACTIVITY_PATTERNS = (
@@ -47,7 +47,7 @@ def list_issues() -> list[dict[str, Any]]:
 
 def list_prs() -> list[dict[str, Any]]:
     """List open pull requests visible to the assignment controller."""
-    return cast(list[dict[str, Any]], gh_json(['pr', 'list', '--repo', REPO, '--state', 'open', '--limit', '500', '--json', 'number,title,labels,headRefName,createdAt,updatedAt,isDraft']))
+    return cast(list[dict[str, Any]], gh_json(['pr', 'list', '--repo', REPO, '--state', 'open', '--limit', '500', '--json', 'number,title,body,labels,headRefName,createdAt,updatedAt,isDraft']))
 
 
 def target_json(number: int) -> dict[str, Any]:
@@ -263,7 +263,7 @@ def assign(worker: str) -> Candidate | None:
     if worker_has_active_lease(worker):
         print(f'[factory-controller] Factory {worker} already has an active lease; skipping dispatch', file=sys.stderr)
         return None
-    candidates = build_candidates(list_issues(), list_prs())
+    candidates = order_candidates_for_worker(build_candidates(list_issues(), list_prs()), worker)
     for candidate in candidates:
         if not candidate_is_live_executable(candidate):
             continue
