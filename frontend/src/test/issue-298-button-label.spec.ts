@@ -1,22 +1,22 @@
 import { test, expect } from './fixtures';
-import { createThread, setRangeInput, SELECTORS } from './helpers';
+import { createThread } from './helpers';
 
 test.describe('Issue #298 - Button Label on Last Issue', () => {
-  test('should display "Save & Complete" when rating the last issue', async ({ authenticatedWithThreadsPage }) => {
-    const token = await authenticatedWithThreadsPage.evaluate(() => 
+  test('should display "Mark read & complete" when rating the last issue', async ({ authenticatedWithThreadsPage }) => {
+    const token = await authenticatedWithThreadsPage.evaluate(() =>
       localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
     );
     expect(token).toBeTruthy();
 
-    // Create a thread with exactly 1 issue remaining
+    // Create a thread with exactly 1 issue remaining (the last issue)
     const thread = await createThread(authenticatedWithThreadsPage, {
       title: 'Last Issue Test Thread',
       format: 'issue',
       issues_remaining: 1,
-      total_issues: 1,
+      total_issues: 10,
     });
 
-    // Set the thread as pending
+    // Set the thread pending so the rating view auto-opens on the roll page
     const setPendingResponse = await authenticatedWithThreadsPage.request.post(
       `/api/threads/${thread.id}/set-pending`,
       {
@@ -27,35 +27,24 @@ test.describe('Issue #298 - Button Label on Last Issue', () => {
     );
     expect(setPendingResponse.ok()).toBeTruthy();
 
-    // Reload the page to see the pending thread
+    // Reload to the roll page; the pending thread opens the rating view directly
     await authenticatedWithThreadsPage.goto('/');
-    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
-
-    // Click on the first thread card
-    const firstThreadCard = authenticatedWithThreadsPage.locator('[role="button"]').filter({
-      has: authenticatedWithThreadsPage.locator('p.font-black'),
-    }).first();
-    await expect(firstThreadCard).toBeVisible({ timeout: 10000 });
-    await firstThreadCard.click();
-
-    // Click "Read Now"
-    await authenticatedWithThreadsPage.getByText('Read Now', { exact: true }).click();
-    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 10000 });
+    await expect(authenticatedWithThreadsPage.locator('[data-testid="rating-actions"]')).toBeVisible();
 
     // Verify we're on the rating view
-    await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible();
+    await expect(authenticatedWithThreadsPage.locator('#rating-input')).toBeVisible();
 
-    // Check that the submit button shows "Save & Complete" (not "Save & Continue")
-    const submitButton = authenticatedWithThreadsPage.locator('button:has-text("Save & Complete")');
+    // When this is the last issue, the submit button reads "Mark read & complete"
+    const submitButton = authenticatedWithThreadsPage.locator('[data-testid="save-and-continue"]');
     await expect(submitButton).toBeVisible();
+    await expect(submitButton).toHaveText('Mark read & complete');
 
-    // Verify the old button text is NOT present
-    const oldButton = authenticatedWithThreadsPage.locator('button:has-text("Save & Continue")');
-    await expect(oldButton).toHaveCount(0);
+    // The multi-issue label must NOT be present
+    await expect(submitButton).not.toHaveText('Mark read & save');
   });
 
-  test('should display "Save & Continue" when multiple issues remain', async ({ authenticatedWithThreadsPage }) => {
-    const token = await authenticatedWithThreadsPage.evaluate(() => 
+  test('should display "Mark read & save" when multiple issues remain', async ({ authenticatedWithThreadsPage }) => {
+    const token = await authenticatedWithThreadsPage.evaluate(() =>
       localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
     );
     expect(token).toBeTruthy();
@@ -68,7 +57,7 @@ test.describe('Issue #298 - Button Label on Last Issue', () => {
       total_issues: 10,
     });
 
-    // Set the thread as pending
+    // Set the thread pending so the rating view auto-opens on the roll page
     const setPendingResponse = await authenticatedWithThreadsPage.request.post(
       `/api/threads/${thread.id}/set-pending`,
       {
@@ -79,30 +68,19 @@ test.describe('Issue #298 - Button Label on Last Issue', () => {
     );
     expect(setPendingResponse.ok()).toBeTruthy();
 
-    // Reload the page to see the pending thread
+    // Reload to the roll page; the pending thread opens the rating view directly
     await authenticatedWithThreadsPage.goto('/');
-    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
-
-    // Click on the first thread card
-    const firstThreadCard = authenticatedWithThreadsPage.locator('[role="button"]').filter({
-      has: authenticatedWithThreadsPage.locator('p.font-black'),
-    }).first();
-    await expect(firstThreadCard).toBeVisible({ timeout: 10000 });
-    await firstThreadCard.click();
-
-    // Click "Read Now"
-    await authenticatedWithThreadsPage.getByText('Read Now', { exact: true }).click();
-    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 10000 });
+    await expect(authenticatedWithThreadsPage.locator('[data-testid="rating-actions"]')).toBeVisible();
 
     // Verify we're on the rating view
-    await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible();
+    await expect(authenticatedWithThreadsPage.locator('#rating-input')).toBeVisible();
 
-    // Check that the submit button shows "Save & Continue" (not "Save & Complete")
-    const submitButton = authenticatedWithThreadsPage.locator('button:has-text("Save & Continue")');
+    // When issues remain, the submit button reads "Mark read & save"
+    const submitButton = authenticatedWithThreadsPage.locator('[data-testid="save-and-continue"]');
     await expect(submitButton).toBeVisible();
+    await expect(submitButton).toHaveText('Mark read & save');
 
-    // Verify the new button text is NOT present
-    const newButton = authenticatedWithThreadsPage.locator('button:has-text("Save & Complete")');
-    await expect(newButton).toHaveCount(0);
+    // The last-issue label must NOT be present
+    await expect(submitButton).not.toHaveText('Mark read & complete');
   });
 });
