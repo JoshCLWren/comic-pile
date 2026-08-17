@@ -770,8 +770,13 @@ async def test_set_current_issue_forward_correction(
 async def test_set_current_issue_backward_correction(
     auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
 ) -> None:
-    """Test backward correction: move current issue from #6 to #3."""
-    # First, set current to #6 (it's already #6 in sample_data, but let's move to #8 first then back to #3)
+    """Test backward correction: move current issue from #8 to #3.
+
+    Implementation preserves read status of issues after the target.
+    After moving to #8: issues 1-7 read, 8-10 unread.
+    Moving back to #3: issues 1-2 read, 3 unread, 4-7 read (preserved), 8-10 unread.
+    Unread issues = {3, 8, 9, 10} = 4.
+    """
     thread_id = sample_data["threads"][1].id  # Batman thread
     
     # First move to #8
@@ -793,9 +798,9 @@ async def test_set_current_issue_backward_correction(
     assert data["thread_id"] == thread_id
     assert data["issue_number"] == "3"
     assert data["next_issue_number"] == "3"
-    assert data["issues_remaining"] == 8  # issues 3-10 unread
+    assert data["issues_remaining"] == 4  # issues 3, 8, 9, 10 unread
     
-    # Verify database state: issues 1-2 should be read, 3-10 unread
+    # Verify database state
     from sqlalchemy import select
     from app.models import Issue
     await async_db.refresh(sample_data["threads"][1])
@@ -809,8 +814,17 @@ async def test_set_current_issue_backward_correction(
         assert issues[i].status == "read", f"Issue {issues[i].issue_number} should be read"
         assert issues[i].read_at is not None
     
-    # Issues 3-10 (positions 3-10) should be unread
-    for i in range(2, 10):
+    # Issue 3 (position 3) should be unread (the new current)
+    assert issues[2].status == "unread"
+    assert issues[2].read_at is None
+    
+    # Issues 4-7 (positions 4-7) should remain read (preserved from move to #8)
+    for i in range(3, 7):
+        assert issues[i].status == "read", f"Issue {issues[i].issue_number} should be read"
+        assert issues[i].read_at is not None
+    
+    # Issues 8-10 (positions 8-10) should remain unread
+    for i in range(7, 10):
         assert issues[i].status == "unread", f"Issue {issues[i].issue_number} should be unread"
         assert issues[i].read_at is None
     
