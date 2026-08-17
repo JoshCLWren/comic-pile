@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { SELECTORS, setRangeInput } from './helpers';
+import { SELECTORS, setRangeInput, waitForRollPageReady } from './helpers';
 
 const CLIENT_TIMEOUT_MS = 50;
 const RESPONSE_TAIL_DELAY_MS = 150;
@@ -32,11 +32,9 @@ async function installShortAxiosTimeout(page: import('@playwright/test').Page): 
 
 async function openRatingView(page: import('@playwright/test').Page): Promise<void> {
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  await expect(page.locator('#root')).toBeVisible();
+  await waitForRollPageReady(page);
 
-  const firstThreadCard = page.locator('[role="button"]').filter({
-    has: page.locator('p.font-black'),
-  }).first();
+  const firstThreadCard = page.locator('[data-roll-pool] [role="button"]').first();
   await expect(firstThreadCard).toBeVisible({ timeout: 10000 });
   await firstThreadCard.click();
   await page.getByText('Read Now', { exact: true }).click();
