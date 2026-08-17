@@ -116,6 +116,14 @@ export default function ContinuityPlannerPage() {
       if (node.node_type === 'crossover') {
         return { ...node, label: groupNames.get(node.ref_id) ?? 'Unavailable crossover' }
       }
+      if (node.node_type === 'thread') {
+        try {
+          const thread = await threadsApi.get(node.ref_id)
+          return { ...node, label: thread.title ?? 'Unavailable thread' }
+        } catch {
+          return { ...node, label: 'Unavailable thread' }
+        }
+      }
       try {
         const issue = await issuesApi.get(node.ref_id)
         const thread = await threadsApi.get(issue.thread_id)

@@ -841,6 +841,31 @@ describe('ContinuityPlannerPage', () => {
     expect(mocks.get).not.toHaveBeenCalled()
   })
 
+  it('falls back to an "Unavailable thread" label when a thread lookup fails during hydration', async () => {
+    mocks.get.mockResolvedValue({
+      id: 12,
+      user_id: 1,
+      name: 'Saved lane',
+      ordering_mode: 'strict_sequential',
+      lanes: [{ id: 'main', name: 'Reading order', order: 0 }],
+      nodes: [{ id: 'thread-4', node_type: 'thread', ref_id: 4, lane_id: 'main', position: 0 }],
+      created_at: '2026-08-12T00:00:00Z',
+      updated_at: '2026-08-12T00:00:00Z',
+    })
+    mocks.getThread.mockReset()
+    mocks.getThread.mockRejectedValueOnce(new Error('lookup failed'))
+
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans/12']}>
+        <Routes>
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Unavailable thread')).toBeVisible()
+  })
+
   it('falls back to the generic save message when the API detail is an object without a known code', async () => {
     mocks.create.mockReset()
     mocks.create.mockRejectedValueOnce({
