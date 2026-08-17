@@ -456,11 +456,16 @@ async def update_thread(
         thread.notes = thread_data.notes
     if thread_data.is_test is not None:
         thread.is_test = thread_data.is_test
+    
+    # Pre-fetch issue mapping data to avoid post-commit database access
+    issue_number_map = await load_next_issue_numbers([thread], db)
+    issues_remaining_map = await load_unread_counts([thread], db)
+    
     await db.commit()
     await db.refresh(thread)
 
     await invalidate_user_view(current_user.id)
-    return await thread_to_response(thread, db)
+    return await thread_to_response(thread, db, issue_number_map, issues_remaining_map)
 
 
 @router.delete("/{thread_id}", status_code=status.HTTP_204_NO_CONTENT)
