@@ -51,7 +51,7 @@ test.describe('Issue #283: Phantom Roll Events on Snooze', () => {
     // Rate the thread
     await page.fill('#rating-input', '4');
     await submitRatingAndWaitForRateResponse(page, () =>
-      page.click('button:has-text("Save & Continue")'),
+      page.click('button[data-testid="save-and-continue"]'),
     );
 
     // Wait for roll view to return
@@ -137,7 +137,7 @@ test.describe('Issue #283: Phantom Roll Events on Snooze', () => {
     // Rate the thread
     await page.fill('#rating-input', '5');
     await submitRatingAndWaitForRateResponse(page, () =>
-      page.click('button:has-text("Save & Continue")'),
+      page.click('button[data-testid="save-and-continue"]'),
     );
 
     // Wait for roll view to return
@@ -240,7 +240,7 @@ test.describe('Issue #283: Phantom Roll Events on Snooze', () => {
       // Rate
       await page.fill('#rating-input', '3');
       await submitRatingAndWaitForRateResponse(page, () =>
-        page.click('button:has-text("Save & Continue")'),
+        page.click('button[data-testid="save-and-continue"]'),
       );
       
       await page.waitForSelector('#main-die-3d', { state: 'visible', timeout: 10000 });

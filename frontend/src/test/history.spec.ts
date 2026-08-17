@@ -5,7 +5,7 @@ import { SELECTORS, setRangeInput, submitRatingAndWaitForRateResponse, navigateT
 async function readThreadFromQueue(page: Page, rating: string): Promise<void> {
   await navigateToRatePage(page);
   await setRangeInput(page, SELECTORS.rate.ratingInput, rating);
-  await submitRatingAndWaitForRateResponse(page, () => page.click('button:has-text("Save & Continue")'));
+  await submitRatingAndWaitForRateResponse(page, () => page.click('button[data-testid="save-and-continue"]'));
   await expect(page.locator('#root')).toBeVisible();
 }
 
