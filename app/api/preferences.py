@@ -84,7 +84,7 @@ async def patch_user_preferences(
     )
     preferences = result.scalar_one_or_none()
     if preferences is None:
-        preferences = UserPreferences(user_id=current_user.id)
+        preferences = UserPreferences(user_id=current_user.id, theme=DEFAULT_THEME)
         db.add(preferences)
 
     if payload.theme is not None:
