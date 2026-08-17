@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parents[1] / ".github" / "scripts"
+WORKFLOWS = Path(__file__).resolve().parents[1] / ".github" / "workflows"
 sys.path.insert(0, str(SCRIPTS))
 
 from factory_review_policy import (  # noqa: E402
@@ -269,3 +270,24 @@ def test_controller_reject_closes_without_reopening(monkeypatch):
     assert transitions[-1]["pr_stage"] == "factory:blocked"
     assert ["pr", "close", "1390", "--repo", module.REPO] in commands
     assert not any("reopen" in command for args in commands for command in args)
+
+
+def test_worker_submits_model_verdict_to_controller_instead_of_promoting_directly():
+    """The worker may parse a verdict, but only the controller can mutate ready state."""
+    source = (SCRIPTS / "free-model-factory-worker.sh").read_text(encoding="utf-8")
+    assert "factory-review-controller.py review" in source
+    assert "--verdict \"$verdict\"" in source
+    final_review_path = source[source.index("review_log=") :]
+    assert "machine_merge_gates_pass" not in final_review_path
+    assert "'factory:ready'" not in final_review_path
+
+
+def test_dispatcher_requires_controller_authorization_before_merge():
+    """The scheduled merge drain cannot merge a ready label without exact-head attestation."""
+    source = (WORKFLOWS / "fixed-model-factory-dispatch.yml").read_text(encoding="utf-8")
+    authorization = 'python3 "$review_controller" authorized --pr "$pr"'
+    merge = 'gh pr merge "$pr"'
+    assert authorization in source
+    assert merge in source
+    assert source.index(authorization) < source.index(merge)
+    assert '"$authorized_head" != "$head"' in source
