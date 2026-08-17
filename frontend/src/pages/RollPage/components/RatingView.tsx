@@ -6,7 +6,7 @@ import type { ReadingOrder } from '../../../services/api-reading-orders'
 import type { ConnectedThreadInfo } from '../../../types'
 import { RATING_THRESHOLD, getProgressPercentage } from '../utils'
 import type { RatingThread } from '../types'
-import { ComicVineIssueCard } from './ComicVineIssueCard'
+import { ComicPillar } from './ComicVineIssueCard'
 import { ContinuityReadinessSummary } from './ContinuityReadinessSummary'
 import { ReadingOrderGroups } from './ReadingOrderGroups'
 import { ReadingRouteExplanation } from './ReadingRouteExplanation'
@@ -300,7 +300,7 @@ export function RatingView({
         </div>
       </div>
 
-      <ComicVineIssueCard issueId={issueId} />
+      <ComicPillar issueId={issueId} />
 
       <ReadingRouteExplanation
         isOpen={isRouteExplanationOpen}

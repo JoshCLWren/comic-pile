@@ -1,7 +1,7 @@
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { comicVineApi } from '../services/api'
-import { ComicVineIssueCard } from '../pages/RollPage/components/ComicVineIssueCard'
+import { ComicPillar } from '../pages/RollPage/components/ComicVineIssueCard'
 
 vi.mock('../services/api', async () => {
   const actual = await vi.importActual<typeof import('../services/api')>('../services/api')
@@ -10,12 +10,28 @@ vi.mock('../services/api', async () => {
 
 const getIntelligence = vi.mocked(comicVineApi.getIssueIntelligence)
 
-describe('ComicVineIssueCard', () => {
+function mockDesktop(isDesktop = true) {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: isDesktop,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  })
+}
+
+beforeAll(() => {
+  mockDesktop(true)
+})
+
+describe('ComicPillar', () => {
   beforeEach(() => {
     getIntelligence.mockReset()
   })
 
-  it('progressively reveals metadata and mapped versus missing story-arc issues', async () => {
+  it('displays full metadata expanded by default with large cover on desktop', async () => {
     getIntelligence.mockResolvedValue({
       comicvine_issue_id: '100',
       comicvine_url: 'https://comicvine.example/100',
@@ -46,19 +62,21 @@ describe('ComicVineIssueCard', () => {
       }],
     })
 
-    render(<ComicVineIssueCard issueId={1} />)
+    render(<ComicPillar issueId={1} />)
     expect(await screen.findByText('Alpha #1')).toBeInTheDocument()
-    fireEvent.click(screen.getByText('Comic details'))
+    expect(screen.getByText('Opening')).toBeInTheDocument()
     expect(screen.getByText('A bold beginning.')).toBeInTheDocument()
     expect(screen.getByText('Writer One')).toBeInTheDocument()
-    expect(screen.getByText('Alpha #2 - Second Part: The Plot Thickens')).toBeInTheDocument()
-    expect(screen.getByText('Beta #1')).toBeInTheDocument()
-    expect(screen.getByText('Unread')).toBeInTheDocument()
-    expect(screen.getByText('Missing')).toBeInTheDocument()
+    expect(screen.getByText('The Big Arc')).toBeInTheDocument()
+    expect(screen.getByText('Alpha #2 — Second Part: The Plot Thickens')).toBeInTheDocument()
+    expect(screen.getByText('Beta #102')).toBeInTheDocument()
     expect(screen.getByText('1 in ComicPile · 1 missing')).toBeInTheDocument()
+    expect(screen.getByText('View source on ComicVine')).toBeInTheDocument()
+    const cover = screen.getByAlt('Cover art for Alpha #1 — Opening')
+    expect(cover).toBeInTheDocument()
   })
 
-  it('labels every story-arc issue with its series, number, and title', async () => {
+  it('labels every story-arc issue with series number and title without requiring expansion', async () => {
     getIntelligence.mockResolvedValue({
       comicvine_issue_id: '583',
       comicvine_url: 'https://comicvine.example/583',
@@ -93,23 +111,47 @@ describe('ComicVineIssueCard', () => {
       }],
     })
 
-    render(<ComicVineIssueCard issueId={1} />)
-    expect(await screen.findByText('Three')).toBeInTheDocument()
-    fireEvent.click(screen.getByText('Comic details'))
-    expect(screen.getByText('Fantastic Four #584 - Three, Part Two: Congratulations, Mister Grimm. You`re Handsome Again!')).toBeInTheDocument()
-    expect(screen.getByText('The Amazing Spider-Man #657 - Torch Song')).toBeInTheDocument()
+    render(<ComicPillar issueId={1} />)
+    expect(await screen.findByText('Fantastic Four #583')).toBeInTheDocument()
+    expect(screen.getByText('Three')).toBeInTheDocument()
+    expect(screen.getByText('Fantastic Four #584 — Three, Part Two: Congratulations, Mister Grimm. You`re Handsome Again!')).toBeInTheDocument()
+    expect(screen.getByText('The Amazing Spider-Man #657 — Torch Song')).toBeInTheDocument()
     expect(screen.getByText('Fantastic Four Adventures #28')).toBeInTheDocument()
     expect(screen.getByText('0 in ComicPile · 3 missing')).toBeInTheDocument()
   })
 
   it('renders nothing when the issue has no confirmed ComicVine mapping', async () => {
     getIntelligence.mockResolvedValue(null)
-    const { container } = render(<ComicVineIssueCard issueId={9} />)
+    const { container } = render(<ComicPillar issueId={9} />)
     await waitFor(() => expect(getIntelligence).toHaveBeenCalledWith(9))
     await waitFor(() => expect(container).toBeEmptyDOMElement())
   })
 
-  it('handles sparse metadata, read matches, and a cover image failure', async () => {
+  it('shows a cover placeholder when the image fails to load on desktop', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '201',
+      comicvine_url: null,
+      series_name: 'X-Men',
+      series_id: 3,
+      issue_number: '7',
+      name: null,
+      description: null,
+      image_url: 'https://images.example/broken-cover.jpg',
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [],
+    })
+
+    const { container } = render(<ComicPillar issueId={2} />)
+    expect(await screen.findByText('X-Men #7')).toBeInTheDocument()
+    const cover = screen.getByAlt('Cover art for X-Men #7')
+    expect(cover).toBeInTheDocument()
+    fireEvent.error(cover)
+    expect(container.querySelector('img')).toBeNull()
+  })
+
+  it('handles sparse metadata, read matches, and cover fallback on desktop', async () => {
     getIntelligence.mockResolvedValue({
       comicvine_issue_id: '200',
       comicvine_url: null,
@@ -143,64 +185,118 @@ describe('ComicVineIssueCard', () => {
             }],
           }],
         },
-        {
-          comicvine_arc_id: 51,
-          name: 'Second Arc',
-          comicvine_url: null,
-          related_issues: [{
-            comicvine_issue_id: '202',
-            series_name: null,
-            issue_number: null,
-            name: null,
-            cover_date: null,
-            comicvine_url: null,
-            comicpile_matches: [],
-          }],
-        },
       ],
     })
 
-    const { container } = render(<ComicVineIssueCard issueId={2} />)
+    mockDesktop(true)
+    const { container } = render(<ComicPillar issueId={2} />)
     expect(await screen.findByText('ComicVine')).toBeInTheDocument()
-    expect(screen.getByText('2 story arcs')).toBeInTheDocument()
     expect(screen.getByText('Coming soon')).toBeInTheDocument()
     expect(screen.getByText('Artist Only')).toBeInTheDocument()
     expect(screen.getByText('Named Special')).toBeInTheDocument()
-    expect(screen.getByText('ComicVine issue 202')).toBeInTheDocument()
-    expect(screen.getByText('Read')).toBeInTheDocument()
     expect(screen.queryByText('View source on ComicVine')).not.toBeInTheDocument()
 
     const cover = container.querySelector('img')
-    expect(cover).not.toBeNull()
-    fireEvent.error(cover!)
+    if (cover) {
+      fireEvent(cover, new Event('error'))
+    }
     expect(container.querySelector('img')).toBeNull()
   })
 
-  it('does not request metadata when no issue is selected', () => {
-    const { container } = render(<ComicVineIssueCard issueId={null} />)
+  it('does not request metadata when no issue is selected', async () => {
+    const { container } = render(<ComicPillar issueId={null} />)
     expect(getIntelligence).not.toHaveBeenCalled()
     expect(container).toBeEmptyDOMElement()
   })
 
   it('fails closed when metadata loading fails', async () => {
     getIntelligence.mockRejectedValue(new Error('metadata unavailable'))
-    const { container } = render(<ComicVineIssueCard issueId={3} />)
+    const { container } = render(<ComicPillar issueId={3} />)
     await waitFor(() => expect(getIntelligence).toHaveBeenCalledWith(3))
-    await waitFor(() => expect(screen.queryByLabelText('Loading comic details')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByLabelText('Loading ComicVine details')).not.toBeInTheDocument())
     expect(container).toBeEmptyDOMElement()
   })
 
-  it('ignores a response that arrives after the card unmounts', async () => {
+  it('ignores a response that arrives after the component unmounts', async () => {
     let resolveRequest: ((value: null) => void) | undefined
     getIntelligence.mockImplementation(() => new Promise((resolve) => {
       resolveRequest = resolve
     }))
-    const { unmount } = render(<ComicVineIssueCard issueId={4} />)
+    const { unmount } = render(<ComicPillar issueId={4} />)
     await waitFor(() => expect(getIntelligence).toHaveBeenCalledWith(4))
 
     unmount()
     resolveRequest?.(null)
     await Promise.resolve()
     await Promise.resolve()
+  })
+
+  it('reveals secondary metadata on mobile when Show more is activated', async () => {
+    mockDesktop(false)
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '300',
+      comicvine_url: 'https://comicvine.example/300',
+      series_name: 'Detective',
+      series_id: 5,
+      issue_number: '12',
+      name: 'The Clue',
+      description: 'A short description.',
+      image_url: 'https://images.example/300.jpg',
+      cover_date: '2026-03-15',
+      store_date: null,
+      creators: [{ name: 'Penciler', roles: ['pencils'] }, { name: 'Inker', roles: ['inks'] }],
+      story_arcs: [{
+        comicvine_arc_id: 99,
+        name: 'Mystery Run',
+        comicvine_url: null,
+        related_issues: [{
+          comicvine_issue_id: '301',
+          series_name: 'Detective',
+          issue_number: '13',
+          name: null,
+          cover_date: null,
+          comicvine_url: null,
+          comicpile_matches: [],
+        }],
+      }],
+    })
+
+    render(<ComicPillar issueId={5} />)
+    expect(await screen.findByText('Detective #12')).toBeInTheDocument()
+    expect(screen.getByText('A short description.')).toBeInTheDocument()
+    expect(screen.getByText('Show more')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('Show more'))
+    expect(screen.getByText('Penciler')).toBeInTheDocument()
+    expect(screen.getByText('Mystery Run')).toBeInTheDocument()
+    expect(screen.getByText('Detective #13')).toBeInTheDocument()
+    expect(screen.getByText('View source on ComicVine')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('Show less'))
+    expect(screen.queryByText('Penciler')).not.toBeInTheDocument()
+  })
+
+  it('displays source link with accessible keyboard focus', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '400',
+      comicvine_url: 'https://comicvine.example/400',
+      series_name: 'Action',
+      series_id: 1,
+      issue_number: '1',
+      name: null,
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [],
+    })
+
+    render(<ComicPillar issueId={6} />)
+    const link = await screen.findByRole('link', { name: /view source on comicvine/i })
+    expect(link).toHaveAttribute('href', 'https://comicvine.example/400')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noreferrer')
+    expect(link).toHaveAttribute('tabindex', '0')
   })
 })
