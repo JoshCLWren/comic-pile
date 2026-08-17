@@ -23,6 +23,7 @@ __all__ = ["linked_issue_from_branch", "plan_distinct_assignments"]
 
 
 def run_gh(args: list[str], *, input_json: object | None = None, check: bool = True) -> str:
+    """Run a bounded GitHub CLI command and return stdout."""
     command = ['gh', *args]
     try:
         proc = subprocess.run(command, input=None if input_json is None else json.dumps(input_json), text=True, capture_output=True, check=False, timeout=GH_TIMEOUT_SECONDS)
@@ -34,24 +35,34 @@ def run_gh(args: list[str], *, input_json: object | None = None, check: bool = T
 
 
 def gh_json(args: list[str], *, input_json: object | None = None) -> object | None:
+    """Run GitHub CLI and decode JSON stdout."""
     output = run_gh(args, input_json=input_json)
     return json.loads(output) if output.strip() else None
 
 
 def list_issues() -> list[dict[str, Any]]:
+    """List open issues visible to the assignment controller."""
     return cast(list[dict[str, Any]], gh_json(['issue', 'list', '--repo', REPO, '--state', 'open', '--limit', '1000', '--json', 'number,title,labels,createdAt,updatedAt']))
 
 
 def list_prs() -> list[dict[str, Any]]:
-    """List open PRs including GitHub's current merge-conflict assessment."""
+    """List open pull requests including current mergeability."""
     return cast(list[dict[str, Any]], gh_json(['pr', 'list', '--repo', REPO, '--state', 'open', '--limit', '500', '--json', 'number,title,body,labels,headRefName,createdAt,updatedAt,isDraft,mergeable,mergeStateStatus']))
 
 
 def target_json(number: int) -> dict[str, Any]:
+    """Fetch one issue-compatible GitHub target payload."""
     return cast(dict[str, Any], gh_json(['api', f'repos/{REPO}/issues/{number}']))
 
 
 def replace_factory_labels(number: int, owner: str, stage: str | None=None) -> None:
+    """Atomically reconcile one target to exactly one owner and workflow stage.
+
+    The repository policy requires a single full label-set replacement rather
+    than sequential add/remove mutations, which would expose contradictory
+    intermediate owner states. A post-write claim verification is performed by
+    ``assign_candidate``.
+    """
     target = target_json(number)
     current = [label['name'] for label in target.get('labels', [])]
     existing_stage = next((label for label in current if label in STAGE_LABELS), None)
@@ -62,6 +73,7 @@ def replace_factory_labels(number: int, owner: str, stage: str | None=None) -> N
 
 
 def issue_has_open_blocker(number: int) -> bool:
+    """Return whether an issue has an open dependency blocker."""
     try:
         blockers = cast(list[dict[str, Any]], gh_json(['api', f'repos/{REPO}/issues/{number}/dependencies/blocked_by?per_page=100']) or [])
     except RuntimeError:
@@ -70,6 +82,7 @@ def issue_has_open_blocker(number: int) -> bool:
 
 
 def required_checks_failed(pr_number: int) -> bool:
+    """Return whether any required pull-request check has failed."""
     try:
         output = run_gh(['pr', 'checks', str(pr_number), '--repo', REPO, '--required', '--json', 'state'], check=False)
     except RuntimeError:
@@ -85,6 +98,7 @@ def required_checks_failed(pr_number: int) -> bool:
 
 
 def candidate_is_live_executable(candidate: Candidate) -> bool:
+    """Return whether a ranked candidate has an executable next action."""
     if candidate.kind == 'issue':
         return not issue_has_open_blocker(candidate.number)
     target = target_json(candidate.number)
@@ -97,17 +111,20 @@ def candidate_is_live_executable(candidate: Candidate) -> bool:
 
 
 def target_still_unowned(number: int) -> bool:
+    """Return whether a target remains safely claimable."""
     labels = {label['name'] for label in target_json(number).get('labels', [])}
     return item_is_unowned(labels) and not bool(labels & BLOCKED_LABELS)
 
 
 def target_owned_by(number: int, owner: str) -> bool:
+    """Return whether exactly one expected active owner holds a target."""
     labels = {label['name'] for label in target_json(number).get('labels', [])}
     active_owners = {label for label in labels if OWNER_RE.fullmatch(label) and label != 'factory:unowned'}
     return active_owners == {owner}
 
 
 def assign_candidate(candidate: Candidate, worker: str) -> bool:
+    """Claim a candidate and any linked issue for one fixed-model worker."""
     owner = f'factory:{worker}'
     numbers = [candidate.number]
     if candidate.kind == 'pr' and candidate.linked_issue is not None:
@@ -122,6 +139,7 @@ def assign_candidate(candidate: Candidate, worker: str) -> bool:
             return False
 
     def release_verified_claims(claimed_numbers: list[int]) -> None:
+        """Release only labels this worker can still prove it owns."""
         for claimed_number in claimed_numbers:
             try:
                 if target_owned_by(claimed_number, owner):
@@ -149,6 +167,7 @@ def assign_candidate(candidate: Candidate, worker: str) -> bool:
 
 
 def flatten_pages(pages: object | None) -> list[dict[str, Any]]:
+    """Flatten paginated GitHub API responses into object rows."""
     result: list[dict[str, Any]] = []
     for page in pages or []:
         if isinstance(page, list):
@@ -159,6 +178,7 @@ def flatten_pages(pages: object | None) -> list[dict[str, Any]]:
 
 
 def latest_lease_activity_epoch(number: int) -> int | None:
+    """Return the latest trusted lease activity marker for a target."""
     try:
         pages = gh_json(['api', '--paginate', '--slurp', f'repos/{REPO}/issues/{number}/comments?per_page=100'])
     except RuntimeError:
@@ -176,6 +196,7 @@ def latest_lease_activity_epoch(number: int) -> int | None:
 
 
 def active_fixed_workers() -> set[int]:
+    """Return worker IDs with queued or running fixed-model entry runs."""
     workers: set[int] = set()
     runs: list[dict[str, Any]] = []
     for status in ('queued', 'in_progress'):
@@ -210,6 +231,7 @@ def active_fixed_workers() -> set[int]:
 
 
 def owned_targets(issues: list[dict[str, Any]] | None=None, prs: list[dict[str, Any]] | None=None) -> list[tuple[int, str]]:
+    """List open targets that currently have an active factory owner."""
     targets: list[tuple[int, str]] = []
     issue_items = list_issues() if issues is None else issues
     pr_items = list_prs() if prs is None else prs
@@ -221,6 +243,7 @@ def owned_targets(issues: list[dict[str, Any]] | None=None, prs: list[dict[str, 
 
 
 def reconcile_stale_leases(now_epoch: int | None=None) -> list[int]:
+    """Release fixed-model and proven-stale local leases safely."""
     now_epoch = int(time.time()) if now_epoch is None else now_epoch
     active = active_fixed_workers()
     released: list[int] = []
@@ -235,11 +258,13 @@ def reconcile_stale_leases(now_epoch: int | None=None) -> list[int]:
 
 
 def worker_has_active_lease(worker: str) -> bool:
+    """Return whether a fixed-model worker already owns open work."""
     owner = f'factory:{worker}'
     return any(current_owner == owner for _, current_owner in owned_targets())
 
 
 def assign(worker: str) -> Candidate | None:
+    """Assign the highest-ranked executable work to one fixed-model worker."""
     if not re.fullmatch('(?:[6-9]|[1-3][0-9]|4[0-6])', worker):
         raise SystemExit(f'unsupported fixed-model worker: {worker}')
     if worker_has_active_lease(worker):
@@ -257,6 +282,7 @@ def assign(worker: str) -> Candidate | None:
 
 
 def release_worker(worker: str) -> list[int]:
+    """Release all targets still owned by one fixed-model worker."""
     owner = f'factory:{worker}'
     released: list[int] = []
     for number, current_owner in owned_targets():
@@ -268,6 +294,7 @@ def release_worker(worker: str) -> list[int]:
 
 
 def main() -> int:
+    """Run the factory controller command-line interface."""
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest='command', required=True)
     subparsers.add_parser('reconcile')
