@@ -222,8 +222,6 @@ async def test_list_threads_ownership_isolation(
     sample_data: dict,
 ) -> None:
     """A second user's threads are never returned, even when using a different user's cursor."""
-    user2 = User(username="other_user", created_at=datetime.now(UTC))
-
     # Create a second user with its own threads
     user2 = User(username="other_user", created_at=datetime.now(UTC))
     async_db.add(user2)
