@@ -337,7 +337,7 @@ jobs:
 
           if [[ "$EVENT_NAME" == workflow_dispatch && -n "${DISPATCH_WORKER:-}" ]]; then
             awk -F '\t' -v worker="$DISPATCH_WORKER" '$1 == worker {found=1} END {exit !found}' "$manifest"
-            workers="$(jq -nc --arg worker="$DISPATCH_WORKER" '[$worker]')"
+            workers="$(jq -nc --arg worker "$DISPATCH_WORKER" '[$worker]')"
           elif [[ "$EVENT_NAME" == schedule ]]; then
             minute="${SCHEDULE_EXPR%% *}"
             [[ "$minute" =~ ^(0|5|10|15|20|25|30|35|40|45|50|55)$ ]] || {
