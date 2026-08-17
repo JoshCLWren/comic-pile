@@ -44,17 +44,23 @@ install -d -m 0750 -o root -g "$APP_USER" "$ENV_DIR"
 
 DATABASE_URL="$DATABASE_URL" python3 - "$ENV_FILE" <<'PY'
 import os
+import secrets
 import sys
 
 path = sys.argv[1]
 url = os.environ["DATABASE_URL"]
+# Generate one shared signing key in the systemd EnvironmentFile so every
+# Uvicorn worker signs and verifies benchmark JWTs with the same secret.
+secret_key = secrets.token_urlsafe(48)
 # systemd EnvironmentFile accepts backslash escapes inside double quotes.
-escaped = url.replace("\\", "\\\\").replace('"', '\\"')
+escaped_url = url.replace("\\", "\\\\").replace('"', '\\"')
+escaped_secret = secret_key.replace("\\", "\\\\").replace('"', '\\"')
 with open(path, "w", encoding="utf-8") as handle:
     handle.write('ENVIRONMENT="staging"\n')
     handle.write('WEB_CONCURRENCY="2"\n')
     handle.write('CACHE_ENABLED="false"\n')
-    handle.write(f'DATABASE_URL="{escaped}"\n')
+    handle.write(f'SECRET_KEY="{escaped_secret}"\n')
+    handle.write(f'DATABASE_URL="{escaped_url}"\n')
 PY
 unset DATABASE_URL
 
