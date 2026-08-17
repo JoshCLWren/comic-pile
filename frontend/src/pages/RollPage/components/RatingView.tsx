@@ -90,7 +90,7 @@ export function RatingView({
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
                 Selected issue
               </p>
-              <h2 id="selected-issue-heading" className="mt-1 text-xl font-black leading-tight text-stone-100">
+              <h2 id="selected-issue-heading" className="mt-1 line-clamp-2 text-xl font-black leading-tight text-stone-100">
                 {threadTitle}
                 {issueNumber != null ? <span className="text-amber-400"> #{issueNumber}</span> : null}
               </h2>
