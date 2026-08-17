@@ -25,7 +25,7 @@ def candidate(
     stage: str | None = None,
     producer: str | None = None,
     lane: int = 3,
-):
+) -> Candidate:
     """Build a deterministic candidate fixture."""
     return Candidate(
         kind=kind,
@@ -80,6 +80,22 @@ def test_non_reserved_worker_preserves_product_capacity():
     issue = candidate(kind="issue", number=1500, lane=5)
     ordered = policy.order_candidates_for_worker([review, issue], "9")
     assert ordered[0] == issue
+
+
+def test_stage_precedence_is_deterministic_for_inconsistent_labels():
+    """Transient contradictory labels never randomize semantic review classification."""
+    labels = {"factory:ci", "factory:review", "factory:building"}
+    assert policy.stage_of(labels) == "factory:review"
+    assert policy.stage_of(reversed(sorted(labels))) == "factory:review"
+
+
+def test_shared_producer_provenance_drives_assignment():
+    """Assignment derives producer identity through the canonical review policy."""
+    pr = {
+        "headRefName": "factory/43-1386-opencode-free",
+        "body": "Worker: opencode-free-model-factory-17",
+    }
+    assert policy.producer_worker_from_pr(pr) == "43"
 
 
 def test_closed_pr_is_never_a_candidate():
