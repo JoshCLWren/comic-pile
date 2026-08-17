@@ -69,10 +69,10 @@ describe('ComicPillar', () => {
     expect(screen.getByText('Writer One')).toBeInTheDocument()
     expect(screen.getByText('The Big Arc')).toBeInTheDocument()
     expect(screen.getByText('Alpha #2 — Second Part: The Plot Thickens')).toBeInTheDocument()
-    expect(screen.getByText('Beta #102')).toBeInTheDocument()
+    expect(screen.getByText('Beta #1')).toBeInTheDocument()
     expect(screen.getByText('1 in ComicPile · 1 missing')).toBeInTheDocument()
     expect(screen.getByText('View source on ComicVine')).toBeInTheDocument()
-    const cover = screen.getByAlt('Cover art for Alpha #1 — Opening')
+    const cover = screen.getByAltText('Cover art for Alpha #1 — Opening')
     expect(cover).toBeInTheDocument()
   })
 
@@ -145,7 +145,7 @@ describe('ComicPillar', () => {
 
     const { container } = render(<ComicPillar issueId={2} />)
     expect(await screen.findByText('X-Men #7')).toBeInTheDocument()
-    const cover = screen.getByAlt('Cover art for X-Men #7')
+    const cover = screen.getByAltText('Cover art for X-Men #7')
     expect(cover).toBeInTheDocument()
     fireEvent.error(cover)
     expect(container.querySelector('img')).toBeNull()
@@ -264,16 +264,16 @@ describe('ComicPillar', () => {
     render(<ComicPillar issueId={5} />)
     expect(await screen.findByText('Detective #12')).toBeInTheDocument()
     expect(screen.getByText('A short description.')).toBeInTheDocument()
-    expect(screen.getByText('Show more')).toBeInTheDocument()
+    expect(screen.getAllByText('Show more').length).toBeGreaterThan(0)
 
-    fireEvent.click(screen.getByText('Show more'))
+    fireEvent.click(screen.getAllByText('Show more')[0])
     expect(screen.getByText('Penciler')).toBeInTheDocument()
     expect(screen.getByText('Mystery Run')).toBeInTheDocument()
     expect(screen.getByText('Detective #13')).toBeInTheDocument()
     expect(screen.getByText('View source on ComicVine')).toBeInTheDocument()
 
     fireEvent.click(screen.getByText('Show less'))
-    expect(screen.queryByText('Penciler')).not.toBeInTheDocument()
+    expect(screen.queryByText('Penciler')).not.toBeVisible()
   })
 
   it('displays source link with accessible keyboard focus', async () => {

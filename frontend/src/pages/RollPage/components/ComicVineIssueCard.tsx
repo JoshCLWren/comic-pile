@@ -54,6 +54,67 @@ interface ComicCoverProps {
   isDesktop: boolean
 }
 
+interface RelatedIssue {
+  comicvine_issue_id: string
+  series_name: string | null
+  issue_number: string | null
+  name: string | null
+  cover_date: string | null
+  comicvine_url: string | null
+  comicpile_matches: Array<{
+    issue_id: number
+    thread_title: string
+    issue_number: string
+    status: string
+  }>
+}
+
+function relatedIssueLabel(issue: RelatedIssue): string {
+  const identity = [issue.series_name, issue.issue_number ? `#${issue.issue_number}` : null]
+    .filter(Boolean)
+    .join(' ')
+  if (!identity) return issue.name ? issue.name : `ComicVine issue ${issue.comicvine_issue_id}`
+  return issue.name ? `${identity} — ${issue.name}` : identity
+}
+
+function ArcRelatedIssues({ arc }: { arc: { name: string; related_issues: RelatedIssue[] } }) {
+  const inComicPile = arc.related_issues.filter((issue) => issue.comicpile_matches.length > 0).length
+  const missing = arc.related_issues.filter((issue) => issue.comicpile_matches.length === 0).length
+
+  return (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-black text-amber-400">{arc.name}</span>
+        <span className="text-[9px] text-stone-500 shrink-0">
+          {inComicPile} in ComicPile · {missing} missing
+        </span>
+      </div>
+      <p className="text-[9px] text-stone-600">Related by story-arc membership, not reading order.</p>
+      <ul className="space-y-1.5 max-h-64 overflow-y-auto overscroll-contain pr-1">
+        {arc.related_issues.map((issue) => (
+          <li key={issue.comicvine_issue_id} className="p-2 rounded-lg bg-black/15 border border-white/5">
+            <div className="flex items-start justify-between gap-2">
+              <span className="text-[11px] font-bold text-stone-300">{relatedIssueLabel(issue)}</span>
+              {issue.comicpile_matches.length === 0 ? (
+                <span className="text-[9px] text-amber-500 shrink-0">Missing</span>
+              ) : (
+                <span className="text-[9px] text-teal-400 shrink-0">
+                  {issue.comicpile_matches.some((m) => m.status === 'unread') ? 'Unread' : 'Read'}
+                </span>
+              )}
+            </div>
+            {issue.comicpile_matches.map((match) => (
+              <p key={match.issue_id} className="text-[9px] text-stone-500 mt-0.5">
+                {match.thread_title} #{match.issue_number} · {match.status}
+              </p>
+            ))}
+          </li>
+        ))}
+      </ul>
+    </>
+  )
+}
+
 function ComicCover({ imageUrl, failedImageUrl, onImageError, alt, isDesktop }: ComicCoverProps) {
   if (!imageUrl || imageUrl === failedImageUrl) {
     return (
@@ -87,6 +148,7 @@ export function ComicPillar({ issueId }: ComicPillarProps) {
   const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null)
   const [showCreators, setShowCreators] = useState(false)
   const [showArcs, setShowArcs] = useState(false)
+  const [showDescription, setShowDescription] = useState(false)
 
   if (!issueId || (!isLoading && !metadata)) return null
 
@@ -104,12 +166,13 @@ export function ComicPillar({ issueId }: ComicPillarProps) {
   if (!metadata) return null
 
   const coverDate = formatDate(metadata.cover_date) ?? formatDate(metadata.store_date)
-  const titleParts = [metadata.series_name ?? 'ComicVine', metadata.issue_number ? `#${metadata.issue_number}` : null]
+  const titleParts = [metadata.series_name ?? '', metadata.issue_number ? `#${metadata.issue_number}` : null]
   const title = titleParts.filter(Boolean).join(' ')
   const identity = [title, metadata.name].filter(Boolean).join(' — ')
   const coverAlt = identity ? `Cover art for ${identity}` : 'Comic cover art'
-  const descriptionTooLong = metadata.description.length > 280
-  const displayDescription = descriptionTooLong ? metadata.description.slice(0, 280).trimEnd() : metadata.description
+  const description = metadata.description
+  const descriptionTooLong = description !== null && description.length > 280
+  const displayDescription = descriptionTooLong ? description.slice(0, 280).trimEnd() : description ?? ''
   const showCreatorsBlock = metadata.creators.length > 0
   const showArcsBlock = metadata.story_arcs.length > 0
   const needsDisclosure = !isDesktop && (showCreatorsBlock || showArcsBlock || descriptionTooLong)
@@ -145,25 +208,20 @@ export function ComicPillar({ issueId }: ComicPillarProps) {
                   <dd className="text-stone-300">{coverDate}</dd>
                 </>
               ) : null}
-              {metadata.creators.length > 0 ? (
-                <>
-                  <dt className="font-bold text-stone-500">Creators</dt>
-                  <dd className="text-stone-300 truncate">
-                    {metadata.creators.slice(0, 3).map((c) => c.name).join(', ')}
-                    {metadata.creators.length > 3 ? ` +${metadata.creators.length - 3}` : ''}
-                  </dd>
-                </>
-              ) : null}
             </dl>
           </div>
         </div>
 
-        {metadata.description && (
+        {description && (
           <p className={`text-xs md:text-sm leading-relaxed text-stone-300 ${descriptionTooLong && !isDesktop ? 'line-clamp-3' : ''}`}>
             {displayDescription}
             {descriptionTooLong && isDesktop && (
-              <ShowMoreDisclosure isOpen={false} onToggle={() => {}} label="Full description">
-                <p className="text-xs md:text-sm leading-relaxed text-stone-300">{metadata.description}</p>
+              <ShowMoreDisclosure
+                isOpen={showDescription}
+                onToggle={() => setShowDescription((prev) => !prev)}
+                label="Full description"
+              >
+                <p className="text-xs md:text-sm leading-relaxed text-stone-300">{description}</p>
               </ShowMoreDisclosure>
             )}
           </p>
@@ -194,71 +252,22 @@ export function ComicPillar({ issueId }: ComicPillarProps) {
                   Story arcs
                 </h3>
                 {metadata.story_arcs.map((arc) => (
-                  <div key={arc.comicvine_arc_id} className="space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <h4 className="text-xs font-black text-amber-400">{arc.name}</h4>
-                      <span className="text-[9px] text-stone-500 shrink-0">
-                        {arc.related_issues.filter((issue) => issue.comicpile_matches.length > 0).length} in ComicPile ·{' '}
-                        {arc.related_issues.filter((issue) => issue.comicpile_matches.length === 0).length} missing
-                      </span>
-                    </div>
-                    <p className="text-[9px] text-stone-600">
-                      Related by story-arc membership, not reading order.
-                    </p>
-                    <ul className="space-y-1.5 max-h-64 overflow-y-auto overscroll-contain pr-1">
-                      {arc.related_issues.map((issue) => {
-                        const identityParts = [issue.series_name, issue.issue_number ? `#${issue.issue_number}` : null]
-                          .filter(Boolean)
-                          .join(' ')
-                        const issueLabel = issue.name
-                          ? identityParts
-                            ? `${identityParts} — ${issue.name}`
-                            : issue.name
-                          : identityParts || `ComicVine issue ${issue.comicvine_issue_id}`
-                        return (
-                          <li key={issue.comicvine_issue_id} className="p-2 rounded-lg bg-black/15 border border-white/5">
-                            <div className="flex items-start justify-between gap-2">
-                              <span className="text-[11px] font-bold text-stone-300">{issueLabel}</span>
-                              {issue.comicpile_matches.length === 0 ? (
-                                <span className="text-[9px] text-amber-500 shrink-0">Missing</span>
-                              ) : (
-                                <span className="text-[9px] text-teal-400 shrink-0">
-                                  {issue.comicpile_matches.some((m) => m.status === 'unread') ? 'Unread' : 'Read'}
-                                </span>
-                              )}
-                            </div>
-                            {issue.comicpile_matches.map((match) => (
-                              <p key={match.issue_id} className="text-[9px] text-stone-500 mt-0.5">
-                                {match.thread_title} #{match.issue_number} · {match.status}
-                              </p>
-                            ))}
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  </div>
+                  <ArcRelatedIssues key={arc.comicvine_arc_id} arc={arc} />
                 ))}
               </section>
-            )}
-            {metadata.comicvine_url && (
-              <div className="border-t border-white/10 pt-3">
-                <a
-                  href={metadata.comicvine_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-500 hover:text-amber-400 transition-colors focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                >
-                  View source on ComicVine
-                  <svg aria-hidden="true" className="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M6 3l5 5-5 5" />
-                    <path d="M11 8H3" />
-                  </svg>
-                </a>
-              </div>
             )}
           </div>
         ) : needsDisclosure ? (
           <div className="border-t border-white/10 pt-3 space-y-2">
+            {descriptionTooLong && (
+              <ShowMoreDisclosure
+                isOpen={showDescription}
+                onToggle={() => setShowDescription((prev) => !prev)}
+                label="Full description"
+              >
+                <p className="text-xs md:text-sm leading-relaxed text-stone-300">{description}</p>
+              </ShowMoreDisclosure>
+            )}
             {showCreatorsBlock && (
               <ShowMoreDisclosure isOpen={showCreators} onToggle={() => setShowCreators((prev) => !prev)} label="Creators">
                 <ul className="space-y-1">
@@ -275,40 +284,33 @@ export function ComicPillar({ issueId }: ComicPillarProps) {
             )}
             {showArcsBlock && (
               <ShowMoreDisclosure isOpen={showArcs} onToggle={() => setShowArcs((prev) => !prev)} label="Story arcs">
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {metadata.story_arcs.map((arc) => (
-                    <div key={arc.comicvine_arc_id}>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-black text-amber-400">{arc.name}</span>
-                        <span className="text-[9px] text-stone-500 shrink-0">
-                          {arc.related_issues.filter((issue) => issue.comicpile_matches.length > 0).length} in ComicPile ·{' '}
-                          {arc.related_issues.filter((issue) => issue.comicpile_matches.length === 0).length} missing
-                        </span>
-                      </div>
-                      <p className="text-[9px] text-stone-600 mt-0.5">
-                        Related by story-arc membership, not reading order.
-                      </p>
-                    </div>
+                    <ArcRelatedIssues key={arc.comicvine_arc_id} arc={arc} />
                   ))}
                 </div>
               </ShowMoreDisclosure>
             )}
-            {metadata.comicvine_url && (
-              <a
-                href={metadata.comicvine_url}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-500 hover:text-amber-400 transition-colors focus:ring-2 focus:ring-amber-500 focus:outline-none"
-              >
-                View source on ComicVine
-                <svg aria-hidden="true" className="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M6 3l5 5-5 5" />
-                  <path d="M11 8H3" />
-                </svg>
-              </a>
-            )}
           </div>
         ) : null}
+
+        {metadata.comicvine_url && (
+          <div className="border-t border-white/10 pt-3">
+            <a
+              href={metadata.comicvine_url}
+              target="_blank"
+              rel="noreferrer"
+              tabIndex={0}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-500 hover:text-amber-400 transition-colors focus:ring-2 focus:ring-amber-500 focus:outline-none"
+            >
+              View source on ComicVine
+              <svg aria-hidden="true" className="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M6 3l5 5-5 5" />
+                <path d="M11 8H3" />
+              </svg>
+            </a>
+          </div>
+        )}
       </div>
     </section>
   )
