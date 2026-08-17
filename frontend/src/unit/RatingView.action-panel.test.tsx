@@ -36,6 +36,7 @@ function ratingView(overrides: Record<string, unknown> = {}) {
       reading_progress: 'in_progress',
       issue_id: 100,
       next_issue_id: 101,
+      queue_position: 1,
     },
     currentDie: 6,
     rolledResult: 3,

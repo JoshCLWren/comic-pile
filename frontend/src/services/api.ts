@@ -261,7 +261,13 @@ rawApi.interceptors.response.use(
       }
     }
 
-    console.error('API Error:', error)
+    // 5xx responses are server-side / transient (for example a serverless cold start)
+    // and should not read as a client error in the console during background reconnects.
+    if (error.response && error.response.status >= 500 && error.response.status < 600) {
+      console.warn('API request failed with server error:', error.response.status)
+    } else {
+      console.error('API Error:', error)
+    }
     return Promise.reject(error)
   },
 )
