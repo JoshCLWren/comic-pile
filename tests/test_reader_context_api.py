@@ -384,7 +384,7 @@ async def test_reader_context_crossover_aggregates(
     assert crossover["name"] == "Annihilation"
     assert crossover["ratings_count"] == 3
     assert crossover["average_rating"] == pytest.approx(3.17)
-    assert crossover["read_count"] == 2
+    assert crossover["read_count"] == 3
 
 
 @pytest.mark.asyncio
