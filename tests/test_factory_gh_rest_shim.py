@@ -60,6 +60,66 @@ def _run(tmp_path: Path, *args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _fake_checks_gh(
+    tmp_path: Path,
+    *,
+    checks_message: str,
+    checks_status: int,
+    protected: bool,
+) -> Path:
+    """Create a gh stand-in for required-check normalization tests."""
+    fake = tmp_path / "gh-checks-real"
+    protected_json = "true" if protected else "false"
+    fake.write_text(
+        f"""#!/usr/bin/env bash
+set -Eeuo pipefail
+if [[ "$1" == pr && "$2" == checks ]]; then
+  printf '%s\\n' {checks_message!r} >&2
+  exit {checks_status}
+fi
+if [[ "$1" == api && "$2" == repos/JoshCLWren/comic-pile/pulls/1390 ]]; then
+  printf '%s\\n' '{{"base":{{"ref":"main"}}}}'
+  exit 0
+fi
+if [[ "$1" == api && "$2" == repos/JoshCLWren/comic-pile/branches/main ]]; then
+  printf '%s\\n' '{{"protected":{protected_json}}}'
+  exit 0
+fi
+printf 'unexpected command: %s\\n' "$*" >&2
+exit 97
+""",
+        encoding="utf-8",
+    )
+    fake.chmod(0o755)
+    return fake
+
+
+def _run_checks(fake_gh: Path) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    env.update(
+        {
+            "FACTORY_REAL_GH": str(fake_gh),
+            "GITHUB_REPOSITORY": "JoshCLWren/comic-pile",
+        }
+    )
+    return subprocess.run(
+        [
+            "bash",
+            str(SHIM),
+            "pr",
+            "checks",
+            "1390",
+            "--repo",
+            "JoshCLWren/comic-pile",
+            "--required",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+        env=env,
+    )
+
+
 def test_rest_shim_lists_only_matching_issues(tmp_path: Path) -> None:
     """Issue enumeration avoids GraphQL and excludes pull-request rows."""
     result = _run(
@@ -121,6 +181,75 @@ def test_rest_shim_normalizes_issue_view_state(tmp_path: Path) -> None:
         ".state",
     )
     assert viewed.stdout.strip() == "OPEN"
+
+
+def test_no_checks_are_satisfied_on_explicitly_unprotected_base(tmp_path: Path) -> None:
+    """GitHub CLI's no-check error is not a failed gate when the base is unprotected."""
+    fake = _fake_checks_gh(
+        tmp_path,
+        checks_message="no checks reported on the 'factory/43-1386-opencode-free' branch",
+        checks_status=1,
+        protected=False,
+    )
+    result = _run_checks(fake)
+    assert result.returncode == 0
+    assert "no required checks configured on unprotected base main" in result.stderr
+
+
+def test_no_required_checks_are_satisfied_on_unprotected_base(tmp_path: Path) -> None:
+    """The CLI's alternate no-required-checks message receives the same narrow exception."""
+    fake = _fake_checks_gh(
+        tmp_path,
+        checks_message=(
+            "no required checks reported on the 'factory/43-1386-opencode-free' branch"
+        ),
+        checks_status=1,
+        protected=False,
+    )
+    result = _run_checks(fake)
+    assert result.returncode == 0
+
+
+def test_no_required_checks_still_fail_on_protected_base(tmp_path: Path) -> None:
+    """Protected branches remain fail-closed even when GitHub reports no checks."""
+    message = "no required checks reported on the 'factory/43-1386-opencode-free' branch"
+    fake = _fake_checks_gh(
+        tmp_path,
+        checks_message=message,
+        checks_status=1,
+        protected=True,
+    )
+    result = _run_checks(fake)
+    assert result.returncode == 1
+    assert message in result.stderr
+
+
+def test_real_required_check_failure_is_never_normalized(tmp_path: Path) -> None:
+    """Only the CLI's specific no-check result may receive the exception."""
+    message = "Unit Tests\tfail\t42s"
+    fake = _fake_checks_gh(
+        tmp_path,
+        checks_message=message,
+        checks_status=1,
+        protected=False,
+    )
+    result = _run_checks(fake)
+    assert result.returncode == 1
+    assert message in result.stderr
+
+
+def test_successful_required_checks_pass_through(tmp_path: Path) -> None:
+    """Normal successful check execution remains untouched."""
+    message = "Unit Tests\tpass\t38s"
+    fake = _fake_checks_gh(
+        tmp_path,
+        checks_message=message,
+        checks_status=0,
+        protected=True,
+    )
+    result = _run_checks(fake)
+    assert result.returncode == 0
+    assert message in result.stdout
 
 
 def test_dispatcher_and_worker_install_rest_shim() -> None:
