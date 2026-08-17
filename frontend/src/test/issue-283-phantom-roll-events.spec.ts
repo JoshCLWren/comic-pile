@@ -4,6 +4,7 @@ import {
   setupAuthenticatedPage,
   getAuthToken,
   submitRatingAndWaitForRateResponse,
+  SELECTORS,
 } from './helpers';
 
 test.describe('Issue #283: Phantom Roll Events on Snooze', () => {
@@ -51,7 +52,7 @@ test.describe('Issue #283: Phantom Roll Events on Snooze', () => {
     // Rate the thread
     await page.fill('#rating-input', '4');
     await submitRatingAndWaitForRateResponse(page, () =>
-      page.click('button:has-text("Save & Continue")'),
+      page.click(SELECTORS.rate.submitButton),
     );
 
     // Wait for roll view to return
@@ -137,7 +138,7 @@ test.describe('Issue #283: Phantom Roll Events on Snooze', () => {
     // Rate the thread
     await page.fill('#rating-input', '5');
     await submitRatingAndWaitForRateResponse(page, () =>
-      page.click('button:has-text("Save & Continue")'),
+      page.click(SELECTORS.rate.submitButton),
     );
 
     // Wait for roll view to return
