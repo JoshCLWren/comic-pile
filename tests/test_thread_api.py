@@ -948,3 +948,46 @@ async def test_set_current_issue_updates_session_pending_issue(
     assert session.id == original_session_id
 
 
+@pytest.mark.asyncio
+async def test_set_current_issue_preserves_already_read_issues_after_target(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
+    """Test that already-read issues after the target remain read."""
+    from sqlalchemy import select
+
+    thread_id = sample_data["threads"][1].id  # Batman thread
+
+    # First set current to #8
+    response = await auth_client.post(
+        f"/api/v1/threads/{thread_id}:setCurrentIssue",
+        json={"issue_number": "8"}
+    )
+    assert response.status_code == 200
+
+    # Manually mark issue #10 as read (simulating user read ahead)
+    result = await async_db.execute(
+        select(Issue).where(Issue.thread_id == thread_id).where(Issue.issue_number == "10")
+    )
+    issue_10 = result.scalar_one()
+    issue_10.status = "read"
+    issue_10.read_at = datetime.now(UTC)
+    await async_db.flush()
+
+    # Now set current to #9 (one before #10)
+    response = await auth_client.post(
+        f"/api/v1/threads/{thread_id}:setCurrentIssue",
+        json={"issue_number": "9"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    # Verify #10 is still read
+    await async_db.refresh(issue_10)
+    assert issue_10.status == "read"
+    assert issue_10.read_at is not None
+
+    # Verify issues_remaining is 1 (only #9 unread)
+    assert data["issues_remaining"] == 1
+    assert data["issue_number"] == "9"
+    assert data["next_issue_number"] == "9"
+

@@ -983,7 +983,7 @@ async def set_current_issue(
             if issue.status != "read":
                 issue.status = "read"
                 issue.read_at = now
-        elif issue.position >= target_issue.position:
+        elif issue.position == target_issue.position:
             if issue.status != "unread":
                 issue.status = "unread"
                 issue.read_at = None
@@ -1004,6 +1004,7 @@ async def set_current_issue(
     thread_format = thread.format
 
     current_session = await get_or_create(db, user_id=current_user.id)
+    current_session.pending_thread_id = thread_id
     current_session.pending_issue_id = target_issue_id
     current_session.pending_thread_updated_at = now
 
