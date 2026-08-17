@@ -96,37 +96,48 @@ const [isSavingNote, setIsSavingNote] = useState(false)
     [searchResults, selectedThreadId]
   )
 
-  const loadDependencies = useCallback(async () => {
-    const currentThreadId = thread?.id
-    setIsLoadingDeps(true)
-    setError('')
-    try {
-      const data = await dependenciesApi.listThreadDependencies(currentThreadId!)
-      setDependencies(data)
-    } catch (loadError: unknown) {
-      setError(getApiErrorDetail(loadError))
-    } finally {
-      setIsLoadingDeps(false)
-    }
-  }, [thread?.id])
+const loadDependencies = useCallback(async () => {
+  const currentThreadId = thread?.id
+  if (!currentThreadId) {
+    setIsLoadingDeps(false)
+    return
+  }
+  setIsLoadingDeps(true)
+  setError('')
+  try {
+    const data = await dependenciesApi.listThreadDependencies(currentThreadId)
+    setDependencies(data)
+  } catch (loadError: unknown) {
+    setError(getApiErrorDetail(loadError))
+  } finally {
+    setIsLoadingDeps(false)
+  }
+}, [thread?.id])
 
-  /**
+/**
    * Build the full graph of threads and dependencies for the flowchart.
    * Synthesizes virtual thread-level edges from issue-level deps so they
    * show as dashed connections in the flowchart.
    */
   const loadFlowchartData = useCallback(async () => {
     const currentThreadId = thread?.id
+    if (!currentThreadId) {
+      setFlowchartThreads([])
+      setFlowchartDependencies([])
+      setFlowchartIssueNodes([])
+      setBlockedIds(new Set())
+      setIsGraphLoading(false)
+      return
+    }
+    setIsGraphLoading(true)
     try {
       const [depsData, allBlockedIds] = await Promise.all([
-        dependenciesApi.listThreadDependencies(currentThreadId!),
+        dependenciesApi.listThreadDependencies(currentThreadId),
         dependenciesApi.listBlockedThreadIds(),
       ])
 
-      const relatedIds = new Set([currentThreadId!])
+      const relatedIds = new Set([currentThreadId])
       const allDeps = [...depsData.blocking, ...depsData.blocked_by]
-
-      
 
       // Thread-level deps map directly to FlowchartDependency
       const threadDeps: FlowchartDependency[] = allDeps
@@ -150,8 +161,6 @@ const [isSavingNote, setIsSavingNote] = useState(false)
       )
       const issueNodeMap = new Map<number, FlowchartNode>()
       const issueEdges: FlowchartDependency[] = []
-
-      
 
       for (const d of issueOnlyDeps) {
         if (!d.source_issue_thread_id || !d.target_issue_thread_id) continue
@@ -181,9 +190,9 @@ const [isSavingNote, setIsSavingNote] = useState(false)
           })
         }
 
- issueEdges.push({
- id: d.id,
- source_id: srcNodeId,
+        issueEdges.push({
+          id: d.id,
+          source_id: srcNodeId,
           target_id: tgtNodeId,
           is_issue_level: true,
           source_parent_thread_id: d.source_issue_thread_id,
@@ -196,14 +205,10 @@ const [isSavingNote, setIsSavingNote] = useState(false)
         relatedIds.add(d.target_issue_thread_id)
       }
 
-      
-
       const allEdges = [...threadDeps, ...issueEdges]
 
-    const allThreads = await threadsApi.list()
-    const relatedThreads = allThreads.threads.filter((t) => relatedIds.has(t.id))
-
-      
+      const allThreads = await threadsApi.list()
+      const relatedThreads = allThreads.threads.filter((t) => relatedIds.has(t.id))
 
       setFlowchartThreads(relatedThreads)
       setFlowchartDependencies(allEdges)
@@ -214,6 +219,8 @@ const [isSavingNote, setIsSavingNote] = useState(false)
       setFlowchartThreads([])
       setFlowchartDependencies([])
       setFlowchartIssueNodes([])
+    } finally {
+      setIsGraphLoading(false)
     }
   }, [thread?.id])
 
