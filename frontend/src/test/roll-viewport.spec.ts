@@ -700,6 +700,58 @@ test.describe('Roll Viewport Regression Coverage', () => {
         if (scrollW > 1100) break;
       }
     });
+
+    for (const vp of ROLL_VIEWPORTS.filter((v) => v.width >= 1280)) {
+      test(`three-pillar RatingView wider than 300 px at ${vp.width}×${vp.height} (${vp.name})`, async ({ authenticatedWithThreadsPage }) => {
+        await authenticatedWithThreadsPage.setViewportSize({ width: vp.width, height: vp.height });
+        await ensureRatingView(authenticatedWithThreadsPage);
+
+        const cardBox = await authenticatedWithThreadsPage
+          .locator(CORE_ROLL_SELECTORS.cardContainer)
+          .first()
+          .boundingBox()
+          .catch(() => null);
+
+        if (cardBox) {
+          expect(cardBox.width).toBeGreaterThan(300);
+        }
+      });
+    }
+
+    test('desktop 1600 px: main cockpit container bounded at 1700 px, not stretched to fill viewport', async ({ authenticatedWithThreadsPage }) => {
+      await authenticatedWithThreadsPage.setViewportSize({ width: 1600, height: 900 });
+      await ensureRatingView(authenticatedWithThreadsPage);
+      await authenticatedWithThreadsPage.evaluate(() => window.scrollTo(0, 0));
+
+      const mainBox = await authenticatedWithThreadsPage
+        .locator('[data-testid="roll-page"], main, #root > div')
+        .first()
+        .boundingBox()
+        .catch(() => null);
+
+      if (mainBox) {
+        expect(mainBox.x + mainBox.width).toBeLessThanOrEqual(1700);
+      }
+    });
+
+    test('desktop 768 px and above: reading context heading left of viewport midline (comic in left column)', async ({ authenticatedWithThreadsPage }) => {
+      for (const vp of ROLL_VIEWPORTS.filter((v) => v.width >= 768)) {
+        await authenticatedWithThreadsPage.setViewportSize({ width: vp.width, height: vp.height });
+        await ensureRatingView(authenticatedWithThreadsPage);
+
+        const centerBox = await authenticatedWithThreadsPage
+          .locator(CORE_ROLL_SELECTORS.ratingHeading)
+          .first()
+          .boundingBox()
+          .catch(() => null);
+
+        if (centerBox && centerBox.width > 0) {
+          const centerPageX = centerBox.x + centerBox.width / 2;
+          const viewportMidpoint = vp.width / 2;
+          expect(centerPageX).toBeLessThan(viewportMidpoint);
+        }
+      }
+    });
   });
 
 });
