@@ -24,6 +24,12 @@ REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-3][0-9]|4[0-6])$")
 FIXED_WORKER_RE = re.compile(r"^(?:[6-9]|[1-3][0-9]|4[0-6])$")
 HEAD_RE = re.compile(r"^[0-9a-f]{40}$")
+SENSITIVE_ASSIGNMENT_RE = re.compile(
+    r"(?i)([\"']?[A-Z][A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|DATABASE_URL|REDIS_URL|POSTGRES_URL)[\"']?\s*[=:]\s*[\"']?)([^\"'\s,}]+)"
+)
+BEARER_RE = re.compile(r"(?i)(authorization\s*:\s*bearer\s+)\S+")
+GITHUB_TOKEN_RE = re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b")
+API_KEY_RE = re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b")
 STAGE_LABELS = {
     "factory:building",
     "factory:review",
@@ -163,15 +169,30 @@ def review_comment_bodies(pr_number: int) -> list[str]:
     return bodies
 
 
-def review_excerpt(path: str | None) -> str:
-    """Read a bounded tail of model review output for actionable findings."""
+def redact_review_text(text: str) -> str:
+    """Redact common credential shapes before review output reaches GitHub."""
+    text = SENSITIVE_ASSIGNMENT_RE.sub(r"\1[REDACTED]", text)
+    text = BEARER_RE.sub(r"\1[REDACTED]", text)
+    text = GITHUB_TOKEN_RE.sub("[REDACTED_GITHUB_TOKEN]", text)
+    return API_KEY_RE.sub("[REDACTED_API_KEY]", text)
+
+
+def review_excerpt(path: str | None, *, worker: str) -> str:
+    """Read only the expected worker log and return a redacted bounded tail."""
     if not path:
         return ""
+    expected = Path(f"/tmp/opencode-factory-{worker}.log")
+    candidate = Path(path)
+    if candidate != expected or candidate.is_symlink():
+        return ""
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
-        text = Path(path).read_text(encoding="utf-8", errors="replace")
+        descriptor = os.open(candidate, flags)
+        with os.fdopen(descriptor, "r", encoding="utf-8", errors="replace") as stream:
+            text = stream.read()
     except OSError:
         return ""
-    return text[-7000:]
+    return redact_review_text(text[-7000:])
 
 
 def post_review_comment(
@@ -361,7 +382,7 @@ def handle_review(
     if not HEAD_RE.fullmatch(current_head):
         raise RuntimeError(f"PR #{pr_number} has an invalid current head")
     producer = producer_worker_from_pr(branch=branch, body=str(pr.get("body") or ""))
-    excerpt = review_excerpt(review_log)
+    excerpt = review_excerpt(review_log, worker=worker)
 
     if current_head != reviewed_head:
         return return_to_review(
