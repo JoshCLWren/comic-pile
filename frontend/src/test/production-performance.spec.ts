@@ -44,6 +44,11 @@ async function waitForFirstApiResponse(page: Page, startedAt: number): Promise<T
 }
 
 test('records production startup and queue milestones', async ({ page }, testInfo) => {
+  test.skip(
+    testInfo.config.metadata.productionPerformance !== true,
+    'Run with playwright.prod-performance.config.ts and a production storage state.',
+  )
+
   const startedAt = performance.now()
   const firstApiResponsePromise = waitForFirstApiResponse(page, startedAt)
 

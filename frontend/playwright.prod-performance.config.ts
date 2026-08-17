@@ -13,6 +13,9 @@ if (!storageState || !existsSync(storageState)) {
 }
 
 export default defineConfig({
+  metadata: {
+    productionPerformance: true,
+  },
   testDir: './src/test',
   testMatch: 'production-performance.spec.ts',
   fullyParallel: false,
