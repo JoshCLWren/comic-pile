@@ -36,6 +36,7 @@ function ratingView(overrides: Record<string, unknown> = {}) {
       reading_progress: 'in_progress',
       issue_id: 100,
       next_issue_id: 101,
+      queue_position: 1,
     },
     currentDie: 6,
     rolledResult: 3,
@@ -118,10 +119,10 @@ describe('RatingView action panel (issue #1406)', () => {
   it('primary action shows Mark read & complete for last issue', () => {
     render(ratingView({
       activeRatingThread: {
-        id: 1, title: 'Saga', format: 'Comic', issues_remaining: 1, total_issues: 10,
-        issue_number: '10', next_issue_number: null, reading_progress: 'in_progress',
-        issue_id: 100, next_issue_id: null,
-      },
+  id: 1, title: 'Saga', format: 'Comic', issues_remaining: 1, total_issues: 10,
+  issue_number: '10', next_issue_number: null, reading_progress: 'in_progress',
+  issue_id: 100, next_issue_id: null, queue_position: 1,
+},
     }))
     expect(screen.getByRole('button', { name: /mark read & complete/i })).toBeInTheDocument()
   })
@@ -129,10 +130,10 @@ describe('RatingView action panel (issue #1406)', () => {
   it('last issue banner is displayed', () => {
     render(ratingView({
       activeRatingThread: {
-        id: 1, title: 'Saga', format: 'Comic', issues_remaining: 1, total_issues: 10,
-        issue_number: '10', next_issue_number: null, reading_progress: 'in_progress',
-        issue_id: 100, next_issue_id: null,
-      },
+  id: 1, title: 'Saga', format: 'Comic', issues_remaining: 1, total_issues: 10,
+  issue_number: '10', next_issue_number: null, reading_progress: 'in_progress',
+  issue_id: 100, next_issue_id: null, queue_position: 1,
+},
     }))
     expect(screen.getByText(/This is the last issue in the thread/)).toBeInTheDocument()
   })

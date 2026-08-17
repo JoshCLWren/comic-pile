@@ -51,6 +51,8 @@ function renderRatingView(overrides: Record<string, unknown> = {}) {
       next_issue_number: '4',
       issue_id: 100,
       next_issue_id: 101,
+      queue_position: 1,
+      reading_progress: '50%',
     },
     currentDie: 6,
     rolledResult: 3,
