@@ -27,8 +27,12 @@ on:
       - '.github/workflows/free-model-factory-entry.yml'
       - '.github/workflows/free-model-factory-run.yml'
       - '.github/scripts/factory-work-controller.py'
+      - '.github/scripts/factory-review-controller.py'
+      - '.github/scripts/factory_work_policy.py'
+      - '.github/scripts/factory_review_policy.py'
       - '.github/scripts/factory-gh-rest-shim.sh'
       - '.github/scripts/free-model-factory-worker.sh'
+      - '.github/scripts/free-model-factory-worker-primitives.sh'
       - '.github/scripts/kilo-auto-factory-run.sh'
       - '.github/free-model-factories.tsv'
 
@@ -75,6 +79,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
+          review_controller='.github/scripts/factory-review-controller.py'
 
           current_head_review_blockers() {
             local pr="$1" head="$2" changes unresolved
@@ -136,12 +141,23 @@ jobs:
             IFS=$'\t' read -r pr head <<< "$candidate"
             [[ -n "$pr" && -n "$head" ]] || continue
 
+            if ! authorization="$(python3 "$review_controller" authorized --pr "$pr")"; then
+              echo "Unable to verify semantic authorization for PR #${pr}; leaving it open" >&2
+              continue
+            fi
+            authorized="$(jq -r '.authorized // false' <<< "$authorization")"
+            authorized_head="$(jq -r '.head // empty' <<< "$authorization")"
+            if [[ "$authorized" != 'true' || "$authorized_head" != "$head" ]]; then
+              echo "PR #${pr} lacks semantic authorization for ready head ${head}; leaving it open"
+              continue
+            fi
+
             if ! ready_to_merge "$pr" "$head"; then
               echo "PR #${pr} is labeled ready but exact-head gates are not currently satisfied; leaving it open"
               continue
             fi
 
-            echo "Merging ready PR #${pr} at ${head}"
+            echo "Merging semantically authorized ready PR #${pr} at ${head}"
             if gh pr merge "$pr" --repo "$GITHUB_REPOSITORY" \
               --merge --match-head-commit "$head"; then
               echo "Merged ready PR #${pr}"
@@ -321,7 +337,7 @@ jobs:
 
           if [[ "$EVENT_NAME" == workflow_dispatch && -n "${DISPATCH_WORKER:-}" ]]; then
             awk -F '\t' -v worker="$DISPATCH_WORKER" '$1 == worker {found=1} END {exit !found}' "$manifest"
-            workers="$(jq -nc --arg worker "$DISPATCH_WORKER" '[$worker]')"
+            workers="$(jq -nc --arg worker="$DISPATCH_WORKER" '[$worker]')"
           elif [[ "$EVENT_NAME" == schedule ]]; then
             minute="${SCHEDULE_EXPR%% *}"
             [[ "$minute" =~ ^(0|5|10|15|20|25|30|35|40|45|50|55)$ ]] || {
