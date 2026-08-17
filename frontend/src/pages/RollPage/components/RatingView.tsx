@@ -10,6 +10,7 @@ import { ComicVineIssueCard } from './ComicVineIssueCard'
 import { ContinuityReadinessSummary } from './ContinuityReadinessSummary'
 import { ReadingOrderGroups } from './ReadingOrderGroups'
 import { ReadingRouteExplanation } from './ReadingRouteExplanation'
+import BugReportModal from '../../../components/BugReportModal'
 
 function getDieDirection(currentDie: number, predictedDie: number): string {
   if (predictedDie < currentDie) return 'More focused next roll'
@@ -58,6 +59,50 @@ export function RatingView({
   onCancel,
   onRefreshThread,
 }: RatingViewProps) {
+  const [isCorrectionDialogOpen, setIsCorrectionDialogOpen] = useState(false)
+  const [isContinuityDialogOpen, setIsContinuityDialogOpen] = useState(false)
+  const [isRouteExplanationOpen, setIsRouteExplanationOpen] = useState(false)
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const threadTitle = activeRatingThread?.title ?? 'Loading…'
+  const issueNumber = activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number ?? null
+  const issueId = activeRatingThread?.issue_id ?? activeRatingThread?.next_issue_id
+  const totalIssues = activeRatingThread?.total_issues ?? null
+  const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
+  const progress = getProgressPercentage(activeRatingThread)
+  const dieDirection = getDieDirection(currentDie, predictedDie)
+  const [bugReportModalOpen, setBugReportModalOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!title.trim() || !description.trim()) {
+      setError('Title and description are required')
+      return
+    }
+    setIsSubmitting(true)
+    setError(null)
+    try {
+      await onSubmit(reportType, title.trim(), description.trim())
+    } catch (err) {
+      console.error('Failed to submit report:', err)
+      setError(err instanceof Error ? err.message : 'Failed to submit report')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+  const handleDescriptionKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (
+      event.key !== 'Enter' ||
+      event.shiftKey ||
+      event.nativeEvent.isComposing ||
+      isSubmitting ||
+      !title.trim() ||
+      !description.trim()
+    ) {
+      return
+    }
+    event.preventDefault()
+    event.currentTarget.form?.requestSubmit()
   const [isCorrectionDialogOpen, setIsCorrectionDialogOpen] = useState(false)
   const [isContinuityDialogOpen, setIsContinuityDialogOpen] = useState(false)
   const [isRouteExplanationOpen, setIsRouteExplanationOpen] = useState(false)
