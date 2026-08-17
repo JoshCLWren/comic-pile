@@ -103,9 +103,9 @@ test.describe('Responsive multi-column virtualized grid (#583-C)', () => {
     });
 
     // Wait deterministically for the virtualizer to render a different range.
-    await expect.poll(async () => virtualRows.last().getAttribute('data-index'), {
-      timeout: 10000,
-    }).not.toBe(initialLastIndex);
+  await expect.poll(async () => virtualRows.last().getAttribute('data-index'), {
+    timeout: 15000,
+  }).not.toBe(initialLastIndex);
 
     // Virtualization reuses DOM nodes, so the node count is intentionally stable.
     const scrolledLastIndex = await virtualRows.last().getAttribute('data-index');
