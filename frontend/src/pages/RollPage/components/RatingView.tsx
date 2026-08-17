@@ -293,7 +293,7 @@ export function RatingView({
             type="button"
             onClick={onCancel}
             disabled={dismissIsPending}
-            className="min-h-11 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-400 transition hover:bg-white/10 focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
+            className="min-h-11 flex-1 rounded-xl border border-rose-600/30 bg-rose-600/10 py-3 text-xs font-black uppercase tracking-[0.15em] text-rose-400 transition hover:bg-rose-600/20 focus:ring-2 focus:ring-rose-500 disabled:opacity-50"
           >
             Cancel roll
           </button>
