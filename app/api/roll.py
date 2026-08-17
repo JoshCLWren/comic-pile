@@ -137,7 +137,7 @@ async def roll_dice(
         current_session.pending_thread_updated_at = datetime.now(UTC)
 
     await db.commit()
-    await _invalidate_session_caches(current_user.id)
+    await _invalidate_session_caches(user_id)
 
     snoozed_count = len(snoozed_ids)
     offset = snoozed_count
@@ -173,11 +173,12 @@ async def dismiss_pending_roll(
         db: SQLAlchemy session for database operations.
     """
     current_session = await get_or_create(db, user_id=current_user.id, existing_user=current_user)
+    user_id = current_user.id
     current_session.pending_thread_id = None
     current_session.pending_thread_updated_at = None
     await db.commit()
 
-    await _invalidate_session_caches(current_user.id)
+    await _invalidate_session_caches(user_id)
 
 
 @router.post("/override", response_model=RollResponse)
@@ -273,9 +274,10 @@ async def override_roll(
 
     current_session.pending_thread_id = override_thread_id
     current_session.pending_thread_updated_at = datetime.now(UTC)
+    user_id = current_user.id
 
     await db.commit()
-    await _invalidate_session_caches(current_user.id)
+    await _invalidate_session_caches(user_id)
 
     snoozed_count = len(snoozed_ids)
     offset = snoozed_count
@@ -327,9 +329,10 @@ async def set_manual_die(
         )
 
     current_session.manual_die = die
+    user_id = current_user.id
     await db.commit()
 
-    await _invalidate_session_caches(current_user.id)
+    await _invalidate_session_caches(user_id)
     return f"d{die}"
 
 
@@ -350,9 +353,10 @@ async def clear_manual_die(
     current_session = await get_or_create(db, user_id=current_user.id, existing_user=current_user)
 
     current_session.manual_die = None
+    user_id = current_user.id
     await db.commit()
 
-    await _invalidate_session_caches(current_user.id)
+    await _invalidate_session_caches(user_id)
 
     await db.refresh(current_session)
     current_die = await get_current_die_for_session(current_session, db)
