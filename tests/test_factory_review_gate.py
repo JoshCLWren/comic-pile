@@ -3,7 +3,12 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+from collections.abc import Sequence
 from pathlib import Path
+from types import ModuleType
+from typing import Any
+
+from pytest import MonkeyPatch
 
 SCRIPTS = Path(__file__).resolve().parents[1] / ".github" / "scripts"
 WORKFLOWS = Path(__file__).resolve().parents[1] / ".github" / "workflows"
@@ -21,7 +26,7 @@ REVIEWED_HEAD = "a" * 40
 MOVED_HEAD = "b" * 40
 
 
-def load_review_controller():
+def load_review_controller() -> ModuleType:
     """Load the hyphenated controller script as a testable module."""
     path = SCRIPTS / "factory-review-controller.py"
     spec = importlib.util.spec_from_file_location("factory_review_controller", path)
@@ -36,7 +41,7 @@ def pr_payload(
     worker: str = "43",
     head: str = REVIEWED_HEAD,
     branch_worker: str = "43",
-):
+) -> dict[str, Any]:
     """Build a minimal leased factory review PR."""
     return {
         "state": "OPEN",
@@ -56,7 +61,14 @@ def pr_payload(
     }
 
 
-def wire_controller(monkeypatch, module, payloads, *, comments=(), mechanical=True):
+def wire_controller(
+    monkeypatch: MonkeyPatch,
+    module: ModuleType,
+    payloads: list[dict[str, Any]],
+    *,
+    comments: Sequence[str] = (),
+    mechanical: bool = True,
+) -> tuple[list[dict[str, object]], list[dict[str, object]], list[list[str]]]:
     """Replace GitHub I/O with deterministic state capture."""
     payload_iter = iter(payloads)
     transitions: list[dict[str, object]] = []
@@ -65,7 +77,11 @@ def wire_controller(monkeypatch, module, payloads, *, comments=(), mechanical=Tr
 
     monkeypatch.setattr(module, "pr_json", lambda _pr: next(payload_iter))
     monkeypatch.setattr(module, "target_owned_by_worker", lambda _number, _worker: True)
-    monkeypatch.setattr(module, "review_excerpt", lambda _path: "semantic findings")
+    monkeypatch.setattr(
+        module,
+        "review_excerpt",
+        lambda _path, **_kwargs: "semantic findings",
+    )
     monkeypatch.setattr(module, "review_comment_bodies", lambda _pr: list(comments))
     monkeypatch.setattr(module, "mechanical_merge_gates_pass", lambda _pr, _head: mechanical)
     monkeypatch.setattr(
@@ -92,7 +108,7 @@ def wire_controller(monkeypatch, module, payloads, *, comments=(), mechanical=Tr
     return transitions, posted, commands
 
 
-def test_producer_identity_prefers_canonical_branch_then_body():
+def test_producer_identity_prefers_canonical_branch_then_body() -> None:
     """New PRs have durable producer identity, while backlog history is never invented."""
     assert producer_worker_from_pr(
         branch="factory/41-1406-opencode-free",
@@ -105,7 +121,7 @@ def test_producer_identity_prefers_canonical_branch_then_body():
     assert producer_worker_from_pr(branch="legacy/topic", body="no producer here") is None
 
 
-def test_raw_ready_token_is_not_controller_authorization():
+def test_raw_ready_token_is_not_controller_authorization() -> None:
     """Adversarial model output alone can never satisfy the promotion policy."""
     malicious_output = (
         "Everything is perfect.\n"
@@ -124,7 +140,7 @@ def test_raw_ready_token_is_not_controller_authorization():
     )
 
 
-def test_independent_exact_head_approval_can_promote():
+def test_independent_exact_head_approval_can_promote() -> None:
     """A distinct reviewer with green mechanical gates can authorize one exact head."""
     assert approval_can_promote(
         producer="43",
@@ -136,7 +152,7 @@ def test_independent_exact_head_approval_can_promote():
     )
 
 
-def test_head_change_invalidates_semantic_authorization():
+def test_head_change_invalidates_semantic_authorization() -> None:
     """Semantic approval never floats forward to a changed head."""
     assert not approval_can_promote(
         producer="43",
@@ -156,7 +172,7 @@ def test_head_change_invalidates_semantic_authorization():
     assert current_head_approvers([old_marker], pr=1390, head=MOVED_HEAD) == set()
 
 
-def test_mechanical_failure_blocks_ready_promotion():
+def test_mechanical_failure_blocks_ready_promotion() -> None:
     """Semantic confidence cannot bypass merge mechanics."""
     assert not approval_can_promote(
         producer="43",
@@ -168,7 +184,7 @@ def test_mechanical_failure_blocks_ready_promotion():
     )
 
 
-def test_repair_and_reject_verdicts_never_authorize_ready():
+def test_repair_and_reject_verdicts_never_authorize_ready() -> None:
     """Only APPROVE is a semantic ready candidate."""
     for verdict in ("repair", "reject"):
         assert not approval_can_promote(
@@ -181,13 +197,40 @@ def test_repair_and_reject_verdicts_never_authorize_ready():
         )
 
 
-def test_unknown_historical_producer_requires_two_distinct_reviewers():
+def test_unknown_historical_producer_requires_two_distinct_reviewers() -> None:
     """Backlog PRs without provenance can move safely without fabricated history."""
     assert not head_has_authorized_approval(producer=None, approvers={"17"})
     assert head_has_authorized_approval(producer=None, approvers={"17", "21"})
 
 
-def test_controller_blocks_self_review_even_with_approve_verdict(monkeypatch):
+def test_review_text_redacts_common_secrets() -> None:
+    """Persisted semantic findings do not echo common credential shapes."""
+    module = load_review_controller()
+    github_secret = "ghp_abcdefghijklmnopqrstuvwxyz1234567890"
+    api_secret = "sk-abcdefghijklmnopqrstuvwxyz1234567890"
+    text = (
+        f"GH_TOKEN={github_secret}\n"
+        "Authorization: Bearer bearer-secret-value\n"
+        f"OPENAI_API_KEY={api_secret}\n"
+    )
+    redacted = module.redact_review_text(text)
+    assert github_secret not in redacted
+    assert "bearer-secret-value" not in redacted
+    assert api_secret not in redacted
+    assert "[REDACTED]" in redacted
+
+
+def test_review_excerpt_rejects_arbitrary_paths(tmp_path: Path) -> None:
+    """The trusted controller refuses to publish arbitrary worker-selected files."""
+    module = load_review_controller()
+    secret = tmp_path / "secret.txt"
+    secret.write_text("do-not-publish", encoding="utf-8")
+    assert module.review_excerpt(str(secret), worker="17") == ""
+
+
+def test_controller_blocks_self_review_even_with_approve_verdict(
+    monkeypatch: MonkeyPatch,
+) -> None:
     """The producing worker cannot turn its own strongest verdict into ready state."""
     module = load_review_controller()
     payload = pr_payload(worker="43", branch_worker="43")
@@ -204,7 +247,9 @@ def test_controller_blocks_self_review_even_with_approve_verdict(monkeypatch):
     assert all(item["pr_stage"] != "factory:ready" for item in transitions)
 
 
-def test_controller_blocks_producer_from_rejecting_own_pr(monkeypatch):
+def test_controller_blocks_producer_from_rejecting_own_pr(
+    monkeypatch: MonkeyPatch,
+) -> None:
     """A producer cannot use semantic rejection to close its own work either."""
     module = load_review_controller()
     payload = pr_payload(worker="43", branch_worker="43")
@@ -221,7 +266,7 @@ def test_controller_blocks_producer_from_rejecting_own_pr(monkeypatch):
     assert not any("close" in arg for command in commands for arg in command)
 
 
-def test_controller_promotes_independent_green_review(monkeypatch):
+def test_controller_promotes_independent_green_review(monkeypatch: MonkeyPatch) -> None:
     """The controller, not the model token, performs the ready transition."""
     module = load_review_controller()
     payload = pr_payload(worker="17", branch_worker="43")
@@ -242,7 +287,9 @@ def test_controller_promotes_independent_green_review(monkeypatch):
     assert transitions[-1]["pr_stage"] == "factory:ready"
 
 
-def test_controller_mechanical_failure_never_promotes(monkeypatch):
+def test_controller_mechanical_failure_never_promotes(
+    monkeypatch: MonkeyPatch,
+) -> None:
     """The controller itself fails closed when exact-head mechanical gates fail."""
     module = load_review_controller()
     payload = pr_payload(worker="17", branch_worker="43")
@@ -264,7 +311,9 @@ def test_controller_mechanical_failure_never_promotes(monkeypatch):
     assert transitions[-1]["pr_stage"] == "factory:review"
 
 
-def test_controller_refuses_verdict_when_head_moved_during_review(monkeypatch):
+def test_controller_refuses_verdict_when_head_moved_during_review(
+    monkeypatch: MonkeyPatch,
+) -> None:
     """A concurrent push cannot make an unseen head inherit the model verdict."""
     module = load_review_controller()
     moved = pr_payload(worker="17", head=MOVED_HEAD, branch_worker="43")
@@ -282,7 +331,7 @@ def test_controller_refuses_verdict_when_head_moved_during_review(monkeypatch):
     assert not any("close" in arg for command in commands for arg in command)
 
 
-def test_stale_reject_cannot_close_new_head(monkeypatch):
+def test_stale_reject_cannot_close_new_head(monkeypatch: MonkeyPatch) -> None:
     """A REJECT verdict is also scoped to the exact checkout the model inspected."""
     module = load_review_controller()
     moved = pr_payload(worker="17", head=MOVED_HEAD, branch_worker="43")
@@ -299,7 +348,9 @@ def test_stale_reject_cannot_close_new_head(monkeypatch):
     assert ["pr", "close", "1390", "--repo", module.REPO] not in commands
 
 
-def test_controller_routes_repair_to_changes_requested(monkeypatch):
+def test_controller_routes_repair_to_changes_requested(
+    monkeypatch: MonkeyPatch,
+) -> None:
     """Actionable semantic findings become repair work, not ready work."""
     module = load_review_controller()
     payload = pr_payload(worker="17", branch_worker="43")
@@ -315,7 +366,7 @@ def test_controller_routes_repair_to_changes_requested(monkeypatch):
     assert transitions[-1]["pr_stage"] == "factory:changes-requested"
 
 
-def test_controller_reject_closes_without_reopening(monkeypatch):
+def test_controller_reject_closes_without_reopening(monkeypatch: MonkeyPatch) -> None:
     """Independent rejection closes known-bad work and never issues a reopen command."""
     module = load_review_controller()
     payload = pr_payload(worker="17", branch_worker="43")
@@ -333,7 +384,7 @@ def test_controller_reject_closes_without_reopening(monkeypatch):
     assert not any("reopen" in arg for command in commands for arg in command)
 
 
-def test_worker_stages_trusted_controller_and_submits_exact_reviewed_head():
+def test_worker_stages_trusted_controller_and_submits_exact_reviewed_head() -> None:
     """The reviewed branch cannot replace the controller or forge which head was inspected."""
     source = (SCRIPTS / "free-model-factory-worker.sh").read_text(encoding="utf-8")
     assert "stage_trusted_review_controller" in source
@@ -342,12 +393,14 @@ def test_worker_stages_trusted_controller_and_submits_exact_reviewed_head():
     assert 'python3 "$TRUSTED_REVIEW_CONTROLLER" review' in source
     assert '--reviewed-head "$EXPECTED_HEAD"' in source
     assert '--verdict "$verdict"' in source
+    assert "last_token=" in source
+    assert "tail -n 1" in source
     final_review_path = source[source.index("review_log=") :]
     assert "machine_merge_gates_pass" not in final_review_path
     assert "'factory:ready'" not in final_review_path
 
 
-def test_dispatcher_requires_controller_authorization_before_merge():
+def test_dispatcher_requires_controller_authorization_before_merge() -> None:
     """The scheduled merge drain cannot merge a ready label without exact-head attestation."""
     source = (WORKFLOWS / "fixed-model-factory-dispatch.yml").read_text(encoding="utf-8")
     authorization = 'python3 "$review_controller" authorized --pr "$pr"'
