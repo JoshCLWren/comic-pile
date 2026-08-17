@@ -225,7 +225,7 @@ async def _relevant_crossover_groups(
     """
     result = await db.execute(
         select(DependencyGroup)
-.join(
+        .join(
             DependencyGroupMembership,
             DependencyGroupMembership.group_id == DependencyGroup.id,
         )
@@ -403,9 +403,9 @@ def _build_crossovers(
         ]
         next_member: ReaderContextCrossoverNextMember | None = None
         if same_thread_future:
-nearest = min(
-                 same_thread_future, key=lambda member: (member.position, member.id)
-             )
+            nearest = min(
+                same_thread_future, key=lambda member: (member.position, member.id)
+            )
             next_member = ReaderContextCrossoverNextMember(
                 issue_id=nearest.id,
                 issue_number=nearest.issue_number,
@@ -464,7 +464,7 @@ def _build_local_issues(
         memberships = [
             ReaderContextCrossoverMembership(id=group.id, name=group.name)
             for group in groups
-if candidate.id in group_member_sets.get(group.id, set())
+            if candidate.id in group_member_sets.get(group.id, set())
         ]
         rating = effective[candidate.id][0] if candidate.id in effective else None
         issues.append(
@@ -592,7 +592,7 @@ async def get_reader_context(
         [group.id for group in groups],
     )
 
-rating_issue_ids: set[int] = {candidate.id for candidate in series_issues}
+    rating_issue_ids: set[int] = {candidate.id for candidate in series_issues}
     rating_issue_ids.update(candidate.id for candidate in neighborhood)
     if previous_issue is not None:
         rating_issue_ids.add(previous_issue.id)
