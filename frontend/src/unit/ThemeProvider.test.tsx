@@ -73,8 +73,8 @@ function renderWithTheme(entry = '/') {
 }
 
 test('defaults to classic when no preferences exist', async () => {
-  mockApiGet.mockResolvedValueOnce({ username: 'testuser' })
   mockApiGet.mockResolvedValueOnce({ theme: 'classic' })
+  mockApiGet.mockResolvedValueOnce({ username: 'testuser' })
   renderWithTheme()
 
   await waitFor(() => {
@@ -84,21 +84,20 @@ test('defaults to classic when no preferences exist', async () => {
 })
 
 test('applies server theme on load', async () => {
-  mockApiGet.mockResolvedValueOnce({ username: 'testuser' })
   mockApiGet.mockResolvedValueOnce({ theme: 'ink-gold' })
+  mockApiGet.mockResolvedValueOnce({ username: 'testuser' })
   renderWithTheme()
 
   await waitFor(() => {
     expect(screen.getByTestId('loaded').textContent).toBe('true')
   })
-  console.log('DEBUG - mockApiGet calls:', mockApiGet.mock.calls.map(c => c[0]))
   expect(screen.getByTestId('theme').textContent).toBe('ink-gold')
   expect(document.documentElement.getAttribute('data-theme')).toBe('ink-gold')
 })
 
 test('falls back to classic on preferences fetch failure', async () => {
-  mockApiGet.mockResolvedValueOnce({ username: 'testuser' })
   mockApiGet.mockRejectedValueOnce(new Error('network'))
+  mockApiGet.mockResolvedValueOnce({ username: 'testuser' })
   renderWithTheme()
 
   await waitFor(() => {
@@ -108,8 +107,8 @@ test('falls back to classic on preferences fetch failure', async () => {
 })
 
 test('setTheme applies immediately and patches server', async () => {
-  mockApiGet.mockResolvedValueOnce({ username: 'testuser' })
   mockApiGet.mockResolvedValueOnce({ theme: 'classic' })
+  mockApiGet.mockResolvedValueOnce({ username: 'testuser' })
   mockApiPatch.mockResolvedValueOnce({ theme: 'command-center' })
 
   renderWithTheme()
@@ -129,8 +128,8 @@ test('setTheme applies immediately and patches server', async () => {
 })
 
 test('reverts on server failure', async () => {
-  mockApiGet.mockResolvedValueOnce({ username: 'testuser' })
   mockApiGet.mockResolvedValueOnce({ theme: 'classic' })
+  mockApiGet.mockResolvedValueOnce({ username: 'testuser' })
   mockApiPatch.mockRejectedValueOnce(new Error('fail'))
   // Fallback GET on failure
   mockApiGet.mockResolvedValueOnce({ theme: 'classic' })

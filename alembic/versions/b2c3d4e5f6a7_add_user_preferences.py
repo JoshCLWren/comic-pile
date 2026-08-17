@@ -10,6 +10,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects.postgresql import JSONB
 
 # revision identifiers, used by Alembic.
 revision: str = "b2c3d4e5f6a7"
@@ -22,7 +23,7 @@ def upgrade() -> None:
     """Add the preferences JSONB column to the users table."""
     op.add_column(
         "users",
-        sa.Column("preferences", sa.JSONB(), nullable=True),
+        sa.Column("preferences", JSONB(), nullable=True),
     )
 
 
