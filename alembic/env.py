@@ -17,7 +17,7 @@ load_dotenv()
 
 config = context.config
 
-    database_url = os.getenv("DATABASE_URL", "postgresql://default:password@localhost:5432/comic-pile")
+database_url = os.getenv("DATABASE_URL", "postgresql://default:password@localhost:5432/comic-pile")
 if database_url:
     # Convert to sync driver for alembic migrations
     if database_url.startswith("postgresql+asyncpg://"):
