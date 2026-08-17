@@ -37,7 +37,9 @@ def env_positive_int(name: str, default: int) -> int:
         return default
     return value
 
+
 LOCAL_LEASE_TTL_SECONDS = env_positive_int('FACTORY_LOCAL_LEASE_TTL_SECONDS', 3600)
+FACTORY_PR_WIP_LIMIT = env_positive_int('FACTORY_PR_WIP_LIMIT', 5)
 
 
 @dataclass(frozen=True)
@@ -51,6 +53,7 @@ class Candidate:
     linked_issue: int | None = None
     stage: str | None = None
     producer_worker: str | None = None
+    conflicted: bool = False
 
     def sort_key(self) -> tuple[int, int, float, int]:
         """Return the deterministic queue ordering key."""
@@ -135,6 +138,36 @@ def item_is_unowned(labels: set[str]) -> bool:
     return owner_of(labels) in (None, 'factory:unowned')
 
 
+def issue_bypasses_wip_limit(issue: dict[str, Any]) -> bool:
+    """Keep genuinely urgent product defects executable while the PR queue drains."""
+    labels = labels_of(issue)
+    return (
+        ('user-reported' in labels and 'bug' in labels)
+        or 'priority:P0' in labels
+        or 'ralph-priority:critical' in labels
+    )
+
+
+def factory_pr_wip_count(prs: Iterable[dict[str, Any]]) -> int:
+    """Count open non-draft factory PRs that still consume delivery capacity."""
+    count = 0
+    for pr in prs:
+        if str(pr.get('state') or 'OPEN').upper() != 'OPEN' or pr.get('isDraft'):
+            continue
+        labels = labels_of(pr)
+        head = str(pr.get('headRefName') or '')
+        if 'factory' in labels or head.startswith('factory/'):
+            count += 1
+    return count
+
+
+def pr_is_conflicted(pr: dict[str, Any]) -> bool:
+    """Return whether GitHub reports the current PR head as merge-conflicted."""
+    mergeable = str(pr.get('mergeable') or '').upper()
+    merge_state = str(pr.get('mergeStateStatus') or '').upper()
+    return mergeable == 'CONFLICTING' or merge_state == 'DIRTY'
+
+
 def issue_is_static_candidate(issue: dict[str, Any], suppressing_pr_issues: set[int]) -> bool:
     """Return whether an issue is structurally eligible for assignment."""
     number = int(issue['number'])
@@ -192,13 +225,30 @@ def pr_suppresses_issue_candidate(pr: dict[str, Any], issue_map: dict[int, dict[
 def build_candidates(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -> list[Candidate]:
     """Build and rank executable issue and pull-request candidates."""
     issue_map = {int(issue['number']): issue for issue in issues}
-    suppressing_pr_issues = {linked for pr in prs if (linked := linked_issue_from_branch(pr.get('headRefName'))) is not None and pr_suppresses_issue_candidate(pr, issue_map)}
+    suppressing_pr_issues = {
+        linked
+        for pr in prs
+        if (linked := linked_issue_from_branch(pr.get('headRefName'))) is not None
+        and pr_suppresses_issue_candidate(pr, issue_map)
+    }
+    pr_wip_full = factory_pr_wip_count(prs) >= FACTORY_PR_WIP_LIMIT
     candidates: list[Candidate] = []
     for issue in issues:
         if not issue_is_static_candidate(issue, suppressing_pr_issues):
             continue
+        if pr_wip_full and not issue_bypasses_wip_limit(issue):
+            continue
         labels = labels_of(issue)
-        candidates.append(Candidate(kind='issue', number=int(issue['number']), lane=provenance_lane(labels), priority=priority_rank(labels), created_at=str(issue.get('createdAt') or ''), stage=stage_of(labels)))
+        candidates.append(
+            Candidate(
+                kind='issue',
+                number=int(issue['number']),
+                lane=provenance_lane(labels),
+                priority=priority_rank(labels),
+                created_at=str(issue.get('createdAt') or ''),
+                stage=stage_of(labels),
+            )
+        )
     for pr in prs:
         if not pr_is_static_candidate(pr, issue_map):
             continue
@@ -210,39 +260,63 @@ def build_candidates(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) ->
         lane = provenance_lane(labels)
         if lane == 1:
             lane = 2
-        candidates.append(Candidate(kind='pr', number=int(pr['number']), lane=lane, priority=priority_rank(labels), created_at=str(pr.get('createdAt') or ''), linked_issue=linked, stage=stage_of(pr_labels), producer_worker=producer_worker_from_pr(pr)))
+        candidates.append(
+            Candidate(
+                kind='pr',
+                number=int(pr['number']),
+                lane=lane,
+                priority=priority_rank(labels),
+                created_at=str(pr.get('createdAt') or ''),
+                linked_issue=linked,
+                stage=stage_of(pr_labels),
+                producer_worker=producer_worker_from_pr(pr),
+                conflicted=pr_is_conflicted(pr),
+            )
+        )
     return sorted(candidates, key=Candidate.sort_key)
 
 
 def review_capacity_worker(worker: str) -> bool:
-    """Reserve a stable minority of fixed workers for review-first assignment."""
+    """Compatibility helper retained for older tests and callers."""
     return int(worker) % 4 == 2
 
 
 def candidate_is_independent_for_worker(candidate: Candidate, worker: str) -> bool:
     """Prevent a producing factory from being assigned semantic review of its PR."""
-    return not (candidate.kind == 'pr' and candidate.stage == 'factory:review' and candidate.producer_worker == worker)
+    return not (
+        candidate.kind == 'pr'
+        and candidate.stage == 'factory:review'
+        and candidate.producer_worker == worker
+    )
 
 
 def order_candidates_for_worker(candidates: list[Candidate], worker: str) -> list[Candidate]:
-    """Give review bounded capacity while preserving concurrent product work."""
-    eligible = [candidate for candidate in candidates if candidate_is_independent_for_worker(candidate, worker)]
+    """Drain merge conflicts and other existing PR work before new issues."""
+    eligible = [
+        candidate
+        for candidate in candidates
+        if candidate_is_independent_for_worker(candidate, worker)
+    ]
 
     def work_class(candidate: Candidate) -> int:
-        is_semantic_review = candidate.kind == 'pr' and candidate.stage == 'factory:review'
-        if review_capacity_worker(worker):
-            if is_semantic_review:
+        if candidate.kind == 'pr':
+            if candidate.conflicted:
                 return 0
-            if candidate.kind == 'pr':
+            if candidate.stage == 'factory:ci':
                 return 1
-            return 2
-        if candidate.kind == 'issue':
-            return 0
-        if candidate.kind == 'pr' and candidate.stage != 'factory:review':
-            return 1
-        return 2
+            if candidate.stage == 'factory:changes-requested':
+                return 2
+            if candidate.stage == 'factory:review':
+                return 3
+            return 4
+        if candidate.lane == 1:
+            return 5
+        return 6
 
-    return sorted(eligible, key=lambda candidate: (work_class(candidate), candidate.sort_key()))
+    return sorted(
+        eligible,
+        key=lambda candidate: (work_class(candidate), candidate.sort_key()),
+    )
 
 
 def plan_distinct_assignments(candidates: list[Candidate], workers: list[str]) -> dict[str, Candidate]:

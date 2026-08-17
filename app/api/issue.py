@@ -24,7 +24,9 @@ from app.schemas import (
     IssueResponse,
 )
 from app.schemas.comicvine import ComicVineIssueIntelligence
+from app.schemas.reader_context import ReaderContextResponse
 from app.services.comicvine_intelligence import get_issue_intelligence
+from app.services.reader_context import get_reader_context
 from app.utils.issue_parser import parse_issue_ranges
 from app.services.ownership import get_owned_issue_or_404, get_owned_thread_or_404
 from comic_pile.dependencies import (
@@ -58,6 +60,32 @@ async def get_issue_comicvine_intelligence(
     """
     await get_owned_issue_or_404(db, current_user.id, issue_id)
     return await get_issue_intelligence(db, issue_id, current_user.id)
+
+
+@router.get("/issues/{issue_id}/reader-context", response_model=ReaderContextResponse)
+async def get_issue_reader_context(
+    issue_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> ReaderContextResponse:
+    """Return bounded reading analytics and local neighborhood for an owned issue.
+
+    The response is decorative context for the Roll experience and must never
+    be a prerequisite for rating. It is computed with bounded, user-scoped
+    queries that do not traverse the full library or hydrate ComicVine.
+
+    Args:
+        issue_id: ComicPile issue identifier.
+        current_user: Authenticated owner of the requested issue.
+        db: Async database session.
+
+    Returns:
+        Bounded reader-context payload for the requested issue.
+
+    Raises:
+        HTTPException: If the issue does not belong to the user.
+    """
+    return await get_reader_context(db, current_user.id, issue_id)
 
 
 async def _invalidate_issue_caches(user_id: int) -> None:

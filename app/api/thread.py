@@ -26,6 +26,8 @@ from app.schemas import (
     QueueThreadListResponse,
     ReactivateRequest,
     RollResponse,
+    SetCurrentIssueRequest,
+    SetCurrentIssueResponse,
     ThreadCreate,
     ThreadDetail,
     ThreadResponse,
@@ -34,7 +36,6 @@ from app.schemas import (
 from app.schemas.migration import MigrateToIssuesSimpleRequest
 from app.services.ownership import get_owned_thread_or_404
 from app.services.thread_issue_stats import load_next_issue_numbers, load_unread_counts
-from app.services.queue_pagination import decode_queue_cursor, encode_queue_cursor, QueueCursor, QueueSort
 from comic_pile.session import get_current_die, get_or_create
 
 router = APIRouter(tags=["threads"])
@@ -184,9 +185,8 @@ async def list_threads(
         description="Number of threads to return per page (default 50, max 200)",
     ),
     page_token: str | None = Query(
-        default=None, description="Token for pagination continuation"
+        default=None, description="Token for pagination continuation (queue_position,thread_id)"
     ),
-    sort: QueueSort = Query(default="position", description="Sort order for queue"),
 ) -> QueueThreadListResponse:
     """List threads ordered by position with cursor-based pagination.
 
@@ -194,8 +194,7 @@ async def list_threads(
         request: FastAPI request object for rate limiting.
         search: Optional case-insensitive title search filter.
         page_size: Number of threads to return per page (default 50, max 200).
-        page_token: Token for pagination continuation.
-        sort: Sort order for queue (position, title, created).
+        page_token: Token for pagination continuation (queue_position,thread_id).
         current_user: The authenticated user making the request.
         db: SQLAlchemy session for database operations.
 
@@ -216,62 +215,29 @@ async def list_threads(
     if normalized_search:
         query = query.where(Thread.title.ilike(f"%{normalized_search}%"))
 
+    query = query.order_by(Thread.queue_position, Thread.id)
+
     # Apply cursor-based pagination if page_token provided
+    # Uses composite cursor of (queue_position, id) to handle non-unique positions
     if page_token:
         try:
-            cursor = decode_queue_cursor(
-                page_token,
-                sort=sort,
-                search=normalized_search,
+            parts = page_token.split(",")
+            if len(parts) != 2:
+                raise ValueError("Invalid format")
+            cursor_position = int(parts[0])
+            cursor_id = int(parts[1])
+            # Filter: (queue_position > cursor_position) OR (queue_position == cursor_position AND id > cursor_id)
+            query = query.where(
+                or_(
+                    Thread.queue_position > cursor_position,
+                    (Thread.queue_position == cursor_position) & (Thread.id > cursor_id),
+                )
             )
-            # Filter using cursor values based on sort type
-            if cursor.sort == "position":
-                cursor_position = int(cursor.values[0]) if cursor.values else None
-                cursor_id = int(cursor.values[1]) if len(cursor.values) > 1 else None
-                query = query.where(
-                    or_(
-                        Thread.queue_position > cursor_position,
-                        (Thread.queue_position == cursor_position) & (Thread.id > cursor_id),
-                    )
-                )
-            elif cursor.sort == "title":
-                # Title-based cursor: filter by title > pivot_title, id tie-breaker
-                cursor_title = cursor.values[0] if cursor.values else ""
-                cursor_id = int(cursor.values[1]) if len(cursor.values) > 1 else 0
-                query = query.where(
-                    or_(
-                        Thread.title > cursor_title,
-                        (Thread.title == cursor_title) & (Thread.id > cursor_id),
-                    )
-                )
-            elif cursor.sort == "created":
-                # Created-based cursor: filter by created_at > pivot_time, id tie-breaker
-                cursor_created_str = cursor.values[0] if cursor.values else ""
-                cursor_id = int(cursor.values[1]) if len(cursor.values) > 1 else 0
-                try:
-                    from datetime import datetime as dt
-                    cursor_created = dt.fromisoformat(cursor_created_str)
-                except ValueError:
-                    cursor_created = dt.min.replace(tzinfo=UTC)
-                query = query.where(
-                    or_(
-                        Thread.created_at > cursor_created,
-                        (Thread.created_at == cursor_created) & (Thread.id > cursor_id),
-                    )
-                )
-        except ValueError as e:
+        except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(e),
+                detail="Invalid page_token format",
             ) from None
-
-    # Determine ordering based on sort parameter
-    if sort == "position":
-        query = query.order_by(Thread.queue_position, Thread.id)
-    elif sort == "title":
-        query = query.order_by(Thread.title, Thread.id)
-    elif sort == "created":
-        query = query.order_by(Thread.created_at, Thread.id)
 
     # Query for page_size + 1 to detect if there's a next page
     query = query.limit(page_size + 1)
@@ -289,19 +255,11 @@ async def list_threads(
     # Convert full ThreadResponse to narrow QueueThreadListItem for list views
     queue_items = [_to_queue_list_item(tr) for tr in thread_responses]
 
-    # Set next_page_token using sort-specific cursor values
+    # Set next_page_token to composite cursor of last item if there are more pages
     next_token = None
     if has_more and threads_to_return:
         last = threads_to_return[-1]
-        if sort == "position":
-            cursor_values = (str(last.queue_position), str(last.id))
-        elif sort == "title":
-            cursor_values = (str(last.title), str(last.id))
-        elif sort == "created":
-            cursor_values = (last.created_at.isoformat(), str(last.id))
-        next_token = encode_queue_cursor(
-            QueueCursor(sort=sort, search=normalized_search or "", values=cursor_values)
-        )
+        next_token = f"{last.queue_position},{last.id}"
 
     return QueueThreadListResponse(
         threads=queue_items,
@@ -955,3 +913,114 @@ async def migrate_thread_to_issues_simple(
     await invalidate_user_view(current_user.id)
 
     return response
+
+
+@router.post("/{thread_id}:setCurrentIssue", response_model=SetCurrentIssueResponse)
+async def set_current_issue(
+    thread_id: int,
+    request: SetCurrentIssueRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> SetCurrentIssueResponse:
+    """Atomically correct the current issue for an active thread.
+
+    Marks every issue before the target as read, ensures the target is
+    unread, updates ``thread.next_unread_issue_id``, and pins
+    ``session.pending_issue_id`` so the active roll reflects the corrected
+    position immediately.
+
+    Args:
+        thread_id: The thread whose current issue should be corrected.
+        request: Target issue number.
+        current_user: Authenticated user.
+        db: Async database session.
+
+    Returns:
+        SetCurrentIssueResponse with the corrected thread and issue info.
+
+    Raises:
+        HTTPException: 404 if thread not found, 400 for validation errors.
+    """
+    thread = await get_owned_thread_or_404(db, current_user.id, thread_id)
+
+    if thread.status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Thread {thread_id} is not active",
+        )
+
+    if not thread.uses_issue_tracking():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Thread {thread_id} does not use issue tracking",
+        )
+
+    target_number = request.issue_number.strip()
+
+    result = await db.execute(
+        select(Issue)
+        .where(Issue.thread_id == thread_id)
+        .where(Issue.issue_number == target_number)
+    )
+    target_issue = result.scalar_one_or_none()
+
+    if not target_issue:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue '{target_number}' not found in thread {thread_id}",
+        )
+
+    result = await db.execute(
+        select(Issue)
+        .where(Issue.thread_id == thread_id)
+        .order_by(Issue.position)
+    )
+    all_issues = list(result.scalars().all())
+
+    now = datetime.now(UTC)
+    for issue in all_issues:
+        if issue.position < target_issue.position:
+            if issue.status != "read":
+                issue.status = "read"
+                issue.read_at = now
+        elif issue.position == target_issue.position:
+            if issue.status != "unread":
+                issue.status = "unread"
+                issue.read_at = None
+
+    thread.total_issues = len(all_issues)
+    thread.next_unread_issue_id = target_issue.id
+    thread.reading_progress = "in_progress"
+    thread.issues_remaining = await thread.get_issues_remaining(db)
+
+    target_issue_id = target_issue.id
+    target_issue_number = target_issue.issue_number
+
+    issues_remaining = thread.issues_remaining
+    total_issues = thread.total_issues
+    reading_progress = thread.reading_progress
+    queue_position = thread.queue_position
+    thread_title = thread.title
+    thread_format = thread.format
+
+    current_session = await get_or_create(db, user_id=current_user.id)
+    current_session.pending_thread_id = thread_id
+    current_session.pending_issue_id = target_issue_id
+    current_session.pending_thread_updated_at = now
+
+    await db.commit()
+    await invalidate_user_view(current_user.id)
+
+    return SetCurrentIssueResponse(
+        thread_id=thread_id,
+        title=thread_title,
+        format=thread_format,
+        issues_remaining=issues_remaining,
+        queue_position=queue_position,
+        issue_id=target_issue_id,
+        issue_number=target_issue_number,
+        next_issue_id=target_issue_id,
+        next_issue_number=target_issue_number,
+        total_issues=total_issues,
+        reading_progress=reading_progress,
+    )

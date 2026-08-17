@@ -34,6 +34,30 @@ class RollResponse(BaseModel):
     reading_progress: str | None = None
 
 
+class SetCurrentIssueRequest(BaseModel):
+    """Schema for atomically correcting the current issue in an active thread."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    issue_number: str = Field(..., min_length=1, description="Target issue number to set as current")
+
+
+class SetCurrentIssueResponse(BaseModel):
+    """Response after atomically correcting the current issue."""
+
+    thread_id: int
+    title: str
+    format: str
+    issues_remaining: int
+    queue_position: int
+    issue_id: int | None = None
+    issue_number: str | None = None
+    next_issue_id: int | None = None
+    next_issue_number: str | None = None
+    total_issues: int | None = None
+    reading_progress: str | None = None
+
+
 class OverrideRequest(BaseModel):
     """Schema for manual thread override."""
 

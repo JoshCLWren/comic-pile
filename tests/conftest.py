@@ -35,7 +35,8 @@ load_dotenv(".env.test")
 
 TRUNCATE_TEST_DATA_SQL = text(
     "TRUNCATE TABLE sessions, events, threads, issues, snapshots, dependencies, "
-    "revoked_tokens, failed_login_attempts, users RESTART IDENTITY CASCADE;"
+    "revoked_tokens, failed_login_attempts, user_preferences, users "
+    "RESTART IDENTITY CASCADE;"
 )
 _SHARED_TEST_ENGINE: AsyncEngine | None = None
 
@@ -57,6 +58,12 @@ def set_test_environment() -> Iterator[None]:
         os.environ.pop("TEST_ENVIRONMENT", None)
     else:
         os.environ["TEST_ENVIRONMENT"] = original_value
+
+
+@pytest.fixture(scope="session")
+def worker_id() -> str:
+    """Provide a worker ID for test coordination."""
+    return "master"
 
 
 @pytest.fixture(autouse=True)
@@ -106,6 +113,7 @@ def _has_schema_drift(conn: Connection) -> bool:
         "snapshots",
         "revoked_tokens",
         "failed_login_attempts",
+        "user_preferences",
     }
 
     for table_name in required_table_names:
@@ -423,6 +431,7 @@ async def async_db_committed(db_engine: AsyncEngine) -> AsyncIterator[SQLAlchemy
         await session.execute(text("DELETE FROM dependencies"))
         await session.execute(text("DELETE FROM revoked_tokens"))
         await session.execute(text("DELETE FROM failed_login_attempts"))
+        await session.execute(text("DELETE FROM user_preferences"))
         await session.execute(text("DELETE FROM users"))
         await session.execute(text("DROP INDEX IF EXISTS ix_issue_thread_id"))
         await session.execute(text("DROP INDEX IF EXISTS ix_issue_thread_is_read"))
@@ -439,6 +448,7 @@ async def async_db_committed(db_engine: AsyncEngine) -> AsyncIterator[SQLAlchemy
         await cleanup_session.execute(text("DELETE FROM dependencies"))
         await cleanup_session.execute(text("DELETE FROM revoked_tokens"))
         await cleanup_session.execute(text("DELETE FROM failed_login_attempts"))
+        await cleanup_session.execute(text("DELETE FROM user_preferences"))
         await cleanup_session.execute(text("DELETE FROM users"))
         await cleanup_session.commit()
 
