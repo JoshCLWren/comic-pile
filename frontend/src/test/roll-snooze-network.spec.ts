@@ -29,7 +29,10 @@ function observeRequests(page: Page): {
 function isFullThreadListGet(request: ObservedRequest): boolean {
   return (
     request.method === 'GET' &&
-    (request.pathname === '/api/threads/' || request.pathname === '/api/threads')
+    (request.pathname === '/api/threads/' ||
+      request.pathname === '/api/threads' ||
+      request.pathname === '/api/v1/threads/' ||
+      request.pathname === '/api/v1/threads')
   )
 }
 
@@ -38,7 +41,10 @@ function isRollReconciliationGet(request: ObservedRequest): boolean {
     request.method === 'GET' &&
     (request.pathname === '/api/roll/bootstrap' ||
       request.pathname === '/api/roll/bootstrap/' ||
-      request.pathname === '/api/sessions/current/')
+      request.pathname === '/api/v1/roll/bootstrap' ||
+      request.pathname === '/api/v1/roll/bootstrap/' ||
+      request.pathname === '/api/sessions/current/' ||
+      request.pathname === '/api/v1/sessions/current/')
   )
 }
 
@@ -70,7 +76,7 @@ test.describe('Roll snooze request sequence', () => {
       page.waitForResponse(
         (response) =>
           response.request().method() === 'POST' &&
-          new URL(response.url()).pathname === '/api/snooze/' &&
+          new URL(response.url()).pathname === '/api/v1/snooze/' &&
           response.ok(),
       ),
       page.locator(SELECTORS.rate.snoozeButton).click(),

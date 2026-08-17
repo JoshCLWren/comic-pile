@@ -6,6 +6,7 @@ import { queryClient } from '../query/queryClient'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 
 const snoozeApi = vi.hoisted(() => ({ snooze: vi.fn(), unsnooze: vi.fn() }))
+const threadsApi = vi.hoisted(() => ({ list: vi.fn() }))
 const protectedRollMutationApi = vi.hoisted(() => ({
   rate: vi.fn(),
   snooze: vi.fn(),
@@ -14,7 +15,7 @@ const protectedRollMutationApi = vi.hoisted(() => ({
 const rollBootstrapApi = vi.hoisted(() => ({ get: vi.fn() }))
 const invalidateCurrentSessionAfterSnooze = vi.hoisted(() => vi.fn())
 
-vi.mock('../services/api', () => ({ snoozeApi }))
+vi.mock('../services/api', () => ({ snoozeApi, threadsApi }))
 vi.mock('../services/protectedRollMutationApi', () => ({ protectedRollMutationApi }))
 vi.mock('../services/rollBootstrapApi', () => ({ rollBootstrapApi }))
 vi.mock('../query/cacheEffects', () => ({ invalidateCurrentSessionAfterSnooze }))
@@ -69,6 +70,33 @@ describe('snooze hooks', () => {
       expect(snoozeApi.unsnooze).toHaveBeenCalledWith(7)
       expect(invalidateCurrentSessionAfterSnooze).toHaveBeenCalledTimes(2)
       expect(invalidateCurrentSessionAfterSnooze).toHaveBeenLastCalledWith(queryClient)
+    } finally {
+      window.removeEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
+    }
+  })
+
+  it('reconciles snooze and unsnooze through a single Roll bootstrap GET without a full thread-list reload', async () => {
+    const reconciled = vi.fn()
+    window.addEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
+
+    try {
+      const snooze = renderHook(() => useSnooze())
+      await act(async () => await snooze.result.current.mutate(7))
+
+      // Snooze reconciles authoritative Roll state via exactly one bootstrap GET.
+      expect(protectedRollMutationApi.snooze).toHaveBeenCalledTimes(1)
+      expect(rollBootstrapApi.get).toHaveBeenCalledTimes(1)
+      expect(reconciled).toHaveBeenCalledTimes(1)
+      // Snooze must never trigger a full thread-list reload.
+      expect(threadsApi.list).not.toHaveBeenCalled()
+
+      const unsnooze = renderHook(() => useUnsnooze())
+      await act(async () => await unsnooze.result.current.mutate(7))
+
+      // Unsnooze also avoids a full thread-list reload; the page layer refetches
+      // the bootstrap (guarded by the Roll page) rather than the thread list.
+      expect(snoozeApi.unsnooze).toHaveBeenCalledWith(7)
+      expect(threadsApi.list).not.toHaveBeenCalled()
     } finally {
       window.removeEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
     }
