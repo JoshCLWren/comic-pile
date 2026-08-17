@@ -83,6 +83,20 @@ stage_trusted_kilo_helper() {
   chmod +x "$TRUSTED_KILO_HELPER"
 }
 
+# Semantic state transitions are more privileged than the reviewed branch.
+# Copy the controller and its pure policy module from trusted main before any
+# checkout_target switch so a stale or contaminated PR cannot replace the
+# authority code that interprets its model verdict.
+stage_trusted_review_controller() {
+  local trusted_dir
+  trusted_dir="$(mktemp -d /tmp/comic-pile-review-controller.XXXXXX)"
+  cp .github/scripts/factory-review-controller.py "$trusted_dir/factory-review-controller.py"
+  cp .github/scripts/factory_review_policy.py "$trusted_dir/factory_review_policy.py"
+  chmod +x "$trusted_dir/factory-review-controller.py"
+  TRUSTED_REVIEW_CONTROLLER="$trusted_dir/factory-review-controller.py"
+  export TRUSTED_REVIEW_CONTROLLER
+}
+
 # Keep the established OpenCode/NVIDIA implementation untouched. Kilo needs a
 # small override only so it invokes the trusted helper staged from main.
 eval "$(declare -f run_agent | sed '1s/^run_agent /legacy_run_agent /')"
@@ -189,6 +203,7 @@ select_controller_assignment() {
 ensure_owner_label
 stage_trusted_guard
 stage_trusted_kilo_helper
+stage_trusted_review_controller
 trap 'release_owned_targets session-end-handoff || true' EXIT
 
 MODE=''
@@ -309,10 +324,11 @@ if [[ -z "$verdict" ]]; then
   exit 0
 fi
 
-log "submitting ${verdict} semantic verdict for PR #${NUMBER} to the trusted review controller"
-python3 .github/scripts/factory-review-controller.py review \
+log "submitting ${verdict} semantic verdict for PR #${NUMBER} at reviewed head ${EXPECTED_HEAD} to the trusted review controller"
+python3 "$TRUSTED_REVIEW_CONTROLLER" review \
   --worker "$WORKER" \
   --pr "$NUMBER" \
+  --reviewed-head "$EXPECTED_HEAD" \
   --verdict "$verdict" \
   --review-log "$review_log"
 
