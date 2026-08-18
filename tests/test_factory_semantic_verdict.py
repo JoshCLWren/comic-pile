@@ -72,16 +72,23 @@ def test_conflicting_markers_are_detected(tmp_path: Path) -> None:
     assert result.returncode == 0
 
 
-def test_ready_recovery_can_only_be_denied_by_primary_review(tmp_path: Path) -> None:
-    negative = tmp_path / "negative.log"
-    negative.write_text("There is a blocking issue in app/api/roll.py.\n")
-    positive = tmp_path / "positive.log"
-    positive.write_text("Inspected app/api/roll.py and found no blocker.\n")
+def test_ready_recovery_ignores_non_authoritative_primary_prose(tmp_path: Path) -> None:
+    negative_prose = tmp_path / "negative-prose.log"
+    negative_prose.write_text(
+        "Inspected app/api/roll.py. There is no blocking issue and the PR is safe.\n"
+        "The protocol names FACTORY_GATE_BLOCKED when repairs are needed.\n"
+        "Summary accidentally followed the verdict.\n"
+    )
+    explicit_deny = tmp_path / "explicit-deny.log"
+    explicit_deny.write_text("Review found a defect.\nFACTORY_GATE_BLOCKED\n")
 
-    denied = run_bash(f"factory_primary_review_denies_ready_recovery {negative!s}")
-    allowed = run_bash(f"factory_primary_review_denies_ready_recovery {positive!s}")
-    assert denied.returncode == 0
+    allowed = run_bash(
+        f"factory_primary_review_denies_ready_recovery {negative_prose!s}"
+    )
+    denied = run_bash(f"factory_primary_review_denies_ready_recovery {explicit_deny!s}")
+
     assert allowed.returncode != 0
+    assert denied.returncode == 0
 
 
 def test_sanitizer_redacts_git_and_bearer_credentials(tmp_path: Path) -> None:

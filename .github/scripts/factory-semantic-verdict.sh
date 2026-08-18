@@ -78,10 +78,19 @@ factory_review_is_substantive() {
 }
 
 factory_primary_review_denies_ready_recovery() {
-  local log_file="$1"
+  local log_file="$1" marker
   [[ -f "$log_file" ]] || return 0
-  # This check may only deny approval. It can never manufacture approval.
-  grep -Eiq 'FACTORY_GATE_(BLOCKED|NOT_READY|REJECT)|\bnot[[:space:]-]+ready\b|\bcannot[[:space:]]+approve\b|\bblocking[[:space:]]+(issue|defect|problem)\b|\brequest(ed)?[[:space:]]+changes\b' "$log_file"
+
+  # Recovery is a continuation of the same model session and its exact final
+  # marker is authoritative. Never infer a contradiction from ordinary review
+  # prose such as "no blocking issue" or from marker names mentioned while
+  # explaining the protocol. Only an authoritative terminal deny marker can
+  # veto a recovered approval.
+  marker="$(factory_terminal_marker "$log_file" || true)"
+  case "$marker" in
+    FACTORY_GATE_BLOCKED|FACTORY_GATE_NOT_READY|FACTORY_GATE_REJECT) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 factory_sanitize_review_log() {

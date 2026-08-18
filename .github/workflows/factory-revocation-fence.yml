@@ -2,7 +2,11 @@ name: Factory Revocation Fence
 
 on:
   pull_request_target:
-    types: [opened, reopened, synchronize, ready_for_review]
+    # This fence validates entry into the factory PR queue. Once a PR is open,
+    # ownership deliberately hands off between producer, reviewer, and repair
+    # workers. Re-validating the original branch producer on later pushes would
+    # close healthy canonical PRs during that shared lifecycle.
+    types: [opened, reopened, ready_for_review]
 
 permissions:
   contents: read
