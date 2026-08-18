@@ -150,7 +150,7 @@ describe('setTheme', () => {
       fireEvent.click(screen.getByTestId('set-theme-ink-gold'))
     })
     await waitFor(() => {
-      expect(mockApiPatch).toHaveBeenCalledWith('/users/me/preferences', { theme: 'ink-gold' })
+      expect(mockApiPatch).toHaveBeenCalledWith('/v1/users/me/preferences', { theme: 'ink-gold' })
     })
     await waitFor(() => {
       expect(screen.getByTestId('theme').textContent).toBe('ink-gold')
@@ -173,7 +173,7 @@ describe('setTheme', () => {
       fireEvent.click(screen.getByTestId('set-theme-command-center'))
     })
     await waitFor(() => {
-      expect(mockApiPatch).toHaveBeenCalledWith('/users/me/preferences', { theme: 'command-center' })
+      expect(mockApiPatch).toHaveBeenCalledWith('/v1/users/me/preferences', { theme: 'command-center' })
     })
     await waitFor(() => {
       expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('command-center')
@@ -209,7 +209,7 @@ describe('setTheme', () => {
       fireEvent.click(screen.getByTestId('set-theme-ink-gold'))
     })
     await waitFor(() => {
-      expect(mockApiPatch).toHaveBeenCalledWith('/users/me/preferences', { theme: 'ink-gold' })
+      expect(mockApiPatch).toHaveBeenCalledWith('/v1/users/me/preferences', { theme: 'ink-gold' })
     })
     await waitFor(() => {
       expect(document.documentElement.getAttribute('data-theme')).toBe('ink-gold')

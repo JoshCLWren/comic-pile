@@ -433,6 +433,6 @@ export const bugReportsApi = {
 }
 
 export const preferencesApi = {
-  get: () => api.get<UserPreferences>('/users/me/preferences'),
-  patch: (data: UserPreferencesPatchRequest) => api.patch<UserPreferences, UserPreferencesPatchRequest>('/users/me/preferences', data),
+  get: () => api.get<UserPreferences>('/v1/users/me/preferences'),
+  patch: (data: UserPreferencesPatchRequest) => api.patch<UserPreferences, UserPreferencesPatchRequest>('/v1/users/me/preferences', data),
 }
