@@ -29,9 +29,9 @@ function relatedLabel(issue: ComicVineRelatedIssue): string {
 }
 
 export function ComicVineIssueCard({ issueId, metadata: providedMetadata, isLoading: providedIsLoading }: ComicVineIssueCardProps) {
-  const { metadata, isLoading } = providedMetadata !== undefined || providedIsLoading !== undefined
-    ? { metadata: providedMetadata ?? null, isLoading: providedIsLoading ?? false }
-    : useComicVineIssueIntelligence(issueId)
+  const { metadata: fetchedMetadata, isLoading: fetchedIsLoading } = useComicVineIssueIntelligence(issueId)
+  const metadata = providedMetadata !== undefined ? providedMetadata : fetchedMetadata
+  const isLoading = providedIsLoading !== undefined ? providedIsLoading : fetchedIsLoading
   const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null)
 
   if (!issueId || (!isLoading && !metadata)) return null
