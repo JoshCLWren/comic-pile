@@ -62,14 +62,14 @@ export default function ResumeRecovery({
           }
           setRecoveryState('idle')
           return
-        } catch (error) {
+        } catch (_error) {
           if (attempt < MAX_RESUME_ATTEMPTS) {
             await delay(RESUME_RETRY_DELAY_MS)
           }
         }
       }
 
-      if (sequence === requestSequence.current && mode === 'explicit') {
+      if (sequence === requestSequence.current) {
         setRecoveryState('failed')
       }
     } finally {

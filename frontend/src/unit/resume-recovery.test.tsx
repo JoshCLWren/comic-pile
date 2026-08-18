@@ -60,7 +60,7 @@ describe('ResumeRecovery', () => {
     expect(recoverSession).not.toHaveBeenCalled()
   })
 
-  it('keeps the application visible and stays silent when automatic retries fail', async () => {
+  it('keeps the application visible during automatic retries, then shows failure alert when retries are exhausted', async () => {
     vi.useFakeTimers()
     revalidateSession.mockRejectedValue(new Error('network suspended'))
 
@@ -74,7 +74,9 @@ describe('ResumeRecovery', () => {
     expect(revalidateSession).toHaveBeenCalledTimes(2)
     expect(screen.getByText('Last usable screen')).toBeInTheDocument()
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('ComicPile could not reconnect')
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reload' })).toBeInTheDocument()
   })
 
   it('runs an explicit auth recovery immediately even inside the automatic throttle window', async () => {
@@ -90,7 +92,7 @@ describe('ResumeRecovery', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(750)
     })
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('ComicPile could not reconnect')
 
     now.mockReturnValue(10_500)
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
@@ -123,7 +125,7 @@ describe('ResumeRecovery', () => {
       await vi.advanceTimersByTimeAsync(750)
     })
 
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('ComicPile could not reconnect')
     expect(revalidateSession).toHaveBeenCalledTimes(2)
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
