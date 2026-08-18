@@ -22,6 +22,7 @@ from app.schemas import (
     IssueOrderValidationResponse,
     IssueReorderRequest,
     IssueResponse,
+    IssueSetCurrentRequest,
 )
 from app.schemas.comicvine import ComicVineIssueIntelligence
 from app.schemas.reader_context import ReaderContextResponse
@@ -709,6 +710,126 @@ async def reorder_issues(
     await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
     await _invalidate_issue_caches(current_user.id)
+
+
+@router.post("/threads/{thread_id}/issues:setCurrentIssue", response_model=IssueListResponse)
+async def set_current_issue(
+    thread_id: int,
+    request: IssueSetCurrentRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> IssueListResponse:
+    """Set the current issue for a thread by marking all previous issues as read
+    and the target issue as unread.
+    
+    Args:
+        thread_id: The thread ID to update
+        request: The issue number to set as current
+        current_user: The authenticated user making the request
+        db: SQLAlchemy session for database operations
+        
+    Returns:
+        IssueListResponse with updated thread issue information
+        
+    Raises:
+        HTTPException: If thread not found, issue not found, or invalid issue number
+    """
+    issue_number = request.issue_number
+    
+    # Get the thread and validate ownership
+    thread = await get_owned_thread_or_404(db, current_user.id, thread_id, for_update=True)
+    
+    # Check if thread is using issue tracking
+    if not thread.uses_issue_tracking():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Thread is not using issue tracking. Please migrate to issue tracking first."
+        )
+    
+    # Get all issues for the thread with lock
+    issues_result = await db.execute(
+        select(Issue)
+        .where(Issue.thread_id == thread_id)
+        .order_by(Issue.position, Issue.id)
+        .with_for_update()
+    )
+    issues = list(issues_result.scalars().all())
+    
+    if not issues:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No issues found for thread {thread_id}"
+        )
+    
+    # Find the target issue by issue_number
+    target_issue = None
+    for issue in issues:
+        if issue.issue_number == issue_number:
+            target_issue = issue
+            break
+    
+    if not target_issue:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue #{issue_number} not found in thread {thread_id}"
+        )
+    
+    # Mark all issues before the target as read
+    # Mark the target and all after as unread (to ensure clean state)
+    for issue in issues:
+        if issue.position < target_issue.position:
+            # Mark as read if not already
+            if issue.status != "read":
+                issue.status = "read"
+                issue.read_at = datetime.now(UTC)
+        else:
+            # Mark as unread if not already (including target)
+            if issue.status != "unread":
+                issue.status = "unread"
+                issue.read_at = None
+    
+    # Recalculate thread issue tracking state
+    _recalculate_thread_issue_tracking_state(thread, issues)
+    
+    # Add event for the change
+    event = Event(
+        type="issue_current_set",
+        timestamp=datetime.now(UTC),
+        thread_id=thread.id,
+        issue_number=issue_number,
+    )
+    db.add(event)
+    
+    # Commit the transaction
+    await refresh_user_blocked_status(current_user.id, db)
+    try:
+        await db.commit()
+        await _invalidate_issue_caches(current_user.id)
+    except Exception as e:
+        await db.rollback()
+        logger.error(
+            "Database error during set current issue",
+            extra={
+                "thread_id": thread_id,
+                "issue_number": issue_number,
+                "error": str(e),
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal error: Failed to set current issue"
+        ) from e
+    
+    # Return updated issue list
+    issue_responses = [issue_to_response(issue) for issue in issues]
+    total_count = len(issues)
+    
+    return IssueListResponse(
+        issues=issue_responses,
+        total_count=total_count,
+        page_size=total_count,
+        next_page_token=None,
+    )
 
 
 @router.delete("/issues/{issue_id}", status_code=status.HTTP_204_NO_CONTENT)

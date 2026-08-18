@@ -21,6 +21,7 @@ import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../../hooks/useQ
 import { useRate } from '../../hooks'
 import { threadsApi, dependenciesApi } from '../../services/api'
 import { readingOrdersApi } from '../../services/api-reading-orders'
+import { issuesApi } from '../../services/api-issues'
 import { getApiErrorStatus, getApiErrorDetail } from '../../utils/apiError'
 import { isDiceSide } from '../../components/diceTypes'
 import type { Thread, ConnectedThreadInfo } from '../../types'
@@ -67,8 +68,15 @@ export default function RollPage() {
     rollTimeoutRef,
   } = state
 
-  const [readingOrders, setReadingOrders] = useState<import('../../services/api-reading-orders').ReadingOrder[]>([])
-  const [connectedThreads, setConnectedThreads] = useState<ConnectedThreadInfo[]>([])
+const [readingOrders, setReadingOrders] = useState<import('../../services/api-reading-orders').ReadingOrder[]>([])
+    const [connectedThreads, setConnectedThreads] = useState<ConnectedThreadInfo[]>([])
+    
+    // State for set current issue modal
+    const [isSetCurrentIssueModalOpen, setIsSetCurrentIssueModalOpen] = useState(false)
+    const [setCurrentIssueThreadId, setSetCurrentIssueThreadId] = useState<number | null>(null)
+    const [setCurrentIssueValue, setSetCurrentIssueValue] = useState('')
+    const [setCurrentIssueError, setSetCurrentIssueError] = useState<string | null>(null)
+    const [setCurrentIssueIsPending, setSetCurrentIssueIsPending] = useState(false)
 
   const { data: bootstrap, refetch: refetchBootstrap, isPending: isBootstrapLoading, isError: isBootstrapError, error: bootstrapError } = useRollBootstrap()
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
@@ -298,9 +306,17 @@ export default function RollPage() {
           }
           await refetchBootstrap()
           break
-        case 'edit':
-          navigate('/queue', { state: { editThreadId: selectedThread!.id } })
-          break
+case 'edit':
+      // Open set current issue modal instead of navigating to queue
+      if (selectedThread) {
+        setSetCurrentIssueThreadId(selectedThread.id);
+        // Set initial value to the current next issue number if available
+        const nextIssueNumber = selectedThread.next_issue_number ?? '';
+        setSetCurrentIssueValue(nextIssueNumber);
+        setSetCurrentIssueError(null);
+        setIsSetCurrentIssueModalOpen(true);
+      }
+      break
       }
     } catch (error) {
       console.error('Action failed:', error)
@@ -932,6 +948,64 @@ export default function RollPage() {
             <button type="button" onClick={() => handleAction('edit')} className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3">
               <span className="text-lg">✏️</span><span>Edit Thread</span>
             </button>
+          </div>
+        </Modal>
+
+        {/* Set Current Issue Modal */}
+        <Modal isOpen={isSetCurrentIssueModalOpen} title="Set Current Issue" onClose={() => setIsSetCurrentIssueModalOpen(false)}>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="set-current-issue-input" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+                Issue Number
+              </label>
+              <input
+                id="set-current-issue-input"
+                type="text"
+                value={setCurrentIssueValue}
+                onChange={(e) => setSetCurrentIssueValue(e.target.value)}
+                className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+                placeholder="Enter issue number (e.g., 20)"
+                required
+              />
+              {setCurrentIssueError && (
+                <p className="text-xs text-red-400">{setCurrentIssueError}</p>
+              )}
+            </div>
+            
+            <div className="space-y-2 pt-4 border-t border-white/10">
+              <p className="text-xs text-stone-500">
+                This will mark all issues before the selected issue as read, and the selected issue as unread.
+              </p>
+            </div>
+            
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!setCurrentIssueThreadId || !setCurrentIssueValue.trim()) {
+                    setSetCurrentIssueError('Please enter an issue number');
+                    return;
+                  }
+                  
+                  setSetCurrentIssueIsPending(true);
+                  setSetCurrentIssueError(null);
+                  try {
+                    await issuesApi.setCurrentIssue(setCurrentIssueThreadId, setCurrentIssueValue.trim());
+                    // Close modal and refetch bootstrap to update the UI
+                    setIsSetCurrentIssueModalOpen(false);
+                    await refetchBootstrap();
+                  } catch (error) {
+                    setSetCurrentIssueError(getApiErrorDetail(error));
+                  } finally {
+                    setSetCurrentIssueIsPending(false);
+                  }
+                }}
+                disabled={setCurrentIssueIsPending}
+                className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-60"
+              >
+                {setCurrentIssueIsPending ? 'Setting...' : 'Set Current Issue'}
+              </button>
+            </div>
           </div>
         </Modal>
       </div>
