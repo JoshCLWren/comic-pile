@@ -48,7 +48,7 @@ export function ComicPillar({
         <span className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-comic-accent)' }}>The Comic</span>
       </div>
       <section id="thread-info" aria-labelledby="selected-issue-heading" className="space-y-3">
-        <div className="rounded-2xl p-3 md:p-4" style={{ border: '1px solid var(--theme-comic-accent)', borderOpacity: 0.2, backgroundColor: 'var(--theme-bg-panel)' }}>
+        <div className="rounded-2xl p-3 md:p-4" style={{ border: '1px solid rgba(212,137,14,0.2)', backgroundColor: 'var(--theme-bg-panel)' }}>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">

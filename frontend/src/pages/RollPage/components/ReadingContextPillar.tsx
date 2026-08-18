@@ -35,7 +35,7 @@ export function ReadingContextPillar({
       <ContinuityReadinessSummary issueId={issueId} />
 
       {connectedThreads.length > 0 ? (
-        <section aria-labelledby="connected-heading" className="rounded-2xl p-3" style={{ border: '1px solid var(--theme-continuity-accent)', borderOpacity: 0.3, backgroundColor: 'rgba(6, 182, 212, 0.09)' }}>
+        <section aria-labelledby="connected-heading" className="rounded-2xl p-3" style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'rgba(6, 182, 212, 0.09)' }}>
           <div className="flex items-center justify-between gap-2">
             <h3 id="connected-heading" className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-continuity-accent)' }}>
               Verified dependency connections
@@ -55,8 +55,7 @@ export function ReadingContextPillar({
                 key={`${connectedThread.thread_id}-${connectedThread.dependency_id}`}
                 className="rounded-full px-2.5 py-1 text-[10px] font-bold"
                 style={{
-                  border: '1px solid var(--theme-continuity-accent)',
-                  borderOpacity: 0.4,
+                  border: '1px solid rgba(6,182,212,0.4)',
                   backgroundColor: 'rgba(6, 182, 212, 0.12)',
                   color: 'rgb(165, 243, 252)',
                 }}
@@ -103,8 +102,7 @@ export function ReadingContextPillar({
                       onClick={() => setIsRouteExplanationOpen(true)}
                       className="min-h-11 rounded-lg px-3 text-[10px] font-black transition focus:ring-2"
                       style={{
-                        border: '1px solid var(--theme-primary-action)',
-                        borderOpacity: 0.4,
+                        border: '1px solid rgba(212,137,14,0.4)',
                         backgroundColor: 'rgba(212, 137, 14, 0.09)',
                         color: 'rgb(250, 204, 139)',
                       }}
