@@ -68,6 +68,10 @@ unclean_git_state_json() {
 
 # Reuse the proven persistence/guard/provider/lease primitives as a tracked
 # repository file, stopping before its legacy main loop.
+# NOTE: This cut is intentional. The live wrapper imports declarations only and
+# drops the primitives top-level loop starting at the exact ensure_owner_label
+# sentinel. Shared definitions required here must stay above that sentinel;
+# changes below it are not inherited by this worker.
 source <(sed '/^ensure_owner_label$/,$d' .github/scripts/free-model-factory-worker-primitives.sh)
 source .github/scripts/factory-semantic-verdict.sh
 
@@ -275,6 +279,13 @@ done
 
 if [[ "$MODE" == 'issue' ]]; then
   if pr="$(persist_issue_pr "$NUMBER" "$BRANCH")"; then
+    if ! record_pr_provenance "$pr" "$NUMBER"; then
+      log "PR #${pr} could not prove the issue assignment survived through persistence; closing it fail-closed"
+      gh pr close "$pr" --comment 'Closed because durable factory provenance could not be established before handoff.' >/dev/null 2>&1 || true
+      log "assignment complete; remaining budget $(remaining)s"
+      exit 0
+    fi
+    replace_labels "$pr" "$OWNER" 'factory:review'
     log "opened/updated PR #${pr} for issue #${NUMBER}"
     release_target "$NUMBER" 'factory:review' 'pr-opened-handoff' 'issue'
     release_target "$pr" 'factory:review' 'pr-opened-handoff' 'pr'
