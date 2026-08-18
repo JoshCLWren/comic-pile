@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import re
 import sys
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -19,6 +19,8 @@ STAGE_PRECEDENCE = ('factory:blocked', 'factory:ready', 'factory:review', 'facto
 
 INFRA_LABELS = {'infrastructure', 'e2e-infrastructure', 'policy-change', 'docs', 'documentation', 'quality-control'}
 
+# factory:blocked is reserved for a genuine terminal blocker. Model no-diff
+# failures use a separate bounded retry counter supplied by the controller.
 BLOCKED_LABELS = {'factory:blocked', 'ralph-status:blocked', 'wontfix', 'invalid', 'duplicate'}
 
 
@@ -40,6 +42,7 @@ def env_positive_int(name: str, default: int) -> int:
 
 LOCAL_LEASE_TTL_SECONDS = env_positive_int('FACTORY_LOCAL_LEASE_TTL_SECONDS', 3600)
 FACTORY_PR_WIP_LIMIT = env_positive_int('FACTORY_PR_WIP_LIMIT', 5)
+FACTORY_NO_DIFF_RETRY_LIMIT = env_positive_int('FACTORY_NO_DIFF_RETRY_LIMIT', 3)
 
 
 @dataclass(frozen=True)
@@ -139,7 +142,7 @@ def item_is_unowned(labels: set[str]) -> bool:
 
 
 def issue_bypasses_wip_limit(issue: dict[str, Any]) -> bool:
-    """Keep genuinely urgent product defects executable while the PR queue drains."""
+    """Keep genuinely urgent product defects executable while PR work is saturated."""
     labels = labels_of(issue)
     return (
         ('user-reported' in labels and 'bug' in labels)
@@ -149,14 +152,24 @@ def issue_bypasses_wip_limit(issue: dict[str, Any]) -> bool:
 
 
 def factory_pr_wip_count(prs: Iterable[dict[str, Any]]) -> int:
-    """Count open non-draft factory PRs that still consume delivery capacity."""
+    """Count factory PRs that currently consume a worker lease.
+
+    Queue depth is not worker WIP. Unowned PRs waiting for a reviewer and PRs in
+    factory:ready waiting for the merge drain consume no fixed-model worker
+    capacity, so they must not shut off issue intake merely by existing.
+    """
     count = 0
     for pr in prs:
         if str(pr.get('state') or 'OPEN').upper() != 'OPEN' or pr.get('isDraft'):
             continue
         labels = labels_of(pr)
         head = str(pr.get('headRefName') or '')
-        if 'factory' in labels or head.startswith('factory/'):
+        if not head.startswith('factory/'):
+            continue
+        if 'factory:ready' in labels or labels & BLOCKED_LABELS:
+            continue
+        owner = owner_of(labels)
+        if owner not in (None, 'factory:unowned'):
             count += 1
     return count
 
@@ -168,7 +181,12 @@ def pr_is_conflicted(pr: dict[str, Any]) -> bool:
     return mergeable == 'CONFLICTING' or merge_state == 'DIRTY'
 
 
-def issue_is_static_candidate(issue: dict[str, Any], suppressing_pr_issues: set[int]) -> bool:
+def issue_is_static_candidate(
+    issue: dict[str, Any],
+    suppressing_pr_issues: set[int],
+    *,
+    no_diff_attempts: int = 0,
+) -> bool:
     """Return whether an issue is structurally eligible for assignment."""
     number = int(issue['number'])
     labels = labels_of(issue)
@@ -181,18 +199,22 @@ def issue_is_static_candidate(issue: dict[str, Any], suppressing_pr_issues: set[
         return False
     if labels & BLOCKED_LABELS:
         return False
+    if no_diff_attempts >= FACTORY_NO_DIFF_RETRY_LIMIT:
+        return False
     if 'ralph-status:done' in labels or 'factory:ready' in labels:
         return False
     return item_is_unowned(labels)
 
 
 def pr_is_static_candidate(pr: dict[str, Any], issue_map: dict[int, dict[str, Any]]) -> bool:
-    """Return whether an open factory PR is structurally eligible for work."""
+    """Return whether an open autonomous-factory PR is structurally eligible."""
     if str(pr.get('state') or 'OPEN').upper() != 'OPEN' or pr.get('isDraft'):
         return False
     labels = labels_of(pr)
     head = str(pr.get('headRefName') or '')
-    if 'factory' not in labels and (not head.startswith('factory/')):
+    # Human-authored agent/* and chatgpt/* PRs are not autonomous factory work,
+    # even if a stale/mistaken factory label was applied to them.
+    if not head.startswith('factory/'):
         return False
     if labels & BLOCKED_LABELS or 'factory:ready' in labels:
         return False
@@ -209,19 +231,25 @@ def pr_is_static_candidate(pr: dict[str, Any], issue_map: dict[int, dict[str, An
 def pr_suppresses_issue_candidate(pr: dict[str, Any], issue_map: dict[int, dict[str, Any]]) -> bool:
     """Return whether this open factory PR is canonical work for its issue.
 
-    Once a factory PR exists, the linked issue must not become fresh implementation
-    work again just because the PR is currently owned, blocked, under review, or
-    otherwise not assignable. The PR lifecycle is the only path forward until
-    that PR closes. This is the control-plane invariant that prevents duplicate
-    implementations for one issue.
+    Once a canonical factory PR exists, the linked issue must not become fresh
+    implementation work again just because the PR is currently owned, blocked,
+    under review, or otherwise not assignable. The PR lifecycle is the only
+    path forward until that PR closes.
     """
     del issue_map  # Kept in the signature for compatibility with existing callers.
-    return str(pr.get('state') or 'OPEN').upper() == 'OPEN'
+    head = str(pr.get('headRefName') or '')
+    return str(pr.get('state') or 'OPEN').upper() == 'OPEN' and head.startswith('factory/')
 
 
-def build_candidates(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -> list[Candidate]:
+def build_candidates(
+    issues: list[dict[str, Any]],
+    prs: list[dict[str, Any]],
+    *,
+    no_diff_attempts_by_issue: Mapping[int, int] | None = None,
+) -> list[Candidate]:
     """Build and rank executable issue and pull-request candidates."""
     issue_map = {int(issue['number']): issue for issue in issues}
+    retry_counts = no_diff_attempts_by_issue or {}
     suppressing_pr_issues = {
         linked
         for pr in prs
@@ -231,7 +259,12 @@ def build_candidates(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) ->
     pr_wip_full = factory_pr_wip_count(prs) >= FACTORY_PR_WIP_LIMIT
     candidates: list[Candidate] = []
     for issue in issues:
-        if not issue_is_static_candidate(issue, suppressing_pr_issues):
+        number = int(issue['number'])
+        if not issue_is_static_candidate(
+            issue,
+            suppressing_pr_issues,
+            no_diff_attempts=max(0, int(retry_counts.get(number, 0))),
+        ):
             continue
         if pr_wip_full and not issue_bypasses_wip_limit(issue):
             continue
@@ -239,7 +272,7 @@ def build_candidates(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) ->
         candidates.append(
             Candidate(
                 kind='issue',
-                number=int(issue['number']),
+                number=number,
                 lane=provenance_lane(labels),
                 priority=priority_rank(labels),
                 created_at=str(issue.get('createdAt') or ''),
@@ -274,7 +307,7 @@ def build_candidates(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) ->
 
 
 def review_capacity_worker(worker: str) -> bool:
-    """Compatibility helper retained for older tests and callers."""
+    """Return whether this deterministic worker slot prioritizes review intake."""
     return int(worker) % 4 == 2
 
 
@@ -288,12 +321,13 @@ def candidate_is_independent_for_worker(candidate: Candidate, worker: str) -> bo
 
 
 def order_candidates_for_worker(candidates: list[Candidate], worker: str) -> list[Candidate]:
-    """Drain merge conflicts and other existing PR work before new issues."""
+    """Balance completion pressure with a deterministic fresh-issue intake lane."""
     eligible = [
         candidate
         for candidate in candidates
         if candidate_is_independent_for_worker(candidate, worker)
     ]
+    review_first = review_capacity_worker(worker)
 
     def work_class(candidate: Candidate) -> int:
         if candidate.kind == 'pr':
@@ -304,11 +338,11 @@ def order_candidates_for_worker(candidates: list[Candidate], worker: str) -> lis
             if candidate.stage == 'factory:changes-requested':
                 return 2
             if candidate.stage == 'factory:review':
-                return 3
-            return 4
+                return 3 if review_first else 6
+            return 4 if review_first else 7
         if candidate.lane == 1:
-            return 5
-        return 6
+            return 5 if review_first else 3
+        return 6 if review_first else 4
 
     return sorted(
         eligible,
