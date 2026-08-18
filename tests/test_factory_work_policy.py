@@ -38,6 +38,39 @@ def candidate(
     )
 
 
+def issue_fixture(number: int) -> dict[str, object]:
+    """Build an unowned issue that would otherwise be executable."""
+    return {
+        "number": number,
+        "state": "OPEN",
+        "title": f"Issue {number}",
+        "labels": [{"name": "factory:unowned"}],
+        "createdAt": "2026-08-16T00:00:00Z",
+    }
+
+
+def pr_fixture(
+    *,
+    number: int,
+    issue: int,
+    labels: list[str],
+    state: str = "OPEN",
+    draft: bool = False,
+) -> dict[str, object]:
+    """Build a canonical fixed-model PR linked to one issue."""
+    return {
+        "number": number,
+        "state": state,
+        "isDraft": draft,
+        "labels": [{"name": label} for label in labels],
+        "headRefName": f"factory/18-{issue}-nvidia",
+        "body": "Worker: opencode-free-model-factory-18",
+        "createdAt": "2026-08-16T01:00:00Z",
+        "mergeable": "MERGEABLE",
+        "mergeStateStatus": "CLEAN",
+    }
+
+
 def test_producing_worker_cannot_receive_own_semantic_review():
     """Review assignment itself enforces producer/reviewer independence."""
     own_review = candidate(
@@ -114,6 +147,61 @@ def test_closed_pr_is_never_a_candidate():
         "createdAt": "2026-08-16T00:00:00Z",
     }
     assert not policy.pr_is_static_candidate(pr, {})
+
+
+def test_open_owned_pr_suppresses_fresh_issue_implementation():
+    """An in-flight review lease cannot make its issue reappear as new work."""
+    issue = issue_fixture(1487)
+    pr = pr_fixture(
+        number=1512,
+        issue=1487,
+        labels=["factory", "factory:18", "factory:review"],
+    )
+
+    candidates = policy.build_candidates([issue], [pr])
+
+    assert all(candidate.number != 1487 or candidate.kind != "issue" for candidate in candidates)
+    assert candidates == []
+
+
+def test_open_blocked_or_draft_pr_still_suppresses_duplicate_issue_work():
+    """Temporarily ineligible PR states fail closed instead of spawning replacements."""
+    issue = issue_fixture(1399)
+    blocked = pr_fixture(
+        number=1510,
+        issue=1399,
+        labels=["factory", "factory:unowned", "factory:blocked"],
+    )
+    draft = pr_fixture(
+        number=1510,
+        issue=1399,
+        labels=["factory", "factory:unowned", "factory:review"],
+        draft=True,
+    )
+
+    for pr in (blocked, draft):
+        candidates = policy.build_candidates([issue], [pr])
+        assert all(
+            candidate.number != 1399 or candidate.kind != "issue"
+            for candidate in candidates
+        )
+
+
+def test_closed_pr_releases_issue_back_to_implementation_queue():
+    """Closing the canonical PR makes its still-open issue eligible again."""
+    issue = issue_fixture(1487)
+    closed = pr_fixture(
+        number=1512,
+        issue=1487,
+        labels=["factory", "factory:unowned", "factory:review"],
+        state="CLOSED",
+    )
+
+    candidates = policy.build_candidates([issue], [closed])
+
+    assert [(candidate.kind, candidate.number) for candidate in candidates] == [
+        ("issue", 1487)
+    ]
 
 
 def test_plan_distinct_assignments_reserves_review_without_stopping_product():
