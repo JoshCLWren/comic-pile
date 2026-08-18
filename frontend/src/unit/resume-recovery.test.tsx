@@ -54,14 +54,34 @@ describe('ResumeRecovery', () => {
   })
 
   it('revalidates auth and cached application data after a BFCache restore', async () => {
+    vi.useFakeTimers()
     revalidateSession.mockResolvedValue(undefined)
     invalidateQueries.mockResolvedValue(undefined)
 
     renderRecovery()
     dispatchPageShow(true)
 
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100)
+      await Promise.resolve()
+    })
+
     expect(screen.getByText('Last usable screen')).toBeInTheDocument()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000)
+      await Promise.resolve()
+    })
+
     expect(screen.getByRole('status')).toHaveTextContent('Reconnecting ComicPile')
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100)
+      await Promise.resolve()
+    })
+
     await waitFor(() => expect(revalidateSession).toHaveBeenCalledWith(15000))
     await waitFor(() => expect(invalidateQueries).toHaveBeenCalledOnce())
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument())
@@ -76,7 +96,8 @@ describe('ResumeRecovery', () => {
     dispatchPageShow(true)
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1000)
+      await vi.advanceTimersByTimeAsync(2000)
+      await Promise.resolve()
     })
 
     expect(revalidateSession).toHaveBeenCalledTimes(2)
@@ -96,6 +117,7 @@ describe('ResumeRecovery', () => {
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(100)
+      await Promise.resolve()
     })
 
     expect(revalidateSession).toHaveBeenCalledTimes(1)
@@ -104,24 +126,28 @@ describe('ResumeRecovery', () => {
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000)
+      await Promise.resolve()
     })
 
     expect(revalidateSession).toHaveBeenCalledTimes(2)
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2000)
+      await Promise.resolve()
     })
 
     expect(revalidateSession).toHaveBeenCalledTimes(3)
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(4000)
+      await Promise.resolve()
     })
 
     expect(revalidateSession).toHaveBeenCalledTimes(4)
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(8000)
+      await Promise.resolve()
     })
 
     expect(screen.getByRole('status')).toHaveTextContent('Reconnecting ComicPile')
@@ -129,6 +155,7 @@ describe('ResumeRecovery', () => {
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(16000)
+      await Promise.resolve()
     })
 
     expect(revalidateSession).toHaveBeenCalledTimes(6)
@@ -145,18 +172,20 @@ describe('ResumeRecovery', () => {
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(7999)
+      await Promise.resolve()
     })
 
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1)
+      await Promise.resolve()
     })
 
     expect(screen.getByRole('status')).toHaveTextContent('Reconnecting ComicPile')
   })
 
-  it('shows reconnecting UI after 3 seconds for non-503 errors in automatic mode', async () => {
+  it('shows failed state for non-503 errors in automatic mode without showing reconnecting UI', async () => {
     vi.useFakeTimers()
     revalidateSession.mockRejectedValue(new Error('network error'))
 
@@ -164,16 +193,12 @@ describe('ResumeRecovery', () => {
     dispatchPageShow(true)
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(2999)
+      await vi.advanceTimersByTimeAsync(2000)
+      await Promise.resolve()
     })
 
+    expect(screen.getByRole('alert')).toHaveTextContent('ComicPile could not reconnect')
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1)
-    })
-
-    expect(screen.getByRole('status')).toHaveTextContent('Reconnecting ComicPile')
   })
 
   it('runs an explicit auth recovery immediately even inside the automatic throttle window', async () => {
@@ -187,18 +212,25 @@ describe('ResumeRecovery', () => {
     dispatchPageShow(true)
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(750)
+      await vi.advanceTimersByTimeAsync(2000)
+      await Promise.resolve()
     })
     expect(screen.getByRole('alert')).toHaveTextContent('ComicPile could not reconnect')
 
     now.mockReturnValue(10_500)
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
 
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100)
+      await Promise.resolve()
+    })
+
     expect(screen.getByRole('status')).toHaveTextContent('Reconnecting ComicPile')
     expect(recoverSession).toHaveBeenCalledWith(15000)
     expect(revalidateSession).toHaveBeenCalledTimes(2)
 
     await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000)
       await Promise.resolve()
     })
     expect(invalidateQueries).toHaveBeenCalledOnce()
@@ -219,7 +251,8 @@ describe('ResumeRecovery', () => {
     renderRecovery()
     dispatchPageShow(true)
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(750)
+      await vi.advanceTimersByTimeAsync(2000)
+      await Promise.resolve()
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
@@ -227,6 +260,7 @@ describe('ResumeRecovery', () => {
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1100)
+      await Promise.resolve()
     })
     fireEvent(document, new Event('visibilitychange'))
     dispatchPageShow(true)
@@ -234,6 +268,7 @@ describe('ResumeRecovery', () => {
 
     await act(async () => {
       finishExplicitRecovery?.()
+      await Promise.resolve()
     })
 
     expect(invalidateQueries).toHaveBeenCalledOnce()
@@ -256,10 +291,17 @@ describe('ResumeRecovery', () => {
 
     setVisibilityState('visible')
     fireEvent(document, new Event('visibilitychange'))
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1100)
+      await Promise.resolve()
+    })
+
     dispatchPageShow(true)
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(750)
+      await vi.advanceTimersByTimeAsync(2000)
+      await Promise.resolve()
     })
 
     expect(revalidateSession).toHaveBeenCalledTimes(2)
@@ -289,6 +331,7 @@ describe('ResumeRecovery', () => {
 
     await act(async () => {
       finishFirstInvalidation?.()
+      await Promise.resolve()
     })
 
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument())
@@ -304,7 +347,8 @@ describe('ResumeRecovery', () => {
     dispatchPageShow(true)
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1000)
+      await vi.advanceTimersByTimeAsync(2000)
+      await Promise.resolve()
     })
 
     expect(screen.getByRole('alert')).toHaveTextContent('ComicPile could not reconnect')
@@ -312,13 +356,8 @@ describe('ResumeRecovery', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(750)
-    })
-
-    expect(recoverSession).toHaveBeenCalledTimes(1)
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(750)
+      await vi.advanceTimersByTimeAsync(2000)
+      await Promise.resolve()
     })
 
     expect(recoverSession).toHaveBeenCalledTimes(2)
