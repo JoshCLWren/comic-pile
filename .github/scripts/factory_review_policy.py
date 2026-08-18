@@ -12,7 +12,8 @@ REVIEW_MARKER_RE = re.compile(
 )
 BRANCH_PRODUCER_RE = re.compile(r"^factory/(?P<worker>\d+)-\d+-")
 BODY_PRODUCER_RE = re.compile(
-    r"(?m)^Worker:\s*opencode-free-model-factory-(?P<worker>\d+)\s*$"
+    r"(?m)^Worker:\s*opencode-(?:free-model|nvidia|omniroute)-factory-"
+    r"(?P<worker>\d+)\s*$"
 )
 
 
@@ -81,10 +82,11 @@ def head_has_authorized_approval(
 ) -> bool:
     """Return whether exact-head approvals satisfy independent review policy.
 
-    New/current factory PRs normally have durable producer provenance. One
-    distinct reviewer is enough for those PRs. Historical PRs with genuinely
-    missing provenance require two distinct factory reviewers so the backlog
-    can move without fabricating producer history.
+    Current factory PRs with durable producer provenance require one distinct
+    reviewer other than the producer. Historical PRs with genuinely missing
+    provenance still require two distinct factory reviewers; producer recovery
+    must never be replaced by an assumption that the current reviewer did not
+    create the PR.
     """
     reviewer_set = set(approvers)
     if producer is not None:
