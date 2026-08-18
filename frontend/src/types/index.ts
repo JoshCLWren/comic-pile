@@ -105,6 +105,20 @@ export interface OverrideRollPayload {
   thread_id: number;
 }
 
+export interface SetCurrentIssueResponse {
+  thread_id: number
+  title: string
+  format: string
+  issues_remaining: number
+  queue_position: number
+  issue_id: number | null
+  issue_number: string | null
+  next_issue_id: number | null
+  next_issue_number: string | null
+  total_issues: number | null
+  reading_progress: string | null
+}
+
 export interface UndoPayload {
   sessionId: number;
   snapshotId: number;

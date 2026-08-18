@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { rollApi } from '../services/api'
+import { issuesApi } from '../services/api-issues'
 import { getApiErrorDetail } from '../utils/apiError'
-import type { OverrideRollPayload } from '../types'
+import type { OverrideRollPayload, SetCurrentIssueResponse } from '../types'
 
 export function useRoll() {
   const [isPending, setIsPending] = useState(false)
@@ -128,5 +129,27 @@ export function useReroll() {
     }
   }
   
+  return { mutate, isPending, isError }
+}
+
+export function useSetCurrentIssue() {
+  const [isPending, setIsPending] = useState(false)
+  const [isError, setIsError] = useState(false)
+
+  const mutate = async (threadId: number, issueNumber: string): Promise<SetCurrentIssueResponse> => {
+    setIsPending(true)
+    setIsError(false)
+    try {
+      const response = await issuesApi.setCurrentIssue(threadId, issueNumber)
+      return response
+    } catch (error: unknown) {
+      setIsError(true)
+      console.error('Failed to set current issue:', getApiErrorDetail(error))
+      throw error
+    } finally {
+      setIsPending(false)
+    }
+  }
+
   return { mutate, isPending, isError }
 }

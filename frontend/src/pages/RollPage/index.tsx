@@ -34,6 +34,7 @@ import {
 } from './utils'
 import { RatingView } from './components/RatingView'
 import { ThreadPool } from './components/ThreadPool'
+import { SetCurrentIssueModal } from './components/SetCurrentIssueModal'
 
 export default function RollPage() {
   const state = useRollPageState()
@@ -92,6 +93,8 @@ export default function RollPage() {
   const moveToBackMutation = useMoveToBack()
   const shuffleQueueMutation = useShuffleQueue()
   const rateMutation = useRate()
+
+  const [isSetCurrentIssueOpen, setIsSetCurrentIssueOpen] = useState(false)
 
   async function handleUnsnooze(threadId: number) {
     try {
@@ -298,6 +301,9 @@ export default function RollPage() {
           }
           await refetchBootstrap()
           break
+        case 'set-current-issue':
+          setIsSetCurrentIssueOpen(true)
+          break
         case 'edit':
           navigate('/queue', { state: { editThreadId: selectedThread!.id } })
           break
@@ -305,6 +311,38 @@ export default function RollPage() {
     } catch (error) {
       console.error('Action failed:', error)
     }
+  }
+
+  function handleSetCurrentIssueSuccess(response: {
+    thread_id: number
+    title: string
+    format: string
+    issues_remaining: number
+    queue_position: number
+    issue_id: number | null
+    issue_number: string | null
+    next_issue_id: number | null
+    next_issue_number: string | null
+    total_issues: number | null
+    reading_progress: string | null
+  }) {
+    setIsSetCurrentIssueOpen(false)
+    const threadMetadata: ThreadMetadata = {
+      id: response.thread_id,
+      title: response.title,
+      format: response.format,
+      issues_remaining: response.issues_remaining,
+      queue_position: response.queue_position,
+      total_issues: response.total_issues,
+      reading_progress: response.reading_progress ?? null,
+      issue_id: response.issue_id,
+      issue_number: response.issue_number,
+      next_issue_id: response.next_issue_id,
+      next_issue_number: response.next_issue_number,
+      last_rolled_result: rolledResult,
+    }
+    suppressPendingAutoOpenRef.current = true
+    enterRatingView(response.thread_id, rolledResult, threadMetadata)
   }
 
   const snoozedThreads = bootstrap?.snoozed_threads ?? []
@@ -864,6 +902,15 @@ export default function RollPage() {
           <SimpleMigrationDialog threadTitle={activeRatingThread.title} onComplete={handleSimpleMigrationComplete} onClose={() => setShowSimpleMigration(false)} />
         )}
 
+        {isSetCurrentIssueOpen && selectedThread && (
+          <SetCurrentIssueModal
+            threadId={selectedThread.id}
+            currentIssueNumber={activeRatingThread?.issue_number ?? selectedThread.issue_number ?? null}
+            onClose={() => setIsSetCurrentIssueOpen(false)}
+            onSuccess={handleSetCurrentIssueSuccess}
+          />
+        )}
+
         <Modal isOpen={isOverrideOpen} title="Pick manually" onClose={() => { setIsOverrideOpen(false); setOverrideErrorMessage('') }}>
           <form className="space-y-4" onSubmit={handleOverrideSubmit}>
             <p className="text-xs text-stone-400">Choose the eligible thread you want to read next.</p>
@@ -929,9 +976,23 @@ export default function RollPage() {
               <span className="text-lg">{snoozedThreads.some((thread) => thread.id === selectedThread?.id) ? '🔔' : '😴'}</span>
               <span>{snoozedThreads.some((thread) => thread.id === selectedThread?.id) ? 'Unsnooze' : 'Snooze'}</span>
             </button>
-            <button type="button" onClick={() => handleAction('edit')} className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3">
-              <span className="text-lg">✏️</span><span>Edit Thread</span>
-            </button>
+            {(() => {
+              const isActivePendingThread = bootstrap?.pending_thread_id === selectedThread?.id
+              const activeThread = bootstrap?.active_thread
+              const isIssueTrackingThread = activeThread?.id === selectedThread?.id && activeThread?.total_issues !== null
+              if (isIssueTrackingThread && isActivePendingThread) {
+                return (
+                  <button type="button" onClick={() => handleAction('set-current-issue')} className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3">
+                    <span className="text-lg">🔧</span><span>Set Current Issue</span>
+                  </button>
+                )
+              }
+              return (
+                <button type="button" onClick={() => handleAction('edit')} className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3">
+                  <span className="text-lg">✏️</span><span>Edit Thread</span>
+                </button>
+              )
+            })()}
           </div>
         </Modal>
       </div>
