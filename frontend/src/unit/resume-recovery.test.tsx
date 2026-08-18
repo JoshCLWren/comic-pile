@@ -127,6 +127,7 @@ describe('ResumeRecovery', () => {
     expect(revalidateSession).toHaveBeenCalledTimes(2)
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(recoverSession).toHaveBeenCalledOnce()
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1100)

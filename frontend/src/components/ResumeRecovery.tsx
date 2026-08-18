@@ -5,7 +5,7 @@ const RESUME_REQUEST_TIMEOUT_MS = 15000
 const RESUME_RETRY_DELAY_MS = 750
 const MAX_RESUME_ATTEMPTS = 2
 
-type RecoveryState = 'idle' | 'reconnecting' | 'failed' | 'auto-failed'
+type RecoveryState = 'idle' | 'reconnecting' | 'failed'
 type RecoveryMode = 'automatic' | 'explicit'
 
 interface ResumeRecoveryProps {
@@ -62,7 +62,7 @@ export default function ResumeRecovery({
           }
           setRecoveryState('idle')
           return
-        } catch {
+        } catch (error) {
           if (attempt < MAX_RESUME_ATTEMPTS) {
             await delay(RESUME_RETRY_DELAY_MS)
           }
@@ -71,8 +71,6 @@ export default function ResumeRecovery({
 
       if (sequence === requestSequence.current && mode === 'explicit') {
         setRecoveryState('failed')
-      } else if (sequence === requestSequence.current && mode === 'automatic') {
-        setRecoveryState('auto-failed')
       }
     } finally {
       if (mode === 'explicit' && sequence === requestSequence.current) {
@@ -110,27 +108,10 @@ export default function ResumeRecovery({
         <div
           aria-live="assertive"
           className="fixed inset-x-3 top-3 z-[100] mx-auto max-w-md rounded-xl border border-stone-200 bg-white p-4 shadow-lg"
-          role={recoveryState === 'failed' ? 'alert' : recoveryState === 'auto-failed' ? undefined : 'status'}
+          role={recoveryState === 'failed' ? 'alert' : 'status'}
         >
           {recoveryState === 'reconnecting' ? (
             <p className="text-sm font-medium text-stone-700">Reconnecting ComicPile...</p>
-          ) : recoveryState === 'auto-failed' ? (
-            <div className="flex gap-2 justify-center">
-              <button
-                className="rounded-lg bg-stone-900 px-3 py-2 text-sm font-medium text-white"
-                onClick={() => void runRecovery('explicit')}
-                type="button"
-              >
-                Retry
-              </button>
-              <button
-                className="rounded-lg border border-stone-300 px-3 py-2 text-sm font-medium text-stone-700"
-                onClick={() => window.location.reload()}
-                type="button"
-              >
-                Reload
-              </button>
-            </div>
           ) : (
             <>
               <p className="font-semibold text-stone-900">ComicPile could not reconnect</p>
