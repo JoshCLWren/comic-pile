@@ -85,10 +85,13 @@ describe('release ordering helpers', () => {
       expect(days[1].releases.map(item => item.id)).toEqual([1])
     })
 
-    it('cleans markdown from visible card copy', () => {
+    it('strips markdown and bare GitHub links from visible card copy', () => {
       expect(releaseDisplayText(
         '[#1058](https://github.com/JoshCLWren/comic-pile/pull/1058) persists reading lists',
       )).toBe('#1058 persists reading lists')
+      expect(releaseDisplayText(
+        'https://github.com/JoshCLWren/comic-pile/pull/1058 persists reading lists',
+      )).toBe('persists reading lists')
       expect(releaseDisplayText('`queue` search')).toBe('queue search')
     })
 
@@ -127,6 +130,7 @@ describe('WhatsNewPage', () => {
       expect(screen.getByText('1 update published this day.')).toBeInTheDocument()
       expect(screen.queryByText(/1096/)).not.toBeInTheDocument()
       expect(screen.queryByText(/release-import-v1/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/github\.com/)).not.toBeInTheDocument()
     })
 
     it('renders the plural day summary for multiple same-day releases', async () => {
@@ -264,5 +268,26 @@ describe('WhatsNewPage', () => {
       expect(screen.queryByText('T')).not.toBeInTheDocument()
       expect(screen.queryByText('S')).not.toBeInTheDocument()
       expect(screen.getByText('1 update published this day.')).toBeInTheDocument()
+    })
+
+    it('strips bare GitHub URLs from release titles and summaries', async () => {
+      api.list.mockResolvedValue({
+        releases: [
+          release({
+            id: 3,
+            title: 'Fix https://github.com/JoshCLWren/comic-pile/issues/1110 roll bug',
+            summary: 'See https://github.com/JoshCLWren/comic-pile/pull/1234 for details.',
+          }),
+        ],
+        total: 1,
+        limit: RELEASE_PAGE_SIZE,
+        offset: 0,
+      })
+
+      render(<WhatsNewPage />)
+
+      expect(await screen.findByText('Fix roll bug')).toBeInTheDocument()
+      expect(screen.getByText('See for details.')).toBeInTheDocument()
+      expect(screen.queryByText(/github\.com/)).not.toBeInTheDocument()
     })
   })
