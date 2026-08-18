@@ -69,6 +69,7 @@ unclean_git_state_json() {
 # Reuse the proven persistence/guard/provider/lease primitives as a tracked
 # repository file, stopping before its legacy main loop.
 source <(sed '/^ensure_owner_label$/,$d' .github/scripts/free-model-factory-worker-primitives.sh)
+source .github/scripts/factory-semantic-verdict.sh
 
 # A PR branch may predate the Kilo integration entirely. Stage the backend
 # runner from trusted main before any checkout so cross-worker takeover never
@@ -308,28 +309,103 @@ if (( agent_status != 0 )); then
 fi
 
 review_log="/tmp/opencode-factory-${WORKER}.log"
-verdict=''
-last_token="$(grep -E '^FACTORY_GATE_(READY|REJECT|NOT_READY)[[:space:]]*$' "$review_log" \
-  | tail -n 1 | tr -d '[:space:]' || true)"
-case "$last_token" in
-  FACTORY_GATE_READY) verdict='approve' ;;
-  FACTORY_GATE_REJECT) verdict='reject' ;;
-  FACTORY_GATE_NOT_READY) verdict='repair' ;;
-esac
+sanitized_review_log="/tmp/opencode-factory-${WORKER}.sanitized.log"
+factory_sanitize_review_log "$review_log" "$sanitized_review_log"
+
+current_head="$(gh pr view "$NUMBER" --json headRefOid --jq .headRefOid 2>/dev/null || true)"
+if [[ "$current_head" != "$EXPECTED_HEAD" ]] || ! current_owner_is_self "$NUMBER"; then
+  log "${FACTORY_SEMANTIC_STATUS_HEAD_CHANGED}: PR #${NUMBER} changed or lease was revoked during review"
+  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'semantic-review-head-changed'
+  exit 0
+fi
+
+if factory_review_has_conflicting_terminal_markers "$review_log"; then
+  log "${FACTORY_SEMANTIC_STATUS_CONFLICTING}: PR #${NUMBER} emitted contradictory semantic markers"
+  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'conflicting-semantic-verdict'
+  exit 0
+fi
+
+verdict="$(factory_extract_semantic_verdict "$review_log" || true)"
+recovery_attempted=0
+recovery_status=0
+
+if [[ -z "$verdict" ]] && [[ "$SOURCE" != 'kilo-auto' ]] && factory_review_is_substantive "$review_log"; then
+  recovery_attempted=1
+  recovery_log="/tmp/opencode-factory-${WORKER}-verdict-recovery.log"
+  recovery_timeout=90
+  available="$(remaining)"
+  (( recovery_timeout > available - 45 )) && recovery_timeout=$((available - 45))
+
+  if (( recovery_timeout >= 20 )); then
+    log "semantic review completed without a terminal marker; attempting one bounded same-session verdict recovery"
+    set +e
+    factory_recover_semantic_verdict "$RUNTIME_MODEL" "$GITHUB_WORKSPACE" "$recovery_timeout" "$recovery_log"
+    recovery_status=$?
+    set -e
+
+    current_head="$(gh pr view "$NUMBER" --json headRefOid --jq .headRefOid 2>/dev/null || true)"
+    if [[ "$current_head" != "$EXPECTED_HEAD" ]] || ! current_owner_is_self "$NUMBER"; then
+      log "${FACTORY_SEMANTIC_STATUS_HEAD_CHANGED}: PR #${NUMBER} changed or lease was revoked during recovery"
+      release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'semantic-review-head-changed'
+      exit 0
+    fi
+
+    if (( recovery_status == 0 )); then
+      recovered_verdict="$(factory_extract_semantic_verdict "$recovery_log" || true)"
+      if [[ "$recovered_verdict" == 'repair' || "$recovered_verdict" == 'reject' ]]; then
+        verdict="$recovered_verdict"
+        log "${FACTORY_SEMANTIC_STATUS_RECOVERED}: recovered conservative verdict for PR #${NUMBER}"
+      elif [[ "$recovered_verdict" == 'approve' ]] && ! factory_primary_review_denies_ready_recovery "$review_log"; then
+        verdict='approve'
+        log "${FACTORY_SEMANTIC_STATUS_RECOVERED}: recovered approval verdict for PR #${NUMBER}"
+      else
+        log "${FACTORY_SEMANTIC_STATUS_RECOVERY_FAILED}: recovery remained ambiguous or contradicted the primary review"
+      fi
+    else
+      log "${FACTORY_SEMANTIC_STATUS_RECOVERY_FAILED}: same-session recovery exited ${recovery_status}"
+    fi
+  fi
+fi
 
 if [[ -z "$verdict" ]]; then
-  log "review model did not emit a recognized terminal verdict for PR #${NUMBER}; leaving it in review"
-  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'missing-semantic-verdict'
+  if (( recovery_attempted == 1 )); then
+    semantic_status="$FACTORY_SEMANTIC_STATUS_RECOVERY_FAILED"
+    release_reason='semantic-review-recovery-failed'
+  else
+    semantic_status="$FACTORY_SEMANTIC_STATUS_MISSING"
+    release_reason='missing-semantic-verdict'
+  fi
+  log "${semantic_status}: review model did not produce an authoritative terminal verdict for PR #${NUMBER}"
+
+  diagnostic="$(mktemp /tmp/factory-semantic-diagnostic.XXXXXX.md)"
+  {
+    printf '<!-- comic-pile-factory-semantic-diagnostic:v1 -->\n'
+    printf '### Factory semantic review diagnostic\n\n'
+    printf 'Status: `%s`  \n' "$semantic_status"
+    printf 'Factory: `%s`  \n' "$WORKER"
+    printf 'Run: `%s`  \n' "${GITHUB_RUN_ID:-unknown}"
+    printf 'Reviewed head: `%s`\n\n' "$EXPECTED_HEAD"
+    printf '<details><summary>Sanitized review tail</summary>\n\n```text\n'
+    tail -n 120 "$sanitized_review_log"
+    printf '\n```\n</details>\n'
+  } > "$diagnostic"
+  gh issue comment "$NUMBER" --body-file "$diagnostic" >/dev/null 2>&1 || true
+  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' "$release_reason"
   log "assignment complete; remaining budget $(remaining)s"
   exit 0
 fi
 
-log "submitting ${verdict} semantic verdict for PR #${NUMBER} at reviewed head ${EXPECTED_HEAD} to the trusted review controller"
+case "$verdict" in
+  approve) semantic_status="$FACTORY_SEMANTIC_STATUS_APPROVED" ;;
+  repair|reject) semantic_status="$FACTORY_SEMANTIC_STATUS_BLOCKED" ;;
+  *) semantic_status="$FACTORY_SEMANTIC_STATUS_MISSING" ;;
+esac
+log "${semantic_status}: submitting ${verdict} semantic verdict for PR #${NUMBER} at reviewed head ${EXPECTED_HEAD}"
 python3 "$TRUSTED_REVIEW_CONTROLLER" review \
   --worker "$WORKER" \
   --pr "$NUMBER" \
   --reviewed-head "$EXPECTED_HEAD" \
   --verdict "$verdict" \
-  --review-log "$review_log"
+  --review-log "$sanitized_review_log"
 
 log "assignment complete; remaining budget $(remaining)s"
