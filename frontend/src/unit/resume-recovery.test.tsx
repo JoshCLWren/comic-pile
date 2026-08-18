@@ -126,12 +126,14 @@ describe('ResumeRecovery', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(revalidateSession).toHaveBeenCalledTimes(2)
 
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1100)
     })
     fireEvent(document, new Event('visibilitychange'))
     dispatchPageShow(true)
-    expect(revalidateSession).toHaveBeenCalledTimes(3)
+    expect(revalidateSession).toHaveBeenCalledTimes(2)
 
     await act(async () => {
       finishExplicitRecovery?.()
