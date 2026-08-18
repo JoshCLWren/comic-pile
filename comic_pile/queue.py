@@ -503,11 +503,13 @@ async def get_roll_pool_rows(
     return [(row[0], row[1], row[2]) for row in result]
 
 
-async def get_stale_threads(user_id: int, db: AsyncSession, days: int = 7) -> list[Thread]:
+async def get_stale_threads(
+    user_id: int, db: AsyncSession, days: int = 7, snoozed_ids: list[int] | None = None
+) -> list[Thread]:
     """Get threads not read in the specified number of days."""
     cutoff_date = datetime.now(UTC) - timedelta(days=days)
 
-    result = await db.execute(
+    query = (
         select(Thread)
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
@@ -515,4 +517,8 @@ async def get_stale_threads(user_id: int, db: AsyncSession, days: int = 7) -> li
         .where((Thread.last_activity_at < cutoff_date) | (Thread.last_activity_at.is_(None)))
         .order_by(Thread.last_activity_at.asc().nullsfirst())
     )
+    if snoozed_ids:
+        query = query.where(Thread.id.not_in(snoozed_ids))
+
+    result = await db.execute(query)
     return list(result.scalars().all())

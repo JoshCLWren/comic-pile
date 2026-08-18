@@ -5,6 +5,8 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models import Session as SessionModel
+
 
 @pytest.mark.asyncio
 async def test_roll_success(auth_client: AsyncClient, sample_data: dict) -> None:
@@ -410,3 +412,62 @@ async def test_roll_bootstrap_counts_null_activity_old_threads_as_stale(
 
     assert data["stale_thread_count"] == 1
     assert data["stale_thread"]["title"] == "Old No Activity"
+
+
+@pytest.mark.asyncio
+async def test_roll_bootstrap_excludes_snoozed_threads_from_stale(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Bootstrap excludes snoozed threads from the stale thread count and summary.
+
+    Args:
+        auth_client: Authenticated HTTP client for API requests.
+        async_db: Async database session for direct database queries.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from app.models import Thread
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    now = datetime.now(UTC)
+    stale_date = now - timedelta(days=30)
+
+    session = SessionModel(start_die=6, user_id=user.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    snoozed_stale_thread = Thread(
+        title="Snoozed Stale Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        last_activity_at=stale_date,
+        created_at=now,
+    )
+    unstale_thread = Thread(
+        title="Fresh Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        last_activity_at=None,
+        created_at=now,
+    )
+    async_db.add_all([snoozed_stale_thread, unstale_thread])
+    await async_db.commit()
+
+    session.snoozed_thread_ids = [snoozed_stale_thread.id]
+    await async_db.commit()
+
+    response = await auth_client.get("/api/roll/bootstrap")
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["stale_thread_count"] == 0
+    assert data["stale_thread"] is None

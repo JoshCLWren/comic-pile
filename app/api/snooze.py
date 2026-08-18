@@ -1,6 +1,7 @@
 """Snooze API endpoint."""
 
 import logging
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -177,6 +178,8 @@ async def snooze_thread(
         excluded_thread_ids=current_session.snoozed_thread_ids,
     )
 
+    from app.models import Thread
+
     snoozed_ids = (
         list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
     )
@@ -187,6 +190,10 @@ async def snooze_thread(
         logger.info(f"Snooze: added to snoozed list, snoozed_ids after={snoozed_ids}")
     else:
         logger.info(f"Snooze: thread {pending_thread_id} already in snoozed list")
+
+    pending_thread = await db.get(Thread, pending_thread_id)
+    if pending_thread is not None:
+        pending_thread.last_activity_at = datetime.now(UTC)
 
     event = Event(
         type="snooze",

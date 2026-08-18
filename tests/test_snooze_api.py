@@ -1,6 +1,7 @@
 """Tests for snooze API endpoints."""
 
 import pytest
+from datetime import UTC, datetime, timedelta
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -507,3 +508,58 @@ async def test_snooze_multiple_different_threads(
     assert thread2.id in data3["snoozed_thread_ids"]
     assert thread3.id in data3["snoozed_thread_ids"]
     assert len(data3["snoozed_thread_ids"]) == 3
+
+
+@pytest.mark.asyncio
+async def test_snooze_updates_last_activity_at(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Snoozing a thread updates its last_activity_at so it is no longer stale.
+
+    Args:
+        auth_client: Authenticated HTTP client for API requests.
+        async_db: Async database session for direct database queries.
+    """
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    session = SessionModel(start_die=6, user_id=user.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    old_date = datetime.now(UTC) - timedelta(days=30)
+    thread = Thread(
+        title="Old Stale Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        last_activity_at=old_date,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    event = Event(
+        type="roll",
+        die=6,
+        result=1,
+        selected_thread_id=thread.id,
+        selection_method="random",
+        session_id=session.id,
+        thread_id=thread.id,
+    )
+    async_db.add(event)
+    session.pending_thread_id = thread.id
+    await async_db.commit()
+
+    response = await auth_client.post("/api/snooze/")
+    assert response.status_code == 200
+
+    await async_db.refresh(thread)
+    assert thread.last_activity_at is not None
+    assert thread.last_activity_at > old_date

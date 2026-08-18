@@ -491,7 +491,7 @@ async def roll_bootstrap(
 
     stale_cutoff = datetime.now(UTC) - timedelta(days=7)
     effective_activity = func.coalesce(Thread.last_activity_at, Thread.created_at)
-    stale_count_result = await db.execute(
+    stale_count_query = (
         select(func.count())
         .select_from(Thread)
         .where(Thread.user_id == user_id)
@@ -499,11 +499,14 @@ async def roll_bootstrap(
         .where(Thread.is_blocked.is_(False))
         .where(effective_activity < stale_cutoff)
     )
+    if snoozed_ids:
+        stale_count_query = stale_count_query.where(Thread.id.not_in(snoozed_ids))
+    stale_count_result = await db.execute(stale_count_query)
     stale_thread_count = stale_count_result.scalar() or 0
 
     stale_thread = None
     if stale_thread_count > 0:
-        stale_result = await db.execute(
+        stale_query = (
             select(Thread.id, Thread.title, Thread.format, Thread.last_activity_at)
             .where(Thread.user_id == user_id)
             .where(Thread.status == "active")
@@ -512,6 +515,9 @@ async def roll_bootstrap(
             .order_by(effective_activity.asc())
             .limit(1)
         )
+        if snoozed_ids:
+            stale_query = stale_query.where(Thread.id.not_in(snoozed_ids))
+        stale_result = await db.execute(stale_query)
         stale_row = stale_result.first()
         if stale_row:
             stale_last_activity = (

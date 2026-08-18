@@ -158,7 +158,10 @@ async def list_stale_threads(
     from datetime import timedelta
 
     cutoff_date = datetime.now(UTC) - timedelta(days=days)
-    result = await db.execute(
+    current_session = await get_or_create(db, user_id=current_user.id)
+    snoozed_ids = list(current_session.snoozed_thread_ids or [])
+
+    query = (
         select(Thread)
         .where(Thread.user_id == current_user.id)
         .where(Thread.status == "active")
@@ -166,6 +169,10 @@ async def list_stale_threads(
         .where((Thread.last_activity_at < cutoff_date) | (Thread.last_activity_at.is_(None)))
         .order_by(Thread.last_activity_at.asc().nullsfirst())
     )
+    if snoozed_ids:
+        query = query.where(Thread.id.not_in(snoozed_ids))
+
+    result = await db.execute(query)
     threads = list(result.scalars().all())
     return await _threads_to_responses(threads, db)
 
