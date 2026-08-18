@@ -319,7 +319,7 @@ describe('auth state race condition regression', () => {
   })
 })
 
-describe('auth-loading shell handoff (issue #1245)', () => {
+describe('auth-loading shell handoff (issue #1245) and returning to a screen (issue #1503)', () => {
   beforeEach(() => {
     mockApiGet.mockReset()
     mockSetAccessToken.mockReset()
@@ -328,7 +328,7 @@ describe('auth-loading shell handoff (issue #1245)', () => {
     delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
   })
 
-  test('protected routes dismiss the bootstrap footer while resuming by rendering the app-shell-ready loading state', async () => {
+  test('protected routes render the app content immediately while resuming instead of a blocking auth screen', async () => {
     let resolveAuth!: (value: { username: string }) => void
     mockApiGet
       .mockReturnValueOnce(new Promise((resolve) => { resolveAuth = resolve }))
@@ -337,18 +337,18 @@ describe('auth-loading shell handoff (issue #1245)', () => {
     renderWithAuth('/')
 
     await waitFor(() => {
-      expect(screen.getByText('Checking authentication...')).toBeInTheDocument()
+      expect(screen.getByTestId('roll-page')).toBeInTheDocument()
     })
-
+    expect(screen.queryByText('Checking authentication...')).not.toBeInTheDocument()
     const readyShell = document.querySelector('[data-app-shell-ready]')
     expect(readyShell).not.toBeNull()
-    expect(readyShell?.textContent).toContain('Checking authentication')
+    expect(readyShell?.textContent).not.toContain('Checking authentication')
     expect(screen.queryByRole('navigation', { name: /main navigation/i })).not.toBeInTheDocument()
 
     await act(async () => resolveAuth({ username: 'reader' }))
   })
 
-  test('public routes dismiss the bootstrap footer while resuming by rendering the app-shell-ready loading state', async () => {
+  test('public routes render the auth page content immediately while resuming instead of a blocking loading state', async () => {
     let resolveAuth!: (value: { username: string }) => void
     mockApiGet
       .mockReturnValueOnce(new Promise((resolve) => { resolveAuth = resolve }))
@@ -357,15 +357,53 @@ describe('auth-loading shell handoff (issue #1245)', () => {
     renderWithAuth('/login')
 
     await waitFor(() => {
-      expect(screen.getByText('Loading...')).toBeInTheDocument()
+      expect(screen.getByTestId('login-page')).toBeInTheDocument()
     })
-
+    expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
     const readyShell = document.querySelector('[data-app-shell-ready]')
     expect(readyShell).not.toBeNull()
-    expect(readyShell?.textContent).toContain('Loading')
+    expect(readyShell?.textContent).not.toContain('Loading')
     expect(screen.queryByRole('navigation', { name: /main navigation/i })).not.toBeInTheDocument()
 
     await act(async () => resolveAuth({ username: 'reader' }))
+  })
+
+  test('returns to the same place where the user left it without flashing an auth screen', async () => {
+    let resolveAuth!: (value: { username: string }) => void
+    mockApiGet
+      .mockReturnValueOnce(new Promise((resolve) => { resolveAuth = resolve }))
+      .mockResolvedValue({ username: 'reader', email: 'reader@example.com' })
+
+    renderWithAuth('/queue')
+
+    await waitFor(() => {
+      expect(screen.getByTestId('queue-page')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('Checking authentication...')).not.toBeInTheDocument()
+
+    await act(async () => resolveAuth({ username: 'reader' }))
+    await waitFor(() => {
+      expect(screen.getByTestId('queue-page')).toBeInTheDocument()
+    })
+  })
+
+  test('still redirects an unauthenticated user to /login once the auth bootstrap resolves', async () => {
+    let rejectAuth!: (error: Error) => void
+    mockApiGet
+      .mockReturnValueOnce(new Promise((_, reject) => { rejectAuth = reject }))
+      .mockResolvedValue({ username: 'reader', email: 'reader@example.com' })
+
+    renderWithAuth('/')
+
+    await waitFor(() => {
+      expect(screen.getByTestId('roll-page')).toBeInTheDocument()
+    })
+
+    await act(async () => rejectAuth(unauthenticatedError()))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('login-page')).toBeInTheDocument()
+    })
   })
 })
 

@@ -17,12 +17,12 @@ describe('startBootstrapShellLifecycle', () => {
     document.body.innerHTML = ''
   })
 
-  it('removes the static shell once the React auth-loading state mounts with the app-shell-ready marker', async () => {
+  it('removes the static shell once the app content mounts with the app-shell-ready marker', async () => {
     const root = document.getElementById('root') as HTMLElement
     const shell = document.getElementById('bootstrap-shell') as HTMLElement
 
     startBootstrapShellLifecycle(root, shell)
-    root.innerHTML = '<div class="flex min-h-screen items-center justify-center text-center" data-app-shell-ready>Checking authentication...</div>'
+    root.innerHTML = '<div class="flex min-h-screen" data-app-shell-ready><main>Roll</main></div>'
     await Promise.resolve()
 
     expect(document.getElementById('bootstrap-shell')).toBeNull()
@@ -113,7 +113,7 @@ describe('startBootstrapShellLifecycle', () => {
 
     expect(shell.querySelector('.bootstrap-shell__nav')).not.toBeNull()
 
-    root.innerHTML = '<div class="flex min-h-screen items-center justify-center text-center" data-app-shell-ready>Checking authentication...</div>'
+    root.innerHTML = '<div class="flex min-h-screen" data-app-shell-ready><main>Roll</main></div>'
     await Promise.resolve()
 
     expect(document.getElementById('bootstrap-shell')).toBeNull()
