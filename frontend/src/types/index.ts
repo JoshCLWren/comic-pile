@@ -473,3 +473,14 @@ export interface RollResponse {
 export interface BugReportResponse {
   issue_url: string
 }
+
+export type ThemeId = 'classic' | 'ink-gold' | 'command-center';
+
+export interface UserPreferences {
+  theme: ThemeId;
+  user_id: number;
+}
+
+export interface UserPreferencesPatchRequest {
+  theme?: ThemeId;
+}

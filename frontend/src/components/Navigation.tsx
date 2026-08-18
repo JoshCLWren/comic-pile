@@ -4,6 +4,7 @@ import axios from 'axios'
 import BugReportButton from './BugReportButton'
 import type { ReportType } from './BugReportModal'
 import { useAuth } from '../App'
+import { useTheme } from '../contexts/ThemeContext'
 import api from '../services/api'
 import type { AuthUser } from '../types'
 import type { DiagnosticData } from '../hooks/useDiagnostics'
@@ -19,19 +20,35 @@ interface NavigationProps {
   onBugReportSubmit: BugReportSubmit
 }
 
+const THEME_LABELS: Record<string, string> = {
+  classic: 'Classic',
+  'ink-gold': 'Ink Gold',
+  'command-center': 'Command Center',
+}
+
+const THEME_ICONS: Record<string, string> = {
+  classic: '🎨',
+  'ink-gold': '📜',
+  'command-center': '🖥️',
+}
+
 export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   const location = useLocation()
   const { isAuthenticated, logout } = useAuth()
+  const { theme, setTheme, supportedThemes } = useTheme()
   const navigate = useNavigate()
   const [username, setUsername] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [hasError, setHasError] = useState(false)
   const [isMoreOpen, setIsMoreOpen] = useState(false)
+  const [isAppearanceOpen, setIsAppearanceOpen] = useState(false)
+  const [themeError, setThemeError] = useState<string | null>(null)
   const moreButtonRef = useRef<HTMLButtonElement>(null)
   const moreMenuRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     setIsMoreOpen(false)
+    setIsAppearanceOpen(false)
   }, [location.pathname])
 
   useEffect(() => {
@@ -43,6 +60,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
       if (moreButtonRef.current?.contains(target) || moreMenuRef.current?.contains(target)) return
       if (target instanceof Element && target.closest('[data-overlay-layer="dialog"]')) return
       setIsMoreOpen(false)
+      setIsAppearanceOpen(false)
     }
 
     document.addEventListener('pointerdown', dismissMoreMenu)
@@ -85,6 +103,18 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
     navigate('/login')
   }
 
+  const handleThemeSelect = async (newTheme: string) => {
+    setThemeError(null)
+    try {
+      await setTheme(newTheme as 'classic' | 'ink-gold' | 'command-center')
+      setIsAppearanceOpen(false)
+      setIsMoreOpen(false)
+    } catch (error) {
+      console.error('Failed to set theme:', error)
+      setThemeError('Failed to save theme preference. Please try again.')
+    }
+  }
+
   if (!isAuthenticated) return null
 
   return (
@@ -100,10 +130,50 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
       </nav>
 
       {isMoreOpen && (
-        <nav ref={moreMenuRef} id="secondary-navigation" aria-label="More pages" className="fixed bottom-16 right-3 z-50 w-56 rounded-2xl border border-stone-700 bg-stone-950 p-2 shadow-2xl md:bottom-24 md:right-6">
+        <nav ref={moreMenuRef} id="secondary-navigation" aria-label="More pages" className="fixed bottom-16 right-3 z-50 w-64 rounded-2xl border border-stone-700 bg-stone-950 p-2 shadow-2xl md:bottom-24 md:right-6">
           <Link to="/continuity-plans" className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-stone-100 hover:bg-stone-800"><span aria-hidden="true">🧭</span><span>Continuity Planner</span></Link>
-          <Link to="/whats-new" className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-stone-100 hover:bg-stone-800"><span aria-hidden="true">✨</span><span>What’s New</span></Link>
+          <Link to="/whats-new" className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-stone-100 hover:bg-stone-800"><span aria-hidden="true">✨</span><span>What's New</span></Link>
           <Link to="/help" className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-stone-100 hover:bg-stone-800"><span aria-hidden="true">❓</span><span>Help</span></Link>
+
+          <div className="border-t border-stone-800 my-2" />
+
+          <button
+            type="button"
+            onClick={() => setIsAppearanceOpen(true)}
+            className="flex w-full min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-stone-100 hover:bg-stone-800 text-left"
+            aria-expanded={isAppearanceOpen}
+            aria-controls="appearance-menu"
+          >
+            <span aria-hidden="true">🎨</span><span>Appearance</span>
+          </button>
+
+          {isAppearanceOpen && (
+            <div id="appearance-menu" className="space-y-1 mt-1 ml-2 mr-2 mb-2 animate-fade-in" role="menu" aria-label="Theme selection">
+              {supportedThemes.map((themeId) => (
+                <button
+                  key={themeId}
+                  type="button"
+                  onClick={() => handleThemeSelect(themeId)}
+                  role="menuitemradio"
+                  aria-checked={theme === themeId}
+                  aria-label={THEME_LABELS[themeId]}
+                  className={`flex w-full min-h-10 items-center gap-3 rounded-xl px-3 py-2 font-medium text-left transition-colors ${
+                    theme === themeId
+                      ? 'bg-stone-800 text-stone-100'
+                      : 'text-stone-300 hover:bg-stone-800 hover:text-stone-100'
+                  }`}
+                >
+                  <span aria-hidden="true">{THEME_ICONS[themeId]}</span>
+                  <span className="flex-1 text-sm">{THEME_LABELS[themeId]}</span>
+                  {theme === themeId && <span aria-hidden="true" className="text-stone-400">✓</span>}
+                </button>
+              ))}
+              {themeError && (
+                <p className="text-xs text-red-400 px-3 pb-1" role="alert">{themeError}</p>
+              )}
+            </div>
+          )}
+
           <div className="space-y-1 border-t border-stone-800 pt-2 md:hidden">
             <BugReportButton onSubmit={onBugReportSubmit} variant="nav" />
             <button type="button" onClick={handleLogout} className="flex min-h-12 w-full items-center gap-3 rounded-xl px-4 py-3 text-left font-bold text-red-300 hover:bg-stone-800">

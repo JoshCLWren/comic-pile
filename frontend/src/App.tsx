@@ -1,5 +1,4 @@
-import { Suspense, createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
-import type { ReactNode } from 'react'
+import { Suspense, createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from './query/queryClient'
@@ -17,6 +16,8 @@ import type { DiagnosticData } from './hooks/useDiagnostics'
 import { ToastProvider } from './contexts/ToastProvider'
 import { CacheProvider } from './contexts/CacheContext'
 import { BugReportRestoreProvider } from './contexts/BugReportRestoreContext'
+import { ThemeProvider } from './contexts/ThemeContext'
+import type { ThemeId } from './types/theme'
 import './index.css'
 
 declare global {
@@ -59,11 +60,46 @@ export interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext)
   if (!context) throw new Error('useAuth must be used within an AuthProvider')
   return context
+}
+
+function fetchUserTheme(): Promise<ThemeId> {
+  return api.get<{ theme: ThemeId }>('/users/me/preferences', { skipAuthRedirect: true })
+    .then((response) => response.theme)
+    .catch(() => 'classic' as ThemeId)
+}
+
+function ThemeBootstrap({ children, initialTheme }: { children: ReactNode; initialTheme: ThemeId }) {
+  const [theme, setTheme] = useState<ThemeId>(initialTheme)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    let isMounted = true
+    fetchUserTheme()
+      .then((fetchedTheme) => {
+        if (isMounted) {
+          setTheme(fetchedTheme)
+          setIsLoading(false)
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  if (isLoading) {
+    return <ThemeProvider initialTheme={initialTheme}>{children}</ThemeProvider>
+  }
+
+  return <ThemeProvider initialTheme={theme}>{children}</ThemeProvider>
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -276,7 +312,25 @@ function AuthResumeBoundary({ children }: { children: ReactNode }) {
 }
 
 function App() {
-  return <BrowserRouter><QueryClientProvider client={queryClient}><BugReportRestoreProvider><ToastProvider><CacheProvider><AuthProvider><AuthResumeBoundary><AppRoutes /></AuthResumeBoundary></AuthProvider></CacheProvider></ToastProvider></BugReportRestoreProvider></QueryClientProvider></BrowserRouter>
+  return (
+    <BrowserRouter>
+      <QueryClientProvider client={queryClient}>
+        <BugReportRestoreProvider>
+          <ToastProvider>
+            <CacheProvider>
+              <AuthProvider>
+                <AuthResumeBoundary>
+                  <ThemeBootstrap initialTheme="classic">
+                    <AppRoutes />
+                  </ThemeBootstrap>
+                </AuthResumeBoundary>
+              </AuthProvider>
+            </CacheProvider>
+          </ToastProvider>
+        </BugReportRestoreProvider>
+      </QueryClientProvider>
+    </BrowserRouter>
+  )
 }
 
 export { AppRoutes }

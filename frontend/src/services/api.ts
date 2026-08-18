@@ -26,6 +26,8 @@ import type {
   ThreadListResponse,
   ThreadQueryParams,
   ThreadUpdatePayload,
+  UserPreferences,
+  UserPreferencesPatchRequest,
 } from '../types'
 
 type ApiRequestConfig<D = unknown> = AxiosRequestConfig<D> & {
@@ -428,4 +430,9 @@ export const migrationApi = {
 export const bugReportsApi = {
   create: (data: { title: string; description: string; diagnostics?: unknown }) =>
     api.post<BugReportResponse>('/bug-reports/', data),
+}
+
+export const preferencesApi = {
+  get: () => api.get<UserPreferences>('/users/me/preferences'),
+  patch: (data: UserPreferencesPatchRequest) => api.patch<UserPreferences, UserPreferencesPatchRequest>('/users/me/preferences', data),
 }
