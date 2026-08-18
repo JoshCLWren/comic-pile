@@ -215,3 +215,33 @@ describe('RatingView action panel (issue #1406)', () => {
     expect(value.className).toContain('text-red-600')
   })
 })
+
+describe('RatingView three-pillar responsive contract (issue #1402)', () => {
+  it('composes the pillar grid as 1 column mobile, 2 columns md, 26/46/28 at xl', () => {
+    const { container } = render(ratingView())
+    const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
+    expect(grid).not.toBeNull()
+    expect(grid!.className).toContain('grid')
+    expect(grid!.className).toContain('md:grid-cols-2')
+    expect(grid!.className).toContain('xl:grid-cols-[minmax(0,26fr)_minmax(0,46fr)_minmax(0,28fr)]')
+  })
+
+  it('spans The Comic across both rows at md so Your Context sits below Reading Context on the right', () => {
+    const { container } = render(ratingView())
+    const comicWrapper = container.querySelector('[data-testid="rating-pillars-grid"] > div')
+    expect(comicWrapper).not.toBeNull()
+    expect(comicWrapper!.className).toContain('md:row-span-2')
+    expect(comicWrapper!.className).toContain('xl:row-span-1')
+  })
+
+  it('keeps the three pillars in DOM order Comic, Reading Context, Your Context', () => {
+    const { container } = render(ratingView())
+    const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
+    const headings = Array.from(grid!.querySelectorAll('span'))
+      .filter((el) => /01|02|03/.test(el.textContent ?? ''))
+      .map((el) => (el.textContent ?? '').trim())
+    expect(headings.join(' ')).toContain('01')
+    expect(headings.join(' ')).toContain('02')
+    expect(headings.join(' ')).toContain('03')
+  })
+})

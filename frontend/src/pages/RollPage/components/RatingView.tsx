@@ -51,15 +51,17 @@ export function RatingView({
 
   return (
     <div className="relative z-10 space-y-4 p-3 md:p-4">
-      <div className="grid gap-4 md:gap-6 md:grid-cols-2 xl:grid-cols-[minmax(0,26fr)_minmax(0,46fr)_minmax(0,28fr)]">
-        <ComicPillar
-          activeRatingThread={activeRatingThread}
-          currentDie={currentDie}
-          rolledResult={rolledResult}
-          poolSize={poolSize}
-          hasValidRolledResult={hasValidRolledResult}
-          onRefreshThread={onRefreshThread}
-        />
+      <div className="grid gap-4 md:grid-cols-2 md:gap-6 xl:grid-cols-[minmax(0,26fr)_minmax(0,46fr)_minmax(0,28fr)]" data-testid="rating-pillars-grid">
+        <div className="md:row-span-2 xl:row-span-1">
+          <ComicPillar
+            activeRatingThread={activeRatingThread}
+            currentDie={currentDie}
+            rolledResult={rolledResult}
+            poolSize={poolSize}
+            hasValidRolledResult={hasValidRolledResult}
+            onRefreshThread={onRefreshThread}
+          />
+        </div>
 
         <ReadingContextPillar
           activeRatingThread={activeRatingThread}
