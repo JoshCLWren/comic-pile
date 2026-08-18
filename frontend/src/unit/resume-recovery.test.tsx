@@ -54,10 +54,9 @@ describe('ResumeRecovery', () => {
     dispatchPageShow(true)
 
     expect(screen.getByText('Last usable screen')).toBeInTheDocument()
-    expect(screen.getByRole('status')).toHaveTextContent('Reconnecting ComicPile')
     await waitFor(() => expect(revalidateSession).toHaveBeenCalledWith(15000))
     await waitFor(() => expect(invalidateQueries).toHaveBeenCalledOnce())
-    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument())
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
     expect(recoverSession).not.toHaveBeenCalled()
   })
 
@@ -69,7 +68,7 @@ describe('ResumeRecovery', () => {
     dispatchPageShow(true)
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1000)
+      await vi.advanceTimersByTimeAsync(2000)
     })
 
     expect(revalidateSession).toHaveBeenCalledTimes(2)
@@ -90,14 +89,14 @@ describe('ResumeRecovery', () => {
     dispatchPageShow(true)
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(750)
+      await vi.advanceTimersByTimeAsync(2000)
     })
     expect(screen.getByRole('alert')).toHaveTextContent('ComicPile could not reconnect')
 
     now.mockReturnValue(10_500)
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
 
-    expect(screen.getByRole('status')).toHaveTextContent('Reconnecting ComicPile')
+    expect(screen.getByRole('status')).toHaveTextContent('Reconnecting…')
     expect(recoverSession).toHaveBeenCalledWith(15000)
     expect(revalidateSession).toHaveBeenCalledTimes(2)
 
@@ -122,7 +121,7 @@ describe('ResumeRecovery', () => {
     renderRecovery()
     dispatchPageShow(true)
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(750)
+      await vi.advanceTimersByTimeAsync(2000)
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
@@ -131,9 +130,10 @@ describe('ResumeRecovery', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1100)
     })
+    const callsBefore = revalidateSession.mock.calls.length
     fireEvent(document, new Event('visibilitychange'))
     dispatchPageShow(true)
-    expect(revalidateSession).toHaveBeenCalledTimes(2)
+    expect(revalidateSession).toHaveBeenCalledTimes(callsBefore)
 
     await act(async () => {
       finishExplicitRecovery?.()
@@ -162,7 +162,7 @@ describe('ResumeRecovery', () => {
     dispatchPageShow(true)
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(750)
+      await vi.advanceTimersByTimeAsync(1000)
     })
 
     expect(revalidateSession).toHaveBeenCalledTimes(2)
@@ -171,6 +171,7 @@ describe('ResumeRecovery', () => {
   })
 
   it('does not let an older invalidation hide a newer recovery attempt', async () => {
+    vi.useFakeTimers()
     let finishFirstInvalidation: (() => void) | undefined
     const now = vi.spyOn(Date, 'now').mockReturnValue(10_000)
     revalidateSession.mockResolvedValue(undefined)

@@ -2,23 +2,17 @@ import { expect, test } from './fixtures'
 
 test('Retry explicitly refreshes auth after automatic resume recovery fails', async ({
   authenticatedPage,
-  allowExpectedBrowserFailures,
 }) => {
   const page = authenticatedPage
   let meAttempts = 0
   let refreshAttempts = 0
-
-  allowExpectedBrowserFailures.allow(
-    { category: 'console', message: '503' },
-    { category: 'console', message: 'ComicPile resume validation failed' },
-  )
 
   await page.goto('/')
   await expect(page.locator('[data-app-shell-ready]')).toBeVisible()
 
   await page.route('**/api/v1/auth/me', async (route) => {
     meAttempts += 1
-    if (meAttempts <= 2) {
+    if (meAttempts <= 6) {
       await route.fulfill({
         status: 503,
         contentType: 'application/json',
@@ -42,7 +36,7 @@ test('Retry explicitly refreshes auth after automatic resume recovery fails', as
 
   await page.getByRole('button', { name: 'Retry' }).click()
 
-  await expect(page.getByRole('status')).toContainText('Reconnecting ComicPile')
+  await expect(page.getByRole('status')).toContainText('Reconnecting…')
   await expect.poll(() => refreshAttempts).toBe(1)
   await expect(page.getByRole('alert')).toHaveCount(0)
   await expect(page.locator('[data-app-shell-ready]')).toBeVisible()
