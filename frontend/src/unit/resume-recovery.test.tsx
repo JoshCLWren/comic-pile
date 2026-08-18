@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import axios from 'axios'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ResumeRecovery from '../components/ResumeRecovery'
 
@@ -11,6 +12,12 @@ const { revalidateSession, recoverSession, invalidateQueries } = vi.hoisted(() =
 vi.mock('../query/queryClient', () => ({
   queryClient: { invalidateQueries },
 }))
+
+function createAxiosError(status: number, message: string): Error {
+  const error = new Error(message) as Error & { response?: { status: number } }
+  error.response = { status }
+  return error
+}
 
 function dispatchPageShow(persisted: boolean): void {
   const event = new Event('pageshow')
@@ -77,6 +84,96 @@ describe('ResumeRecovery', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('ComicPile could not reconnect')
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reload' })).toBeInTheDocument()
+  })
+
+  it('retries 503 errors many times with exponential backoff and never shows failed state', async () => {
+    vi.useFakeTimers()
+    const serviceUnavailableError = createAxiosError(503, 'Service Unavailable')
+    revalidateSession.mockRejectedValue(serviceUnavailableError)
+
+    renderRecovery()
+    dispatchPageShow(true)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100)
+    })
+
+    expect(revalidateSession).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000)
+    })
+
+    expect(revalidateSession).toHaveBeenCalledTimes(2)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000)
+    })
+
+    expect(revalidateSession).toHaveBeenCalledTimes(3)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4000)
+    })
+
+    expect(revalidateSession).toHaveBeenCalledTimes(4)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(8000)
+    })
+
+    expect(screen.getByRole('status')).toHaveTextContent('Reconnecting ComicPile')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(16000)
+    })
+
+    expect(revalidateSession).toHaveBeenCalledTimes(6)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('shows reconnecting UI after 8 seconds for 503 errors in automatic mode', async () => {
+    vi.useFakeTimers()
+    const serviceUnavailableError = createAxiosError(503, 'Service Unavailable')
+    revalidateSession.mockRejectedValue(serviceUnavailableError)
+
+    renderRecovery()
+    dispatchPageShow(true)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(7999)
+    })
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+
+    expect(screen.getByRole('status')).toHaveTextContent('Reconnecting ComicPile')
+  })
+
+  it('shows reconnecting UI after 3 seconds for non-503 errors in automatic mode', async () => {
+    vi.useFakeTimers()
+    revalidateSession.mockRejectedValue(new Error('network error'))
+
+    renderRecovery()
+    dispatchPageShow(true)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2999)
+    })
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+
+    expect(screen.getByRole('status')).toHaveTextContent('Reconnecting ComicPile')
   })
 
   it('runs an explicit auth recovery immediately even inside the automatic throttle window', async () => {
@@ -195,5 +292,36 @@ describe('ResumeRecovery', () => {
     })
 
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument())
+  })
+
+  it('treats 503 on explicit retry as a regular error with bounded attempts', async () => {
+    vi.useFakeTimers()
+    const serviceUnavailableError = createAxiosError(503, 'Service Unavailable')
+    revalidateSession.mockRejectedValue(serviceUnavailableError)
+    recoverSession.mockRejectedValue(serviceUnavailableError)
+
+    renderRecovery()
+    dispatchPageShow(true)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000)
+    })
+
+    expect(screen.getByRole('alert')).toHaveTextContent('ComicPile could not reconnect')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(750)
+    })
+
+    expect(recoverSession).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(750)
+    })
+
+    expect(recoverSession).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('alert')).toHaveTextContent('ComicPile could not reconnect')
   })
 })

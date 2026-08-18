@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import axios from 'axios'
 import { queryClient } from '../query/queryClient'
 
 const RESUME_REQUEST_TIMEOUT_MS = 15000
 const RESUME_RETRY_DELAY_MS = 750
 const MAX_RESUME_ATTEMPTS = 2
+const SERVICE_UNAVAILABLE_MAX_ATTEMPTS = 10
+const SERVICE_UNAVAILABLE_BASE_DELAY_MS = 1000
+const RECONNECTING_UI_DELAY_MS = 3000
+const SERVICE_UNAVAILABLE_RECONNECTING_UI_DELAY_MS = 8000
 
 type RecoveryState = 'idle' | 'reconnecting' | 'failed'
 type RecoveryMode = 'automatic' | 'explicit'
@@ -18,6 +23,10 @@ function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds))
 }
 
+function isServiceUnavailableError(error: unknown): boolean {
+  return axios.isAxiosError(error) && error.response?.status === 503
+}
+
 export default function ResumeRecovery({
   children,
   revalidateSession,
@@ -27,6 +36,15 @@ export default function ResumeRecovery({
   const requestSequence = useRef(0)
   const lastValidationAt = useRef(0)
   const explicitRecoveryActive = useRef(false)
+  const reconnectingTimer = useRef<number | undefined>()
+  const lastErrorWasServiceUnavailable = useRef(false)
+
+  const clearReconnectingTimer = useCallback(() => {
+    if (reconnectingTimer.current !== undefined) {
+      window.clearTimeout(reconnectingTimer.current)
+      reconnectingTimer.current = undefined
+    }
+  }, [])
 
   const runRecovery = useCallback(async (mode: RecoveryMode) => {
     if (mode === 'automatic') {
@@ -44,11 +62,22 @@ export default function ResumeRecovery({
     }
 
     const sequence = ++requestSequence.current
-    setRecoveryState('reconnecting')
+    lastErrorWasServiceUnavailable.current = false
+    clearReconnectingTimer()
+
     const recover = mode === 'explicit' ? recoverSession : revalidateSession
+    const maxAttempts = mode === 'explicit' ? MAX_RESUME_ATTEMPTS : SERVICE_UNAVAILABLE_MAX_ATTEMPTS
+    const baseDelay = mode === 'explicit' ? RESUME_RETRY_DELAY_MS : SERVICE_UNAVAILABLE_BASE_DELAY_MS
+    const uiDelay = mode === 'explicit' ? RECONNECTING_UI_DELAY_MS : SERVICE_UNAVAILABLE_RECONNECTING_UI_DELAY_MS
+
+    reconnectingTimer.current = window.setTimeout(() => {
+      if (sequence === requestSequence.current) {
+        setRecoveryState('reconnecting')
+      }
+    }, uiDelay)
 
     try {
-      for (let attempt = 1; attempt <= MAX_RESUME_ATTEMPTS; attempt += 1) {
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
         try {
           await recover(RESUME_REQUEST_TIMEOUT_MS)
           if (sequence !== requestSequence.current) {
@@ -58,24 +87,34 @@ export default function ResumeRecovery({
           if (sequence !== requestSequence.current) {
             return
           }
+          clearReconnectingTimer()
           setRecoveryState('idle')
           return
         } catch (error) {
-          if (attempt < MAX_RESUME_ATTEMPTS) {
-            await delay(RESUME_RETRY_DELAY_MS)
+          const serviceUnavailable = isServiceUnavailableError(error)
+          lastErrorWasServiceUnavailable.current = serviceUnavailable
+
+          if (attempt < maxAttempts) {
+            const attemptDelay = serviceUnavailable
+              ? baseDelay * Math.pow(2, attempt - 1)
+              : baseDelay
+            await delay(attemptDelay)
           }
         }
       }
 
       if (sequence === requestSequence.current) {
-        setRecoveryState('failed')
+        clearReconnectingTimer()
+        if (!lastErrorWasServiceUnavailable.current) {
+          setRecoveryState('failed')
+        }
       }
     } finally {
       if (mode === 'explicit' && sequence === requestSequence.current) {
         explicitRecoveryActive.current = false
       }
     }
-  }, [recoverSession, revalidateSession])
+  }, [recoverSession, revalidateSession, clearReconnectingTimer])
 
   useEffect(() => {
     const handlePageShow = (event: PageTransitionEvent) => {
@@ -94,10 +133,11 @@ export default function ResumeRecovery({
     return () => {
       requestSequence.current += 1
       explicitRecoveryActive.current = false
+      clearReconnectingTimer()
       window.removeEventListener('pageshow', handlePageShow)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [runRecovery])
+  }, [runRecovery, clearReconnectingTimer])
 
   return (
     <>
