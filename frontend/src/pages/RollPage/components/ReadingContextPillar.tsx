@@ -28,22 +28,23 @@ export function ReadingContextPillar({
 
   return (
     <div className="w-full space-y-4">
-      <div className="flex items-center gap-2 border-b-2 border-teal-400/40 pb-2">
-        <span className="text-[10px] font-black tabular-nums text-teal-400">02</span>
-        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-teal-400">Reading Context</span>
+      <div className="flex items-center gap-2 border-b-2 pb-2" style={{ borderColor: 'var(--theme-continuity-accent)' }}>
+        <span className="text-[10px] font-black tabular-nums" style={{ color: 'var(--theme-continuity-accent)' }}>02</span>
+        <span className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-continuity-accent)' }}>Reading Context</span>
       </div>
       <ContinuityReadinessSummary issueId={issueId} />
 
       {connectedThreads.length > 0 ? (
-        <section aria-labelledby="connected-heading" className="rounded-2xl border border-blue-800/30 bg-blue-950/15 p-3">
+        <section aria-labelledby="connected-heading" className="rounded-2xl p-3" style={{ border: '1px solid var(--theme-continuity-accent)', borderOpacity: 0.3, backgroundColor: 'rgba(6, 182, 212, 0.09)' }}>
           <div className="flex items-center justify-between gap-2">
-            <h3 id="connected-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-400">
+            <h3 id="connected-heading" className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-continuity-accent)' }}>
               Verified dependency connections
             </h3>
             <button
               type="button"
               onClick={() => setIsContinuityDialogOpen(true)}
-              className="text-[10px] font-bold text-blue-400 hover:text-blue-300 transition-colors"
+              className="text-[10px] font-bold transition-colors hover:opacity-80"
+              style={{ color: 'var(--theme-continuity-accent)' }}
             >
               Correct continuity
             </button>
@@ -52,7 +53,13 @@ export function ReadingContextPillar({
             {connectedThreads.map((connectedThread) => (
               <li
                 key={`${connectedThread.thread_id}-${connectedThread.dependency_id}`}
-                className="rounded-full border border-blue-800/40 bg-blue-900/20 px-2.5 py-1 text-[10px] font-bold text-blue-200"
+                className="rounded-full px-2.5 py-1 text-[10px] font-bold"
+                style={{
+                  border: '1px solid var(--theme-continuity-accent)',
+                  borderOpacity: 0.4,
+                  backgroundColor: 'rgba(6, 182, 212, 0.12)',
+                  color: 'rgb(165, 243, 252)',
+                }}
               >
                 {connectedThread.title}
               </li>
@@ -79,22 +86,28 @@ export function ReadingContextPillar({
                 ? Math.round((order.completed_items / order.total_items) * 100)
                 : 0
               return (
-                <article key={order.id} className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
+                <article key={order.id} className="rounded-xl p-3" style={{ border: '1px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.04)' }}>
                   <div className="flex items-center justify-between gap-3">
                     <h4 className="truncate text-xs font-black text-stone-200">{order.name}</h4>
                     <span className="shrink-0 text-[10px] font-bold text-stone-500">
                       {order.completed_items}/{order.total_items}
                     </span>
                   </div>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10" aria-hidden="true">
-                    <div className="h-full rounded-full bg-amber-600" style={{ width: `${routeProgress}%` }} />
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }} aria-hidden="true">
+                    <div className="h-full rounded-full" style={{ backgroundColor: 'var(--theme-primary-action)', width: `${routeProgress}%` }} />
                   </div>
                   <div className="mt-2 flex items-center justify-between gap-2">
                     <p className="text-[10px] font-bold text-stone-500">{routeProgress}% complete</p>
                     <button
                       type="button"
                       onClick={() => setIsRouteExplanationOpen(true)}
-                      className="min-h-11 rounded-lg border border-amber-700/40 bg-amber-900/15 px-3 text-[10px] font-black text-amber-200 focus:ring-2 focus:ring-amber-500"
+                      className="min-h-11 rounded-lg px-3 text-[10px] font-black transition focus:ring-2"
+                      style={{
+                        border: '1px solid var(--theme-primary-action)',
+                        borderOpacity: 0.4,
+                        backgroundColor: 'rgba(212, 137, 14, 0.09)',
+                        color: 'rgb(250, 204, 139)',
+                      }}
                       aria-label={`Explain why ${threadTitle} ${issueNumber != null ? `#${issueNumber}` : ''} is next in ${order.name}`}
                     >
                       Explain route

@@ -43,12 +43,12 @@ export function ComicPillar({
 
   return (
     <div className="w-full space-y-4">
-      <div className="flex items-center gap-2 border-b-2 border-amber-500/40 pb-2">
-        <span className="text-[10px] font-black tabular-nums text-amber-500">01</span>
-        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-500">The Comic</span>
+      <div className="flex items-center gap-2 border-b-2 pb-2" style={{ borderColor: 'var(--theme-comic-accent)' }}>
+        <span className="text-[10px] font-black tabular-nums" style={{ color: 'var(--theme-comic-accent)' }}>01</span>
+        <span className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-comic-accent)' }}>The Comic</span>
       </div>
       <section id="thread-info" aria-labelledby="selected-issue-heading" className="space-y-3">
-        <div className="rounded-2xl border border-amber-500/20 bg-white/[0.04] p-3 md:p-4">
+        <div className="rounded-2xl p-3 md:p-4" style={{ border: '1px solid var(--theme-comic-accent)', borderOpacity: 0.2, backgroundColor: 'var(--theme-bg-panel)' }}>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
@@ -56,7 +56,7 @@ export function ComicPillar({
               </p>
               <h2 id="selected-issue-heading" className="mt-1 text-xl font-black leading-tight text-stone-100">
                 {threadTitle}
-                {issueNumber != null ? <span className="text-amber-400"> #{issueNumber}</span> : null}
+                {issueNumber != null ? <span style={{ color: 'var(--theme-comic-accent)' }}> #{issueNumber}</span> : null}
               </h2>
               {hasValidRolledResult ? (
                 <p className="mt-1 text-[11px] font-bold text-stone-400">
@@ -71,7 +71,11 @@ export function ComicPillar({
                   type="button"
                   onClick={handleCopyComicReference}
                   disabled={!activeRatingThread?.title}
-                  className="min-h-11 rounded-xl border border-white/10 bg-white/5 px-3 text-[10px] font-black uppercase tracking-wider text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-amber-500 disabled:opacity-30"
+                  className="min-h-11 rounded-xl px-3 text-[10px] font-black uppercase tracking-wider text-stone-300 transition disabled:opacity-30"
+                  style={{
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    backgroundColor: 'rgba(255,255,255,0.05)',
+                  }}
                   aria-label={`Copy ${threadTitle} ${issueNumber}`}
                 >
                   {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Retry copy' : 'Copy'}
@@ -80,7 +84,11 @@ export function ComicPillar({
                   type="button"
                   onClick={() => setIsCorrectionDialogOpen(true)}
                   disabled={!activeRatingThread?.id}
-                  className="min-h-11 rounded-xl border border-white/10 bg-white/5 px-3 text-[10px] font-black uppercase tracking-wider text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-amber-500 disabled:opacity-30"
+                  className="min-h-11 rounded-xl px-3 text-[10px] font-black uppercase tracking-wider text-stone-300 transition disabled:opacity-30"
+                  style={{
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    backgroundColor: 'rgba(255,255,255,0.05)',
+                  }}
                   aria-label="Correct issue number"
                 >
                   Edit
