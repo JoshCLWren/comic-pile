@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
 import type { ReactNode } from 'react'
 import { ThemeId, DEFAULT_THEME, isValidThemeId, SUPPORTED_THEMES } from '../types/theme'
 import type { UserPreferences } from '../types'
-import api, { getAccessToken, preferencesApi } from '../services/api'
+import api, { getAccessToken } from '../services/api'
 
 const THEME_STORAGE_KEY = 'comic-pile-theme'
 
@@ -78,7 +78,7 @@ export function ThemeProvider({ children, initialTheme = DEFAULT_THEME }: ThemeP
     userChoseThemeRef.current = true
 
     try {
-      await preferencesApi.patch({ theme: newTheme })
+      await api.patch('/v1/users/me/preferences', { theme: newTheme }, { skipAuthRedirect: true })
       setThemeState(newTheme)
       applyTheme(newTheme)
       writeCachedTheme(newTheme)
@@ -101,7 +101,6 @@ export function ThemeProvider({ children, initialTheme = DEFAULT_THEME }: ThemeP
     }
 
     api.get<UserPreferences>('/v1/users/me/preferences', { skipAuthRedirect: true })
-      .then((response) => {
       .then((response) => {
         if (isMounted && !userChoseThemeRef.current && isValidThemeId(response.theme)) {
           setThemeState(response.theme)
