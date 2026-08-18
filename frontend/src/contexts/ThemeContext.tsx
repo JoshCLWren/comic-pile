@@ -1,68 +1,63 @@
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { ThemeId, DEFAULT_THEME, isValidThemeId, SUPPORTED_THEMES } from '../types/theme';
-import type { UserPreferences } from '../types';
-import api from '../services/api';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import type { ReactNode } from 'react'
+import { ThemeId, DEFAULT_THEME, isValidThemeId, SUPPORTED_THEMES } from '../types/theme'
+import type { UserPreferences } from '../types'
+import api from '../services/api'
 
 interface ThemeContextValue {
-  theme: ThemeId;
-  isLoading: boolean;
-  setTheme: (theme: ThemeId) => Promise<void>;
-  supportedThemes: readonly ThemeId[];
+  theme: ThemeId
+  isLoading: boolean
+  setTheme: (theme: ThemeId) => Promise<void>
+  supportedThemes: readonly ThemeId[]
 }
 
-const ThemeContext = createContext<ThemeContextValue | null>(null);
+const ThemeContext = createContext<ThemeContextValue | null>(null)
 
 export function useTheme() {
-  const context = useContext(ThemeContext);
+  const context = useContext(ThemeContext)
   if (!context) {
-    throw new Error('useTheme must be used within a ThemeProvider');
+    throw new Error('useTheme must be used within a ThemeProvider')
   }
-  return context;
+  return context
 }
 
 interface ThemeProviderProps {
-  children: ReactNode;
-  initialTheme?: ThemeId;
+  children: ReactNode
+  initialTheme?: ThemeId
 }
 
 export function ThemeProvider({ children, initialTheme = DEFAULT_THEME }: ThemeProviderProps) {
-  const [theme, setThemeState] = useState<ThemeId>(initialTheme);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isApplying, setIsApplying] = useState(false);
+  const [theme, setThemeState] = useState<ThemeId>(initialTheme)
 
   const applyTheme = useCallback((newTheme: ThemeId) => {
-    document.documentElement.setAttribute('data-theme', newTheme);
-  }, []);
+    document.documentElement.setAttribute('data-theme', newTheme)
+  }, [])
 
   const setTheme = useCallback(async (newTheme: ThemeId) => {
     if (!isValidThemeId(newTheme)) {
-      console.error(`Invalid theme id: ${newTheme}`);
-      return;
+      console.error(`Invalid theme id: ${newTheme}`)
+      return
     }
 
-    setIsApplying(true);
     try {
-      await api.patch<UserPreferences>('/users/me/preferences', { theme: newTheme });
-      setThemeState(newTheme);
-      applyTheme(newTheme);
+      await api.patch<UserPreferences>('/users/me/preferences', { theme: newTheme })
+      setThemeState(newTheme)
+      applyTheme(newTheme)
     } catch (error) {
-      console.error('Failed to persist theme preference:', error);
-      throw error;
-    } finally {
-      setIsApplying(false);
+      console.error('Failed to persist theme preference:', error)
+      throw error
     }
-  }, [applyTheme]);
+  }, [applyTheme])
 
   useEffect(() => {
     if (isValidThemeId(initialTheme)) {
-      applyTheme(initialTheme);
+      applyTheme(initialTheme)
     }
-    setIsLoading(false);
-  }, [initialTheme, applyTheme]);
+  }, [initialTheme, applyTheme])
 
   return (
-    <ThemeContext.Provider value={{ theme, isLoading, setTheme, supportedThemes: SUPPORTED_THEMES }}>
+    <ThemeContext.Provider value={{ theme, isLoading: false, setTheme, supportedThemes: SUPPORTED_THEMES }}>
       {children}
     </ThemeContext.Provider>
-  );
+  )
 }

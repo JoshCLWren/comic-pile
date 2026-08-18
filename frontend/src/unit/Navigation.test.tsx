@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import { AuthProvider } from '../App'
 import Navigation from '../components/Navigation'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
+import { ThemeProvider } from '../contexts/ThemeContext'
 
 const mockApiGet = vi.fn()
 const mockApiPost = vi.fn()
@@ -38,9 +39,11 @@ const renderWithAuth = (initialEntry = '/') => {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <AuthProvider>
-        <BugReportRestoreProvider>
-          <Navigation onBugReportSubmit={vi.fn()} />
-        </BugReportRestoreProvider>
+        <ThemeProvider initialTheme="classic">
+          <BugReportRestoreProvider>
+            <Navigation onBugReportSubmit={vi.fn()} />
+          </BugReportRestoreProvider>
+        </ThemeProvider>
       </AuthProvider>
     </MemoryRouter>
   )
@@ -51,9 +54,11 @@ const renderWithoutAuth = () => {
   return render(
     <MemoryRouter initialEntries={['/']}>
       <AuthProvider>
-        <BugReportRestoreProvider>
-          <Navigation onBugReportSubmit={vi.fn()} />
-        </BugReportRestoreProvider>
+        <ThemeProvider initialTheme="classic">
+          <BugReportRestoreProvider>
+            <Navigation onBugReportSubmit={vi.fn()} />
+          </BugReportRestoreProvider>
+        </ThemeProvider>
       </AuthProvider>
     </MemoryRouter>
   )
@@ -130,9 +135,11 @@ test('shows loading and non-auth failure states and logs out gracefully', async 
   render(
     <MemoryRouter initialEntries={['/queue']}>
       <AuthProvider>
-        <BugReportRestoreProvider>
-          <Navigation onBugReportSubmit={vi.fn()} />
-        </BugReportRestoreProvider>
+        <ThemeProvider initialTheme="classic">
+          <BugReportRestoreProvider>
+            <Navigation onBugReportSubmit={vi.fn()} />
+          </BugReportRestoreProvider>
+        </ThemeProvider>
       </AuthProvider>
     </MemoryRouter>,
   )
@@ -150,9 +157,11 @@ test('clears authentication when the user lookup returns unauthorized', async ()
   render(
     <MemoryRouter initialEntries={['/']}>
       <AuthProvider>
-        <BugReportRestoreProvider>
-          <Navigation onBugReportSubmit={vi.fn()} />
-        </BugReportRestoreProvider>
+        <ThemeProvider initialTheme="classic">
+          <BugReportRestoreProvider>
+            <Navigation onBugReportSubmit={vi.fn()} />
+          </BugReportRestoreProvider>
+        </ThemeProvider>
       </AuthProvider>
     </MemoryRouter>,
   )
@@ -165,9 +174,11 @@ test('falls back to an empty username when the user profile omits it', async () 
   render(
     <MemoryRouter initialEntries={['/']}>
       <AuthProvider>
-        <BugReportRestoreProvider>
-          <Navigation onBugReportSubmit={vi.fn()} />
-        </BugReportRestoreProvider>
+        <ThemeProvider initialTheme="classic">
+          <BugReportRestoreProvider>
+            <Navigation onBugReportSubmit={vi.fn()} />
+          </BugReportRestoreProvider>
+        </ThemeProvider>
       </AuthProvider>
     </MemoryRouter>,
   )
