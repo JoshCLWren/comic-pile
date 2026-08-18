@@ -30,6 +30,7 @@ function ratingView(overrides: Record<string, unknown> = {}) {
       title: 'Saga',
       format: 'Comic',
       issues_remaining: 5,
+      queue_position: 1,
       total_issues: 10,
       issue_number: '3',
       next_issue_number: '4',
@@ -118,7 +119,7 @@ describe('RatingView action panel (issue #1406)', () => {
   it('primary action shows Mark read & complete for last issue', () => {
     render(ratingView({
       activeRatingThread: {
-        id: 1, title: 'Saga', format: 'Comic', issues_remaining: 1, total_issues: 10,
+        id: 1, title: 'Saga', format: 'Comic', issues_remaining: 1, queue_position: 1, total_issues: 10,
         issue_number: '10', next_issue_number: null, reading_progress: 'in_progress',
         issue_id: 100, next_issue_id: null,
       },
@@ -129,7 +130,7 @@ describe('RatingView action panel (issue #1406)', () => {
   it('last issue banner is displayed', () => {
     render(ratingView({
       activeRatingThread: {
-        id: 1, title: 'Saga', format: 'Comic', issues_remaining: 1, total_issues: 10,
+        id: 1, title: 'Saga', format: 'Comic', issues_remaining: 1, queue_position: 1, total_issues: 10,
         issue_number: '10', next_issue_number: null, reading_progress: 'in_progress',
         issue_id: 100, next_issue_id: null,
       },

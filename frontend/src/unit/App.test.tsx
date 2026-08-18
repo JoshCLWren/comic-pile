@@ -64,14 +64,14 @@ const TestAuthConsumer = ({ onAuth }: { onAuth?: (auth: AuthContextValue) => voi
 const renderWithAuth = (initialEntry = '/') => {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
-      <AuthProvider>
-        <ThemeProvider initialTheme="classic">
+      <ThemeProvider initialTheme="classic">
+        <AuthProvider>
           <BugReportRestoreProvider>
             <TestAuthConsumer />
             <AppRoutes />
           </BugReportRestoreProvider>
-        </ThemeProvider>
-      </AuthProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </MemoryRouter>
   )
 }

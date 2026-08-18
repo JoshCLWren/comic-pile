@@ -60,7 +60,7 @@ export default function ResumeRecovery({
           }
           setRecoveryState('idle')
           return
-        } catch (error) {
+        } catch {
           if (attempt < MAX_RESUME_ATTEMPTS) {
             await delay(RESUME_RETRY_DELAY_MS)
           }

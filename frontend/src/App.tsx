@@ -17,7 +17,6 @@ import { ToastProvider } from './contexts/ToastProvider'
 import { CacheProvider } from './contexts/CacheContext'
 import { BugReportRestoreProvider } from './contexts/BugReportRestoreContext'
 import { ThemeProvider } from './contexts/ThemeContext'
-import type { ThemeId } from './types/theme'
 import './index.css'
 
 declare global {
@@ -47,6 +46,25 @@ const HelpPage = lazyRoute('help')
 const WhatsNewPage = lazyRoute('whatsNew')
 const LoginPage = lazyRoute('login')
 const RegisterPage = lazyRoute('register')
+
+export interface AuthContextValue {
+  isAuthenticated: boolean
+  isLoading: boolean
+  user: AuthUser | null
+  login: (accessToken: string) => Promise<void>
+  logout: () => void
+  revalidateSession: (timeout?: number) => Promise<void>
+  recoverSession: (timeout?: number) => Promise<void>
+}
+
+const AuthContext = createContext<AuthContextValue | null>(null)
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function useAuth() {
+  const context = useContext(AuthContext)
+  if (!context) throw new Error('useAuth must be used within an AuthProvider')
+  return context
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)

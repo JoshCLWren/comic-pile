@@ -6,12 +6,16 @@ import { ThemeId, DEFAULT_THEME, SUPPORTED_THEMES, isValidThemeId } from '../typ
 
 const mockApiGet = vi.fn()
 const mockApiPatch = vi.fn()
+const mockGetAccessToken = vi.fn(() => 'test-token')
 
 vi.mock('../services/api', () => ({
   default: {
     get: (...args: Parameters<typeof mockApiGet>) => mockApiGet(...args),
     patch: (...args: Parameters<typeof mockApiPatch>) => mockApiPatch(...args),
   },
+  getAccessToken: () => mockGetAccessToken(),
+  setAccessToken: vi.fn(),
+  clearAccessToken: vi.fn(),
 }))
 
 const THEME_STORAGE_KEY = 'comic-pile-theme'
@@ -57,6 +61,8 @@ beforeEach(() => {
   localStorage.clear()
   mockApiGet.mockReset()
   mockApiPatch.mockReset()
+  mockGetAccessToken.mockReset()
+  mockGetAccessToken.mockReturnValue('test-token')
   mockApiGet.mockResolvedValue({ theme: 'classic', user_id: 1 })
   mockApiPatch.mockResolvedValue({ theme: 'ink-gold', user_id: 1 })
   document.documentElement.removeAttribute('data-theme')

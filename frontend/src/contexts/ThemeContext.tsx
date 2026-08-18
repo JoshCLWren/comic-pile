@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
 import type { ReactNode } from 'react'
 import { ThemeId, DEFAULT_THEME, isValidThemeId, SUPPORTED_THEMES } from '../types/theme'
 import type { UserPreferences } from '../types'
-import api from '../services/api'
+import api, { getAccessToken } from '../services/api'
 
 const THEME_STORAGE_KEY = 'comic-pile-theme'
 
@@ -57,6 +57,7 @@ export function ThemeProvider({ children, initialTheme = DEFAULT_THEME }: ThemeP
   const [theme, setThemeState] = useState<ThemeId>(effectiveInitialTheme)
   const [isLoading, setIsLoading] = useState(true)
   const hasAppliedInitialTheme = useRef(false)
+  const userChoseThemeRef = useRef(false)
 
   const applyTheme = useCallback((newTheme: ThemeId) => {
     document.documentElement.setAttribute('data-theme', newTheme)
@@ -74,6 +75,8 @@ export function ThemeProvider({ children, initialTheme = DEFAULT_THEME }: ThemeP
       return
     }
 
+    userChoseThemeRef.current = true
+
     try {
       await api.patch<UserPreferences>('/users/me/preferences', { theme: newTheme })
       setThemeState(newTheme)
@@ -85,19 +88,24 @@ export function ThemeProvider({ children, initialTheme = DEFAULT_THEME }: ThemeP
     }
   }, [applyTheme])
 
-  // Fetch user's persisted theme from server and sync
+  // Fetch the authenticated user's persisted theme from the server and sync.
+  // The endpoint requires auth, so skip the probe when no access token exists.
+  // This effect runs once on mount; a stale response must never override a
+  // theme the user explicitly chose in this session.
   useEffect(() => {
     let isMounted = true
 
+    if (!getAccessToken()) {
+      setIsLoading(false)
+      return
+    }
+
     api.get<UserPreferences>('/users/me/preferences', { skipAuthRedirect: true })
       .then((response) => {
-        if (isMounted && isValidThemeId(response.theme)) {
-          const serverTheme = response.theme
-          if (serverTheme !== theme) {
-            setThemeState(serverTheme)
-            applyTheme(serverTheme)
-            writeCachedTheme(serverTheme)
-          }
+        if (isMounted && !userChoseThemeRef.current && isValidThemeId(response.theme)) {
+          setThemeState(response.theme)
+          applyTheme(response.theme)
+          writeCachedTheme(response.theme)
         }
       })
       .catch(() => {
@@ -112,7 +120,7 @@ export function ThemeProvider({ children, initialTheme = DEFAULT_THEME }: ThemeP
     return () => {
       isMounted = false
     }
-  }, [applyTheme, theme])
+  }, [applyTheme])
 
   // Apply theme when it changes (covers server sync updates)
   useEffect(() => {

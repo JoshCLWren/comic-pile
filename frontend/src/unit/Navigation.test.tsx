@@ -38,13 +38,13 @@ const renderWithAuth = (initialEntry = '/') => {
 
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
-      <AuthProvider>
-        <ThemeProvider initialTheme="classic">
+      <ThemeProvider initialTheme="classic">
+        <AuthProvider>
           <BugReportRestoreProvider>
             <Navigation onBugReportSubmit={vi.fn()} />
           </BugReportRestoreProvider>
-        </ThemeProvider>
-      </AuthProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </MemoryRouter>
   )
 }
@@ -53,13 +53,13 @@ const renderWithoutAuth = () => {
   mockApiGet.mockRejectedValue(new Error('unauthenticated'))
   return render(
     <MemoryRouter initialEntries={['/']}>
-      <AuthProvider>
-        <ThemeProvider initialTheme="classic">
+      <ThemeProvider initialTheme="classic">
+        <AuthProvider>
           <BugReportRestoreProvider>
             <Navigation onBugReportSubmit={vi.fn()} />
           </BugReportRestoreProvider>
-        </ThemeProvider>
-      </AuthProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </MemoryRouter>
   )
 }
@@ -131,16 +131,17 @@ test('puts the mobile Sign out action inside More', async () => {
 
 test('shows loading and non-auth failure states and logs out gracefully', async () => {
   mockApiGet.mockResolvedValueOnce({ username: 'user', email: 'user@example.com' })
+    .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
     .mockRejectedValueOnce(new Error('server unavailable'))
   render(
     <MemoryRouter initialEntries={['/queue']}>
-      <AuthProvider>
-        <ThemeProvider initialTheme="classic">
+      <ThemeProvider initialTheme="classic">
+        <AuthProvider>
           <BugReportRestoreProvider>
             <Navigation onBugReportSubmit={vi.fn()} />
           </BugReportRestoreProvider>
-        </ThemeProvider>
-      </AuthProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </MemoryRouter>,
   )
   const user = userEvent.setup()
@@ -153,16 +154,17 @@ test('shows loading and non-auth failure states and logs out gracefully', async 
 
 test('clears authentication when the user lookup returns unauthorized', async () => {
   mockApiGet.mockResolvedValueOnce({ username: 'user', email: 'user@example.com' })
+    .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
     .mockRejectedValueOnce({ isAxiosError: true, response: { status: 401 } })
   render(
     <MemoryRouter initialEntries={['/']}>
-      <AuthProvider>
-        <ThemeProvider initialTheme="classic">
+      <ThemeProvider initialTheme="classic">
+        <AuthProvider>
           <BugReportRestoreProvider>
             <Navigation onBugReportSubmit={vi.fn()} />
           </BugReportRestoreProvider>
-        </ThemeProvider>
-      </AuthProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </MemoryRouter>,
   )
   await waitFor(() => expect(mockClearAccessToken).toHaveBeenCalled())
@@ -173,13 +175,13 @@ test('falls back to an empty username when the user profile omits it', async () 
   mockApiGet.mockResolvedValue({ username: '', email: 'empty@test.com' })
   render(
     <MemoryRouter initialEntries={['/']}>
-      <AuthProvider>
-        <ThemeProvider initialTheme="classic">
+      <ThemeProvider initialTheme="classic">
+        <AuthProvider>
           <BugReportRestoreProvider>
             <Navigation onBugReportSubmit={vi.fn()} />
           </BugReportRestoreProvider>
-        </ThemeProvider>
-      </AuthProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </MemoryRouter>,
   )
   await waitFor(() => expect(screen.getByRole('button', { name: /more pages/i })).toBeInTheDocument())
