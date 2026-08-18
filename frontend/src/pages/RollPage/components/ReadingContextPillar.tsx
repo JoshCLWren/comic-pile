@@ -28,6 +28,10 @@ export function ReadingContextPillar({
 
   return (
     <div className="w-full space-y-4">
+      <div className="flex items-center gap-2 border-b-2 border-teal-400/40 pb-2">
+        <span className="text-[10px] font-black tabular-nums text-teal-400">02</span>
+        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-teal-400">Reading Context</span>
+      </div>
       <ContinuityReadinessSummary issueId={issueId} />
 
       {connectedThreads.length > 0 ? (

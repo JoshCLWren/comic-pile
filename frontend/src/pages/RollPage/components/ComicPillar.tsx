@@ -43,8 +43,12 @@ export function ComicPillar({
 
   return (
     <div className="w-full space-y-4">
+      <div className="flex items-center gap-2 border-b-2 border-amber-500/40 pb-2">
+        <span className="text-[10px] font-black tabular-nums text-amber-500">01</span>
+        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-500">The Comic</span>
+      </div>
       <section id="thread-info" aria-labelledby="selected-issue-heading" className="space-y-3">
-        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 md:p-4">
+        <div className="rounded-2xl border border-amber-500/20 bg-white/[0.04] p-3 md:p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">

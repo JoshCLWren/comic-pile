@@ -22,7 +22,11 @@ export function YourContextPillar({
 
   return (
     <div className="w-full space-y-4">
-      <section aria-labelledby="rating-heading" className="space-y-3 rounded-2xl border border-white/10 bg-black/10 p-3">
+      <div className="flex items-center gap-2 border-b-2 border-violet-400/40 pb-2">
+        <span className="text-[10px] font-black tabular-nums text-violet-400">03</span>
+        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-violet-400">Your Context</span>
+      </div>
+      <section aria-labelledby="rating-heading" className="space-y-3 rounded-2xl border border-violet-400/20 bg-black/10 p-3">
         <div className="flex items-end justify-between gap-3">
           <div>
             <Tooltip content={`Ratings of ${RATING_THRESHOLD.toFixed(1)}+ move the thread to the front and step the die down. Lower ratings move it past the next roll range and step the die up.`}>
