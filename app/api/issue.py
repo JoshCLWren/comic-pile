@@ -775,18 +775,20 @@ async def set_current_issue(
         )
     
     # Mark all issues before the target as read
-    # Mark the target and all after as unread (to ensure clean state)
+    # Mark the target issue as unread
+    # Preserve the status of issues after the target
     for issue in issues:
         if issue.position < target_issue.position:
             # Mark as read if not already
             if issue.status != "read":
                 issue.status = "read"
                 issue.read_at = datetime.now(UTC)
-        else:
-            # Mark as unread if not already (including target)
+        elif issue.position == target_issue.position:
+            # Set target issue to unread
             if issue.status != "unread":
                 issue.status = "unread"
                 issue.read_at = None
+        # else: issue.position > target_issue.position — preserve status
     
     # Recalculate thread issue tracking state
     _recalculate_thread_issue_tracking_state(thread, issues)
