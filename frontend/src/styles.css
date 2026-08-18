@@ -34,6 +34,49 @@ body {
   --text-dim: #6b5f50;
   --mobile-nav-height: 3.5rem;
   --desktop-nav-height: 5rem;
+
+  --theme-page-bg: var(--bg-main);
+  --theme-panel-bg: var(--glass-bg);
+  --theme-panel-border: var(--glass-border);
+  --theme-text-primary: var(--text-primary);
+  --theme-text-muted: var(--text-muted);
+  --theme-text-dim: var(--text-dim);
+  --theme-primary-action: var(--accent-amber);
+  --theme-primary-action-text: #110e0a;
+  --theme-danger: var(--accent-red);
+  --theme-danger-hover: #d65b45;
+  --theme-comic-accent: var(--accent-amber);
+  --theme-continuity-accent: #22d1ae;
+  --theme-personal-accent: #a78bfa;
+  --theme-glow-primary: rgba(212, 137, 14, 0.3);
+}
+
+[data-theme="command-center"] {
+  --bg-main: #0b0907;
+  --bg-darker: #050402;
+  --accent-primary: #d6890e;
+  --accent-red: #c0392b;
+  --accent-amber: var(--accent-primary);
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(212, 137, 14, 0.15);
+  --text-primary: #e8d5b0;
+  --text-muted: #a0937e;
+  --text-dim: #6b5f50;
+
+  --theme-page-bg: var(--bg-main);
+  --theme-panel-bg: rgba(255, 255, 255, 0.03);
+  --theme-panel-border: var(--glass-border);
+  --theme-text-primary: var(--text-primary);
+  --theme-text-muted: var(--text-muted);
+  --theme-text-dim: var(--text-dim);
+  --theme-primary-action: var(--accent-amber);
+  --theme-primary-action-text: #050402;
+  --theme-danger: var(--accent-red);
+  --theme-danger-hover: #d65b45;
+  --theme-comic-accent: var(--accent-amber);
+  --theme-continuity-accent: #22d1ae;
+  --theme-personal-accent: #a78bfa;
+  --theme-glow-primary: rgba(212, 137, 14, 0.35);
 }
 
 /* Keep mobile form controls inside their containers and at the iOS no-zoom font threshold. */

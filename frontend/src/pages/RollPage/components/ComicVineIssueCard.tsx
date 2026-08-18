@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueIntelligence'
-import { type ComicVineRelatedIssue } from '../../../services/api'
+import { type ComicVineIssueIntelligence, type ComicVineRelatedIssue } from '../../../services/api'
 
 interface ComicVineIssueCardProps {
   issueId: number | null | undefined
+  metadata?: ComicVineIssueIntelligence | null
+  isLoading?: boolean
 }
 
 function formatDate(value: string | null): string | null {
@@ -26,8 +28,10 @@ function relatedLabel(issue: ComicVineRelatedIssue): string {
   return issue.name ? `${identity} - ${issue.name}` : identity
 }
 
-export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
-  const { metadata, isLoading } = useComicVineIssueIntelligence(issueId)
+export function ComicVineIssueCard({ issueId, metadata: providedMetadata, isLoading: providedIsLoading }: ComicVineIssueCardProps) {
+  const { metadata, isLoading } = providedMetadata !== undefined || providedIsLoading !== undefined
+    ? { metadata: providedMetadata ?? null, isLoading: providedIsLoading ?? false }
+    : useComicVineIssueIntelligence(issueId)
   const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null)
 
   if (!issueId || (!isLoading && !metadata)) return null

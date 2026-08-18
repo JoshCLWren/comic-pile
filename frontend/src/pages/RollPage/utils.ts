@@ -81,3 +81,9 @@ export function createExplosion(): void {
     setTimeout(() => p.remove(), 1000)
   }
 }
+
+export function getDieDirection(currentDie: number, predictedDie: number): string {
+  if (predictedDie < currentDie) return 'More focused next roll'
+  if (predictedDie > currentDie) return 'More variety next roll'
+  return 'Die stays the same'
+}
