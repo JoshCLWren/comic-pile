@@ -63,8 +63,20 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
       setIsAppearanceOpen(false)
     }
 
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsMoreOpen(false)
+        setIsAppearanceOpen(false)
+        moreButtonRef.current?.focus()
+      }
+    }
+
     document.addEventListener('pointerdown', dismissMoreMenu)
-    return () => document.removeEventListener('pointerdown', dismissMoreMenu)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', dismissMoreMenu)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
   }, [isMoreOpen])
 
   useEffect(() => {

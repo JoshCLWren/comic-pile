@@ -48,61 +48,6 @@ const WhatsNewPage = lazyRoute('whatsNew')
 const LoginPage = lazyRoute('login')
 const RegisterPage = lazyRoute('register')
 
-export interface AuthContextValue {
-  isAuthenticated: boolean
-  isLoading: boolean
-  user: AuthUser | null
-  login: (accessToken: string) => Promise<void>
-  logout: () => void
-  revalidateSession: (timeout?: number) => Promise<void>
-  recoverSession: (timeout?: number) => Promise<void>
-}
-
-const AuthContext = createContext<AuthContextValue | null>(null)
-
-// eslint-disable-next-line react-refresh/only-export-components
-export function useAuth() {
-  const context = useContext(AuthContext)
-  if (!context) throw new Error('useAuth must be used within an AuthProvider')
-  return context
-}
-
-function fetchUserTheme(): Promise<ThemeId> {
-  return api.get<{ theme: ThemeId }>('/users/me/preferences', { skipAuthRedirect: true })
-    .then((response) => response.theme)
-    .catch(() => 'classic' as ThemeId)
-}
-
-function ThemeBootstrap({ children, initialTheme }: { children: ReactNode; initialTheme: ThemeId }) {
-  const [theme, setTheme] = useState<ThemeId>(initialTheme)
-  const [isLoading, setIsLoading] = useState(true)
-
-  useEffect(() => {
-    let isMounted = true
-    fetchUserTheme()
-      .then((fetchedTheme) => {
-        if (isMounted) {
-          setTheme(fetchedTheme)
-          setIsLoading(false)
-        }
-      })
-      .catch(() => {
-        if (isMounted) {
-          setIsLoading(false)
-        }
-      })
-    return () => {
-      isMounted = false
-    }
-  }, [])
-
-  if (isLoading) {
-    return <ThemeProvider initialTheme={initialTheme}>{children}</ThemeProvider>
-  }
-
-  return <ThemeProvider initialTheme={theme}>{children}</ThemeProvider>
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -319,13 +264,13 @@ function App() {
         <BugReportRestoreProvider>
           <ToastProvider>
             <CacheProvider>
-              <AuthProvider>
-                <AuthResumeBoundary>
-                  <ThemeBootstrap initialTheme="classic">
+              <ThemeProvider initialTheme="classic">
+                <AuthProvider>
+                  <AuthResumeBoundary>
                     <AppRoutes />
-                  </ThemeBootstrap>
-                </AuthResumeBoundary>
-              </AuthProvider>
+                  </AuthResumeBoundary>
+                </AuthProvider>
+              </ThemeProvider>
             </CacheProvider>
           </ToastProvider>
         </BugReportRestoreProvider>
