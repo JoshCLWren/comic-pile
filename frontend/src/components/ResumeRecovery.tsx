@@ -44,7 +44,9 @@ export default function ResumeRecovery({
     }
 
     const sequence = ++requestSequence.current
-    setRecoveryState('reconnecting')
+    if (mode === 'explicit') {
+      setRecoveryState('reconnecting')
+    }
     const recover = mode === 'explicit' ? recoverSession : revalidateSession
 
     try {
@@ -60,7 +62,7 @@ export default function ResumeRecovery({
           }
           setRecoveryState('idle')
           return
-        } catch (error) {
+        } catch (_error) {
           if (attempt < MAX_RESUME_ATTEMPTS) {
             await delay(RESUME_RETRY_DELAY_MS)
           }

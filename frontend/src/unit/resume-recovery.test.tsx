@@ -46,7 +46,7 @@ describe('ResumeRecovery', () => {
     vi.restoreAllMocks()
   })
 
-  it('revalidates auth and cached application data after a BFCache restore', async () => {
+  it('revalidates auth and cached application data silently after a BFCache restore', async () => {
     revalidateSession.mockResolvedValue(undefined)
     invalidateQueries.mockResolvedValue(undefined)
 
@@ -54,14 +54,13 @@ describe('ResumeRecovery', () => {
     dispatchPageShow(true)
 
     expect(screen.getByText('Last usable screen')).toBeInTheDocument()
-    expect(screen.getByRole('status')).toHaveTextContent('Reconnecting ComicPile')
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
     await waitFor(() => expect(revalidateSession).toHaveBeenCalledWith(15000))
     await waitFor(() => expect(invalidateQueries).toHaveBeenCalledOnce())
-    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument())
     expect(recoverSession).not.toHaveBeenCalled()
   })
 
-  it('keeps the application visible and offers recovery after bounded retries fail', async () => {
+  it('keeps the application visible during automatic retries, then shows failure alert when retries are exhausted', async () => {
     vi.useFakeTimers()
     revalidateSession.mockRejectedValue(new Error('network suspended'))
 
@@ -74,6 +73,7 @@ describe('ResumeRecovery', () => {
 
     expect(revalidateSession).toHaveBeenCalledTimes(2)
     expect(screen.getByText('Last usable screen')).toBeInTheDocument()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
     expect(screen.getByRole('alert')).toHaveTextContent('ComicPile could not reconnect')
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reload' })).toBeInTheDocument()
@@ -124,6 +124,9 @@ describe('ResumeRecovery', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(750)
     })
+
+    expect(screen.getByRole('alert')).toHaveTextContent('ComicPile could not reconnect')
+    expect(revalidateSession).toHaveBeenCalledTimes(2)
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     expect(recoverSession).toHaveBeenCalledOnce()
