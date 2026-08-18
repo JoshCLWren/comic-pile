@@ -21,7 +21,6 @@ from app.schemas.issue import (
     IssueOrderValidationResponse,
     IssueReorderRequest,
     IssueResponse,
-    IssueSetCurrentRequest,
     IssueUpdate,
 )
 from app.schemas.migration import MigrateToIssuesRequest
@@ -84,7 +83,6 @@ __all__ = [
     "IssueMoveRequest",
     "IssueReorderRequest",
     "IssueUpdate",
-    "IssueSetCurrentRequest",
     "IssueResponse",
     "IssueListResponse",
     "IssueOrderValidationResponse",

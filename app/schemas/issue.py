@@ -76,11 +76,5 @@ class IssueReorderRequest(BaseModel):
 
 class IssueOrderValidationResponse(BaseModel):
     """Schema for reporting in-thread dependency ordering conflicts."""
-    
+
     warnings: list[str]
-
-
-class IssueSetCurrentRequest(BaseModel):
-    """Schema for setting the current issue in a thread."""
-    
-    issue_number: str = Field(..., min_length=1, description="Issue number to set as current")

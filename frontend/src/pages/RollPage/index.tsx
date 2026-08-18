@@ -68,15 +68,15 @@ export default function RollPage() {
     rollTimeoutRef,
   } = state
 
-const [readingOrders, setReadingOrders] = useState<import('../../services/api-reading-orders').ReadingOrder[]>([])
-    const [connectedThreads, setConnectedThreads] = useState<ConnectedThreadInfo[]>([])
-    
-    // State for set current issue modal
-    const [isSetCurrentIssueModalOpen, setIsSetCurrentIssueModalOpen] = useState(false)
-    const [setCurrentIssueThreadId, setSetCurrentIssueThreadId] = useState<number | null>(null)
-    const [setCurrentIssueValue, setSetCurrentIssueValue] = useState('')
-    const [setCurrentIssueError, setSetCurrentIssueError] = useState<string | null>(null)
-    const [setCurrentIssueIsPending, setSetCurrentIssueIsPending] = useState(false)
+  const [readingOrders, setReadingOrders] = useState<import('../../services/api-reading-orders').ReadingOrder[]>([])
+  const [connectedThreads, setConnectedThreads] = useState<ConnectedThreadInfo[]>([])
+
+  // State for the set-current-issue modal
+  const [isSetCurrentIssueModalOpen, setIsSetCurrentIssueModalOpen] = useState(false)
+  const [setCurrentIssueThreadId, setSetCurrentIssueThreadId] = useState<number | null>(null)
+  const [setCurrentIssueValue, setSetCurrentIssueValue] = useState('')
+  const [setCurrentIssueError, setSetCurrentIssueError] = useState<string | null>(null)
+  const [setCurrentIssueIsPending, setSetCurrentIssueIsPending] = useState(false)
 
   const { data: bootstrap, refetch: refetchBootstrap, isPending: isBootstrapLoading, isError: isBootstrapError, error: bootstrapError } = useRollBootstrap()
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
@@ -306,17 +306,17 @@ const [readingOrders, setReadingOrders] = useState<import('../../services/api-re
           }
           await refetchBootstrap()
           break
-case 'edit':
-      // Open set current issue modal instead of navigating to queue
-      if (selectedThread) {
-        setSetCurrentIssueThreadId(selectedThread.id);
-        // Set initial value to the current next issue number if available
-        const nextIssueNumber = selectedThread.next_issue_number ?? '';
-        setSetCurrentIssueValue(nextIssueNumber);
-        setSetCurrentIssueError(null);
-        setIsSetCurrentIssueModalOpen(true);
-      }
-      break
+        case 'edit':
+          // Open the set-current-issue modal instead of navigating to the queue editor.
+          // `issue_number` on a pool thread is the thread's next unread issue number.
+          if (selectedThread) {
+            setSetCurrentIssueThreadId(selectedThread.id)
+            const nextIssueNumber = selectedThread.issue_number ?? ''
+            setSetCurrentIssueValue(nextIssueNumber)
+            setSetCurrentIssueError(null)
+            setIsSetCurrentIssueModalOpen(true)
+          }
+          break
       }
     } catch (error) {
       console.error('Action failed:', error)
@@ -971,33 +971,33 @@ case 'edit':
                 <p className="text-xs text-red-400">{setCurrentIssueError}</p>
               )}
             </div>
-            
+
             <div className="space-y-2 pt-4 border-t border-white/10">
               <p className="text-xs text-stone-500">
                 This will mark all issues before the selected issue as read, and the selected issue as unread.
               </p>
             </div>
-            
+
             <div className="space-y-2">
               <button
                 type="button"
                 onClick={async () => {
                   if (!setCurrentIssueThreadId || !setCurrentIssueValue.trim()) {
-                    setSetCurrentIssueError('Please enter an issue number');
-                    return;
+                    setSetCurrentIssueError('Please enter an issue number')
+                    return
                   }
-                  
-                  setSetCurrentIssueIsPending(true);
-                  setSetCurrentIssueError(null);
+
+                  setSetCurrentIssueIsPending(true)
+                  setSetCurrentIssueError(null)
                   try {
-                    await issuesApi.setCurrentIssue(setCurrentIssueThreadId, setCurrentIssueValue.trim());
+                    await issuesApi.setCurrentIssue(setCurrentIssueThreadId, setCurrentIssueValue.trim())
                     // Close modal and refetch bootstrap to update the UI
-                    setIsSetCurrentIssueModalOpen(false);
-                    await refetchBootstrap();
+                    setIsSetCurrentIssueModalOpen(false)
+                    await refetchBootstrap()
                   } catch (error) {
-                    setSetCurrentIssueError(getApiErrorDetail(error));
+                    setSetCurrentIssueError(getApiErrorDetail(error))
                   } finally {
-                    setSetCurrentIssueIsPending(false);
+                    setSetCurrentIssueIsPending(false)
                   }
                 }}
                 disabled={setCurrentIssueIsPending}

@@ -144,7 +144,8 @@ describe('RollPage parent handlers', () => {
     await user.click(snoozeAction)
     await openActions()
     await user.click(screen.getByRole('button', { name: /edit thread/i }))
-    expect(spies.navigate).toHaveBeenCalledWith('/queue', { state: { editThreadId: 1 } })
+    expect(screen.getByRole('heading', { name: 'Set Current Issue' })).toBeInTheDocument()
+    expect(spies.navigate).not.toHaveBeenCalledWith('/queue', { state: { editThreadId: 1 } })
 
     await user.click(screen.getAllByRole('button', { name: 'd6' })[0]!)
     await user.click(screen.getAllByRole('button', { name: 'd4' })[0]!)
