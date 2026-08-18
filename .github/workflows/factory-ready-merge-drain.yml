@@ -1,8 +1,8 @@
 name: Factory Ready Merge Drain
 
 on:
-  schedule:
-    - cron: '2-57/5 * * * *'
+  # schedule:
+  #   - cron: '2-57/5 * * * *'
   workflow_dispatch:
   push:
     branches: [main]
