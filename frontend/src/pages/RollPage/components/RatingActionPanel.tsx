@@ -1,6 +1,3 @@
-import { useState } from 'react'
-import type { RatingThread } from './types'
-
 interface RatingActionPanelProps {
   errorMessage: string
   rateIsPending: boolean

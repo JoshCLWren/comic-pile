@@ -54,6 +54,12 @@ export function buildRatingThread(
   return null
 }
 
+export function getDieDirection(currentDie: number, predictedDie: number): string {
+  if (predictedDie < currentDie) return 'More focused next roll'
+  if (predictedDie > currentDie) return 'More variety next roll'
+  return 'Die stays the same'
+}
+
 export function getProgressPercentage(
   thread: { total_issues?: number | null; issues_remaining?: number | null } | null,
 ): number {

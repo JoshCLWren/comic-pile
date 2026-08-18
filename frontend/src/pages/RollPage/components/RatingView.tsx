@@ -1,25 +1,10 @@
-import { useState } from 'react'
-import IssueCorrectionDialog from '../../../components/IssueCorrectionDialog'
-import ContinuityCorrectionDialog from '../../../components/ContinuityCorrectionDialog'
-import Tooltip from '../../../components/Tooltip'
 import type { ReadingOrder } from '../../../services/api-reading-orders'
 import type { ConnectedThreadInfo } from '../../../types'
-import { RATING_THRESHOLD, getProgressPercentage } from '../utils'
 import type { RatingThread } from '../types'
-import { ComicVineIssueCard } from './ComicVineIssueCard'
-import { ContinuityReadinessSummary } from './ContinuityReadinessSummary'
-import { ReadingOrderGroups } from './ReadingOrderGroups'
-import { ReadingRouteExplanation } from './ReadingRouteExplanation'
 import { ComicPillar } from './ComicPillar'
 import { ReadingContextPillar } from './ReadingContextPillar'
 import { YourContextPillar } from './YourContextPillar'
 import { RatingActionPanel } from './RatingActionPanel'
-
-function getDieDirection(currentDie: number, predictedDie: number): string {
-  if (predictedDie < currentDie) return 'More focused next roll'
-  if (predictedDie > currentDie) return 'More variety next roll'
-  return 'Die stays the same'
-}
 
 interface RatingViewProps {
   activeRatingThread: RatingThread | null
@@ -39,6 +24,7 @@ interface RatingViewProps {
   onSubmitRating: (finishSession: boolean) => void
   onSnooze: () => void
   onCancel: () => void
+  onRefreshThread: () => void
 }
 
 export function RatingView({
@@ -61,70 +47,25 @@ export function RatingView({
   onCancel,
   onRefreshThread,
 }: RatingViewProps) {
-  const [isCorrectionDialogOpen, setIsCorrectionDialogOpen] = useState(false)
-  const [isContinuityDialogOpen, setIsContinuityDialogOpen] = useState(false)
-  const [isRouteExplanationOpen, setIsRouteExplanationOpen] = useState(false)
-  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
-  const threadTitle = activeRatingThread?.title ?? 'Loading…'
-  const issueNumber = activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number ?? null
-  const issueId = activeRatingThread?.issue_id ?? activeRatingThread?.next_issue_id
-  const totalIssues = activeRatingThread?.total_issues ?? null
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
-  const progress = getProgressPercentage(activeRatingThread)
-  const dieDirection = getDieDirection(currentDie, predictedDie)
-
-  async function handleCopyComicReference() {
-    if (!activeRatingThread?.title || issueNumber == null) return
-
-    try {
-      await navigator.clipboard.writeText(`${activeRatingThread.title} ${issueNumber}`)
-      setCopyStatus('copied')
-    } catch {
-      setCopyStatus('failed')
-    }
-  }
 
   return (
-    <div className="w-full space-y-4">
-      <div className="grid md:grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+    <div className="relative z-10 space-y-4 p-3 md:p-4">
+      <div className="grid gap-4 md:gap-6 md:grid-cols-2 xl:grid-cols-[minmax(0,26fr)_minmax(0,46fr)_minmax(0,28fr)]">
         <ComicPillar
           activeRatingThread={activeRatingThread}
           currentDie={currentDie}
           rolledResult={rolledResult}
-          rating={rating}
-          predictedDie={predictedDie}
-          hasValidRolledResult={hasValidRolledResult}
           poolSize={poolSize}
-          errorMessage={errorMessage}
-          rateIsPending={rateIsPending}
-          snoozeIsPending={snoozeIsPending}
-          dismissIsPending={dismissIsPending}
-          readingOrders={readingOrders}
-          connectedThreads={connectedThreads}
-          onUpdateRating={onUpdateRating}
-          onSubmitRating={onSubmitRating}
-          onSnooze={onSnooze}
-          onCancel={onCancel}
+          hasValidRolledResult={hasValidRolledResult}
+          onRefreshThread={onRefreshThread}
         />
 
         <ReadingContextPillar
           activeRatingThread={activeRatingThread}
-          currentDie={currentDie}
-          rolledResult={rolledResult}
-          rating={rating}
-          predictedDie={predictedDie}
-          hasValidRolledResult={hasValidRolledResult}
-          poolSize={poolSize}
-          errorMessage={errorMessage}
-          rateIsPending={rateIsPending}
-          snoozeIsPending={snoozeIsPending}
-          dismissIsPending={dismissIsPending}
           readingOrders={readingOrders}
           connectedThreads={connectedThreads}
-          onUpdateRating={onUpdateRating}
-          onSubmitRating={onSubmitRating}
-          onSnooze={onSnooze}
-          onCancel={onCancel}
+          onRefreshThread={onRefreshThread}
         />
 
         <YourContextPillar
@@ -132,8 +73,7 @@ export function RatingView({
           currentDie={currentDie}
           rating={rating}
           predictedDie={predictedDie}
-          onSnooze={onSnooze}
-          onCancel={onCancel}
+          onUpdateRating={onUpdateRating}
         />
       </div>
 
