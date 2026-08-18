@@ -92,3 +92,17 @@ factory_sanitize_review_log() {
     | sed -E 's/(Authorization:[[:space:]]*Bearer[[:space:]]+)[^[:space:]]+/\1[REDACTED]/Ig' \
     > "$output"
 }
+
+factory_recover_semantic_verdict() {
+  local runtime_model="$1" workspace="$2" timeout_seconds="$3" recovery_log="$4"
+  local status=0
+  set +e
+  timeout --signal=TERM --kill-after=15s "${timeout_seconds}s" \
+    opencode run --continue -m "$runtime_model" --agent build --auto --dir "$workspace" \
+    --title 'ComicPile semantic verdict recovery' \
+    'Your semantic review is complete but its terminal machine verdict was missing. Do not inspect files, run commands, or redo the review. Return exactly one bare line and nothing else: FACTORY_GATE_READY if your completed review found no semantic blocker, otherwise FACTORY_GATE_BLOCKED.' \
+    2>&1 | tee "$recovery_log"
+  status=${PIPESTATUS[0]}
+  set -e
+  return "$status"
+}
