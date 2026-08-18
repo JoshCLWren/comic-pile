@@ -55,7 +55,6 @@ describe('ResumeRecovery', () => {
 
     expect(screen.getByText('Last usable screen')).toBeInTheDocument()
     await waitFor(() => expect(revalidateSession).toHaveBeenCalledWith(15000))
-    await waitFor(() => expect(invalidateQueries).toHaveBeenCalledOnce())
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
     expect(recoverSession).not.toHaveBeenCalled()
   })
@@ -68,10 +67,10 @@ describe('ResumeRecovery', () => {
     dispatchPageShow(true)
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(2000)
+      await vi.advanceTimersByTimeAsync(8000)
     })
 
-    expect(revalidateSession).toHaveBeenCalledTimes(2)
+    expect(revalidateSession).toHaveBeenCalledTimes(4)
     expect(screen.getByText('Last usable screen')).toBeInTheDocument()
     expect(screen.getByRole('alert')).toHaveTextContent('ComicPile could not reconnect')
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()

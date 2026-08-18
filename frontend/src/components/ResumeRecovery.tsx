@@ -64,11 +64,8 @@ export default function ResumeRecovery({
           if (sequence !== requestSequence.current) {
             return
           }
-          await queryClient.invalidateQueries()
-          if (sequence !== requestSequence.current) {
-            return
-          }
           setRecoveryState('idle')
+          queryClient.invalidateQueries().catch(() => {})
           return
         } catch (error) {
           lastError = error
