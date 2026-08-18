@@ -44,7 +44,9 @@ export default function ResumeRecovery({
     }
 
     const sequence = ++requestSequence.current
-    setRecoveryState('reconnecting')
+    if (mode === 'explicit') {
+      setRecoveryState('reconnecting')
+    }
     const recover = mode === 'explicit' ? recoverSession : revalidateSession
 
     try {
@@ -67,7 +69,7 @@ export default function ResumeRecovery({
         }
       }
 
-      if (sequence === requestSequence.current) {
+      if (sequence === requestSequence.current && mode === 'explicit') {
         setRecoveryState('failed')
       }
     } finally {
