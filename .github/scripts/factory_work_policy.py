@@ -207,19 +207,16 @@ def pr_is_static_candidate(pr: dict[str, Any], issue_map: dict[int, dict[str, An
 
 
 def pr_suppresses_issue_candidate(pr: dict[str, Any], issue_map: dict[int, dict[str, Any]]) -> bool:
-    """Return whether this PR should stand in for its linked issue in the queue.
+    """Return whether this open factory PR is canonical work for its issue.
 
-    Ready PRs are owned by the merge controller. Other PRs suppress duplicate
-    issue implementation only when the PR itself is executable. Draft, blocked,
-    closed, or otherwise ineligible PRs must never make the linked issue
-    disappear.
+    Once a factory PR exists, the linked issue must not become fresh implementation
+    work again just because the PR is currently owned, blocked, under review, or
+    otherwise not assignable. The PR lifecycle is the only path forward until
+    that PR closes. This is the control-plane invariant that prevents duplicate
+    implementations for one issue.
     """
-    if str(pr.get('state') or 'OPEN').upper() != 'OPEN':
-        return False
-    labels = labels_of(pr)
-    if 'factory:ready' in labels and (not pr.get('isDraft')):
-        return True
-    return pr_is_static_candidate(pr, issue_map)
+    del issue_map  # Kept in the signature for compatibility with existing callers.
+    return str(pr.get('state') or 'OPEN').upper() == 'OPEN'
 
 
 def build_candidates(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -> list[Candidate]:
