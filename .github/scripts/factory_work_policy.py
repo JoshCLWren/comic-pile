@@ -126,6 +126,8 @@ def provenance_lane(labels: set[str]) -> int:
     """Return the deterministic assignment lane for a label set."""
     if labels & INFRA_LABELS:
         return 5
+    if 'e2e-discovered' in labels:
+        return 4
     if 'user-reported' in labels and 'bug' in labels:
         return 1
     return 3
