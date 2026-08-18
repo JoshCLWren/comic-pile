@@ -2,11 +2,9 @@ name: Factory Revocation Fence
 
 on:
   pull_request_target:
-    # This fence validates entry into the factory PR queue. Once a PR is open,
-    # ownership deliberately hands off between producer, reviewer, and repair
-    # workers. Re-validating the original branch producer on later pushes would
-    # close healthy canonical PRs during that shared lifecycle.
-    types: [opened, reopened, ready_for_review]
+    # Factory workers never create draft PRs. Reopened/ready_for_review happen
+    # after the producer-to-reviewer handoff, so only initial queue entry is fenced.
+    types: [opened]
 
 permissions:
   contents: read
@@ -14,39 +12,70 @@ permissions:
   pull-requests: write
 
 jobs:
-  verify-factory-lease:
+  verify-factory-provenance:
     if: startsWith(github.event.pull_request.head.ref, 'factory/')
     runs-on: ubuntu-latest
     steps:
-      - name: Reject PRs from revoked factory assignments
+      - name: Checkout trusted fence implementation
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Reject PRs without durable factory provenance
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPOSITORY: ${{ github.repository }}
         run: |
           set -Eeuo pipefail
 
-          # Canonical fixed-model branches are factory/<worker>-<issue>-<suffix>.
-          if [[ ! "$HEAD_REF" =~ ^factory/([0-9]+)-([0-9]+)- ]]; then
-            echo "Factory-looking branch does not use the fixed-model branch contract: $HEAD_REF"
-            exit 0
+          comments="$RUNNER_TEMP/factory-pr-comments.json"
+          decision="$RUNNER_TEMP/factory-fence-decision.json"
+          api_read_succeeded=false
+
+          # PR creation and the worker's provenance comment are separate API calls.
+          # Give the trusted worker a short window to finish that persistence handoff.
+          for attempt in {1..12}; do
+            if gh api --paginate --slurp \
+              "repos/${REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" >"$comments"; then
+              api_read_succeeded=true
+              set +e
+              python3 .github/scripts/factory-revocation-fence.py \
+                --head-ref "$HEAD_REF" \
+                --pr-number "$PR_NUMBER" \
+                --head-sha "$HEAD_SHA" \
+                --comments-json "$comments" >"$decision"
+              status=$?
+              set -e
+              cat "$decision"
+              if (( status == 0 )); then
+                echo "Factory PR #${PR_NUMBER} has exact durable producer provenance."
+                exit 0
+              fi
+            else
+              echo "Unable to read factory provenance on attempt ${attempt}; fence remains fail-closed."
+            fi
+
+            (( attempt < 12 )) && sleep 5
+          done
+
+          if [[ "$api_read_succeeded" != true ]]; then
+            set +e
+            python3 .github/scripts/factory-revocation-fence.py \
+              --head-ref "$HEAD_REF" \
+              --pr-number "$PR_NUMBER" \
+              --head-sha "$HEAD_SHA" \
+              --provenance-unavailable >"$decision"
+            set -e
+            cat "$decision"
           fi
 
-          worker="${BASH_REMATCH[1]}"
-          issue="${BASH_REMATCH[2]}"
-          owner="factory:${worker}"
-
-          issue_state="$(gh api "repos/${REPOSITORY}/issues/${issue}" --jq .state 2>/dev/null || true)"
-          labels="$(gh api "repos/${REPOSITORY}/issues/${issue}/labels?per_page=100" --jq '[.[].name]' 2>/dev/null || printf '[]')"
-
-          if [[ "$issue_state" == "open" ]] && jq -e --arg owner "$owner" 'index($owner) != null' >/dev/null <<< "$labels"; then
-            echo "Lease is current: ${owner} still owns issue #${issue}."
-            exit 0
-          fi
-
-          echo "Rejecting stale factory PR #${PR_NUMBER}: ${owner} no longer owns open issue #${issue}."
+          reason="$(jq -r '.reason // "provenance-unavailable"' "$decision" 2>/dev/null || printf 'provenance-unavailable')"
+          echo "Rejecting factory PR #${PR_NUMBER}: ${reason}."
           gh api --method PATCH "repos/${REPOSITORY}/pulls/${PR_NUMBER}" -f state=closed >/dev/null
           gh api --method POST "repos/${REPOSITORY}/issues/${PR_NUMBER}/comments" \
-            -f body="Closed automatically by the Factory Revocation Fence. This PR came from ${HEAD_REF}, but ${owner} no longer owns open issue #${issue}. The assignment was revoked or superseded before persistence, so this branch cannot re-enter the active factory queue." >/dev/null
+            -f body="Closed automatically by the Factory Revocation Fence. The canonical factory branch ${HEAD_REF} did not have trusted persistence provenance matching PR #${PR_NUMBER} at ${HEAD_SHA}. This means the assignment was revoked or superseded before persistence, the provenance read failed, or the branch attempted to re-enter with stale provenance."

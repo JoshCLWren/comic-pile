@@ -103,6 +103,25 @@ claim_unowned_pr() {
   gh issue comment "$number" --body "$(printf '<!-- omniroute-factory-owner:%s -->\nFactory %s · %s adopted this unowned PR using %s through OmniRoute.\n' "$WORKER" "$WORKER" "$CALL_SIGN" "$MODEL")" >/dev/null
 }
 
+record_pr_provenance() {
+  local pr="$1" issue="$2" labels head epoch marker
+  if ! labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${issue}/labels?per_page=100" --jq '[.[].name]' 2>/dev/null)"; then
+    log "unable to read issue #${issue} ownership before PR provenance; refusing handoff" >&2
+    return 1
+  fi
+  if ! jq -e --arg owner "$OWNER" 'index($owner) != null' >/dev/null <<< "$labels"; then
+    log "${OWNER} no longer owns issue #${issue}; refusing stale PR provenance" >&2
+    return 1
+  fi
+  head="$(git rev-parse HEAD)"
+  epoch="$(date +%s)"
+  marker="<!-- comic-pile-factory-pr-provenance-v1:pr-${pr}:issue-${issue}:${WORKER_ID}:${epoch}:${head} -->"
+  if ! gh issue comment "$pr" --body "$marker" >/dev/null 2>&1; then
+    log "unable to persist provenance for PR #${pr}; refusing handoff" >&2
+    return 1
+  fi
+}
+
 checkout_target() {
   local mode="$1" number="$2" branch="$3"
   git fetch --prune origin
@@ -228,7 +247,6 @@ persist_issue_pr() {
       --body "$body" >/tmp/factory-pr-url
     pr="$(gh pr list --state open --head "$branch" --json number --jq '.[0].number')"
   fi
-  replace_labels "$pr" "$OWNER" 'factory:review'
   echo "$pr"
 }
 
@@ -353,6 +371,13 @@ while (( $(remaining) > 480 )); do
 
   if [[ "$TARGET_MODE" == 'issue' ]]; then
     if pr="$(persist_issue_pr "$NUMBER" "$BRANCH")"; then
+      if ! record_pr_provenance "$pr" "$NUMBER"; then
+        log "PR #${pr} could not prove the issue assignment survived through persistence; closing it fail-closed"
+        gh pr close "$pr" --comment 'Closed because durable factory provenance could not be established before handoff.' >/dev/null 2>&1 || true
+        SKIP_PRS+=("$pr")
+        continue
+      fi
+      replace_labels "$pr" "$OWNER" 'factory:review'
       log "opened/updated PR #${pr} for issue #${NUMBER}"
       SKIP_PRS+=("$pr")
     elif (( transient_failure == 1 )); then
