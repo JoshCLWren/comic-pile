@@ -16,9 +16,6 @@ vi.mock('../pages/RollPage/components/ReadingOrderGroups', () => ({
 vi.mock('../pages/RollPage/components/ContinuityReadinessSummary', () => ({
   ContinuityReadinessSummary: () => null,
 }))
-vi.mock('../pages/RollPage/components/ComicVineIssueCard', () => ({
-  ComicVineIssueCard: () => null,
-}))
 vi.mock('../pages/RollPage/components/ReadingRouteExplanation', () => ({
   ReadingRouteExplanation: () => null,
 }))
