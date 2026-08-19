@@ -1,6 +1,6 @@
 # ComicPile Autonomous Factory Policy
 
-Version: 22
+Version: 24
 
 This is the canonical policy for every scheduled ChatGPT worker, the local OpenCode factory, fixed-model external factories, and interactive factory repair sessions.
 
