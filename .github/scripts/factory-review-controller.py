@@ -125,10 +125,12 @@ def pr_json(pr_number: int) -> dict[str, Any]:
 
 
 def target_json(number: int) -> dict[str, Any]:
+    """Fetch issue-compatible target state."""
     return cast(dict[str, Any], gh_json(["api", f"repos/{REPO}/issues/{number}"]))
 
 
 def labels_of(item: dict[str, Any]) -> set[str]:
+    """Return normalized label names from a GitHub payload."""
     labels: set[str] = set()
     for label in item.get("labels") or []:
         if isinstance(label, dict) and label.get("name"):
@@ -139,6 +141,7 @@ def labels_of(item: dict[str, Any]) -> set[str]:
 
 
 def replace_factory_labels(number: int, owner: str, stage: str) -> None:
+    """Atomically replace factory owner/stage labels on one target."""
     current = labels_of(target_json(number))
     labels = {
         label
@@ -149,12 +152,20 @@ def replace_factory_labels(number: int, owner: str, stage: str) -> None:
     }
     labels.update({"factory", owner, stage})
     run_gh(
-        ["api", "--method", "PUT", f"repos/{REPO}/issues/{number}/labels", "--input", "-"],
+        [
+            "api",
+            "--method",
+            "PUT",
+            f"repos/{REPO}/issues/{number}/labels",
+            "--input",
+            "-",
+        ],
         input_json={"labels": sorted(labels)},
     )
 
 
 def linked_issue_from_branch(branch: str | None) -> int | None:
+    """Extract an issue number from a canonical fixed-model branch."""
     if not branch:
         return None
     match = re.match(r"^factory/\d+-(\d+)-", branch)
@@ -162,6 +173,7 @@ def linked_issue_from_branch(branch: str | None) -> int | None:
 
 
 def flatten_pages(value: object | None) -> list[dict[str, Any]]:
+    """Flatten gh api --paginate --slurp JSON pages."""
     result: list[dict[str, Any]] = []
     for page in value or []:
         if isinstance(page, list):
@@ -172,8 +184,14 @@ def flatten_pages(value: object | None) -> list[dict[str, Any]]:
 
 
 def review_comment_bodies(pr_number: int) -> list[str]:
+    """Return action-authored comments that may contain review attestations."""
     pages = gh_json(
-        ["api", "--paginate", "--slurp", f"repos/{REPO}/issues/{pr_number}/comments?per_page=100"]
+        [
+            "api",
+            "--paginate",
+            "--slurp",
+            f"repos/{REPO}/issues/{pr_number}/comments?per_page=100",
+        ]
     )
     bodies: list[str] = []
     for comment in flatten_pages(pages):
@@ -185,6 +203,7 @@ def review_comment_bodies(pr_number: int) -> list[str]:
 
 
 def redact_review_text(text: str) -> str:
+    """Redact common credential shapes before review output reaches GitHub."""
     text = SENSITIVE_ASSIGNMENT_RE.sub(r"\1[REDACTED]", text)
     text = BEARER_RE.sub(r"\1[REDACTED]", text)
     text = GITHUB_TOKEN_RE.sub("[REDACTED_GITHUB_TOKEN]", text)
@@ -192,6 +211,7 @@ def redact_review_text(text: str) -> str:
 
 
 def review_excerpt(path: str | None, *, worker: str) -> str:
+    """Read only the expected worker log and return a redacted bounded tail."""
     if not path:
         return ""
     expected = Path(f"/tmp/opencode-factory-{worker}.log")
@@ -217,6 +237,7 @@ def post_review_comment(
     excerpt: str,
     note: str,
 ) -> None:
+    """Persist semantic findings and controller audit metadata."""
     parts: list[str] = []
     if marker:
         parts.append(marker)
@@ -229,7 +250,9 @@ def post_review_comment(
             + excerpt
             + "\n```\n</details>"
         )
-    run_gh(["issue", "comment", str(pr_number), "--repo", REPO, "--body", "\n\n".join(parts)])
+    run_gh(
+        ["issue", "comment", str(pr_number), "--repo", REPO, "--body", "\n\n".join(parts)]
+    )
 
 
 def interpret_required_checks(
@@ -421,6 +444,7 @@ def mechanical_merge_gate(pr_number: int, expected_head: str) -> GateResult:
 
 
 def target_owned_by_worker(number: int, worker: str) -> bool:
+    """Return whether exactly this fixed worker currently owns a target."""
     active = {
         label
         for label in labels_of(target_json(number))
@@ -430,8 +454,14 @@ def target_owned_by_worker(number: int, worker: str) -> bool:
 
 
 def transition_pr_and_linked_issue(
-    *, pr_number: int, branch: str, worker: str, pr_stage: str, issue_stage: str | None = None
+    *,
+    pr_number: int,
+    branch: str,
+    worker: str,
+    pr_stage: str,
+    issue_stage: str | None = None,
 ) -> None:
+    """Release a reviewed PR and its linked issue to controller-owned state."""
     replace_factory_labels(pr_number, "factory:unowned", pr_stage)
     issue = linked_issue_from_branch(branch)
     if issue is None:
@@ -446,6 +476,7 @@ def transition_pr_and_linked_issue(
 
 
 def validate_review_lease(pr_number: int, worker: str, pr: dict[str, Any]) -> None:
+    """Reject review state changes not backed by the current worker lease."""
     if str(pr.get("state")) != "OPEN":
         raise RuntimeError(f"PR #{pr_number} is not open")
     labels = labels_of(pr)
@@ -468,6 +499,7 @@ def return_to_review(
     head: str,
     producer: str | None,
 ) -> dict[str, Any]:
+    """Record a non-authoritative result and safely release its lease."""
     post_review_comment(
         pr_number=pr_number,
         marker=None,
@@ -486,8 +518,14 @@ def return_to_review(
 
 
 def handle_review(
-    *, worker: str, pr_number: int, verdict: str, reviewed_head: str, review_log: str | None
+    *,
+    worker: str,
+    pr_number: int,
+    verdict: str,
+    reviewed_head: str,
+    review_log: str | None,
 ) -> dict[str, Any]:
+    """Interpret model review output under controller-owned repository authority."""
     if not FIXED_WORKER_RE.fullmatch(worker):
         raise RuntimeError(f"unsupported fixed-model reviewer: {worker}")
     if verdict not in {"approve", "repair", "reject"}:
@@ -586,7 +624,9 @@ def handle_review(
         return {"status": "rejected", "head": reviewed_head, "producer": producer}
 
     prior_approvers = current_head_approvers(
-        review_comment_bodies(pr_number), pr=pr_number, head=reviewed_head
+        review_comment_bodies(pr_number),
+        pr=pr_number,
+        head=reviewed_head,
     )
     post_review_comment(
         pr_number=pr_number,
@@ -666,11 +706,16 @@ def handle_review(
 
 
 def authorize_ready(pr_number: int) -> dict[str, Any]:
+    """Validate that a ready PR still has authorization for its current head."""
     pr = pr_json(pr_number)
     branch = str(pr.get("headRefName") or "")
     head = str(pr.get("headRefOid") or "")
     producer = producer_worker_from_pr(branch=branch, body=str(pr.get("body") or ""))
-    approvers = current_head_approvers(review_comment_bodies(pr_number), pr=pr_number, head=head)
+    approvers = current_head_approvers(
+        review_comment_bodies(pr_number),
+        pr=pr_number,
+        head=head,
+    )
     authorized = (
         str(pr.get("state")) == "OPEN"
         and "factory:ready" in labels_of(pr)
@@ -693,7 +738,11 @@ def authorize_ready(pr_number: int) -> dict[str, Any]:
                 issue_target = target_json(issue)
             except RuntimeError:
                 issue_target = None
-            if issue_target and issue_target.get("state") == "open" and "factory:ready" in labels_of(issue_target):
+            if (
+                issue_target
+                and issue_target.get("state") == "open"
+                and "factory:ready" in labels_of(issue_target)
+            ):
                 replace_factory_labels(issue, "factory:unowned", "factory:review")
 
     return {
@@ -705,6 +754,7 @@ def authorize_ready(pr_number: int) -> dict[str, Any]:
 
 
 def main() -> int:
+    """Run semantic review controller commands."""
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -712,7 +762,11 @@ def main() -> int:
     review.add_argument("--worker", required=True)
     review.add_argument("--pr", type=int, required=True)
     review.add_argument("--reviewed-head", required=True)
-    review.add_argument("--verdict", choices=("approve", "repair", "reject"), required=True)
+    review.add_argument(
+        "--verdict",
+        choices=("approve", "repair", "reject"),
+        required=True,
+    )
     review.add_argument("--review-log")
 
     authorized = subparsers.add_parser("authorized")
