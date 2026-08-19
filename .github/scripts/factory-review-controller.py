@@ -347,16 +347,50 @@ def interpret_review_threads(
     return gate_result("pass", "no current-head review thread blockers")
 
 
+def review_thread_query_required(comments: object | None, *, head: str) -> GateResult | None:
+    """Use REST review comments to decide whether GraphQL thread state is needed.
+
+    A review thread cannot exist without at least one inline review comment. If REST
+    proves every inline comment belongs to an older head, unresolved thread state
+    cannot block the exact current head and the GraphQL query is unnecessary. A
+    missing commit id fails closed by requiring the GraphQL query.
+    """
+    rows = flatten_pages(comments)
+    for comment in rows:
+        commit_id = comment.get("commit_id")
+        if not commit_id or str(commit_id) == head:
+            return None
+    return gate_result("pass", "no current-head review thread blockers")
+
+
 def current_head_review_gate(pr_number: int, head: str) -> GateResult:
     try:
         pages = gh_json(
             ["api", "--paginate", "--slurp", f"repos/{REPO}/pulls/{pr_number}/reviews?per_page=100"]
         )
-    except RuntimeError:
-        return gate_result("retry", "review submissions could not be inspected")
+    except RuntimeError as exc:
+        detail = redact_review_text(str(exc))[-500:]
+        return gate_result("retry", f"review submissions could not be inspected: {detail}")
     for review in flatten_pages(pages):
         if review.get("state") == "CHANGES_REQUESTED" and review.get("commit_id") == head:
             return gate_result("deny", "current head has CHANGES_REQUESTED")
+
+    try:
+        comment_pages = gh_json(
+            [
+                "api",
+                "--paginate",
+                "--slurp",
+                f"repos/{REPO}/pulls/{pr_number}/comments?per_page=100",
+            ]
+        )
+    except RuntimeError as exc:
+        detail = redact_review_text(str(exc))[-500:]
+        return gate_result("retry", f"review comments could not be inspected: {detail}")
+
+    rest_result = review_thread_query_required(comment_pages, head=head)
+    if rest_result is not None:
+        return rest_result
 
     owner, name = REPO.split("/", 1)
     try:
@@ -382,8 +416,9 @@ def current_head_review_gate(pr_number: int, head: str) -> GateResult:
                 ]
             ),
         )
-    except RuntimeError:
-        return gate_result("retry", "review threads could not be inspected")
+    except RuntimeError as exc:
+        detail = redact_review_text(str(exc))[-500:]
+        return gate_result("retry", f"review threads could not be inspected: {detail}")
     threads = (
         result.get("data", {})
         .get("repository", {})
