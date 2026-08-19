@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import os
-import secrets
 from dataclasses import asdict
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.releases import require_release_writer_token
 from app.cbl_ingest import CBLBook, CBLList
 from app.cbl_remote_sync import finalize_cbl_sync, get_cbl_source_revision, sync_cbl_batch
 from app.database import get_db
@@ -23,43 +22,16 @@ from app.schemas.cbl_sync import (
 router = APIRouter(prefix="/cbl-sync", tags=["cbl-sync"])
 
 
-async def require_cbl_sync_token(
-    x_cbl_sync_token: Annotated[str | None, Header()] = None,
-) -> None:
-    """Require the server-only CBL synchronization credential.
-
-    Args:
-        x_cbl_sync_token: Credential supplied by trusted synchronization automation.
-
-    Returns:
-        None.
-
-    Raises:
-        HTTPException: If synchronization is unconfigured or the credential is invalid.
-    """
-    expected = os.getenv("CBL_SYNC_TOKEN", "").strip()
-    if not expected:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="CBL synchronization authorization is not configured",
-        )
-    if x_cbl_sync_token is None or not secrets.compare_digest(x_cbl_sync_token, expected):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid CBL synchronization credential",
-        )
-
-
 @router.get("/source", response_model=CBLSourceStatusResponse)
 async def get_source_status(
-    _: Annotated[None, Depends(require_cbl_sync_token)],
+    _: Annotated[None, Depends(require_release_writer_token)],
     repository: str = Query(min_length=1, max_length=255),
     db: AsyncSession = Depends(get_db),
 ) -> CBLSourceStatusResponse:
     """Return the last completely synchronized revision for one repository.
 
     Args:
-        _: Successful CBL synchronization authorization dependency.
+        _: Successful trusted-automation authorization dependency.
         repository: Stable source repository identity.
         db: Application database session.
 
@@ -73,14 +45,14 @@ async def get_source_status(
 @router.post("/batch", response_model=CBLBatchResponse)
 async def import_batch(
     payload: CBLBatchRequest,
-    _: Annotated[None, Depends(require_cbl_sync_token)],
+    _: Annotated[None, Depends(require_release_writer_token)],
     db: AsyncSession = Depends(get_db),
 ) -> CBLBatchResponse:
     """Persist one bounded batch without declaring the revision complete.
 
     Args:
         payload: Repository, revision, and normalized CBL lists for this batch.
-        _: Successful CBL synchronization authorization dependency.
+        _: Successful trusted-automation authorization dependency.
         db: Application database session.
 
     Returns:
@@ -116,14 +88,14 @@ async def import_batch(
 @router.post("/finalize", response_model=CBLBatchResponse)
 async def finalize_sync(
     payload: CBLFinalizeRequest,
-    _: Annotated[None, Depends(require_cbl_sync_token)],
+    _: Annotated[None, Depends(require_release_writer_token)],
     db: AsyncSession = Depends(get_db),
 ) -> CBLBatchResponse:
     """Mark missing lists inactive and atomically publish the completed revision.
 
     Args:
         payload: Repository, revision, complete active path set, and protected paths.
-        _: Successful CBL synchronization authorization dependency.
+        _: Successful trusted-automation authorization dependency.
         db: Application database session.
 
     Returns:
