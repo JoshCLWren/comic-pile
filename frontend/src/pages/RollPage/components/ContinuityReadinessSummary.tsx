@@ -79,7 +79,13 @@ export function ContinuityReadinessSummary({ issueId }: ContinuityReadinessSumma
               key={`${blocker.rule_id}-${blocker.source_type}-${blocker.source_id}`}
               className="text-[11px] leading-relaxed text-stone-300"
             >
-              <span className="font-bold text-rose-200">{blocker.source_label}</span>
+              {blocker.unread_issue_details.length > 0 ? (
+                <span className="font-bold text-rose-200">
+                  {blocker.unread_issue_details.map((d) => d.label).join(', ')}
+                </span>
+              ) : (
+                <span className="font-bold text-rose-200">{blocker.source_label}</span>
+              )}
               {blocker.note ? <span className="text-stone-500"> · {blocker.note}</span> : null}
             </li>
           ))}

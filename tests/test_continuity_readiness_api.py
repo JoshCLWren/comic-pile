@@ -859,3 +859,148 @@ async def test_converged_gate_with_crossover_target_blocks_until_members_read(
     assert ready.status_code == 200
     assert ready.json()["is_readable"] is True
     assert ready.json()["blockers"] == []
+
+
+@pytest.mark.asyncio
+async def test_unread_issue_details_populated_for_single_item_blocker(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """A single-issue item_read blocker includes structured unread issue details.
+
+    Args:
+        auth_client: Authenticated API client fixture.
+        async_db: Async database session fixture.
+
+    Returns:
+        None.
+    """
+    user = await get_or_create_user_async(async_db)
+    _source_thread, source_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="detail-source", issue_count=1
+    )
+    _target_thread, target_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="detail-target", issue_count=1
+    )
+    async_db.add(
+        _rule(
+            user_id=user.id,
+            source_type="issue",
+            source_id=source_issues[0].id,
+            target_type="issue",
+            target_id=target_issues[0].id,
+            satisfaction_type="item_read",
+        )
+    )
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/v1/continuity/readiness",
+        json={"node_type": "issue", "node_id": target_issues[0].id},
+    )
+    assert response.status_code == 200, response.text
+    blocker = response.json()["blockers"][0]
+    assert len(blocker["unread_issue_details"]) == 1
+    detail = blocker["unread_issue_details"][0]
+    assert detail["issue_id"] == source_issues[0].id
+    assert "detail-source" in detail["label"]
+    assert f"#{source_issues[0].issue_number}" in detail["label"]
+
+
+@pytest.mark.asyncio
+async def test_unread_issue_details_exclude_read_issues_from_crossover_blocker(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """A crossover blocker only lists unread members in unread_issue_details.
+
+    Args:
+        auth_client: Authenticated API client fixture.
+        async_db: Async database session fixture.
+
+    Returns:
+        None.
+    """
+    user = await get_or_create_user_async(async_db)
+    _source_thread, source_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="detail-x-source", issue_count=1
+    )
+    _branch_thread, branch_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="detail-x-branch", issue_count=3
+    )
+    _target_thread, target_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="detail-x-target", issue_count=1
+    )
+    crossover = await _make_group(
+        async_db,
+        user_id=user.id,
+        suffix="detail-x",
+        issue_ids=[branch_issues[0].id, branch_issues[1].id, branch_issues[2].id],
+    )
+    async_db.add(
+        _rule(
+            user_id=user.id,
+            source_type="crossover",
+            source_id=crossover.id,
+            target_type="issue",
+            target_id=target_issues[0].id,
+            satisfaction_type="all_members_read",
+        )
+    )
+    branch_issues[0].status = "read"
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/v1/continuity/readiness",
+        json={"node_type": "issue", "node_id": target_issues[0].id},
+    )
+    assert response.status_code == 200, response.text
+    blocker = response.json()["blockers"][0]
+    unread_ids = {d["issue_id"] for d in blocker["unread_issue_details"]}
+    assert unread_ids == {branch_issues[1].id, branch_issues[2].id}
+    assert source_issues[0].id not in unread_ids
+    for detail in blocker["unread_issue_details"]:
+        assert "detail-x-branch" in detail["label"]
+
+
+@pytest.mark.asyncio
+async def test_unread_issue_details_empty_when_all_prerequisites_read(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """A blocker list is empty when all prerequisites are already read.
+
+    Args:
+        auth_client: Authenticated API client fixture.
+        async_db: Async database session fixture.
+
+    Returns:
+        None.
+    """
+    user = await get_or_create_user_async(async_db)
+    _source_thread, source_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="detail-all-read-source", issue_count=1
+    )
+    _target_thread, target_issues = await _make_thread_with_issues(
+        async_db, user_id=user.id, suffix="detail-all-read-target", issue_count=1
+    )
+    async_db.add(
+        _rule(
+            user_id=user.id,
+            source_type="issue",
+            source_id=source_issues[0].id,
+            target_type="issue",
+            target_id=target_issues[0].id,
+            satisfaction_type="item_read",
+        )
+    )
+    source_issues[0].status = "read"
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/v1/continuity/readiness",
+        json={"node_type": "issue", "node_id": target_issues[0].id},
+    )
+    assert response.status_code == 200
+    assert response.json()["is_readable"] is True
+    assert response.json()["blockers"] == []
