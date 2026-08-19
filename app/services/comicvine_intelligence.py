@@ -236,14 +236,6 @@ async def get_issue_intelligence(
             schedule_issue_metadata_hydration(identity.id)
         except RuntimeError as e:
             logger.warning(f"Hydration failed: {str(e).lower()} (issue_id={identity.id})")
-    if not identity.metadata_json:
-        result = await db.execute(
-            select(ExternalIdentity).where(
-                ExternalIdentity.provider == identity.provider,
-                ExternalIdentity.external_id == identity.external_id,
-            )
-        )
-        identity = result.scalar_one_or_none()
 
     metadata = identity.metadata_json
     arc_refs = _arc_references(metadata)
