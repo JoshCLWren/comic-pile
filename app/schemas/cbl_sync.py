@@ -39,7 +39,7 @@ class CBLFinalizeRequest(BaseModel):
     repository: str = Field(min_length=1, max_length=255)
     revision_sha: str = Field(min_length=7, max_length=128)
     active_paths: list[str]
-    protected_paths: list[str] = []
+    protected_paths: list[str] = Field(default_factory=list)
 
 
 class CBLSourceStatusResponse(BaseModel):
