@@ -20,21 +20,21 @@ on:
         description: Optional active external Factory; blank runs the strategy smoke set
         required: false
         type: string
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/fixed-model-factory-dispatch.yml'
-      - '.github/workflows/free-model-factory-entry.yml'
-      - '.github/workflows/free-model-factory-run.yml'
-      - '.github/scripts/factory-work-controller.py'
-      - '.github/scripts/factory-review-controller.py'
-      - '.github/scripts/factory_work_policy.py'
-      - '.github/scripts/factory_review_policy.py'
-      - '.github/scripts/factory-gh-rest-shim.sh'
-      - '.github/scripts/free-model-factory-worker.sh'
-      - '.github/scripts/free-model-factory-worker-primitives.sh'
-      - '.github/scripts/kilo-auto-factory-run.sh'
-      - '.github/free-model-factories.tsv'
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - '.github/workflows/fixed-model-factory-dispatch.yml'
+  #     - '.github/workflows/free-model-factory-entry.yml'
+  #     - '.github/workflows/free-model-factory-run.yml'
+  #     - '.github/scripts/factory-work-controller.py'
+  #     - '.github/scripts/factory-review-controller.py'
+  #     - '.github/scripts/factory_work_policy.py'
+  #     - '.github/scripts/factory_review_policy.py'
+  #     - '.github/scripts/factory-gh-rest-shim.sh'
+  #     - '.github/scripts/free-model-factory-worker.sh'
+  #     - '.github/scripts/free-model-factory-worker-primitives.sh'
+  #     - '.github/scripts/kilo-auto-factory-run.sh'
+  #     - '.github/free-model-factories.tsv'
 
 permissions:
   contents: read
