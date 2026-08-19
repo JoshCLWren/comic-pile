@@ -30,21 +30,7 @@ def _display_length(value: object) -> int:
     return len(text.strip())
 
 
-class Release(BaseModel):
-    id: int
-    source_pr_number: int | None
-    source_merge_sha: str | None
-    merged_at: datetime | None
-    released_at: datetime
-    category: str
-    title: str
-    summary: str
-    body: str | None
-    visibility: Literal["public", "internal"]
-    status: Literal["draft", "published", "retracted"]
-    provenance_json: dict
-    reconciliation_hash: str
-
+class ReleaseUpsertRequest(BaseModel):
     """Idempotent release publication payload from trusted automation."""
 
     source_repository: str = Field(min_length=1, max_length=255)
