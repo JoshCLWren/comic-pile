@@ -2,54 +2,6 @@ import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { RollBootstrapThread } from '../../../types/rollBootstrap'
 
-/**
- * Extracts the primary identity for a thread in the format "Series Name #125"
- * where "Series Name" is derived from the thread title or issue number.
- */
-function getPrimaryIdentity(thread: RollBootstrapThread): string {
-  // Try to extract series name from title (e.g., "Captain Marvel #32" -> "Captain Marvel")
-  const titleParts = thread.title.split(' ')
-  let seriesName = ''
-  let issueNumber = ''
-
-  // Check if title ends with an issue number pattern
-  if (titleParts.length > 1) {
-    const lastPart = titleParts[titleParts.length - 1]
-    const numberMatch = lastPart.match(/^\d+$/)
-    if (numberMatch) {
-      issueNumber = numberMatch[0]
-      // Remove the issue number from title parts
-      seriesName = titleParts.slice(0, -1).join(' ')
-    } else {
-      // Check if title contains an issue number pattern anywhere
-      const titleWithNumber = thread.title.replace(/[^\d]/g, ' ') // Replace non-digits with spaces
-      const numberParts = titleWithNumber.split(' ').filter(part => part !== '')
-      if (numberParts.length > 1) {
-        // Assume the second-to-last part is the issue number
-        issueNumber = numberParts[numberParts.length - 2]
-        seriesName = numberParts.slice(0, -1).join(' ')
-      }
-    }
-  }
-
-  // If we couldn't extract from title, try from issue_number
-  if (!issueNumber && thread.issue_number) {
-    const numberMatch = thread.issue_number.match(/^(\d+)/)
-    if (numberMatch) {
-      issueNumber = numberMatch[1]
-      // Remove digits from title to get series name
-      seriesName = thread.title.replace(/\d+/g, '').trim()
-    }
-  }
-
-  // If we still don't have a series name, use the title as fallback
-  if (!seriesName) {
-    seriesName = thread.title
-  }
-
-  return `${seriesName} #${issueNumber || '?'}`
-}
-
 interface ThreadPoolProps {
   pool: RollBootstrapThread[]
   blockedThreads: RollBootstrapThread[]
