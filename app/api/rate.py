@@ -288,12 +288,21 @@ async def rate_thread(
         ),
     }
 
-    issues_remaining = await thread.get_issues_remaining(db)
-    if issues_remaining <= 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Thread {thread_id} has no issues remaining",
-        )
+    # Validate thread has issues remaining. For issue-tracked threads, rely on
+    # the thread's denormalized counter and next_unread_issue_id instead of a
+    # fresh COUNT query.
+    if thread.uses_issue_tracking():
+        if thread.issues_remaining <= 0 or thread.next_unread_issue_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Thread {thread_id} has no issues remaining",
+            )
+    else:
+        if thread.issues_remaining <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Thread {thread_id} has no issues remaining",
+            )
 
     if not thread.uses_issue_tracking() and rate_data.issue_number is not None:
         issue_number = rate_data.issue_number
@@ -378,6 +387,7 @@ async def rate_thread(
     issues_read = 0
     rated_issue_id: int | None = None
     rated_issue_number: str | None = None
+    next_issue: Issue | None = None
 
     if thread.uses_issue_tracking():
         if thread.next_unread_issue_id:
@@ -405,7 +415,16 @@ async def rate_thread(
                 if next_issue:
                     thread.next_unread_issue_id = next_issue.id
                     thread.reading_progress = "in_progress"
-                    thread.issues_remaining = await thread.get_issues_remaining(db)
+                    # Avoid COUNT query: count remaining from the next unread's
+                    # position. All issues at positions >= next_issue.position are
+                    # unread (the current one was just marked read, and earlier
+                    # positions are already read).
+                    if thread.total_issues is not None:
+                        thread.issues_remaining = (
+                            thread.total_issues - next_issue.position + 1
+                        )
+                    else:
+                        thread.issues_remaining = await thread.get_issues_remaining(db)
                 else:
                     thread.next_unread_issue_id = None
                     thread.reading_progress = "completed"
@@ -491,16 +510,19 @@ async def rate_thread(
     resp_reading_progress = thread.reading_progress
     resp_next_unread_issue_id = thread.next_unread_issue_id
 
-    if thread.uses_issue_tracking():
-        resp_issues_remaining = await thread.get_issues_remaining(db)
-    else:
-        resp_issues_remaining = thread.issues_remaining
+    # Reuse already-computed issues_remaining instead of re-querying.
+    resp_issues_remaining = thread_issues_remaining
 
+    # Extract next issue number from the already-loaded issue if available,
+    # otherwise fall back to a targeted lookup.
     resp_next_unread_issue_number: str | None = None
     if resp_next_unread_issue_id is not None:
-        next_issue = await db.get(Issue, resp_next_unread_issue_id)
-        if next_issue:
+        if next_issue is not None and next_issue.id == resp_next_unread_issue_id:
             resp_next_unread_issue_number = next_issue.issue_number
+        else:
+            next_issue_obj = await db.get(Issue, resp_next_unread_issue_id)
+            if next_issue_obj:
+                resp_next_unread_issue_number = next_issue_obj.issue_number
 
     await db.flush()
     await snapshot_thread_states(

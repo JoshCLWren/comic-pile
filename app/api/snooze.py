@@ -198,8 +198,61 @@ async def snooze_thread(
     pending_thread_id = current_session.pending_thread_id
     current_session_id = current_session.id
 
-    current_die = await get_current_die_for_session(current_session, db)
+    # Combined query: fetch all die-changing events and latest roll event in one shot.
+    # die-changing events -> current die + ladder path
+    # roll events -> active thread info
+    events_result = await db.execute(
+        select(Event)
+        .where(Event.session_id == current_session_id)
+        .where(
+            Event.type.in_(("rate", "snooze", "undo", "roll"))
+        )
+        .order_by(Event.timestamp.desc(), Event.id.desc())
+    )
+    all_events = events_result.scalars().all()
+
+    # Current die: latest rate/snooze/undo event with die_after, or session start_die.
+    current_die = current_session.manual_die
+    if current_die is None:
+        for evt in all_events:
+            if evt.type in ("rate", "snooze", "undo") and evt.die_after is not None:
+                current_die = evt.die_after
+                break
+        if current_die is None:
+            current_die = current_session.start_die
+
     new_die = step_up(current_die)
+
+    # Ladder path: build from pre-fetched events instead of re-querying.
+    die_events = [
+        evt for evt in reversed(all_events)
+        if evt.type in ("rate", "snooze", "undo") and evt.die_after is not None
+    ]
+    ladder_path = str(current_session.start_die)
+    if die_events:
+        ladder_path = " → ".join(
+            [str(current_session.start_die)] + [str(evt.die_after) for evt in die_events]
+        )
+
+    # Active thread: use pending_thread_id from the already-loaded session.
+    pre_active_thread = None
+    if pending_thread_id is not None:
+        active_thread = await db.get(Thread, pending_thread_id)
+        if active_thread:
+            # Find the roll event result for this thread from pre-fetched events.
+            roll_result = None
+            for evt in all_events:
+                if evt.type == "roll" and evt.selected_thread_id == pending_thread_id:
+                    roll_result = evt.result
+                    break
+            pre_active_thread = ActiveThreadInfo(
+                id=active_thread.id,
+                title=active_thread.title,
+                format=active_thread.format,
+                issues_remaining=active_thread.issues_remaining,
+                queue_position=active_thread.queue_position,
+                last_rolled_result=roll_result,
+            )
 
     await move_to_safe_position(
         pending_thread_id,
@@ -232,9 +285,7 @@ async def snooze_thread(
     current_session.pending_thread_id = None
     current_session.pending_thread_updated_at = None
 
-    # Pre-compute response values before commit to avoid re-querying.
-    _, pre_active_thread = await get_active_thread_info(current_session_id, db)
-    pre_ladder_path = await build_ladder_path(current_session_id, db)
+    # Snapshot count: pre-compute before commit.
     result = await db.execute(
         select(func.count()).select_from(Snapshot).where(Snapshot.session_id == current_session_id)
     )
@@ -250,7 +301,7 @@ async def snooze_thread(
         current_die=new_die,
         active_thread_id=pre_active_thread.id if pre_active_thread else None,
         active_thread_info=pre_active_thread,
-        ladder_path=pre_ladder_path,
+        ladder_path=ladder_path,
         snapshot_count=pre_snapshot_count,
     )
 
@@ -296,7 +347,9 @@ async def unsnooze_thread(
     )
     db.add(event)
 
-    pre_ladder_path = await build_ladder_path(current_session.id, db)
+    pre_ladder_path = await build_ladder_path(
+        current_session.id, db, session=current_session
+    )
     result = await db.execute(
         select(func.count()).select_from(Snapshot).where(Snapshot.session_id == current_session.id)
     )

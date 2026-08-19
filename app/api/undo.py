@@ -9,7 +9,6 @@ from sqlalchemy import and_, case, delete, func, or_, select, update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.session import build_ladder_path
 from app.auth import get_current_user
 from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
@@ -24,7 +23,6 @@ from app.services.snapshot_contract import (
     SNAPSHOT_VERSION_KEY,
     USES_ISSUE_TRACKING_KEY,
 )
-from comic_pile.session import get_current_die_for_session
 
 router = APIRouter(tags=["undo"])
 
@@ -404,38 +402,52 @@ async def undo_to_snapshot(
 
             # Pre-compute response values before commit to avoid post-commit
             # re-reads that trigger MissingGreenlet errors on expired objects.
-            pre_ladder_path = await build_ladder_path(session_id, db)
-            pre_current_die = await get_current_die_for_session(session, db)
-
-            # Snapshot count after this undo operation.
-            if is_delta:
-                # Delta undo deletes the snapshot, so count decreases by 1.
-                count_result = await db.execute(
-                    select(func.count())
-                    .select_from(Snapshot)
-                    .where(Snapshot.session_id == session_id)
-                )
-                pre_snapshot_count = (count_result.scalar() or 0) - 1
-            else:
-                count_result = await db.execute(
-                    select(func.count())
-                    .select_from(Snapshot)
-                    .where(Snapshot.session_id == session_id)
-                )
-                pre_snapshot_count = count_result.scalar() or 0
-
-            # Active thread info from latest roll event.
-            event_result = await db.execute(
+            # Combined query: fetch all die-changing events and latest roll event.
+            events_result = await db.execute(
                 select(Event)
                 .where(Event.session_id == session_id)
-                .where(Event.type == "roll")
-                .where(Event.selected_thread_id.is_not(None))
+                .where(Event.type.in_(("rate", "snooze", "undo", "roll")))
                 .order_by(Event.timestamp.desc(), Event.id.desc())
             )
-            pre_active_event = event_result.scalars().first()
+            all_events = events_result.scalars().all()
 
-            pre_thread = None
+            # Current die from pre-fetched events (skip get_current_die_for_session).
+            pre_current_die = session.manual_die
+            if pre_current_die is None:
+                for evt in all_events:
+                    if evt.type in ("rate", "snooze", "undo") and evt.die_after is not None:
+                        pre_current_die = evt.die_after
+                        break
+                if pre_current_die is None:
+                    pre_current_die = session.start_die
+
+            # Ladder path from pre-fetched events (skip build_ladder_path's session query).
+            die_events = [
+                evt for evt in reversed(all_events)
+                if evt.type in ("rate", "snooze", "undo") and evt.die_after is not None
+            ]
+            pre_ladder_path = str(session.start_die)
+            if die_events:
+                pre_ladder_path = " → ".join(
+                    [str(session.start_die)] + [str(evt.die_after) for evt in die_events]
+                )
+
+            # Snapshot count: one query regardless of delta/full, adjust for pending delete.
+            count_result = await db.execute(
+                select(func.count())
+                .select_from(Snapshot)
+                .where(Snapshot.session_id == session_id)
+            )
+            pre_snapshot_count = (count_result.scalar() or 0) - (1 if is_delta else 0)
+
+            # Active thread info from pre-fetched events.
+            pre_active_event = None
             pre_active_info = None
+            for evt in all_events:
+                if evt.type == "roll" and evt.selected_thread_id is not None:
+                    pre_active_event = evt
+                    break
+
             if pre_active_event and pre_active_event.selected_thread_id:
                 pre_thread = await db.get(Thread, pre_active_event.selected_thread_id)
                 if pre_thread is not None:
