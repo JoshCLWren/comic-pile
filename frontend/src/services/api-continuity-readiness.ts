@@ -2,6 +2,11 @@ import api from './api'
 
 export type ContinuityReadinessNodeType = 'issue' | 'thread' | 'crossover'
 
+export interface UnreadIssueDetail {
+  issue_id: number
+  label: string
+}
+
 export interface ContinuityBlocker {
   rule_id: number
   source_type: 'issue' | 'thread' | 'crossover'
@@ -11,6 +16,7 @@ export interface ContinuityBlocker {
   satisfied: boolean
   causing_issue_ids: number[]
   causing_member_issue_ids: number[]
+  unread_issue_details: UnreadIssueDetail[]
   note: string | null
 }
 

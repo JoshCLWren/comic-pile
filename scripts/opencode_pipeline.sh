@@ -728,7 +728,7 @@ The repo is already checked out in your working directory.
 STANDARDS:
 - No Any types (ruff ANN401)
 - Mobile-first, touch targets ≥44px for UI changes
-- Add the required isolated docs/changelog.d fragment when the change is user-facing
+- Release notes are generated asynchronously after merge via the release-writer agent
 - Do NOT open a PR — stop after committing
 - Never bypass pre-commit hooks or commit with failing tests
 

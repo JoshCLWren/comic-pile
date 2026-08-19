@@ -58,6 +58,8 @@ const AUTH_ENDPOINT_PATHS = new Set(['/v1/auth/login', '/v1/auth/register', '/v1
 // Cast once at the boundary so callers get strongly typed payload methods.
 const api = rawApi as unknown as ApiClient
 
+export const AUTH_TOKEN_STORAGE_KEY = 'auth_token'
+
 let isRedirectingToLogin = false
 let accessToken: string | null = null
 let csrfTokenPromise: Promise<string | null> | null = null
@@ -68,16 +70,46 @@ let failedQueue: Array<{
 }> = []
 let isRefreshing = false
 
+export function readStoredAccessToken(): string | null {
+  if (typeof localStorage === 'undefined') {
+    return null
+  }
+
+  return localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)
+}
+
+function writeStoredAccessToken(token: string | null): void {
+  if (typeof localStorage === 'undefined') {
+    return
+  }
+
+  if (token) {
+    localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token)
+  } else {
+    localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY)
+  }
+}
+
 export function setAccessToken(token: string | null): void {
   accessToken = token
+  writeStoredAccessToken(token)
 }
 
 export function getAccessToken(): string | null {
-  return accessToken
+  if (accessToken) {
+    return accessToken
+  }
+
+  const stored = readStoredAccessToken()
+  if (stored) {
+    accessToken = stored
+  }
+  return stored
 }
 
 export function clearAccessToken(): void {
   accessToken = null
+  writeStoredAccessToken(null)
 }
 
 function getCookieValue(name: string): string | null {

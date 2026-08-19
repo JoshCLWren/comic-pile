@@ -1,10 +1,13 @@
 """API coverage for issue-scoped ComicVine intelligence."""
 
+from datetime import UTC, datetime
+
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Issue, Thread, User
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+from app.services import comicvine_intelligence
 
 
 def _identity(external_id: str, metadata: dict[str, object]) -> ExternalIdentity:
@@ -172,3 +175,61 @@ async def test_comicvine_intelligence_absence_and_ownership(
     assert absent.status_code == 200
     assert absent.json() is None
     assert forbidden.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_comicvine_intelligence_stays_usable_when_hydration_scheduling_fails(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A provider/scheduling failure never breaks the issue-view or rating workflow."""
+    thread = Thread(
+        user_id=default_user.id,
+        title="Resilient series",
+        format="issue",
+        issues_remaining=1,
+        total_issues=1,
+        queue_position=5,
+    )
+    async_db.add(thread)
+    await async_db.flush()
+    issue = Issue(thread_id=thread.id, issue_number="1", position=1, status="unread")
+    async_db.add(issue)
+    await async_db.flush()
+    identity = ExternalIdentity(
+        provider="comicvine",
+        entity_type="issue",
+        external_id="555",
+        metadata_json={"issue_number": "1", "name": "Partial"},
+        updated_at=datetime.now(UTC),
+    )
+    async_db.add(identity)
+    await async_db.flush()
+    async_db.add(
+        IssueExternalIdentityMapping(
+            issue_id=issue.id,
+            external_identity_id=identity.id,
+            status="confirmed",
+            confidence=1.0,
+        )
+    )
+    await async_db.flush()
+
+    def _boom(_identity_id: int) -> bool:
+        raise RuntimeError("simulated event-loop failure")
+
+    monkeypatch.setattr(
+        comicvine_intelligence,
+        "schedule_issue_metadata_hydration",
+        _boom,
+    )
+
+    response = await auth_client.get(f"/api/v1/issues/{issue.id}/comicvine")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body is not None
+    assert body["comicvine_issue_id"] == "555"
+    assert body["name"] == "Partial"

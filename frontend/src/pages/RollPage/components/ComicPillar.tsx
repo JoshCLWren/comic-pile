@@ -2,7 +2,7 @@ import { useState } from 'react'
 import IssueCorrectionDialog from '../../../components/IssueCorrectionDialog'
 import { getProgressPercentage } from '../utils'
 import type { RatingThread } from '../types'
-import { ComicVineIssueCard } from './ComicVineIssueCard'
+import { ComicIdentity } from './ComicIdentity'
 
 interface ComicPillarProps {
   activeRatingThread: RatingThread | null
@@ -115,7 +115,7 @@ export function ComicPillar({
         </div>
       </section>
 
-      <ComicVineIssueCard issueId={issueId} />
+      <ComicIdentity issueId={issueId} />
 
       {activeRatingThread ? (
         <IssueCorrectionDialog

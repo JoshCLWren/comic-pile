@@ -6,7 +6,7 @@ This document is the mandatory operating procedure for agents executing GitHub i
 
 Workers operating as part of the autonomous software-delivery factory must also read and follow [`docs/AUTONOMOUS_FACTORY_POLICY.md`](AUTONOMOUS_FACTORY_POLICY.md).
 
-For autonomous factory runs, that policy is the canonical source for backlog selection, lifecycle, claim leases, exact-SHA review, gated merges, draft-PR prohibition, CI-assisted repair loops, daily Chromium discovery, and escalation boundaries. It overrides contradictory generic instructions in this file or `AGENTS.md`.
+For autonomous factory runs, that policy is the canonical source for backlog selection, lifecycle, claim leases, exact-SHA review, gated merges, draft-PR prohibition, and CI-assisted repair loops. It overrides contradictory generic instructions in this file or `AGENTS.md`.
 
 Repository engineering rules still apply. Factory workers may not skip tests, weaken gates, bypass hooks, add linter suppressions, violate async PostgreSQL requirements, or misrepresent CI evidence as local evidence.
 
@@ -68,10 +68,6 @@ Common backend checks include:
 pytest <focused-test-file-or-test>
 pytest
 ```
-
-Chromium Playwright is the required browser E2E target when browser validation is required. Firefox and WebKit are optional diagnostics for browser-specific investigations.
-
-The complete maintained Chromium discovery suite runs independently on its daily workflow and by manual dispatch. Discovery failures must preserve traces, screenshots, video, JSON results, backend logs, and run metadata before classification. Reproducible product failures become focused `bug` issues in the normal shared factory pool; setup or runner failures become E2E infrastructure issues. Ordinary factories do not launch the complete discovery suite when their work pool is empty.
 
 ## Review feedback
 

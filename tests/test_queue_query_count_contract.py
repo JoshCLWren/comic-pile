@@ -91,6 +91,7 @@ async def test_queue_query_count_is_constant_for_page_size(
             current_user=SimpleNamespace(id=user.id),
             db=async_db,
             search=None,
+            sort="position",
             page_size=thread_count,
             page_token=None,
         )

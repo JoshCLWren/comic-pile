@@ -248,34 +248,44 @@ async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str
     return summary
 
 
-async def build_ladder_path(session_id: int, db: AsyncSession) -> str:
+async def build_ladder_path(
+    session_id: int,
+    db: AsyncSession,
+    *,
+    session: SessionModel | None = None,
+    die_events: list[Event] | None = None,
+) -> str:
     """Build narrative summary of dice ladder from session events.
 
     Args:
         session_id: The session ID to build ladder path for.
         db: Database session.
+        session: Pre-loaded session object (avoids a redundant SELECT).
+        die_events: Pre-fetched die-changing events (avoids a redundant SELECT).
 
     Returns:
         String representation of dice ladder path (e.g., "d4 → d6 → d8").
     """
-    session = await db.get(SessionModel, session_id)
-    if not session:
-        return ""
+    if session is None:
+        session = await db.get(SessionModel, session_id)
+        if not session:
+            return ""
 
-    events_result = await db.execute(
-        select(Event)
-        .where(Event.session_id == session_id)
-        .where(Event.type.in_(("rate", "snooze", "undo")))
-        .where(Event.die_after.is_not(None))
-        .order_by(Event.timestamp, Event.id)
-    )
-    events = events_result.scalars().all()
+    if die_events is None:
+        events_result = await db.execute(
+            select(Event)
+            .where(Event.session_id == session_id)
+            .where(Event.type.in_(("rate", "snooze", "undo")))
+            .where(Event.die_after.is_not(None))
+            .order_by(Event.timestamp, Event.id)
+        )
+        die_events = events_result.scalars().all()
 
-    if not events:
+    if not die_events:
         return str(session.start_die)
 
     path = [session.start_die]
-    for event in events:
+    for event in die_events:
         if event.die_after:
             path.append(event.die_after)
 

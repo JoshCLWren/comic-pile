@@ -7,7 +7,6 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.thread import thread_to_response
 from app.auth import get_current_user
 from app.cache_invalidation import invalidate_user_view
 from app.config import get_rating_settings
@@ -27,7 +26,7 @@ from app.services.snapshot_contract import (
 from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.dice_ladder import step_down, step_up
 from comic_pile.queue import move_to_back, move_to_front, move_to_safe_position
-from comic_pile.session import get_current_die
+from comic_pile.session import get_current_die_for_session
 
 router = APIRouter()
 
@@ -270,7 +269,7 @@ async def rate_thread(
 
     thread_id = thread.id
     pre_thread_state = await _capture_thread_pre_state(thread, db)
-    current_die = await get_current_die(current_session_id, db)
+    current_die = await get_current_die_for_session(current_session, db)
     pre_session_state = {
         "start_die": current_session.start_die,
         "manual_die": current_session.manual_die,
@@ -289,12 +288,21 @@ async def rate_thread(
         ),
     }
 
-    issues_remaining = await thread.get_issues_remaining(db)
-    if issues_remaining <= 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Thread {thread_id} has no issues remaining",
-        )
+    # Validate thread has issues remaining. For issue-tracked threads, rely on
+    # the thread's denormalized counter and next_unread_issue_id instead of a
+    # fresh COUNT query.
+    if thread.uses_issue_tracking():
+        if thread.issues_remaining <= 0 or thread.next_unread_issue_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Thread {thread_id} has no issues remaining",
+            )
+    else:
+        if thread.issues_remaining <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Thread {thread_id} has no issues remaining",
+            )
 
     if not thread.uses_issue_tracking() and rate_data.issue_number is not None:
         issue_number = rate_data.issue_number
@@ -379,6 +387,7 @@ async def rate_thread(
     issues_read = 0
     rated_issue_id: int | None = None
     rated_issue_number: str | None = None
+    next_issue: Issue | None = None
 
     if thread.uses_issue_tracking():
         if thread.next_unread_issue_id:
@@ -406,7 +415,16 @@ async def rate_thread(
                 if next_issue:
                     thread.next_unread_issue_id = next_issue.id
                     thread.reading_progress = "in_progress"
-                    thread.issues_remaining = await thread.get_issues_remaining(db)
+                    # Avoid COUNT query: count remaining from the next unread's
+                    # position. All issues at positions >= next_issue.position are
+                    # unread (the current one was just marked read, and earlier
+                    # positions are already read).
+                    if thread.total_issues is not None:
+                        thread.issues_remaining = (
+                            thread.total_issues - next_issue.position + 1
+                        )
+                    else:
+                        thread.issues_remaining = await thread.get_issues_remaining(db)
                 else:
                     thread.next_unread_issue_id = None
                     thread.reading_progress = "completed"
@@ -475,6 +493,37 @@ async def rate_thread(
     current_session.pending_thread_id = None
     current_session.pending_thread_updated_at = None
 
+    # Extract response values before commit to avoid post-commit re-reads
+    # that trigger MissingGreenlet errors on expired session objects.
+    resp_id = thread.id
+    resp_title = thread.title
+    resp_format = thread.format
+    resp_queue_position = thread.queue_position
+    resp_status = thread.status
+    resp_last_rating = thread.last_rating
+    resp_last_activity_at = thread.last_activity_at
+    resp_notes = thread.notes
+    resp_is_test = thread.is_test
+    resp_is_blocked = thread.is_blocked
+    resp_created_at = thread.created_at
+    resp_total_issues = thread.total_issues
+    resp_reading_progress = thread.reading_progress
+    resp_next_unread_issue_id = thread.next_unread_issue_id
+
+    # Reuse already-computed issues_remaining instead of re-querying.
+    resp_issues_remaining = thread_issues_remaining
+
+    # Extract next issue number from the already-loaded issue if available,
+    # otherwise fall back to a targeted lookup.
+    resp_next_unread_issue_number: str | None = None
+    if resp_next_unread_issue_id is not None:
+        if next_issue is not None and next_issue.id == resp_next_unread_issue_id:
+            resp_next_unread_issue_number = next_issue.issue_number
+        else:
+            next_issue_obj = await db.get(Issue, resp_next_unread_issue_id)
+            if next_issue_obj:
+                resp_next_unread_issue_number = next_issue_obj.issue_number
+
     await db.flush()
     await snapshot_thread_states(
         db,
@@ -492,5 +541,22 @@ async def rate_thread(
 
     await invalidate_user_view(user_id)
 
-    await db.refresh(thread)
-    return await thread_to_response(thread, db)
+    return ThreadResponse(
+        id=resp_id,
+        title=resp_title,
+        format=resp_format,
+        issues_remaining=resp_issues_remaining,
+        queue_position=resp_queue_position,
+        status=resp_status,
+        last_rating=resp_last_rating,
+        last_activity_at=resp_last_activity_at,
+        notes=resp_notes,
+        is_test=resp_is_test,
+        is_blocked=resp_is_blocked,
+        created_at=resp_created_at,
+        total_issues=resp_total_issues,
+        reading_progress=resp_reading_progress,
+        next_unread_issue_id=resp_next_unread_issue_id,
+        next_unread_issue_number=resp_next_unread_issue_number,
+        blocking_reasons=[],
+    )
