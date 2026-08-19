@@ -13,7 +13,6 @@ from inspect import unwrap
 from types import SimpleNamespace
 
 import pytest
-from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from starlette.requests import Request
 

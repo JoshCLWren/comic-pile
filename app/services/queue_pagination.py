@@ -7,9 +7,10 @@ import binascii
 import json
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from sqlalchemy import ColumnElement, or_
+from sqlalchemy.sql.elements import ColumnElement as SQLColumnElement
 
 from app.models.thread import Thread
 
@@ -113,7 +114,7 @@ def decode_queue_cursor(
     )
 
 
-def build_sort_order(sort: QueueSort) -> list[ColumnElement[bool]]:
+def build_sort_order(sort: QueueSort) -> list[SQLColumnElement[Any]]:
     """Return the SQLAlchemy ORDER BY columns for the given sort mode.
 
     Every sort uses ``Thread.id`` as a deterministic tie-breaker so that
