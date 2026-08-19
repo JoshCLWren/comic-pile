@@ -156,8 +156,7 @@ describe('ComicIdentity', () => {
     getIntelligence.mockResolvedValue({
       comicvine_issue_id: '400',
       comicvine_url: null,
-      series_name: 'Many Creators',
-      series_id: 11,
+      series_name: 'Many Creators',      series_id: 11,
       issue_number: '1',
       name: 'Issue',
       description: null,
@@ -189,6 +188,95 @@ describe('ComicIdentity', () => {
 
     expect(screen.getByText('Creator 1')).toBeInTheDocument()
     expect(screen.queryByText('Creator 7')).not.toBeInTheDocument()
+  })
+
+  it('keeps the Show all creators control outside the summary so activating it cannot collapse the disclosure', async () => {
+    const manyCreators = Array.from({ length: 10 }, (_, i) => ({
+      name: `Creator ${i + 1}`,
+      roles: ['writer'],
+    }))
+
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '401',
+      comicvine_url: null,
+      series_name: 'Many Creators',
+      series_id: 11,
+      issue_number: '1',
+      name: 'Issue',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: manyCreators,
+      story_arcs: [],
+    })
+
+    render(<ComicIdentity issueId={4} />)
+    await waitForLoaded()
+
+    const showAllButton = screen.getByRole('button', { name: /show all 10/i })
+    expect(showAllButton.closest('summary')).toBeNull()
+
+    fireEvent.click(showAllButton)
+    await waitFor(() => expect(screen.getByText('Creator 10')).toBeInTheDocument())
+    const creatorsDetails = showAllButton.closest('details')
+    expect(creatorsDetails).not.toBeNull()
+    expect(creatorsDetails?.open).toBe(true)
+  })
+
+  it('expands creator and story-arc disclosures by default once metadata loads', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '402',
+      comicvine_url: null,
+      series_name: 'Expanded',
+      series_id: 17,
+      issue_number: '1',
+      name: 'Issue',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [{ name: 'Creator One', roles: ['writer'] }],
+      story_arcs: [{
+        comicvine_arc_id: 7,
+        name: 'Arc Seven',
+        comicvine_url: null,
+        related_issues: [],
+      }],
+    })
+
+    render(<ComicIdentity issueId={4} />)
+    await waitForLoaded()
+
+    await waitFor(() => expect(screen.getByText('Creator One')).toBeInTheDocument())
+    const creatorsDetails = screen.getByText('Creators').closest('details')
+    expect(creatorsDetails?.open).toBe(true)
+
+    const storyArcsDetails = screen.getByText('Story arcs (1)').closest('details')
+    expect(storyArcsDetails?.open).toBe(true)
+  })
+
+  it('names the section via aria-label when the issue title is missing', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '403',
+      comicvine_url: null,
+      series_name: 'Untitled Series',
+      series_id: 18,
+      issue_number: '1',
+      name: null,
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [],
+    })
+
+    render(<ComicIdentity issueId={4} />)
+    await waitForLoaded()
+
+    const section = screen.getByRole('region', { name: 'Comic details' })
+    expect(section).toBeInTheDocument()
   })
 
   it('shows Show more/Show less for long story arc lists', async () => {

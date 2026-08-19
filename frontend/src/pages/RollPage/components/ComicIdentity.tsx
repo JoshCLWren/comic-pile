@@ -43,13 +43,10 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
     if (creatorsDetailsRef.current) {
       creatorsDetailsRef.current.open = true
     }
-  }, [])
-
-  useEffect(() => {
     if (storyArcsDetailsRef.current) {
       storyArcsDetailsRef.current.open = true
     }
-  }, [])
+  }, [metadata])
 
   if (!issueId || (!isLoading && !metadata)) return null
   if (isLoading) {
@@ -64,7 +61,11 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
   const hasMoreCreators = metadata.creators.length > CREATOR_LIMIT
 
   return (
-    <section aria-labelledby="comic-identity-heading" className="w-full space-y-4">
+    <section
+      aria-labelledby={metadata.name ? 'comic-identity-heading' : undefined}
+      aria-label={metadata.name ? undefined : 'Comic details'}
+      className="w-full space-y-4"
+    >
       <div className="relative aspect-[2/3] w-full max-w-full rounded-xl overflow-hidden bg-stone-900" style={{ border: '1px solid var(--theme-border)' }}>
         {metadata.image_url && metadata.image_url !== failedImageUrl ? (
           <img
@@ -114,17 +115,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
           <details ref={creatorsDetailsRef} className="group space-y-2">
             <summary className="flex items-center gap-2 cursor-pointer list-none focus:ring-2 focus:ring-amber-500 rounded-lg p-2 hover:bg-white/5 transition-colors">
               <span className="text-[10px] font-black uppercase tracking-wider text-stone-400">Creators</span>
-              {hasMoreCreators && (
-                <button
-                  type="button"
-                  onClick={() => setShowAllCreators(!showAllCreators)}
-                  className="ml-auto text-[10px] font-bold text-amber-500 hover:text-amber-400"
-                  aria-expanded={showAllCreators}
-                  aria-controls="creators-list"
-                >
-                  {showAllCreators ? 'Show less' : `Show all ${metadata.creators.length}`}
-                </button>
-              )}
+              <span className="ml-auto text-stone-500 group-open:rotate-180 transition-transform" aria-hidden="true">⌄</span>
             </summary>
             <div id="creators-list" className="pl-6 pr-2 pb-2 space-y-1 border-l border-white/10">
               {creatorsToShow.map((creator, index) => (
@@ -134,6 +125,17 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                 </p>
               ))}
             </div>
+            {hasMoreCreators && (
+              <button
+                type="button"
+                onClick={() => setShowAllCreators(!showAllCreators)}
+                className="ml-6 text-[10px] font-bold text-amber-500 hover:text-amber-400 py-1"
+                aria-expanded={showAllCreators}
+                aria-controls="creators-list"
+              >
+                {showAllCreators ? 'Show less' : `Show all ${metadata.creators.length}`}
+              </button>
+            )}
           </details>
         )}
 
