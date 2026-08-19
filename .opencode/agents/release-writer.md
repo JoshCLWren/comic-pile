@@ -32,8 +32,5 @@ For each merged pull request you are asked to process:
 5. For an internal change, call:
    `python scripts/release_writer.py skip '<json>'`
    with repository, PR number, merge SHA, merged timestamp, and a concise reason. The helper records a durable hidden internal source record so future reconciliation does not repeatedly reclassify the same PR.
-6. To retract a broken or placeholder public release, call:
-   `python scripts/release_writer.py retract <repository> <pr-number> <merge-sha>`
-   with the repository, PR number, and merge SHA of the release to retract.
 
 Keep summaries user-facing and concrete. The helper validates allowed fields and lengths and holds the credential boundary. Never print, inspect, or request release credentials. Never put credentials in prompts or command arguments.

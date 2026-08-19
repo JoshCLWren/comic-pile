@@ -1,0 +1,96 @@
+name: Release writer
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Optional merged pull request number to reconcile
+        required: false
+        type: string
+  schedule:
+    - cron: '23 * * * *'
+
+jobs:
+  publish-release:
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    env:
+      RELEASE_API_URL: https://comic-pile.vercel.app/api/v1/releases
+      RELEASE_WRITER_TOKEN: ${{ secrets.RELEASE_WRITER_TOKEN }}
+      NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+    steps:
+      - name: Checkout merged main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Validate release-writer credentials
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ -z "$RELEASE_WRITER_TOKEN" ]]; then
+            echo '::error::RELEASE_WRITER_TOKEN is not configured in GitHub Actions secrets.'
+            exit 1
+          fi
+          if [[ -z "$NVIDIA_API_KEY" ]]; then
+            echo '::error::NVIDIA_API_KEY is not configured in GitHub Actions secrets.'
+            exit 1
+          fi
+
+      - name: Install OpenCode CLI
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          curl -fsSL https://opencode.ai/install | bash
+          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+          "$HOME/.opencode/bin/opencode" --version
+
+      - name: Install pinned FCM discovery CLI
+        run: npm install --global --ignore-scripts free-coding-models@0.5.69
+
+      - name: Select a healthy NVIDIA model
+        id: model
+        run: |
+          fcm_output="$(free-coding-models --json --origin nvidia --hide-unconfigured --best --no-telemetry)"
+          candidates="$(printf '%s\n' "$fcm_output" | python scripts/select_fcm_nvidia_model.py)"
+          selected_model="$(printf '%s\n' "$candidates" | head -n 1)"
+          if [[ -z "$selected_model" ]]; then
+            echo 'No configured NVIDIA release-writer model is available' >&2
+            exit 1
+          fi
+          echo "model=$selected_model" >> "$GITHUB_OUTPUT"
+
+      - name: Build release-writer prompt
+        id: prompt
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_PR: ${{ github.event.pull_request.number }}
+          INPUT_PR: ${{ inputs.pr_number }}
+        run: |
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            prompt="Process merged pull request #${EVENT_PR} in ${GITHUB_REPOSITORY}. Verify it is merged, inspect its changed-file summary and linked issue context, then publish or explicitly skip it according to the release-writer contract."
+          elif [[ -n "$INPUT_PR" ]]; then
+            prompt="Reconcile merged pull request #${INPUT_PR} in ${GITHUB_REPOSITORY}. Check the release ledger first, then publish it if missing or report a source conflict."
+          else
+            prompt="Reconcile the 100 most recently merged pull requests in ${GITHUB_REPOSITORY}. Start with 'python scripts/release_writer.py recent ${GITHUB_REPOSITORY} 100' and treat that output as the authoritative reconciliation set. Process every returned row in order, checking the release ledger before detailed inspection. Publish or explicitly skip only missing entries. Do not discover the reconciliation set with gh api. Stop and report any source-identity conflict instead of overwriting provenance."
+          fi
+          printf 'prompt=%s\n' "$prompt" >> "$GITHUB_OUTPUT"
+
+      - name: Run dedicated release writer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODEL: ${{ steps.model.outputs.model }}
+          PROMPT: ${{ steps.prompt.outputs.prompt }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          opencode run -m "$MODEL" --agent release-writer --auto --dir "$GITHUB_WORKSPACE" --title "ComicPile release writer" "$PROMPT"
