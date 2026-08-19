@@ -1,6 +1,6 @@
 # ComicPile Autonomous Factory Policy
 
-Version: 22
+Version: 23
 
 This is the canonical policy for every scheduled ChatGPT worker, the local OpenCode factory, fixed-model external factories, and interactive factory repair sessions.
 
@@ -23,9 +23,7 @@ The delivery factory follows this permanent cycle:
 
 An empty or blocked ordinary backlog is never a reason to pause, disable, suspend, or mutate a factory schedule. Only Josh, or an interactive session acting on Josh's direct instruction, may pause or disable a factory. Scheduled workers remain enabled and continue checking on schedule.
 
-Backlog replenishment is owned independently by the daily Chromium discovery workflow. Ordinary factories must not launch the complete discovery suite merely because their current pool is empty.
-
-User-reported product bugs are the first delivery queue. Reproducible E2E-discovered product bugs come after them, then ordinary executable product issues. Preserve `user-reported` only for defects actually reported by a user.
+User-reported product bugs are the first delivery queue, then ordinary executable product issues. Preserve `user-reported` only for defects actually reported by a user.
 
 Firefox and WebKit are optional diagnostics for browser-specific investigations. They are not required factory release coverage and must not delay issue closure, merges, or backlog draining.
 
@@ -36,10 +34,9 @@ Choose work in this order:
 1. The highest-priority unclaimed open issue labeled both `user-reported` and `bug`; within equal priority, choose the newest report first.
 2. A branch-caused failing check, merge conflict, or actionable review defect only when the affected PR directly delivers an equal-or-higher-priority user-reported/product bug or clearing the blocker can immediately finish or merge that product fix.
 3. Other branch-caused failing checks, conflicts, or actionable review defects that prevent substantive product-delivery PRs from becoming mergeable.
-4. The highest-priority unclaimed reproducible E2E-discovered product `bug` issue.
-5. The highest-value unclaimed executable product issue, honoring explicit priority and dependencies.
-6. Additional work on an existing PR only when required to complete its issue contract or make the PR mergeable.
-7. Factory, CI, test, or E2E infrastructure only when it directly blocks product delivery or exists as a focused executable infrastructure issue from the discovery system.
+4. The highest-value unclaimed executable product issue, honoring explicit priority and dependencies.
+5. Additional work on an existing PR only when required to complete its issue contract or make the PR mergeable.
+6. Factory, CI, test, or E2E infrastructure only when it directly blocks product delivery or exists as a focused executable infrastructure issue.
 
 Test-only defects, stale selectors, optional validation, E2E plumbing, docs, release-note work, CI cosmetics, metadata cleanup, and evidence polishing never outrank an executable user-reported or product bug unless that infrastructure directly blocks safe validation or merge of the same higher-priority product fix.
 
@@ -55,7 +52,7 @@ After every substantive fix, opened PR, merge, completed issue, or valid blocker
 
 Do not end a run merely because CI or review is pending, because the current item became blocked, or because one issue reached a handoff state. Preserve or release ownership as appropriate, then select the next executable item. Continue until the runtime or tool budget makes further safe substantive work impossible or the shared executable pool is genuinely empty.
 
-When no executable work remains, ending the current session cleanly is valid. The worker stays enabled for its next scheduled heartbeat; it does not launch the full Chromium discovery suite itself.
+When no executable work remains, ending the current session cleanly is valid. The worker stays enabled for its next scheduled heartbeat.
 
 ## Concurrency and throughput floor
 
@@ -106,30 +103,7 @@ After work becomes blocked, merge-gated, or dependent on a human-only decision, 
 
 After any issue or PR reaches a stable outcome, return to selection again and continue the same scheduled work session while runtime remains.
 
-If no ordinary executable issue can be selected, release any stale active lease, record a truthful no-work outcome, and end the bounded session cleanly. The independent daily Chromium discovery workflow is responsible for replenishing the bug pool.
-
-## Daily Chromium discovery
-
-The complete maintained Chromium Playwright suite is a separate scheduled discovery system, not fallback work executed by ordinary factories.
-
-The discovery workflow must:
-
-1. run once daily and remain manually dispatchable;
-2. run the complete maintained Chromium scenario set with shard-level `fail-fast: false`;
-3. retain Playwright traces, screenshots, video, HTML report data, machine-readable JSON results, backend logs, and run metadata after failures;
-4. upload failure evidence under `if: always()` before the failed run is allowed to disappear;
-5. retain discovery evidence long enough for diagnosis across subsequent runs;
-6. classify persisted results after the shards finish, even when one or more shards failed;
-7. create or update one focused GitHub issue per independent reproducible product failure, including the run, commit, spec, test title, and durable artifact name;
-8. create focused E2E infrastructure issues when a shard fails before producing trustworthy Playwright results rather than mislabeling setup failures as product bugs;
-9. deduplicate repeated failures across daily runs and append fresh evidence to the existing open issue;
-10. return discovered product bugs to the normal shared factory pool with `bug`, `factory`, `factory:unowned`, and executable pending state.
-
-A newer discovery run must not cancel an in-flight run before its durable failure packet uploads. Discovery concurrency therefore serializes runs rather than discarding evidence mid-test.
-
-When a factory fixes an E2E-discovered product defect, keep or strengthen focused regression coverage for the corrected behavior. The discovery suite should become a ratchet: every confirmed defect leaves behind sharper automated protection.
-
-Firefox and WebKit may be run manually when a browser-specific defect warrants them. They are not daily discovery completion gates.
+If no ordinary executable issue can be selected, release any stale active lease, record a truthful no-work outcome, and end the bounded session cleanly.
 
 ## Release-note ownership
 
@@ -186,7 +160,7 @@ These are minimum substantive outcomes, not reasons to stop a run. After achievi
 
 Comments, labels, claims, reviews, PR-body edits, ready markers, help text, speculative plans, and optional test additions alone are not sufficient while executable work exists.
 
-When the shared executable pool is genuinely empty, a truthful no-work completion is valid. The worker remains scheduled; it does not self-pause and it does not invoke the full Chromium discovery suite.
+When the shared executable pool is genuinely empty, a truthful no-work completion is valid. The worker remains scheduled.
 
 ## Ownership and blocked work
 
