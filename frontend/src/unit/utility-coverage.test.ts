@@ -4,7 +4,7 @@ import { parseIssueRange } from '../utils/issueParser'
 import { getDependencyTooltip } from '../utils/dependencyHelpers'
 import { layoutGraph } from '../utils/graphLayout'
 import { reorderIssuesForDrop, moveIssueByStep, normalizeIssueOrder, applyIssueMutation, applyIssueMutations, getPendingIssueIds } from '../pages/QueuePage/issueUtils'
-import { buildRatingThread, createExplosion, getProgressPercentage, mapSessionThreadToRatingThread } from '../pages/RollPage/utils'
+import { buildRatingThread, createExplosion, getDieDirection, getProgressPercentage, mapSessionThreadToRatingThread } from '../pages/RollPage/utils'
 import { getTopologicalPath } from '../utils/topologicalSort'
 import { buildD10Faces } from '../components/d10Geometry'
 import { DEFAULT_DICE_RENDER_CONFIG, getDiceRenderConfigForSides } from '../components/diceRenderConfig'
@@ -131,6 +131,12 @@ describe('roll utilities', () => {
     expect(getProgressPercentage(null)).toBe(0)
     expect(getProgressPercentage({ total_issues: 0, issues_remaining: 0 })).toBe(0)
     expect(getProgressPercentage({ total_issues: 4, issues_remaining: 1 })).toBe(75)
+  })
+
+  it('returns correct die direction for all three branches', () => {
+    expect(getDieDirection(10, 8)).toBe('More focused next roll')
+    expect(getDieDirection(10, 12)).toBe('More variety next roll')
+    expect(getDieDirection(10, 10)).toBe('Die stays the same')
   })
 
   it('creates an explosion and cleans particles', () => {

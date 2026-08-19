@@ -34,6 +34,22 @@ body {
   --text-dim: #6b5f50;
   --mobile-nav-height: 3.5rem;
   --desktop-nav-height: 5rem;
+
+  /* Semantic theme tokens for Roll cockpit (command-center defaults) */
+  --theme-bg-page: var(--bg-main);
+  --theme-bg-panel: var(--glass-bg);
+  --theme-border: var(--glass-border);
+  --theme-text-primary: var(--text-primary);
+  --theme-text-muted: var(--text-muted);
+  --theme-text-dim: var(--text-dim);
+  --theme-comic-accent: #d4890e;
+  --theme-continuity-accent: #06b6d4;
+  --theme-personal-accent: #a855f7;
+  --theme-primary-action: #d4890e;
+  --theme-primary-action-hover: #f0b429;
+  --theme-danger: #c0392b;
+  --theme-danger-hover: #e74c3c;
+  --theme-focus-ring: var(--theme-comic-accent);
 }
 
 /* Keep mobile form controls inside their containers and at the iOS no-zoom font threshold. */
