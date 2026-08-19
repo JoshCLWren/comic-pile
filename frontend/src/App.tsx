@@ -135,6 +135,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (window.__COMIC_PILE_ACCESS_TOKEN) {
         setAccessToken(window.__COMIC_PILE_ACCESS_TOKEN)
         delete window.__COMIC_PILE_ACCESS_TOKEN
+      } else if (!getAccessToken()) {
+        const storedToken = typeof localStorage !== 'undefined' ? localStorage.getItem('auth_token') : null
+        if (storedToken) {
+          setAccessToken(storedToken)
+        }
       }
       try {
         const response = await api.get<AuthUser>('/v1/auth/me', {
