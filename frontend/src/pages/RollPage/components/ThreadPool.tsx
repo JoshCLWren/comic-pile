@@ -62,7 +62,7 @@ export function ThreadPool({
   }, [isRatingView])
 
   return (
-    <div className={`px-3 md:px-4 pb-20 md:pb-28 flex flex-col ${!isRatingView ? 'flex-1 min-h-[300px]' : 'border-t border-white/5 pt-4 md:pt-8'}`}>      
+    <div className={`px-3 md:px-4 pb-20 md:pb-28 flex flex-col ${!isRatingView ? 'flex-1 min-h-[300px]' : 'border-t border-white/5 pt-4 md:pt-8'}`}>
       {!isRolling && rolledResult === null && !isRatingView && pool.length > 0 && (
         <p
           id="tap-instruction"
@@ -94,7 +94,7 @@ export function ThreadPool({
         <span id="shuffle-queue-description" className="sr-only">Randomizes the complete active queue, then refreshes these eligible die mappings.</span>
       </div>}
 
-      {!isRatingView && <div className="space-y-2" data-roll-pool aria-label={`Eligible now, ${pool.length} mapped result${pool.length === 1 ? '' : 's'}`}>        
+      {!isRatingView && <div className="space-y-2" data-roll-pool aria-label={`Eligible now, ${pool.length} mapped result${pool.length === 1 ? '' : 's'}`}>
         {pool.length === 0 && blockedThreads.length === 0 && snoozedThreads.length === 0 ? (
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🎲</div>
@@ -111,7 +111,7 @@ export function ThreadPool({
             <div className="text-left bg-white/5 rounded-xl p-4 mt-4">
               <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider mb-2">How it works:</p>
               <ul className="text-xs text-stone-500 space-y-1">
-                <li>• Add series you&apos;re reading as "threads"</li>
+                <li>• Add series you&apos;re reading as &quot;threads&quot;</li>
                 <li>• Roll the dice to pick what to read next</li>
                 <li>• Set dependencies to enforce reading order between series</li>
               </ul>
@@ -121,7 +121,7 @@ export function ThreadPool({
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🔒</div>
             <div>
-              <p className="text-sm text-stone-300 font-bold uppercase tracking-wider">All threads are blocked or snoozed</p>
+              <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">All threads are blocked or snoozed</p>
               <p className="text-xs text-stone-500 mt-1">Check your queue to see what needs to be read to unlock more options.</p>
             </div>
             <button
@@ -147,7 +147,8 @@ export function ThreadPool({
                 role="button"
                 tabIndex={0}
                 aria-label={`Die face ${index + 1}: ${thread.title}${thread.issue_number ? `, issue ${thread.issue_number}` : ''}${thread.route_labels?.length ? `, routes ${thread.route_labels.join(', ')}` : ''}. Open thread actions.`}
-                className={`flex items-center gap-3 px-4 py-3 bg-white/5 border border-white/5 rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-amber-500/30' :''}`}
+                className={`flex items-center gap-3 px-4 py-3 bg-white/5 border border-white/5 rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-amber-500/30' : ''
+                  }`}
               >
                 <span className="text-lg font-black text-stone-500/50 group-hover:text-stone-400/50 transition-colors w-6 text-center">
                   {index + 1}
@@ -255,9 +256,9 @@ export function ThreadPool({
             >
               ▶
             </span>
-            <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest cursor-help border-b border-dashed border-stone-600">
-              Snoozed ({snoozedThreads.length})
-            </span>
+<span className="text-[10px] font-black text-stone-400 uppercase tracking-widest cursor-help border-b border-dashed border-stone-600">
+                Snoozed ({snoozedThreads.length})
+              </span>
           </button>
           {snoozedExpanded && (
             <div className="mt-2 space-y-1">
