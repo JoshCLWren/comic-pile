@@ -2,36 +2,36 @@ name: Sync CBL Mirror
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   schedule:
-    - cron: "17 9 * * *"
+    - cron: '17 7 * * *'
   workflow_dispatch:
     inputs:
       force:
-        description: Reconcile even when the fork SHA is already recorded
+        description: Re-import even when the fork revision is already synchronized
         required: false
         default: false
         type: boolean
 
 concurrency:
-  group: cbl-mirror-sync
+  group: cbl-mirror-reconciliation
   cancel-in-progress: false
-
-permissions:
-  contents: read
 
 jobs:
   sync:
-    name: Reconcile CBL mirror
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    permissions:
+      contents: read
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      ENVIRONMENT: development
+      CBL_SYNC_API_URL: https://comic-pile.vercel.app/api/v1/cbl-sync
+      CBL_SYNC_TOKEN: ${{ secrets.CBL_SYNC_TOKEN }}
     steps:
       - name: Check out ComicPile
         uses: actions/checkout@v7
+        with:
+          path: comic-pile
+          persist-credentials: false
 
       - name: Check out CBL fork
         uses: actions/checkout@v7
@@ -39,34 +39,29 @@ jobs:
           repository: JoshCLWren/CBL-ReadingLists
           ref: main
           path: cbl-mirror
-          fetch-depth: 1
+          persist-credentials: false
 
-      - name: Install uv and Python 3.14
-        run: |
-          pipx install uv
-          uv python install 3.14
-
-      - name: Install ComicPile dependencies
-        run: uv sync --frozen
-
-      - name: Reconcile CBL source revision
+      - name: Validate CBL synchronization credential
         shell: bash
         run: |
-          set -euo pipefail
-          if [[ -z "${DATABASE_URL:-}" ]]; then
-            echo "DATABASE_URL repository secret is required" >&2
-            exit 2
+          set -Eeuo pipefail
+          if [[ -z "$CBL_SYNC_TOKEN" ]]; then
+            echo '::error::CBL_SYNC_TOKEN is not configured in GitHub Actions secrets.'
+            exit 1
           fi
 
-          cbl_sha="$(git -C cbl-mirror rev-parse HEAD)"
-          args=(
-            cbl-mirror
-            --repository JoshCLWren/CBL-ReadingLists
-            --revision-sha "$cbl_sha"
-          )
-
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.force }}" == "true" ]]; then
-            args+=(--force)
+      - name: Reconcile mirror revision
+        shell: bash
+        working-directory: comic-pile
+        run: |
+          set -Eeuo pipefail
+          revision="$(git -C ../cbl-mirror rev-parse HEAD)"
+          force_arg=()
+          if [[ "${{ inputs.force || false }}" == "true" ]]; then
+            force_arg=(--force)
           fi
-
-          uv run python scripts/sync_cbl_mirror.py "${args[@]}"
+          python scripts/push_cbl_mirror.py \
+            ../cbl-mirror \
+            --repository JoshCLWren/CBL-ReadingLists \
+            --revision-sha "$revision" \
+            "${force_arg[@]}"
