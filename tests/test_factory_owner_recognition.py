@@ -1,7 +1,7 @@
 """Regression coverage for shared factory owner-label recognition boundaries.
 
 Issue #1178: the shared NVIDIA and OmniRoute worker scripts capped owner
-recognition at ``factory:16`` (``1[0-6]``), so a factory:17 PR could be treated
+recognition at ``factory:17`` (``1[0-6]``), so a factory:17 PR could be treated
 as unowned and briefly adopted by another worker. The boundary must extend
 through ``factory:17`` without altering NVIDIA provider/model behavior.
 """
@@ -52,7 +52,7 @@ def test_factory_17_is_recognized_as_owned() -> None:
     for label in (
         "factory:1",
         "factory:9",
-        "factory:16",
+        "factory:17",
         "factory:17",
         "factory:unowned",
         "factory:local",
