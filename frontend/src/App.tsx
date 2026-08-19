@@ -9,7 +9,7 @@ import Navigation from './components/Navigation'
 import BugReportButton from './components/BugReportButton'
 import type { ReportType } from './components/BugReportModal'
 import ResumeRecovery from './components/ResumeRecovery'
-import api, { clearAccessToken, setAccessToken, getAccessToken } from './services/api'
+import api, { clearAccessToken, setAccessToken, getAccessToken, readStoredAccessToken } from './services/api'
 import { isDefinitiveAuthenticationFailure } from './services/authFailure'
 import type { AuthTokens, AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
@@ -136,6 +136,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (window.__COMIC_PILE_ACCESS_TOKEN) {
         setAccessToken(window.__COMIC_PILE_ACCESS_TOKEN)
         delete window.__COMIC_PILE_ACCESS_TOKEN
+      } else if (!getAccessToken()) {
+        const storedToken = readStoredAccessToken()
+        if (storedToken) {
+          setAccessToken(storedToken)
+        }
       }
       try {
         const response = await api.get<AuthUser>('/v1/auth/me', {
