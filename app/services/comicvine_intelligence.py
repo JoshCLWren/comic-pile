@@ -236,7 +236,13 @@ async def get_issue_intelligence(
             schedule_issue_metadata_hydration(identity.id)
         except RuntimeError:
             logger.warning(
-                "comicvine_intelligence_schedule_skipped issue_id=%s reason=no_event_loop",
+                "if metadata_needs_hydration(identity):
+    try:
+        schedule_issue_metadata_hydration(identity.id)
+    except RuntimeError as e:
+        logger.warning(f"Hydration failed: {str(e).lower()} (issue_id={identity.id})")
+    if not identity.metadata_json:
+        identity = load_from_db(identity.provider, identity.external_id)",
                 issue_id,
             )
 
