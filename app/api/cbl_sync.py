@@ -26,7 +26,17 @@ router = APIRouter(prefix="/cbl-sync", tags=["cbl-sync"])
 async def require_cbl_sync_token(
     x_cbl_sync_token: Annotated[str | None, Header()] = None,
 ) -> None:
-    """Require the server-only CBL synchronization credential."""
+    """Require the server-only CBL synchronization credential.
+
+    Args:
+        x_cbl_sync_token: Credential supplied by trusted synchronization automation.
+
+    Returns:
+        None.
+
+    Raises:
+        HTTPException: If synchronization is unconfigured or the credential is invalid.
+    """
     expected = os.getenv("CBL_SYNC_TOKEN", "").strip()
     if not expected:
         raise HTTPException(
@@ -42,11 +52,20 @@ async def require_cbl_sync_token(
 
 @router.get("/source", response_model=CBLSourceStatusResponse)
 async def get_source_status(
+    _: Annotated[None, Depends(require_cbl_sync_token)],
     repository: str = Query(min_length=1, max_length=255),
-    _: Annotated[None, Depends(require_cbl_sync_token)] = None,
     db: AsyncSession = Depends(get_db),
 ) -> CBLSourceStatusResponse:
-    """Return the last completely synchronized revision for one repository."""
+    """Return the last completely synchronized revision for one repository.
+
+    Args:
+        _: Successful CBL synchronization authorization dependency.
+        repository: Stable source repository identity.
+        db: Application database session.
+
+    Returns:
+        Source identity and the last fully published revision SHA.
+    """
     revision_sha = await get_cbl_source_revision(db, repository=repository)
     return CBLSourceStatusResponse(repository=repository, revision_sha=revision_sha)
 
@@ -57,7 +76,19 @@ async def import_batch(
     _: Annotated[None, Depends(require_cbl_sync_token)],
     db: AsyncSession = Depends(get_db),
 ) -> CBLBatchResponse:
-    """Persist one bounded batch without declaring the revision complete."""
+    """Persist one bounded batch without declaring the revision complete.
+
+    Args:
+        payload: Repository, revision, and normalized CBL lists for this batch.
+        _: Successful CBL synchronization authorization dependency.
+        db: Application database session.
+
+    Returns:
+        Counters describing the persisted batch.
+
+    Raises:
+        HTTPException: If the batch contains invalid source metadata.
+    """
     parsed = tuple(
         CBLList(
             source_path=item.source_path,
@@ -88,7 +119,19 @@ async def finalize_sync(
     _: Annotated[None, Depends(require_cbl_sync_token)],
     db: AsyncSession = Depends(get_db),
 ) -> CBLBatchResponse:
-    """Mark missing lists inactive and atomically publish the completed revision."""
+    """Mark missing lists inactive and atomically publish the completed revision.
+
+    Args:
+        payload: Repository, revision, complete active path set, and protected paths.
+        _: Successful CBL synchronization authorization dependency.
+        db: Application database session.
+
+    Returns:
+        Counters describing finalization and deactivation work.
+
+    Raises:
+        HTTPException: If finalization metadata is invalid or the source is missing.
+    """
     try:
         summary = await finalize_cbl_sync(
             db,
