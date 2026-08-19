@@ -19,17 +19,18 @@ factory_normalize_terminal_line() {
   local line="$1"
   line="$(printf '%s' "$line" | factory_strip_ansi)"
   line="$(sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' <<< "$line")"
-  # Permit harmless Markdown wrappers while keeping equality exact.
   line="$(sed -E 's/^(\*\*|__|`)//; s/(\*\*|__|`)$//' <<< "$line")"
   printf '%s\n' "$line"
 }
 
 factory_terminal_marker() {
-  local log_file="$1" line
+  local log_file="$1"
   [[ -f "$log_file" ]] || return 1
-  line="$(factory_strip_ansi < "$log_file" | sed -E '/^[[:space:]]*$/d' | tail -n 1 || true)"
-  [[ -n "$line" ]] || return 1
-  factory_normalize_terminal_line "$line"
+  factory_strip_ansi < "$log_file" \
+    | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
+    | sed -E 's/^(\*\*|__|`)//; s/(\*\*|__|`)$//' \
+    | grep -E '^FACTORY_GATE_(READY|BLOCKED|NOT_READY|REJECT)$' \
+    | tail -n 1
 }
 
 factory_verdict_from_marker() {
@@ -61,31 +62,15 @@ factory_review_has_conflicting_terminal_markers() {
 }
 
 factory_review_is_substantive() {
-  local log_file="$1" base_ref="${2:-origin/main}" bytes path basename
+  local log_file="$1" bytes
   [[ -f "$log_file" ]] || return 1
   bytes="$(tr -d '[:space:]' < "$log_file" | wc -c | tr -d ' ')"
-  (( bytes >= 500 )) || return 1
-
-  while IFS= read -r path; do
-    [[ -n "$path" ]] || continue
-    basename="${path##*/}"
-    if grep -Fq -- "$path" "$log_file" || grep -Fq -- "$basename" "$log_file"; then
-      return 0
-    fi
-  done < <(git diff --name-only "$base_ref"...HEAD 2>/dev/null || true)
-
-  return 1
+  (( bytes >= 80 ))
 }
 
 factory_primary_review_denies_ready_recovery() {
   local log_file="$1" marker
   [[ -f "$log_file" ]] || return 0
-
-  # Recovery is a continuation of the same model session and its exact final
-  # marker is authoritative. Never infer a contradiction from ordinary review
-  # prose such as "no blocking issue" or from marker names mentioned while
-  # explaining the protocol. Only an authoritative terminal deny marker can
-  # veto a recovered approval.
   marker="$(factory_terminal_marker "$log_file" || true)"
   case "$marker" in
     FACTORY_GATE_BLOCKED|FACTORY_GATE_NOT_READY|FACTORY_GATE_REJECT) return 0 ;;

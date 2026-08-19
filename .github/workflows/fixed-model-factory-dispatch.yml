@@ -81,51 +81,11 @@ jobs:
           set -Eeuo pipefail
           review_controller='.github/scripts/factory-review-controller.py'
 
-          current_head_review_blockers() {
-            local pr="$1" head="$2" changes unresolved
-            if ! changes="$(gh api --paginate \
-              "repos/${GITHUB_REPOSITORY}/pulls/${pr}/reviews?per_page=100" \
-              | jq -s --arg head "$head" \
-                '[.[][] | select(.state == "CHANGES_REQUESTED" and .commit_id == $head)] | length')"; then
-              echo "Unable to inspect current-head review submissions for PR #${pr}" >&2
-              return 1
-            fi
-            [[ "$changes" == "0" ]] || return 1
-
-            if ! unresolved="$(gh api graphql \
-              -F owner="${GITHUB_REPOSITORY_OWNER}" \
-              -F name="${GITHUB_REPOSITORY#*/}" \
-              -F number="$pr" \
-              -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}}}}}' \
-              --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length')"; then
-              echo "Unable to inspect unresolved review threads for PR #${pr}; leaving it open" >&2
-              return 1
-            fi
-            [[ "$unresolved" == "0" ]]
-          }
-
-          ready_to_merge() {
-            local pr="$1" expected_head="$2" info head
-            info="$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" \
-              --json state,isDraft,mergeable,headRefOid)"
-            [[ "$(jq -r .state <<< "$info")" == "OPEN" ]] || return 1
-            [[ "$(jq -r .isDraft <<< "$info")" == "false" ]] || return 1
-            [[ "$(jq -r .mergeable <<< "$info")" == "MERGEABLE" ]] || return 1
-            head="$(jq -r .headRefOid <<< "$info")"
-            [[ "$head" == "$expected_head" ]] || return 1
-            if ! gh pr checks "$pr" --repo "$GITHUB_REPOSITORY" --required >/tmp/factory-ready-checks 2>&1; then
-              echo "Required checks for PR #${pr} are unavailable or not green; leaving it open" >&2
-              cat /tmp/factory-ready-checks >&2 || true
-              return 1
-            fi
-            current_head_review_blockers "$pr" "$head"
-          }
-
           ready_file="$RUNNER_TEMP/factory-ready-prs.tsv"
           if ! gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 100 \
             --label 'factory:ready' \
-            --json number,isDraft,headRefOid \
-            --jq '.[] | select(.isDraft == false) | [.number, .headRefOid] | @tsv' \
+            --json number,headRefOid \
+            --jq '.[] | [.number, .headRefOid] | @tsv' \
             > "$ready_file"; then
             echo 'Unable to enumerate factory:ready PRs; merge drain will retry on the next dispatcher tick' >&2
             exit 1
@@ -152,10 +112,27 @@ jobs:
               continue
             fi
 
-            if ! ready_to_merge "$pr" "$head"; then
-              echo "PR #${pr} is labeled ready but exact-head gates are not currently satisfied; leaving it open"
+            if ! gate="$(python3 "$review_controller" gates --pr "$pr" --expected-head "$head")"; then
+              echo "Unable to evaluate mechanical gates for PR #${pr}; leaving it open" >&2
               continue
             fi
+            gate_decision="$(jq -r '.decision // "retry"' <<< "$gate")"
+            gate_reason="$(jq -r '.reason // "mechanical gate result unavailable"' <<< "$gate")"
+            case "$gate_decision" in
+              pass) ;;
+              retry)
+                echo "PR #${pr} mechanical gates are retry-later: ${gate_reason}"
+                continue
+                ;;
+              deny)
+                echo "PR #${pr} mechanical gates deny merge: ${gate_reason}"
+                continue
+                ;;
+              *)
+                echo "PR #${pr} returned an unknown mechanical gate decision; leaving it open" >&2
+                continue
+                ;;
+            esac
 
             echo "Merging semantically authorized ready PR #${pr} at ${head}"
             if gh pr merge "$pr" --repo "$GITHUB_REPOSITORY" \

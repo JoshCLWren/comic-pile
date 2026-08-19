@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Controller-owned semantic review authorization for ComicPile factory PRs."""
+"""Controller-owned semantic review authorization and mechanical merge gates."""
 from __future__ import annotations
 
 import argparse
@@ -8,8 +8,9 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, TypedDict, cast
 
 sys.path.insert(0, os.path.dirname(__file__))
 from factory_review_policy import (  # noqa: E402
@@ -39,6 +40,38 @@ STAGE_LABELS = {
     "factory:blocked",
 }
 GH_TIMEOUT_SECONDS = 120
+MERGEABLE_POLL_ATTEMPTS = 10
+MERGEABLE_POLL_INTERVAL_SECONDS = 2.0
+PASSING_CHECK_STATES = {"SUCCESS", "SKIPPED", "NEUTRAL"}
+RETRY_CHECK_STATES = {
+    "ACTION_REQUIRED",
+    "EXPECTED",
+    "IN_PROGRESS",
+    "PENDING",
+    "QUEUED",
+    "REQUESTED",
+    "WAITING",
+}
+FAILING_CHECK_STATES = {
+    "CANCELLED",
+    "ERROR",
+    "FAILURE",
+    "STALE",
+    "STARTUP_FAILURE",
+    "TIMED_OUT",
+}
+NO_REQUIRED_CHECKS_RE = re.compile(r"no checks reported|no required checks", re.IGNORECASE)
+
+GateDecision = Literal["pass", "retry", "deny"]
+
+
+class GateResult(TypedDict):
+    decision: GateDecision
+    reason: str
+
+
+def gate_result(decision: GateDecision, reason: str) -> GateResult:
+    return {"decision": decision, "reason": reason}
 
 
 def run_gh(
@@ -92,12 +125,10 @@ def pr_json(pr_number: int) -> dict[str, Any]:
 
 
 def target_json(number: int) -> dict[str, Any]:
-    """Fetch issue-compatible target state."""
     return cast(dict[str, Any], gh_json(["api", f"repos/{REPO}/issues/{number}"]))
 
 
 def labels_of(item: dict[str, Any]) -> set[str]:
-    """Return normalized label names from a GitHub payload."""
     labels: set[str] = set()
     for label in item.get("labels") or []:
         if isinstance(label, dict) and label.get("name"):
@@ -108,7 +139,6 @@ def labels_of(item: dict[str, Any]) -> set[str]:
 
 
 def replace_factory_labels(number: int, owner: str, stage: str) -> None:
-    """Atomically replace factory owner/stage labels on one target."""
     current = labels_of(target_json(number))
     labels = {
         label
@@ -119,20 +149,12 @@ def replace_factory_labels(number: int, owner: str, stage: str) -> None:
     }
     labels.update({"factory", owner, stage})
     run_gh(
-        [
-            "api",
-            "--method",
-            "PUT",
-            f"repos/{REPO}/issues/{number}/labels",
-            "--input",
-            "-",
-        ],
+        ["api", "--method", "PUT", f"repos/{REPO}/issues/{number}/labels", "--input", "-"],
         input_json={"labels": sorted(labels)},
     )
 
 
 def linked_issue_from_branch(branch: str | None) -> int | None:
-    """Extract an issue number from a canonical fixed-model branch."""
     if not branch:
         return None
     match = re.match(r"^factory/\d+-(\d+)-", branch)
@@ -140,7 +162,6 @@ def linked_issue_from_branch(branch: str | None) -> int | None:
 
 
 def flatten_pages(value: object | None) -> list[dict[str, Any]]:
-    """Flatten gh api --paginate --slurp JSON pages."""
     result: list[dict[str, Any]] = []
     for page in value or []:
         if isinstance(page, list):
@@ -151,14 +172,8 @@ def flatten_pages(value: object | None) -> list[dict[str, Any]]:
 
 
 def review_comment_bodies(pr_number: int) -> list[str]:
-    """Return action-authored comments that may contain review attestations."""
     pages = gh_json(
-        [
-            "api",
-            "--paginate",
-            "--slurp",
-            f"repos/{REPO}/issues/{pr_number}/comments?per_page=100",
-        ]
+        ["api", "--paginate", "--slurp", f"repos/{REPO}/issues/{pr_number}/comments?per_page=100"]
     )
     bodies: list[str] = []
     for comment in flatten_pages(pages):
@@ -170,7 +185,6 @@ def review_comment_bodies(pr_number: int) -> list[str]:
 
 
 def redact_review_text(text: str) -> str:
-    """Redact common credential shapes before review output reaches GitHub."""
     text = SENSITIVE_ASSIGNMENT_RE.sub(r"\1[REDACTED]", text)
     text = BEARER_RE.sub(r"\1[REDACTED]", text)
     text = GITHUB_TOKEN_RE.sub("[REDACTED_GITHUB_TOKEN]", text)
@@ -178,7 +192,6 @@ def redact_review_text(text: str) -> str:
 
 
 def review_excerpt(path: str | None, *, worker: str) -> str:
-    """Read only the expected worker log and return a redacted bounded tail."""
     if not path:
         return ""
     expected = Path(f"/tmp/opencode-factory-{worker}.log")
@@ -204,7 +217,6 @@ def post_review_comment(
     excerpt: str,
     note: str,
 ) -> None:
-    """Persist semantic findings and controller audit metadata."""
     parts: list[str] = []
     if marker:
         parts.append(marker)
@@ -217,76 +229,198 @@ def post_review_comment(
             + excerpt
             + "\n```\n</details>"
         )
-    run_gh(
-        ["issue", "comment", str(pr_number), "--repo", REPO, "--body", "\n\n".join(parts)]
-    )
+    run_gh(["issue", "comment", str(pr_number), "--repo", REPO, "--body", "\n\n".join(parts)])
 
 
-def current_head_review_blockers(pr_number: int, head: str) -> bool:
-    """Return True when the current head has no blocking reviews or threads."""
-    pages = gh_json(
-        [
-            "api",
-            "--paginate",
-            "--slurp",
-            f"repos/{REPO}/pulls/{pr_number}/reviews?per_page=100",
-        ]
+def interpret_required_checks(
+    checks: object | None,
+    *,
+    command_status: int,
+    stderr: str,
+) -> GateResult:
+    """Pure interpretation of `gh pr checks --required --json state` output."""
+    if checks is None:
+        if NO_REQUIRED_CHECKS_RE.search(stderr):
+            return gate_result("pass", "no required checks configured or reported")
+        return gate_result("retry", "required checks could not be determined")
+    if not isinstance(checks, list):
+        return gate_result("retry", "required check payload was not a list")
+    if not checks:
+        if command_status == 0 or NO_REQUIRED_CHECKS_RE.search(stderr):
+            return gate_result("pass", "no required checks configured or reported")
+        return gate_result("retry", "required checks returned no usable result")
+
+    states: list[str] = []
+    for check in checks:
+        if not isinstance(check, dict):
+            return gate_result("retry", "required check payload contained an invalid row")
+        state = str(check.get("state") or "").upper()
+        if not state:
+            return gate_result("retry", "required check state was missing")
+        states.append(state)
+
+    failing = sorted(set(states) & FAILING_CHECK_STATES)
+    if failing:
+        return gate_result("deny", f"required checks failed: {', '.join(failing)}")
+    waiting = sorted(set(states) & RETRY_CHECK_STATES)
+    if waiting:
+        return gate_result("retry", f"required checks are not terminal: {', '.join(waiting)}")
+    unknown = sorted(set(states) - PASSING_CHECK_STATES)
+    if unknown:
+        return gate_result("retry", f"unknown required check states: {', '.join(unknown)}")
+    return gate_result("pass", "all required checks are successful")
+
+
+def required_checks_gate(pr_number: int) -> GateResult:
+    proc = run_gh(
+        ["pr", "checks", str(pr_number), "--repo", REPO, "--required", "--json", "state"],
+        check=False,
     )
+    checks: object | None = None
+    if proc.stdout.strip():
+        try:
+            checks = json.loads(proc.stdout)
+        except json.JSONDecodeError:
+            return gate_result("retry", "required checks returned invalid JSON")
+    return interpret_required_checks(checks, command_status=proc.returncode, stderr=proc.stderr)
+
+
+def interpret_review_threads(
+    nodes: object | None,
+    *,
+    head: str,
+    has_next_page: bool = False,
+) -> GateResult:
+    """Pure exact-head unresolved-thread interpretation."""
+    if has_next_page:
+        return gate_result("retry", "review thread pagination was incomplete")
+    if not isinstance(nodes, list):
+        return gate_result("retry", "review thread payload was unavailable")
+    for node in nodes:
+        if not isinstance(node, dict):
+            return gate_result("retry", "review thread payload contained an invalid row")
+        if bool(node.get("isResolved")):
+            continue
+        comments = node.get("comments")
+        if not isinstance(comments, dict):
+            return gate_result("retry", "unresolved review thread lacked comment metadata")
+        if bool((comments.get("pageInfo") or {}).get("hasNextPage")):
+            return gate_result("retry", "review thread comments were only partially inspected")
+        comment_nodes = comments.get("nodes")
+        if not isinstance(comment_nodes, list) or not comment_nodes:
+            return gate_result("retry", "unresolved review thread lacked commit metadata")
+        saw_commit = False
+        for comment in comment_nodes:
+            if not isinstance(comment, dict):
+                return gate_result("retry", "review thread comment metadata was invalid")
+            commit = comment.get("commit")
+            if not isinstance(commit, dict) or not commit.get("oid"):
+                return gate_result("retry", "review thread comment lacked a commit SHA")
+            saw_commit = True
+            if str(commit["oid"]) == head:
+                return gate_result("deny", "current head has an unresolved review thread")
+        if not saw_commit:
+            return gate_result("retry", "unresolved review thread could not be head-scoped")
+    return gate_result("pass", "no current-head review thread blockers")
+
+
+def current_head_review_gate(pr_number: int, head: str) -> GateResult:
+    try:
+        pages = gh_json(
+            ["api", "--paginate", "--slurp", f"repos/{REPO}/pulls/{pr_number}/reviews?per_page=100"]
+        )
+    except RuntimeError:
+        return gate_result("retry", "review submissions could not be inspected")
     for review in flatten_pages(pages):
         if review.get("state") == "CHANGES_REQUESTED" and review.get("commit_id") == head:
-            return False
+            return gate_result("deny", "current head has CHANGES_REQUESTED")
 
     owner, name = REPO.split("/", 1)
-    result = cast(
-        dict[str, Any],
-        gh_json(
-            [
-                "api",
-                "graphql",
-                "-F",
-                f"owner={owner}",
-                "-F",
-                f"name={name}",
-                "-F",
-                f"number={pr_number}",
-                "-f",
-                (
-                    "query($owner:String!,$name:String!,$number:Int!){"
-                    "repository(owner:$owner,name:$name){pullRequest(number:$number){"
-                    "reviewThreads(first:100){nodes{isResolved}}}}}"
-                ),
-            ]
-        ),
-    )
-    nodes = (
+    try:
+        result = cast(
+            dict[str, Any],
+            gh_json(
+                [
+                    "api",
+                    "graphql",
+                    "-F",
+                    f"owner={owner}",
+                    "-F",
+                    f"name={name}",
+                    "-F",
+                    f"number={pr_number}",
+                    "-f",
+                    (
+                        "query($owner:String!,$name:String!,$number:Int!){"
+                        "repository(owner:$owner,name:$name){pullRequest(number:$number){"
+                        "reviewThreads(first:100){nodes{isResolved comments(first:100){"
+                        "nodes{commit{oid}} pageInfo{hasNextPage}}} pageInfo{hasNextPage}}}}}"
+                    ),
+                ]
+            ),
+        )
+    except RuntimeError:
+        return gate_result("retry", "review threads could not be inspected")
+    threads = (
         result.get("data", {})
         .get("repository", {})
         .get("pullRequest", {})
         .get("reviewThreads", {})
-        .get("nodes", [])
     )
-    return not any(not bool(node.get("isResolved")) for node in nodes)
+    return interpret_review_threads(
+        threads.get("nodes"),
+        head=head,
+        has_next_page=bool((threads.get("pageInfo") or {}).get("hasNextPage")),
+    )
 
 
-def mechanical_merge_gates_pass(pr_number: int, expected_head: str) -> bool:
-    """Re-check exact-head mechanical gates without trusting model output."""
-    info = pr_json(pr_number)
-    if str(info.get("state")) != "OPEN" or bool(info.get("isDraft")):
-        return False
-    if str(info.get("mergeable")) != "MERGEABLE":
-        return False
-    head = str(info.get("headRefOid") or "")
-    if head != expected_head:
-        return False
-    checks = run_gh(
-        ["pr", "checks", str(pr_number), "--repo", REPO, "--required"],
-        check=False,
-    )
-    return checks.returncode == 0 and current_head_review_blockers(pr_number, head)
+def poll_mergeable_gate(
+    pr_number: int,
+    expected_head: str,
+    *,
+    poll_attempts: int = MERGEABLE_POLL_ATTEMPTS,
+    poll_interval: float = MERGEABLE_POLL_INTERVAL_SECONDS,
+) -> GateResult:
+    """Poll GitHub's asynchronous mergeability computation for an exact head."""
+    for attempt in range(max(1, poll_attempts)):
+        try:
+            info = pr_json(pr_number)
+        except RuntimeError:
+            return gate_result("retry", "pull request state could not be read")
+        if str(info.get("state")) != "OPEN":
+            return gate_result("deny", "pull request is not open")
+        if bool(info.get("isDraft")):
+            return gate_result("deny", "pull request is a draft")
+        head = str(info.get("headRefOid") or "")
+        if head != expected_head:
+            return gate_result("deny", "pull request head changed after semantic review")
+        mergeable = str(info.get("mergeable") or "UNKNOWN").upper()
+        if mergeable == "MERGEABLE":
+            return gate_result("pass", "pull request is mergeable")
+        if mergeable == "CONFLICTING":
+            return gate_result("deny", "pull request has merge conflicts")
+        if mergeable != "UNKNOWN":
+            return gate_result("retry", f"unrecognized mergeable state: {mergeable}")
+        if attempt + 1 < max(1, poll_attempts):
+            time.sleep(poll_interval)
+    return gate_result("retry", "mergeability remained UNKNOWN after bounded polling")
+
+
+def mechanical_merge_gate(pr_number: int, expected_head: str) -> GateResult:
+    """Single authoritative exact-head mechanical gate for controller and workflows."""
+    mergeable = poll_mergeable_gate(pr_number, expected_head)
+    if mergeable["decision"] != "pass":
+        return mergeable
+    checks = required_checks_gate(pr_number)
+    if checks["decision"] != "pass":
+        return checks
+    reviews = current_head_review_gate(pr_number, expected_head)
+    if reviews["decision"] != "pass":
+        return reviews
+    return gate_result("pass", "all exact-head mechanical gates passed")
 
 
 def target_owned_by_worker(number: int, worker: str) -> bool:
-    """Return whether exactly this fixed worker currently owns a target."""
     active = {
         label
         for label in labels_of(target_json(number))
@@ -296,14 +430,8 @@ def target_owned_by_worker(number: int, worker: str) -> bool:
 
 
 def transition_pr_and_linked_issue(
-    *,
-    pr_number: int,
-    branch: str,
-    worker: str,
-    pr_stage: str,
-    issue_stage: str | None = None,
+    *, pr_number: int, branch: str, worker: str, pr_stage: str, issue_stage: str | None = None
 ) -> None:
-    """Release a reviewed PR and its linked issue to controller-owned state."""
     replace_factory_labels(pr_number, "factory:unowned", pr_stage)
     issue = linked_issue_from_branch(branch)
     if issue is None:
@@ -318,7 +446,6 @@ def transition_pr_and_linked_issue(
 
 
 def validate_review_lease(pr_number: int, worker: str, pr: dict[str, Any]) -> None:
-    """Reject review state changes not backed by the current worker lease."""
     if str(pr.get("state")) != "OPEN":
         raise RuntimeError(f"PR #{pr_number} is not open")
     labels = labels_of(pr)
@@ -341,7 +468,6 @@ def return_to_review(
     head: str,
     producer: str | None,
 ) -> dict[str, Any]:
-    """Record a non-authoritative result and safely release its lease."""
     post_review_comment(
         pr_number=pr_number,
         marker=None,
@@ -360,14 +486,8 @@ def return_to_review(
 
 
 def handle_review(
-    *,
-    worker: str,
-    pr_number: int,
-    verdict: str,
-    reviewed_head: str,
-    review_log: str | None,
+    *, worker: str, pr_number: int, verdict: str, reviewed_head: str, review_log: str | None
 ) -> dict[str, Any]:
-    """Interpret model review output under controller-owned repository authority."""
     if not FIXED_WORKER_RE.fullmatch(worker):
         raise RuntimeError(f"unsupported fixed-model reviewer: {worker}")
     if verdict not in {"approve", "repair", "reject"}:
@@ -466,9 +586,7 @@ def handle_review(
         return {"status": "rejected", "head": reviewed_head, "producer": producer}
 
     prior_approvers = current_head_approvers(
-        review_comment_bodies(pr_number),
-        pr=pr_number,
-        head=reviewed_head,
+        review_comment_bodies(pr_number), pr=pr_number, head=reviewed_head
     )
     post_review_comment(
         pr_number=pr_number,
@@ -479,24 +597,44 @@ def handle_review(
         note="Semantic approval is scoped to this exact reviewed PR head.",
     )
 
-    mechanical = mechanical_merge_gates_pass(pr_number, reviewed_head)
+    mechanical = mechanical_merge_gate(pr_number, reviewed_head)
     latest = pr_json(pr_number)
     latest_head = str(latest.get("headRefOid") or "")
+    if mechanical["decision"] == "retry":
+        result = return_to_review(
+            pr_number=pr_number,
+            branch=branch,
+            worker=worker,
+            reviewer=worker,
+            verdict=verdict,
+            excerpt="",
+            note=(
+                "Semantic approval is preserved for this exact head, but mechanical gates "
+                f"are not yet decidable: {mechanical['reason']}. This is retry-later, not a denial."
+            ),
+            status="approved-deferred",
+            head=latest_head or reviewed_head,
+            producer=producer,
+        )
+        result["mechanical"] = mechanical
+        return result
+
+    mechanical_passed = mechanical["decision"] == "pass"
     authorized = approval_can_promote(
         producer=producer,
         reviewer=worker,
         reviewed_head=reviewed_head,
         current_head=latest_head,
         verdict=verdict,
-        mechanical_gates_passed=mechanical,
+        mechanical_gates_passed=mechanical_passed,
         prior_approvers=prior_approvers,
     )
     if not authorized:
         note = (
-            "Historical producer provenance is unavailable, so one additional "
-            "distinct factory approval is required for this exact head."
-            if producer is None and mechanical and latest_head == reviewed_head
-            else "Approval did not satisfy all controller-side exact-head and mechanical gates."
+            "Historical producer provenance is unavailable, so one additional distinct "
+            "factory approval is required for this exact head."
+            if producer is None and mechanical_passed and latest_head == reviewed_head
+            else f"Approval was denied by controller-side gates: {mechanical['reason']}."
         )
         result = return_to_review(
             pr_number=pr_number,
@@ -523,21 +661,16 @@ def handle_review(
         "status": "ready",
         "head": reviewed_head,
         "producer": producer,
-        "mechanical": True,
+        "mechanical": mechanical,
     }
 
 
 def authorize_ready(pr_number: int) -> dict[str, Any]:
-    """Validate that a ready PR still has authorization for its current head."""
     pr = pr_json(pr_number)
     branch = str(pr.get("headRefName") or "")
     head = str(pr.get("headRefOid") or "")
     producer = producer_worker_from_pr(branch=branch, body=str(pr.get("body") or ""))
-    approvers = current_head_approvers(
-        review_comment_bodies(pr_number),
-        pr=pr_number,
-        head=head,
-    )
+    approvers = current_head_approvers(review_comment_bodies(pr_number), pr=pr_number, head=head)
     authorized = (
         str(pr.get("state")) == "OPEN"
         and "factory:ready" in labels_of(pr)
@@ -560,11 +693,7 @@ def authorize_ready(pr_number: int) -> dict[str, Any]:
                 issue_target = target_json(issue)
             except RuntimeError:
                 issue_target = None
-            if (
-                issue_target
-                and issue_target.get("state") == "open"
-                and "factory:ready" in labels_of(issue_target)
-            ):
+            if issue_target and issue_target.get("state") == "open" and "factory:ready" in labels_of(issue_target):
                 replace_factory_labels(issue, "factory:unowned", "factory:review")
 
     return {
@@ -576,7 +705,6 @@ def authorize_ready(pr_number: int) -> dict[str, Any]:
 
 
 def main() -> int:
-    """Run semantic review controller commands."""
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -584,15 +712,15 @@ def main() -> int:
     review.add_argument("--worker", required=True)
     review.add_argument("--pr", type=int, required=True)
     review.add_argument("--reviewed-head", required=True)
-    review.add_argument(
-        "--verdict",
-        choices=("approve", "repair", "reject"),
-        required=True,
-    )
+    review.add_argument("--verdict", choices=("approve", "repair", "reject"), required=True)
     review.add_argument("--review-log")
 
     authorized = subparsers.add_parser("authorized")
     authorized.add_argument("--pr", type=int, required=True)
+
+    gates = subparsers.add_parser("gates")
+    gates.add_argument("--pr", type=int, required=True)
+    gates.add_argument("--expected-head", required=True)
 
     args = parser.parse_args()
     if args.command == "review":
@@ -603,8 +731,12 @@ def main() -> int:
             reviewed_head=args.reviewed_head,
             review_log=args.review_log,
         )
-    else:
+    elif args.command == "authorized":
         result = authorize_ready(args.pr)
+    else:
+        if not HEAD_RE.fullmatch(args.expected_head):
+            raise RuntimeError("expected head must be a full lowercase Git SHA")
+        result = mechanical_merge_gate(args.pr, args.expected_head)
     print(json.dumps(result, sort_keys=True))
     return 0
 
