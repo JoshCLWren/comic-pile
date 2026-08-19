@@ -1,6 +1,7 @@
 """API route handlers."""
 
 from app.api import analytics as analytics
+from app.api import cbl_sync as cbl_sync
 from app.api import continuity_plan as continuity_plan
 from app.api import continuity_readiness as continuity_readiness
 from app.api import continuity_rule as continuity_rule
@@ -25,9 +26,11 @@ dependency.router.include_router(continuity_readiness.router)
 dependency.router.include_router(reading_order_projection.router)
 dependency.router.include_router(roll_recovery_switch.router, prefix="/roll")
 dependency.router.include_router(releases.router, prefix="/releases")
+dependency.router.include_router(cbl_sync.router)
 
 __all__ = [
     "analytics",
+    "cbl_sync",
     "continuity_plan",
     "continuity_readiness",
     "continuity_rule",
