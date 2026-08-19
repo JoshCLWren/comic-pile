@@ -75,6 +75,37 @@ unclean_git_state_json() {
 source <(sed '/^ensure_owner_label$/,$d' .github/scripts/free-model-factory-worker-primitives.sh)
 source .github/scripts/factory-semantic-verdict.sh
 
+nvidia_retry_after_seconds() {
+  local runtime_model="$1" provider_model request response headers http_code retry_after target now seconds
+  [[ "$SOURCE" == 'nvidia' ]] || return 1
+  provider_model="${runtime_model#nvidia/}"
+  request="$(jq -nc --arg model "$provider_model" '{model:$model,messages:[{role:"user",content:"Reply with OK"}],max_tokens:1}')"
+  response="$(mktemp)"
+  headers="$(mktemp)"
+  http_code="$(curl --silent --show-error --output "$response" --dump-header "$headers" --write-out '%{http_code}' \
+    --connect-timeout 5 --max-time 20 \
+    --header "Authorization: Bearer $NVIDIA_API_KEY" \
+    --header 'Content-Type: application/json' \
+    --data "$request" https://integrate.api.nvidia.com/v1/chat/completions || true)"
+  if [[ "$http_code" != '429' ]]; then
+    rm -f "$response" "$headers"
+    return 1
+  fi
+  retry_after="$(awk 'BEGIN{IGNORECASE=1} /^Retry-After:/ {sub(/\r$/, ""); sub(/^[^:]*:[[:space:]]*/, ""); print; exit}' "$headers")"
+  rm -f "$response" "$headers"
+  [[ -n "$retry_after" ]] || return 1
+  if [[ "$retry_after" =~ ^[0-9]+$ ]]; then
+    printf '%s\n' "$retry_after"
+    return 0
+  fi
+  target="$(date -d "$retry_after" +%s 2>/dev/null || true)"
+  [[ "$target" =~ ^[0-9]+$ ]] || return 1
+  now="$(date +%s)"
+  seconds=$((target - now))
+  (( seconds > 0 )) || return 1
+  printf '%s\n' "$seconds"
+}
+
 # A PR branch may predate the Kilo integration entirely. Stage the backend
 # runner from trusted main before any checkout so cross-worker takeover never
 # executes a missing or stale branch copy, mirroring the trusted guard model.
@@ -267,6 +298,13 @@ while :; do
   (( $(remaining) > 600 )) || break
 
   sleep_for="$TRANSIENT_BACKOFF_SECONDS"
+  if [[ "$SOURCE" == 'nvidia' ]]; then
+    retry_after="$(nvidia_retry_after_seconds "$RUNTIME_MODEL" || true)"
+    if [[ "$retry_after" =~ ^[0-9]+$ ]] && (( retry_after > sleep_for )); then
+      sleep_for="$retry_after"
+      log "honoring NVIDIA Retry-After: ${retry_after}s"
+    fi
+  fi
   max_sleep=$(( $(remaining) - 540 ))
   (( sleep_for > max_sleep )) && sleep_for="$max_sleep"
   (( sleep_for > 0 )) && sleep "$sleep_for"
