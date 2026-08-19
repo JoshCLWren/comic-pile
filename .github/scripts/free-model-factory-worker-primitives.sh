@@ -70,15 +70,28 @@ release_target() {
   local number="$1" fallback_stage="$2" reason="$3" target_kind="${4:-target}"
   local stage epoch marker
   stage="$(current_stage "$number" "$fallback_stage")"
-  replace_labels "$number" 'factory:unowned' "$stage"
   epoch="$(date +%s)"
   marker="<!-- comic-pile-factory-claim-released-v3:${target_kind}-${number}:${WORKER_ID}:${epoch}:${reason} -->"
-  gh issue comment "$number" --body "$marker" >/dev/null 2>&1 || true
+  if [[ "$target_kind" == 'issue' && "$reason" == 'no-persisted-change-handoff' ]]; then
+    if ! gh issue comment "$number" --body "$marker" >/dev/null 2>&1; then
+      FACTORY_RETAIN_LEASE_ON_EXIT=1
+      log "unable to persist bounded no-diff marker for issue #${number}; retaining the lease"
+      return 1
+    fi
+    replace_labels "$number" 'factory:unowned' "$stage"
+  else
+    replace_labels "$number" 'factory:unowned' "$stage"
+    gh issue comment "$number" --body "$marker" >/dev/null 2>&1 || true
+  fi
   log "released ${target_kind} #${number} to factory:unowned at ${stage} (${reason})"
 }
 
 release_owned_targets() {
   local reason="$1" number stage
+  if [[ "${FACTORY_RETAIN_LEASE_ON_EXIT:-0}" == '1' && "$reason" == 'session-end-handoff' ]]; then
+    log 'retaining current lease because the bounded no-diff marker could not be persisted'
+    return 0
+  fi
   while IFS= read -r number; do
     [[ -n "$number" ]] || continue
     stage="$(current_stage "$number" 'factory:building')"
@@ -558,8 +571,8 @@ while (( $(remaining) > 480 )); do
       log "issue #${NUMBER} produced no changes because the pinned model was interrupted; releasing without marking the issue blocked"
       release_target "$NUMBER" 'factory:building' 'transient-model-interruption' 'issue'
     else
-      log "issue #${NUMBER} produced no changes; releasing as blocked/unowned"
-      release_target "$NUMBER" 'factory:blocked' 'no-persisted-change' 'issue'
+      log "issue #${NUMBER} produced no persisted change; recording a bounded retry attempt"
+      release_target "$NUMBER" 'factory:building' 'no-persisted-change-handoff' 'issue'
     fi
     continue
   fi
