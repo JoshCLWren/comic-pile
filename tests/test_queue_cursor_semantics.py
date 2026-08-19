@@ -588,7 +588,7 @@ async def test_list_threads_stale_cursor_rejected_on_search_change(
     """A cursor issued for search='bat' is rejected when search='flash' is requested."""
     user = await get_or_create_user_async(async_db)
 
-    for i, title in enumerate(["Batman", "Flash", "Superman"], start=1):
+    for i, title in enumerate(["Batman", "Batgirl", "Flash", "Superman"], start=1):
         t = Thread(
             user_id=user.id,
             title=title,

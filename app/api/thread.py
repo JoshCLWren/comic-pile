@@ -3,7 +3,7 @@
 import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, cast
+from typing import Annotated
 
 import os
 
@@ -237,7 +237,7 @@ async def list_threads(
             detail="sort must be one of: position, title, created",
         )
 
-    validated_sort = cast(QueueSort, sort)
+    validated_sort: QueueSort = sort
     normalized_search = normalize_queue_search(search)
 
     query = select(Thread).where(Thread.user_id == current_user.id)
