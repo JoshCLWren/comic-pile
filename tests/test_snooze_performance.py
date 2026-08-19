@@ -1,7 +1,7 @@
 """Performance regression test for snooze endpoint query count.
 
-Ensures the snooze endpoint builds its snoozed-thread list with a single
-bulk query instead of one query per snoozed thread (N+1 loop).
+Ensures the snooze endpoint builds its response with pre-computed values
+instead of re-querying session, die, ladder path, and snapshot count after commit.
 """
 
 import pytest
@@ -17,7 +17,13 @@ async def test_snooze_endpoint_query_count(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """Ensure snooze endpoint uses a bounded number of DB queries (<=10)."""
+    """Ensure snooze endpoint uses a bounded number of DB queries.
+
+    The optimized implementation:
+    - Uses get_current_die_for_session to avoid re-querying the session.
+    - Pre-computes active thread, ladder path, and snapshot count before commit.
+    - Passes pre-computed values to build_session_response to skip post-commit queries.
+    """
     from tests.conftest import get_or_create_user_async
 
     user = await get_or_create_user_async(async_db)
@@ -58,4 +64,5 @@ async def test_snooze_endpoint_query_count(
     assert snooze_resp.status_code == 200
 
     queries = int(snooze_resp.headers.get("X-App-DB-Queries", "0"))
+    # Before optimization: ~12-18 queries. After: should be well under 12.
     assert queries <= 10, f"Too many DB queries on snooze: {queries}"
