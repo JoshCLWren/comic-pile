@@ -16,6 +16,7 @@ from app.schemas.continuity_readiness import (
     ContinuityBlocker,
     ContinuityReadinessNodeType,
     ContinuityReadinessResponse,
+    UnreadIssueDetail,
 )
 
 logger = logging.getLogger(__name__)
@@ -265,6 +266,16 @@ def _source_label(rule: ContinuityRule, snapshot: _GraphSnapshot) -> str:
     return f"{thread.title} #{issue.issue_number}"
 
 
+def _issue_detail(issue_id: int, snapshot: _GraphSnapshot) -> UnreadIssueDetail:
+    """Build a structured label for one unread issue."""
+    issue = snapshot.issues.get(issue_id)
+    if issue is None:
+        return UnreadIssueDetail(issue_id=issue_id, label=f"Issue {issue_id}")
+    thread = snapshot.threads.get(issue.thread_id)
+    label = f"#{issue.issue_number}" if thread is None else f"{thread.title} #{issue.issue_number}"
+    return UnreadIssueDetail(issue_id=issue_id, label=label)
+
+
 def _is_read(issue_id: int, snapshot: _GraphSnapshot) -> bool:
     """Return whether one owned issue is read."""
     issue = snapshot.issues.get(issue_id)
@@ -324,6 +335,7 @@ def _evaluate_rule(rule: ContinuityRule, snapshot: _GraphSnapshot) -> Continuity
             blocker_type = "members_unread"
     else:
         blocker_type = "item_unread"
+    all_unread_ids = sorted(set(causing_issue_ids + causing_member_issue_ids))
     return ContinuityBlocker(
         rule_id=rule.id,
         source_type=rule.source_type,
@@ -333,6 +345,7 @@ def _evaluate_rule(rule: ContinuityRule, snapshot: _GraphSnapshot) -> Continuity
         blocker_type=blocker_type,
         causing_issue_ids=causing_issue_ids,
         causing_member_issue_ids=causing_member_issue_ids,
+        unread_issue_details=[_issue_detail(uid, snapshot) for uid in all_unread_ids],
         note=rule.note,
     )
 

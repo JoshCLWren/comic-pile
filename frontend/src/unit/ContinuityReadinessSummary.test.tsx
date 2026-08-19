@@ -63,6 +63,7 @@ describe('ContinuityReadinessSummary', () => {
           satisfied: false,
           causing_issue_ids: [3],
           causing_member_issue_ids: [],
+          unread_issue_details: [{ issue_id: 3, label: 'Prelude #1' }],
           note: null,
         }],
       },
@@ -77,5 +78,61 @@ describe('ContinuityReadinessSummary', () => {
     })
     rerender(<ContinuityReadinessSummary issueId={7} />)
     expect(screen.getByText(/returned no prerequisite details/i)).toBeVisible()
+  })
+
+  it('shows unread issue details instead of source label when available', () => {
+    mocks.useContinuityReadiness.mockReturnValue({
+      readiness: {
+        node_type: 'issue',
+        node_id: 7,
+        is_readable: false,
+        evaluated_issue_id: 7,
+        blockers: [{
+          rule_id: 5,
+          source_type: 'crossover',
+          source_id: 10,
+          source_label: 'Crossover X',
+          satisfaction_type: 'all_members_read',
+          satisfied: false,
+          causing_issue_ids: [],
+          causing_member_issue_ids: [20, 21],
+          unread_issue_details: [
+            { issue_id: 20, label: 'Batman #10' },
+            { issue_id: 21, label: 'Batman #11' },
+          ],
+          note: null,
+        }],
+      },
+      isLoading: false, error: null, refetch,
+    })
+    render(<ContinuityReadinessSummary issueId={7} />)
+    expect(screen.getByText('Batman #10, Batman #11')).toBeVisible()
+    expect(screen.queryByText('Crossover X')).not.toBeInTheDocument()
+  })
+
+  it('falls back to source label when unread_issue_details is empty', () => {
+    mocks.useContinuityReadiness.mockReturnValue({
+      readiness: {
+        node_type: 'issue',
+        node_id: 7,
+        is_readable: false,
+        evaluated_issue_id: 7,
+        blockers: [{
+          rule_id: 6,
+          source_type: 'issue',
+          source_id: 4,
+          source_label: 'Old Legacy Blocker',
+          satisfaction_type: 'item_read',
+          satisfied: false,
+          causing_issue_ids: [4],
+          causing_member_issue_ids: [],
+          unread_issue_details: [],
+          note: null,
+        }],
+      },
+      isLoading: false, error: null, refetch,
+    })
+    render(<ContinuityReadinessSummary issueId={7} />)
+    expect(screen.getByText('Old Legacy Blocker')).toBeVisible()
   })
 })

@@ -17,6 +17,13 @@ class ContinuityReadinessRequest(BaseModel):
     node_id: int = Field(gt=0)
 
 
+class UnreadIssueDetail(BaseModel):
+    """Structured label for one unread issue causing a continuity block."""
+
+    issue_id: int
+    label: str
+
+
 class ContinuityBlocker(BaseModel):
     """One unsatisfied continuity rule blocking the requested node."""
 
@@ -29,6 +36,7 @@ class ContinuityBlocker(BaseModel):
     satisfied: Literal[False] = False
     causing_issue_ids: list[int] = Field(default_factory=list)
     causing_member_issue_ids: list[int] = Field(default_factory=list)
+    unread_issue_details: list[UnreadIssueDetail] = Field(default_factory=list)
     note: str | None = None
 
 
