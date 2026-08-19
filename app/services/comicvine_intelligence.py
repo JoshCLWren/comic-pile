@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from html.parser import HTMLParser
 import json
 from typing import cast
@@ -24,6 +25,8 @@ from app.services.comicvine_fallback import (
 
 COMICVINE_PROVIDER = "comicvine"
 MAX_RELATED_ISSUES_PER_ARC = 60
+
+logger = logging.getLogger(__name__)
 
 
 class _PlainTextParser(HTMLParser):
@@ -229,7 +232,13 @@ async def get_issue_intelligence(
         return None
 
     if metadata_needs_hydration(identity):
-        schedule_issue_metadata_hydration(identity.id)
+        try:
+            schedule_issue_metadata_hydration(identity.id)
+        except RuntimeError:
+            logger.warning(
+                "comicvine_intelligence_schedule_skipped issue_id=%s reason=no_event_loop",
+                issue_id,
+            )
 
     metadata = identity.metadata_json
     arc_refs = _arc_references(metadata)
