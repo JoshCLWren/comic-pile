@@ -31,6 +31,7 @@ from app.api import (
     queue,
     rate,
     reading_orders,
+    reading_order_projection,
     roll,
     session,
     snooze,
@@ -234,6 +235,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
     app.include_router(queue.router, prefix="/api/v1/queue", tags=["queue"])
     app.include_router(reading_orders.router, tags=["reading-orders"])
+    app.include_router(reading_order_projection.router, prefix="/api/v1", tags=["reading-orders"])
     app.include_router(session.router, prefix="/api/sessions", tags=["session"])
     app.include_router(session.router, prefix="/api/v1/sessions", tags=["session"])
     app.include_router(snooze.router, prefix="/api/snooze", tags=["snooze"])
