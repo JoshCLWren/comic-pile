@@ -9,8 +9,8 @@ async def test_cbl_sync_requires_server_only_credential(
     auth_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Normal authenticated users must not inherit CBL synchronization authority."""
-    monkeypatch.setenv("CBL_SYNC_TOKEN", "cbl-secret")
+    """Normal authenticated users must not inherit trusted automation authority."""
+    monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
 
     response = await auth_client.get(
         "/api/v1/cbl-sync/source",
@@ -26,8 +26,8 @@ async def test_cbl_batches_only_publish_revision_when_finalized(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A partial batch cannot make a mirror revision look fully synchronized."""
-    monkeypatch.setenv("CBL_SYNC_TOKEN", "cbl-secret")
-    headers = {"X-CBL-Sync-Token": "cbl-secret"}
+    monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
+    headers = {"X-Release-Writer-Token": "writer-secret"}
     repository = "tests/cbl-batch-finalize"
     revision = "a" * 40
     payload = {
@@ -97,8 +97,8 @@ async def test_cbl_batch_retry_is_content_idempotent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Retrying a previously persisted list does not rewrite its entries."""
-    monkeypatch.setenv("CBL_SYNC_TOKEN", "cbl-secret")
-    headers = {"X-CBL-Sync-Token": "cbl-secret"}
+    monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
+    headers = {"X-Release-Writer-Token": "writer-secret"}
     payload = {
         "repository": "tests/cbl-idempotent",
         "revision_sha": "c" * 40,
