@@ -12,6 +12,10 @@ on:
         type: string
   schedule:
     - cron: '23 * * * *'
+  push:
+    branches: [main]
+    paths:
+      - '.github/RELEASE_WRITER_RECONCILE_ONCE'
 
 jobs:
   publish-release:
@@ -21,7 +25,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-      issues: read
+      issues: write
     env:
       RELEASE_API_URL: https://comic-pile.vercel.app/api/v1/releases
       RELEASE_WRITER_TOKEN: ${{ secrets.RELEASE_WRITER_TOKEN }}
@@ -86,6 +90,8 @@ jobs:
           printf 'prompt=%s\n' "$prompt" >> "$GITHUB_OUTPUT"
 
       - name: Run dedicated release writer
+        id: writer
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           MODEL: ${{ steps.model.outputs.model }}
@@ -93,4 +99,35 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          opencode run -m "$MODEL" --agent release-writer --auto --dir "$GITHUB_WORKSPACE" --title "ComicPile release writer" "$PROMPT"
+          opencode run -m "$MODEL" --agent release-writer --auto --dir "$GITHUB_WORKSPACE" --title "ComicPile release writer" "$PROMPT" 2>&1 | tee "$RUNNER_TEMP/release-writer.log"
+
+      - name: Report one-shot blank reconciliation
+        if: always() && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WRITER_OUTCOME: ${{ steps.writer.outcome }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          report="$RUNNER_TEMP/release-writer-report.md"
+          {
+            echo '<!-- release-writer-backfill-once -->'
+            echo 'Release writer blank reconciliation'
+            echo
+            echo "Outcome: ${WRITER_OUTCOME:-not-run}"
+            echo "Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo
+            echo '```text'
+            if [[ -f "$RUNNER_TEMP/release-writer.log" ]]; then
+              tail -c 45000 "$RUNNER_TEMP/release-writer.log"
+            else
+              echo 'The release-writer step did not produce a log.'
+            fi
+            echo
+            echo '```'
+          } > "$report"
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1535/comments" --raw-field body="$(cat "$report")" >/dev/null
+
+      - name: Propagate release writer failure
+        if: always() && steps.writer.outcome != 'success'
+        run: exit 1
