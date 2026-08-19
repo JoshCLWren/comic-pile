@@ -58,7 +58,7 @@ const AUTH_ENDPOINT_PATHS = new Set(['/v1/auth/login', '/v1/auth/register', '/v1
 // Cast once at the boundary so callers get strongly typed payload methods.
 const api = rawApi as unknown as ApiClient
 
-const AUTH_TOKEN_STORAGE_KEY = 'auth_token'
+export const AUTH_TOKEN_STORAGE_KEY = 'auth_token'
 
 let isRedirectingToLogin = false
 let accessToken: string | null = null
@@ -70,7 +70,7 @@ let failedQueue: Array<{
 }> = []
 let isRefreshing = false
 
-function readStoredAccessToken(): string | null {
+export function readStoredAccessToken(): string | null {
   if (typeof localStorage === 'undefined') {
     return null
   }
