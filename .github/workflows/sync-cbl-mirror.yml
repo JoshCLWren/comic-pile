@@ -1,0 +1,72 @@
+name: Sync CBL Mirror
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Reconcile even when the fork SHA is already recorded
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: cbl-mirror-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: Reconcile CBL mirror
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      ENVIRONMENT: development
+    steps:
+      - name: Check out ComicPile
+        uses: actions/checkout@v7
+
+      - name: Check out CBL fork
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/CBL-ReadingLists
+          ref: main
+          path: cbl-mirror
+          fetch-depth: 1
+
+      - name: Install uv and Python 3.14
+        run: |
+          pipx install uv
+          uv python install 3.14
+
+      - name: Install ComicPile dependencies
+        run: uv sync --frozen
+
+      - name: Reconcile CBL source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${DATABASE_URL:-}" ]]; then
+            echo "DATABASE_URL repository secret is required" >&2
+            exit 2
+          fi
+
+          cbl_sha="$(git -C cbl-mirror rev-parse HEAD)"
+          args=(
+            cbl-mirror
+            --repository JoshCLWren/CBL-ReadingLists
+            --revision-sha "$cbl_sha"
+          )
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.force }}" == "true" ]]; then
+            args+=(--force)
+          fi
+
+          uv run python scripts/sync_cbl_mirror.py "${args[@]}"
