@@ -38,6 +38,13 @@ replace_labels() {
   gh api --method PUT "repos/${GITHUB_REPOSITORY}/issues/${number}/labels" --input - <<< "{\"labels\":${target}}" >/dev/null
 }
 
+record_no_diff_attempt() {
+  local number="$1" epoch marker
+  epoch="$(date +%s)"
+  marker="<!-- comic-pile-factory-claim-released-v3:issue-${number}:${WORKER_ID}:${epoch}:no-persisted-change-handoff -->"
+  gh issue comment "$number" --body "$marker" >/dev/null 2>&1
+}
+
 ensure_fleet_labels() {
   local worker label
   for worker in {6..15}; do
@@ -72,7 +79,7 @@ choose_issue() {
 }
 
 claim_issue() {
-  local number="$1" labels target
+  local number="$1" labels target epoch marker
   labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
   if jq -e --arg owner_re "$OWNER_RE" '[.[] | select(test($owner_re) and . != "factory:unowned")] | length > 0' >/dev/null <<< "$labels"; then
     return 1
@@ -81,6 +88,9 @@ claim_issue() {
     map(select((test($owner_re)|not) and (test($stage_re)|not) and . != "factory"))
     + ["factory", $owner, "factory:building"] | unique' <<< "$labels")"
   gh api --method PUT "repos/${GITHUB_REPOSITORY}/issues/${number}/labels" --input - <<< "{\"labels\":${target}}" >/dev/null
+  epoch="$(date +%s)"
+  marker="<!-- comic-pile-factory-implement-claim-v3:issue-${number}:${WORKER_ID}:${epoch}:attempt-1 -->"
+  gh issue comment "$number" --body "$marker" >/dev/null 2>&1 || true
 }
 
 claim_unowned_pr() {
@@ -403,8 +413,12 @@ while (( $(remaining) > 480 )); do
       log "issue #${NUMBER} produced no changes because of a transient provider/runtime interruption; releasing without marking the issue blocked"
       replace_labels "$NUMBER" 'factory:unowned' 'factory:building'
     else
-      log "issue #${NUMBER} produced no changes; releasing as blocked/unowned"
-      replace_labels "$NUMBER" 'factory:unowned' 'factory:blocked'
+      if record_no_diff_attempt "$NUMBER"; then
+        log "issue #${NUMBER} produced no changes; recorded a bounded no-diff attempt and released for retry"
+        replace_labels "$NUMBER" 'factory:unowned' 'factory:building'
+      else
+        log "issue #${NUMBER} produced no changes, but the durable retry marker failed; retaining the lease rather than creating an uncounted retry"
+      fi
     fi
     continue
   fi
