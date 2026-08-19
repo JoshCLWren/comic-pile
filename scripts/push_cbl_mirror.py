@@ -27,7 +27,7 @@ def _json_request(
 ) -> dict:
     """Call the CBL synchronization API and decode its JSON response."""
     data = None if payload is None else json.dumps(payload).encode()
-    headers = {"X-CBL-Sync-Token": token}
+    headers = {"X-Release-Writer-Token": token}
     if data is not None:
         headers["Content-Type"] = "application/json"
     req = request.Request(url, data=data, headers=headers, method=method)
@@ -56,9 +56,9 @@ def main() -> int:
     if not args.mirror_path.is_dir():
         print(json.dumps({"error": "mirror_path_not_directory"}), file=sys.stderr)
         return 2
-    token = os.getenv("CBL_SYNC_TOKEN", "").strip()
+    token = os.getenv("RELEASE_WRITER_TOKEN", "").strip()
     if not token:
-        print(json.dumps({"error": "CBL_SYNC_TOKEN_not_configured"}), file=sys.stderr)
+        print(json.dumps({"error": "RELEASE_WRITER_TOKEN_not_configured"}), file=sys.stderr)
         return 2
 
     source_url = f"{args.api_url.rstrip('/')}/source?" + parse.urlencode(
