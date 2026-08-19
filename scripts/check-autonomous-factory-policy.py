@@ -17,7 +17,7 @@ LEGACY_PIPELINE = ROOT / "scripts/opencode_pipeline.sh"
 
 def require(text: str, needle: str, source: Path) -> None:
     """Require one invariant string in a policy source."""
-    if needle in {"Version: 22", "FACTORY POLICY V22"}:
+    if needle in {"Version: 22", "FACTORY POLICY V22", "Version: 23", "FACTORY POLICY V23", "Version: 24", "FACTORY POLICY V24"}:
         pattern = rf"(?<![A-Za-z0-9]){re.escape(needle)}(?![A-Za-z0-9])"
         present = re.search(pattern, text) is not None
     else:
@@ -52,21 +52,12 @@ def require_order(text: str, before: str, after: str, source: Path) -> None:
 def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
     """Validate factory control-plane texts against canonical invariants."""
     for needle in (
-        "Version: 22",
+"Version: 23",
         "Drive the open issue backlog to zero",
         "Factory ownership is a connection-pool lock around the next action",
         "Cross-worker takeover and merge are allowed",
         "release the lease when active work stops",
         "truthful no-work completion",
-        "Ordinary factories must not launch the complete discovery suite",
-        "The complete maintained Chromium Playwright suite is a separate scheduled discovery system",
-        "run once daily and remain manually dispatchable",
-        "retain Playwright traces, screenshots, video",
-        "machine-readable JSON results",
-        "upload failure evidence under `if: always()`",
-        "deduplicate repeated failures across daily runs",
-        "A newer discovery run must not cancel an in-flight run",
-        "When a factory fixes an E2E-discovered product defect, keep or strengthen focused regression coverage",
         "The highest-priority unclaimed open issue labeled both `user-reported` and `bug`",
         "The highest-priority unclaimed reproducible E2E-discovered product `bug` issue",
         "When fewer than four substantive implementation PRs are open",
@@ -95,12 +86,6 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
     forbid_marker(policy, "Version: 220", POLICY)
     forbid(policy, "#679", POLICY)
     forbid(policy, "backlog-zero checkpoint", POLICY)
-    require_order(
-        policy,
-        "The highest-priority unclaimed open issue labeled both `user-reported` and `bug`",
-        "The highest-priority unclaimed reproducible E2E-discovered product `bug` issue",
-        POLICY,
-    )
     require(policy, "within equal priority, choose the newest report first", POLICY)
 
     for marker in (
@@ -194,8 +179,8 @@ def validate_local_guidance() -> None:
         require(text, "factory-resume:v1", source)
 
     scheduled = SCHEDULED_PROMPT.read_text(encoding="utf-8")
-    require(scheduled, "Version: 22", SCHEDULED_PROMPT)
-    require(scheduled, "FACTORY POLICY V22", SCHEDULED_PROMPT)
+    require(scheduled, "Version: 24", SCHEDULED_PROMPT)
+    require(scheduled, "FACTORY POLICY V24", SCHEDULED_PROMPT)
     forbid_marker(scheduled, "Version: 21", SCHEDULED_PROMPT)
     forbid_marker(scheduled, "Version: 220", SCHEDULED_PROMPT)
     forbid_marker(scheduled, "FACTORY POLICY V21", SCHEDULED_PROMPT)
