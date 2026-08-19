@@ -25,7 +25,7 @@ jobs:
       contents: read
     env:
       CBL_SYNC_API_URL: https://comic-pile.vercel.app/api/v1/cbl-sync
-      CBL_SYNC_TOKEN: ${{ secrets.CBL_SYNC_TOKEN }}
+      RELEASE_WRITER_TOKEN: ${{ secrets.RELEASE_WRITER_TOKEN }}
     steps:
       - name: Check out ComicPile
         uses: actions/checkout@v7
@@ -41,12 +41,12 @@ jobs:
           path: cbl-mirror
           persist-credentials: false
 
-      - name: Validate CBL synchronization credential
+      - name: Validate trusted automation credential
         shell: bash
         run: |
           set -Eeuo pipefail
-          if [[ -z "$CBL_SYNC_TOKEN" ]]; then
-            echo '::error::CBL_SYNC_TOKEN is not configured in GitHub Actions secrets.'
+          if [[ -z "$RELEASE_WRITER_TOKEN" ]]; then
+            echo '::error::RELEASE_WRITER_TOKEN is not configured in GitHub Actions secrets.'
             exit 1
           fi
 
