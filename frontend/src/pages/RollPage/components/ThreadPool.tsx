@@ -13,7 +13,7 @@ interface ThreadPoolProps {
   selectedThreadId: number | null
   staleThread: (RollBootstrapThread & { days: number }) | null
   staleThreadCount: number
-  snoozedThreads: Array<{ id: number; title: string; format: string })
+  snoozedThreads: Array<{ id: number; title: string; format: string }>
   snoozedExpanded: boolean
   blockedExpanded: boolean
   onThreadClick: (thread: RollBootstrapThread) => void
