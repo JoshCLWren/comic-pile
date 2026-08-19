@@ -9,7 +9,7 @@ import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import or_, select, update
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -178,6 +178,10 @@ async def list_threads(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
     search: str | None = Query(default=None, min_length=1),
+    sort: str = Query(
+        default="position",
+        description="Sort order: position, title, or created",
+    ),
     page_size: int = Query(
         default=50,
         ge=1,
@@ -185,16 +189,21 @@ async def list_threads(
         description="Number of threads to return per page (default 50, max 200)",
     ),
     page_token: str | None = Query(
-        default=None, description="Token for pagination continuation (queue_position,thread_id)"
+        default=None, description="Opaque cursor token for pagination continuation"
     ),
 ) -> QueueThreadListResponse:
-    """List threads ordered by position with cursor-based pagination.
+    """List threads with deterministic cursor-based pagination.
+
+    Every retained sort has a deterministic cursor contract with stable
+    tie-breakers so that search results remain correct across multiple
+    pages.  Changing ``search`` or ``sort`` invalidates any prior cursor.
 
     Args:
         request: FastAPI request object for rate limiting.
         search: Optional case-insensitive title search filter.
+        sort: Sort order – ``position`` (default), ``title``, or ``created``.
         page_size: Number of threads to return per page (default 50, max 200).
-        page_token: Token for pagination continuation (queue_position,thread_id).
+        page_token: Opaque cursor token for pagination continuation.
         current_user: The authenticated user making the request.
         db: SQLAlchemy session for database operations.
 
@@ -202,42 +211,56 @@ async def list_threads(
         QueueThreadListResponse with paginated threads and next_page_token if more exist.
 
     Raises:
-        HTTPException: If a retired ``collection_id`` query parameter is present.
+        HTTPException: If a retired ``collection_id`` query parameter is present,
+            the sort value is unsupported, or the page token is stale/malformed.
     """
+    from app.services.queue_pagination import (
+        QueueCursor,
+        QueueSort,
+        build_cursor_filter,
+        build_cursor_values_from_row,
+        build_sort_order,
+        decode_queue_cursor,
+        encode_queue_cursor,
+        normalize_queue_search,
+    )
+
     if "collection_id" in request.query_params:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="collection_id is retired",
         )
-    normalized_search = search.strip() if search is not None else None
+
+    if sort not in {"position", "title", "created"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="sort must be one of: position, title, created",
+        )
+
+    validated_sort: QueueSort = sort
+    normalized_search = normalize_queue_search(search)
+
     query = select(Thread).where(Thread.user_id == current_user.id)
 
     if normalized_search:
         query = query.where(Thread.title.ilike(f"%{normalized_search}%"))
 
-    query = query.order_by(Thread.queue_position, Thread.id)
+    # Apply deterministic sort order with tie-breakers
+    for col in build_sort_order(validated_sort):
+        query = query.order_by(col)
 
-    # Apply cursor-based pagination if page_token provided
-    # Uses composite cursor of (queue_position, id) to handle non-unique positions
+    # Decode and apply opaque cursor-based pagination
     if page_token:
         try:
-            parts = page_token.split(",")
-            if len(parts) != 2:
-                raise ValueError("Invalid format")
-            cursor_position = int(parts[0])
-            cursor_id = int(parts[1])
-            # Filter: (queue_position > cursor_position) OR (queue_position == cursor_position AND id > cursor_id)
-            query = query.where(
-                or_(
-                    Thread.queue_position > cursor_position,
-                    (Thread.queue_position == cursor_position) & (Thread.id > cursor_id),
-                )
+            cursor = decode_queue_cursor(
+                page_token, sort=validated_sort, search=search
             )
-        except ValueError:
+        except ValueError as exc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid page_token format",
-            ) from None
+                detail=str(exc),
+            ) from exc
+        query = query.where(build_cursor_filter(cursor))
 
     # Query for page_size + 1 to detect if there's a next page
     query = query.limit(page_size + 1)
@@ -255,11 +278,16 @@ async def list_threads(
     # Convert full ThreadResponse to narrow QueueThreadListItem for list views
     queue_items = [_to_queue_list_item(tr) for tr in thread_responses]
 
-    # Set next_page_token to composite cursor of last item if there are more pages
+    # Build opaque next_page_token from the last row
     next_token = None
     if has_more and threads_to_return:
         last = threads_to_return[-1]
-        next_token = f"{last.queue_position},{last.id}"
+        cursor = QueueCursor(
+            sort=validated_sort,
+            search=normalized_search,
+            values=build_cursor_values_from_row(validated_sort, last),
+        )
+        next_token = encode_queue_cursor(cursor)
 
     return QueueThreadListResponse(
         threads=queue_items,
