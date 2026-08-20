@@ -6,17 +6,11 @@ import { ComicIdentity } from './ComicIdentity'
 
 interface ComicPillarProps {
   activeRatingThread: RatingThread | null
-  currentDie: number
-  rolledResult: number | null
-  poolSize: number
   onRefreshThread: () => void
 }
 
 export function ComicPillar({
   activeRatingThread,
-  currentDie,
-  rolledResult,
-  poolSize,
   onRefreshThread,
 }: ComicPillarProps) {
   const [isCorrectionDialogOpen, setIsCorrectionDialogOpen] = useState(false)

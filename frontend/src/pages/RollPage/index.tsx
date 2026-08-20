@@ -587,7 +587,6 @@ export default function RollPage() {
   const dieSize = currentDie || 6
   const filteredThreads = rollPool.filter((thread) => !isRatingView || thread.id !== (selectedThreadId ? Number(selectedThreadId) : null))
   const pool = filteredThreads.slice(0, dieSize)
-  const hasValidRolledResult = Number.isInteger(rolledResult) && rolledResult !== null && rolledResult >= 1 && rolledResult <= currentDie
 
   async function handleSetDie(die: number) {
     try {
@@ -799,8 +798,6 @@ export default function RollPage() {
                 rolledResult={rolledResult}
                 rating={rating}
                 predictedDie={predictedDie}
-                hasValidRolledResult={hasValidRolledResult}
-                poolSize={pool.length}
                 errorMessage={errorMessage}
                 rateIsPending={rateMutation.isPending}
                 snoozeIsPending={snoozeMutation.isPending}

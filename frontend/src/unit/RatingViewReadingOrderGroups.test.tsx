@@ -42,8 +42,6 @@ function renderRatingView(activeRatingThread: Parameters<typeof RatingView>[0]['
         rolledResult={activeRatingThread ? 3 : null}
         rating={activeRatingThread ? 4 : 3}
         predictedDie={activeRatingThread ? 4 : 6}
-        hasValidRolledResult={Boolean(activeRatingThread)}
-        poolSize={activeRatingThread ? 6 : 0}
         errorMessage=""
         rateIsPending={false}
         snoozeIsPending={false}
