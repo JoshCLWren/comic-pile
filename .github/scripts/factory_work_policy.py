@@ -358,15 +358,15 @@ def order_candidates_for_worker(candidates: list[Candidate], worker: str) -> lis
             if candidate.conflicted:
                 return 0
             if candidate.stage == 'factory:ci':
-                return 2
+                return 1
             if candidate.stage == 'factory:changes-requested':
-                return 3
+                return 2
             if candidate.stage == 'factory:review':
-                return 4 if review_first else 6
-            return 5 if review_first else 7
+                return 3 if review_first else 6
+            return 4 if review_first else 7
         if candidate.lane == 1:
-            return 1
-        return 5 if review_first else 4
+            return 5 if review_first else 3
+        return 6 if review_first else 4
 
     return sorted(
         eligible,
