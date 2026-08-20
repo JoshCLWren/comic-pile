@@ -115,4 +115,48 @@ describe('AuthProvider transient recovery', () => {
     expect(auth?.isAuthenticated).toBe(true)
     expect(mocks.clearAccessToken).not.toHaveBeenCalled()
   })
+
+  it('silently recovers the bootstrap session when the access token is rejected', async () => {
+    mocks.getAccessToken.mockReturnValue('stale-token')
+    mocks.get
+      .mockRejectedValueOnce(axiosError(401))
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
+    mocks.post.mockResolvedValueOnce({ access_token: 'new-token', refresh_token: 'new-refresh' })
+
+    renderProvider()
+    await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+
+    expect(auth?.isLoading).toBe(false)
+    expect(mocks.clearAccessToken).not.toHaveBeenCalled()
+    expect(mocks.post).toHaveBeenCalledWith('/v1/auth/refresh', undefined, { skipAuthRedirect: true })
+  })
+
+  it('only shows the login screen when silent recovery also fails', async () => {
+    mocks.getAccessToken.mockReturnValue('stale-token')
+    mocks.get.mockRejectedValueOnce(axiosError(401))
+    mocks.post.mockRejectedValueOnce(axiosError(401))
+
+    renderProvider()
+    await waitFor(() => expect(auth?.isAuthenticated).toBe(false))
+
+    expect(auth?.isLoading).toBe(false)
+    expect(mocks.clearAccessToken).toHaveBeenCalled()
+  })
+
+  it('revalidates silently before logging the user out on resume', async () => {
+    mocks.get.mockResolvedValue({ username: 'reader', email: 'reader@example.com' })
+    renderProvider()
+    await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+
+    mocks.get.mockRejectedValueOnce(axiosError(401))
+    mocks.post.mockResolvedValueOnce({ access_token: 'new-token', refresh_token: 'new-refresh' })
+    mocks.get.mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
+
+    await act(async () => {
+      await auth!.revalidateSession(15000)
+    })
+
+    expect(auth?.isAuthenticated).toBe(true)
+    expect(mocks.clearAccessToken).not.toHaveBeenCalled()
+  })
 })
