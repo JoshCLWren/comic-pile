@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 _review_policy = importlib.import_module("factory_review_policy")
 approval_can_promote = _review_policy.approval_can_promote
 current_head_approvers = _review_policy.current_head_approvers
+classify_ci_reconciliation = _review_policy.classify_ci_reconciliation
 head_has_authorized_approval = _review_policy.head_has_authorized_approval
 producer_worker_from_pr = _review_policy.producer_worker_from_pr
 review_marker = _review_policy.review_marker
@@ -307,6 +308,104 @@ def required_checks_gate(pr_number: int) -> GateResult:
         except json.JSONDecodeError:
             return gate_result("retry", "required checks returned invalid JSON")
     return interpret_required_checks(checks, command_status=proc.returncode, stderr=proc.stderr)
+
+
+def list_ci_pr_numbers() -> list[int]:
+    """List open CI-stage factory PRs for deterministic reconciliation."""
+    rows = gh_json(
+        [
+            "pr",
+            "list",
+            "--repo",
+            REPO,
+            "--state",
+            "open",
+            "--label",
+            "factory:ci",
+            "--limit",
+            "500",
+            "--json",
+            "number",
+        ]
+    )
+    if not isinstance(rows, list):
+        raise RuntimeError("factory:ci PR listing was unavailable")
+    return [int(row["number"]) for row in rows if isinstance(row, dict) and row.get("number")]
+
+
+def active_factory_owner(labels: set[str]) -> str | None:
+    """Return an active owner, ignoring the explicit unowned marker."""
+    owners = {label for label in labels if OWNER_RE.fullmatch(label)}
+    active = owners - {"factory:unowned"}
+    return sorted(active)[0] if active else None
+
+
+def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
+    """Reconcile one unowned CI PR using exact-head controller authorities."""
+    pr = pr_json(pr_number)
+    labels = labels_of(pr)
+    if str(pr.get("state")) != "OPEN" or "factory:ci" not in labels:
+        return {"pr": pr_number, "status": "skipped"}
+    if active_factory_owner(labels) is not None:
+        return {"pr": pr_number, "status": "owned"}
+
+    checks = required_checks_gate(pr_number)
+    if checks["decision"] != "pass":
+        status = classify_ci_reconciliation(
+            checks_decision=checks["decision"], authorized=False
+        )
+        return {"pr": pr_number, "status": status, "reason": checks["reason"]}
+
+    head = str(pr.get("headRefOid") or "")
+    branch = str(pr.get("headRefName") or "")
+    if not HEAD_RE.fullmatch(head):
+        return {"pr": pr_number, "status": "retry-ci", "reason": "current head unavailable"}
+
+    producer = producer_worker_from_pr(branch=branch, body=str(pr.get("body") or ""))
+    try:
+        approvers = current_head_approvers(
+            review_comment_bodies(pr_number), pr=pr_number, head=head
+        )
+    except (RuntimeError, json.JSONDecodeError) as exc:
+        return {
+            "pr": pr_number,
+            "status": "retry-ci",
+            "reason": f"semantic authorization could not be determined: {exc}",
+        }
+    authorized = head_has_authorized_approval(producer=producer, approvers=approvers)
+    if not authorized:
+        replace_factory_labels(pr_number, "factory:unowned", "factory:review")
+        return {"pr": pr_number, "status": "review", "head": head}
+
+    mechanical = mechanical_merge_gate(pr_number, head)
+    status = classify_ci_reconciliation(
+        checks_decision=checks["decision"],
+        authorized=True,
+        mechanical_decision=mechanical["decision"],
+    )
+    if status == "ready":
+        replace_factory_labels(pr_number, "factory:unowned", "factory:ready")
+    elif status == "changes-requested":
+        replace_factory_labels(pr_number, "factory:unowned", "factory:changes-requested")
+    return {
+        "pr": pr_number,
+        "status": status,
+        "head": head,
+        "reason": mechanical["reason"],
+    }
+
+
+def reconcile_ci() -> list[dict[str, Any]]:
+    """Reconcile every currently open, unowned factory:ci PR."""
+    results: list[dict[str, Any]] = []
+    for pr_number in list_ci_pr_numbers():
+        try:
+            result = reconcile_ci_pr(pr_number)
+        except (RuntimeError, json.JSONDecodeError) as exc:
+            result = {"pr": pr_number, "status": "retry-ci", "reason": str(exc)}
+        results.append(result)
+        print(json.dumps(result, sort_keys=True), file=sys.stderr)
+    return results
 
 
 def interpret_review_threads(
@@ -827,6 +926,8 @@ def main() -> int:
     gates.add_argument("--pr", type=int, required=True)
     gates.add_argument("--expected-head", required=True)
 
+    subparsers.add_parser("reconcile-ci")
+
     args = parser.parse_args()
     if args.command == "review":
         result = handle_review(
@@ -838,6 +939,8 @@ def main() -> int:
         )
     elif args.command == "authorized":
         result = authorize_ready(args.pr)
+    elif args.command == "reconcile-ci":
+        result = {"results": reconcile_ci()}
     else:
         if not HEAD_RE.fullmatch(args.expected_head):
             raise RuntimeError("expected head must be a full lowercase Git SHA")

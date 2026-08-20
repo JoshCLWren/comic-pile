@@ -92,6 +92,15 @@ jobs:
           echo "FACTORY_REAL_GH=$real_gh" >> "$GITHUB_ENV"
           echo "$shim_dir" >> "$GITHUB_PATH"
 
+      - name: Reconcile unowned factory CI PRs
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/factory-review-controller.py reconcile-ci
+
       - name: Drain exact-head ready factory PRs
         continue-on-error: true
         shell: bash

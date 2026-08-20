@@ -17,6 +17,33 @@ BODY_PRODUCER_RE = re.compile(
 )
 
 
+def classify_ci_reconciliation(
+    *,
+    checks_decision: str,
+    authorized: bool,
+    mechanical_decision: str | None = None,
+) -> str:
+    """Classify one exact-head CI-stage PR without invoking a worker.
+
+    The caller supplies decisions from the authoritative GitHub reads and
+    gate functions.  This pure boundary makes the lifecycle ordering explicit
+    and keeps unknown state fail-closed.
+    """
+    if checks_decision == "retry":
+        return "retry-ci"
+    if checks_decision == "deny":
+        return "repair-ci"
+    if checks_decision != "pass":
+        return "retry-ci"
+    if not authorized:
+        return "review"
+    if mechanical_decision == "pass":
+        return "ready"
+    if mechanical_decision == "deny":
+        return "changes-requested"
+    return "retry-ci"
+
+
 def producer_worker_from_pr(*, branch: str | None, body: str | None) -> str | None:
     """Recover durable producer identity without inventing historical provenance."""
     if branch:

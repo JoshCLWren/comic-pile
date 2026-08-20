@@ -61,6 +61,111 @@ def test_required_checks_all_passing_passes():
     assert result["decision"] == "pass"
 
 
+def test_ci_reconciliation_classifies_pending_as_retry():
+    controller = load_controller()
+    assert controller.classify_ci_reconciliation(
+        checks_decision="retry", authorized=False
+    ) == "retry-ci"
+
+
+def test_ci_reconciliation_classifies_failed_checks_as_repair():
+    controller = load_controller()
+    assert controller.classify_ci_reconciliation(
+        checks_decision="deny", authorized=False
+    ) == "repair-ci"
+
+
+def test_ci_reconciliation_promotes_only_authorized_green_exact_head():
+    controller = load_controller()
+    assert controller.classify_ci_reconciliation(
+        checks_decision="pass", authorized=True, mechanical_decision="pass"
+    ) == "ready"
+    assert controller.classify_ci_reconciliation(
+        checks_decision="pass", authorized=False, mechanical_decision="pass"
+    ) == "review"
+
+
+def test_ci_reconciliation_rejects_stale_or_missing_authorization():
+    controller = load_controller()
+    assert controller.classify_ci_reconciliation(
+        checks_decision="pass", authorized=False
+    ) == "review"
+
+
+def test_ci_reconciliation_keeps_repairable_mechanical_failures_executable():
+    controller = load_controller()
+    assert controller.classify_ci_reconciliation(
+        checks_decision="pass", authorized=True, mechanical_decision="deny"
+    ) == "changes-requested"
+    assert controller.classify_ci_reconciliation(
+        checks_decision="pass", authorized=True, mechanical_decision="retry"
+    ) == "retry-ci"
+
+
+def test_reconcile_ci_promotes_green_authorized_pr_without_worker(monkeypatch):
+    controller = load_controller()
+    head = "c" * 40
+    monkeypatch.setattr(
+        controller,
+        "pr_json",
+        lambda _pr: {
+            "state": "OPEN",
+            "headRefOid": head,
+            "headRefName": "factory/10-123-fix",
+            "body": "Worker: opencode-free-model-factory-10",
+            "labels": [
+                {"name": "factory"},
+                {"name": "factory:unowned"},
+                {"name": "factory:ci"},
+            ],
+        },
+    )
+    monkeypatch.setattr(controller, "required_checks_gate", lambda _pr: {"decision": "pass", "reason": "green"})
+    monkeypatch.setattr(controller, "review_comment_bodies", lambda _pr: [
+        controller.review_marker(
+            pr=123, head=head, reviewer="11", producer="10", verdict="approve"
+        )
+    ])
+    monkeypatch.setattr(controller, "mechanical_merge_gate", lambda _pr, _head: {"decision": "pass", "reason": "green"})
+    writes = []
+    monkeypatch.setattr(controller, "replace_factory_labels", lambda *args: writes.append(args))
+
+    result = controller.reconcile_ci_pr(123)
+
+    assert result["status"] == "ready"
+    assert writes == [(123, "factory:unowned", "factory:ready")]
+
+
+def test_reconcile_ci_routes_conflicted_green_pr_to_repair(monkeypatch):
+    controller = load_controller()
+    head = "d" * 40
+    monkeypatch.setattr(
+        controller,
+        "pr_json",
+        lambda _pr: {
+            "state": "OPEN",
+            "headRefOid": head,
+            "headRefName": "factory/10-123-fix",
+            "body": "Worker: opencode-free-model-factory-10",
+            "labels": [{"name": "factory:ci"}, {"name": "factory:unowned"}],
+        },
+    )
+    monkeypatch.setattr(controller, "required_checks_gate", lambda _pr: {"decision": "pass", "reason": "green"})
+    monkeypatch.setattr(controller, "review_comment_bodies", lambda _pr: [
+        controller.review_marker(
+            pr=123, head=head, reviewer="11", producer="10", verdict="approve"
+        )
+    ])
+    monkeypatch.setattr(controller, "mechanical_merge_gate", lambda _pr, _head: {"decision": "deny", "reason": "pull request has merge conflicts"})
+    writes = []
+    monkeypatch.setattr(controller, "replace_factory_labels", lambda *args: writes.append(args))
+
+    result = controller.reconcile_ci_pr(123)
+
+    assert result["status"] == "changes-requested"
+    assert writes == [(123, "factory:unowned", "factory:changes-requested")]
+
+
 def test_mergeable_unknown_then_mergeable(monkeypatch):
     controller = load_controller()
     states = iter(
