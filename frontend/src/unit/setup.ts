@@ -1,5 +1,9 @@
 import '@testing-library/jest-dom'
 
+if (typeof globalThis.Element !== 'undefined' && typeof Element.prototype.scrollIntoView !== 'function') {
+  Element.prototype.scrollIntoView = () => {}
+}
+
 if (typeof globalThis.IntersectionObserver === 'undefined') {
   class MockIntersectionObserver {
     static instances: MockIntersectionObserver[] = []
