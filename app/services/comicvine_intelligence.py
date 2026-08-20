@@ -22,6 +22,7 @@ from app.services.comicvine_fallback import (
     metadata_needs_hydration,
     schedule_issue_metadata_hydration,
 )
+from app.services.comicvine_series_resolution import schedule_series_issue_resolution
 
 COMICVINE_PROVIDER = "comicvine"
 MAX_RELATED_ISSUES_PER_ARC = 60
@@ -229,6 +230,7 @@ async def get_issue_intelligence(
     """
     identity = await _confirmed_identity(db, issue_id)
     if identity is None:
+        schedule_series_issue_resolution(db, issue_id, user_id)
         return None
 
     if metadata_needs_hydration(identity):
