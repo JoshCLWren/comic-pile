@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, it, expect, vi } from 'vitest'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { RatingView } from '../pages/RollPage/components/RatingView'
+import { getPredictedDie } from '../pages/RollPage/utils'
 
 // Mock heavy components
 vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
@@ -17,7 +18,7 @@ const callbacks = {
   onRefreshThread: vi.fn(),
 }
 
-function renderRatingView({ currentDie, rating, predictedDie }: { currentDie: number; rating: number; predictedDie: number }) {
+function renderRatingView({ currentDie, rating }: { currentDie: number; rating: number }) {
   return render(
     <MemoryRouter>
       <ToastProvider>
@@ -38,7 +39,7 @@ function renderRatingView({ currentDie, rating, predictedDie }: { currentDie: nu
           currentDie={currentDie}
           rolledResult={null}
           rating={rating}
-          predictedDie={predictedDie}
+          predictedDie={getPredictedDie(currentDie, rating)}
           hasValidRolledResult={false}
           poolSize={0}
           errorMessage=""
@@ -56,8 +57,14 @@ function renderRatingView({ currentDie, rating, predictedDie }: { currentDie: nu
 
 describe('RatingView initial preview', () => {
   it('shows correct die transition and direction for low rating', () => {
-    renderRatingView({ currentDie: 20, rating: 3.0, predictedDie: 30 })
+    renderRatingView({ currentDie: 20, rating: 3.0 })
     expect(screen.getByText('d20 → d30')).toBeInTheDocument()
     expect(screen.getByText('More variety next roll')).toBeInTheDocument()
+  })
+
+  it('uses the same prediction source for a high rating', () => {
+    renderRatingView({ currentDie: 20, rating: 4.0 })
+    expect(screen.getByText('d20 → d12')).toBeInTheDocument()
+    expect(screen.getByText('More focused next roll')).toBeInTheDocument()
   })
 })
