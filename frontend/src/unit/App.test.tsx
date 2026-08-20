@@ -13,10 +13,17 @@ vi.mock('../services/api', () => {
   return {
     default: {
       get: (...args: Parameters<typeof mockApiGet>) => mockApiGet(...args),
+<<<<<<< HEAD
       post: Object.assign(new Error('unauthenticated'), {
         isAxiosError: true,
         response: { status: 401 },
       }),
+=======
+      post: vi.fn().mockRejectedValue(Object.assign(new Error('unauthenticated'), {
+        isAxiosError: true,
+        response: { status: 401 },
+      })),
+>>>>>>> origin/main
       put: vi.fn(),
       delete: vi.fn(),
       interceptors: {
