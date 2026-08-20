@@ -47,7 +47,7 @@ def _normalize_issue_label(value: str | None) -> str:
         return ""
     normalized = unicodedata.normalize("NFKC", value).strip()
     normalized = normalized.removeprefix("#").strip()
-    return " ".join(normalized.split())
+    return " ".join(normalized.split()).lower()
 
 
 def _is_ambiguous_special(label: str) -> bool:
@@ -319,12 +319,18 @@ async def _run_series_resolution(issue_id: int, user_id: int) -> None:
             )
             return
 
+        try:
+            await db.commit()
+        except Exception:
+            logger.warning(
+                "comicvine_series_resolution_commit_failed issue_id=%s",
+                issue_id,
+                exc_info=True,
+            )
+            return
+
         comicvine_issue_id = _comicvine_issue_id(persisted.external_id)
         if comicvine_issue_id is not None:
-            try:
-                await db.commit()
-            except Exception:  # noqa: BLE001
-                pass
             try:
                 await hydrate_issue(db, client, comicvine_issue_id, refresh=True)
                 await db.commit()
