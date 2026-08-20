@@ -91,9 +91,6 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const wasRatingViewRef = useRef(false)
 
   useEffect(() => {
-    if (wasRatingViewRef.current && !isRatingView) {
-      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
-    }
     wasRatingViewRef.current = isRatingView
   }, [isRatingView])
 
