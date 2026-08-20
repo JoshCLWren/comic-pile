@@ -6,9 +6,25 @@ and pool event listeners are registered.
 """
 
 import importlib
+from collections.abc import Iterator
 
 import pytest
 from sqlalchemy.pool import QueuePool
+
+
+@pytest.fixture(autouse=True)
+def _restore_database_module() -> Iterator[None]:
+    """Keep reload-based configuration tests from replacing app dependencies."""
+    import app.database as db_mod
+
+    original_namespace = vars(db_mod).copy()
+    original_engine = db_mod.async_engine
+    yield
+    reloaded_engine = db_mod.async_engine
+    if reloaded_engine is not original_engine:
+        reloaded_engine.sync_engine.dispose()
+    vars(db_mod).clear()
+    vars(db_mod).update(original_namespace)
 
 
 @pytest.fixture(autouse=True)

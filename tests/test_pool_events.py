@@ -4,7 +4,24 @@ Verifies that observability hooks for checkout, checkin, connect,
 first_connect, and invalidate are registered on the engine pool.
 """
 
+from collections.abc import Iterator
+
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def _restore_database_module() -> Iterator[None]:
+    """Keep listener reload tests from replacing app dependency identities."""
+    import app.database as db_mod
+
+    original_namespace = vars(db_mod).copy()
+    original_engine = db_mod.async_engine
+    yield
+    reloaded_engine = db_mod.async_engine
+    if reloaded_engine is not original_engine:
+        reloaded_engine.sync_engine.dispose()
+    vars(db_mod).clear()
+    vars(db_mod).update(original_namespace)
 
 
 @pytest.fixture()

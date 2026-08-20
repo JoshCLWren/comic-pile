@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parents[1] / ".github" / "scripts"
+if str(SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS))
 SPEC = importlib.util.spec_from_file_location(
     "factory_work_policy",
     SCRIPTS / "factory_work_policy.py",

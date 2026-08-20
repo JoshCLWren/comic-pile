@@ -227,7 +227,7 @@ if [[ "$command_group" == pr && "$command_name" == checks ]]; then
       if [[ -n "$base_ref" ]]; then
         encoded_base="$(jq -rn --arg value "$base_ref" '$value | @uri')"
         if branch_raw="$("$REAL_GH" api "repos/${repo}/branches/${encoded_base}" 2>/dev/null)"; then
-          protected="$(jq -r '.protected // true' <<< "$branch_raw")"
+          protected="$(jq -r 'if has("protected") then .protected else true end' <<< "$branch_raw")"
           if [[ "$protected" == false ]]; then
             echo "factory gh REST shim: no required checks configured on unprotected base ${base_ref}; treating required-check gate as satisfied" >&2
             exit 0
