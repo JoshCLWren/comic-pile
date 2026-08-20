@@ -80,31 +80,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }, [])
 
-  const revalidateSession = useCallback(async (timeout?: number) => {
-    try {
-      const response = await api.get<AuthUser>('/v1/auth/me', {
-        timeout,
-        skipAuthRedirect: true,
-      })
-      setUser(response)
-      setIsAuthenticated(true)
-    } catch (error) {
-      if (isDefinitiveAuthenticationFailure(error)) {
-        // The persistent session can usually be renewed silently with the
-        // refresh cookie. Only treat the user as logged out when that also fails.
-        try {
-          await recoverSession(timeout)
-          return
-        } catch (recoveryError) {
-          if (isDefinitiveAuthenticationFailure(recoveryError)) {
-            markDefinitivelyUnauthenticated()
-          }
-        }
-      }
-      throw error
-    }
-  }, [markDefinitivelyUnauthenticated, recoverSession])
-
   const recoverSession = useCallback((timeout?: number): Promise<void> => {
     if (!recoveryPromise.current) {
       recoveryPromise.current = (async () => {
@@ -132,6 +107,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return recoveryPromise.current
   }, [markDefinitivelyUnauthenticated])
+
+  const revalidateSession = useCallback(async (timeout?: number) => {
+    try {
+      const response = await api.get<AuthUser>('/v1/auth/me', {
+        timeout,
+        skipAuthRedirect: true,
+      })
+      setUser(response)
+      setIsAuthenticated(true)
+    } catch (error) {
+      if (isDefinitiveAuthenticationFailure(error)) {
+        // The persistent session can usually be renewed silently with the
+        // refresh cookie. Only treat the user as logged out when that also fails.
+        try {
+          await recoverSession(timeout)
+          return
+        } catch (recoveryError) {
+          if (isDefinitiveAuthenticationFailure(recoveryError)) {
+            markDefinitivelyUnauthenticated()
+          }
+        }
+      }
+      throw error
+    }
+  }, [markDefinitivelyUnauthenticated, recoverSession])
 
   useEffect(() => {
     let isMounted = true
