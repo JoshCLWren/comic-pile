@@ -1,5 +1,5 @@
 import api from './api'
-import type { Issue, IssueListResponse, Thread } from '../types'
+import type { Issue, IssueListResponse, ReaderContextResponse, Thread } from '../types'
 
 export interface SetCurrentIssueResponse {
   thread_id: number
@@ -151,8 +151,7 @@ export const issuesApi = {
    * @param issueId - The issue ID to get reader-context for
    * @returns Reader-context response with series, crossovers, and local_chain data
    */
-  getReaderContext: async (issueId: number): Promise<any> => {
-    // TODO: Define proper return type based on #1401 contract
+  getReaderContext: async (issueId: number): Promise<ReaderContextResponse> => {
     return api.get(`/v1/issues/${issueId}/reader-context`)
   },
 }

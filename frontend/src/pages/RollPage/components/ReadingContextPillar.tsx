@@ -39,25 +39,37 @@ export function ReadingContextPillar({
   useEffect(() => {
     if (!activeRatingThread || !issueId) {
       setReaderContext(null)
+      setReaderContextError(null)
       return
     }
 
+    const abortController = new AbortController()
     const fetchReaderContext = async () => {
       setIsLoadingReaderContext(true)
       setReaderContextError(null)
       try {
         const response = await issuesApi.getReaderContext(issueId)
-        setReaderContext(response)
+        if (!abortController.signal.aborted) {
+          setReaderContext(response)
+        }
       } catch (error) {
-        console.error('Failed to fetch reader-context:', error)
-        setReaderContextError('Failed to load reading context')
-        setReaderContext(null)
+        if (!abortController.signal.aborted) {
+          console.error('Failed to fetch reader-context:', error)
+          setReaderContextError('Failed to load reading context')
+          setReaderContext(null)
+        }
       } finally {
-        setIsLoadingReaderContext(false)
+        if (!abortController.signal.aborted) {
+          setIsLoadingReaderContext(false)
+        }
       }
     }
 
     fetchReaderContext()
+
+    return () => {
+      abortController.abort()
+    }
   }, [activeRatingThread, issueId])
 
   return (
@@ -68,8 +80,8 @@ export function ReadingContextPillar({
       </div>
       <ContinuityReadinessSummary issueId={issueId} />
 
-      {/* Three-up status row: roll/result, series progress, readiness/eligibility */}
-      <section className="grid grid-cols-3 gap-4 text-center pb-3 border-b border-[rgba(6,182,212,0.2)]">
+      {/* Two-up status row: roll/result, series progress */}
+      <section className="grid grid-cols-2 gap-4 text-center pb-3 border-b border-[rgba(6,182,212,0.2)]">
         {/* Roll/Result */}
         <div>
           {(rolledResult !== null && currentDie !== null) ? (
@@ -92,17 +104,6 @@ export function ReadingContextPillar({
           <div className="text-[9px] font-bold text-stone-500">Series Progress</div>
           <ReadingOrderGroups threadId={activeRatingThread?.id} className="text-[11px] font-mono text-amber-500" />
         </div>
-        
-        {/* Readiness/Eligibility */}
-        <div>
-          <div className="text-[9px] font-bold text-stone-500">Readiness</div>
-          {/* We'll show a simplified version here, with details in ContinuityReadinessSummary above */}
-          {issueId ? (
-            <ContinuityReadinessSummary issueId={issueId} className="text-[11px]" />
-          ) : (
-            <span className="text-[11px] text-stone-400">—</span>
-          )}
-        </div>
       </section>
 
       {/* Bounded local series chain */}
@@ -112,8 +113,6 @@ export function ReadingContextPillar({
             <h3 id="local-series-heading" className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-continuity-accent)' }}>
               Local Series Chain
             </h3>
-            {isLoadingReaderContext && <span className="text-[10px] text-stone-500">Loading...</span>}
-            {readerContextError && <span className="text-[10px] text-red-500">{readerContextError}</span>}
           </div>
           
           <div className="space-y-2">
@@ -167,6 +166,18 @@ export function ReadingContextPillar({
               )
             })}
           </div>
+        </section>
+      ) : null}
+
+      {/* Reader-context unavailable state */}
+      {readerContextError && !readerContext ? (
+        <section aria-labelledby="reader-context-unavailable-heading" className="rounded-2xl p-3" style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'rgba(6, 182, 212, 0.09)' }}>
+          <h3 id="reader-context-unavailable-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
+            Local reading context unavailable
+          </h3>
+          <p className="mt-1 text-[11px] text-stone-400">
+            {readerContextError}
+          </p>
         </section>
       ) : null}
 
