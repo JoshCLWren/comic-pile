@@ -37,7 +37,7 @@ export default function QueuePage() {
     refetch,
     nextPageToken,
     loadMore,
-  } = useQueueThreads(searchQuery)
+  } = useQueueThreads(searchQuery, sortBy)
   const { data: session, refetch: refetchSession } = useSession()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()

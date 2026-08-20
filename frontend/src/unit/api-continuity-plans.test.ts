@@ -78,4 +78,34 @@ describe('continuityPlansApi', () => {
       nodes: basePlan.nodes,
     })
   })
+
+  it('creates a parallel-lane informational plan', async () => {
+    const parallelPlan = {
+      ...basePlan,
+      ordering_mode: 'informational' as const,
+      lanes: [
+        { id: 'era-a', name: 'Era A', order: 0 },
+        { id: 'era-b', name: 'Era B', order: 1 },
+      ],
+      nodes: [
+        { id: 'a-40', node_type: 'issue' as const, ref_id: 40, lane_id: 'era-a', position: 0 },
+        { id: 'b-8', node_type: 'crossover' as const, ref_id: 8, lane_id: 'era-b', position: 0 },
+      ],
+    }
+    apiMock.post.mockResolvedValueOnce(parallelPlan)
+
+    await expect(continuityPlansApi.create({
+      name: 'Parallel plan',
+      ordering_mode: 'informational',
+      lanes: parallelPlan.lanes,
+      nodes: parallelPlan.nodes,
+    })).resolves.toEqual(parallelPlan)
+
+    expect(apiMock.post).toHaveBeenCalledWith('/v1/continuity-plans/', {
+      name: 'Parallel plan',
+      ordering_mode: 'informational',
+      lanes: parallelPlan.lanes,
+      nodes: parallelPlan.nodes,
+    })
+  })
 })

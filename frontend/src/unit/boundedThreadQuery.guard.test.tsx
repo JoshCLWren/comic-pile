@@ -1,4 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
+import type { PropsWithChildren } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useQueueThreads } from '../hooks/useQueue'
 import * as useThreadModule from '../hooks/useThread'
@@ -12,6 +14,15 @@ vi.mock('../services/api', () => ({
 }))
 
 const mockedThreadsApi = vi.mocked(threadsApi)
+
+function createWrapper() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
+  return function Wrapper({ children }: PropsWithChildren) {
+    return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  }
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -27,7 +38,8 @@ describe('bounded thread hydration guard', () => {
   })
 
   it('fetches a single bounded page and never auto-traverses pages', async () => {
-    const { result } = renderHook(() => useQueueThreads())
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useQueueThreads(), { wrapper })
 
     await waitFor(() => expect(result.current.isPending).toBe(false))
 
