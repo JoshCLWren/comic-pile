@@ -120,7 +120,11 @@ async def _run(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    """Run the asynchronous CBL mirror synchronization command."""
+    """Run the asynchronous CBL mirror synchronization command.
+
+    Returns:
+        Process exit status.
+    """
     args = _parser().parse_args()
     if not args.mirror_path.is_dir():
         print(
