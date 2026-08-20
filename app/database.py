@@ -33,7 +33,7 @@ ASYNC_DATABASE_URL = _db_settings.async_url
 # indefinitely. The dependency timeout covers the first pool acquisition, while
 # asyncpg's connect and command timeouts bound lower-level network waits.
 DATABASE_DEPENDENCY_TIMEOUT_SECONDS = 10.0
-DATABASE_CONNECT_TIMEOUT_SECONDS = 3.0
+DATABASE_CONNECT_TIMEOUT_SECONDS = 10.0
 DATABASE_COMMAND_TIMEOUT_SECONDS = 8.0
 
 # Pool configuration from environment (with optimized defaults for Vercel Fluid Compute)
