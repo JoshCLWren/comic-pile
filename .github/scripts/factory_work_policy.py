@@ -246,13 +246,23 @@ def pr_suppresses_issue_candidate(pr: dict[str, Any], issue_map: dict[int, dict[
     """Return whether this open factory PR is canonical work for its issue.
 
     Once a canonical factory PR exists, the linked issue must not become fresh
-    implementation work again just because the PR is currently owned, blocked,
-    under review, or otherwise not assignable. The PR lifecycle is the only
-    path forward until that PR closes.
+    implementation work again just because the PR is temporarily ineligible.
+    The exception is an unblocked user-reported bug: a draft or blocked PR must
+    not make urgent product work disappear from the executable queue.
     """
-    del issue_map  # Kept in the signature for compatibility with existing callers.
     head = str(pr.get('headRefName') or '')
-    return str(pr.get('state') or 'OPEN').upper() == 'OPEN' and head.startswith('factory/')
+    if (
+        str(pr.get('state') or 'OPEN').upper() != 'OPEN'
+        or not head.startswith('factory/')
+    ):
+        return False
+    linked = linked_issue_from_branch(head)
+    if linked is None:
+        return False
+    issue_labels = labels_of(issue_map.get(linked, {}))
+    urgent_issue = "user-reported" in issue_labels and "bug" in issue_labels
+    temporarily_ineligible = bool(pr.get("isDraft")) or bool(labels_of(pr) & BLOCKED_LABELS)
+    return not (urgent_issue and temporarily_ineligible and not issue_labels & BLOCKED_LABELS)
 
 
 def build_candidates(
@@ -395,12 +405,17 @@ def no_diff_attempts_from_comments(comments: Iterable[dict[str, Any]], *, now_ep
     return counts
 
 
-def lease_is_stale(owner: str, *, active_fixed_workers: set[int], has_unresolved_active_runs: bool, latest_activity_epoch: int | None, now_epoch: int, local_ttl_seconds: int=LOCAL_LEASE_TTL_SECONDS, fixed_ttl_seconds: int=FIXED_LEASE_TTL_SECONDS) -> bool:
+def lease_is_stale(owner: str, *, active_fixed_workers: set[int], has_unresolved_active_runs: bool | None = None, latest_activity_epoch: int | None, now_epoch: int, local_ttl_seconds: int=LOCAL_LEASE_TTL_SECONDS, fixed_ttl_seconds: int=FIXED_LEASE_TTL_SECONDS) -> bool:
     """Return whether a factory lease can be proven stale."""
     if owner == 'factory:local':
         return latest_activity_epoch is not None and now_epoch - latest_activity_epoch > local_ttl_seconds
     match = FIXED_OWNER_RE.fullmatch(owner)
     if match:
+        # Callers predating the run-identity fence did not provide this bit.
+        # Preserve their conservative legacy decision while current callers
+        # pass an explicit value and therefore fail closed on unknown runs.
+        if has_unresolved_active_runs is None:
+            return int(match.group('worker')) not in active_fixed_workers
         if has_unresolved_active_runs:
             return False
         worker = int(match.group('worker'))

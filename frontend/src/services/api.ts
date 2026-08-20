@@ -438,9 +438,100 @@ export interface ComicVineIssueIntelligence {
   story_arcs: ComicVineStoryArc[]
 }
 
+export interface ComicVineSeriesResult {
+  comicvine_volume_id: number
+  name: string
+  publisher: string | null
+  start_year: number | null
+  issue_count: number | null
+  site_detail_url: string | null
+  image_url: string | null
+}
+
+export interface ComicVineSeriesSearchResponse {
+  query: string
+  results: ComicVineSeriesResult[]
+  total_available: number | null
+}
+
+export interface ComicVineIssueCandidate {
+  comicvine_issue_id: number
+  issue_number: string | null
+  name: string | null
+  cover_date: string | null
+  store_date: string | null
+  image_url: string | null
+  site_detail_url: string | null
+}
+
+export interface ComicVineSeriesIssuesResponse {
+  comicvine_volume_id: number
+  series_name: string
+  issues: ComicVineIssueCandidate[]
+}
+
+export interface IssueIdentityMapping {
+  external_identity_id: number
+  provider: string
+  comicvine_id: string
+  status: string
+  confidence: number | null
+  evidence_source: string | null
+  created_at: string | null
+}
+
+export interface IssueIdentityResponse {
+  issue_id: number
+  thread_id: number
+  thread_title: string
+  has_confirmed_identity: boolean
+  confirmed_mappings: IssueIdentityMapping[]
+  candidate_mappings: IssueIdentityMapping[]
+  has_unresolved: boolean
+}
+
+export interface MetadataRefreshResponse {
+  issue_id: number
+  refreshed: boolean
+  comicvine_issue_id: string | null
+}
+
+export interface CanonicalCorrection {
+  id: number
+  field_name: string
+  provider_value: string | null
+  canonical_value: string
+  provenance: string
+  created_by: number
+  created_at: string
+}
+
+export interface MetadataCorrectionsResponse {
+  issue_id: number
+  corrections: CanonicalCorrection[]
+}
+
 export const comicVineApi = {
   getIssueIntelligence: (issueId: number) =>
     api.get<ComicVineIssueIntelligence | null>(`/v1/issues/${issueId}/comicvine`),
+  searchSeries: (query: string, limit = 10) =>
+    api.get<ComicVineSeriesSearchResponse>(`/v1/comicvine/search/series`, { params: { q: query, limit } }),
+  getSeriesIssues: (volumeId: number, seriesName = '') =>
+    api.get<ComicVineSeriesIssuesResponse>(`/v1/comicvine/series/${volumeId}/issues`, { params: { series_name: seriesName } }),
+  getIssueIdentity: (issueId: number) =>
+    api.get<IssueIdentityResponse>(`/v1/comicvine/issues/${issueId}/identity`),
+  confirmIdentity: (issueId: number, comicvineIssueId: number) =>
+    api.post<IssueIdentityResponse>(`/v1/comicvine/issues/${issueId}/identity:confirm`, { comicvine_issue_id: comicvineIssueId }),
+  replaceIdentity: (issueId: number, comicvineIssueId: number, reason?: string) =>
+    api.post<IssueIdentityResponse>(`/v1/comicvine/issues/${issueId}/identity:replace`, { comicvine_issue_id: comicvineIssueId, reason }),
+  refreshMetadata: (issueId: number) =>
+    api.post<MetadataRefreshResponse>(`/v1/comicvine/issues/${issueId}/metadata:refresh`),
+  applyCorrection: (issueId: number, fieldName: string, canonicalValue: string, reason?: string) =>
+    api.post<MetadataCorrectionsResponse>(`/v1/comicvine/issues/${issueId}/metadata:correct`, { field_name: fieldName, canonical_value: canonicalValue, reason }),
+  listCorrections: (issueId: number) =>
+    api.get<MetadataCorrectionsResponse>(`/v1/comicvine/issues/${issueId}/metadata:corrections`),
+  revertCorrection: (issueId: number, correctionId: number) =>
+    api.post<MetadataCorrectionsResponse>(`/v1/comicvine/issues/${issueId}/metadata:revert`, { correction_id: correctionId }),
 }
 
 export const tasksApi = {

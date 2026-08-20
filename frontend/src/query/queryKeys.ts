@@ -24,17 +24,17 @@ function normalizedSearch(search?: string): string | null {
 }
 
 export const queryKeys = {
-  session: {
-    all: ['session'] as const,
-    current: () => ['session', 'current'] as const,
-    pages: () => ['session', 'pages'] as const,
-    page: ({ pageToken, pageSize }: SessionPageKeyOptions) =>
-      ['session', 'pages', { pageToken: pageToken ?? null, pageSize }] as const,
-    detail: (sessionId: number) => ['session', 'detail', sessionId] as const,
-  },
   queue: {
     all: ['queue'] as const,
     pages: () => ['queue', 'pages'] as const,
+    /**
+     * Canonical bounded/infinite Queue list key. `pageToken` is intentionally
+     * excluded so the key stays stable across cursor pages; the cursor lives in
+     * `pageParam`, not the key. Changing `search`, `sort`, or `pageSize` becomes
+     * a distinct query that resets to the first compatible page.
+     */
+    list: ({ search, sort, pageSize }: { search?: string; sort: QueueSort; pageSize: number }) =>
+      ['queue', 'pages', { search: normalizedSearch(search), sort, pageSize }] as const,
     page: ({ search, sort, pageToken, pageSize }: QueuePageKeyOptions) =>
       [
         'queue',
@@ -46,6 +46,14 @@ export const queryKeys = {
           pageSize,
         },
       ] as const,
+  },
+  session: {
+    all: ['session'] as const,
+    current: () => ['session', 'current'] as const,
+    pages: () => ['session', 'pages'] as const,
+    page: ({ pageToken, pageSize }: SessionPageKeyOptions) =>
+      ['session', 'pages', { pageToken: pageToken ?? null, pageSize }] as const,
+    detail: (sessionId: number) => ['session', 'detail', sessionId] as const,
   },
   roll: {
     all: ['roll'] as const,

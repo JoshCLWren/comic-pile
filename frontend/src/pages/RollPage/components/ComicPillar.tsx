@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import IssueCorrectionDialog from '../../../components/IssueCorrectionDialog'
+import ComicVineSearchDialog from '../../../components/ComicVineSearchDialog'
+import { comicVineApi, type IssueIdentityResponse } from '../../../services/api'
 import { getProgressPercentage } from '../utils'
 import type { RatingThread } from '../types'
 import { ComicIdentity } from './ComicIdentity'
@@ -22,13 +24,39 @@ export function ComicPillar({
   onRefreshThread,
 }: ComicPillarProps) {
   const [isCorrectionDialogOpen, setIsCorrectionDialogOpen] = useState(false)
+  const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false)
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const [identityState, setIdentityState] = useState<IssueIdentityResponse | null>(null)
   const threadTitle = activeRatingThread?.title ?? 'Loading…'
   const issueNumber = activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number ?? null
   const issueId = activeRatingThread?.issue_id ?? activeRatingThread?.next_issue_id
   const totalIssues = activeRatingThread?.total_issues ?? null
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
   const progress = getProgressPercentage(activeRatingThread)
+
+  const fetchIdentity = useCallback(async () => {
+    if (!issueId) {
+      setIdentityState(null)
+      return
+    }
+    try {
+      const state = await comicVineApi.getIssueIdentity(issueId)
+      setIdentityState(state)
+    } catch {
+      setIdentityState(null)
+    }
+  }, [issueId])
+
+  useEffect(() => {
+    fetchIdentity()
+  }, [fetchIdentity])
+
+  const handleIdentityConfirmed = useCallback(() => {
+    fetchIdentity()
+    onRefreshThread()
+  }, [fetchIdentity, onRefreshThread])
+
+  const needsIdentity = identityState && !identityState.has_confirmed_identity
 
   async function handleCopyComicReference() {
     if (!activeRatingThread?.title || issueNumber == null) return
@@ -44,7 +72,6 @@ export function ComicPillar({
   return (
     <div className="w-full space-y-4">
       <div className="flex items-center gap-2 border-b-2 pb-2" style={{ borderColor: 'var(--theme-comic-accent)' }}>
-        <span className="text-[10px] font-black tabular-nums" style={{ color: 'var(--theme-comic-accent)' }}>01</span>
         <span className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-comic-accent)' }}>The Comic</span>
       </div>
       <section id="thread-info" aria-labelledby="selected-issue-heading" className="space-y-3">
@@ -115,6 +142,52 @@ export function ComicPillar({
         </div>
       </section>
 
+      {needsIdentity && issueId && (
+        <div
+          className="rounded-xl p-3 flex items-center justify-between gap-3"
+          style={{
+            border: '1px solid rgba(234,179,8,0.25)',
+            backgroundColor: 'rgba(234,179,8,0.06)',
+          }}
+        >
+          <p className="text-xs text-amber-300/90 font-bold">
+            No ComicVine identity linked
+          </p>
+          <button
+            type="button"
+            onClick={() => setIsSearchDialogOpen(true)}
+            className="min-h-9 rounded-lg px-3 text-[10px] font-black uppercase tracking-wider text-stone-900 bg-amber-500 hover:bg-amber-400 transition shrink-0"
+          >
+            Find ComicVine match
+          </button>
+        </div>
+      )}
+
+      {identityState?.has_confirmed_identity && issueId && (
+        <div
+          className="rounded-xl p-3 flex items-center justify-between gap-3"
+          style={{
+            border: '1px solid rgba(255,255,255,0.08)',
+            backgroundColor: 'rgba(255,255,255,0.03)',
+          }}
+        >
+          <p className="text-[10px] text-stone-500 font-bold">
+            ComicVine #{identityState.confirmed_mappings[0]?.comicvine_id}
+          </p>
+          <button
+            type="button"
+            onClick={() => setIsSearchDialogOpen(true)}
+            className="min-h-9 rounded-lg px-3 text-[10px] font-black uppercase tracking-wider text-stone-400 hover:text-amber-400 transition shrink-0"
+            style={{
+              border: '1px solid rgba(255,255,255,0.1)',
+              backgroundColor: 'rgba(255,255,255,0.05)',
+            }}
+          >
+            Wrong comic?
+          </button>
+        </div>
+      )}
+
       <ComicIdentity issueId={issueId} />
 
       {activeRatingThread ? (
@@ -131,6 +204,17 @@ export function ComicPillar({
           }}
         />
       ) : null}
+
+      {issueId && (
+        <ComicVineSearchDialog
+          isOpen={isSearchDialogOpen}
+          issueId={issueId}
+          threadTitle={threadTitle}
+          issueNumber={issueNumber}
+          onClose={() => setIsSearchDialogOpen(false)}
+          onConfirmed={handleIdentityConfirmed}
+        />
+      )}
     </div>
   )
 }

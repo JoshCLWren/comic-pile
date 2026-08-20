@@ -697,6 +697,13 @@
             ],
             "title": "Source Type",
             "type": "string"
+          },
+          "unread_issue_details": {
+            "items": {
+              "$ref": "#/components/schemas/UnreadIssueDetail"
+            },
+            "title": "Unread Issue Details",
+            "type": "array"
           }
         },
         "required": [
@@ -3255,6 +3262,400 @@
         "title": "ReactivateRequest",
         "type": "object"
       },
+      "ReaderContextCrossover": {
+        "description": "One owned crossover relevant to the requested issue's thread.",
+        "properties": {
+          "applies_to_current_issue": {
+            "title": "Applies To Current Issue",
+            "type": "boolean"
+          },
+          "average_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Rating"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "next_member": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReaderContextCrossoverNextMember"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ratings_count": {
+            "default": 0,
+            "title": "Ratings Count",
+            "type": "integer"
+          },
+          "read_count": {
+            "default": 0,
+            "title": "Read Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "applies_to_current_issue"
+        ],
+        "title": "ReaderContextCrossover",
+        "type": "object"
+      },
+      "ReaderContextCrossoverMembership": {
+        "description": "One exact crossover membership held by an owned issue.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ReaderContextCrossoverMembership",
+        "type": "object"
+      },
+      "ReaderContextCrossoverNextMember": {
+        "description": "The nearest future exact member of a crossover in the current thread.",
+        "properties": {
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "issue_number": {
+            "title": "Issue Number",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number"
+        ],
+        "title": "ReaderContextCrossoverNextMember",
+        "type": "object"
+      },
+      "ReaderContextEdge": {
+        "description": "One persisted one-hop dependency or continuity edge.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "dependency",
+              "continuity"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "source_issue_id": {
+            "title": "Source Issue Id",
+            "type": "integer"
+          },
+          "target_issue_id": {
+            "title": "Target Issue Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "source_issue_id",
+          "target_issue_id"
+        ],
+        "title": "ReaderContextEdge",
+        "type": "object"
+      },
+      "ReaderContextLocalChain": {
+        "description": "The bounded local reading neighborhood around the requested issue.",
+        "properties": {
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/ReaderContextEdge"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/ReaderContextLocalIssue"
+            },
+            "title": "Issues",
+            "type": "array"
+          }
+        },
+        "title": "ReaderContextLocalChain",
+        "type": "object"
+      },
+      "ReaderContextLocalIssue": {
+        "description": "One bounded local-chain issue centered on the requested issue.",
+        "properties": {
+          "crossover_memberships": {
+            "items": {
+              "$ref": "#/components/schemas/ReaderContextCrossoverMembership"
+            },
+            "title": "Crossover Memberships",
+            "type": "array"
+          },
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "issue_number": {
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          },
+          "relation": {
+            "enum": [
+              "previous",
+              "current",
+              "next",
+              "future"
+            ],
+            "title": "Relation",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number",
+          "position",
+          "status",
+          "relation"
+        ],
+        "title": "ReaderContextLocalIssue",
+        "type": "object"
+      },
+      "ReaderContextPreviousIssue": {
+        "description": "The immediately preceding issue inside the requested issue's thread.",
+        "properties": {
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "issue_number": {
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number"
+        ],
+        "title": "ReaderContextPreviousIssue",
+        "type": "object"
+      },
+      "ReaderContextRecentRating": {
+        "description": "One effective series rating ordered by its effective event timestamp.",
+        "properties": {
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "issue_number": {
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "rating": {
+            "title": "Rating",
+            "type": "number"
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number",
+          "rating"
+        ],
+        "title": "ReaderContextRecentRating",
+        "type": "object"
+      },
+      "ReaderContextResponse": {
+        "description": "Bounded reader-context for one owned issue.",
+        "properties": {
+          "crossovers": {
+            "items": {
+              "$ref": "#/components/schemas/ReaderContextCrossover"
+            },
+            "title": "Crossovers",
+            "type": "array"
+          },
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "local_chain": {
+            "$ref": "#/components/schemas/ReaderContextLocalChain"
+          },
+          "series": {
+            "$ref": "#/components/schemas/ReaderContextSeries"
+          }
+        },
+        "required": [
+          "issue_id",
+          "series",
+          "local_chain"
+        ],
+        "title": "ReaderContextResponse",
+        "type": "object"
+      },
+      "ReaderContextSeries": {
+        "description": "Canonical-series reading analytics for the requested issue.",
+        "properties": {
+          "average_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Rating"
+          },
+          "canonical_series_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Series Id"
+          },
+          "highest_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Highest Rating"
+          },
+          "identity_source": {
+            "enum": [
+              "comicvine",
+              "unavailable"
+            ],
+            "title": "Identity Source",
+            "type": "string"
+          },
+          "lowest_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lowest Rating"
+          },
+          "previous_issue": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReaderContextPreviousIssue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ratings_count": {
+            "default": 0,
+            "title": "Ratings Count",
+            "type": "integer"
+          },
+          "recent_ratings": {
+            "items": {
+              "$ref": "#/components/schemas/ReaderContextRecentRating"
+            },
+            "title": "Recent Ratings",
+            "type": "array"
+          },
+          "series_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series Name"
+          }
+        },
+        "required": [
+          "identity_source"
+        ],
+        "title": "ReaderContextSeries",
+        "type": "object"
+      },
       "ReadingOrderItemResponse": {
         "description": "Response schema for a single item within a reading order.",
         "properties": {
@@ -4800,6 +5201,123 @@
         "title": "SessionResponse",
         "type": "object"
       },
+      "SetCurrentIssueRequest": {
+        "additionalProperties": false,
+        "description": "Schema for atomically correcting the current issue in an active thread.",
+        "properties": {
+          "issue_number": {
+            "description": "Target issue number to set as current",
+            "minLength": 1,
+            "title": "Issue Number",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_number"
+        ],
+        "title": "SetCurrentIssueRequest",
+        "type": "object"
+      },
+      "SetCurrentIssueResponse": {
+        "description": "Response after atomically correcting the current issue.",
+        "properties": {
+          "format": {
+            "title": "Format",
+            "type": "string"
+          },
+          "issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Id"
+          },
+          "issue_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Number"
+          },
+          "issues_remaining": {
+            "title": "Issues Remaining",
+            "type": "integer"
+          },
+          "next_issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Issue Id"
+          },
+          "next_issue_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Issue Number"
+          },
+          "queue_position": {
+            "title": "Queue Position",
+            "type": "integer"
+          },
+          "reading_progress": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reading Progress"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "total_issues": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Issues"
+          }
+        },
+        "required": [
+          "thread_id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position"
+        ],
+        "title": "SetCurrentIssueResponse",
+        "type": "object"
+      },
       "SnapshotResponse": {
         "description": "Schema for snapshot response.",
         "properties": {
@@ -5419,6 +5937,25 @@
         "title": "TokenResponse",
         "type": "object"
       },
+      "UnreadIssueDetail": {
+        "description": "Structured label for one unread issue causing a continuity block.",
+        "properties": {
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "label"
+        ],
+        "title": "UnreadIssueDetail",
+        "type": "object"
+      },
       "UserLoginRequest": {
         "description": "Request schema for user login.",
         "properties": {
@@ -5436,6 +5973,53 @@
           "password"
         ],
         "title": "UserLoginRequest",
+        "type": "object"
+      },
+      "UserPreferencesPatchRequest": {
+        "description": "Partial update of the authenticated user's preferences.\n\nAttributes:\n    theme: Optional theme id to apply. When omitted, the current theme\n        is left unchanged. Unknown values are rejected by validation.",
+        "properties": {
+          "theme": {
+            "anyOf": [
+              {
+                "enum": [
+                  "classic",
+                  "ink-gold",
+                  "command-center"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme"
+          }
+        },
+        "title": "UserPreferencesPatchRequest",
+        "type": "object"
+      },
+      "UserPreferencesResponse": {
+        "description": "Current preference values for the authenticated user.\n\nAttributes:\n    theme: The user's selected visual theme id. Resolves to ``classic``\n        when no preference row has been persisted yet.\n    user_id: Owning user id, always matching the authenticated principal.",
+        "properties": {
+          "theme": {
+            "default": "classic",
+            "enum": [
+              "classic",
+              "ink-gold",
+              "command-center"
+            ],
+            "title": "Theme",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "title": "UserPreferencesResponse",
         "type": "object"
       },
       "UserRegisterRequest": {
@@ -6043,6 +6627,32 @@
         "summary": "Metrics",
         "tags": [
           "metrics"
+        ]
+      }
+    },
+    "/api/ping": {
+      "get": {
+        "description": "Return a minimal alive response.\n\nThis endpoint has zero database, ORM, or heavy dependency\ninitialization overhead. It exists solely to keep the Vercel\nPython serverless function warm and avoid cold starts.\n\nReturns:\n    Simple status dict with no external dependencies.",
+        "operationId": "ping_api_ping_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Ping Api Ping Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ping",
+        "tags": [
+          "ping"
         ]
       }
     },
@@ -6861,7 +7471,7 @@
     },
     "/api/threads/": {
       "get": {
-        "description": "List threads ordered by position with cursor-based pagination.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    search: Optional case-insensitive title search filter.\n    page_size: Number of threads to return per page (default 50, max 200).\n    page_token: Token for pagination continuation (queue_position,thread_id).\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    QueueThreadListResponse with paginated threads and next_page_token if more exist.\n\nRaises:\n    HTTPException: If a retired ``collection_id`` query parameter is present.",
+        "description": "List threads with deterministic cursor-based pagination.\n\nEvery retained sort has a deterministic cursor contract with stable\ntie-breakers so that search results remain correct across multiple\npages.  Changing ``search`` or ``sort`` invalidates any prior cursor.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    search: Optional case-insensitive title search filter.\n    sort: Sort order – ``position`` (default), ``title``, or ``created``.\n    page_size: Number of threads to return per page (default 50, max 200).\n    page_token: Opaque cursor token for pagination continuation.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    QueueThreadListResponse with paginated threads and next_page_token if more exist.\n\nRaises:\n    HTTPException: If a retired ``collection_id`` query parameter is present,\n        the sort value is unsupported, or the page token is stale/malformed.",
         "operationId": "list_threads_api_threads__get",
         "parameters": [
           {
@@ -6882,6 +7492,18 @@
             }
           },
           {
+            "description": "Sort order: position, title, or created",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "position",
+              "description": "Sort order: position, title, or created",
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
             "description": "Number of threads to return per page (default 50, max 200)",
             "in": "query",
             "name": "page_size",
@@ -6896,7 +7518,7 @@
             }
           },
           {
-            "description": "Token for pagination continuation (queue_position,thread_id)",
+            "description": "Opaque cursor token for pagination continuation",
             "in": "query",
             "name": "page_token",
             "required": false,
@@ -6909,7 +7531,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Token for pagination continuation (queue_position,thread_id)",
+              "description": "Opaque cursor token for pagination continuation",
               "title": "Page Token"
             }
           }
@@ -7521,6 +8143,65 @@
           }
         ],
         "summary": "Migrate Thread To Issues Simple",
+        "tags": [
+          "threads",
+          "threads"
+        ]
+      }
+    },
+    "/api/threads/{thread_id}:setCurrentIssue": {
+      "post": {
+        "description": "Atomically correct the current issue for an active thread.\n\nMarks every issue before the target as read, ensures the target is\nunread, updates ``thread.next_unread_issue_id``, and pins\n``session.pending_issue_id`` so the active roll reflects the corrected\nposition immediately.\n\nArgs:\n    thread_id: The thread whose current issue should be corrected.\n    request: Target issue number.\n    current_user: Authenticated user.\n    db: Async database session.\n\nReturns:\n    SetCurrentIssueResponse with the corrected thread and issue info.\n\nRaises:\n    HTTPException: 404 if thread not found, 400 for validation errors.",
+        "operationId": "set_current_issue_api_threads__thread_id__setCurrentIssue_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetCurrentIssueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetCurrentIssueResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Current Issue",
         "tags": [
           "threads",
           "threads"
@@ -9154,6 +9835,55 @@
         "tags": [
           "dependencies",
           "dependencies"
+        ]
+      }
+    },
+    "/api/v1/issues/{issue_id}/reader-context": {
+      "get": {
+        "description": "Return bounded reading analytics and local neighborhood for an owned issue.\n\nThe response is decorative context for the Roll experience and must never\nbe a prerequisite for rating. It is computed with bounded, user-scoped\nqueries that do not traverse the full library or hydrate ComicVine.\n\nArgs:\n    issue_id: ComicPile issue identifier.\n    current_user: Authenticated owner of the requested issue.\n    db: Async database session.\n\nReturns:\n    Bounded reader-context payload for the requested issue.\n\nRaises:\n    HTTPException: If the issue does not belong to the user.",
+        "operationId": "get_issue_reader_context_api_v1_issues__issue_id__reader_context_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "title": "Issue Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReaderContextResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Issue Reader Context",
+        "tags": [
+          "issues",
+          "issues"
         ]
       }
     },
@@ -10963,7 +11693,7 @@
     },
     "/api/v1/threads/": {
       "get": {
-        "description": "List threads ordered by position with cursor-based pagination.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    search: Optional case-insensitive title search filter.\n    page_size: Number of threads to return per page (default 50, max 200).\n    page_token: Token for pagination continuation (queue_position,thread_id).\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    QueueThreadListResponse with paginated threads and next_page_token if more exist.\n\nRaises:\n    HTTPException: If a retired ``collection_id`` query parameter is present.",
+        "description": "List threads with deterministic cursor-based pagination.\n\nEvery retained sort has a deterministic cursor contract with stable\ntie-breakers so that search results remain correct across multiple\npages.  Changing ``search`` or ``sort`` invalidates any prior cursor.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    search: Optional case-insensitive title search filter.\n    sort: Sort order – ``position`` (default), ``title``, or ``created``.\n    page_size: Number of threads to return per page (default 50, max 200).\n    page_token: Opaque cursor token for pagination continuation.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    QueueThreadListResponse with paginated threads and next_page_token if more exist.\n\nRaises:\n    HTTPException: If a retired ``collection_id`` query parameter is present,\n        the sort value is unsupported, or the page token is stale/malformed.",
         "operationId": "list_threads_api_v1_threads__get",
         "parameters": [
           {
@@ -10984,6 +11714,18 @@
             }
           },
           {
+            "description": "Sort order: position, title, or created",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "position",
+              "description": "Sort order: position, title, or created",
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
             "description": "Number of threads to return per page (default 50, max 200)",
             "in": "query",
             "name": "page_size",
@@ -10998,7 +11740,7 @@
             }
           },
           {
-            "description": "Token for pagination continuation (queue_position,thread_id)",
+            "description": "Opaque cursor token for pagination continuation",
             "in": "query",
             "name": "page_token",
             "required": false,
@@ -11011,7 +11753,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Token for pagination continuation (queue_position,thread_id)",
+              "description": "Opaque cursor token for pagination continuation",
               "title": "Page Token"
             }
           }
@@ -12231,6 +12973,65 @@
         ]
       }
     },
+    "/api/v1/threads/{thread_id}:setCurrentIssue": {
+      "post": {
+        "description": "Atomically correct the current issue for an active thread.\n\nMarks every issue before the target as read, ensures the target is\nunread, updates ``thread.next_unread_issue_id``, and pins\n``session.pending_issue_id`` so the active roll reflects the corrected\nposition immediately.\n\nArgs:\n    thread_id: The thread whose current issue should be corrected.\n    request: Target issue number.\n    current_user: Authenticated user.\n    db: Async database session.\n\nReturns:\n    SetCurrentIssueResponse with the corrected thread and issue info.\n\nRaises:\n    HTTPException: 404 if thread not found, 400 for validation errors.",
+        "operationId": "set_current_issue_api_v1_threads__thread_id__setCurrentIssue_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetCurrentIssueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetCurrentIssueResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Current Issue",
+        "tags": [
+          "threads",
+          "threads"
+        ]
+      }
+    },
     "/api/v1/threads:getBlockingInfo": {
       "post": {
         "description": "Return blocked status and human-readable blocking reasons for multiple threads.",
@@ -12388,6 +13189,80 @@
         "tags": [
           "undo",
           "undo"
+        ]
+      }
+    },
+    "/api/v1/users/me/preferences": {
+      "get": {
+        "description": "Return the authenticated user's persisted preferences. When no preference row exists yet, server defaults (currently ``classic``) are resolved so existing and new users need no backfill step.",
+        "operationId": "get_user_preferences_api_v1_users_me_preferences_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPreferencesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read the authenticated user's preferences.",
+        "tags": [
+          "users",
+          "users"
+        ]
+      },
+      "patch": {
+        "description": "Update the authenticated user's preferences. The current request shape supports the ``theme`` field; unknown theme ids are rejected.",
+        "operationId": "patch_user_preferences_api_v1_users_me_preferences_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserPreferencesPatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPreferencesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Apply a partial update to the authenticated user's preferences.",
+        "tags": [
+          "users",
+          "users"
         ]
       }
     },

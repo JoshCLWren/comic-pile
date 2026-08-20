@@ -44,7 +44,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
 
   const { showToast } = useToast()
 
-  const handleAddToComicPile = (identity: { primary: string; secondary: string | null }, comicvineIssueId: string) => {
+  const handleAddToComicPile = (identity: { primary: string; secondary: string | null }, _comicvineIssueId: string) => {
     showToast(
       `Add "${identity.primary}" to ComicPile — feature coming soon`,
       'info'

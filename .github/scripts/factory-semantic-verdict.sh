@@ -27,6 +27,7 @@ factory_terminal_marker() {
   local log_file="$1"
   [[ -f "$log_file" ]] || return 1
   factory_strip_ansi < "$log_file" \
+    | awk 'BEGIN { fenced=0 } /^```[[:space:]]*$/ { fenced = !fenced; next } !fenced { print }' \
     | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
     | sed -E 's/^(\*\*|__|`)//; s/(\*\*|__|`)$//' \
     | grep -E '^FACTORY_GATE_(READY|BLOCKED|NOT_READY|REJECT)$' \

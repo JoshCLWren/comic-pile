@@ -142,6 +142,7 @@ def test_assign_candidate_rolls_first_target_back_when_second_write_fails(
     monkeypatch.setattr(controller, "target_json", lambda number: {"state": "open"})
     monkeypatch.setattr(controller, "target_still_unowned", lambda number: True)
     monkeypatch.setattr(controller, "target_owned_by", lambda number, owner: True)
+    monkeypatch.setattr(controller, "record_controller_lease_activity", lambda *args: None)
     calls: list[tuple[int, str, str | None]] = []
 
     def replace(number: int, owner: str, stage: str | None = None) -> None:
@@ -164,6 +165,7 @@ def test_pr_assignment_preserves_existing_workflow_stage(
     candidate = controller.Candidate("pr", 1603, 2, 3, "2026-08-16T12:00:00Z")
     monkeypatch.setattr(controller, "target_still_unowned", lambda number: True)
     monkeypatch.setattr(controller, "target_owned_by", lambda number, owner: True)
+    monkeypatch.setattr(controller, "record_controller_lease_activity", lambda *args: None)
     calls: list[tuple[int, str, str | None]] = []
     monkeypatch.setattr(
         controller,
@@ -314,8 +316,9 @@ def test_active_fixed_workers_fails_closed_when_live_run_identity_is_unknown(
         lambda args, **kwargs: next(responses),
     )
 
-    with pytest.raises(RuntimeError, match="unable to resolve worker identity"):
-        controller.active_fixed_workers()
+    workers, unresolved = controller.active_fixed_workers()
+    assert workers == set()
+    assert unresolved == {"99"}
 
 
 def test_busy_fixed_worker_is_not_given_a_second_assignment(
