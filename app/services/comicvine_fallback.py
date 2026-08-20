@@ -8,7 +8,7 @@ import logging
 import os
 from pathlib import Path
 
-from sqlalchemy import text
+from sqlalchemy import exc as sqlalchemy_exc, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.comicvine_hydration import hydrate_issue
@@ -27,6 +27,11 @@ COMICVINE_REQUEST_TIMEOUT_SECONDS = 5.0
 COMICVINE_FALLBACK_MAX_ATTEMPTS = 2
 COMICVINE_FALLBACK_RETRY_DELAY_SECONDS = 0.5
 COMICVINE_FALLBACK_LOCK_NAMESPACE = 1_065_000_000
+# Hydration runs inside the request so Vercel serverless never has to keep a
+# detached task alive after the response. This deadline bounds that inline work.
+COMICVINE_FALLBACK_INLINE_TIMEOUT_SECONDS = float(
+    os.environ.get("COMICVINE_FALLBACK_INLINE_TIMEOUT_SECONDS", "8.0")
+)
 
 _REQUIRED_DEEP_RAW_FIELDS = frozenset(
     {
@@ -44,8 +49,6 @@ _REQUIRED_DEEP_RAW_FIELDS = frozenset(
         "date_last_updated",
     }
 )
-
-_pending_hydrations: dict[int, asyncio.Task[None]] = {}
 
 
 def _normalized_timestamp(value: datetime) -> datetime:
@@ -90,36 +93,38 @@ def _comicvine_issue_id(external_id: str) -> int | None:
     return int(normalized) if normalized.isdigit() else None
 
 
-def _clear_pending(identity_id: int, task: asyncio.Task[None]) -> None:
-    """Remove a completed task only when it is still the registered hydration."""
-    if _pending_hydrations.get(identity_id) is task:
-        _pending_hydrations.pop(identity_id, None)
+async def refresh_issue_metadata(identity_id: int) -> bool:
+    """Best-effort inline hydration for one confirmed external identity.
 
-
-def schedule_issue_metadata_hydration(identity_id: int) -> bool:
-    """Schedule at most one in-process hydration for one confirmed external identity.
-
-    Cross-process/provider deduplication is enforced again inside the database task with a
-    PostgreSQL advisory transaction lock, so concurrent serverless instances cannot fan out the
-    same provider lookup.
+    Runs inside the caller's request so Vercel/serverless platforms never need to keep an
+    unbounded detached ``asyncio`` task alive after the response. Cross-process deduplication
+    stays in Postgres via ``pg_try_advisory_xact_lock``. Every database connection, advisory-lock,
+    and provider failure is caught and logged here, so no exception can escape into an unhandled
+    background task.
 
     Args:
         identity_id: ``external_identities.id`` for the confirmed ComicVine issue mapping.
 
     Returns:
-        True when a new task was scheduled, False when one is already pending.
+        True when fresh metadata was persisted, False when hydration was skipped or failed.
     """
-    pending = _pending_hydrations.get(identity_id)
-    if pending is not None and not pending.done():
+    try:
+        async with asyncio.timeout(COMICVINE_FALLBACK_INLINE_TIMEOUT_SECONDS):
+            return await _run_issue_hydration(identity_id)
+    except TimeoutError:
+        logger.warning(
+            "comicvine_fallback_inline_timeout identity_id=%s limit_seconds=%.1f",
+            identity_id,
+            COMICVINE_FALLBACK_INLINE_TIMEOUT_SECONDS,
+        )
         return False
-
-    task = asyncio.create_task(
-        _run_issue_hydration(identity_id),
-        name=f"comicvine-fallback-{identity_id}",
-    )
-    _pending_hydrations[identity_id] = task
-    task.add_done_callback(lambda finished: _clear_pending(identity_id, finished))
-    return True
+    except Exception as exc:
+        logger.warning(
+            "comicvine_fallback_inline_failed identity_id=%s error=%s",
+            identity_id,
+            type(exc).__name__,
+        )
+        return False
 
 
 async def _hydrate_with_retries(
@@ -164,62 +169,92 @@ async def _hydrate_with_retries(
     return False
 
 
-async def _run_issue_hydration(identity_id: int) -> None:
-    """Hydrate one confirmed identity under a cross-process advisory lock."""
+async def _run_issue_hydration(identity_id: int) -> bool:
+    """Hydrate one confirmed identity under a cross-process advisory lock.
+
+    All database acquisition and advisory-lock failures are handled explicitly so the caller never
+    sees a leaked ``Task exception was never retrieved``.
+
+    Args:
+        identity_id: ``external_identities.id`` for the confirmed ComicVine issue mapping.
+
+    Returns:
+        True when fresh metadata was persisted, False when hydration was skipped or failed.
+    """
     api_key = os.environ.get("COMICVINE_API_KEY", "").strip()
     if not api_key:
         logger.info(
             "comicvine_fallback_skipped identity_id=%s reason=missing_api_key",
             identity_id,
         )
-        return
+        return False
 
-    async with AsyncSessionLocal() as db:
-        lock_key = COMICVINE_FALLBACK_LOCK_NAMESPACE + identity_id
-        lock_result = await db.execute(
-            text("SELECT pg_try_advisory_xact_lock(:lock_key)"),
-            {"lock_key": lock_key},
-        )
-        if not bool(lock_result.scalar()):
-            logger.info(
-                "comicvine_fallback_deduplicated identity_id=%s",
-                identity_id,
-            )
-            return
+    try:
+        async with AsyncSessionLocal() as db:
+            lock_key = COMICVINE_FALLBACK_LOCK_NAMESPACE + identity_id
+            try:
+                lock_result = await db.execute(
+                    text("SELECT pg_try_advisory_xact_lock(:lock_key)"),
+                    {"lock_key": lock_key},
+                )
+            except (TimeoutError, sqlalchemy_exc.TimeoutError, sqlalchemy_exc.DBAPIError) as exc:
+                logger.warning(
+                    "comicvine_fallback_lock_unavailable identity_id=%s error=%s",
+                    identity_id,
+                    type(exc).__name__,
+                )
+                return False
+            if not bool(lock_result.scalar()):
+                logger.info(
+                    "comicvine_fallback_deduplicated identity_id=%s",
+                    identity_id,
+                )
+                return False
 
-        identity = await db.get(ExternalIdentity, identity_id)
-        if identity is None or identity.provider != "comicvine" or identity.entity_type != "issue":
-            logger.info(
-                "comicvine_fallback_skipped identity_id=%s reason=identity_not_eligible",
-                identity_id,
-            )
-            return
-        if not metadata_needs_hydration(identity):
-            logger.info(
-                "comicvine_fallback_skipped identity_id=%s reason=metadata_fresh",
-                identity_id,
-            )
-            return
+            identity = await db.get(ExternalIdentity, identity_id)
+            if (
+                identity is None
+                or identity.provider != "comicvine"
+                or identity.entity_type != "issue"
+            ):
+                logger.info(
+                    "comicvine_fallback_skipped identity_id=%s reason=identity_not_eligible",
+                    identity_id,
+                )
+                return False
+            if not metadata_needs_hydration(identity):
+                logger.info(
+                    "comicvine_fallback_skipped identity_id=%s reason=metadata_fresh",
+                    identity_id,
+                )
+                return False
 
-        issue_id = _comicvine_issue_id(identity.external_id)
-        if issue_id is None:
-            logger.warning(
-                "comicvine_fallback_skipped identity_id=%s reason=invalid_external_id",
-                identity_id,
-            )
-            return
+            issue_id = _comicvine_issue_id(identity.external_id)
+            if issue_id is None:
+                logger.warning(
+                    "comicvine_fallback_skipped identity_id=%s reason=invalid_external_id",
+                    identity_id,
+                )
+                return False
 
-        cache_dir = Path(
-            os.environ.get("COMICVINE_CACHE_DIR", "/tmp/comicpile-comicvine")
+            cache_dir = Path(
+                os.environ.get("COMICVINE_CACHE_DIR", "/tmp/comicpile-comicvine")
+            )
+            client = ComicVineClient(
+                api_key,
+                cache_dir,
+                timeout_seconds=COMICVINE_REQUEST_TIMEOUT_SECONDS,
+            )
+            return await _hydrate_with_retries(
+                db,
+                client,
+                identity_id=identity_id,
+                issue_id=issue_id,
+            )
+    except (TimeoutError, sqlalchemy_exc.TimeoutError, sqlalchemy_exc.DBAPIError) as exc:
+        logger.warning(
+            "comicvine_fallback_db_unavailable identity_id=%s error=%s",
+            identity_id,
+            type(exc).__name__,
         )
-        client = ComicVineClient(
-            api_key,
-            cache_dir,
-            timeout_seconds=COMICVINE_REQUEST_TIMEOUT_SECONDS,
-        )
-        await _hydrate_with_retries(
-            db,
-            client,
-            identity_id=identity_id,
-            issue_id=issue_id,
-        )
+        return False
