@@ -14,6 +14,7 @@ import { isDefinitiveAuthenticationFailure } from './services/authFailure'
 import type { AuthTokens, AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
 import { usePingHeartbeat } from './hooks/usePingHeartbeat'
+import { useScrollRestoration } from './hooks/useScrollRestoration'
 import type { DiagnosticData } from './hooks/useDiagnostics'
 import { ToastProvider } from './contexts/ToastProvider'
 import { CacheProvider } from './contexts/CacheContext'
@@ -79,22 +80,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }, [])
 
-  const revalidateSession = useCallback(async (timeout?: number) => {
-    try {
-      const response = await api.get<AuthUser>('/v1/auth/me', {
-        timeout,
-        skipAuthRedirect: true,
-      })
-      setUser(response)
-      setIsAuthenticated(true)
-    } catch (error) {
-      if (isDefinitiveAuthenticationFailure(error)) {
-        markDefinitivelyUnauthenticated()
-      }
-      throw error
-    }
-  }, [markDefinitivelyUnauthenticated])
-
   const recoverSession = useCallback((timeout?: number): Promise<void> => {
     if (!recoveryPromise.current) {
       recoveryPromise.current = (async () => {
@@ -122,6 +107,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return recoveryPromise.current
   }, [markDefinitivelyUnauthenticated])
+
+  const revalidateSession = useCallback(async (timeout?: number) => {
+    try {
+      const response = await api.get<AuthUser>('/v1/auth/me', {
+        timeout,
+        skipAuthRedirect: true,
+      })
+      setUser(response)
+      setIsAuthenticated(true)
+    } catch (error) {
+      if (isDefinitiveAuthenticationFailure(error)) {
+        // The persistent session can usually be renewed silently with the
+        // refresh cookie. Only treat the user as logged out when that also fails.
+        try {
+          await recoverSession(timeout)
+          return
+        } catch (recoveryError) {
+          if (isDefinitiveAuthenticationFailure(recoveryError)) {
+            markDefinitivelyUnauthenticated()
+          }
+        }
+      }
+      throw error
+    }
+  }, [markDefinitivelyUnauthenticated, recoverSession])
 
   useEffect(() => {
     let isMounted = true
@@ -157,11 +167,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return
         }
         if (isDefinitiveAuthenticationFailure(error)) {
-          markDefinitivelyUnauthenticated()
-          setIsLoading(false)
-          return
+          // A stale or expired access token is routine on a return visit. Try to
+          // renew the session silently with the refresh cookie before surfacing
+          // the login screen for a single-user app.
+          try {
+            await recoverSession(AUTH_BOOTSTRAP_TIMEOUT_MS)
+            if (isMounted) {
+              setIsLoading(false)
+            }
+            return
+          } catch (recoveryError) {
+            if (isDefinitiveAuthenticationFailure(recoveryError)) {
+              markDefinitivelyUnauthenticated()
+              setIsLoading(false)
+              return
+            }
+          }
         }
 
+        if (!isMounted) {
+          return
+        }
         retryTimer = window.setTimeout(() => {
           void validateSession()
         }, AUTH_BOOTSTRAP_RETRY_DELAY_MS)
@@ -183,7 +209,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       authChannel?.close()
     }
-  }, [markDefinitivelyUnauthenticated])
+  }, [markDefinitivelyUnauthenticated, recoverSession])
 
   const login = async (accessToken: string) => {
     setAccessToken(accessToken)
@@ -248,6 +274,7 @@ function RouteChunkPrefetcher({ enabled }: { enabled: boolean }) {
 function AppRoutes() {
   const { submit } = useBugReport()
   const { isAuthenticated } = useAuth()
+  useScrollRestoration()
   return (
     <Suspense fallback={<div className="text-center text-stone-500">Loading page...</div>}>
       <RouteChunkPrefetcher enabled={isAuthenticated} />

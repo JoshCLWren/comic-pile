@@ -5,9 +5,9 @@ if (typeof Element.prototype.scrollIntoView !== 'function') {
   Element.prototype.scrollIntoView = vi.fn()
 }
 
-if (typeof globalThis.Element !== 'undefined' && typeof Element.prototype.scrollIntoView !== 'function') {
-  Element.prototype.scrollIntoView = () => {}
-}
+// jsdom's window.scrollTo throws "Not implemented"; replace it with a no-op so
+// scroll-restoration logic can run without noisy console errors.
+window.scrollTo = (() => undefined) as unknown as typeof window.scrollTo
 
 if (typeof globalThis.IntersectionObserver === 'undefined') {
   class MockIntersectionObserver {
