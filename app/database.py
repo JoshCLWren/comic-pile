@@ -218,7 +218,7 @@ async def get_db() -> AsyncIterator[AsyncSession]:
         )
 
     session: AsyncSession | None = None
-    session_context: object | None = None
+    session_context: AsyncSession | None = None
     last_error: BaseException | None = None
 
     for attempt in range(1, DATABASE_ACQUISITION_ATTEMPTS + 1):
