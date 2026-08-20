@@ -72,7 +72,6 @@ export function ComicPillar({
   return (
     <div className="w-full space-y-4">
       <div className="flex items-center gap-2 border-b-2 pb-2" style={{ borderColor: 'var(--theme-comic-accent)' }}>
-        <span className="text-[10px] font-black tabular-nums" style={{ color: 'var(--theme-comic-accent)' }}>01</span>
         <span className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-comic-accent)' }}>The Comic</span>
       </div>
       <section id="thread-info" aria-labelledby="selected-issue-heading" className="space-y-3">
