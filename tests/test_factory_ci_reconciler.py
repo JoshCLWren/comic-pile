@@ -28,13 +28,17 @@ def reconciler() -> ModuleType:
     return module
 
 
-def ci_pr(*, owner: str = "factory:unowned") -> dict[str, Any]:
-    """Build one open factory CI PR fixture."""
+def ci_pr(
+    *,
+    owner: str = "factory:unowned",
+    branch: str = "factory/16-1111-nvidia",
+) -> dict[str, Any]:
+    """Build one open CI-labeled PR fixture."""
     return {
         "state": "OPEN",
         "isDraft": False,
         "headRefOid": HEAD,
-        "headRefName": "factory/16-1111-nvidia",
+        "headRefName": branch,
         "body": "Worker: opencode-free-model-factory-16",
         "labels": [
             {"name": "factory"},
@@ -63,10 +67,15 @@ def arrange(
     gate: dict[str, str] | None = None,
     owner: str = "factory:unowned",
     linked_owner: str = "factory:unowned",
+    branch: str = "factory/16-1111-nvidia",
 ) -> list[tuple[int, str, str]]:
     """Install deterministic PR state and capture lifecycle label writes."""
     controller = reconciler.review_controller
-    monkeypatch.setattr(controller, "pr_json", lambda number: ci_pr(owner=owner))
+    monkeypatch.setattr(
+        controller,
+        "pr_json",
+        lambda number: ci_pr(owner=owner, branch=branch),
+    )
     monkeypatch.setattr(
         controller,
         "target_json",
@@ -198,4 +207,21 @@ def test_live_linked_issue_worker_ownership_is_never_stolen(
 
     assert result["status"] == "linked-issue-owned"
     assert result["owner"] == "factory:17"
+    assert writes == []
+
+
+def test_nonfactory_ci_labeled_pr_is_never_reconciled(
+    reconciler: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Human and agent branches remain outside autonomous factory lifecycle control."""
+    writes = arrange(
+        reconciler,
+        monkeypatch,
+        branch="agent/cbl-mirror-reconciliation",
+    )
+
+    result = reconciler.reconcile_ci_pr(1538)
+
+    assert result["status"] == "non-factory-branch"
     assert writes == []
