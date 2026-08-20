@@ -1,4 +1,4 @@
-"""Add user_preferences table for per-user theme persistence.
+"""Add user preferences and reader-context event index.
 
 Revision ID: c85200000001
 Revises: c85100000001
@@ -18,7 +18,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    """Create the user_preferences table."""
+    """Create user preferences and add the rate-by-issue event index."""
     op.create_table(
         "user_preferences",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -40,9 +40,16 @@ def upgrade() -> None:
         sa.UniqueConstraint("user_id", name="uq_user_preferences_user_id"),
     )
     op.create_index("ix_user_preferences_user_id", "user_preferences", ["user_id"])
+    op.create_index(
+        "ix_event_type_issue_id",
+        "events",
+        ["type", "issue_id"],
+        unique=False,
+    )
 
 
 def downgrade() -> None:
-    """Drop the user_preferences table."""
+    """Drop the reader-context index and user preferences table."""
+    op.drop_index("ix_event_type_issue_id", table_name="events")
     op.drop_index("ix_user_preferences_user_id", table_name="user_preferences")
     op.drop_table("user_preferences")
