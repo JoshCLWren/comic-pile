@@ -12,8 +12,8 @@ interface RatingViewProps {
   rolledResult: number | null
   rating: number
   predictedDie: number
-  hasValidRolledResult: boolean
-  poolSize: number
+  hasValidRolledResult?: boolean
+  poolSize?: number
   errorMessage: string
   rateIsPending: boolean
   snoozeIsPending: boolean
