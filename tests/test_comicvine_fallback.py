@@ -5,11 +5,12 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import cast
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.comicvine_hydration import hydrate_issue
 from app.models import Issue, Thread, User
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 from app.services import comicvine_fallback
@@ -20,7 +21,12 @@ from app.services.comicvine_fallback import (
     schedule_issue_metadata_hydration,
 )
 from app.services.comicvine_intelligence import get_issue_intelligence
-from comic_pile.comicvine_provider import ComicVineClient, ComicVineError, ComicVineRateLimitError
+from comic_pile.comicvine_provider import (
+    ComicVineClient,
+    ComicVineError,
+    ComicVineRateLimitError,
+    ComicVineResponse,
+)
 
 
 def _deep_raw_payload() -> dict[str, object]:
@@ -316,3 +322,65 @@ async def test_rate_limit_defers_without_retry(monkeypatch: pytest.MonkeyPatch) 
     assert result is False
     assert calls == 1
     db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_successful_hydration_persists_and_api_exposes_curated_result(
+    async_db: AsyncSession,
+) -> None:
+    """A completed provider refresh writes the full payload and the intelligence API serves it."""
+    user, issue, identity = await _mapped_issue(
+        async_db,
+        metadata={"issue_number": "1"},
+        username="comicvine_fallback_success",
+    )
+    assert metadata_needs_hydration(identity) is True
+
+    client = MagicMock()
+    client.fetch_issue = AsyncMock(
+        return_value=ComicVineResponse(
+            payload={
+                "results": {
+                    "id": 123,
+                    "name": "Hydrated title",
+                    "issue_number": "1",
+                    "cover_date": "2026-02-02",
+                    "store_date": "2026-01-20",
+                    "image": {"original_url": "https://img.example/123.jpg"},
+                    "volume": {"id": 456, "name": "Hydrated series"},
+                    "person_credits": [{"name": "Writer A", "role": "writer"}],
+                    "character_credits": [],
+                    "team_credits": [],
+                    "story_arc_credits": [],
+                    "date_last_updated": "2026-08-10T00:00:00+00:00",
+                }
+            },
+            from_cache=False,
+            cache_key="issue-123",
+        )
+    )
+    client.fetch_story_arc = AsyncMock()
+
+    hydrated = await hydrate_issue(async_db, client, 123, refresh=True)
+    await async_db.commit()
+
+    await async_db.refresh(hydrated)
+    assert hydrated.id == identity.id
+    raw = hydrated.metadata_json.get("raw_provider_payload")
+    assert isinstance(raw, dict)
+    assert raw.get("id") == 123
+
+    refreshed = await async_db.get(ExternalIdentity, identity.id)
+    assert refreshed is not None
+    assert metadata_needs_hydration(refreshed) is False
+
+    intelligence = await get_issue_intelligence(async_db, issue.id, user.id)
+
+    assert intelligence is not None
+    assert intelligence.comicvine_issue_id == "123"
+    assert intelligence.name == "Hydrated title"
+    assert intelligence.series_name == "Hydrated series"
+    assert intelligence.issue_number == "1"
+    assert intelligence.cover_date == "2026-02-02"
+    assert intelligence.image_url == "https://img.example/123.jpg"
+    assert intelligence.creators == [{"name": "Writer A", "roles": ["writer"]}]
