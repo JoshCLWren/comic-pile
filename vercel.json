@@ -23,13 +23,7 @@
   ],
   "functions": {
     "api/index.py": {
-      "excludeFiles": [
-        "node_modules/**",
-        "static/**",
-        "docs/**",
-        "*.md",
-        "*.log"
-      ]
+      "excludeFiles": "{node_modules/**,static/**,docs/**,*.md,*.log}"
     }
   },
   "crons": [
