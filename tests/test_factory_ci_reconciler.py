@@ -44,6 +44,17 @@ def ci_pr(*, owner: str = "factory:unowned") -> dict[str, Any]:
     }
 
 
+def linked_issue(*, owner: str = "factory:unowned") -> dict[str, Any]:
+    """Build one open linked factory issue fixture."""
+    return {
+        "state": "open",
+        "labels": [
+            {"name": "factory"},
+            {"name": owner},
+        ],
+    }
+
+
 def arrange(
     reconciler: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
@@ -51,10 +62,16 @@ def arrange(
     authorized: bool = True,
     gate: dict[str, str] | None = None,
     owner: str = "factory:unowned",
+    linked_owner: str = "factory:unowned",
 ) -> list[tuple[int, str, str]]:
     """Install deterministic PR state and capture lifecycle label writes."""
     controller = reconciler.review_controller
     monkeypatch.setattr(controller, "pr_json", lambda number: ci_pr(owner=owner))
+    monkeypatch.setattr(
+        controller,
+        "target_json",
+        lambda number: linked_issue(owner=linked_owner),
+    )
     monkeypatch.setattr(
         reconciler,
         "exact_head_is_authorized",
@@ -156,7 +173,7 @@ def test_green_authorized_ci_promotes_directly_to_ready(
     assert writes == [(1513, "factory:unowned", "factory:ready")]
 
 
-def test_live_worker_ownership_is_never_stolen(
+def test_live_pr_worker_ownership_is_never_stolen(
     reconciler: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -166,5 +183,19 @@ def test_live_worker_ownership_is_never_stolen(
     result = reconciler.reconcile_ci_pr(1513)
 
     assert result["status"] == "owned"
+    assert result["owner"] == "factory:17"
+    assert writes == []
+
+
+def test_live_linked_issue_worker_ownership_is_never_stolen(
+    reconciler: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A partial issue/PR lease handoff fails closed instead of racing assignment."""
+    writes = arrange(reconciler, monkeypatch, linked_owner="factory:17")
+
+    result = reconciler.reconcile_ci_pr(1513)
+
+    assert result["status"] == "linked-issue-owned"
     assert result["owner"] == "factory:17"
     assert writes == []
