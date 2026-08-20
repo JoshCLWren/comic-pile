@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -11,6 +12,7 @@ from typing import Any, cast
 
 
 REVIEW_CONTROLLER_PATH = Path(__file__).with_name("factory-review-controller.py")
+BRANCH_ISSUE_RE = re.compile(r"^factory/\d+-(?P<issue>\d+)-")
 FAILED_CHECKS_PREFIX = "required checks failed:"
 REPAIR_DENY_REASONS = {
     "pull request has merge conflicts",
@@ -75,6 +77,31 @@ def active_factory_owner(labels: set[str]) -> str | None:
     return owners[0] if owners else None
 
 
+def linked_issue_number(pr: dict[str, Any]) -> int | None:
+    """Extract the canonical linked issue from a factory branch name."""
+    match = BRANCH_ISSUE_RE.match(str(pr.get("headRefName") or ""))
+    return int(match.group("issue")) if match else None
+
+
+def linked_issue_lease_status(pr: dict[str, Any]) -> tuple[str, str | None] | None:
+    """Return a blocking linked-issue lease state, if one exists."""
+    issue_number = linked_issue_number(pr)
+    if issue_number is None:
+        return "linked-issue-indeterminate", None
+
+    issue = cast(dict[str, Any], review_controller.target_json(issue_number))
+    if str(issue.get("state") or "").upper() != "OPEN":
+        return None
+
+    labels = review_controller.labels_of(issue)
+    owner = active_factory_owner(labels)
+    if owner is not None:
+        return "linked-issue-owned", owner
+    if "factory:unowned" not in labels:
+        return "linked-issue-owner-indeterminate", None
+    return None
+
+
 def exact_head_is_authorized(pr_number: int, pr: dict[str, Any]) -> bool:
     """Return whether semantic approval is valid for this exact current head."""
     branch = str(pr.get("headRefName") or "")
@@ -110,6 +137,14 @@ def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
         return {"pr": pr_number, "status": "owned", "owner": owner, "head": head}
     if "factory:unowned" not in labels:
         return {"pr": pr_number, "status": "owner-indeterminate", "head": head}
+
+    linked_lease = linked_issue_lease_status(pr)
+    if linked_lease is not None:
+        status, linked_owner = linked_lease
+        result: dict[str, Any] = {"pr": pr_number, "status": status, "head": head}
+        if linked_owner is not None:
+            result["owner"] = linked_owner
+        return result
 
     if not review_controller.HEAD_RE.fullmatch(head):
         return {"pr": pr_number, "status": "head-indeterminate", "head": head}
