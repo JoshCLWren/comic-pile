@@ -851,6 +851,45 @@ describe('RollPage parent handlers', () => {
     expect(vibrate).toHaveBeenCalledWith(20)
   })
 
+  it('scrolls the dice into view when saving a rating and returning to the idle roll state', async () => {
+    const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {})
+    const user = userEvent.setup()
+    render(<RollPage />)
+    await user.click(screen.getByRole('button', { name: 'thread' }))
+    await user.click(screen.getByRole('button', { name: /Read Now/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'save rating' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Roll the dice' })).toBeInTheDocument())
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' })
+    scrollIntoView.mockRestore()
+  })
+
+  it('scrolls the dice into view when snoozing from the rating view', async () => {
+    const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {})
+    const user = userEvent.setup()
+    render(<RollPage />)
+    await user.click(screen.getByRole('button', { name: 'thread' }))
+    await user.click(screen.getByRole('button', { name: /Read Now/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'snooze rating' })).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'snooze rating' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Roll the dice' })).toBeInTheDocument())
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' })
+    scrollIntoView.mockRestore()
+  })
+
+  it('scrolls the dice into view when cancelling a pending rating', async () => {
+    const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {})
+    const user = userEvent.setup()
+    render(<RollPage />)
+    await user.click(screen.getByRole('button', { name: 'thread' }))
+    await user.click(screen.getByRole('button', { name: /Read Now/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'cancel rating' })).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'cancel rating' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Roll the dice' })).toBeInTheDocument())
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' })
+    scrollIntoView.mockRestore()
+  })
+
   it('reports pool, stale-read, and action failures without leaving the page stuck', async () => {
     const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
