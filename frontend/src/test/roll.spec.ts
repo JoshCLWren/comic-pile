@@ -1475,4 +1475,198 @@ test.describe('Roll Dice Feature', () => {
       expect(threadAfter.reading_progress).toBe('completed');
     });
   });
+
+  test.describe('Roll Cockpit Layout', () => {
+    test('two-column layout when Reading Context has no content', async ({ authenticatedPage, request }) => {
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+
+      const threadResponse = await request.post('/api/threads/', {
+        data: {
+          title: 'No Context Thread',
+          format: 'Comics',
+          issues_remaining: 5,
+        },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!threadResponse.ok()) {
+        throw new Error(`Failed to create thread: ${threadResponse.status()} ${threadResponse.statusText()}`);
+      }
+
+      const thread = await threadResponse.json();
+
+      await authenticatedPage.goto('/');
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
+
+      const threadElement = authenticatedPage.locator('[data-roll-pool] [role="button"]').filter({ hasText: 'No Context Thread' }).first();
+      await threadElement.click();
+
+      const readButton = authenticatedPage.locator('button:has-text("Read Now")');
+      await readButton.click();
+
+      await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
+
+      // Verify two-column layout (no empty Reading Context column)
+      const pillarsGrid = authenticatedPage.locator('[data-testid="rating-pillars-grid"]');
+      await expect(pillarsGrid).toBeVisible({ timeout: 5000 });
+
+      // Reading Context heading should not have "02" prefix
+      const readingContextHeading = authenticatedPage.locator('text=Reading Context');
+      await expect(readingContextHeading).toBeVisible({ timeout: 5000 });
+
+      // The "02" decorative label should NOT be present
+      const decorativeLabels = authenticatedPage.locator('.tabular-nums');
+      const labelCount = await decorativeLabels.count();
+      expect(labelCount).toBe(0);
+
+      // Verify Comic and Your Context headings are present without numbers
+      const comicHeading = authenticatedPage.locator('text=The Comic');
+      await expect(comicHeading).toBeVisible({ timeout: 5000 });
+
+      const yourContextHeading = authenticatedPage.locator('text=Your Context');
+      await expect(yourContextHeading).toBeVisible({ timeout: 5000 });
+
+      // Grid should have 2 columns at xl (no empty middle column)
+      const gridTemplate = await pillarsGrid.evaluate((el) => el.style.gridTemplateColumns);
+      expect(gridTemplate).not.toContain('minmax(0,46fr)'); // No middle column
+    });
+
+    test('three-column layout when Reading Context has content', async ({ authenticatedPage, request }) => {
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+
+      const threadResponse = await request.post('/api/threads/', {
+        data: {
+          title: 'With Context Thread',
+          format: 'Comics',
+          issues_remaining: 5,
+        },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!threadResponse.ok()) {
+        throw new Error(`Failed to create thread: ${threadResponse.status()} ${threadResponse.statusText()}`);
+      }
+
+      const thread = await threadResponse.json();
+
+      // Create reading orders to give the thread Reading Context content
+      await request.post(`/api/v1/threads/${thread.id}/issues`, {
+        data: { issue_range: '1-5' },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      // Add a dependency to create connected threads
+      const issuesResponse = await request.get(`/api/v1/threads/${thread.id}/issues?page_size=100`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!issuesResponse.ok()) {
+        throw new Error(`Failed to get issues: ${issuesResponse.status()} ${issuesResponse.statusText()}`);
+      }
+
+      const issuesData = await issuesResponse.json();
+      const firstIssue = issuesData.issues[0];
+
+      const dependencyResponse = await request.post('/api/v1/dependencies/', {
+        data: {
+          source_type: 'issue',
+          source_id: firstIssue.id,
+          target_type: 'issue',
+          target_id: firstIssue.id,
+        },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      await authenticatedPage.goto('/');
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
+
+      const threadElement = authenticatedPage.locator('[data-roll-pool] [role="button"]').filter({ hasText: 'With Context Thread' }).first();
+      await threadElement.click();
+
+      const readButton = authenticatedPage.locator('button:has-text("Read Now")');
+      await readButton.click();
+
+      await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
+
+      // Verify three-column layout
+      const pillarsGrid = authenticatedPage.locator('[data-testid="rating-pillars-grid"]');
+      await expect(pillarsGrid).toBeVisible({ timeout: 5000 });
+
+      // Reading Context heading should not have "02" prefix
+      const readingContextHeading = authenticatedPage.locator('text=Reading Context');
+      await expect(readingContextHeading).toBeVisible({ timeout: 5000 });
+
+      // The "02" decorative label should NOT be present
+      const decorativeLabels = authenticatedPage.locator('.tabular-nums');
+      const labelCount = await decorativeLabels.count();
+      expect(labelCount).toBe(0);
+
+      // Verify Comic and Your Context headings are present without numbers
+      const comicHeading = authenticatedPage.locator('text=The Comic');
+      await expect(comicHeading).toBeVisible({ timeout: 5000 });
+
+      const yourContextHeading = authenticatedPage.locator('text=Your Context');
+      await expect(yourContextHeading).toBeVisible({ timeout: 5000 });
+
+      // Grid should have 3 columns at xl when Reading Context has content
+      const gridTemplate = await pillarsGrid.evaluate((el) => el.style.gridTemplateColumns);
+      expect(gridTemplate).toContain('minmax(0,46fr)'); // Middle column present
+    });
+
+    test('no decorative ordinal prefixes anywhere in the cockpit', async ({ authenticatedPage, request }) => {
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+
+      const threadResponse = await request.post('/api/threads/', {
+        data: {
+          title: 'Ordinal Test Thread',
+          format: 'Comics',
+          issues_remaining: 5,
+        },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!threadResponse.ok()) {
+        throw new Error(`Failed to create thread: ${threadResponse.status()} ${threadResponse.statusText()}`);
+      }
+
+      const thread = await threadResponse.json();
+
+      await authenticatedPage.goto('/');
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
+
+      const threadElement = authenticatedPage.locator('[data-roll-pool] [role="button"]').filter({ hasText: 'Ordinal Test Thread' }).first();
+      await threadElement.click();
+
+      const readButton = authenticatedPage.locator('button:has-text("Read Now")');
+      await readButton.click();
+
+      await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
+
+      // Collect all text content from the pillar headings
+      const allHeadings = await authenticatedPage.locator('text*=The Comic, text*=Reading Context, text*=Your Context').all();
+
+      for (const heading of allHeadings) {
+        const headingText = await heading.textContent();
+        // None should contain decorative ordinals like "01", "02", "03"
+        expect(headingText).not.toMatch(/0[123]\s/);
+      }
+    });
+  });
 });

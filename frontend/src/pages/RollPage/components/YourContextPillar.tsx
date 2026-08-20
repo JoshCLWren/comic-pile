@@ -23,7 +23,6 @@ export function YourContextPillar({
   return (
     <div className="w-full space-y-4">
       <div className="flex items-center gap-2 border-b-2 pb-2" style={{ borderColor: 'var(--theme-personal-accent)' }}>
-        <span className="text-[10px] font-black tabular-nums" style={{ color: 'var(--theme-personal-accent)' }}>03</span>
         <span className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-personal-accent)' }}>Your Context</span>
       </div>
       <section aria-labelledby="rating-heading" className="space-y-3 rounded-2xl p-3" style={{ border: '1px solid rgba(168,85,247,0.2)', backgroundColor: 'var(--theme-bg-panel)' }}>
