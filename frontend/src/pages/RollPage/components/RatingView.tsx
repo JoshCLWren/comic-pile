@@ -58,7 +58,6 @@ export function RatingView({
             currentDie={currentDie}
             rolledResult={rolledResult}
             poolSize={poolSize}
-            hasValidRolledResult={hasValidRolledResult}
             onRefreshThread={onRefreshThread}
           />
         </div>
