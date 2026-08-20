@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import type { RollBootstrapThread } from '../../types/rollBootstrap'
 import type { RatingThread } from './types'
 
@@ -88,11 +88,6 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const suppressPendingAutoOpenRef = useRef(false)
   const rollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const rollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const wasRatingViewRef = useRef(false)
-
-  useEffect(() => {
-    wasRatingViewRef.current = isRatingView
-  }, [isRatingView])
 
   return {
     isRolling,
