@@ -318,6 +318,10 @@ async def _run_series_resolution(issue_id: int, user_id: int) -> None:
             )
             return
 
+        mapping_id = mapping.id
+        persisted_external_id = persisted.external_id
+        comicvine_issue_id = _comicvine_issue_id(persisted_external_id)
+
         try:
             await db.commit()
         except Exception:
@@ -328,9 +332,6 @@ async def _run_series_resolution(issue_id: int, user_id: int) -> None:
             )
             return
 
-        mapping_id = mapping.id
-        persisted_external_id = persisted.external_id
-        comicvine_issue_id = _comicvine_issue_id(persisted_external_id)
         if comicvine_issue_id is not None:
             try:
                 await hydrate_issue(db, client, comicvine_issue_id, refresh=True)
