@@ -28,6 +28,7 @@ on:
       - '.github/workflows/free-model-factory-run.yml'
       - '.github/scripts/factory-work-controller.py'
       - '.github/scripts/factory-review-controller.py'
+      - '.github/scripts/factory-ci-reconciler.py'
       - '.github/scripts/factory_work_policy.py'
       - '.github/scripts/factory_review_policy.py'
       - '.github/scripts/factory-gh-rest-shim.sh'
@@ -91,6 +92,15 @@ jobs:
           chmod +x "$shim_dir/gh"
           echo "FACTORY_REAL_GH=$real_gh" >> "$GITHUB_ENV"
           echo "$shim_dir" >> "$GITHUB_PATH"
+
+      - name: Reconcile passive factory CI state
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/factory-ci-reconciler.py
 
       - name: Drain exact-head ready factory PRs
         continue-on-error: true
@@ -334,7 +344,7 @@ jobs:
 
           if [[ "$EVENT_NAME" == workflow_dispatch && -n "${DISPATCH_WORKER:-}" ]]; then
             awk -F '\t' -v worker="$DISPATCH_WORKER" '$1 == worker {found=1} END {exit !found}' "$manifest"
-            workers="$(jq -nc --arg worker "$DISPATCH_WORKER" '[$worker]')"
+            workers="$(jq -nc --arg worker="$DISPATCH_WORKER" '[$worker]')"
           elif [[ "$EVENT_NAME" == schedule ]]; then
             minute="${SCHEDULE_EXPR%% *}"
             [[ "$minute" =~ ^(0|5|10|15|20|25|30|35|40|45|50|55)$ ]] || {
