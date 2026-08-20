@@ -8,6 +8,14 @@ vi.mock('../services/api', async () => {
   return { ...actual, comicVineApi: { getIssueIntelligence: vi.fn() } }
 })
 
+vi.mock('../contexts/useToast', () => ({
+  useToast: () => ({
+    showToast: vi.fn(),
+    removeToast: vi.fn(),
+    toasts: [],
+  }),
+}))
+
 const getIntelligence = vi.mocked(comicVineApi.getIssueIntelligence)
 
 describe('ComicVineIssueCard', () => {
@@ -51,11 +59,15 @@ describe('ComicVineIssueCard', () => {
     fireEvent.click(screen.getByText('Comic details'))
     expect(screen.getByText('A bold beginning.')).toBeInTheDocument()
     expect(screen.getByText('Writer One')).toBeInTheDocument()
-    expect(screen.getByText('Alpha #2 - Second Part: The Plot Thickens')).toBeInTheDocument()
+    // Primary identity and secondary title are now separate elements
+    expect(screen.getByText('Alpha #2')).toBeInTheDocument()
+    expect(screen.getByText('Second Part: The Plot Thickens')).toBeInTheDocument()
     expect(screen.getByText('Beta #1')).toBeInTheDocument()
     expect(screen.getByText('Unread')).toBeInTheDocument()
-    expect(screen.getByText('Missing')).toBeInTheDocument()
+    expect(screen.getByText('Not in ComicPile')).toBeInTheDocument()
     expect(screen.getByText('1 in ComicPile · 1 missing')).toBeInTheDocument()
+    // Add to ComicPile button for missing issue
+    expect(screen.getByRole('button', { name: /Add Beta #1 to ComicPile/i })).toBeInTheDocument()
   })
 
   it('labels every story-arc issue with its series, number, and title', async () => {
@@ -96,10 +108,17 @@ describe('ComicVineIssueCard', () => {
     render(<ComicVineIssueCard issueId={1} />)
     expect(await screen.findByText('Three')).toBeInTheDocument()
     fireEvent.click(screen.getByText('Comic details'))
-    expect(screen.getByText('Fantastic Four #584 - Three, Part Two: Congratulations, Mister Grimm. You`re Handsome Again!')).toBeInTheDocument()
-    expect(screen.getByText('The Amazing Spider-Man #657 - Torch Song')).toBeInTheDocument()
+    // Primary identity and secondary title are now separate elements
+    expect(screen.getByText('Fantastic Four #584')).toBeInTheDocument()
+    expect(screen.getByText("Three, Part Two: Congratulations, Mister Grimm. You`re Handsome Again!")).toBeInTheDocument()
+    expect(screen.getByText('The Amazing Spider-Man #657')).toBeInTheDocument()
+    expect(screen.getByText('Torch Song')).toBeInTheDocument()
     expect(screen.getByText('Fantastic Four Adventures #28')).toBeInTheDocument()
     expect(screen.getByText('0 in ComicPile · 3 missing')).toBeInTheDocument()
+    // Add to ComicPile buttons for all missing issues
+    expect(screen.getByRole('button', { name: /Add Fantastic Four #584 to ComicPile/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Add The Amazing Spider-Man #657 to ComicPile/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Add Fantastic Four Adventures #28 to ComicPile/i })).toBeInTheDocument()
   })
 
   it('renders nothing when the issue has no confirmed ComicVine mapping', async () => {
@@ -168,7 +187,9 @@ describe('ComicVineIssueCard', () => {
     expect(screen.getByText('Named Special')).toBeInTheDocument()
     expect(screen.getByText('ComicVine issue 202')).toBeInTheDocument()
     expect(screen.getByText('Read')).toBeInTheDocument()
+    expect(screen.getByText('Not in ComicPile')).toBeInTheDocument()
     expect(screen.queryByText('View source on ComicVine')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Add ComicVine issue 202 to ComicPile/i })).toBeInTheDocument()
 
     const cover = container.querySelector('img')
     expect(cover).not.toBeNull()
