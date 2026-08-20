@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cbl_ingest import CBLList
@@ -13,13 +14,70 @@ from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
 
 
 async def get_cbl_source_revision(db: AsyncSession, *, repository: str) -> str | None:
-    """Return the last fully synchronized source revision."""
+    """Return the last fully synchronized source revision.
+
+    Args:
+        db: Application database session.
+        repository: Stable source repository identity.
+
+    Returns:
+        The stored revision marker, or ``None`` when the source has never synchronized.
+
+    Raises:
+        ValueError: If the repository identity is blank.
+    """
     normalized_repository = repository.strip()
     if not normalized_repository:
         raise ValueError("repository is required")
     return await db.scalar(
         select(CBLSource.revision_sha).where(CBLSource.repository == normalized_repository)
     )
+
+
+async def _get_or_create_locked_source(
+    db: AsyncSession,
+    *,
+    repository: str,
+    pending_revision: str,
+    synced_at: datetime,
+) -> tuple[CBLSource, bool]:
+    """Get one locked source row or create it safely under concurrent requests.
+
+    Args:
+        db: Application database session.
+        repository: Normalized source repository identity.
+        pending_revision: Pending revision marker stored for a new source.
+        synced_at: Synchronization timestamp for a newly created source.
+
+    Returns:
+        The locked source row and whether this call created it.
+
+    Raises:
+        RuntimeError: If a concurrent insert wins but the row cannot be reloaded.
+    """
+    source = await db.scalar(
+        select(CBLSource).where(CBLSource.repository == repository).with_for_update()
+    )
+    if source is not None:
+        return source, False
+
+    candidate = CBLSource(
+        repository=repository,
+        revision_sha=pending_revision,
+        synced_at=synced_at,
+    )
+    try:
+        async with db.begin_nested():
+            db.add(candidate)
+            await db.flush()
+    except IntegrityError:
+        source = await db.scalar(
+            select(CBLSource).where(CBLSource.repository == repository).with_for_update()
+        )
+        if source is None:
+            raise RuntimeError("concurrent CBL source creation could not be reconciled")
+        return source, False
+    return candidate, True
 
 
 async def sync_cbl_batch(
@@ -30,7 +88,22 @@ async def sync_cbl_batch(
     parsed_lists: tuple[CBLList, ...],
     synced_at: datetime | None = None,
 ) -> CBLSyncSummary:
-    """Upsert a bounded batch without publishing the source revision as complete."""
+    """Upsert a bounded batch without publishing the source revision as complete.
+
+    Args:
+        db: Application database session.
+        repository: Stable source repository identity.
+        revision_sha: Source revision represented by this batch.
+        parsed_lists: Parsed CBL lists included in this bounded batch.
+        synced_at: Optional deterministic timestamp for tests.
+
+    Returns:
+        Machine-readable counters describing the persisted batch.
+
+    Raises:
+        ValueError: If source metadata or parsed list metadata is invalid.
+        RuntimeError: If concurrent source creation cannot be reconciled.
+    """
     normalized_repository = repository.strip()
     normalized_revision = revision_sha.strip()
     if not normalized_repository:
@@ -48,19 +121,14 @@ async def sync_cbl_batch(
     if any(not item.content_hash.strip() for item in parsed_lists):
         raise ValueError("CBL content hashes must be non-empty")
 
-    source = await db.scalar(
-        select(CBLSource).where(CBLSource.repository == normalized_repository).with_for_update()
+    pending_marker = f"pending:{normalized_revision}"
+    source, source_created = await _get_or_create_locked_source(
+        db,
+        repository=normalized_repository,
+        pending_revision=pending_marker,
+        synced_at=synced_at or datetime.now(UTC),
     )
-    source_created = source is None
-    now = synced_at or datetime.now(UTC)
-    if source is None:
-        source = CBLSource(
-            repository=normalized_repository,
-            revision_sha=f"pending:{normalized_revision}",
-            synced_at=now,
-        )
-        db.add(source)
-        await db.flush()
+    source.revision_sha = pending_marker
 
     existing_lists = list(
         (
@@ -136,7 +204,23 @@ async def finalize_cbl_sync(
     protected_paths: frozenset[str] = frozenset(),
     synced_at: datetime | None = None,
 ) -> CBLSyncSummary:
-    """Deactivate removed lists and publish a revision after every batch succeeds."""
+    """Deactivate removed lists and publish a revision after every batch succeeds.
+
+    Args:
+        db: Application database session.
+        repository: Stable source repository identity.
+        revision_sha: Source revision to publish as fully synchronized.
+        active_paths: Complete set of successfully parsed list paths.
+        protected_paths: Present paths whose prior known-good state must be preserved.
+        synced_at: Optional deterministic timestamp for tests.
+
+    Returns:
+        Machine-readable counters describing finalization and deactivation work.
+
+    Raises:
+        ValueError: If metadata is invalid, the source is missing, or the pending
+            revision does not match the revision being finalized.
+    """
     normalized_repository = repository.strip()
     normalized_revision = revision_sha.strip()
     if not normalized_repository:
@@ -151,6 +235,9 @@ async def finalize_cbl_sync(
     )
     if source is None:
         raise ValueError("CBL source must exist before finalization")
+    expected_pending = f"pending:{normalized_revision}"
+    if source.revision_sha != expected_pending:
+        raise ValueError("no matching pending CBL revision exists for finalization")
 
     existing_lists = list(
         (
