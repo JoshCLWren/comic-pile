@@ -329,6 +329,7 @@ async def _run_series_resolution(issue_id: int, user_id: int) -> None:
             )
             return
 
+        mapping_id = mapping.id
         comicvine_issue_id = _comicvine_issue_id(persisted.external_id)
         if comicvine_issue_id is not None:
             try:
@@ -339,7 +340,7 @@ async def _run_series_resolution(issue_id: int, user_id: int) -> None:
                     "comicvine_series_resolution_hydration_deferred "
                     "issue_id=%s mapping_id=%s error=%s",
                     issue_id,
-                    mapping.id,
+                    mapping_id,
                     type(exc).__name__,
                 )
             except Exception as exc:  # noqa: BLE001
@@ -347,7 +348,7 @@ async def _run_series_resolution(issue_id: int, user_id: int) -> None:
                     "comicvine_series_resolution_hydration_failed "
                     "issue_id=%s mapping_id=%s error=%s",
                     issue_id,
-                    mapping.id,
+                    mapping_id,
                     type(exc).__name__,
                 )
 
