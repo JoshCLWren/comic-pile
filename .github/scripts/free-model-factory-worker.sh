@@ -339,7 +339,7 @@ if [[ "$MODE" == 'issue' ]]; then
 fi
 
 if persist_pr_changes "$NUMBER" "$BRANCH"; then
-  log "pushed repairs to PR #${NUMBER}; releasing for exact-head review"
+  log "pushed repairs to PR #${NUMBER}; handing it to the merge controller for exact-head review"
   release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'repairs-pushed-handoff'
   log "assignment complete; remaining budget $(remaining)s"
   exit 0
@@ -360,6 +360,9 @@ fi
 review_log="/tmp/opencode-factory-${WORKER}.log"
 sanitized_review_log="/tmp/opencode-factory-${WORKER}.sanitized.log"
 factory_sanitize_review_log "$review_log" "$sanitized_review_log"
+# Retain the terminal token for diagnostics; the merge controller remains the
+# only component authorized to decide whether a PR can merge.
+last_token="$(factory_terminal_marker "$review_log" || true)"
 
 current_head="$(gh pr view "$NUMBER" --json headRefOid --jq .headRefOid 2>/dev/null || true)"
 if [[ "$current_head" != "$EXPECTED_HEAD" ]] || ! current_owner_is_self "$NUMBER"; then

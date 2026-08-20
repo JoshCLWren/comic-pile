@@ -1,25 +1,17 @@
 """Focused contract tests for the shared comic catalog API."""
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 import pytest
-from httpx import AsyncClient
 
-from app.external_identities import upsert_external_identity, link_thread_external_series, link_issue_external_identity
+from app.external_identities import (
+    link_issue_external_identity,
+    link_thread_external_series,
+    upsert_external_identity,
+)
 from app.models import Issue, Thread, User
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping, ThreadExternalSeriesMapping
-from app.schemas.catalog import (
-    ExternalIdentityUpsert,
-    ExternalIdentityResponse,
-    ThreadSeriesAttachRequest,
-    ThreadSeriesAttachResponse,
-    IssueAttachRequest,
-    IssueAttachResponse,
-    CatalogSeriesSearchResponse,
-    CatalogIssueSearchResponse,
-    ThreadExternalSeriesMappingResponse,
-    IssueExternalIdentityMappingResponse,
-)
 
 
 @pytest.mark.asyncio
@@ -41,7 +33,7 @@ async def test_catalog_series_upsert_is_idempotent(async_db: AsyncSession) -> No
     )
 
     assert repeated.id == fresh.id
-    assert repeated.metadata_json == {"name": "Justice League"}
+    assert repeated.metadata_json == {"name": "Justice League (updated)"}
     assert await async_db.scalar(select(func.count()).select_from(ExternalIdentity)) == 1
 
 
@@ -64,7 +56,7 @@ async def test_catalog_issue_upsert_is_idempotent(async_db: AsyncSession) -> Non
     )
 
     assert repeated.id == fresh.id
-    assert repeated.metadata_json == {"issue_number": "1", "name": "Test Issue"}
+    assert repeated.metadata_json == {"issue_number": "1", "name": "Test Issue (updated)"}
     assert await async_db.scalar(select(func.count()).select_from(ExternalIdentity)) == 1
 
 
@@ -127,7 +119,7 @@ async def test_search_catalog_issues(async_db: AsyncSession) -> None:
 @pytest.mark.asyncio
 async def test_attach_series_to_thread(async_db: AsyncSession) -> None:
     """Attach a series identity to a user's reading thread."""
-    owner, thread, issue = _owned_issue(
+    owner, thread, issue = await _owned_issue(
         async_db,
         username="catalog_test_owner",
         title="Justice League",
@@ -159,7 +151,7 @@ async def test_attach_series_to_thread(async_db: AsyncSession) -> None:
 @pytest.mark.asyncio
 async def test_attach_issue_to_thread(async_db: AsyncSession) -> None:
     """Attach an issue identity to a user's reading thread."""
-    owner, thread, issue = _owned_issue(
+    owner, thread, issue = await _owned_issue(
         async_db,
         username="catalog_issue_test_owner",
         title="Test Series",
@@ -192,7 +184,7 @@ async def test_attach_issue_to_thread(async_db: AsyncSession) -> None:
 @pytest.mark.asyncio
 async def test_list_series_mappings(async_db: AsyncSession) -> None:
     """List thread-series mappings (inspection endpoint)."""
-    owner, thread, issue = _owned_issue(
+    owner, thread, issue = await _owned_issue(
         async_db,
         username="catalog_mapping_list_owner",
         title="Test Series",
@@ -227,7 +219,7 @@ async def test_list_series_mappings(async_db: AsyncSession) -> None:
 @pytest.mark.asyncio
 async def test_list_issue_mappings(async_db: AsyncSession) -> None:
     """List issue-external identity mappings (inspection endpoint)."""
-    owner, thread, issue = _owned_issue(
+    owner, thread, issue = await _owned_issue(
         async_db,
         username="catalog_issue_list_owner",
         title="Test Series",

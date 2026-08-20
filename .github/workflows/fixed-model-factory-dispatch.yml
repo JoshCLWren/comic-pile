@@ -60,6 +60,26 @@ jobs:
         with:
           ref: main
 
+      - name: Ensure GitHub CLI supports JSON PR checks
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if gh pr checks --help 2>&1 | grep -q -- '--json'; then
+            gh --version
+            exit 0
+          fi
+
+          version='2.97.0'
+          archive="gh_${version}_linux_amd64.tar.gz"
+          destination="$RUNNER_TEMP/$archive"
+          curl -fsSL "https://github.com/cli/cli/releases/download/v${version}/${archive}" -o "$destination"
+          printf '%s  %s\n' 'a2c9b8497e1f85b1ad0dfcb78b5a622e098801b8e461e459e88e1ee12f018112' "$destination" \
+            | sha256sum --check --strict
+          tar -xzf "$destination" -C "$RUNNER_TEMP"
+          gh_dir="$RUNNER_TEMP/gh_${version}_linux_amd64/bin"
+          "$gh_dir/gh" pr checks --help | grep -q -- '--json'
+          echo "$gh_dir" >> "$GITHUB_PATH"
+
       - name: Install REST-backed factory GitHub reads
         shell: bash
         run: |

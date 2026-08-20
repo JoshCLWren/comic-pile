@@ -1,13 +1,15 @@
 """Catalog API endpoints for shared comic series and issue identities."""
 
-from fastapi import APIRouter, Depends, Query, status
+from datetime import datetime
 from typing import Annotated
 
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.external_identities import upsert_external_identity
+from app.auth import get_current_user
+from app.external_identities import link_thread_external_series, upsert_external_identity
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping, ThreadExternalSeriesMapping
 from app.models.user import User
 from app.schemas.catalog import (
@@ -22,10 +24,7 @@ from app.schemas.catalog import (
     ThreadExternalSeriesMappingResponse,
     IssueExternalIdentityMappingResponse,
 )
-from app.auth import get_current_user
-
-
-def _dt_to_ts(dt) -> float | None:
+def _dt_to_ts(dt: datetime | None) -> float | None:
     """Convert datetime to Unix timestamp."""
     return dt.timestamp() if dt is not None else None
 
@@ -54,15 +53,15 @@ async def search_catalog_series(
     """
     query = select(ExternalIdentity).where(
         ExternalIdentity.entity_type == "series",
-        ExternalIdentity.provider == provider.strip().lower(),
+        ExternalIdentity.provider == (provider or "comicvine").strip().lower(),
     )
 
     if search:
         normalized = search.strip().lower()
         query = query.where(ExternalIdentity.external_id.ilike(f"%{normalized}%"))
 
-    result = await db.execute(query.scalars().unique())
-    identities = result.all()
+    result = await db.execute(query)
+    identities = result.scalars().unique().all()
     return [
         CatalogSeriesSearchResponse(
             id=identity.id,
@@ -104,7 +103,7 @@ async def search_catalog_issues(
     """
     query = select(ExternalIdentity).where(
         ExternalIdentity.entity_type == "issue",
-        ExternalIdentity.provider == provider.strip().lower(),
+        ExternalIdentity.provider == (provider or "comicvine").strip().lower(),
     )
 
     if series_external_id:
@@ -122,8 +121,8 @@ async def search_catalog_issues(
         normalized = search.strip().lower()
         query = query.where(ExternalIdentity.external_id.ilike(f"%{normalized}%"))
 
-    result = await db.execute(query.scalars().unique())
-    identities = result.all()
+    result = await db.execute(query)
+    identities = result.scalars().unique().all()
     return [
         CatalogIssueSearchResponse(
             id=identity.id,

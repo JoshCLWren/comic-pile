@@ -5,6 +5,7 @@ import type { AuthContextValue } from '../App'
 
 const mockApiGet = vi.fn()
 const mockGetAccessToken = vi.fn<() => string | null>(() => null)
+const mockReadStoredAccessToken = vi.fn<() => string | null>(() => null)
 const mockSetAccessToken = vi.fn()
 const mockClearAccessToken = vi.fn()
 
@@ -13,6 +14,7 @@ vi.mock('../services/api', () => ({
     get: (...args: Parameters<typeof mockApiGet>) => mockApiGet(...args),
   },
   getAccessToken: () => mockGetAccessToken(),
+  readStoredAccessToken: () => mockReadStoredAccessToken(),
   setAccessToken: (...args: Parameters<typeof mockSetAccessToken>) => mockSetAccessToken(...args),
   clearAccessToken: (...args: Parameters<typeof mockClearAccessToken>) => mockClearAccessToken(...args),
 }))
@@ -37,6 +39,8 @@ describe('hard refresh session bootstrap', () => {
     mockApiGet.mockReset()
     mockGetAccessToken.mockReset()
     mockGetAccessToken.mockReturnValue(null)
+    mockReadStoredAccessToken.mockReset()
+    mockReadStoredAccessToken.mockReturnValue(null)
     mockSetAccessToken.mockReset()
     mockClearAccessToken.mockReset()
     delete window.__COMIC_PILE_ACCESS_TOKEN
@@ -71,6 +75,7 @@ describe('hard refresh session bootstrap', () => {
   test('preserves the authenticated screen when resume validation is temporarily unavailable', async () => {
     window.history.replaceState({}, '', '/queue')
     mockGetAccessToken.mockReturnValue('preserved-access-token')
+    mockReadStoredAccessToken.mockReturnValue('preserved-access-token')
     mockApiGet.mockResolvedValueOnce({ username: 'testuser', email: 'test@example.com' })
 
     render(

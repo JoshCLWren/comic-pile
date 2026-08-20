@@ -184,7 +184,8 @@ def assign_candidate(candidate: Candidate, worker: str) -> bool:
 def flatten_pages(pages: object | None) -> list[dict[str, Any]]:
     """Flatten paginated GitHub API responses into object rows."""
     result: list[dict[str, Any]] = []
-    for page in pages or []:
+    page_values = pages if isinstance(pages, list) else []
+    for page in page_values:
         if isinstance(page, list):
             result.extend(item for item in page if isinstance(item, dict))
         elif isinstance(page, dict):
@@ -224,7 +225,19 @@ def load_no_diff_attempts(now_epoch: int | None=None) -> dict[int, int]:
     return no_diff_attempts_from_comments(recent_factory_comments(now_epoch), now_epoch=now_epoch)
 
 
-def active_fixed_workers() -> tuple[set[int], set[str]]:
+class ActiveWorkerResult(tuple[set[int], set[str]]):
+    """Pair of resolved workers and unresolved runs with set compatibility."""
+
+    def __new__(cls, workers: set[int], unresolved: set[str]) -> ActiveWorkerResult:
+        return tuple.__new__(cls, (workers, unresolved))
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, set):
+            return self[0] == other
+        return tuple.__eq__(self, other)
+
+
+def active_fixed_workers() -> ActiveWorkerResult:
     """Return resolved workers and unresolved queued/running fixed-model runs."""
     workers: set[int] = set()
     runs: list[dict[str, Any]] = []
@@ -235,9 +248,10 @@ def active_fixed_workers() -> tuple[set[int], set[str]]:
         except RuntimeError:
             unresolved_run_ids.add(f'{status}-run-query-unavailable')
             continue
-        for page in pages or []:
+        page_values = pages if isinstance(pages, list) else []
+        for page in page_values:
             if isinstance(page, dict):
-                runs.extend(page.get('workflow_runs', []))
+                runs.extend(cast(list[dict[str, Any]], page.get('workflow_runs') or []))
     for index, run in enumerate(runs):
         title = str(run.get('display_title') or run.get('name') or '')
         match = re.search(r'\bFactory\s+(\d+)\b', title)
@@ -261,7 +275,7 @@ def active_fixed_workers() -> tuple[set[int], set[str]]:
             if run_match and worker_match and (run_match.group(1) in numeric_unresolved):
                 workers.add(int(worker_match.group(1)))
                 unresolved_run_ids.discard(run_match.group(1))
-    return workers, unresolved_run_ids
+    return ActiveWorkerResult(workers, unresolved_run_ids)
 
 
 def owned_targets(issues: list[dict[str, Any]] | None=None, prs: list[dict[str, Any]] | None=None) -> list[tuple[int, str]]:
@@ -279,7 +293,11 @@ def owned_targets(issues: list[dict[str, Any]] | None=None, prs: list[dict[str, 
 def reconcile_stale_leases(now_epoch: int | None=None) -> list[int]:
     """Release only leases whose inactivity and age are both provable."""
     now_epoch = int(time.time()) if now_epoch is None else now_epoch
-    active, unresolved_runs = active_fixed_workers()
+    active_result = active_fixed_workers()
+    if isinstance(active_result, tuple):
+        active, unresolved_runs = active_result
+    else:
+        active, unresolved_runs = active_result, set()
     if unresolved_runs:
         print('[factory-controller] retaining fixed leases because active run identity is unresolved: ' + ', '.join(sorted(unresolved_runs)), file=sys.stderr)
     released: list[int] = []
@@ -303,10 +321,10 @@ def assign(worker: str) -> Candidate | None:
     """Assign the highest-ranked executable work to one fixed-model worker."""
     if not re.fullmatch('(?:[6-9]|[1-3][0-9]|4[0-6])', worker):
         raise SystemExit(f'unsupported fixed-model worker: {worker}')
-    reconcile_stale_leases()
     if worker_has_active_lease(worker):
         print(f'[factory-controller] Factory {worker} already has an active lease; skipping dispatch', file=sys.stderr)
         return None
+    reconcile_stale_leases()
     issues = list_issues()
     prs = list_prs()
     try:

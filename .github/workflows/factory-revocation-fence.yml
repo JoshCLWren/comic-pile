@@ -2,14 +2,15 @@ name: Factory Revocation Fence
 
 on:
   pull_request_target:
-    # Factory workers never create draft PRs. Reopened/ready_for_review happen
-    # after the producer-to-reviewer handoff, so only initial queue entry is fenced.
-    types: [opened]
+    types: [opened, reopened, ready_for_review]
 
 permissions:
   contents: read
   issues: write
   pull-requests: write
+
+# Factory branches use the canonical factory/<worker>-<issue>-<suffix> shape;
+# the fence rejects a producer that no longer owns open issue before re-entry.
 
 jobs:
   verify-factory-provenance:

@@ -1,4 +1,9 @@
 import '@testing-library/jest-dom'
+import { vi } from 'vitest'
+
+if (typeof Element.prototype.scrollIntoView !== 'function') {
+  Element.prototype.scrollIntoView = vi.fn()
+}
 
 if (typeof globalThis.IntersectionObserver === 'undefined') {
   class MockIntersectionObserver {

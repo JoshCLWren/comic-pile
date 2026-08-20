@@ -24,6 +24,7 @@ from app.schemas.comicvine_resolution import (
     CanonicalCorrection,
     ComicVineIssueCandidate,
     ComicVineSeriesIssuesResponse,
+    ComicVineSeriesSearchResponse,
     ComicVineSeriesResult,
     IssueIdentityMapping,
     IssueIdentityResponse,
@@ -31,12 +32,13 @@ from app.schemas.comicvine_resolution import (
     MetadataCorrectionsResponse,
     MetadataRefreshResponse,
 )
+from comic_pile.comicvine_provider import ComicVineClient
 
 logger = logging.getLogger(__name__)
 
 
 async def search_comicvine_series(
-    client: "ComicVineClient | None",
+    client: ComicVineClient | None,
     query: str,
     *,
     limit: int = 10,
@@ -111,7 +113,7 @@ async def search_comicvine_series(
 
 
 async def get_comicvine_series_issues(
-    client: "ComicVineClient | None",
+    client: ComicVineClient | None,
     volume_id: int,
     *,
     series_name: str = "",
@@ -174,7 +176,8 @@ async def get_comicvine_series_issues(
         vol_response = await client.fetch_volume(volume_id)
         vol_obj = vol_response.payload.get("results")
         if isinstance(vol_obj, dict):
-            series_name = str(vol_obj.get("name", "")) if isinstance(vol_obj.get("name"), str) else f"Volume {volume_id}"
+            volume_name = vol_obj.get("name")
+            series_name = volume_name if isinstance(volume_name, str) else f"Volume {volume_id}"
         else:
             series_name = f"Volume {volume_id}"
 

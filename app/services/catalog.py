@@ -1,6 +1,8 @@
 """Catalog service layer for shared comic series and issue identities."""
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.external_identities import (
     link_issue_external_identity,
@@ -187,7 +189,7 @@ async def attach_issue_to_thread(
     return mapping
 
 
-async def _validate_mapping_status(status: str) -> None:
+def _validate_mapping_status(status: str) -> None:
     """Validate mapping status before persistence."""
     if status not in MAPPING_STATUSES:
         raise ValueError(f"unsupported mapping status: {status}")
@@ -226,16 +228,13 @@ async def reconcile_unmapped_issues(
         Number of issues reconciled.
     """
     from app.models.issue import Issue
-    from app.models.thread import Thread
-    from sqlalchemy.orm import selectinload
-
     # Find issues that don't have a confirmed mapping yet
     issues_result = await db.execute(
         select(Issue)
         .options(selectinload(Issue.thread))
         .outerjoin(IssueExternalIdentityMapping, IssueExternalIdentityMapping.issue_id == Issue.id)
         .where(
-            (IssueExternalIdentityMapping.external_identity_id.is_(None))  # noqa: E711
+            IssueExternalIdentityMapping.external_identity_id.is_(None)
             | ~IssueExternalIdentityMapping.status.in_(("confirmed",))
         )
         .order_by(Issue.thread_id, Issue.position)
