@@ -43,18 +43,18 @@ export function ReadingContextPillar({
     }
 
     const abortController = new AbortController()
+    let isCurrent = true
     const fetchReaderContext = async () => {
       setReaderContextError(null)
       try {
-        const response = await issuesApi.getReaderContext(issueId)
-        if (!abortController.signal.aborted) {
+        const response = await issuesApi.getReaderContext(issueId, { signal: abortController.signal })
+        if (isCurrent && !abortController.signal.aborted) {
           setReaderContext(response)
         }
       } catch (error) {
-        if (!abortController.signal.aborted) {
+        if (isCurrent && !abortController.signal.aborted) {
           console.error('Failed to fetch reader-context:', error)
           setReaderContextError('Failed to load reading context')
-          setReaderContext(null)
         }
       }
     }
@@ -62,6 +62,7 @@ export function ReadingContextPillar({
     fetchReaderContext()
 
     return () => {
+      isCurrent = false
       abortController.abort()
     }
   }, [activeRatingThread, issueId])
