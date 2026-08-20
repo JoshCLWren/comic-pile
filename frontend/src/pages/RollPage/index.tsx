@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useCallback, useState } from 'react'
+import { useEffect, useMemo, useCallback, useState, useRef } from 'react'
 import type { ChangeEvent, FormEvent, KeyboardEvent } from 'react'
 import LazyDice3D from '../../components/LazyDice3D'
 import Modal from '../../components/Modal'
@@ -73,6 +73,11 @@ export default function RollPage() {
   const { data: bootstrap, refetch: refetchBootstrap, isPending: isBootstrapLoading, isError: isBootstrapError, error: bootstrapError } = useRollBootstrap()
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
   const navigate = useNavigate()
+  const mainDieRef = useRef<HTMLDivElement>(null)
+
+  function scrollToDice() {
+    mainDieRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   useEffect(() => {
     if (isBootstrapError && bootstrapError) {
@@ -549,6 +554,7 @@ setPredictedDie(newPredictedDie);
       setSelectedThreadId(null)
       setActiveRatingThread(null)
       setErrorMessage('')
+      scrollToDice()
     } catch (error: unknown) {
       setErrorMessage(getApiErrorDetail(error))
     }
@@ -563,6 +569,7 @@ setPredictedDie(newPredictedDie);
       setRolledResult(null)
       setSelectedThreadId(null)
       setActiveRatingThread(null)
+      scrollToDice()
     } catch (error: unknown) {
       setErrorMessage(getApiErrorDetail(error))
     }
@@ -791,7 +798,7 @@ setPredictedDie(newPredictedDie);
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 md:w-80 md:h-80 bg-amber-900/15 rounded-full blur-[100px] md:blur-[120px] pointer-events-none"></div>
           <div className="flex-1 flex flex-col">
             {!isRatingView ? (
-              <div id="main-die-3d" onClick={handleRoll} onKeyDown={handleKeyDown} role="button" tabIndex={0} aria-label="Roll the dice"
+              <div id="main-die-3d" ref={mainDieRef} onClick={handleRoll} onKeyDown={handleKeyDown} role="button" tabIndex={0} aria-label="Roll the dice"
                 className={`dice-state-${diceState} relative z-10 cursor-pointer shrink-0 flex items-center justify-center rounded-full transition-all mt-4 md:mt-8 mx-auto active:scale-95`}
                 style={{ width: '200px', height: '200px' }}
                 data-testid="main-die-3d">
@@ -832,6 +839,7 @@ setPredictedDie(newPredictedDie);
                   setSelectedThreadId(null)
                   setActiveRatingThread(null)
                   setErrorMessage('')
+                  scrollToDice()
                 }}
               />
             )}
