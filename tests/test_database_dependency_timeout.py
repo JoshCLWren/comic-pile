@@ -12,6 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app import database
 
 
+@pytest.fixture(autouse=True)
+def _reset_database_circuit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep process-local circuit state isolated between tests."""
+    monkeypatch.setattr(database, "_database_circuit_open_until", 0.0)
+
+
 class _FakeSessionContext:
     """Minimal async context manager used to exercise the dependency boundary."""
 
