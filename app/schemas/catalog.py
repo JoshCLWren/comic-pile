@@ -64,9 +64,23 @@ class ThreadSeriesAttachResponse(BaseModel):
 class IssueAttachRequest(BaseModel):
     """Schema for attaching an issue to a thread."""
 
+    issue_id: int = Field(..., description="Internal ComicPile issue ID to attach the external identity to")
+    provider: str = Field(..., min_length=1, description="External provider name (e.g., comicvine, cbl)")
+    entity_type: str = Field(..., min_length=1, description="Entity type: 'series' or 'issue'")
+    external_id: str = Field(..., min_length=1, description="Provider-specific identifier")
+    external_url: str | None = Field(default=None, description="Optional URL to the external resource")
+    metadata_json: dict = Field(default=dict, description="Optional arbitrary metadata from the provider")
     status: str = Field(..., min_length=1, description="Mapping status: unresolved, candidate, confirmed, rejected")
     evidence_source: str | None = Field(default=None, description="Optional source of the evidence")
     confidence: float | None = Field(default=None, ge=0, le=1, description="Optional confidence score (0-1)")
+
+    @root_validator
+    def validate_entity_type(self, values: dict) -> dict:
+        """Validate that entity_type is either 'issue' or 'series'."""
+        entity_type = values.get("entity_type", "")
+        if entity_type not in {"issue", "series"}:
+            raise ValueError(f"unsupported entity_type: {entity_type}")
+        return values
 
 
 class IssueAttachResponse(BaseModel):

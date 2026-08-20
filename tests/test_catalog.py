@@ -1,11 +1,11 @@
 """Focused contract tests for the shared comic catalog API."""
 
-from datetime import UTC, datetime
+from sqlalchemy import select, func
 
 import pytest
-from fastapi import status
 from httpx import AsyncClient
 
+from app.external_identities import upsert_external_identity, link_thread_external_series, link_issue_external_identity
 from app.models import Issue, Thread, User
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping, ThreadExternalSeriesMapping
 from app.schemas.catalog import (
@@ -262,7 +262,7 @@ async def test_list_issue_mappings(async_db: AsyncSession) -> None:
     assert mappings[0].status == "confirmed"
 
 
-def _owned_issue(
+async def _owned_issue(
     db: AsyncSession,
     *,
     username: str,

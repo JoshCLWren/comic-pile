@@ -1,12 +1,12 @@
 """Catalog service layer for shared comic series and issue identities."""
 
-from datetime import datetime, UTC
-
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.external_identities import link_issue_external_identity, link_thread_external_series
+from app.external_identities import (
+    link_issue_external_identity,
+    link_thread_external_series,
+    upsert_external_identity,
+)
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping, ThreadExternalSeriesMapping
 
 
@@ -38,44 +38,14 @@ async def upsert_catalog_series(
     Returns:
         The created or existing external identity.
     """
-    normalized_provider = provider.strip().lower()
-    normalized_entity_type = entity_type.strip().lower()
-    normalized_external_id = external_id.strip()
-    if not normalized_provider or not normalized_external_id:
-        raise ValueError("provider and external_id are required")
-    if normalized_entity_type not in {"issue", "series"}:
-        raise ValueError(f"unsupported entity_type: {entity_type}")
-
-    identity_query = select(ExternalIdentity).where(
-        ExternalIdentity.provider == normalized_provider,
-        ExternalIdentity.entity_type == normalized_entity_type,
-        ExternalIdentity.external_id == normalized_external_id,
+    return await upsert_external_identity(
+        db,
+        provider=provider,
+        entity_type=entity_type,
+        external_id=external_id,
+        external_url=external_url,
+        metadata_json=metadata_json,
     )
-    identity = (await db.execute(identity_query)).scalar_one_or_none()
-    if identity is None:
-        try:
-            async with db.begin_nested():
-                identity = ExternalIdentity(
-                    provider=normalized_provider,
-                    entity_type=normalized_entity_type,
-                    external_id=normalized_external_id,
-                    external_url=external_url,
-                    metadata_json=metadata_json or {},
-                    provider_updated_at=datetime.now(UTC).replace(tzinfo=None) if metadata_json else None,
-                )
-                db.add(identity)
-                await db.flush()
-        except IntegrityError:
-            identity = (await db.execute(identity_query)).scalar_one()
-        else:
-            return identity
-
-    if metadata_json is not None:
-        identity.metadata_json = metadata_json
-    if external_url is not None:
-        identity.external_url = external_url
-    await db.flush()
-    return identity
 
 
 async def upsert_catalog_issue(
@@ -164,7 +134,12 @@ async def attach_issue_to_thread(
     *,
     user_id: int,
     thread_id: int,
-    issue_external_id: str,
+    issue_id: int,
+    provider: str,
+    entity_type: str,
+    external_id: str,
+    external_url: str | None = None,
+    metadata_json: dict[str, object] | None = None,
     status: str,
     evidence_source: str | None = None,
     confidence: float | None = None,
@@ -175,7 +150,12 @@ async def attach_issue_to_thread(
         db: Async database session.
         user_id: Owner user ID for authorization.
         thread_id: Thread to associate with the issue.
-        issue_external_id: The external issue identity external_id (e.g., ComicVine issue ID).
+        issue_id: Internal ComicPile issue ID to attach the external identity to.
+        provider: External provider name.
+        entity_type: Entity type ("issue" or "series").
+        external_id: Provider-specific identifier.
+        external_url: Optional URL to the external resource.
+        metadata_json: Optional arbitrary metadata from the provider.
         status: Mapping status (unresolved, candidate, confirmed, rejected).
         evidence_source: Optional source of the evidence.
         confidence: Optional confidence score (0-1).
@@ -186,17 +166,19 @@ async def attach_issue_to_thread(
     _validate_mapping_status(status)
 
     # First, upsert the issue identity if not already present
-    identity = await upsert_catalog_issue(
+    identity = await upsert_external_identity(
         db,
-        provider="comicvine",
-        entity_type="issue",
-        external_id=issue_external_id,
+        provider=provider,
+        entity_type=entity_type,
+        external_id=external_id,
+        external_url=external_url,
+        metadata_json=metadata_json,
     )
 
     mapping = await link_issue_external_identity(
         db,
         user_id=user_id,
-        issue_id=None,
+        issue_id=issue_id,
         external_identity_id=identity.id,
         status=status,
         evidence_source=evidence_source,
@@ -244,13 +226,18 @@ async def reconcile_unmapped_issues(
         Number of issues reconciled.
     """
     from app.models.issue import Issue
+    from app.models.thread import Thread
+    from sqlalchemy.orm import selectinload
 
     # Find issues that don't have a confirmed mapping yet
     issues_result = await db.execute(
         select(Issue)
+        .options(selectinload(Issue.thread))
         .outerjoin(IssueExternalIdentityMapping, IssueExternalIdentityMapping.issue_id == Issue.id)
-        .where(IssueExternalIdentityMapping.external_identity_id == None  # noqa: E711
-               | ~IssueExternalIdentityMapping.status.in_(("confirmed",)))
+        .where(
+            (IssueExternalIdentityMapping.external_identity_id.is_(None))  # noqa: E711
+            | ~IssueExternalIdentityMapping.status.in_(("confirmed",))
+        )
         .order_by(Issue.thread_id, Issue.position)
     )
     issues = issues_result.scalars().unique().all()

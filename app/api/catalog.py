@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.external_identities import upsert_external_identity, link_thread_external_series, link_issue_external_identity
+from app.external_identities import upsert_external_identity
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping, ThreadExternalSeriesMapping
 from app.models.user import User
 from app.schemas.catalog import (
@@ -23,6 +23,12 @@ from app.schemas.catalog import (
     IssueExternalIdentityMappingResponse,
 )
 from app.auth import get_current_user
+
+
+def _dt_to_ts(dt) -> float | None:
+    """Convert datetime to Unix timestamp."""
+    return dt.timestamp() if dt is not None else None
+
 
 router = APIRouter(prefix="/api/v1", tags=["catalog"])
 
@@ -65,9 +71,9 @@ async def search_catalog_series(
             external_id=identity.external_id,
             external_url=identity.external_url,
             metadata_json=identity.metadata_json,
-            provider_updated_at=identity.provider_updated_at,
-            created_at=identity.created_at,
-            updated_at=identity.updated_at,
+            provider_updated_at=_dt_to_ts(identity.provider_updated_at),
+            created_at=_dt_to_ts(identity.created_at),
+            updated_at=_dt_to_ts(identity.updated_at),
         )
         for identity in identities
     ]
@@ -126,9 +132,9 @@ async def search_catalog_issues(
             external_id=identity.external_id,
             external_url=identity.external_url,
             metadata_json=identity.metadata_json,
-            provider_updated_at=identity.provider_updated_at,
-            created_at=identity.created_at,
-            updated_at=identity.updated_at,
+            provider_updated_at=_dt_to_ts(identity.provider_updated_at),
+            created_at=_dt_to_ts(identity.created_at),
+            updated_at=_dt_to_ts(identity.updated_at),
         )
         for identity in identities
     ]
@@ -173,9 +179,9 @@ async def upsert_catalog_series(
         external_id=identity.external_id,
         external_url=identity.external_url,
         metadata_json=identity.metadata_json,
-        provider_updated_at=identity.provider_updated_at,
-        created_at=identity.created_at,
-        updated_at=identity.updated_at,
+        provider_updated_at=_dt_to_ts(identity.provider_updated_at),
+        created_at=_dt_to_ts(identity.created_at),
+        updated_at=_dt_to_ts(identity.updated_at),
     )
 
 
@@ -216,9 +222,9 @@ async def upsert_catalog_issue(
         external_id=identity.external_id,
         external_url=identity.external_url,
         metadata_json=identity.metadata_json,
-        provider_updated_at=identity.provider_updated_at,
-        created_at=identity.created_at,
-        updated_at=identity.updated_at,
+        provider_updated_at=_dt_to_ts(identity.provider_updated_at),
+        created_at=_dt_to_ts(identity.created_at),
+        updated_at=_dt_to_ts(identity.updated_at),
     )
 
 
@@ -270,19 +276,19 @@ async def attach_series_to_thread(
         status=mapping.status,
         evidence_source=mapping.evidence_source,
         confidence=mapping.confidence,
-        created_at=mapping.created_at,
-        updated_at=mapping.updated_at,
+        created_at=_dt_to_ts(mapping.created_at),
+        updated_at=_dt_to_ts(mapping.updated_at),
     )
 
 
 @router.post(
-    "/threads/{thread_id}/issues/{issue_external_id}/attach",
+    "/threads/{thread_id}/issues/{issue_id}/attach-external",
     response_model=IssueAttachResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def attach_issue_to_thread(
     thread_id: int,
-    issue_external_id: str,
+    issue_id: int,
     request: IssueAttachRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -291,28 +297,26 @@ async def attach_issue_to_thread(
 
     Args:
         thread_id: The thread to associate with the issue.
-        issue_external_id: The external issue identity external_id (e.g., ComicVine issue ID).
-        request: Attachment request with status and optional evidence/confidence.
+        issue_id: The internal ComicPile issue ID to attach the external identity to.
+        request: Attachment request with external identity details and mapping status.
         current_user: Authenticated user for authorization.
         db: Database session.
 
     Returns:
         The created or updated issue-external identity mapping.
     """
-    identity = await upsert_external_identity(
-        db,
-        provider=request.provider,
-        entity_type=request.entity_type,
-        external_id=issue_external_id,
-        external_url=request.external_url,
-        metadata_json=request.metadata_json,
-    )
+    from app.services.catalog import attach_issue_to_thread as attach_issue_service
 
-    mapping = await link_issue_external_identity(
+    mapping = await attach_issue_service(
         db,
         user_id=current_user.id,
-        issue_id=None,
-        external_identity_id=identity.id,
+        thread_id=thread_id,
+        issue_id=issue_id,
+        provider=request.provider,
+        entity_type=request.entity_type,
+        external_id=request.external_id,
+        external_url=request.external_url,
+        metadata_json=request.metadata_json,
         status=request.status,
         evidence_source=request.evidence_source,
         confidence=request.confidence,
@@ -326,8 +330,8 @@ async def attach_issue_to_thread(
         evidence_source=mapping.evidence_source,
         confidence=mapping.confidence,
         rejection_reason=mapping.rejection_reason,
-        created_at=mapping.created_at,
-        updated_at=mapping.updated_at,
+        created_at=_dt_to_ts(mapping.created_at),
+        updated_at=_dt_to_ts(mapping.updated_at),
     )
 
 
@@ -370,8 +374,8 @@ async def list_series_mappings(
             status=mapping.status,
             evidence_source=mapping.evidence_source,
             confidence=mapping.confidence,
-            created_at=mapping.created_at,
-            updated_at=mapping.updated_at,
+            created_at=_dt_to_ts(mapping.created_at),
+            updated_at=_dt_to_ts(mapping.updated_at),
         )
         for mapping in mappings
     ]
@@ -417,8 +421,8 @@ async def list_issue_mappings(
             evidence_source=mapping.evidence_source,
             confidence=mapping.confidence,
             rejection_reason=mapping.rejection_reason,
-            created_at=mapping.created_at,
-            updated_at=mapping.updated_at,
+            created_at=_dt_to_ts(mapping.created_at),
+            updated_at=_dt_to_ts(mapping.updated_at),
         )
         for mapping in mappings
     ]
