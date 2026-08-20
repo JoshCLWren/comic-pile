@@ -1,19 +1,21 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { invalidateAfterQueueMovement } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import { queueApi, threadsApi } from '../services/api'
 import { getApiErrorDetail } from '../utils/apiError'
-import type { MoveToPositionPayload, QueueSortBy } from '../pages/QueuePage/useQueueFilters'
+import type { MoveToPositionPayload, Thread, ThreadListResponse } from '../types'
+import type { QueueSortBy } from '../pages/QueuePage/useQueueFilters'
 import type { QueueSort } from '../query/queryKeys'
-import type { Thread, ThreadListResponse } from '../types'
 
 /** Bounded initial page size for Queue. The cursor (`next_page_token`) drives
  * every subsequent page, so later pages never need an explicit page_size. */
 export const QUEUE_PAGE_SIZE = 50
 
-function toApiSort(sort: QueueSortBy): QueueSort {
+type ApiSort = 'position' | 'title' | 'created'
+
+function toApiSort(sort: QueueSortBy): ApiSort {
   // The backend cursor contract uses `title` for the alphabetical order.
   return sort === 'alphabetical' ? 'title' : sort
 }
@@ -35,7 +37,7 @@ export function useQueueThreads(searchTerm?: string, sort: QueueSortBy = 'positi
   const apiSort = toApiSort(sort)
 
   const query = useInfiniteQuery({
-    queryKey: queryKeys.queue.list({ search: normalizedSearch, sort: sortBy, pageSize: QUEUE_PAGE_SIZE }),
+    queryKey: queryKeys.queue.list({ search: normalizedSearch, sort: sort as QueueSort, pageSize: QUEUE_PAGE_SIZE }),
     queryFn: ({ pageParam }) =>
       threadsApi.list(
         {
@@ -60,14 +62,14 @@ export function useQueueThreads(searchTerm?: string, sort: QueueSortBy = 'positi
   const nextPageToken = query.hasNextPage ? (lastPage?.next_page_token ?? null) : null
 
   const refetch = useCallback((): Promise<void> => {
-    return query.refetch() as Promise<void>
+    return query.refetch().then(() => undefined)
   }, [query])
 
   const loadMore = useCallback((): Promise<void> => {
     if (!query.hasNextPage || query.isFetchingNextPage) {
       return Promise.resolve()
     }
-    return query.fetchNextPage() as Promise<void>
+    return query.fetchNextPage().then(() => undefined)
   }, [query])
 
   return { data, isPending, isError, refetch, nextPageToken, loadMore }

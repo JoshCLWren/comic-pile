@@ -130,8 +130,8 @@ describe('useQueueThreads (bounded incremental loader)', () => {
       await result.current.loadMore()
     })
 
+    await waitFor(() => expect(result.current.data).toHaveLength(2))
     expect(mockedThreadsApi.list).toHaveBeenCalledTimes(2)
-    expect(result.current.data).toHaveLength(2)
     expect(result.current.nextPageToken).toBeNull()
   })
 
