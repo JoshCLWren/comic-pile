@@ -83,23 +83,16 @@ def linked_issue_number(pr: dict[str, Any]) -> int | None:
     return int(match.group("issue")) if match else None
 
 
-def linked_issue_lease_status(pr: dict[str, Any]) -> tuple[str, str | None] | None:
-    """Return a blocking linked-issue lease state, if one exists."""
+def linked_issue_active_owner(pr: dict[str, Any]) -> str | None:
+    """Return an active linked-issue lease that would make promotion race a worker."""
     issue_number = linked_issue_number(pr)
     if issue_number is None:
-        return "linked-issue-indeterminate", None
+        return None
 
     issue = cast(dict[str, Any], review_controller.target_json(issue_number))
     if str(issue.get("state") or "").upper() != "OPEN":
         return None
-
-    labels = review_controller.labels_of(issue)
-    owner = active_factory_owner(labels)
-    if owner is not None:
-        return "linked-issue-owned", owner
-    if "factory:unowned" not in labels:
-        return "linked-issue-owner-indeterminate", None
-    return None
+    return active_factory_owner(review_controller.labels_of(issue))
 
 
 def exact_head_is_authorized(pr_number: int, pr: dict[str, Any]) -> bool:
@@ -138,13 +131,14 @@ def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
     if "factory:unowned" not in labels:
         return {"pr": pr_number, "status": "owner-indeterminate", "head": head}
 
-    linked_lease = linked_issue_lease_status(pr)
-    if linked_lease is not None:
-        status, linked_owner = linked_lease
-        result: dict[str, Any] = {"pr": pr_number, "status": status, "head": head}
-        if linked_owner is not None:
-            result["owner"] = linked_owner
-        return result
+    linked_owner = linked_issue_active_owner(pr)
+    if linked_owner is not None:
+        return {
+            "pr": pr_number,
+            "status": "linked-issue-owned",
+            "owner": linked_owner,
+            "head": head,
+        }
 
     if not review_controller.HEAD_RE.fullmatch(head):
         return {"pr": pr_number, "status": "head-indeterminate", "head": head}
