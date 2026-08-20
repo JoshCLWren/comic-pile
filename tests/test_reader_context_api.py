@@ -673,11 +673,11 @@ async def test_reader_context_no_synchronous_provider_dependency(
         raise AssertionError("ComicVine provider was hydrated synchronously")
 
     monkeypatch.setattr(
-        "app.services.comicvine_intelligence.schedule_issue_metadata_hydration",
+        "app.services.comicvine_intelligence.refresh_issue_metadata",
         _unexpected_call,
     )
     monkeypatch.setattr(
-        "app.services.comicvine_fallback.schedule_issue_metadata_hydration",
+        "app.services.comicvine_fallback.refresh_issue_metadata",
         _unexpected_call,
     )
 

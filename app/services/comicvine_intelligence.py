@@ -20,7 +20,7 @@ from app.schemas.comicvine import (
 )
 from app.services.comicvine_fallback import (
     metadata_needs_hydration,
-    schedule_issue_metadata_hydration,
+    refresh_issue_metadata,
 )
 
 COMICVINE_PROVIDER = "comicvine"
@@ -216,8 +216,10 @@ async def get_issue_intelligence(
 ) -> ComicVineIssueIntelligence | None:
     """Build curated metadata and explicit story-arc relationships for one issue.
 
-    Missing or stale metadata is refreshed asynchronously from the confirmed issue-level ComicVine
-    identity. The current database-backed result is always returned without waiting on ComicVine.
+    Missing or stale metadata is hydrated inline for a bounded best-effort window before the
+    response is built, so Vercel/serverless never needs to keep a detached background task alive
+    after the request. When hydration succeeds, the freshly persisted provider metadata is served;
+    when it is skipped, rate-limited, or fails, the current database-backed result is returned.
 
     Args:
         db: Async database session.
@@ -233,9 +235,10 @@ async def get_issue_intelligence(
 
     if metadata_needs_hydration(identity):
         try:
-            schedule_issue_metadata_hydration(identity.id)
-        except RuntimeError as e:
+            await refresh_issue_metadata(identity.id)
+        except Exception as e:
             logger.warning(f"Hydration failed: {str(e).lower()} (issue_id={identity.id})")
+        await db.refresh(identity)
 
     metadata = identity.metadata_json
     arc_refs = _arc_references(metadata)
