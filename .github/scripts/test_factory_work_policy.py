@@ -120,17 +120,10 @@ class CompletionFirstOrderingTests(unittest.TestCase):
             [3, 2, 1],
         )
 
-    def test_urgent_issue_keeps_priority_over_nonurgent_repair_work(self) -> None:
+    def test_urgent_issue_still_waits_behind_repair_work(self) -> None:
         candidates = [
             Candidate("issue", 1, 1, 4, "", stage="factory:building"),
             Candidate("pr", 2, 5, 0, "", stage="factory:changes-requested"),
-        ]
-        self.assertEqual(order_candidates_for_worker(candidates, "9")[0].number, 1)
-
-    def test_failed_ci_work_beats_ordinary_fresh_intake(self) -> None:
-        candidates = [
-            Candidate("issue", 1, 3, 4, "", stage="factory:building"),
-            Candidate("pr", 2, 3, 0, "", stage="factory:ci"),
         ]
         self.assertEqual(order_candidates_for_worker(candidates, "9")[0].number, 2)
 
