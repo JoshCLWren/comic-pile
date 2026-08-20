@@ -6,7 +6,7 @@ import Tooltip from '../../components/Tooltip'
 import MigrationDialog from '../../components/MigrationDialog'
 import SimpleMigrationDialog from '../../components/SimpleMigrationDialog'
 import { useNavigate } from 'react-router-dom'
-import { DICE_LADDER } from '../../components/diceLadder'
+import { DICE_LADDER, RATING_THRESHOLD } from '../../components/diceLadder'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import {
@@ -174,11 +174,18 @@ export default function RollPage() {
     if (result !== null) setRolledResult(result)
     setActiveRatingThread(ratingThread)
 
-    setRating(3.0)
-    setErrorMessage('')
-    const die = currentDie || 6
-    const idx = DICE_LADDER.indexOf(die)
-    setPredictedDie(idx > 0 ? DICE_LADDER[idx - 1] : DICE_LADDER[0])
+setRating(3.0)
+  setErrorMessage('')
+  const die = currentDie || 6
+  const idx = DICE_LADDER.indexOf(die)
+  const ratingNum = 3.0
+  let newPredictedDie
+  if (ratingNum >= RATING_THRESHOLD) {
+    newPredictedDie = idx > 0 ? DICE_LADDER[idx - 1] : DICE_LADDER[0]
+  } else {
+    newPredictedDie = idx < DICE_LADDER.length - 1 ? DICE_LADDER[idx + 1] : DICE_LADDER[DICE_LADDER.length - 1]
+  }
+  setPredictedDie(newPredictedDie)
     setIsRatingView(true)
     suppressPendingAutoOpenRef.current = false
 
@@ -441,7 +448,8 @@ export default function RollPage() {
       setErrorMessage('')
       const die = currentDie || 6
       const idx = DICE_LADDER.indexOf(die)
-      setPredictedDie(idx > 0 ? DICE_LADDER[idx - 1] : DICE_LADDER[0])
+let newPredictedDie = idx > 0 ? DICE_LADDER[idx - 1] : DICE_LADDER[0];
+setPredictedDie(newPredictedDie);
       setIsRatingView(true)
     }
     setIsActionSheetOpen(false)
