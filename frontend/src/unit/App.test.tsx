@@ -9,21 +9,19 @@ const mockSetAccessToken = vi.fn()
 const mockClearAccessToken = vi.fn()
 const mockGetAccessToken = vi.fn<() => string | null>(() => 'test-token')
 
+const unauthenticatedError = () => Object.assign(new Error('unauthenticated'), {
+  isAxiosError: true,
+  response: { status: 401 },
+})
+
 vi.mock('../services/api', () => {
   return {
     default: {
       get: (...args: Parameters<typeof mockApiGet>) => mockApiGet(...args),
-<<<<<<< HEAD
-      post: Object.assign(new Error('unauthenticated'), {
-        isAxiosError: true,
-        response: { status: 401 },
-      }),
-=======
       post: vi.fn().mockRejectedValue(Object.assign(new Error('unauthenticated'), {
         isAxiosError: true,
         response: { status: 401 },
       })),
->>>>>>> origin/main
       put: vi.fn(),
       delete: vi.fn(),
       interceptors: {
