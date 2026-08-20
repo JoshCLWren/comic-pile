@@ -22,6 +22,14 @@ vi.mock('../pages/RollPage/components/ComicVineIssueCard', () => ({
 vi.mock('../pages/RollPage/components/ReadingRouteExplanation', () => ({
   ReadingRouteExplanation: () => null,
 }))
+vi.mock('../hooks/useReaderContext', () => ({
+  useReaderContext: () => ({
+    context: null,
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+}))
 
 function ratingView(overrides: Record<string, unknown> = {}) {
   const defaults = {
