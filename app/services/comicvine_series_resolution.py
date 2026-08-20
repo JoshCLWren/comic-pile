@@ -131,7 +131,6 @@ def _build_identity_from_volume_row(
 
 
 async def _resolve_issue_from_series(
-    db: AsyncSession,
     client: ComicVineClient,
     series_identity: ExternalIdentity,
     issue_label: str | None,
@@ -258,7 +257,7 @@ async def _run_series_resolution(issue_id: int, user_id: int) -> None:
 
         try:
             identities = await _resolve_issue_from_series(
-                db, client, series_identity, issue.issue_number
+                client, series_identity, issue.issue_number
             )
         except ComicVineRateLimitError:
             logger.warning(
@@ -330,7 +329,8 @@ async def _run_series_resolution(issue_id: int, user_id: int) -> None:
             return
 
         mapping_id = mapping.id
-        comicvine_issue_id = _comicvine_issue_id(persisted.external_id)
+        persisted_external_id = persisted.external_id
+        comicvine_issue_id = _comicvine_issue_id(persisted_external_id)
         if comicvine_issue_id is not None:
             try:
                 await hydrate_issue(db, client, comicvine_issue_id, refresh=True)
@@ -356,32 +356,46 @@ async def _run_series_resolution(issue_id: int, user_id: int) -> None:
             "comicvine_series_resolution_completed issue_id=%s external_id=%s "
             "confidence=%s provider_count=%s",
             issue_id,
-            persisted.external_id,
+            persisted_external_id,
             confidence,
             len(identities),
         )
 
 
-def schedule_series_issue_resolution(
+async def schedule_series_issue_resolution(
     db: AsyncSession, issue_id: int, user_id: int
 ) -> bool:
     """Schedule at most one background resolution for an unmapped issue.
 
-    The resolution runs asynchronously and does not block the caller.  In-process
-    deduplication prevents fan-out from parallel requests for the same issue; a
-    PostgreSQL advisory transaction lock provides cross-process safety.
+    The resolution runs asynchronously and does not block the caller.  A fast
+    database pre-check avoids spawning a background task when the issue already
+    has a confirmed mapping or lacks a confirmed thread-series mapping (so no
+    deterministic resolution is possible).  In-process deduplication prevents
+    fan-out from parallel requests for the same issue; a PostgreSQL advisory
+    transaction lock provides cross-process safety.
 
     Args:
-        db: Async database session (used for fast pre-check only).
+        db: Async database session used for the fast pre-check.
         issue_id: ComicPile issue identifier.
         user_id: Owner user ID for authorization.
 
     Returns:
         True when a new background task was scheduled, False when one is already
-        pending or the issue is already confirmed.
+        pending or the issue is already confirmed / cannot be resolved.
     """
     pending = _pending_resolutions.get(issue_id)
     if pending is not None and not pending.done():
+        return False
+
+    existing = await _find_existing_mapping(db, issue_id)
+    if existing is not None and existing.status == "confirmed":
+        return False
+
+    issue = await db.get(Issue, issue_id)
+    if issue is None:
+        return False
+    series_identity = await _confirmed_series_identity(db, issue.thread_id)
+    if series_identity is None:
         return False
 
     task = asyncio.create_task(

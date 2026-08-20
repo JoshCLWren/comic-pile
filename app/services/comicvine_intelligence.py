@@ -230,7 +230,7 @@ async def get_issue_intelligence(
     """
     identity = await _confirmed_identity(db, issue_id)
     if identity is None:
-        schedule_series_issue_resolution(db, issue_id, user_id)
+        await schedule_series_issue_resolution(db, issue_id, user_id)
         return None
 
     if metadata_needs_hydration(identity):
