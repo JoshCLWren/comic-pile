@@ -343,7 +343,7 @@ async def _run_series_resolution(issue_id: int, user_id: int) -> None:
                     mapping_id,
                     type(exc).__name__,
                 )
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.info(
                     "comicvine_series_resolution_hydration_failed "
                     "issue_id=%s mapping_id=%s error=%s",
