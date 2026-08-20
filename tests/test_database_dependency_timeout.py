@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException, status
+from sqlalchemy import exc as sqlalchemy_exc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import database
@@ -27,6 +28,7 @@ class _FakeSessionContext:
         traceback: object,
     ) -> None:
         del exc_type, exc, traceback
+        await self._session.close()
 
 
 @pytest.mark.asyncio
@@ -82,3 +84,64 @@ async def test_database_connection_probe_is_bounded(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(database, "DATABASE_DEPENDENCY_TIMEOUT_SECONDS", 0.01)
 
     assert await database.test_database_connection() is False
+
+
+@pytest.mark.asyncio
+async def test_get_db_retries_acquisition_before_yield(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A transient acquisition failure opens a fresh session within the budget."""
+    first_session = AsyncMock(spec=AsyncSession)
+    first_session.connection.side_effect = sqlalchemy_exc.TimeoutError("waking")
+    recovered_session = AsyncMock(spec=AsyncSession)
+    sessions = iter((first_session, recovered_session))
+
+    monkeypatch.setattr(
+        database,
+        "AsyncSessionLocal",
+        lambda: _FakeSessionContext(next(sessions)),
+    )
+    monkeypatch.setattr(database, "DATABASE_DEPENDENCY_TIMEOUT_SECONDS", 1.0)
+    monkeypatch.setattr(database, "DATABASE_RETRY_BACKOFF_SECONDS", 0.0)
+    monkeypatch.setattr(database, "_database_circuit_open_until", 0.0)
+
+    dependency: AsyncIterator[AsyncSession] = database.get_db()
+    assert await anext(dependency) is recovered_session
+    with pytest.raises(StopAsyncIteration):
+        await anext(dependency)
+
+    first_session.connection.assert_awaited_once()
+    first_session.close.assert_awaited_once()
+    recovered_session.connection.assert_awaited_once()
+    recovered_session.close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_get_db_sustained_failure_is_bounded_and_opens_circuit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Exhaustion retries finitely, then the local circuit rejects another request."""
+    sessions: list[AsyncMock] = []
+
+    def session_factory() -> _FakeSessionContext:
+        session = AsyncMock(spec=AsyncSession)
+        session.connection.side_effect = sqlalchemy_exc.TimeoutError("offline")
+        sessions.append(session)
+        return _FakeSessionContext(session)
+
+    monkeypatch.setattr(database, "AsyncSessionLocal", session_factory)
+    monkeypatch.setattr(database, "DATABASE_DEPENDENCY_TIMEOUT_SECONDS", 1.0)
+    monkeypatch.setattr(database, "DATABASE_ACQUISITION_ATTEMPTS", 2)
+    monkeypatch.setattr(database, "DATABASE_RETRY_BACKOFF_SECONDS", 0.0)
+    monkeypatch.setattr(database, "DATABASE_CIRCUIT_COOLDOWN_SECONDS", 10.0)
+    monkeypatch.setattr(database, "_database_circuit_open_until", 0.0)
+
+    with pytest.raises(HTTPException) as first_error:
+        await anext(database.get_db())
+    assert first_error.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert len(sessions) == 2
+
+    with pytest.raises(HTTPException) as circuit_error:
+        await anext(database.get_db())
+    assert circuit_error.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert len(sessions) == 2
