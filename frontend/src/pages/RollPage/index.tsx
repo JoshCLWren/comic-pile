@@ -990,8 +990,23 @@ export default function RollPage() {
                   setSetCurrentIssueIsPending(true)
                   setSetCurrentIssueError(null)
                   try {
-                    await issuesApi.setCurrentIssue(setCurrentIssueThreadId, setCurrentIssueValue.trim())
-                    // Close modal and refetch bootstrap to update the UI
+                    const corrected = await issuesApi.setCurrentIssue(
+                      setCurrentIssueThreadId,
+                      setCurrentIssueValue.trim(),
+                    )
+                    if (activeRatingThread?.id === corrected.thread_id) {
+                      setActiveRatingThread({
+                        ...activeRatingThread,
+                        issues_remaining: corrected.issues_remaining,
+                        queue_position: corrected.queue_position,
+                        issue_id: corrected.issue_id,
+                        issue_number: corrected.issue_number,
+                        next_issue_id: corrected.next_issue_id,
+                        next_issue_number: corrected.next_issue_number,
+                        total_issues: corrected.total_issues,
+                        reading_progress: corrected.reading_progress,
+                      })
+                    }
                     setIsSetCurrentIssueModalOpen(false)
                     await refetchBootstrap()
                   } catch (error) {
