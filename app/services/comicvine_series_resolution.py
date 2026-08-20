@@ -301,13 +301,6 @@ async def _run_series_resolution(issue_id: int, user_id: int) -> None:
                 return
 
         confidence = 1.0 if len(identities) == 1 else 0.55
-        evidence = {
-            "resolved_at": datetime.now(UTC).isoformat(),
-            "series_external_id": series_identity.external_id,
-            "issue_number": issue.issue_number,
-            "provider_match_count": len(identities),
-            "volume_id": _volume_id(identity.metadata_json),
-        }
         try:
             mapping = await link_issue_external_identity(
                 db,
