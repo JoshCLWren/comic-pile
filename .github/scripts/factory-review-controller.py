@@ -294,11 +294,72 @@ def interpret_required_checks(
     return gate_result("pass", "all required checks are successful")
 
 
+def _parse_checks_text_output(text: str) -> list[dict[str, str]]:
+    """Parse tab-separated output from `gh pr checks --required` (no --json flag)."""
+    checks: list[dict[str, str]] = []
+    for line in text.strip().splitlines():
+        if not line.strip():
+            continue
+        parts = line.split("\t")
+        if len(parts) >= 4:
+            checks.append({
+                "name": parts[0].strip(),
+                "status": parts[1].strip(),
+                "url": parts[2].strip(),
+                "conclusion": parts[3].strip(),
+            })
+    return checks
+
+
+def _conclusion_to_state(conclusion: str) -> str:
+    """Map gh pr checks text conclusion to the JSON state equivalent."""
+    conclusion_upper = conclusion.upper()
+    mapping = {
+        "SUCCESS": "SUCCESS",
+        "SKIPPED": "SKIPPED",
+        "NEUTRAL": "NEUTRAL",
+        "FAILURE": "FAILURE",
+        "ERROR": "ERROR",
+        "CANCELLED": "CANCELLED",
+        "TIMED_OUT": "TIMED_OUT",
+        "ACTION_REQUIRED": "ACTION_REQUIRED",
+        "PENDING": "PENDING",
+        "QUEUED": "QUEUED",
+        "WAITING": "WAITING",
+        "IN_PROGRESS": "IN_PROGRESS",
+        "STARTUP_FAILURE": "STARTUP_FAILURE",
+        "STALE": "STALE",
+        "REQUESTED": "REQUESTED",
+    }
+    return mapping.get(conclusion_upper, conclusion_upper)
+
+
 def required_checks_gate(pr_number: int) -> GateResult:
     proc = run_gh(
         ["pr", "checks", str(pr_number), "--repo", REPO, "--required", "--json", "state"],
         check=False,
     )
+
+    if proc.returncode == 0 and proc.stdout.strip():
+        try:
+            checks = json.loads(proc.stdout)
+            return interpret_required_checks(checks, command_status=proc.returncode, stderr=proc.stderr)
+        except json.JSONDecodeError:
+            pass
+
+    if "unknown flag: --json" in proc.stderr:
+        text_proc = run_gh(
+            ["pr", "checks", str(pr_number), "--repo", REPO, "--required"],
+            check=False,
+        )
+        if text_proc.returncode == 0 and text_proc.stdout.strip():
+            raw_checks = _parse_checks_text_output(text_proc.stdout)
+            checks = [{"state": _conclusion_to_state(c.get("conclusion", ""))} for c in raw_checks]
+            return interpret_required_checks(checks, command_status=0, stderr="")
+        if NO_REQUIRED_CHECKS_RE.search(text_proc.stderr) or NO_REQUIRED_CHECKS_RE.search(text_proc.stdout):
+            return gate_result("pass", "no required checks configured or reported")
+        return gate_result("retry", f"required checks could not be determined: {text_proc.stderr.strip()}")
+
     checks: object | None = None
     if proc.stdout.strip():
         try:

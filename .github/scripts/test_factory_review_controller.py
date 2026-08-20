@@ -167,6 +167,117 @@ def test_workflows_delegate_mechanical_gates_to_controller():
         assert '--json state,isDraft,mergeable,headRefOid' not in text
 
 
+def test_parse_checks_text_output_success():
+    controller = load_controller()
+    text = "ci/test\tsuccess\thttps://example.com\tSuccess\nbuild\tpending\thttps://example.com\tPending\n"
+    checks = controller._parse_checks_text_output(text)
+    assert len(checks) == 2
+    assert checks[0]["name"] == "ci/test"
+    assert checks[0]["conclusion"] == "Success"
+    assert checks[1]["name"] == "build"
+    assert checks[1]["conclusion"] == "Pending"
+
+
+def test_parse_checks_text_output_empty():
+    controller = load_controller()
+    assert controller._parse_checks_text_output("") == []
+    assert controller._parse_checks_text_output("  \n  ") == []
+
+
+def test_parse_checks_text_output_single_column_skipped():
+    controller = load_controller()
+    text = "ci/test\tsuccess\thttps://example.com\n"
+    checks = controller._parse_checks_text_output(text)
+    assert len(checks) == 0
+
+
+def test_conclusion_to_state_mapping():
+    controller = load_controller()
+    assert controller._conclusion_to_state("Success") == "SUCCESS"
+    assert controller._conclusion_to_state("failure") == "FAILURE"
+    assert controller._conclusion_to_state("skipped") == "SKIPPED"
+    assert controller._conclusion_to_state("pending") == "PENDING"
+    assert controller._conclusion_to_state("cancelled") == "CANCELLED"
+    assert controller._conclusion_to_state("timed_out") == "TIMED_OUT"
+    assert controller._conclusion_to_state("unknown_conclusion") == "UNKNOWN_CONCLUSION"
+
+
+def test_required_checks_gate_json_fallback(monkeypatch):
+    controller = load_controller()
+    gh_calls = []
+
+    def mock_run_gh(args, **kwargs):
+        gh_calls.append(args)
+        if "--json" in args:
+            return subprocess.CompletedProcess(
+                args=args,
+                returncode=1,
+                stdout="",
+                stderr="unknown flag: --json\n",
+            )
+        return subprocess.CompletedProcess(
+            args=args,
+            returncode=0,
+            stdout="ci/test\tsuccess\thttps://example.com\tSuccess\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(controller, "run_gh", mock_run_gh)
+    result = controller.required_checks_gate(123)
+    assert result["decision"] == "pass"
+    assert len(gh_calls) == 2
+    assert "--json" in gh_calls[0]
+    assert "--json" not in gh_calls[1]
+
+
+def test_required_checks_gate_json_fallback_no_checks(monkeypatch):
+    controller = load_controller()
+
+    def mock_run_gh(args, **kwargs):
+        if "--json" in args:
+            return subprocess.CompletedProcess(
+                args=args,
+                returncode=1,
+                stdout="",
+                stderr="unknown flag: --json\n",
+            )
+        return subprocess.CompletedProcess(
+            args=args,
+            returncode=0,
+            stdout="",
+            stderr="no required checks reported for this branch\n",
+        )
+
+    monkeypatch.setattr(controller, "run_gh", mock_run_gh)
+    result = controller.required_checks_gate(123)
+    assert result["decision"] == "pass"
+    assert "no required checks" in result["reason"]
+
+
+def test_required_checks_gate_json_fallback_failure(monkeypatch):
+    controller = load_controller()
+
+    def mock_run_gh(args, **kwargs):
+        if "--json" in args:
+            return subprocess.CompletedProcess(
+                args=args,
+                returncode=1,
+                stdout="",
+                stderr="unknown flag: --json\n",
+            )
+        return subprocess.CompletedProcess(
+            args=args,
+            returncode=0,
+            stdout="ci/test\tcompleted\thttps://example.com\tFailure\nbuild\tcompleted\thttps://example.com\tSuccess\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(controller, "run_gh", mock_run_gh)
+    result = controller.required_checks_gate(123)
+    assert result["decision"] == "deny"
+    assert "FAILURE" in result["reason"]
+
+
 def test_paused_schedule_blocks_remain_commented():
     root = SCRIPT_DIR.parent / "workflows"
     drain = (root / "factory-ready-merge-drain.yml").read_text()
