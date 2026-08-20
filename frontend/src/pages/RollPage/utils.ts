@@ -1,7 +1,22 @@
 import type { SessionThread } from '../../types'
+import { DICE_LADDER } from '../../components/diceLadder'
 import type { RatingThread, ThreadMetadata } from './types'
 
 export const RATING_THRESHOLD = 4.0
+
+export function getPredictedDie(currentDie: number, rating: number): number {
+  const die = currentDie || 6
+  const ladderIndex = DICE_LADDER.indexOf(die)
+  const index = ladderIndex >= 0 ? ladderIndex : DICE_LADDER.indexOf(6)
+
+  if (rating >= RATING_THRESHOLD) {
+    return index > 0 ? DICE_LADDER[index - 1] : DICE_LADDER[0]
+  }
+
+  return index < DICE_LADDER.length - 1
+    ? DICE_LADDER[index + 1]
+    : DICE_LADDER[DICE_LADDER.length - 1]
+}
 
 export function mapSessionThreadToRatingThread(thread: SessionThread): RatingThread {
   return {
