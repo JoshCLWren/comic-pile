@@ -1,58 +1,74 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback } from 'react'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { invalidateAfterQueueMovement } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
+import { queryKeys } from '../query/queryKeys'
 import { queueApi, threadsApi } from '../services/api'
 import { getApiErrorDetail } from '../utils/apiError'
-import type { MoveToPositionPayload, Thread, ThreadListResponse, ThreadQueryParams } from '../types'
+import type { MoveToPositionPayload, QueueSortBy } from '../pages/QueuePage/useQueueFilters'
+import type { QueueSort } from '../query/queryKeys'
+import type { Thread, ThreadListResponse } from '../types'
 
-export function useQueueThreads(searchTerm?: string) {
-  const [data, setData] = useState<Thread[] | null>(null)
-  const [isPending, setIsPending] = useState(true)
-  const [isError, setIsError] = useState(false)
-  const [nextPageToken, setNextPageToken] = useState<string | null>(null)
+/** Bounded initial page size for Queue. The cursor (`next_page_token`) drives
+ * every subsequent page, so later pages never need an explicit page_size. */
+export const QUEUE_PAGE_SIZE = 50
 
-  const fetchData = useCallback(async (pageToken?: string) => {
-    setIsPending(true)
-    setIsError(false)
+function toApiSort(sort: QueueSortBy): QueueSort {
+  // The backend cursor contract uses `title` for the alphabetical order.
+  return sort === 'alphabetical' ? 'title' : sort
+}
 
-    try {
-      const baseParams: ThreadQueryParams = {}
-      if (searchTerm?.trim()) {
-        baseParams.search = searchTerm.trim()
-      }
-      // Bounded initial load: fetch only the first page (default page_size=50)
-      if (!pageToken) {
-        baseParams.page_size = 50
-      }
+/**
+ * Bounded, incremental Queue loader built on TanStack Query's infinite query
+ * and the canonical `queue.pages` query key.
+ *
+ * The first navigation requests exactly one bounded page. Later pages are
+ * appended only through `loadMore` (driven by the `next_page_token` cursor),
+ * never by automatic traversal. Changing `searchTerm` or `sort` changes the
+ * query key, which resets the loader to the first compatible page.
+ *
+ * @param searchTerm - Retained search filter; empty string means no filter.
+ * @param sort - Retained sort order; drives the server-side deterministic cursor.
+ */
+export function useQueueThreads(searchTerm?: string, sort: QueueSortBy = 'position') {
+  const normalizedSearch = searchTerm?.trim() || undefined
+  const apiSort = toApiSort(sort)
 
-      const result: ThreadListResponse = await threadsApi.list(
-        Object.keys(baseParams).length > 0 ? baseParams : undefined,
-        pageToken
-      )
+  const query = useInfiniteQuery({
+    queryKey: queryKeys.queue.list({ search: normalizedSearch, sort: sortBy, pageSize: QUEUE_PAGE_SIZE }),
+    queryFn: ({ pageParam }) =>
+      threadsApi.list(
+        {
+          ...(normalizedSearch ? { search: normalizedSearch } : {}),
+          sort: apiSort,
+          ...(pageParam ? {} : { page_size: QUEUE_PAGE_SIZE }),
+        },
+        pageParam ?? undefined,
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage: ThreadListResponse) => lastPage.next_page_token ?? undefined,
+    retry: false,
+  })
 
-      setData(prev => pageToken ? [...(prev ?? []), ...result.threads] : result.threads)
-      setNextPageToken(result.next_page_token)
-    } catch (error) {
-      setIsError(true)
-      throw error
-    } finally {
-      setIsPending(false)
+  const data = query.data?.pages.flatMap((page) => page.threads) ?? null
+  // Initial load OR an in-flight next-page append both keep already-rendered
+  // rows visible: `isPending` drives the full-screen loader only before any
+  // data exists, while `isFetchingNextPage` drives the inline loading indicator.
+  const isPending = query.isPending || query.isFetchingNextPage
+  const isError = query.isError
+  const lastPage = query.data?.pages.at(-1)
+  const nextPageToken = query.hasNextPage ? (lastPage?.next_page_token ?? null) : null
+
+  const refetch = useCallback((): Promise<void> => {
+    return query.refetch() as Promise<void>
+  }, [query])
+
+  const loadMore = useCallback((): Promise<void> => {
+    if (!query.hasNextPage || query.isFetchingNextPage) {
+      return Promise.resolve()
     }
-  }, [searchTerm])
-
-  useEffect(() => {
-    void fetchData().catch(() => undefined)
-  }, [fetchData])
-
-  const refetch = useCallback((pageToken?: string): Promise<void> => {
-    return fetchData(pageToken)
-  }, [fetchData])
-
-  const loadMore = useCallback(async () => {
-    if (nextPageToken && !isPending) {
-      await fetchData(nextPageToken)
-    }
-  }, [nextPageToken, isPending, fetchData])
+    return query.fetchNextPage() as Promise<void>
+  }, [query])
 
   return { data, isPending, isError, refetch, nextPageToken, loadMore }
 }

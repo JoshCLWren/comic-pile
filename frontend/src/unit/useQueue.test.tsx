@@ -1,9 +1,12 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
+import type { PropsWithChildren } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useQueueThreads, useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
 import { invalidateAfterQueueMovement } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 import { queueApi, threadsApi } from '../services/api'
+import type { QueueSortBy } from '../pages/QueuePage/useQueueFilters'
 
 vi.mock('../services/api', () => ({
   queueApi: {
@@ -25,6 +28,15 @@ const mockedQueueApi = vi.mocked(queueApi)
 const mockedThreadsApi = vi.mocked(threadsApi)
 const mockedInvalidateAfterQueueMovement = vi.mocked(invalidateAfterQueueMovement)
 
+function createWrapper() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
+  return function Wrapper({ children }: PropsWithChildren) {
+    return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   mockedQueueApi.moveToPosition.mockResolvedValue(undefined as never)
@@ -35,12 +47,14 @@ beforeEach(() => {
   mockedThreadsApi.list.mockResolvedValue({ threads: [], next_page_token: null })
 })
 
-describe('useQueueThreads', () => {
-  it('fetches threads on mount with default page_size', async () => {
-    const { result } = renderHook(() => useQueueThreads())
+describe('useQueueThreads (bounded incremental loader)', () => {
+  it('fetches exactly one bounded page on mount', async () => {
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useQueueThreads(), { wrapper })
 
     await waitFor(() => expect(result.current.isPending).toBe(false))
 
+    expect(mockedThreadsApi.list).toHaveBeenCalledTimes(1)
     expect(mockedThreadsApi.list).toHaveBeenCalledWith(
       expect.objectContaining({ page_size: 50 }),
       undefined,
@@ -49,61 +63,66 @@ describe('useQueueThreads', () => {
     expect(result.current.nextPageToken).toBeNull()
   })
 
-  it('passes search term when provided', async () => {
+  it('passes search and default sort on the initial page', async () => {
     mockedThreadsApi.list.mockResolvedValue({
       threads: [{ id: 1, title: 'Bat' } as never],
       next_page_token: null,
     })
 
-    const { result } = renderHook(() => useQueueThreads('bat'))
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useQueueThreads('bat'), { wrapper })
 
     await waitFor(() => expect(result.current.isPending).toBe(false))
 
     expect(mockedThreadsApi.list).toHaveBeenCalledWith(
-      expect.objectContaining({ search: 'bat', page_size: 50 }),
+      expect.objectContaining({ search: 'bat', sort: 'position', page_size: 50 }),
       undefined,
     )
     expect(result.current.data).toHaveLength(1)
   })
 
-  it('does not include page_size when pageToken is supplied', async () => {
-    const { result } = renderHook(() => useQueueThreads())
+  it('maps the alphabetical UI sort to the title API sort', async () => {
+    mockedThreadsApi.list.mockResolvedValue({ threads: [], next_page_token: null })
+
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useQueueThreads('', 'alphabetical' as QueueSortBy), { wrapper })
 
     await waitFor(() => expect(result.current.isPending).toBe(false))
 
-    mockedThreadsApi.list.mockResolvedValue({
-      threads: [{ id: 2 } as never],
-      next_page_token: null,
-    })
+    expect(mockedThreadsApi.list).toHaveBeenCalledWith(
+      expect.objectContaining({ sort: 'title' }),
+      undefined,
+    )
+  })
+
+  it('does not include page_size when fetching a later cursor page', async () => {
+    mockedThreadsApi.list
+      .mockResolvedValueOnce({ threads: [{ id: 1 } as never], next_page_token: 'tok-2' })
+      .mockResolvedValueOnce({ threads: [{ id: 2 } as never], next_page_token: null })
+
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useQueueThreads(), { wrapper })
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
 
     await act(async () => {
-      await result.current.refetch('next-page')
+      await result.current.loadMore()
     })
 
-    expect(mockedThreadsApi.list).toHaveBeenLastCalledWith(undefined, 'next-page')
+    expect(mockedThreadsApi.list).toHaveBeenCalledTimes(2)
+    expect(mockedThreadsApi.list).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({ page_size: expect.anything() }),
+      'tok-2',
+    )
   })
 
-  it('sets error state when API call fails', async () => {
-    mockedThreadsApi.list.mockRejectedValueOnce(new Error('network'))
-
-    const { result } = renderHook(() => useQueueThreads())
-
-    await waitFor(() => expect(result.current.isError).toBe(true))
-    expect(result.current.isPending).toBe(false)
-  })
-
-  it('loadMore fetches next page when token exists', async () => {
+  it('appends later pages without duplicating rows', async () => {
     mockedThreadsApi.list
-      .mockResolvedValueOnce({
-        threads: [{ id: 1 } as never],
-        next_page_token: 'tok-2',
-      })
-      .mockResolvedValueOnce({
-        threads: [{ id: 2 } as never],
-        next_page_token: null,
-      })
+      .mockResolvedValueOnce({ threads: [{ id: 1 } as never], next_page_token: 'tok-2' })
+      .mockResolvedValueOnce({ threads: [{ id: 2 } as never], next_page_token: null })
 
-    const { result } = renderHook(() => useQueueThreads())
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useQueueThreads(), { wrapper })
 
     await waitFor(() => expect(result.current.isPending).toBe(false))
 
@@ -113,10 +132,14 @@ describe('useQueueThreads', () => {
 
     expect(mockedThreadsApi.list).toHaveBeenCalledTimes(2)
     expect(result.current.data).toHaveLength(2)
+    expect(result.current.nextPageToken).toBeNull()
   })
 
-  it('loadMore is no-op when no next page token', async () => {
-    const { result } = renderHook(() => useQueueThreads())
+  it('loadMore is a no-op when there is no next page', async () => {
+    mockedThreadsApi.list.mockResolvedValue({ threads: [{ id: 1 } as never], next_page_token: null })
+
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useQueueThreads(), { wrapper })
 
     await waitFor(() => expect(result.current.isPending).toBe(false))
 
@@ -124,6 +147,90 @@ describe('useQueueThreads', () => {
       await result.current.loadMore()
     })
 
+    expect(mockedThreadsApi.list).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports no next page token at the end of the list', async () => {
+    mockedThreadsApi.list.mockResolvedValue({ threads: [{ id: 1 } as never], next_page_token: null })
+
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useQueueThreads(), { wrapper })
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+
+    expect(result.current.nextPageToken).toBeNull()
+    expect(result.current.data).toHaveLength(1)
+  })
+
+  it('sets the error state when the initial request fails', async () => {
+    mockedThreadsApi.list.mockRejectedValueOnce(new Error('network'))
+
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useQueueThreads(), { wrapper })
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(result.current.isPending).toBe(false)
+  })
+
+  it('surfaces an incremental-load error without discarding loaded pages', async () => {
+    mockedThreadsApi.list
+      .mockResolvedValueOnce({ threads: [{ id: 1 } as never], next_page_token: 'tok-2' })
+      .mockRejectedValueOnce(new Error('next page unavailable'))
+
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useQueueThreads(), { wrapper })
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+
+    await act(async () => {
+      await result.current.loadMore()
+    })
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(result.current.data).toHaveLength(1)
+    expect(result.current.nextPageToken).toBe('tok-2')
+  })
+
+  it('resets to the first compatible page when search changes', async () => {
+    const wrapper = createWrapper()
+    const { result, rerender } = renderHook(({ search }: { search: string }) => useQueueThreads(search), {
+      wrapper,
+      initialProps: { search: '' },
+    })
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+    expect(mockedThreadsApi.list).toHaveBeenCalledTimes(1)
+
+    mockedThreadsApi.list.mockClear()
+    rerender({ search: 'bat' })
+
+    await waitFor(() =>
+      expect(mockedThreadsApi.list).toHaveBeenCalledWith(
+        expect.objectContaining({ search: 'bat' }),
+        undefined,
+      ),
+    )
+    expect(mockedThreadsApi.list).toHaveBeenCalledTimes(1)
+  })
+
+  it('resets and re-requests the first page when sort changes', async () => {
+    const wrapper = createWrapper()
+    const { result, rerender } = renderHook(
+      ({ sort }: { sort: QueueSortBy }) => useQueueThreads('', sort),
+      { wrapper, initialProps: { sort: 'position' as QueueSortBy } },
+    )
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+    mockedThreadsApi.list.mockClear()
+
+    rerender({ sort: 'created' as QueueSortBy })
+
+    await waitFor(() =>
+      expect(mockedThreadsApi.list).toHaveBeenCalledWith(
+        expect.objectContaining({ sort: 'created' }),
+        undefined,
+      ),
+    )
     expect(mockedThreadsApi.list).toHaveBeenCalledTimes(1)
   })
 })
