@@ -51,7 +51,15 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
-    """Reconcile one local mirror revision through the deployed ComicPile API."""
+    """Reconcile one local mirror revision through the deployed ComicPile API.
+
+    Args:
+        None.
+
+    Returns:
+        Process exit status. Returns 0 after a successful or skipped synchronization,
+        1 when parsing failures occur, and 2 for invalid local configuration.
+    """
     args = _parser().parse_args()
     if not args.mirror_path.is_dir():
         print(json.dumps({"error": "mirror_path_not_directory"}), file=sys.stderr)
