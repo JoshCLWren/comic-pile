@@ -71,6 +71,7 @@ export interface AuthTokens {
 
 export interface ThreadQueryParams {
   search?: string;
+  sort?: 'position' | 'title' | 'created';
   page_size?: number;
   page_token?: string;
 }
