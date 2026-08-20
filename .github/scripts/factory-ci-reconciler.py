@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import re
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -121,9 +120,17 @@ def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
             "factory:unowned",
             "factory:review",
         )
-        return {"pr": pr_number, "status": "review", "head": head, "reason": "exact-head semantic approval is missing or stale"}
+        return {
+            "pr": pr_number,
+            "status": "review",
+            "head": head,
+            "reason": "exact-head semantic approval is missing or stale",
+        }
 
-    gate = cast(dict[str, str], review_controller.mechanical_merge_gate(pr_number, head))
+    gate = cast(
+        dict[str, str],
+        review_controller.mechanical_merge_gate(pr_number, head),
+    )
     decision = str(gate.get("decision") or "retry")
     reason = str(gate.get("reason") or "mechanical gate result unavailable")
 
@@ -139,7 +146,12 @@ def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
         return {"pr": pr_number, "status": "ci", "head": head, "reason": reason}
 
     if decision == "deny" and reason.startswith(FAILED_CHECKS_PREFIX):
-        return {"pr": pr_number, "status": "failed-ci", "head": head, "reason": reason}
+        return {
+            "pr": pr_number,
+            "status": "failed-ci",
+            "head": head,
+            "reason": reason,
+        }
 
     if decision == "deny" and reason in REPAIR_DENY_REASONS:
         review_controller.replace_factory_labels(
@@ -147,7 +159,12 @@ def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
             "factory:unowned",
             "factory:changes-requested",
         )
-        return {"pr": pr_number, "status": "changes-requested", "head": head, "reason": reason}
+        return {
+            "pr": pr_number,
+            "status": "changes-requested",
+            "head": head,
+            "reason": reason,
+        }
 
     if decision == "deny" and reason in REVIEW_DENY_REASONS:
         review_controller.replace_factory_labels(
