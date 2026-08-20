@@ -15,6 +15,7 @@ vi.mock('../services/api', () => ({
   getAccessToken: () => mockGetAccessToken(),
   setAccessToken: (...args: Parameters<typeof mockSetAccessToken>) => mockSetAccessToken(...args),
   clearAccessToken: (...args: Parameters<typeof mockClearAccessToken>) => mockClearAccessToken(...args),
+  readStoredAccessToken: vi.fn(() => null),
 }))
 
 import { AuthProvider, useAuth } from '../App'

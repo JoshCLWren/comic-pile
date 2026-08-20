@@ -30,7 +30,6 @@ export function ReadingContextPillar({
   const [isRouteExplanationOpen, setIsRouteExplanationOpen] = useState(false)
   const [readerContext, setReaderContext] = useState<ReaderContextResponse | null>(null)
   const [readerContextError, setReaderContextError] = useState<string | null>(null)
-  const [isLoadingReaderContext, setIsLoadingReaderContext] = useState(false)
   const threadTitle = activeRatingThread?.title ?? 'Loading…'
   const issueNumber = activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number ?? null
   const issueId = activeRatingThread?.issue_id ?? activeRatingThread?.next_issue_id
@@ -45,7 +44,6 @@ export function ReadingContextPillar({
 
     const abortController = new AbortController()
     const fetchReaderContext = async () => {
-      setIsLoadingReaderContext(true)
       setReaderContextError(null)
       try {
         const response = await issuesApi.getReaderContext(issueId)
@@ -57,10 +55,6 @@ export function ReadingContextPillar({
           console.error('Failed to fetch reader-context:', error)
           setReaderContextError('Failed to load reading context')
           setReaderContext(null)
-        }
-      } finally {
-        if (!abortController.signal.aborted) {
-          setIsLoadingReaderContext(false)
         }
       }
     }
@@ -116,7 +110,7 @@ export function ReadingContextPillar({
           </div>
           
           <div className="space-y-2">
-            {readerContext.local_chain.issues.map((issue, index) => {
+            {readerContext.local_chain.issues.map((issue, _index) => {
               const isCurrent = issue.relation === 'current'
               return (
                 <div key={issue.issue_id} className={`flex items-center gap-3 ${isCurrent ? 'border-l-2 border-l-solid border-l-[var(--theme-continuity-accent)]' : ''} `}>
@@ -328,6 +322,29 @@ export function ReadingContextPillar({
                 </article>
               )
             })}
+          </div>
+        </section>
+      ) : null}
+
+      {/* Continuity correction affordance */}
+      {connectedThreads.length > 0 && activeRatingThread ? (
+        <section aria-labelledby="correction-heading" className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <h3 id="correction-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
+              Continuity Correction
+            </h3>
+            <button
+              type="button"
+              onClick={() => setIsContinuityDialogOpen(true)}
+              className="min-h-11 rounded-lg px-3 text-[10px] font-black transition"
+              style={{
+                border: '1px solid rgba(6,182,212,0.4)',
+                backgroundColor: 'rgba(6, 182, 212, 0.09)',
+                color: 'var(--theme-continuity-accent)',
+              }}
+            >
+              Correct continuity
+            </button>
           </div>
         </section>
       ) : null}

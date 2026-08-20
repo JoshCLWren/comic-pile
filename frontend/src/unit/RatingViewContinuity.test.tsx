@@ -138,10 +138,10 @@ describe('RatingView continuity correction', () => {
     expect(screen.queryByTestId('continuity-correction-dialog')).not.toBeInTheDocument()
   })
 
-  it('does not open the dialog when no active thread exists', async () => {
-    const user = userEvent.setup()
+  it('does not render the Correct continuity button when no active thread exists', () => {
     renderRatingView({ activeRatingThread: null })
-    await user.click(screen.getByRole('button', { name: /correct continuity/i }))
-    expect(screen.queryByTestId('continuity-correction-dialog')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /correct continuity/i }),
+    ).not.toBeInTheDocument()
   })
 })

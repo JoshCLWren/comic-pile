@@ -115,7 +115,7 @@ describe('RatingView', () => {
     const onUpdateRating = vi.fn(); const onSubmitRating = vi.fn(); const onSnooze = vi.fn(); const onCancel = vi.fn(); const onRefreshThread = vi.fn()
     const user = userEvent.setup()
     render(<RatingView activeRatingThread={{ ...thread, id: 1, issue_number: '2', next_issue_number: '3', reading_progress: 'in_progress' } as never} currentDie={20} rolledResult={19} rating={5} predictedDie={6} hasValidRolledResult poolSize={6} errorMessage="Problem" rateIsPending={false} snoozeIsPending={false} dismissIsPending={false} readingOrders={[]} connectedThreads={[{ thread_id: 2, title: 'Other', connection_type: 'blocks', dependency_id: 1 }]} onUpdateRating={onUpdateRating} onSubmitRating={onSubmitRating} onSnooze={onSnooze} onCancel={onCancel} onRefreshThread={onRefreshThread} />)
-    expect(screen.getByText(/Rolled 19 on d20/)).toBeInTheDocument()
+    expect(screen.getAllByText(/Rolled 19 on d20/)).toHaveLength(2)
     expect(screen.getByText(/6 eligible/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /correct issue number/i }))
     await user.click(screen.getByRole('button', { name: /close correction/i }))
@@ -193,8 +193,8 @@ describe('RatingView', () => {
     expect(callbacks.onSubmitRating).toHaveBeenCalledWith(false)
   })
 
-  it('pluralizes connected threads and renders separators for multiple links', () => {
-    // L135 `connectedThreads.length !== 1 ? 's' : ''` and L139 `i > 0 && ', '`
+  it('renders continuity correction button when connected threads exist', () => {
+    // connectedThreads are no longer displayed as a list; they are used for the correction workflow
     render(<RatingView
       activeRatingThread={{ ...thread, issue_number: '2', issues_remaining: 1 } as never}
       currentDie={6}
@@ -218,9 +218,6 @@ describe('RatingView', () => {
       onCancel={vi.fn()}
       onRefreshThread={vi.fn()}
     />)
-    // L135 `connectedThreads.length !== 1 ? 's' : ''` is evaluated when building the Tooltip content prop;
-    // L139 `i > 0 && ', '` renders the separator between the two connected thread titles.
-    expect(screen.getByText('Alpha')).toBeInTheDocument()
-    expect(screen.getByText('Beta')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /correct continuity/i })).toBeInTheDocument()
   })
 })
