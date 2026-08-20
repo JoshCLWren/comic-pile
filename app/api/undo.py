@@ -396,6 +396,24 @@ async def undo_to_snapshot(
             else:
                 await _restore_from_full_snapshot(db, session, snapshot, session_id)
 
+            # Counter-only snapshots predate issue tracking. Their restored
+            # state has no issue identity, so rate events from the undone
+            # session must not retain foreign keys to issues just removed.
+            counter_thread_ids = [
+                int(thread_id)
+                for thread_id, state in (snapshot.thread_states or {}).items()
+                if isinstance(state, dict)
+                and USES_ISSUE_TRACKING_KEY in state
+                and not state[USES_ISSUE_TRACKING_KEY]
+            ]
+            if counter_thread_ids:
+                await db.execute(
+                    update(Event)
+                    .where(Event.session_id == session_id)
+                    .where(Event.thread_id.in_(counter_thread_ids))
+                    .values(issue_id=None)
+                )
+
             await _record_undo_event(db, snapshot, session_id)
             if is_delta:
                 await db.delete(snapshot)
@@ -451,6 +469,10 @@ async def undo_to_snapshot(
             if pre_active_event and pre_active_event.selected_thread_id:
                 pre_thread = await db.get(Thread, pre_active_event.selected_thread_id)
                 if pre_thread is not None:
+                    # Refresh identity-mapped state before reading it. An earlier
+                    # commit may have expired this instance, and implicit lazy
+                    # loads are not safe from an async endpoint.
+                    await db.refresh(pre_thread)
                     pre_active_info = ActiveThreadInfo(
                         id=pre_thread.id,
                         title=pre_thread.title,

@@ -101,6 +101,7 @@ async def build_session_response(
                 format=thread.format,
                 issues_remaining=thread.issues_remaining,
                 queue_position=thread.queue_position,
+                last_rolled_result=None,
             )
 
     if snapshot_count is None:
@@ -204,9 +205,7 @@ async def snooze_thread(
     events_result = await db.execute(
         select(Event)
         .where(Event.session_id == current_session_id)
-        .where(
-            Event.type.in_(("rate", "snooze", "undo", "roll"))
-        )
+        .where(Event.type.in_(("rate", "snooze", "undo", "roll")))
         .order_by(Event.timestamp.desc(), Event.id.desc())
     )
     all_events = events_result.scalars().all()
@@ -225,7 +224,8 @@ async def snooze_thread(
 
     # Ladder path: build from pre-fetched events instead of re-querying.
     die_events = [
-        evt for evt in reversed(all_events)
+        evt
+        for evt in reversed(all_events)
         if evt.type in ("rate", "snooze", "undo") and evt.die_after is not None
     ]
     ladder_path = str(current_session.start_die)
@@ -347,9 +347,7 @@ async def unsnooze_thread(
     )
     db.add(event)
 
-    pre_ladder_path = await build_ladder_path(
-        current_session.id, db, session=current_session
-    )
+    pre_ladder_path = await build_ladder_path(current_session.id, db, session=current_session)
     result = await db.execute(
         select(func.count()).select_from(Snapshot).where(Snapshot.session_id == current_session.id)
     )

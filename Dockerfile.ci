@@ -20,6 +20,8 @@ RUN apt-get update -qq && \
         curl \
         git \
         gpg \
+        gh \
+        jq \
         postgresql-client \
         tar \
         ripgrep \
@@ -43,7 +45,7 @@ RUN python -m venv .venv && \
 # Stage 3: Python dependencies.
 FROM python-env AS python-deps
 COPY pyproject.toml ./
-RUN uv sync --locked --all-extras
+RUN uv sync --locked --all-extras --no-install-project
 
 # Stage 4: Playwright.
 FROM python-deps AS playwright-env
@@ -68,8 +70,5 @@ RUN .venv/bin/python -c "import sys; assert sys.version_info[:2] == (3, 14), sys
     mkdir -p /opt/ci-assets/static
 COPY --from=frontend-build /workspace/static/react /opt/ci-assets/static/react
 COPY --from=frontend-build /workspace/static/react /workspace/static/react
-COPY app/ app/
-COPY comic_pile/ comic_pile/
-COPY pyproject.toml ./
 ENV PATH="/workspace/.venv/bin:$PATH"
 CMD ["/bin/bash"]

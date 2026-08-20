@@ -24,6 +24,8 @@ from app.api import (
     analytics,
     auth,
     bug_report,
+    catalog,
+    comicvine_resolution,
     debug,
     dependency,
     issue,
@@ -234,6 +236,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     if app_settings.environment != "production":
         app.include_router(debug.router, prefix="/api", tags=["debug"])
     app.include_router(issue.router, tags=["issues"])
+    app.include_router(comicvine_resolution.router, tags=["comicvine-resolution"])
     app.include_router(rate.router, prefix="/api/rate", tags=["rate"])
     app.include_router(rate.router, prefix="/api/v1/rate", tags=["rate"])
     app.include_router(queue.router, prefix="/api/queue", tags=["queue"])

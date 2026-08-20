@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import LazyDice3D from '../../components/LazyDice3D'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
@@ -49,6 +49,10 @@ export default function RollPage() {
     error: bootstrapError,
   } = useRollBootstrap()
 
+  const scrollToDice = useCallback(() => {
+    mainDieRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
+
   const setDieMutation = useSetDie()
   const clearManualDieMutation = useClearManualDie()
   const rollMutation = useRoll()
@@ -61,14 +65,6 @@ export default function RollPage() {
   const shuffleQueueMutation = useShuffleQueue()
   const rateMutation = useRate()
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
-
-  function scrollToDice() {
-    // The die is unmounted while the rating view is open, so defer the scroll
-    // until the idle stage re-renders and the die is restored.
-    setTimeout(() => {
-      mainDieRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }, 0)
-  }
 
   useRollBootstrapSync({
     state,

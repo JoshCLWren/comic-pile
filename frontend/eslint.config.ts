@@ -52,6 +52,7 @@ export default [
   {
     files: ['src/test/**/*.{ts,tsx}'],
     rules: {
+      'max-lines': ['error', { max: 1600, skipBlankLines: true, skipComments: true }],
       'react-hooks/rules-of-hooks': 'off',
       'react-hooks/exhaustive-deps': 'off',
     },

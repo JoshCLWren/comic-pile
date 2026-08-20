@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, it, expect, vi } from 'vitest'
+import { ToastProvider } from '../contexts/ToastProvider'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 
 // Mock heavy components
@@ -19,34 +20,36 @@ const callbacks = {
 function renderRatingView({ currentDie, rating, predictedDie }: { currentDie: number; rating: number; predictedDie: number }) {
   return render(
     <MemoryRouter>
-      <RatingView
-        activeRatingThread={{
-          id: 1,
-          title: 'Test',
-          format: 'Comic',
-          issues_remaining: 3,
-          total_issues: 10,
-          reading_progress: 'in_progress',
-          issue_id: null,
-          issue_number: '1',
-          next_issue_id: null,
-          next_issue_number: null,
-          last_rolled_result: null,
-        } as any}
-        currentDie={currentDie}
-        rolledResult={null}
-        rating={rating}
-        predictedDie={predictedDie}
-        hasValidRolledResult={false}
-        poolSize={0}
-        errorMessage=""
-        rateIsPending={false}
-        snoozeIsPending={false}
-        dismissIsPending={false}
-        readingOrders={[]}
-        connectedThreads={[]}
-        {...callbacks}
-      />
+      <ToastProvider>
+        <RatingView
+          activeRatingThread={{
+            id: 1,
+            title: 'Test',
+            format: 'Comic',
+            issues_remaining: 3,
+            total_issues: 10,
+            reading_progress: 'in_progress',
+            issue_id: null,
+            issue_number: '1',
+            next_issue_id: null,
+            next_issue_number: null,
+            last_rolled_result: null,
+          } as any}
+          currentDie={currentDie}
+          rolledResult={null}
+          rating={rating}
+          predictedDie={predictedDie}
+          hasValidRolledResult={false}
+          poolSize={0}
+          errorMessage=""
+          rateIsPending={false}
+          snoozeIsPending={false}
+          dismissIsPending={false}
+          readingOrders={[]}
+          connectedThreads={[]}
+          {...callbacks}
+        />
+      </ToastProvider>
     </MemoryRouter>
   )
 }

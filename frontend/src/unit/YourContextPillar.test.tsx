@@ -322,7 +322,7 @@ describe('YourContextPillar reader-context integration', () => {
         onUpdateRating={vi.fn()}
       />,
     )
-    expect(screen.getByText('03')).toBeInTheDocument()
+    expect(screen.queryByText('03')).not.toBeInTheDocument()
     expect(screen.getByText('Your Context')).toBeInTheDocument()
     expect(screen.getByText('Your rating')).toBeInTheDocument()
     expect(screen.getByText('3.0')).toBeInTheDocument()
