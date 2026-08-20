@@ -12,6 +12,14 @@ vi.mock('../components/IssueCorrectionDialog', () => ({ default: ({ isOpen, onCl
 vi.mock('../hooks/useRollBootstrap', () => ({
   useRollBootstrap: () => ({ data: null, isPending: false, isError: false, error: null }),
 }))
+vi.mock('../hooks/useReaderContext', () => ({
+  useReaderContext: () => ({
+    context: null,
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+}))
 
 const thread = { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 5, total_issues: 10, next_unread_issue_number: '3' } as Thread
 const callbacks = () => ({

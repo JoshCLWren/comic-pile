@@ -25,6 +25,15 @@ vi.mock('../hooks/useRollBootstrap', () => ({
   }),
 }))
 
+vi.mock('../hooks/useReaderContext', () => ({
+  useReaderContext: () => ({
+    context: null,
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+}))
+
 const callbacks = {
   onUpdateRating: vi.fn(),
   onSubmitRating: vi.fn(),
