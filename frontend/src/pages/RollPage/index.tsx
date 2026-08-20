@@ -74,10 +74,18 @@ export default function RollPage() {
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
   const navigate = useNavigate()
   const mainDieRef = useRef<HTMLDivElement>(null)
+  const wasRatingViewRef = useRef(isRatingView)
 
-  function scrollToDice() {
+  const scrollToDice = useCallback(() => {
     mainDieRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
+  }, [])
+
+  useEffect(() => {
+    if (wasRatingViewRef.current && !isRatingView) {
+      scrollToDice()
+    }
+    wasRatingViewRef.current = isRatingView
+  }, [isRatingView, scrollToDice])
 
   useEffect(() => {
     if (isBootstrapError && bootstrapError) {
@@ -554,7 +562,6 @@ setPredictedDie(newPredictedDie);
       setSelectedThreadId(null)
       setActiveRatingThread(null)
       setErrorMessage('')
-      scrollToDice()
     } catch (error: unknown) {
       setErrorMessage(getApiErrorDetail(error))
     }
@@ -569,7 +576,6 @@ setPredictedDie(newPredictedDie);
       setRolledResult(null)
       setSelectedThreadId(null)
       setActiveRatingThread(null)
-      scrollToDice()
     } catch (error: unknown) {
       setErrorMessage(getApiErrorDetail(error))
     }
@@ -839,7 +845,6 @@ setPredictedDie(newPredictedDie);
                   setSelectedThreadId(null)
                   setActiveRatingThread(null)
                   setErrorMessage('')
-                  scrollToDice()
                 }}
               />
             )}
