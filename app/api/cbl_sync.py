@@ -6,6 +6,7 @@ from dataclasses import asdict
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.releases import require_release_writer_token
@@ -37,9 +38,25 @@ async def get_source_status(
 
     Returns:
         Source identity and the last fully published revision SHA.
+
+    Raises:
+        HTTPException: If the repository identity is invalid.
     """
-    revision_sha = await get_cbl_source_revision(db, repository=repository)
-    return CBLSourceStatusResponse(repository=repository, revision_sha=revision_sha)
+    normalized_repository = repository.strip()
+    try:
+        revision_sha = await get_cbl_source_revision(
+            db,
+            repository=normalized_repository,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    return CBLSourceStatusResponse(
+        repository=normalized_repository,
+        revision_sha=revision_sha,
+    )
 
 
 @router.post("/batch", response_model=CBLBatchResponse)
@@ -59,7 +76,7 @@ async def import_batch(
         Counters describing the persisted batch.
 
     Raises:
-        HTTPException: If the batch contains invalid source metadata.
+        HTTPException: If the batch is invalid or conflicts with persistence state.
     """
     parsed = tuple(
         CBLList(
@@ -81,7 +98,16 @@ async def import_batch(
         await db.commit()
     except ValueError as exc:
         await db.rollback()
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    except SQLAlchemyError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="CBL synchronization conflicted with current persistence state",
+        ) from exc
     return CBLBatchResponse(**asdict(summary))
 
 
@@ -102,7 +128,7 @@ async def finalize_sync(
         Counters describing finalization and deactivation work.
 
     Raises:
-        HTTPException: If finalization metadata is invalid or the source is missing.
+        HTTPException: If finalization is invalid or conflicts with persistence state.
     """
     try:
         summary = await finalize_cbl_sync(
@@ -115,5 +141,14 @@ async def finalize_sync(
         await db.commit()
     except ValueError as exc:
         await db.rollback()
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    except SQLAlchemyError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="CBL finalization conflicted with current persistence state",
+        ) from exc
     return CBLBatchResponse(**asdict(summary))
