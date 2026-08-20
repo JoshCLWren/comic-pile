@@ -8,6 +8,7 @@ and pool event listeners are registered.
 import importlib
 
 import pytest
+from sqlalchemy.pool import QueuePool
 
 
 @pytest.fixture(autouse=True)
@@ -78,5 +79,6 @@ def test_engine_uses_configured_pool_settings() -> None:
     import app.database as db_mod
 
     pool = db_mod.async_engine.sync_engine.pool
+    assert isinstance(pool, QueuePool)
     assert pool.size() == db_mod.POOL_SIZE
     assert pool._max_overflow == db_mod.MAX_OVERFLOW
