@@ -6,6 +6,7 @@ deterministic mapping logic and the post-commit attribute handling that previous
 risked ``MissingGreenlet`` errors under async SQLAlchemy.
 """
 
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
