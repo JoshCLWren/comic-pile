@@ -70,12 +70,14 @@ async def _get_or_create_locked_source(
         async with db.begin_nested():
             db.add(candidate)
             await db.flush()
-    except IntegrityError:
+    except IntegrityError as exc:
         source = await db.scalar(
             select(CBLSource).where(CBLSource.repository == repository).with_for_update()
         )
         if source is None:
-            raise RuntimeError("concurrent CBL source creation could not be reconciled")
+            raise RuntimeError(
+                "concurrent CBL source creation could not be reconciled"
+            ) from exc
         return source, False
     return candidate, True
 
