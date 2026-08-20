@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
+vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 
 vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
 vi.mock('../components/Tooltip', () => ({
@@ -20,6 +21,15 @@ vi.mock('../hooks/useRollBootstrap', () => ({
     data: null,
     isPending: false,
     isError: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+}))
+
+vi.mock('../hooks/useReaderContext', () => ({
+  useReaderContext: () => ({
+    context: null,
+    isLoading: false,
     error: null,
     refetch: vi.fn(),
   }),

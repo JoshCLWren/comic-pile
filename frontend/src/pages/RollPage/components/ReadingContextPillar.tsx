@@ -69,7 +69,6 @@ export function ReadingContextPillar({
   return (
     <div className="w-full space-y-4">
       <div className="flex items-center gap-2 border-b-2 pb-2" style={{ borderColor: 'var(--theme-continuity-accent)' }}>
-        <span className="text-[10px] font-black tabular-nums" style={{ color: 'var(--theme-continuity-accent)' }}>02</span>
         <span className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-continuity-accent)' }}>Reading Context</span>
       </div>
       <ContinuityReadinessSummary issueId={issueId} />

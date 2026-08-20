@@ -25,8 +25,15 @@ async def test_comicvine_intelligence_normalizes_metadata_and_matches_arc_member
     auth_client,
     async_db: AsyncSession,
     default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Rich metadata includes mapped duplicates and missing external arc members."""
+
+    async def _noop_refresh(_identity_id: int) -> bool:
+        return False
+
+    monkeypatch.setattr(comicvine_intelligence, "refresh_issue_metadata", _noop_refresh)
+
     primary_thread = Thread(
         user_id=default_user.id,
         title="Alpha",
@@ -217,12 +224,12 @@ async def test_comicvine_intelligence_stays_usable_when_hydration_scheduling_fai
     )
     await async_db.flush()
 
-    def _boom(_identity_id: int) -> bool:
-        raise RuntimeError("simulated event-loop failure")
+    async def _boom(_identity_id: int) -> bool:
+        raise TimeoutError("simulated advisory-lock timeout")
 
     monkeypatch.setattr(
         comicvine_intelligence,
-        "schedule_issue_metadata_hydration",
+        "refresh_issue_metadata",
         _boom,
     )
 

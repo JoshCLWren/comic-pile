@@ -4,18 +4,21 @@ import { useEffect } from 'react'
 import type { AuthContextValue } from '../App'
 
 const mockApiGet = vi.fn()
+const mockApiPost = vi.fn()
 const mockGetAccessToken = vi.fn<() => string | null>(() => null)
+const mockReadStoredAccessToken = vi.fn<() => string | null>(() => null)
 const mockSetAccessToken = vi.fn()
 const mockClearAccessToken = vi.fn()
 
 vi.mock('../services/api', () => ({
   default: {
     get: (...args: Parameters<typeof mockApiGet>) => mockApiGet(...args),
+    post: (...args: Parameters<typeof mockApiPost>) => mockApiPost(...args),
   },
   getAccessToken: () => mockGetAccessToken(),
+  readStoredAccessToken: () => mockReadStoredAccessToken(),
   setAccessToken: (...args: Parameters<typeof mockSetAccessToken>) => mockSetAccessToken(...args),
   clearAccessToken: (...args: Parameters<typeof mockClearAccessToken>) => mockClearAccessToken(...args),
-  readStoredAccessToken: vi.fn(() => null),
 }))
 
 import { AuthProvider, useAuth } from '../App'
@@ -36,8 +39,11 @@ describe('hard refresh session bootstrap', () => {
   beforeEach(() => {
     authState = null
     mockApiGet.mockReset()
+    mockApiPost.mockReset()
     mockGetAccessToken.mockReset()
     mockGetAccessToken.mockReturnValue(null)
+    mockReadStoredAccessToken.mockReset()
+    mockReadStoredAccessToken.mockReturnValue(null)
     mockSetAccessToken.mockReset()
     mockClearAccessToken.mockReset()
     delete window.__COMIC_PILE_ACCESS_TOKEN

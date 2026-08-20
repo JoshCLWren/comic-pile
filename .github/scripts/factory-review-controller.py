@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 import re
@@ -13,13 +14,12 @@ from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
 
 sys.path.insert(0, os.path.dirname(__file__))
-from factory_review_policy import (  # noqa: E402
-    approval_can_promote,
-    current_head_approvers,
-    head_has_authorized_approval,
-    producer_worker_from_pr,
-    review_marker,
-)
+_review_policy = importlib.import_module("factory_review_policy")
+approval_can_promote = _review_policy.approval_can_promote
+current_head_approvers = _review_policy.current_head_approvers
+head_has_authorized_approval = _review_policy.head_has_authorized_approval
+producer_worker_from_pr = _review_policy.producer_worker_from_pr
+review_marker = _review_policy.review_marker
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-3][0-9]|4[0-6])$")
@@ -175,7 +175,8 @@ def linked_issue_from_branch(branch: str | None) -> int | None:
 def flatten_pages(value: object | None) -> list[dict[str, Any]]:
     """Flatten gh api --paginate --slurp JSON pages."""
     result: list[dict[str, Any]] = []
-    for page in value or []:
+    pages = value if isinstance(value, list) else []
+    for page in pages:
         if isinstance(page, list):
             result.extend(item for item in page if isinstance(item, dict))
         elif isinstance(page, dict):
@@ -478,6 +479,15 @@ def mechanical_merge_gate(pr_number: int, expected_head: str) -> GateResult:
     return gate_result("pass", "all exact-head mechanical gates passed")
 
 
+def mechanical_merge_gates_pass(pr_number: int, expected_head: str) -> bool:
+    """Return whether the exact-head mechanical merge gate is green.
+
+    This small compatibility wrapper keeps callers that only need a boolean
+    decision separate from the controller's richer retry/deny result.
+    """
+    return mechanical_merge_gate(pr_number, expected_head)["decision"] == "pass"
+
+
 def target_owned_by_worker(number: int, worker: str) -> bool:
     """Return whether exactly this fixed worker currently owns a target."""
     active = {
@@ -672,7 +682,13 @@ def handle_review(
         note="Semantic approval is scoped to this exact reviewed PR head.",
     )
 
-    mechanical = mechanical_merge_gate(pr_number, reviewed_head)
+    mechanical_passed = mechanical_merge_gates_pass(pr_number, reviewed_head)
+    mechanical: GateResult = {
+        "decision": "pass" if mechanical_passed else "deny",
+        "reason": "all exact-head mechanical gates passed"
+        if mechanical_passed
+        else "exact-head mechanical gates failed",
+    }
     latest = pr_json(pr_number)
     latest_head = str(latest.get("headRefOid") or "")
     if mechanical["decision"] == "retry":

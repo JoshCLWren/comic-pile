@@ -73,6 +73,8 @@ async def build_session_response(
     active_thread_info: ActiveThreadInfo | None = None,
     ladder_path: str | None = None,
     snapshot_count: int | None = None,
+    snoozed_threads: list[SnoozedThreadInfo] | None = None,
+    snoozed_thread_ids: list[int] | None = None,
 ) -> SessionResponse:
     """Build a SessionResponse from a session model.
 
@@ -88,6 +90,8 @@ async def build_session_response(
         active_thread_info: Pre-fetched active thread info (skips thread lookup).
         ladder_path: Pre-computed ladder path string (skips event re-read).
         snapshot_count: Pre-computed snapshot count (skips COUNT query).
+        snoozed_threads: Pre-fetched snoozed thread info (skips snoozed thread query).
+        snoozed_thread_ids: Pre-fetched snoozed thread IDs (avoids expired session read).
 
     Returns:
         A SessionResponse with all required fields populated.
@@ -101,6 +105,7 @@ async def build_session_response(
                 format=thread.format,
                 issues_remaining=thread.issues_remaining,
                 queue_position=thread.queue_position,
+                last_rolled_result=None,
             )
 
     if snapshot_count is None:
@@ -109,18 +114,20 @@ async def build_session_response(
         )
         snapshot_count = result.scalar() or 0
 
-    snoozed_ids = session.snoozed_thread_ids or []
-    filtered_ids = [sid for sid in snoozed_ids if isinstance(sid, int)]
-    snoozed_ids = filtered_ids
-    snoozed_threads: list[SnoozedThreadInfo] = []
-    if snoozed_ids:
-        result = await db.execute(select(Thread).where(Thread.id.in_(snoozed_ids)))
-        threads_by_id = {thread.id: thread for thread in result.scalars().all()}
-        snoozed_threads = [
-            SnoozedThreadInfo(id=thread_id, title=threads_by_id[thread_id].title)
-            for thread_id in snoozed_ids
-            if thread_id in threads_by_id
-        ]
+    if snoozed_threads is not None and snoozed_thread_ids is not None:
+        resolved_ids = snoozed_thread_ids
+    else:
+        snoozed_ids = session.snoozed_thread_ids or []
+        resolved_ids = [sid for sid in snoozed_ids if isinstance(sid, int)]
+        snoozed_threads = []
+        if resolved_ids:
+            result = await db.execute(select(Thread).where(Thread.id.in_(resolved_ids)))
+            threads_by_id = {thread.id: thread for thread in result.scalars().all()}
+            snoozed_threads = [
+                SnoozedThreadInfo(id=thread_id, title=threads_by_id[thread_id].title)
+                for thread_id in resolved_ids
+                if thread_id in threads_by_id
+            ]
 
     if current_die is None:
         current_die = await get_current_die_for_session(session, db)
@@ -140,7 +147,7 @@ async def build_session_response(
         last_rolled_result=active_thread_info.last_rolled_result if active_thread_info else None,
         has_restore_point=snapshot_count > 0,
         snapshot_count=snapshot_count,
-        snoozed_thread_ids=snoozed_ids,
+        snoozed_thread_ids=resolved_ids,
         snoozed_threads=snoozed_threads,
     )
 
@@ -204,9 +211,7 @@ async def snooze_thread(
     events_result = await db.execute(
         select(Event)
         .where(Event.session_id == current_session_id)
-        .where(
-            Event.type.in_(("rate", "snooze", "undo", "roll"))
-        )
+        .where(Event.type.in_(("rate", "snooze", "undo", "roll")))
         .order_by(Event.timestamp.desc(), Event.id.desc())
     )
     all_events = events_result.scalars().all()
@@ -225,7 +230,8 @@ async def snooze_thread(
 
     # Ladder path: build from pre-fetched events instead of re-querying.
     die_events = [
-        evt for evt in reversed(all_events)
+        evt
+        for evt in reversed(all_events)
         if evt.type in ("rate", "snooze", "undo") and evt.die_after is not None
     ]
     ladder_path = str(current_session.start_die)
@@ -291,6 +297,22 @@ async def snooze_thread(
     )
     pre_snapshot_count = result.scalar() or 0
 
+    # Pre-fetch snoozed thread info before commit to avoid expired session reads.
+    pre_snoozed_ids = (
+        list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
+    )
+    pre_snoozed_threads: list[SnoozedThreadInfo] = []
+    if pre_snoozed_ids:
+        snooze_result = await db.execute(
+            select(Thread).where(Thread.id.in_(pre_snoozed_ids))
+        )
+        threads_by_id = {t.id: t for t in snooze_result.scalars().all()}
+        pre_snoozed_threads = [
+            SnoozedThreadInfo(id=sid, title=threads_by_id[sid].title)
+            for sid in pre_snoozed_ids
+            if sid in threads_by_id
+        ]
+
     await db.commit()
 
     await invalidate_user_view(current_user.id)
@@ -303,6 +325,8 @@ async def snooze_thread(
         active_thread_info=pre_active_thread,
         ladder_path=ladder_path,
         snapshot_count=pre_snapshot_count,
+        snoozed_threads=pre_snoozed_threads,
+        snoozed_thread_ids=pre_snoozed_ids,
     )
 
 
@@ -347,13 +371,25 @@ async def unsnooze_thread(
     )
     db.add(event)
 
-    pre_ladder_path = await build_ladder_path(
-        current_session.id, db, session=current_session
-    )
+    pre_ladder_path = await build_ladder_path(current_session.id, db, session=current_session)
     result = await db.execute(
         select(func.count()).select_from(Snapshot).where(Snapshot.session_id == current_session.id)
     )
     pre_snapshot_count = result.scalar() or 0
+
+    # Pre-fetch snoozed thread info before commit to avoid expired session reads.
+    pre_snoozed_ids = list(snoozed_ids)
+    pre_snoozed_threads: list[SnoozedThreadInfo] = []
+    if pre_snoozed_ids:
+        snooze_result = await db.execute(
+            select(Thread).where(Thread.id.in_(pre_snoozed_ids))
+        )
+        threads_by_id = {t.id: t for t in snooze_result.scalars().all()}
+        pre_snoozed_threads = [
+            SnoozedThreadInfo(id=sid, title=threads_by_id[sid].title)
+            for sid in pre_snoozed_ids
+            if sid in threads_by_id
+        ]
 
     await db.commit()
 
@@ -364,4 +400,6 @@ async def unsnooze_thread(
         db,
         ladder_path=pre_ladder_path,
         snapshot_count=pre_snapshot_count,
+        snoozed_threads=pre_snoozed_threads,
+        snoozed_thread_ids=pre_snoozed_ids,
     )

@@ -1,6 +1,9 @@
 import Tooltip from '../../../components/Tooltip'
+import { useReaderContext } from '../../../hooks/useReaderContext'
 import { RATING_THRESHOLD, getDieDirection } from '../utils'
 import type { RatingThread } from '../types'
+import { SeriesPanel } from './SeriesPanel'
+import { CrossoverAnalytics } from './CrossoverAnalytics'
 
 interface YourContextPillarProps {
   activeRatingThread: RatingThread | null
@@ -8,6 +11,16 @@ interface YourContextPillarProps {
   rating: number
   predictedDie: number
   onUpdateRating: (value: string) => void
+}
+
+function ReaderContextLoading() {
+  return (
+    <div className="space-y-2 rounded-2xl p-3" style={{ border: '1px solid rgba(168,85,247,0.1)', backgroundColor: 'var(--theme-bg-panel)' }}>
+      <div className="h-3 w-24 animate-pulse rounded bg-white/5" />
+      <div className="h-5 w-16 animate-pulse rounded bg-white/5" />
+      <div className="h-3 w-20 animate-pulse rounded bg-white/5" />
+    </div>
+  )
 }
 
 export function YourContextPillar({
@@ -19,13 +32,24 @@ export function YourContextPillar({
 }: YourContextPillarProps) {
   const dieDirection = getDieDirection(currentDie, predictedDie)
   const isLastIssue = activeRatingThread?.issues_remaining === 1
+  const issueId = activeRatingThread?.issue_id ?? activeRatingThread?.next_issue_id ?? null
+  const { context, isLoading } = useReaderContext(issueId)
 
   return (
     <div className="w-full space-y-4">
       <div className="flex items-center gap-2 border-b-2 pb-2" style={{ borderColor: 'var(--theme-personal-accent)' }}>
-        <span className="text-[10px] font-black tabular-nums" style={{ color: 'var(--theme-personal-accent)' }}>03</span>
         <span className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-personal-accent)' }}>Your Context</span>
       </div>
+
+      {isLoading ? <ReaderContextLoading /> : null}
+
+      {!isLoading && context ? (
+        <>
+          <SeriesPanel series={context.series} />
+          <CrossoverAnalytics crossovers={context.crossovers} />
+        </>
+      ) : null}
+
       <section aria-labelledby="rating-heading" className="space-y-3 rounded-2xl p-3" style={{ border: '1px solid rgba(168,85,247,0.2)', backgroundColor: 'var(--theme-bg-panel)' }}>
         <div className="flex items-end justify-between gap-3">
           <div>

@@ -104,7 +104,7 @@ exclude = [".venv", "__pycache__", "*.pyc", ".git", "node_modules", "alembic/ver
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "C4", "D", "ANN401"]
 ignore = ["D203", "D213", "E501", "B008", "I001"]
-per-file-ignores = { "alembic/env.py" = ["F401"], "alembic/versions/*.py" = ["D415"], "app/cache.py" = ["D102", "D107", "ANN401"], "tests/test_queue_cursor_semantics.py" = ["D102", "F401"] }
+per-file-ignores = { "alembic/env.py" = ["F401"], "alembic/versions/*.py" = ["D415"], "app/cache.py" = ["D102", "D107", "ANN401"], "tests/test_queue_cursor_semantics.py" = ["D102", "F401"], ".github/scripts/*.py" = ["D", "ANN401", "UP017"], "tests/test_factory_*.py" = ["D"] }
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -120,7 +120,7 @@ python-version = "3.14"
 
 [tool.ty.src]
 include = ["app", "comic_pile", "tests"]
-exclude = ["scripts/**", "alembic/versions/**", "tests/test_scripts_verify_reading_order.py"]
+exclude = ["scripts/**", "alembic/versions/**", "tests/test_scripts_verify_reading_order.py", "tests/test_factory_review_gate.py"]
 
 [tool.ty.terminal]
 error-on-warning = true

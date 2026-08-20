@@ -8,6 +8,14 @@ vi.mock('../services/api', async () => {
   return { ...actual, comicVineApi: { getIssueIntelligence: vi.fn() } }
 })
 
+vi.mock('../contexts/useToast', () => ({
+  useToast: () => ({
+    showToast: vi.fn(),
+    removeToast: vi.fn(),
+    toasts: [],
+  }),
+}))
+
 const getIntelligence = vi.mocked(comicVineApi.getIssueIntelligence)
 
 function waitForLoaded() {
@@ -76,15 +84,17 @@ describe('ComicIdentity', () => {
     // Description
     expect(screen.getByText('A bold beginning.')).toBeInTheDocument()
 
-    // Story arc metadata
+    // Story arc metadata - primary and secondary are now separate
     expect(screen.getByText('The Big Arc')).toBeInTheDocument()
-    expect(screen.getByText('Alpha #2 - Second Part')).toBeInTheDocument()
+    expect(screen.getByText('Alpha #2')).toBeInTheDocument()
+    expect(screen.getByText('Second Part')).toBeInTheDocument()
     expect(screen.getByText('Beta #1')).toBeInTheDocument()
     expect(screen.getByText('Unread')).toBeInTheDocument()
-    expect(screen.getByText('Missing')).toBeInTheDocument()
+    expect(screen.getByText('Not in ComicPile')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Add Beta #1 to ComicPile/i })).toBeInTheDocument()
 
     // ComicVine source link
-    expect(screen.getByText('View source on ComicVine')).toBeInTheDocument()
+    expect(screen.getByText('View issue on ComicVine')).toBeInTheDocument()
   })
 
   it('renders placeholder when cover image is missing', async () => {
@@ -361,25 +371,29 @@ describe('ComicIdentity', () => {
 
     await waitFor(() => expect(screen.getByText('Big Arc')).toBeInTheDocument())
 
-    // Initially only first 5 issues shown
-    expect(screen.getByText('Series #1 - Issue 1')).toBeInTheDocument()
-    expect(screen.getByText('Series #5 - Issue 5')).toBeInTheDocument()
-    expect(screen.queryByText('Series #6 - Issue 6')).not.toBeInTheDocument()
+    // Initially only first 5 issues shown - primary and secondary are separate
+    expect(screen.getByText('Series #1')).toBeInTheDocument()
+    expect(screen.getByText('Issue 1')).toBeInTheDocument()
+    expect(screen.getByText('Series #5')).toBeInTheDocument()
+    expect(screen.getByText('Issue 5')).toBeInTheDocument()
+    expect(screen.queryByText('Series #6')).not.toBeInTheDocument()
 
     // Button should say "Show all 8 issues" initially
     const showMoreButton = screen.getByRole('button', { name: /show all 8 issues/i })
     expect(showMoreButton).toBeInTheDocument()
     fireEvent.click(showMoreButton)
 
-    await waitFor(() => expect(screen.getByText('Series #6 - Issue 6')).toBeInTheDocument())
-    expect(screen.getByText('Series #8 - Issue 8')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('Series #6')).toBeInTheDocument())
+    expect(screen.getByText('Issue 6')).toBeInTheDocument()
+    expect(screen.getByText('Series #8')).toBeInTheDocument()
+    expect(screen.getByText('Issue 8')).toBeInTheDocument()
 
     // Show fewer button
     const showLessButton = screen.getByRole('button', { name: /show fewer/i })
     fireEvent.click(showLessButton)
 
-    await waitFor(() => expect(screen.getByText('Series #1 - Issue 1')).toBeInTheDocument())
-    expect(screen.queryByText('Series #6 - Issue 6')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('Series #1')).toBeInTheDocument())
+    expect(screen.queryByText('Series #6')).not.toBeInTheDocument()
   })
 
   it('renders nothing when issue has no confirmed ComicVine mapping', async () => {
@@ -478,7 +492,9 @@ describe('ComicIdentity', () => {
     expect(screen.getByText('Named Special')).toBeInTheDocument()
     expect(screen.getByText('ComicVine issue 702')).toBeInTheDocument()
     expect(screen.getByText('Read')).toBeInTheDocument()
+    expect(screen.getByText('Not in ComicPile')).toBeInTheDocument()
     expect(screen.queryByText('View source on ComicVine')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Add ComicVine issue 702 to ComicPile/i })).toBeInTheDocument()
   })
 
   it('description is in a collapsible details element', async () => {

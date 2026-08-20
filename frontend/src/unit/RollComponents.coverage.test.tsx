@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
+vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 import { ThreadPool } from '../pages/RollPage/components/ThreadPool'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 import type { Thread } from '../types'
@@ -11,6 +12,14 @@ vi.mock('../components/Tooltip', () => ({ default: ({ children }: { children: Re
 vi.mock('../components/IssueCorrectionDialog', () => ({ default: ({ isOpen, onClose, onSuccess }: { isOpen: boolean; onClose: () => void; onSuccess: () => void }) => isOpen ? <><button onClick={onClose}>Close correction</button><button onClick={onSuccess}>Correct successfully</button></> : null }))
 vi.mock('../hooks/useRollBootstrap', () => ({
   useRollBootstrap: () => ({ data: null, isPending: false, isError: false, error: null }),
+}))
+vi.mock('../hooks/useReaderContext', () => ({
+  useReaderContext: () => ({
+    context: null,
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
 }))
 
 const thread = { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 5, total_issues: 10, next_unread_issue_number: '3' } as Thread

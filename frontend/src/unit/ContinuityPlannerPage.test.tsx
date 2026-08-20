@@ -884,4 +884,134 @@ describe('ContinuityPlannerPage', () => {
     await user.click(cancelButton)
     expect(screen.getByLabelText('Plan name')).toHaveValue('My reading plan')
   })
+
+  it('saves two parallel lanes after moving a node across lanes', async () => {
+    mocks.create.mockResolvedValue({
+      id: 12,
+      user_id: 1,
+      name: 'Parallel plan',
+      ordering_mode: 'informational',
+      lanes: [
+        { id: 'main', name: 'Reading order', order: 0 },
+        { id: 'lane-1', name: 'Lane 2', order: 1 },
+      ],
+      nodes: [
+        { id: 'issue-40', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0 },
+        { id: 'crossover-8', node_type: 'crossover', ref_id: 8, lane_id: 'lane-1', position: 0 },
+      ],
+      created_at: '2026-08-12T00:00:00Z',
+      updated_at: '2026-08-12T00:00:00Z',
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans']}>
+        <Routes>
+          <Route path="/continuity-plans" element={<ContinuityPlannerPage />} />
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
+    await screen.findByRole('option', { name: /Annual 1/i })
+    await user.selectOptions(screen.getByLabelText('Issue'), '40')
+    await user.click(screen.getByRole('button', { name: 'Add issue' }))
+    await user.selectOptions(screen.getByLabelText('Crossover'), '8')
+    await user.click(screen.getByRole('button', { name: 'Add crossover' }))
+
+    await user.click(screen.getByRole('button', { name: 'Add lane' }))
+
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: /Move Fourth World to another lane/i }),
+      'lane-1',
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Save plan' }))
+    await waitFor(() => expect(mocks.create).toHaveBeenCalledOnce())
+
+    const payload = mocks.create.mock.calls[0][0] as {
+      ordering_mode: string
+      lanes: Array<{ id: string }>
+      nodes: Array<{ id: string; lane_id: string; position: number }>
+    }
+    expect(payload.ordering_mode).toBe('informational')
+    expect(payload.lanes.map((lane) => lane.id)).toEqual(['main', 'lane-1'])
+    expect(payload.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'issue-40', lane_id: 'main', position: 0 }),
+        expect.objectContaining({ id: 'crossover-8', lane_id: 'lane-1', position: 0 }),
+      ]),
+    )
+  })
+
+  it('disables removing a non-empty lane and enables it once emptied', async () => {
+    mocks.get.mockResolvedValue({
+      id: 12,
+      user_id: 1,
+      name: 'Parallel plan',
+      ordering_mode: 'informational',
+      lanes: [
+        { id: 'main', name: 'Reading order', order: 0 },
+        { id: 'lane-2', name: 'Lane 2', order: 1 },
+      ],
+      nodes: [
+        { id: 'issue-40', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0 },
+        { id: 'crossover-8', node_type: 'crossover', ref_id: 8, lane_id: 'main', position: 1 },
+      ],
+      created_at: '2026-08-12T00:00:00Z',
+      updated_at: '2026-08-12T00:00:00Z',
+    })
+    mocks.update.mockResolvedValue({
+      id: 12,
+      user_id: 1,
+      name: 'Parallel plan',
+      ordering_mode: 'informational',
+      lanes: [{ id: 'main', name: 'Reading order', order: 0 }],
+      nodes: [
+        { id: 'issue-40', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0 },
+        { id: 'crossover-8', node_type: 'crossover', ref_id: 8, lane_id: 'main', position: 1 },
+      ],
+      created_at: '2026-08-12T00:00:00Z',
+      updated_at: '2026-08-12T00:00:00Z',
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans/12']}>
+        <Routes>
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    const removeMain = await screen.findByRole('button', { name: 'Remove lane Reading order' })
+    expect(removeMain).toBeDisabled()
+    const removeLane2 = screen.getByRole('button', { name: 'Remove lane Lane 2' })
+    expect(removeLane2).toBeEnabled()
+
+    // Move both steps into the second lane, then empty and remove it.
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: /Move Mister Miracle #Annual 1 to another lane/i }),
+      'lane-2',
+    )
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: /Move Fourth World to another lane/i }),
+      'lane-2',
+    )
+
+    expect(screen.getByRole('button', { name: 'Remove lane Lane 2' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Remove lane Reading order' })).toBeEnabled()
+
+    await user.click(screen.getByRole('button', { name: 'Remove lane Reading order' }))
+    await user.click(screen.getByRole('button', { name: 'Save plan' }))
+    await waitFor(() => expect(mocks.update).toHaveBeenCalledOnce())
+
+    const payload = mocks.update.mock.calls[0][1] as {
+      lanes: Array<{ id: string }>
+      nodes: Array<{ id: string; lane_id: string }>
+    }
+    expect(payload.lanes.map((lane) => lane.id)).toEqual(['lane-2'])
+    expect(payload.nodes.every((node) => node.lane_id === 'lane-2')).toBe(true)
+  })
 })

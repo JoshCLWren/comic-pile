@@ -44,10 +44,14 @@ export function RatingView({
   onRefreshThread,
 }: RatingViewProps) {
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
+  const hasReadingContextContent = readingOrders.length > 0 || connectedThreads.length > 0
+  const gridCols = hasReadingContextContent
+    ? 'xl:grid-cols-[minmax(0,26fr)_minmax(0,46fr)_minmax(0,28fr)]'
+    : 'xl:grid-cols-[minmax(0,50fr)_minmax(0,50fr)]'
 
   return (
     <div className="relative z-10 space-y-4 p-3 md:p-4">
-      <div className="grid gap-4 md:grid-cols-2 md:gap-6 xl:grid-cols-[minmax(0,26fr)_minmax(0,46fr)_minmax(0,28fr)]" data-testid="rating-pillars-grid">
+      <div className={`grid gap-4 md:grid-cols-2 md:gap-6 ${gridCols}`} data-testid="rating-pillars-grid">
         <div className="md:row-span-2 xl:row-span-1">
           <ComicPillar
             activeRatingThread={activeRatingThread}

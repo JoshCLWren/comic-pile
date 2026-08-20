@@ -312,6 +312,7 @@ async def rate_thread(
             .where(Issue.issue_number == issue_number)
         )
         current_issue = result.scalar_one_or_none()
+        created_issues: list[Issue] = []
 
         if not current_issue:
             try:
@@ -323,23 +324,22 @@ async def rate_thread(
                         detail=f"Total issues ({total_issues}) exceeds reasonable limit",
                     )
                 for issue_position in range(1, total_issues + 1):
-                    db.add(
-                        Issue(
-                            thread_id=thread.id,
-                            issue_number=str(issue_position),
-                            status="read" if issue_position < issue_num_int else "unread",
-                            read_at=datetime.now(UTC)
-                            if issue_position < issue_num_int
-                            else None,
-                            position=issue_position,
-                        )
+                    issue = Issue(
+                        thread_id=thread.id,
+                        issue_number=str(issue_position),
+                        status="read" if issue_position < issue_num_int else "unread",
+                        read_at=datetime.now(UTC)
+                        if issue_position < issue_num_int
+                        else None,
+                        position=issue_position,
                     )
-                result = await db.execute(
-                    select(Issue)
-                    .where(Issue.thread_id == thread.id)
-                    .where(Issue.issue_number == issue_number)
+                    db.add(issue)
+                    created_issues.append(issue)
+                await db.flush()
+                current_issue = next(
+                    (i for i in created_issues if i.issue_number == issue_number),
+                    None,
                 )
-                current_issue = result.scalar_one_or_none()
                 if not current_issue:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
@@ -362,10 +362,13 @@ async def rate_thread(
                     detail="Migration failed.",
                 ) from error
 
-        all_issues_result = await db.execute(
-            select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
-        )
-        all_issues = all_issues_result.scalars().all()
+        if created_issues:
+            all_issues = sorted(created_issues, key=lambda i: i.position)
+        else:
+            all_issues_result = await db.execute(
+                select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
+            )
+            all_issues = all_issues_result.scalars().all()
         for issue in all_issues:
             if issue.position < current_issue.position and issue.status != "read":
                 issue.status = "read"

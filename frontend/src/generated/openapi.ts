@@ -422,6 +422,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ping
+         * @description Return a minimal alive response.
+         *
+         *     This endpoint has zero database, ORM, or heavy dependency
+         *     initialization overhead. It exists solely to keep the Vercel
+         *     Python serverless function warm and avoid cold starts.
+         *
+         *     Returns:
+         *         Simple status dict with no external dependencies.
+         */
+        get: operations["ping_api_ping_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/queue/shuffle/": {
         parameters: {
             query?: never;
@@ -1009,13 +1036,18 @@ export interface paths {
         };
         /**
          * List Threads
-         * @description List threads ordered by position with cursor-based pagination.
+         * @description List threads with deterministic cursor-based pagination.
+         *
+         *     Every retained sort has a deterministic cursor contract with stable
+         *     tie-breakers so that search results remain correct across multiple
+         *     pages.  Changing ``search`` or ``sort`` invalidates any prior cursor.
          *
          *     Args:
          *         request: FastAPI request object for rate limiting.
          *         search: Optional case-insensitive title search filter.
+         *         sort: Sort order – ``position`` (default), ``title``, or ``created``.
          *         page_size: Number of threads to return per page (default 50, max 200).
-         *         page_token: Token for pagination continuation (queue_position,thread_id).
+         *         page_token: Opaque cursor token for pagination continuation.
          *         current_user: The authenticated user making the request.
          *         db: SQLAlchemy session for database operations.
          *
@@ -1023,7 +1055,8 @@ export interface paths {
          *         QueueThreadListResponse with paginated threads and next_page_token if more exist.
          *
          *     Raises:
-         *         HTTPException: If a retired ``collection_id`` query parameter is present.
+         *         HTTPException: If a retired ``collection_id`` query parameter is present,
+         *             the sort value is unsupported, or the page token is stale/malformed.
          */
         get: operations["list_threads_api_threads__get"];
         put?: never;
@@ -1359,6 +1392,43 @@ export interface paths {
          *         HTTPException: 404 if thread not found, 400 if validation fails
          */
         post: operations["migrate_thread_to_issues_simple_api_threads__thread_id__migrateToIssuesSimple_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/threads/{thread_id}:setCurrentIssue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Current Issue
+         * @description Atomically correct the current issue for an active thread.
+         *
+         *     Marks every issue before the target as read, ensures the target is
+         *     unread, updates ``thread.next_unread_issue_id``, and pins
+         *     ``session.pending_issue_id`` so the active roll reflects the corrected
+         *     position immediately.
+         *
+         *     Args:
+         *         thread_id: The thread whose current issue should be corrected.
+         *         request: Target issue number.
+         *         current_user: Authenticated user.
+         *         db: Async database session.
+         *
+         *     Returns:
+         *         SetCurrentIssueResponse with the corrected thread and issue info.
+         *
+         *     Raises:
+         *         HTTPException: 404 if thread not found, 400 for validation errors.
+         */
+        post: operations["set_current_issue_api_threads__thread_id__setCurrentIssue_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2035,6 +2105,41 @@ export interface paths {
          * @description List all incoming and outgoing dependency edges for a specific issue.
          */
         get: operations["list_issue_dependencies_api_v1_issues__issue_id__dependencies_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/issues/{issue_id}/reader-context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Issue Reader Context
+         * @description Return bounded reading analytics and local neighborhood for an owned issue.
+         *
+         *     The response is decorative context for the Roll experience and must never
+         *     be a prerequisite for rating. It is computed with bounded, user-scoped
+         *     queries that do not traverse the full library or hydrate ComicVine.
+         *
+         *     Args:
+         *         issue_id: ComicPile issue identifier.
+         *         current_user: Authenticated owner of the requested issue.
+         *         db: Async database session.
+         *
+         *     Returns:
+         *         Bounded reader-context payload for the requested issue.
+         *
+         *     Raises:
+         *         HTTPException: If the issue does not belong to the user.
+         */
+        get: operations["get_issue_reader_context_api_v1_issues__issue_id__reader_context_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2984,13 +3089,18 @@ export interface paths {
         };
         /**
          * List Threads
-         * @description List threads ordered by position with cursor-based pagination.
+         * @description List threads with deterministic cursor-based pagination.
+         *
+         *     Every retained sort has a deterministic cursor contract with stable
+         *     tie-breakers so that search results remain correct across multiple
+         *     pages.  Changing ``search`` or ``sort`` invalidates any prior cursor.
          *
          *     Args:
          *         request: FastAPI request object for rate limiting.
          *         search: Optional case-insensitive title search filter.
+         *         sort: Sort order – ``position`` (default), ``title``, or ``created``.
          *         page_size: Number of threads to return per page (default 50, max 200).
-         *         page_token: Token for pagination continuation (queue_position,thread_id).
+         *         page_token: Opaque cursor token for pagination continuation.
          *         current_user: The authenticated user making the request.
          *         db: SQLAlchemy session for database operations.
          *
@@ -2998,7 +3108,8 @@ export interface paths {
          *         QueueThreadListResponse with paginated threads and next_page_token if more exist.
          *
          *     Raises:
-         *         HTTPException: If a retired ``collection_id`` query parameter is present.
+         *         HTTPException: If a retired ``collection_id`` query parameter is present,
+         *             the sort value is unsupported, or the page token is stale/malformed.
          */
         get: operations["list_threads_api_v1_threads__get"];
         put?: never;
@@ -3608,6 +3719,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/{thread_id}:setCurrentIssue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Current Issue
+         * @description Atomically correct the current issue for an active thread.
+         *
+         *     Marks every issue before the target as read, ensures the target is
+         *     unread, updates ``thread.next_unread_issue_id``, and pins
+         *     ``session.pending_issue_id`` so the active roll reflects the corrected
+         *     position immediately.
+         *
+         *     Args:
+         *         thread_id: The thread whose current issue should be corrected.
+         *         request: Target issue number.
+         *         current_user: Authenticated user.
+         *         db: Async database session.
+         *
+         *     Returns:
+         *         SetCurrentIssueResponse with the corrected thread and issue info.
+         *
+         *     Raises:
+         *         HTTPException: 404 if thread not found, 400 for validation errors.
+         */
+        post: operations["set_current_issue_api_v1_threads__thread_id__setCurrentIssue_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads:getBlockingInfo": {
         parameters: {
             query?: never;
@@ -3689,6 +3837,30 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/me/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the authenticated user's preferences.
+         * @description Return the authenticated user's persisted preferences. When no preference row exists yet, server defaults (currently ``classic``) are resolved so existing and new users need no backfill step.
+         */
+        get: operations["get_user_preferences_api_v1_users_me_preferences_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Apply a partial update to the authenticated user's preferences.
+         * @description Update the authenticated user's preferences. The current request shape supports the ``theme`` field; unknown theme ids are rejected.
+         */
+        patch: operations["patch_user_preferences_api_v1_users_me_preferences_patch"];
         trace?: never;
     };
     "/health": {
@@ -4078,6 +4250,8 @@ export interface components {
              * @enum {string}
              */
             source_type: "issue" | "crossover";
+            /** Unread Issue Details */
+            unread_issue_details?: components["schemas"]["UnreadIssueDetail"][];
         };
         /**
          * ContinuityChainDiagnostic
@@ -5181,6 +5355,168 @@ export interface components {
             thread_id: number;
         };
         /**
+         * ReaderContextCrossover
+         * @description One owned crossover relevant to the requested issue's thread.
+         */
+        ReaderContextCrossover: {
+            /** Applies To Current Issue */
+            applies_to_current_issue: boolean;
+            /** Average Rating */
+            average_rating?: number | null;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            next_member?: components["schemas"]["ReaderContextCrossoverNextMember"] | null;
+            /**
+             * Ratings Count
+             * @default 0
+             */
+            ratings_count: number;
+            /**
+             * Read Count
+             * @default 0
+             */
+            read_count: number;
+        };
+        /**
+         * ReaderContextCrossoverMembership
+         * @description One exact crossover membership held by an owned issue.
+         */
+        ReaderContextCrossoverMembership: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+        };
+        /**
+         * ReaderContextCrossoverNextMember
+         * @description The nearest future exact member of a crossover in the current thread.
+         */
+        ReaderContextCrossoverNextMember: {
+            /** Issue Id */
+            issue_id: number;
+            /** Issue Number */
+            issue_number: string;
+        };
+        /**
+         * ReaderContextEdge
+         * @description One persisted one-hop dependency or continuity edge.
+         */
+        ReaderContextEdge: {
+            /** Id */
+            id: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "dependency" | "continuity";
+            /** Note */
+            note?: string | null;
+            /** Source Issue Id */
+            source_issue_id: number;
+            /** Target Issue Id */
+            target_issue_id: number;
+        };
+        /**
+         * ReaderContextLocalChain
+         * @description The bounded local reading neighborhood around the requested issue.
+         */
+        ReaderContextLocalChain: {
+            /** Edges */
+            edges?: components["schemas"]["ReaderContextEdge"][];
+            /** Issues */
+            issues?: components["schemas"]["ReaderContextLocalIssue"][];
+        };
+        /**
+         * ReaderContextLocalIssue
+         * @description One bounded local-chain issue centered on the requested issue.
+         */
+        ReaderContextLocalIssue: {
+            /** Crossover Memberships */
+            crossover_memberships?: components["schemas"]["ReaderContextCrossoverMembership"][];
+            /** Issue Id */
+            issue_id: number;
+            /** Issue Number */
+            issue_number: string;
+            /** Position */
+            position: number;
+            /** Rating */
+            rating?: number | null;
+            /**
+             * Relation
+             * @enum {string}
+             */
+            relation: "previous" | "current" | "next" | "future";
+            /** Status */
+            status: string;
+        };
+        /**
+         * ReaderContextPreviousIssue
+         * @description The immediately preceding issue inside the requested issue's thread.
+         */
+        ReaderContextPreviousIssue: {
+            /** Issue Id */
+            issue_id: number;
+            /** Issue Number */
+            issue_number: string;
+            /** Rating */
+            rating?: number | null;
+        };
+        /**
+         * ReaderContextRecentRating
+         * @description One effective series rating ordered by its effective event timestamp.
+         */
+        ReaderContextRecentRating: {
+            /** Issue Id */
+            issue_id: number;
+            /** Issue Number */
+            issue_number: string;
+            /** Rating */
+            rating: number;
+        };
+        /**
+         * ReaderContextResponse
+         * @description Bounded reader-context for one owned issue.
+         */
+        ReaderContextResponse: {
+            /** Crossovers */
+            crossovers?: components["schemas"]["ReaderContextCrossover"][];
+            /** Issue Id */
+            issue_id: number;
+            local_chain: components["schemas"]["ReaderContextLocalChain"];
+            series: components["schemas"]["ReaderContextSeries"];
+        };
+        /**
+         * ReaderContextSeries
+         * @description Canonical-series reading analytics for the requested issue.
+         */
+        ReaderContextSeries: {
+            /** Average Rating */
+            average_rating?: number | null;
+            /** Canonical Series Id */
+            canonical_series_id?: string | null;
+            /** Highest Rating */
+            highest_rating?: number | null;
+            /**
+             * Identity Source
+             * @enum {string}
+             */
+            identity_source: "comicvine" | "unavailable";
+            /** Lowest Rating */
+            lowest_rating?: number | null;
+            previous_issue?: components["schemas"]["ReaderContextPreviousIssue"] | null;
+            /**
+             * Ratings Count
+             * @default 0
+             */
+            ratings_count: number;
+            /** Recent Ratings */
+            recent_ratings?: components["schemas"]["ReaderContextRecentRating"][];
+            /** Series Name */
+            series_name?: string | null;
+        };
+        /**
          * ReadingOrderItemResponse
          * @description Response schema for a single item within a reading order.
          */
@@ -5774,6 +6110,45 @@ export interface components {
             user_id: number;
         };
         /**
+         * SetCurrentIssueRequest
+         * @description Schema for atomically correcting the current issue in an active thread.
+         */
+        SetCurrentIssueRequest: {
+            /**
+             * Issue Number
+             * @description Target issue number to set as current
+             */
+            issue_number: string;
+        };
+        /**
+         * SetCurrentIssueResponse
+         * @description Response after atomically correcting the current issue.
+         */
+        SetCurrentIssueResponse: {
+            /** Format */
+            format: string;
+            /** Issue Id */
+            issue_id?: number | null;
+            /** Issue Number */
+            issue_number?: string | null;
+            /** Issues Remaining */
+            issues_remaining: number;
+            /** Next Issue Id */
+            next_issue_id?: number | null;
+            /** Next Issue Number */
+            next_issue_number?: string | null;
+            /** Queue Position */
+            queue_position: number;
+            /** Reading Progress */
+            reading_progress?: string | null;
+            /** Thread Id */
+            thread_id: number;
+            /** Title */
+            title: string;
+            /** Total Issues */
+            total_issues?: number | null;
+        };
+        /**
          * SnapshotResponse
          * @description Schema for snapshot response.
          */
@@ -6006,6 +6381,16 @@ export interface components {
             token_type: string;
         };
         /**
+         * UnreadIssueDetail
+         * @description Structured label for one unread issue causing a continuity block.
+         */
+        UnreadIssueDetail: {
+            /** Issue Id */
+            issue_id: number;
+            /** Label */
+            label: string;
+        };
+        /**
          * UserLoginRequest
          * @description Request schema for user login.
          */
@@ -6014,6 +6399,37 @@ export interface components {
             password: string;
             /** Username */
             username: string;
+        };
+        /**
+         * UserPreferencesPatchRequest
+         * @description Partial update of the authenticated user's preferences.
+         *
+         *     Attributes:
+         *         theme: Optional theme id to apply. When omitted, the current theme
+         *             is left unchanged. Unknown values are rejected by validation.
+         */
+        UserPreferencesPatchRequest: {
+            /** Theme */
+            theme?: ("classic" | "ink-gold" | "command-center") | null;
+        };
+        /**
+         * UserPreferencesResponse
+         * @description Current preference values for the authenticated user.
+         *
+         *     Attributes:
+         *         theme: The user's selected visual theme id. Resolves to ``classic``
+         *             when no preference row has been persisted yet.
+         *         user_id: Owning user id, always matching the authenticated principal.
+         */
+        UserPreferencesResponse: {
+            /**
+             * Theme
+             * @default classic
+             * @enum {string}
+             */
+            theme: "classic" | "ink-gold" | "command-center";
+            /** User Id */
+            user_id: number;
         };
         /**
          * UserRegisterRequest
@@ -6438,6 +6854,28 @@ export interface operations {
                 content: {
                     "application/json": {
                         [key: string]: number | null;
+                    };
+                };
+            };
+        };
+    };
+    ping_api_ping_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
                     };
                 };
             };
@@ -6979,9 +7417,11 @@ export interface operations {
         parameters: {
             query?: {
                 search?: string | null;
+                /** @description Sort order: position, title, or created */
+                sort?: string;
                 /** @description Number of threads to return per page (default 50, max 200) */
                 page_size?: number;
-                /** @description Token for pagination continuation (queue_position,thread_id) */
+                /** @description Opaque cursor token for pagination continuation */
                 page_token?: string | null;
             };
             header?: never;
@@ -7364,6 +7804,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ThreadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_current_issue_api_threads__thread_id__setCurrentIssue_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetCurrentIssueRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetCurrentIssueResponse"];
                 };
             };
             /** @description Validation Error */
@@ -8403,6 +8878,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IssueDependenciesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_issue_reader_context_api_v1_issues__issue_id__reader_context_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReaderContextResponse"];
                 };
             };
             /** @description Validation Error */
@@ -9541,9 +10047,11 @@ export interface operations {
         parameters: {
             query?: {
                 search?: string | null;
+                /** @description Sort order: position, title, or created */
+                sort?: string;
                 /** @description Number of threads to return per page (default 50, max 200) */
                 page_size?: number;
-                /** @description Token for pagination continuation (queue_position,thread_id) */
+                /** @description Opaque cursor token for pagination continuation */
                 page_token?: string | null;
             };
             header?: never;
@@ -10294,6 +10802,41 @@ export interface operations {
             };
         };
     };
+    set_current_issue_api_v1_threads__thread_id__setCurrentIssue_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetCurrentIssueRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetCurrentIssueResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_threads_blocking_info_api_v1_threads_getBlockingInfo_post: {
         parameters: {
             query?: never;
@@ -10379,6 +10922,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_user_preferences_api_v1_users_me_preferences_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPreferencesResponse"];
+                };
+            };
+        };
+    };
+    patch_user_preferences_api_v1_users_me_preferences_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserPreferencesPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPreferencesResponse"];
                 };
             };
             /** @description Validation Error */

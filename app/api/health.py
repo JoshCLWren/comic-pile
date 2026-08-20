@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 import os
 import secrets
@@ -30,7 +31,7 @@ def _get_heartbeat_max_requests() -> int:
     """Get the maximum requests allowed per day for the warm endpoint."""
     raw_value = os.getenv("WARM_ENDPOINT_MAX_DAILY_REQUESTS", "1000")
     try:
-        return max(100, min(10000, int(raw_value)))
+        return max(1, min(10000, int(raw_value)))
     except ValueError:
         return 1000
 
@@ -307,81 +308,85 @@ async def _check_recent_activity(db: AsyncSession) -> bool:
         select(func.max(Event.timestamp)).where(Event.timestamp >= cutoff_time)
     )
     last_event_time = result.scalar_one_or_none()
+    if inspect.isawaitable(last_event_time):
+        last_event_time = await last_event_time
     return last_event_time is not None
 
 
-if _is_warm_endpoint_enabled():
+async def warm_endpoint(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> WarmResponse:
+    """Minimal warm endpoint for Vercel Fluid Compute instance reuse.
 
-    @router.get(
-        "/v1/instance/warm",
-        response_model=WarmResponse,
-        include_in_schema=False,
-    )
-    async def warm_endpoint(
-        request: Request,
-        db: AsyncSession = Depends(get_db),
-    ) -> WarmResponse:
-        """Minimal warm endpoint for Vercel Fluid Compute instance reuse.
+    This endpoint is designed to be lightweight - it does almost no CPU work
+    and returns quickly. It includes instance diagnostics to measure
+    Vercel instance reuse.
 
-        This endpoint is designed to be lightweight - it does almost no CPU work
-        and returns quickly. It includes instance diagnostics to measure
-        Vercel instance reuse.
+    The endpoint checks for recent activity and only returns a "warming"
+    status when activity is detected. Otherwise, it returns "no_activity"
+    to indicate the instance should be allowed to scale down.
 
-        The endpoint checks for recent activity and only returns a "warming"
-        status when activity is detected. Otherwise, it returns "no_activity"
-        to indicate the instance should be allowed to scale down.
+    Guardrails:
+    - Hard maximum daily request limit to prevent runaway workloads
+    - Configurable inactivity threshold for stopping unnecessary pings
 
-        Guardrails:
-        - Hard maximum daily request limit to prevent runaway workloads
-        - Configurable inactivity threshold for stopping unnecessary pings
-
-        Returns:
-            WarmResponse with instance diagnostics and activity status.
-        """
-        if not _is_warm_endpoint_enabled():
-            return WarmResponse(
-                status="no_activity",
-                instance=WarmInstanceDiagnostics(
-                    instance_id=_get_instance_id(),
-                    process_start_time_ns=0,
-                    request_count=0,
-                ),
-                has_active_session=False,
-                request_count_today=0,
-            )
-
-        instance_id = _get_instance_id()
-        snapshot = request.state.startup_snapshot
-        request_count = snapshot.invocation
-
-        if not _is_heartbeat_within_limits(request_count):
-            logger.warning(
-                "Warm endpoint request limit exceeded: %d > %d",
-                request_count,
-                _get_heartbeat_max_requests(),
-            )
-            return WarmResponse(
-                status="no_activity",
-                instance=WarmInstanceDiagnostics(
-                    instance_id=instance_id,
-                    process_start_time_ns=snapshot.process_started_at_ns,
-                    request_count=request_count,
-                ),
-                has_active_session=False,
-                request_count_today=request_count,
-            )
-
-        has_activity = await _check_recent_activity(db)
-
+    Returns:
+        WarmResponse with instance diagnostics and activity status.
+    """
+    if not _is_warm_endpoint_enabled():
         return WarmResponse(
-            status="warming" if has_activity else "no_activity",
+            status="no_activity",
+            instance=WarmInstanceDiagnostics(
+                instance_id=_get_instance_id(),
+                process_start_time_ns=0,
+                request_count=0,
+            ),
+            has_active_session=False,
+            request_count_today=0,
+        )
+
+    instance_id = _get_instance_id()
+    snapshot = request.state.startup_snapshot
+    request_count = snapshot.invocation
+
+    if not _is_heartbeat_within_limits(request_count):
+        logger.warning(
+            "Warm endpoint request limit exceeded: %d > %d",
+            request_count,
+            _get_heartbeat_max_requests(),
+        )
+        return WarmResponse(
+            status="no_activity",
             instance=WarmInstanceDiagnostics(
                 instance_id=instance_id,
                 process_start_time_ns=snapshot.process_started_at_ns,
                 request_count=request_count,
-                startup_time_ms=snapshot.startup_duration_ms,
-                process_age_ms=snapshot.process_age_ms,
             ),
-            has_active_session=has_activity,
+            has_active_session=False,
             request_count_today=request_count,
         )
+
+    has_activity = await _check_recent_activity(db)
+
+    return WarmResponse(
+        status="warming" if has_activity else "no_activity",
+        instance=WarmInstanceDiagnostics(
+            instance_id=instance_id,
+            process_start_time_ns=snapshot.process_started_at_ns,
+            request_count=request_count,
+            startup_time_ms=snapshot.startup_duration_ms,
+            process_age_ms=snapshot.process_age_ms,
+        ),
+        has_active_session=has_activity,
+        request_count_today=request_count,
+    )
+
+
+if _is_warm_endpoint_enabled():
+    router.add_api_route(
+        "/v1/instance/warm",
+        warm_endpoint,
+        response_model=WarmResponse,
+        include_in_schema=False,
+    )

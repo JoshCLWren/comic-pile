@@ -58,8 +58,16 @@ async def _restore_issue_states(
     db: AsyncSession,
     thread: Thread,
     state: dict,
+    pre_loaded_issues: list[Issue] | None = None,
 ) -> None:
-    """Restore issue state in place so surviving associations remain intact."""
+    """Restore issue state in place so surviving associations remain intact.
+
+    Args:
+        db: Database session.
+        thread: Thread whose issues to restore.
+        state: Snapshot state dict for this thread.
+        pre_loaded_issues: Pre-fetched issues for this thread (avoids a query).
+    """
     has_tracking_marker = USES_ISSUE_TRACKING_KEY in state
     has_issue_payload = "issue_states" in state
     if not has_tracking_marker and not has_issue_payload:
@@ -69,10 +77,13 @@ async def _restore_issue_states(
         USES_ISSUE_TRACKING_KEY,
         state.get("issue_states") is not None,
     )
-    result = await db.execute(
-        select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
-    )
-    existing_issues = list(result.scalars().all())
+    if pre_loaded_issues is not None:
+        existing_issues = pre_loaded_issues
+    else:
+        result = await db.execute(
+            select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
+        )
+        existing_issues = list(result.scalars().all())
 
     thread.next_unread_issue_id = None
     await db.flush()
@@ -124,9 +135,21 @@ async def _restore_thread_from_state(
     thread_id: int,
     state: dict,
     session_user_id: int,
+    *,
+    pre_loaded_thread: Thread | None = None,
+    pre_loaded_issues: list[Issue] | None = None,
 ) -> None:
-    """Restore one thread and its issue state from a snapshot payload."""
-    thread = await db.get(Thread, thread_id)
+    """Restore one thread and its issue state from a snapshot payload.
+
+    Args:
+        db: Database session.
+        thread_id: Thread to restore.
+        state: Snapshot state for this thread.
+        session_user_id: Session owner ID.
+        pre_loaded_thread: Pre-fetched thread (avoids a db.get query).
+        pre_loaded_issues: Pre-fetched issues for this thread (avoids a query).
+    """
+    thread = pre_loaded_thread if pre_loaded_thread is not None else await db.get(Thread, thread_id)
     if thread is None:
         thread = Thread(
             id=thread_id,
@@ -168,7 +191,7 @@ async def _restore_thread_from_state(
         if "last_activity_at" in state:
             thread.last_activity_at = _deserialize_datetime(state["last_activity_at"])
 
-    await _restore_issue_states(db, thread, state)
+    await _restore_issue_states(db, thread, state, pre_loaded_issues=pre_loaded_issues)
 
 
 async def _restore_from_full_snapshot(
@@ -218,12 +241,33 @@ async def _restore_from_full_snapshot(
         )
         db.expire_all()
 
-    for thread_id, state in snapshot.thread_states.items():
+    # Bulk-load all threads that need restoration to avoid per-thread db.get.
+    restore_thread_ids = [int(tid) for tid in snapshot.thread_states if not str(tid).startswith("_")]
+    threads_by_id: dict[int, Thread] = {}
+    if restore_thread_ids:
+        t_result = await db.execute(
+            select(Thread).where(Thread.id.in_(restore_thread_ids))
+        )
+        threads_by_id = {t.id: t for t in t_result.scalars().all()}
+
+    # Bulk-load all issues for threads being restored to avoid per-thread queries.
+    issues_by_thread: dict[int, list[Issue]] = {}
+    if restore_thread_ids:
+        i_result = await db.execute(
+            select(Issue).where(Issue.thread_id.in_(restore_thread_ids)).order_by(Issue.position)
+        )
+        for issue in i_result.scalars().all():
+            issues_by_thread.setdefault(issue.thread_id, []).append(issue)
+
+    for thread_id_str, state in snapshot.thread_states.items():
+        tid = int(thread_id_str)
         await _restore_thread_from_state(
             db,
-            int(thread_id),
+            tid,
             state,
             session.user_id,
+            pre_loaded_thread=threads_by_id.get(tid),
+            pre_loaded_issues=issues_by_thread.get(tid),
         )
 
     if snapshot.session_state:
@@ -238,14 +282,38 @@ async def _restore_from_delta_snapshot(
 ) -> None:
     """Restore only state changed by one version-two rating snapshot."""
     thread_states = snapshot.thread_states or {}
+    restore_thread_ids = [
+        int(tid) for tid in thread_states if not str(tid).startswith("_")
+    ]
+
+    # Bulk-load all threads that need restoration to avoid per-thread db.get.
+    threads_by_id: dict[int, Thread] = {}
+    if restore_thread_ids:
+        t_result = await db.execute(
+            select(Thread).where(Thread.id.in_(restore_thread_ids))
+        )
+        threads_by_id = {t.id: t for t in t_result.scalars().all()}
+
+    # Bulk-load all issues for threads being restored to avoid per-thread queries.
+    issues_by_thread: dict[int, list[Issue]] = {}
+    if restore_thread_ids:
+        i_result = await db.execute(
+            select(Issue).where(Issue.thread_id.in_(restore_thread_ids)).order_by(Issue.position)
+        )
+        for issue in i_result.scalars().all():
+            issues_by_thread.setdefault(issue.thread_id, []).append(issue)
+
     for thread_id, state in thread_states.items():
         if thread_id.startswith("_"):
             continue
+        tid = int(thread_id)
         await _restore_thread_from_state(
             db,
-            int(thread_id),
+            tid,
             state,
             session.user_id,
+            pre_loaded_thread=threads_by_id.get(tid),
+            pre_loaded_issues=issues_by_thread.get(tid),
         )
 
     queue_changes = {
@@ -396,6 +464,24 @@ async def undo_to_snapshot(
             else:
                 await _restore_from_full_snapshot(db, session, snapshot, session_id)
 
+            # Counter-only snapshots predate issue tracking. Their restored
+            # state has no issue identity, so rate events from the undone
+            # session must not retain foreign keys to issues just removed.
+            counter_thread_ids = [
+                int(thread_id)
+                for thread_id, state in (snapshot.thread_states or {}).items()
+                if isinstance(state, dict)
+                and USES_ISSUE_TRACKING_KEY in state
+                and not state[USES_ISSUE_TRACKING_KEY]
+            ]
+            if counter_thread_ids:
+                await db.execute(
+                    update(Event)
+                    .where(Event.session_id == session_id)
+                    .where(Event.thread_id.in_(counter_thread_ids))
+                    .values(issue_id=None)
+                )
+
             await _record_undo_event(db, snapshot, session_id)
             if is_delta:
                 await db.delete(snapshot)
@@ -451,6 +537,10 @@ async def undo_to_snapshot(
             if pre_active_event and pre_active_event.selected_thread_id:
                 pre_thread = await db.get(Thread, pre_active_event.selected_thread_id)
                 if pre_thread is not None:
+                    # Refresh identity-mapped state before reading it. An earlier
+                    # commit may have expired this instance, and implicit lazy
+                    # loads are not safe from an async endpoint.
+                    await db.refresh(pre_thread)
                     pre_active_info = ActiveThreadInfo(
                         id=pre_thread.id,
                         title=pre_thread.title,

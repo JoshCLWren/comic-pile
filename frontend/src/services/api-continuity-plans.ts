@@ -1,6 +1,14 @@
 import api from './api'
 
-export type ContinuityPlanNodeType = 'issue' | 'crossover'
+export type ContinuityPlanNodeType = 'issue' | 'crossover' | 'thread'
+
+export type ContinuityPlanOrderingMode = 'strict_sequential' | 'informational'
+
+export interface ContinuityPlanLane {
+  id: string
+  name: string
+  order: number
+}
 
 export interface ContinuityPlanNode {
   id: string
@@ -12,8 +20,8 @@ export interface ContinuityPlanNode {
 
 export interface ContinuityPlanWrite {
   name: string
-  ordering_mode: 'strict_sequential'
-  lanes: Array<{ id: string; name: string; order: number }>
+  ordering_mode: ContinuityPlanOrderingMode
+  lanes: ContinuityPlanLane[]
   nodes: ContinuityPlanNode[]
 }
 

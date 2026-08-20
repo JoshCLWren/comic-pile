@@ -18,7 +18,7 @@ vi.mock('../services/api', () => {
   return {
     default: {
       get: (...args: Parameters<typeof mockApiGet>) => mockApiGet(...args),
-      post: vi.fn(),
+      post: vi.fn().mockRejectedValue(unauthenticatedError()),
       put: vi.fn(),
       delete: vi.fn(),
       interceptors: {
