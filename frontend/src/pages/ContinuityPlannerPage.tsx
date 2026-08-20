@@ -13,8 +13,14 @@ import PlanProjectionDialog from '../components/PlanProjectionDialog'
 import type { Issue, Thread } from '../types'
 
 const LAST_PLAN_KEY = 'comic-pile:last-continuity-plan'
-const LANE_ID = 'main'
 const DEFAULT_PLAN_NAME = 'My reading plan'
+const DEFAULT_LANE = { id: 'main', name: 'Reading order', order: 0 }
+
+interface LaneState {
+  id: string
+  name: string
+  order: number
+}
 
 interface PlannerNode extends ContinuityPlanNode {
   label: string
@@ -67,16 +73,16 @@ async function fetchAllIssues(threadId: number): Promise<Issue[]> {
   return result
 }
 
-function toPayload(name: string, nodes: PlannerNode[]) {
+function toPayload(name: string, lanes: LaneState[], nodes: PlannerNode[]) {
   return {
     name: name.trim(),
-    ordering_mode: 'strict_sequential' as const,
-    lanes: [{ id: LANE_ID, name: 'Reading order', order: 0 }],
-    nodes: nodes.map(({ id, node_type, ref_id }, position) => ({
+    ordering_mode: 'informational' as const,
+    lanes: lanes.map((lane) => ({ id: lane.id, name: lane.name, order: lane.order })),
+    nodes: nodes.map(({ id, node_type, ref_id, lane_id }, position) => ({
       id,
       node_type,
       ref_id,
-      lane_id: LANE_ID,
+      lane_id: lane_id || lanes[0]?.id || 'main',
       position,
     })),
   }
@@ -108,7 +114,7 @@ export default function ContinuityPlannerPage() {
   const lastPlanId = typeof window === 'undefined' ? null : window.localStorage.getItem(LAST_PLAN_KEY)
   const issueRequestRef = useRef<AbortController | null>(null)
 
-  const isDirty = name !== savedName || JSON.stringify(nodes) !== JSON.stringify(savedNodes)
+  const isDirty = name !== savedName || JSON.stringify(nodes) !== JSON.stringify(savedNodes) || JSON.stringify(lanes) !== JSON.stringify(savedLanes)
 
   const hydrateLabels = useCallback(async (rawNodes: ContinuityPlanNode[], loadedGroups: DependencyGroup[]) => {
     const groupNames = new Map(loadedGroups.map((group) => [group.id, group.name]))
@@ -147,9 +153,12 @@ export default function ContinuityPlannerPage() {
         const hydrated = await hydrateLabels(orderedNodes, loadedGroups)
         if (!active) return
         setName(plan.name)
+        setLanes(plan.lanes || [DEFAULT_LANE])
+        setSelectedLaneId((plan.lanes && plan.lanes[0]?.id) ? plan.lanes[0].id : DEFAULT_LANE.id)
         setNodes(hydrated)
         setSavedName(plan.name)
         setSavedNodes(hydrated)
+        setSavedLanes(plan.lanes || [DEFAULT_LANE])
         window.localStorage.setItem(LAST_PLAN_KEY, String(plan.id))
       })
       .catch((error) => active && setLoadError(errorMessage(error, 'Unable to load the continuity planner.')))
@@ -194,7 +203,7 @@ export default function ContinuityPlannerPage() {
       id: key,
       node_type: 'issue',
       ref_id: selectedIssue.id,
-      lane_id: LANE_ID,
+      lane_id: selectedLaneId,
       position: current.length,
       label: `${selectedThread.title} #${selectedIssue.issue_number}`,
     }])
@@ -214,7 +223,7 @@ export default function ContinuityPlannerPage() {
       id: key,
       node_type: 'crossover',
       ref_id: group.id,
-      lane_id: LANE_ID,
+      lane_id: selectedLaneId,
       position: current.length,
       label: group.name,
     }])
@@ -241,8 +250,8 @@ export default function ContinuityPlannerPage() {
     setSaveError(null)
     try {
       const saved = planId
-        ? await continuityPlansApi.update(planId, toPayload(name, nodes))
-        : await continuityPlansApi.create(toPayload(name, nodes))
+        ? await continuityPlansApi.update(planId, toPayload(name, lanes, nodes))
+        : await continuityPlansApi.create(toPayload(name, lanes, nodes))
       const normalized = nodes.map((node, position) => ({ ...node, position }))
       setNodes(normalized)
       setSavedName(saved.name)
@@ -258,6 +267,8 @@ export default function ContinuityPlannerPage() {
 
   const cancel = () => {
     setName(savedName || DEFAULT_PLAN_NAME)
+    setLanes(savedLanes)
+    setSelectedLaneId(savedLanes[0]?.id || DEFAULT_LANE.id)
     setNodes(savedNodes)
     setSaveError(null)
   }
