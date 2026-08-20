@@ -8,19 +8,11 @@ import { ComicIdentity } from './ComicIdentity'
 
 interface ComicPillarProps {
   activeRatingThread: RatingThread | null
-  currentDie: number
-  rolledResult: number | null
-  poolSize: number
-  hasValidRolledResult: boolean
   onRefreshThread: () => void
 }
 
 export function ComicPillar({
   activeRatingThread,
-  currentDie,
-  rolledResult,
-  poolSize,
-  hasValidRolledResult,
   onRefreshThread,
 }: ComicPillarProps) {
   const [isCorrectionDialogOpen, setIsCorrectionDialogOpen] = useState(false)
@@ -85,12 +77,6 @@ export function ComicPillar({
                 {threadTitle}
                 {issueNumber != null ? <span style={{ color: 'var(--theme-comic-accent)' }}> #{issueNumber}</span> : null}
               </h2>
-              {hasValidRolledResult ? (
-                <p className="mt-1 text-[11px] font-bold text-stone-400">
-                  Rolled {rolledResult} on d{currentDie}
-                  {currentDie > poolSize ? ` · ${poolSize} eligible` : ''}
-                </p>
-              ) : null}
             </div>
             {issueNumber != null ? (
               <div className="flex shrink-0 gap-1.5">

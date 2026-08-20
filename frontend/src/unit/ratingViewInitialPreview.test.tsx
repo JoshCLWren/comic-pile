@@ -39,8 +39,6 @@ function renderRatingView({ currentDie, rating, predictedDie }: { currentDie: nu
           rolledResult={null}
           rating={rating}
           predictedDie={predictedDie}
-          hasValidRolledResult={false}
-          poolSize={0}
           errorMessage=""
           rateIsPending={false}
           snoozeIsPending={false}

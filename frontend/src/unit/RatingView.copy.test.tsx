@@ -54,8 +54,6 @@ function renderRatingView() {
       rolledResult={2}
       rating={4}
       predictedDie={4}
-      hasValidRolledResult
-      poolSize={6}
       errorMessage=""
       rateIsPending={false}
       snoozeIsPending={false}

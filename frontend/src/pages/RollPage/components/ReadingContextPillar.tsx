@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { ReadingOrder } from '../../../services/api-reading-orders'
 import type { ConnectedThreadInfo } from '../../../types'
 import type { RatingThread } from '../types'
+import type { ReaderContextResponse } from '../../../types'
+import { issuesApi } from '../../../services/api-issues'
 import ContinuityCorrectionDialog from '../../../components/ContinuityCorrectionDialog'
 import { ContinuityReadinessSummary } from './ContinuityReadinessSummary'
 import { ReadingOrderGroups } from './ReadingOrderGroups'
@@ -12,6 +14,8 @@ interface ReadingContextPillarProps {
   readingOrders: ReadingOrder[]
   connectedThreads: ConnectedThreadInfo[]
   onRefreshThread: () => void
+  rolledResult: number | null
+  currentDie: number
 }
 
 export function ReadingContextPillar({
@@ -19,12 +23,49 @@ export function ReadingContextPillar({
   readingOrders,
   connectedThreads,
   onRefreshThread,
+  rolledResult,
+  currentDie,
 }: ReadingContextPillarProps) {
   const [isContinuityDialogOpen, setIsContinuityDialogOpen] = useState(false)
   const [isRouteExplanationOpen, setIsRouteExplanationOpen] = useState(false)
+  const [readerContext, setReaderContext] = useState<ReaderContextResponse | null>(null)
+  const [readerContextError, setReaderContextError] = useState<string | null>(null)
   const threadTitle = activeRatingThread?.title ?? 'Loading…'
   const issueNumber = activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number ?? null
   const issueId = activeRatingThread?.issue_id ?? activeRatingThread?.next_issue_id
+
+  // Fetch reader-context data when activeRatingThread changes
+  useEffect(() => {
+    if (!activeRatingThread || !issueId) {
+      setReaderContext(null)
+      setReaderContextError(null)
+      return
+    }
+
+    const abortController = new AbortController()
+    let isCurrent = true
+    const fetchReaderContext = async () => {
+      setReaderContextError(null)
+      try {
+        const response = await issuesApi.getReaderContext(issueId, { signal: abortController.signal })
+        if (isCurrent && !abortController.signal.aborted) {
+          setReaderContext(response)
+        }
+      } catch (error) {
+        if (isCurrent && !abortController.signal.aborted) {
+          console.error('Failed to fetch reader-context:', error)
+          setReaderContextError('Failed to load reading context')
+        }
+      }
+    }
+
+    fetchReaderContext()
+
+    return () => {
+      isCurrent = false
+      abortController.abort()
+    }
+  }, [activeRatingThread, issueId])
 
   return (
     <div className="w-full space-y-4">
@@ -33,46 +74,214 @@ export function ReadingContextPillar({
       </div>
       <ContinuityReadinessSummary issueId={issueId} />
 
-      {connectedThreads.length > 0 ? (
-        <section aria-labelledby="connected-heading" className="rounded-2xl p-3" style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'rgba(6, 182, 212, 0.09)' }}>
-          <div className="flex items-center justify-between gap-2">
-            <h3 id="connected-heading" className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-continuity-accent)' }}>
-              Verified dependency connections
+      {/* Two-up status row: roll/result, series progress */}
+      <section className="grid grid-cols-2 gap-4 text-center pb-3 border-b border-[rgba(6,182,212,0.2)]">
+        {/* Roll/Result */}
+        <div>
+          {(rolledResult !== null && currentDie !== null) ? (
+            <>
+              <div className="text-[9px] font-bold text-stone-500">Roll Result</div>
+              <div className="text-[11px] font-mono text-amber-500">
+                Rolled {rolledResult} on d{currentDie}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="text-[9px] font-bold text-stone-500">Roll Result</div>
+              <div className="text-[11px] text-stone-400">—</div>
+            </>
+          )}
+        </div>
+        
+        {/* Series Progress */}
+        <div>
+          <div className="text-[9px] font-bold text-stone-500">Series Progress</div>
+          <ReadingOrderGroups threadId={activeRatingThread?.id} className="text-[11px] font-mono text-amber-500" />
+        </div>
+      </section>
+
+      {/* Bounded local series chain */}
+       {readerContext ? (
+        <section aria-labelledby="local-series-heading" className="rounded-2xl p-4" style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'rgba(6, 182, 212, 0.09)' }}>
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <h3 id="local-series-heading" className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-continuity-accent)' }}>
+              Local Series Chain
             </h3>
-            <button
-              type="button"
-              onClick={() => setIsContinuityDialogOpen(true)}
-              className="text-[10px] font-bold transition-colors hover:opacity-80"
-              style={{ color: 'var(--theme-continuity-accent)' }}
-            >
-              Correct continuity
-            </button>
           </div>
-          <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Connected threads">
-            {connectedThreads.map((connectedThread) => (
-              <li
-                key={`${connectedThread.thread_id}-${connectedThread.dependency_id}`}
-                className="rounded-full px-2.5 py-1 text-[10px] font-bold"
-                style={{
-                  border: '1px solid rgba(6,182,212,0.4)',
-                  backgroundColor: 'rgba(6, 182, 212, 0.12)',
-                  color: 'rgb(165, 243, 252)',
-                }}
-              >
-                {connectedThread.title}
-              </li>
-            ))}
-          </ul>
+          
+          <div className="space-y-2">
+            {readerContext.local_chain.issues.map((issue, _index) => {
+              const isCurrent = issue.relation === 'current'
+              return (
+                <div key={issue.issue_id} className={`flex items-center gap-3 ${isCurrent ? 'border-l-2 border-l-solid border-l-[var(--theme-continuity-accent)]' : ''} `}>
+                  {/* Issue relation indicator */}
+                  <div className="flex-shrink-0 w-2 h-2 rounded-full" style={{
+                    backgroundColor: isCurrent ? 'var(--theme-continuity-accent)' : 
+                                issue.relation === 'previous' ? 'rgba(6,182,212,0.3)' :
+                                issue.relation === 'next' ? 'rgba(6,182,212,0.2)' :
+                                'rgba(6,182,212,0.1)'
+                  }}></div>
+                  
+                  {/* Issue info */}
+                  <div className="flex-1 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[10px]">{issue.issue_number}</span>
+                          {issue.rating !== null && (
+                            <span className="text-[9px] text-stone-500">({issue.rating})</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-[9px] text-stone-500">
+                        {issue.relation === 'previous' && '←'}
+                        {issue.relation === 'current' && 'YOU ARE HERE'}
+                        {issue.relation === 'next' && '→'}
+                        {issue.relation === 'future' && '↗'}
+                      </div>
+                    </div>
+                    
+                    {/* Crossover memberships for this issue (exact current/future crossover context) */}
+                    {issue.crossover_memberships.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {issue.crossover_memberships.map((crossover) => (
+                          <span key={crossover.id} className="rounded-full px-1.5 py-0.5 text-[8px] font-bold" style={{
+                            border: '1px solid rgba(212,137,14,0.4)',
+                            backgroundColor: 'rgba(212, 137, 14, 0.12)',
+                            color: 'rgb(250, 204, 139)',
+                          }}>
+                            {crossover.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </section>
       ) : null}
 
-      <ReadingOrderGroups threadId={activeRatingThread?.id} />
+      {/* Reader-context unavailable state */}
+      {readerContextError && !readerContext ? (
+        <section aria-labelledby="reader-context-unavailable-heading" className="rounded-2xl p-3" style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'rgba(6, 182, 212, 0.09)' }}>
+          <h3 id="reader-context-unavailable-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
+            Local reading context unavailable
+          </h3>
+          <p className="mt-1 text-[11px] text-stone-400">
+            {readerContextError}
+          </p>
+        </section>
+      ) : null}
 
+      {/* Exact current/future crossover context attached to the issue that owns it */}
+      {readerContext ? (
+        <section aria-labelledby="exact-crossover-heading" className="rounded-2xl p-4" style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'rgba(6, 182, 212, 0.09)' }}>
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <h3 id="exact-crossover-heading" className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-continuity-accent)' }}>
+              Exact Crossover Context
+            </h3>
+          </div>
+          
+          {/* Current issue crossovers */}
+          <div className="space-y-2">
+            <div className="font-bold text-[9px] text-stone-500 mb-1">Current Issue Crossovers:</div>
+            {(() => {
+              const currentIssue = readerContext.local_chain.issues.find(issue => issue.relation === 'current')
+              if (!currentIssue || currentIssue.crossover_memberships.length === 0) return null
+              return currentIssue.crossover_memberships.map((crossover) => (
+                <div key={crossover.id} className="rounded-full px-2 py-1 text-[9px] font-bold" style={{
+                  border: '1px solid rgba(212,137,14,0.4)',
+                  backgroundColor: 'rgba(212, 137, 14, 0.12)',
+                  color: 'rgb(250, 204, 139)',
+                }}>
+                  {crossover.name}
+                </div>
+              ))
+            })()}
+          </div>
+
+          {/* Future crossovers (from crossovers array where applies_to_current_issue is false) */}
+          <section aria-labelledby="upcoming-crossover-heading" className="rounded-2xl p-4 mt-4" style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'rgba(6, 182, 212, 0.09)' }}>
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <h3 id="upcoming-crossover-heading" className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-continuity-accent)' }}>
+                Upcoming Crossovers
+              </h3>
+              <span className="text-[8px] text-stone-500">
+                ({readerContext.crossovers.filter(c => !c.applies_to_current_issue).length} upcoming)
+              </span>
+            </div>
+            
+            {readerContext.crossovers
+              .filter(crossover => !crossover.applies_to_current_issue)
+              .map((crossover) => (
+                <div key={crossover.id} className="flex items-center gap-3 px-2 py-1" style={{ borderLeft: '3px solid rgb(250, 204, 139)', backgroundColor: 'rgba(250, 204, 139, 0.05)' }}>
+                  <div className="flex-shrink-0 w-2 h-2 rounded-full" style={{ backgroundColor: 'rgb(250, 204, 139)' }}></div>
+                  <div className="flex-1 space-y-0.5">
+                    <div className="flex items-center justify-between text-[8px]">
+                      <span>{crossover.name}</span>
+                      <span className="text-stone-400">→</span>
+                      <span>#{crossover.next_member?.issue_number ?? '?'}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+          </section>
+        </section>
+      ) : null}
+
+      {/* Exact persisted one-hop dependency/continuity edges touching the local neighborhood */}
+      {readerContext ? (
+        <section aria-labelledby="dependency-edges-heading" className="rounded-2xl p-4" style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'rgba(6, 182, 212, 0.09)' }}>
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <h3 id="dependency-edges-heading" className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-continuity-accent)' }}>
+              Dependency & Continuity Edges
+            </h3>
+            <span className="text-[8px] text-stone-500">
+              ({readerContext.local_chain.edges.length} edges)
+            </span>
+          </div>
+          
+          {readerContext.local_chain.edges.length > 0 ? (
+            <div className="space-y-1">
+              {readerContext.local_chain.edges.map((edge) => (
+                <div key={`${edge.source_issue_id}-${edge.target_issue_id}`} className="flex items-center gap-3 px-2 py-1" style={{
+                  borderLeft: edge.kind === 'dependency' ? '3px solid rgb(250, 204, 139)' : '3px solid rgb(165, 243, 252)',
+                  backgroundColor: edge.kind === 'dependency' ? 'rgba(250, 204, 139, 0.05)' : 'rgba(165, 243, 252, 0.05)'
+                }}>
+                  <div className="flex-shrink-0 w-2 h-2 rounded-full" style={{
+                    backgroundColor: edge.kind === 'dependency' ? 'rgb(250, 204, 139)' : 'rgb(165, 243, 252)'
+                  }}></div>
+                  <div className="flex-1 space-y-0.5">
+                    <div className="flex items-center justify-between text-[8px]">
+                      <span>#{edge.source_issue_id}</span>
+                      <span className="text-stone-400">{edge.kind === 'dependency' ? '→' : '↝'}</span>
+                      <span>#{edge.target_issue_id}</span>
+                    </div>
+                    {edge.note && (
+                      <div className="text-[8px] text-stone-400 italic">
+                        {edge.note}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[9px] text-stone-500 text-center py-4">
+              No dependency or continuity edges in local neighborhood
+            </p>
+          )}
+        </section>
+      ) : null}
+
+      {/* Retained reading-route summaries */}
       {readingOrders.length > 0 ? (
         <section aria-labelledby="routes-heading" className="space-y-2">
           <div className="flex items-center justify-between gap-2">
             <h3 id="routes-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
-              Reading routes
+              Reading Routes
             </h3>
             <span className="text-[10px] font-bold text-stone-600">
               {readingOrders.length} active
@@ -117,6 +326,30 @@ export function ReadingContextPillar({
         </section>
       ) : null}
 
+      {/* Continuity correction affordance */}
+      {connectedThreads.length > 0 && activeRatingThread ? (
+        <section aria-labelledby="correction-heading" className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <h3 id="correction-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
+              Continuity Correction
+            </h3>
+            <button
+              type="button"
+              onClick={() => setIsContinuityDialogOpen(true)}
+              className="min-h-11 rounded-lg px-3 text-[10px] font-black transition"
+              style={{
+                border: '1px solid rgba(6,182,212,0.4)',
+                backgroundColor: 'rgba(6, 182, 212, 0.09)',
+                color: 'var(--theme-continuity-accent)',
+              }}
+            >
+              Correct continuity
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {/* Explain route / correction affordances */}
       <ReadingRouteExplanation
         isOpen={isRouteExplanationOpen}
         issueId={issueId}

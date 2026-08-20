@@ -51,8 +51,6 @@ function ratingView(overrides: Record<string, unknown> = {}) {
     rolledResult: 3,
     rating: 3.0,
     predictedDie: 8,
-    hasValidRolledResult: true,
-    poolSize: 6,
     errorMessage: '',
     rateIsPending: false,
     snoozeIsPending: false,

@@ -1,5 +1,5 @@
 import api from './api'
-import type { Issue, IssueListResponse, Thread } from '../types'
+import type { Issue, IssueListResponse, ReaderContextResponse, Thread } from '../types'
 
 export interface SetCurrentIssueResponse {
   thread_id: number
@@ -131,17 +131,27 @@ export const issuesApi = {
     })
   },
 
-  /**
-   * Atomically set the current issue for an active thread
-   * Marks all issues before the target as read, sets target as unread,
-   * and updates the session's pending issue.
-   * @param threadId - The thread to correct
-   * @param issueNumber - The target issue number to set as current
-   * @returns Response with corrected thread and issue info
-   */
+/**
+ * Atomically set the current issue for an active thread
+ * Marks all issues before the target as read, sets target as unread,
+ * and updates the session's pending issue.
+ * @param threadId - The thread to correct
+ * @param issueNumber - The target issue number to set as current
+ * @returns Response with corrected thread and issue info
+ */
   setCurrentIssue: async (threadId: number, issueNumber: string): Promise<SetCurrentIssueResponse> => {
     return api.post(`/v1/threads/${threadId}:setCurrentIssue`, {
       issue_number: issueNumber,
     })
+  },
+
+  /**
+   * Get reader-context for an issue
+   * Returns bounded series history, exact crossover context, and local reading neighborhood
+   * @param issueId - The issue ID to get reader-context for
+   * @returns Reader-context response with series, crossovers, and local_chain data
+   */
+  getReaderContext: async (issueId: number, config?: { signal?: AbortSignal }): Promise<ReaderContextResponse> => {
+    return api.get(`/v1/issues/${issueId}/reader-context`, config)
   },
 }

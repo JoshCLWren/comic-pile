@@ -83,8 +83,6 @@ function renderRatingView(overrides: Partial<React.ComponentProps<typeof RatingV
       rolledResult={2}
       rating={4}
       predictedDie={4}
-      hasValidRolledResult
-      poolSize={6}
       errorMessage=""
       rateIsPending={false}
       snoozeIsPending={false}
@@ -147,10 +145,10 @@ describe('RatingView continuity correction', () => {
     expect(screen.queryByTestId('continuity-correction-dialog')).not.toBeInTheDocument()
   })
 
-  it('does not open the dialog when no active thread exists', async () => {
-    const user = userEvent.setup()
+  it('does not render the Correct continuity button when no active thread exists', () => {
     renderRatingView({ activeRatingThread: null })
-    await user.click(screen.getByRole('button', { name: /correct continuity/i }))
-    expect(screen.queryByTestId('continuity-correction-dialog')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /correct continuity/i }),
+    ).not.toBeInTheDocument()
   })
 })

@@ -8,7 +8,7 @@ const mockApiPost = vi.fn()
 const mockGetAccessToken = vi.fn<() => string | null>(() => null)
 const mockSetAccessToken = vi.fn()
 const mockClearAccessToken = vi.fn()
-const mockReadStoredAccessToken = vi.fn<() => string | null>(() => null)
+const mockReadStoredAccessToken = vi.fn() => string | null>(() => null)
 
 vi.mock('../services/api', () => ({
   default: {
@@ -78,7 +78,6 @@ describe('hard refresh session bootstrap', () => {
   test('preserves the authenticated screen when resume validation is temporarily unavailable', async () => {
     window.history.replaceState({}, '', '/queue')
     mockGetAccessToken.mockReturnValue('preserved-access-token')
-    mockReadStoredAccessToken.mockReturnValue('preserved-access-token')
     mockApiGet.mockResolvedValueOnce({ username: 'testuser', email: 'test@example.com' })
 
     render(

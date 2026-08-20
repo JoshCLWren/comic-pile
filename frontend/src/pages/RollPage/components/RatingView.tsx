@@ -12,8 +12,6 @@ interface RatingViewProps {
   rolledResult: number | null
   rating: number
   predictedDie: number
-  hasValidRolledResult: boolean
-  poolSize: number
   errorMessage: string
   rateIsPending: boolean
   snoozeIsPending: boolean
@@ -33,8 +31,6 @@ export function RatingView({
   rolledResult,
   rating,
   predictedDie,
-  hasValidRolledResult,
-  poolSize,
   errorMessage,
   rateIsPending,
   snoozeIsPending,
@@ -59,10 +55,6 @@ export function RatingView({
         <div className="md:row-span-2 xl:row-span-1">
           <ComicPillar
             activeRatingThread={activeRatingThread}
-            currentDie={currentDie}
-            rolledResult={rolledResult}
-            poolSize={poolSize}
-            hasValidRolledResult={hasValidRolledResult}
             onRefreshThread={onRefreshThread}
           />
         </div>
@@ -72,6 +64,8 @@ export function RatingView({
           readingOrders={readingOrders}
           connectedThreads={connectedThreads}
           onRefreshThread={onRefreshThread}
+          rolledResult={rolledResult}
+          currentDie={currentDie}
         />
 
         <YourContextPillar

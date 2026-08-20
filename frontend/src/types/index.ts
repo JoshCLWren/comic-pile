@@ -474,3 +474,109 @@ export interface RollResponse {
 export interface BugReportResponse {
   issue_url: string
 }
+
+/**
+ * Reader-context response from GET /v1/issues/{issue_id}/reader-context
+ * As defined in issue #1401
+ */
+export interface ReaderContextResponse {
+  issue_id: number
+  series: ReaderContextSeries
+  crossovers: ReaderContextCrossover[]
+  local_chain: ReaderContextLocalChain
+}
+
+/**
+ * Series information in reader-context response
+ */
+export interface ReaderContextSeries {
+  identity_source: 'comicvine' | 'unavailable'
+  canonical_series_id: string | null
+  series_name: string | null
+  average_rating: number | null
+  ratings_count: number
+  previous_issue: ReaderContextPreviousIssue | null
+  recent_ratings: ReaderContextRating[]  // max 5
+  highest_rating: number | null
+  lowest_rating: number | null
+}
+
+/**
+ * Previous issue information in series
+ */
+export interface ReaderContextPreviousIssue {
+  issue_id: number
+  issue_number: string
+  rating: number | null
+}
+
+/**
+ * Rating information in series
+ */
+export interface ReaderContextRating {
+  issue_id: number
+  issue_number: string
+  rating: number | null
+  timestamp: string  // ISO 8601 timestamp
+}
+
+/**
+ * Crossover information in reader-context response
+ */
+export interface ReaderContextCrossover {
+  id: number
+  name: string
+  applies_to_current_issue: boolean
+  next_member: ReaderContextNextMember | null
+  average_rating: number | null
+  ratings_count: number
+  read_count: number
+}
+
+/**
+ * Next member information in crossover
+ */
+export interface ReaderContextNextMember {
+  issue_id: number
+  issue_number: string
+}
+
+/**
+ * Local chain information in reader-context response
+ */
+export interface ReaderContextLocalChain {
+  issues: ReaderContextLocalIssue[]  // max 5
+  edges: ReaderContextEdge[]         // max 20
+}
+
+/**
+ * Local issue information in local_chain
+ */
+export interface ReaderContextLocalIssue {
+  issue_id: number
+  issue_number: string
+  position: number
+  status: 'unread' | 'read'
+  relation: 'previous' | 'current' | 'next' | 'future'
+  rating: number | null
+  crossover_memberships: ReaderContextCrossoverMembership[]  // exact crossover memberships for this issue
+}
+
+/**
+ * Crossover membership for a local issue
+ */
+export interface ReaderContextCrossoverMembership {
+  id: number
+  name: string
+}
+
+/**
+ * Edge information in local_chain (one-hop dependency/continuity edges)
+ */
+export interface ReaderContextEdge {
+  id: number
+  kind: 'dependency' | 'continuity'
+  source_issue_id: number
+  target_issue_id: number
+  note: string | null
+}

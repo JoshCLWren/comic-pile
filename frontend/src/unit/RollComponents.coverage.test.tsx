@@ -126,9 +126,8 @@ describe('RatingView', () => {
   it('renders rating states and invokes controls', async () => {
     const onUpdateRating = vi.fn(); const onSubmitRating = vi.fn(); const onSnooze = vi.fn(); const onCancel = vi.fn(); const onRefreshThread = vi.fn()
     const user = userEvent.setup()
-    render(<RatingView activeRatingThread={{ ...thread, id: 1, issue_number: '2', next_issue_number: '3', reading_progress: 'in_progress' } as never} currentDie={20} rolledResult={19} rating={5} predictedDie={6} hasValidRolledResult poolSize={6} errorMessage="Problem" rateIsPending={false} snoozeIsPending={false} dismissIsPending={false} readingOrders={[]} connectedThreads={[{ thread_id: 2, title: 'Other', connection_type: 'blocks', dependency_id: 1 }]} onUpdateRating={onUpdateRating} onSubmitRating={onSubmitRating} onSnooze={onSnooze} onCancel={onCancel} onRefreshThread={onRefreshThread} />)
+    render(<RatingView activeRatingThread={{ ...thread, id: 1, issue_number: '2', next_issue_number: '3', reading_progress: 'in_progress' } as never} currentDie={20} rolledResult={19} rating={5} predictedDie={6} errorMessage="Problem" rateIsPending={false} snoozeIsPending={false} dismissIsPending={false} readingOrders={[]} connectedThreads={[{ thread_id: 2, title: 'Other', connection_type: 'blocks', dependency_id: 1 }]} onUpdateRating={onUpdateRating} onSubmitRating={onSubmitRating} onSnooze={onSnooze} onCancel={onCancel} onRefreshThread={onRefreshThread} />)
     expect(screen.getByText(/Rolled 19 on d20/)).toBeInTheDocument()
-    expect(screen.getByText(/6 eligible/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /correct issue number/i }))
     await user.click(screen.getByRole('button', { name: /close correction/i }))
     const rating = screen.getByRole('slider')
@@ -143,7 +142,7 @@ describe('RatingView', () => {
   it('renders empty, low-rating, progress, reading-order, and correction states', async () => {
     const callbacks = { onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onSnooze: vi.fn(), onCancel: vi.fn(), onRefreshThread: vi.fn() }
     const user = userEvent.setup()
-    render(<RatingView activeRatingThread={{ ...thread, issue_number: '2', next_issue_number: null, reading_progress: 'completed', issues_remaining: 1 } as never} currentDie={4} rolledResult={null} rating={1} predictedDie={6} hasValidRolledResult={false} poolSize={2} errorMessage="Oops" rateIsPending snoozeIsPending dismissIsPending readingOrders={[{ id: 1, name: 'Order', description: '', completed_items: 0, total_items: 0 } as never]} connectedThreads={[{ thread_id: 2, title: 'Other', connection_type: 'blocks', dependency_id: 1 }]} {...callbacks} />)
+    render(<RatingView activeRatingThread={{ ...thread, issue_number: '2', next_issue_number: null, reading_progress: 'completed', issues_remaining: 1 } as never} currentDie={4} rolledResult={null} rating={1} predictedDie={6} errorMessage="Oops" rateIsPending snoozeIsPending dismissIsPending readingOrders={[{ id: 1, name: 'Order', description: '', completed_items: 0, total_items: 0 } as never]} connectedThreads={[{ thread_id: 2, title: 'Other', connection_type: 'blocks', dependency_id: 1 }]} {...callbacks} />)
     expect(screen.getByText(/This is the last issue/)).toBeInTheDocument()
     expect(screen.getByText('Oops')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /correct issue number/i }))
@@ -161,8 +160,6 @@ describe('RatingView', () => {
       rolledResult={7}
       rating={3}
       predictedDie={7 as never}
-      hasValidRolledResult={false}
-      poolSize={0}
       errorMessage=""
       rateIsPending={false}
       snoozeIsPending={false}
@@ -189,8 +186,6 @@ describe('RatingView', () => {
       rolledResult={2}
       rating={5}
       predictedDie={6}
-      hasValidRolledResult
-      poolSize={8}
       errorMessage=""
       rateIsPending={false}
       snoozeIsPending={false}
@@ -205,16 +200,14 @@ describe('RatingView', () => {
     expect(callbacks.onSubmitRating).toHaveBeenCalledWith(false)
   })
 
-  it('pluralizes connected threads and renders separators for multiple links', () => {
-    // L135 `connectedThreads.length !== 1 ? 's' : ''` and L139 `i > 0 && ', '`
+  it('renders continuity correction button when connected threads exist', () => {
+    // connectedThreads are no longer displayed as a list; they are used for the correction workflow
     render(<RatingView
       activeRatingThread={{ ...thread, issue_number: '2', issues_remaining: 1 } as never}
       currentDie={6}
       rolledResult={3}
       rating={3}
       predictedDie={6}
-      hasValidRolledResult
-      poolSize={2}
       errorMessage=""
       rateIsPending={false}
       snoozeIsPending={false}
@@ -230,9 +223,6 @@ describe('RatingView', () => {
       onCancel={vi.fn()}
       onRefreshThread={vi.fn()}
     />)
-    // L135 `connectedThreads.length !== 1 ? 's' : ''` is evaluated when building the Tooltip content prop;
-    // L139 `i > 0 && ', '` renders the separator between the two connected thread titles.
-    expect(screen.getByText('Alpha')).toBeInTheDocument()
-    expect(screen.getByText('Beta')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /correct continuity/i })).toBeInTheDocument()
   })
 })

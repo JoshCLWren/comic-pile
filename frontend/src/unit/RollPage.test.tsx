@@ -4,6 +4,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
+import { ToastProvider } from '../contexts/ToastProvider'
 import {
   useClearManualDie,
   useDismissPending,
@@ -87,6 +88,14 @@ const bootstrap = {
   stale_thread: null,
 }
 
+function renderRollPage() {
+  return render(
+    <ToastProvider>
+      <RollPage />
+    </ToastProvider>
+  )
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   mockedUseRollBootstrap.mockReturnValue({
@@ -116,7 +125,7 @@ beforeEach(() => {
 })
 
 it('renders the bounded bootstrap pool without Collections state', () => {
-  render(<RollPage />)
+  renderRollPage()
 
   expect(screen.getByText('Pile Roller')).toBeInTheDocument()
   expect(screen.getByLabelText(/Eligible now, 2 mapped results/i)).toBeInTheDocument()
@@ -127,7 +136,7 @@ it('renders the bounded bootstrap pool without Collections state', () => {
 
 it('opens the retained thread action sheet from a bootstrap pool item', async () => {
   const user = userEvent.setup()
-  render(<RollPage />)
+  renderRollPage()
 
   await user.click(screen.getByText('Saga'))
 
@@ -150,7 +159,7 @@ it('loads every active override page only after the modal opens', async () => {
       next_page_token: null,
     } as any)
 
-  render(<RollPage />)
+  renderRollPage()
   expect(threadsApi.list).not.toHaveBeenCalled()
 
   await user.click(screen.getByRole('button', { name: /pick manually/i }))
@@ -164,7 +173,7 @@ it('loads every active override page only after the modal opens', async () => {
 
 it('explains automatic and manual die modes on mobile', async () => {
   const user = userEvent.setup()
-  render(<RollPage />)
+  renderRollPage()
 
   const dieControl = screen.getByRole('button', { name: /current die d6, automatic mode/i })
   expect(dieControl).toHaveTextContent('Auto')
@@ -185,7 +194,7 @@ it('shows a retry action when bootstrap loading fails', async () => {
     error: new Error('bootstrap unavailable'),
   })
 
-  render(<RollPage />)
+  renderRollPage()
   expect(screen.getByText('Session Error')).toBeInTheDocument()
 
   await user.click(screen.getByRole('button', { name: 'Retry' }))
