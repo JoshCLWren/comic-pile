@@ -6,11 +6,11 @@ deterministic mapping logic and the post-commit attribute handling that previous
 risked ``MissingGreenlet`` errors under async SQLAlchemy.
 """
 
-from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Issue, Thread, User
 from app.models.external_identity import (
@@ -31,16 +31,16 @@ from comic_pile.comicvine_provider import ComicVineResponse, ComicVineRateLimitE
 class _FakeComicVineClient:
     """Provider client stub that returns a single deterministic volume roster."""
 
-    def __init__(self, api_key: str, cache_dir: str, timeout_seconds: float = 5.0) -> None:
+    def __init__(self, api_key: str, cache_dir: str | Path, timeout_seconds: float = 5.0) -> None:
         self.api_key = api_key
-        self.cache_dir = cache_dir
+        self.cache_dir = Path(cache_dir)
         self.timeout_seconds = timeout_seconds
 
     async def request(
         self,
         endpoint_bucket: str,
         endpoint: str,
-        params: dict[str, Any],
+        params: dict[str, object],
         *,
         refresh: bool = False,
     ) -> ComicVineResponse:
@@ -78,7 +78,7 @@ class _FakeComicVineClient:
 
 
 async def _seed(
-    db: Any,
+    db: AsyncSession,
     *,
     username: str,
     issue_number: str,
@@ -122,7 +122,7 @@ async def _seed(
 
 
 @pytest.mark.asyncio
-async def test_normalize_issue_label_strips_hash_and_case(async_db: Any) -> None:
+async def test_normalize_issue_label_strips_hash_and_case(async_db: AsyncSession) -> None:
     """Labels are NFKC-normalized, hash-stripped, and lowercased."""
     assert _normalize_issue_label("#5") == "5"
     assert _normalize_issue_label("  Annual 1 ") == "annual 1"
@@ -131,7 +131,7 @@ async def test_normalize_issue_label_strips_hash_and_case(async_db: Any) -> None
 
 
 @pytest.mark.asyncio
-async def test_is_ambiguous_special_detects_non_issue_volumes(async_db: Any) -> None:
+async def test_is_ambiguous_special_detects_non_issue_volumes(async_db: AsyncSession) -> None:
     """Annuals, specials, one-shots, and giants are treated as ambiguous."""
     assert _is_ambiguous_special("Annual 1") is True
     assert _is_ambiguous_special("Giant-Size X") is True
@@ -142,16 +142,16 @@ async def test_is_ambiguous_special_detects_non_issue_volumes(async_db: Any) -> 
 
 @pytest.mark.asyncio
 async def test_schedule_skips_without_confirmed_series(
-    async_db: Any, monkeypatch: pytest.MonkeyPatch
+    async_db_committed: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """No background task is created when resolution cannot possibly succeed."""
     user, issue, _series = await _seed(
-        async_db, username="series_res_noseries", issue_number="5", confirmed_series=False
+        async_db_committed, username="series_res_noseries", issue_number="5", confirmed_series=False
     )
     spy = AsyncMock()
     monkeypatch.setattr(resolution_module, "_run_series_resolution", spy)
 
-    scheduled = await schedule_series_issue_resolution(async_db, issue.id, user.id)
+    scheduled = await schedule_series_issue_resolution(async_db_committed, issue.id, user.id)
 
     assert scheduled is False
     spy.assert_not_called()
@@ -159,25 +159,25 @@ async def test_schedule_skips_without_confirmed_series(
 
 @pytest.mark.asyncio
 async def test_schedule_runs_when_series_confirmed(
-    async_db: Any, monkeypatch: pytest.MonkeyPatch
+    async_db_committed: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A confirmed series mapping lets the resolver schedule and run."""
     user, issue, _series = await _seed(
-        async_db, username="series_res_sched", issue_number="5", confirmed_series=True
+        async_db_committed, username="series_res_sched", issue_number="5", confirmed_series=True
     )
     monkeypatch.setattr(resolution_module, "ComicVineClient", _FakeComicVineClient)
     monkeypatch.setenv("COMICVINE_API_KEY", "test-key")
     hydrate = AsyncMock()
     monkeypatch.setattr(resolution_module, "hydrate_issue", hydrate)
 
-    scheduled = await schedule_series_issue_resolution(async_db, issue.id, user.id)
+    scheduled = await schedule_series_issue_resolution(async_db_committed, issue.id, user.id)
     assert scheduled is True
 
     task = resolution_module._pending_resolutions[issue.id]
     await task
 
     mapping = (
-        await async_db.execute(
+        await async_db_committed.execute(
             select(IssueExternalIdentityMapping).where(
                 IssueExternalIdentityMapping.issue_id == issue.id
             )
@@ -190,11 +190,11 @@ async def test_schedule_runs_when_series_confirmed(
 
 @pytest.mark.asyncio
 async def test_resolves_confirmed_mapping_from_series(
-    async_db: Any, monkeypatch: pytest.MonkeyPatch
+    async_db_committed: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A single deterministic match produces a confirmed issue mapping."""
     user, issue, _series = await _seed(
-        async_db, username="series_res_happy", issue_number="5", confirmed_series=True
+        async_db_committed, username="series_res_happy", issue_number="5", confirmed_series=True
     )
     monkeypatch.setattr(resolution_module, "ComicVineClient", _FakeComicVineClient)
     monkeypatch.setenv("COMICVINE_API_KEY", "test-key")
@@ -204,7 +204,7 @@ async def test_resolves_confirmed_mapping_from_series(
     await _run_series_resolution(issue.id, user.id)
 
     mapping = (
-        await async_db.execute(
+        await async_db_committed.execute(
             select(IssueExternalIdentityMapping).where(
                 IssueExternalIdentityMapping.issue_id == issue.id
             )
@@ -219,11 +219,11 @@ async def test_resolves_confirmed_mapping_from_series(
 
 @pytest.mark.asyncio
 async def test_skips_when_already_confirmed(
-    async_db: Any, monkeypatch: pytest.MonkeyPatch
+    async_db_committed: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """An existing confirmed mapping prevents a duplicate resolution."""
     user, issue, _series = await _seed(
-        async_db, username="series_res_existing", issue_number="5", confirmed_series=True
+        async_db_committed, username="series_res_existing", issue_number="5", confirmed_series=True
     )
     existing = ExternalIdentity(
         provider="comicvine",
@@ -231,9 +231,9 @@ async def test_skips_when_already_confirmed(
         external_id="4000-99999",
         metadata_json={"issue_number": "5"},
     )
-    async_db.add(existing)
-    await async_db.flush()
-    async_db.add(
+    async_db_committed.add(existing)
+    await async_db_committed.flush()
+    async_db_committed.add(
         IssueExternalIdentityMapping(
             issue_id=issue.id,
             external_identity_id=existing.id,
@@ -241,7 +241,7 @@ async def test_skips_when_already_confirmed(
             confidence=1.0,
         )
     )
-    await async_db.commit()
+    await async_db_committed.commit()
 
     monkeypatch.setattr(resolution_module, "ComicVineClient", _FakeComicVineClient)
     monkeypatch.setenv("COMICVINE_API_KEY", "test-key")
@@ -251,7 +251,7 @@ async def test_skips_when_already_confirmed(
     await _run_series_resolution(issue.id, user.id)
 
     mappings = (
-        await async_db.execute(
+        await async_db_committed.execute(
             select(IssueExternalIdentityMapping).where(
                 IssueExternalIdentityMapping.issue_id == issue.id
             )
@@ -264,11 +264,11 @@ async def test_skips_when_already_confirmed(
 
 @pytest.mark.asyncio
 async def test_skips_ambiguous_special_issue(
-    async_db: Any, monkeypatch: pytest.MonkeyPatch
+    async_db_committed: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Issues that likely belong to another volume are not resolved."""
     user, issue, _series = await _seed(
-        async_db, username="series_res_special", issue_number="Annual 1", confirmed_series=True
+        async_db_committed, username="series_res_special", issue_number="Annual 1", confirmed_series=True
     )
     monkeypatch.setattr(resolution_module, "ComicVineClient", _FakeComicVineClient)
     monkeypatch.setenv("COMICVINE_API_KEY", "test-key")
@@ -278,7 +278,7 @@ async def test_skips_ambiguous_special_issue(
     await _run_series_resolution(issue.id, user.id)
 
     mapping = (
-        await async_db.execute(
+        await async_db_committed.execute(
             select(IssueExternalIdentityMapping).where(
                 IssueExternalIdentityMapping.issue_id == issue.id
             )
@@ -290,15 +290,17 @@ async def test_skips_ambiguous_special_issue(
 
 @pytest.mark.asyncio
 async def test_defers_on_rate_limit(
-    async_db: Any, monkeypatch: pytest.MonkeyPatch
+    async_db_committed: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A provider rate limit defers resolution without creating a mapping."""
     user, issue, _series = await _seed(
-        async_db, username="series_res_ratelimit", issue_number="5", confirmed_series=True
+        async_db_committed, username="series_res_ratelimit", issue_number="5", confirmed_series=True
     )
 
     class _RateLimitClient(_FakeComicVineClient):
-        async def request(self, *args: Any, **kwargs: Any) -> ComicVineResponse:
+        async def request(
+            self, endpoint_bucket: str, endpoint: str, params: dict[str, object], *, refresh: bool = False
+        ) -> ComicVineResponse:
             raise ComicVineRateLimitError("rate limited")
 
     monkeypatch.setattr(resolution_module, "ComicVineClient", _RateLimitClient)
@@ -309,7 +311,7 @@ async def test_defers_on_rate_limit(
     await _run_series_resolution(issue.id, user.id)
 
     mapping = (
-        await async_db.execute(
+        await async_db_committed.execute(
             select(IssueExternalIdentityMapping).where(
                 IssueExternalIdentityMapping.issue_id == issue.id
             )
