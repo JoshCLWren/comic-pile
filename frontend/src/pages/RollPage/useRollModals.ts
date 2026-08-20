@@ -50,13 +50,13 @@ export function useRollModals({
     setIsActionSheetOpen,
   } = state
 
-  const snoozedThreads = bootstrap?.snoozed_threads ?? []
   const [overrideThreads, setOverrideThreads] = useState<Thread[] | null>(null)
 
   useEffect(() => {
     if (!isOverrideOpen || overrideThreads) return
 
     let cancelled = false
+    const snoozedThreads = bootstrap?.snoozed_threads ?? []
     const snoozedIds = new Set(snoozedThreads.map((thread) => thread.id))
 
     async function loadAllOverrideThreads() {
@@ -82,7 +82,7 @@ export function useRollModals({
     return () => {
       cancelled = true
     }
-  }, [isOverrideOpen, overrideThreads, snoozedThreads])
+  }, [isOverrideOpen, overrideThreads, bootstrap])
 
   useEffect(() => {
     if (showSimpleMigration) {

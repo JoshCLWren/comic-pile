@@ -144,7 +144,7 @@ export function useRollRating({
   const handleMigrationSkip = useCallback(() => {
     setShowMigrationDialog(false)
     if (threadToMigrate) enterRatingView(threadToMigrate.id, null, threadToMigrate)
-  }, [threadToMigrate, enterRatingView, setShowMigrationDialog])
+  }, [enterRatingView, setShowMigrationDialog])
 
   const handleMigrationClose = useCallback(() => {
     setShowMigrationDialog(false)
