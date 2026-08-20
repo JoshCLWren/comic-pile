@@ -12,7 +12,7 @@ import { RATING_THRESHOLD, buildRatingThread, createExplosion } from './utils'
 
 interface UseRollRatingParams {
   state: RollPageState & RollPageStateSetters
-  bootstrap?: RollBootstrapResponse
+  bootstrap?: RollBootstrapResponse | null
   rateMutation: { mutate: (payload: RatePayload) => Promise<Thread | undefined>; isPending: boolean }
   dismissPendingMutation: { mutate: () => Promise<unknown>; isPending: boolean }
   refetchBootstrap: () => Promise<RollBootstrapResponse | undefined>
@@ -35,6 +35,7 @@ export function useRollRating({
 }: UseRollRatingParams) {
   const {
     activeRatingThread,
+    threadToMigrate,
     currentDie,
     suppressPendingAutoOpenRef,
     rating,
@@ -144,7 +145,7 @@ export function useRollRating({
   const handleMigrationSkip = useCallback(() => {
     setShowMigrationDialog(false)
     if (threadToMigrate) enterRatingView(threadToMigrate.id, null, threadToMigrate)
-  }, [enterRatingView, setShowMigrationDialog])
+  }, [enterRatingView, setShowMigrationDialog, threadToMigrate])
 
   const handleMigrationClose = useCallback(() => {
     setShowMigrationDialog(false)

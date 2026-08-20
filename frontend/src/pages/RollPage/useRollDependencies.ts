@@ -4,7 +4,7 @@ import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 
 interface UseRollDependenciesParams {
   state: RollPageState & RollPageStateSetters
-  bootstrap?: RollBootstrapResponse
+  bootstrap?: RollBootstrapResponse | null
 }
 
 /**

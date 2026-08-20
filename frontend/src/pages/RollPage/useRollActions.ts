@@ -21,7 +21,7 @@ interface RollMutations {
 
 interface UseRollActionsParams {
   state: RollPageState & RollPageStateSetters
-  bootstrap?: RollBootstrapResponse
+  bootstrap?: RollBootstrapResponse | null
   rollPool: RollBootstrapThread[]
   navigate: NavigateFunction
   mutations: RollMutations

@@ -6,7 +6,7 @@ import type { ThreadMetadata } from './types'
 
 interface UseRollPendingSessionParams {
   state: RollPageState & RollPageStateSetters
-  bootstrap?: RollBootstrapResponse
+  bootstrap?: RollBootstrapResponse | null
   rollPool: RollBootstrapThread[]
 }
 

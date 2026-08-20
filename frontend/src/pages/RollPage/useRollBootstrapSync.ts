@@ -6,7 +6,7 @@ import type { RollPageStateSetters } from './useRollPageState'
 
 interface UseRollBootstrapSyncParams {
   state: RollPageStateSetters
-  bootstrap?: RollBootstrapResponse
+  bootstrap?: RollBootstrapResponse | null
   isBootstrapError: boolean
   bootstrapError: unknown
   navigate: NavigateFunction

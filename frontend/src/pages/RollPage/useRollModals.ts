@@ -9,7 +9,7 @@ import type { ThreadMetadata } from './types'
 
 interface UseRollModalsParams {
   state: RollPageState & RollPageStateSetters
-  bootstrap?: RollBootstrapResponse
+  bootstrap?: RollBootstrapResponse | null
   overrideMutation: { mutate: (payload: { thread_id: number }) => Promise<RollResponse> }
   enterRatingView: (
     threadId: number | null,
