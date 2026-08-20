@@ -83,12 +83,8 @@ def linked_issue_number(pr: dict[str, Any]) -> int | None:
     return int(match.group("issue")) if match else None
 
 
-def linked_issue_active_owner(pr: dict[str, Any]) -> str | None:
+def linked_issue_active_owner(pr: dict[str, Any], issue_number: int) -> str | None:
     """Return an active linked-issue lease that would make promotion race a worker."""
-    issue_number = linked_issue_number(pr)
-    if issue_number is None:
-        return None
-
     issue = cast(dict[str, Any], review_controller.target_json(issue_number))
     if str(issue.get("state") or "").upper() != "OPEN":
         return None
@@ -125,13 +121,17 @@ def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
     if str(pr.get("state") or "").upper() != "OPEN" or "factory:ci" not in labels:
         return {"pr": pr_number, "status": "not-ci", "head": head}
 
+    issue_number = linked_issue_number(pr)
+    if issue_number is None:
+        return {"pr": pr_number, "status": "non-factory-branch", "head": head}
+
     owner = active_factory_owner(labels)
     if owner is not None:
         return {"pr": pr_number, "status": "owned", "owner": owner, "head": head}
     if "factory:unowned" not in labels:
         return {"pr": pr_number, "status": "owner-indeterminate", "head": head}
 
-    linked_owner = linked_issue_active_owner(pr)
+    linked_owner = linked_issue_active_owner(pr, issue_number)
     if linked_owner is not None:
         return {
             "pr": pr_number,
