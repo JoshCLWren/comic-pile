@@ -557,7 +557,7 @@ export interface ReaderContextLocalIssue {
   position: number
   status: 'unread' | 'read'
   relation: 'previous' | 'current' | 'next' | 'future'
-  effective_rating: number | null
+  rating: number | null
   crossover_memberships: ReaderContextCrossoverMembership[]  // exact crossover memberships for this issue
 }
 
@@ -573,10 +573,9 @@ export interface ReaderContextCrossoverMembership {
  * Edge information in local_chain (one-hop dependency/continuity edges)
  */
 export interface ReaderContextEdge {
+  id: number
+  kind: 'dependency' | 'continuity'
   source_issue_id: number
-  source_issue_number: string
   target_issue_id: number
-  target_issue_number: string
-  dependency_type: 'dependency' | 'continuity'  // or whatever the actual types are
   note: string | null
 }

@@ -72,14 +72,14 @@ export function ReadingOrderGroups({ threadId, className }: ReadingOrderGroupsPr
   }
 
   if (groups.length === 0) {
-    return (
+    return recoveryCard ? (
       <div className={className}>
         {recoveryCard}
       </div>
-    )
+    ) : null
   }
 
-return (
+  return (
     <div className={className}>
       <>
         {recoveryCard}

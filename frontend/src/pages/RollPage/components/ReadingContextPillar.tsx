@@ -23,6 +23,8 @@ export function ReadingContextPillar({
   readingOrders,
   connectedThreads,
   onRefreshThread,
+  rolledResult,
+  currentDie,
 }: ReadingContextPillarProps) {
   const [isContinuityDialogOpen, setIsContinuityDialogOpen] = useState(false)
   const [isRouteExplanationOpen, setIsRouteExplanationOpen] = useState(false)
@@ -103,7 +105,7 @@ export function ReadingContextPillar({
         </div>
       </section>
 
-{/* Bounded local series chain */}
+      {/* Bounded local series chain */}
        {readerContext ? (
         <section aria-labelledby="local-series-heading" className="rounded-2xl p-4" style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'rgba(6, 182, 212, 0.09)' }}>
           <div className="flex items-center justify-between gap-2 mb-3">
@@ -133,8 +135,8 @@ export function ReadingContextPillar({
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-[10px]">{issue.issue_number}</span>
-                          {issue.effective_rating !== null && (
-                            <span className="text-[9px] text-stone-500">({issue.effective_rating})</span>
+                          {issue.rating !== null && (
+                            <span className="text-[9px] text-stone-500">({issue.rating})</span>
                           )}
                         </div>
                       </div>
@@ -180,20 +182,23 @@ export function ReadingContextPillar({
           {/* Current issue crossovers */}
           <div className="space-y-2">
             <div className="font-bold text-[9px] text-stone-500 mb-1">Current Issue Crossovers:</div>
-{readerContext.local_chain.issues
-               .find(issue => issue.relation === 'current')
-               ?.crossover_memberships.map((crossover) => (
-                 <div key={crossover.id} className="rounded-full px-2 py-1 text-[9px] font-bold" style={{
-                   border: '1px solid rgba(212,137,14,0.4)',
-                   backgroundColor: 'rgba(212, 137, 14, 0.12)',
-                   color: 'rgb(250, 204, 139)',
-                 }}>
-                   {crossover.name}
-                 </div>
-               )) || []}
+            {(() => {
+              const currentIssue = readerContext.local_chain.issues.find(issue => issue.relation === 'current')
+              if (!currentIssue || currentIssue.crossover_memberships.length === 0) return null
+              return currentIssue.crossover_memberships.map((crossover) => (
+                <div key={crossover.id} className="rounded-full px-2 py-1 text-[9px] font-bold" style={{
+                  border: '1px solid rgba(212,137,14,0.4)',
+                  backgroundColor: 'rgba(212, 137, 14, 0.12)',
+                  color: 'rgb(250, 204, 139)',
+                }}>
+                  {crossover.name}
+                </div>
+              ))
+            })()}
           </div>
-{/* Future crossovers (from crossovers array where applies_to_current_issue is false)} */
-          <section aria-labelledby="upcoming-crossover-heading" className="rounded-2xl p-4" style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'rgba(6, 182, 212, 0.09)' }}>
+
+          {/* Future crossovers (from crossovers array where applies_to_current_issue is false) */}
+          <section aria-labelledby="upcoming-crossover-heading" className="rounded-2xl p-4 mt-4" style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'rgba(6, 182, 212, 0.09)' }}>
             <div className="flex items-center justify-between gap-2 mb-3">
               <h3 id="upcoming-crossover-heading" className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-continuity-accent)' }}>
                 Upcoming Crossovers
@@ -216,39 +221,8 @@ export function ReadingContextPillar({
                     </div>
                   </div>
                 </div>
-              )) || []}
-{readerContext.local_chain.edges.length > 0 ? (
-            <div className="space-y-1">
-              {readerContext.local_chain.edges.map((edge, index) => (
-                <div key={edge.source_issue_id}-{edge.target_issue_id} className="flex items-center gap-3 px-2 py-1" style={{
-                  borderLeft: edge.dependency_type === 'dependency' ? '3px solid rgb(250, 204, 139)' : '3px solid rgb(165, 243, 252)',
-                  backgroundColor: edge.dependency_type === 'dependency' ? 'rgba(250, 204, 139, 0.05)' : 'rgba(165, 243, 252, 0.05)'
-                }}>
-                  <div className="flex-shrink-0 w-2 h-2 rounded-full" style={{
-                    backgroundColor: edge.dependency_type === 'dependency' ? 'rgb(250, 204, 139)' : 'rgb(165, 243, 252)'
-                  }}></div>
-                  <div className="flex-1 space-y-0.5">
-                    <div className="flex items-center justify-between text-[8px]">
-                      <span>#{edge.source_issue_number}</span>
-                      <span className="text-stone-400">{edge.dependency_type === 'dependency' ? '→' : '↝'}</span>
-                      <span>#{edge.target_issue_number}</span>
-                    </div>
-                    {edge.note && (
-                      <div className="text-[8px] text-stone-400 italic">
-                        {edge.note}
-                      </div>
-                    )}
-                  </div>
-                }))
-              }}
-            </div>
-          ) : (
-            <p className="text-[9px] text-stone-500 text-center py-4">
-              No dependency or continuity edges in local neighborhood
-            </p>
-          )}
-        </section>
-      ) : null}
+              ))}
+          </section>
         </section>
       ) : null}
 
@@ -264,21 +238,21 @@ export function ReadingContextPillar({
             </span>
           </div>
           
-{readerContext.local_chain.edges.length > 0 ? (
+          {readerContext.local_chain.edges.length > 0 ? (
             <div className="space-y-1">
-              {readerContext.local_chain.edges.map((edge, index) => (
-                <div key={edge.source_issue_id}-{edge.target_issue_id} className="flex items-center gap-3 px-2 py-1" style={{
-                  borderLeft: edge.dependency_type === 'dependency' ? '3px solid rgb(250, 204, 139)' : '3px solid rgb(165, 243, 252)',
-                  backgroundColor: edge.dependency_type === 'dependency' ? 'rgba(250, 204, 139, 0.05)' : 'rgba(165, 243, 252, 0.05)'
+              {readerContext.local_chain.edges.map((edge) => (
+                <div key={`${edge.source_issue_id}-${edge.target_issue_id}`} className="flex items-center gap-3 px-2 py-1" style={{
+                  borderLeft: edge.kind === 'dependency' ? '3px solid rgb(250, 204, 139)' : '3px solid rgb(165, 243, 252)',
+                  backgroundColor: edge.kind === 'dependency' ? 'rgba(250, 204, 139, 0.05)' : 'rgba(165, 243, 252, 0.05)'
                 }}>
                   <div className="flex-shrink-0 w-2 h-2 rounded-full" style={{
-                    backgroundColor: edge.dependency_type === 'dependency' ? 'rgb(250, 204, 139)' : 'rgb(165, 243, 252)'
+                    backgroundColor: edge.kind === 'dependency' ? 'rgb(250, 204, 139)' : 'rgb(165, 243, 252)'
                   }}></div>
                   <div className="flex-1 space-y-0.5">
                     <div className="flex items-center justify-between text-[8px]">
-                      <span>#{edge.source_issue_number}</span>
-                      <span className="text-stone-400">{edge.dependency_type === 'dependency' ? '→' : '↝'}</span>
-                      <span>#{edge.target_issue_number}</span>
+                      <span>#{edge.source_issue_id}</span>
+                      <span className="text-stone-400">{edge.kind === 'dependency' ? '→' : '↝'}</span>
+                      <span>#{edge.target_issue_id}</span>
                     </div>
                     {edge.note && (
                       <div className="text-[8px] text-stone-400 italic">
@@ -286,8 +260,8 @@ export function ReadingContextPillar({
                       </div>
                     )}
                   </div>
-                }))
-              }}
+                </div>
+              ))}
             </div>
           ) : (
             <p className="text-[9px] text-stone-500 text-center py-4">
@@ -342,7 +316,7 @@ export function ReadingContextPillar({
                   </div>
                 </article>
               )
-            )}
+            })}
           </div>
         </section>
       ) : null}
