@@ -1498,6 +1498,14 @@ test.describe('Roll Dice Feature', () => {
 
       const thread = await threadResponse.json();
 
+      await request.post(`/api/v1/threads/${thread.id}/issues`, {
+        data: { issue_range: '1-5' },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
       await authenticatedPage.goto('/');
       await expect(authenticatedPage.locator('#root')).toBeVisible();
 
@@ -1564,6 +1572,27 @@ test.describe('Roll Dice Feature', () => {
         },
       });
 
+      const companionResponse = await request.post('/api/threads/', {
+        data: {
+          title: 'Context Companion Thread',
+          format: 'Comics',
+          issues_remaining: 1,
+        },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      expect(companionResponse.ok()).toBe(true);
+      const companionThread = await companionResponse.json();
+      await request.post(`/api/v1/threads/${companionThread.id}/issues`, {
+        data: { issue_range: '1' },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
       // Add a dependency to create connected threads
       const issuesResponse = await request.get(`/api/v1/threads/${thread.id}/issues?page_size=100`, {
         headers: {
@@ -1577,19 +1606,28 @@ test.describe('Roll Dice Feature', () => {
 
       const issuesData = await issuesResponse.json();
       const firstIssue = issuesData.issues[0];
+      const companionIssuesResponse = await request.get(
+        `/api/v1/threads/${companionThread.id}/issues?page_size=100`,
+        { headers: { 'Authorization': `Bearer ${token}` } },
+      );
+      expect(companionIssuesResponse.ok()).toBe(true);
+      const companionIssuesData = await companionIssuesResponse.json();
+      const companionIssue = companionIssuesData.issues[0];
 
       const dependencyResponse = await request.post('/api/v1/dependencies/', {
         data: {
           source_type: 'issue',
           source_id: firstIssue.id,
           target_type: 'issue',
-          target_id: firstIssue.id,
+          target_id: companionIssue.id,
         },
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
       });
+
+      expect(dependencyResponse.ok()).toBe(true);
 
       await authenticatedPage.goto('/');
       await expect(authenticatedPage.locator('#root')).toBeVisible();
@@ -1623,8 +1661,7 @@ test.describe('Roll Dice Feature', () => {
       await expect(yourContextHeading).toBeVisible({ timeout: 5000 });
 
       // Grid should have 3 columns at xl when Reading Context has content
-      const gridTemplate = await pillarsGrid.evaluate((el) => el.style.gridTemplateColumns);
-      expect(gridTemplate).toContain('minmax(0,46fr)'); // Middle column present
+      await expect(pillarsGrid).toHaveClass(/xl:grid-cols-\[minmax\(0,26fr\)_minmax\(0,46fr\)_minmax\(0,28fr\)\]/);
     });
 
     test('no decorative ordinal prefixes anywhere in the cockpit', async ({ authenticatedPage, request }) => {
@@ -1648,6 +1685,14 @@ test.describe('Roll Dice Feature', () => {
 
       const thread = await threadResponse.json();
 
+      await request.post(`/api/v1/threads/${thread.id}/issues`, {
+        data: { issue_range: '1-5' },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
       await authenticatedPage.goto('/');
       await expect(authenticatedPage.locator('#root')).toBeVisible();
 
@@ -1659,14 +1704,14 @@ test.describe('Roll Dice Feature', () => {
 
       await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
 
-      // Collect all text content from the pillar headings
-      const allHeadings = await authenticatedPage.locator('text*=The Comic, text*=Reading Context, text*=Your Context').all();
-
-      for (const heading of allHeadings) {
-        const headingText = await heading.textContent();
-        // None should contain decorative ordinals like "01", "02", "03"
-        expect(headingText).not.toMatch(/0[123]\s/);
+      const headings = ['The Comic', 'Reading Context', 'Your Context'];
+      for (const heading of headings) {
+        await expect(authenticatedPage.getByText(heading, { exact: true })).toBeVisible();
       }
+      const cockpitText = await authenticatedPage
+        .locator('[data-testid="rating-pillars-grid"]')
+        .textContent();
+      expect(cockpitText).not.toMatch(/\b0[123]\b/);
     });
   });
 });

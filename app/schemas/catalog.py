@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 
-from pydantic import Field, root_validator
-
-from app.schemas import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 
 class ExternalIdentityUpsert(BaseModel):
@@ -15,15 +13,17 @@ class ExternalIdentityUpsert(BaseModel):
     entity_type: str = Field(..., min_length=1, description="Entity type: 'series' or 'issue'")
     external_id: str = Field(..., min_length=1, description="Provider-specific identifier")
     external_url: str | None = Field(default=None, description="Optional URL to the external resource")
-    metadata_json: dict = Field(default=dict, description="Optional arbitrary metadata from the provider")
+    metadata_json: dict[str, object] = Field(
+        default_factory=dict, description="Optional arbitrary metadata from the provider"
+    )
 
-    @root_validator
-    def validate_entity_type(self, values: dict) -> dict:
+    @field_validator("entity_type")
+    @classmethod
+    def validate_entity_type(cls, entity_type: str) -> str:
         """Validate that entity_type is either 'issue' or 'series'."""
-        entity_type = values.get("entity_type", "")
         if entity_type not in {"issue", "series"}:
             raise ValueError(f"unsupported entity_type: {entity_type}")
-        return values
+        return entity_type
 
 
 class ExternalIdentityResponse(BaseModel):
@@ -34,7 +34,9 @@ class ExternalIdentityResponse(BaseModel):
     entity_type: str = Field(..., min_length=1, description="Entity type: 'issue' or 'series'")
     external_id: str = Field(..., min_length=1, description="Provider-specific identifier")
     external_url: str | None = Field(default=None, description="Optional URL to the external resource")
-    metadata_json: dict = Field(default_factory=dict, description="Arbitrary metadata from the provider")
+    metadata_json: dict[str, object] = Field(
+        default_factory=dict, description="Arbitrary metadata from the provider"
+    )
     provider_updated_at: float | None = Field(default=None, description="Timestamp of last provider update")
     created_at: float = Field(..., description="Creation timestamp (Unix epoch)")
     updated_at: float = Field(..., description="Last update timestamp (Unix epoch)")
@@ -69,18 +71,20 @@ class IssueAttachRequest(BaseModel):
     entity_type: str = Field(..., min_length=1, description="Entity type: 'series' or 'issue'")
     external_id: str = Field(..., min_length=1, description="Provider-specific identifier")
     external_url: str | None = Field(default=None, description="Optional URL to the external resource")
-    metadata_json: dict = Field(default=dict, description="Optional arbitrary metadata from the provider")
+    metadata_json: dict[str, object] = Field(
+        default_factory=dict, description="Optional arbitrary metadata from the provider"
+    )
     status: str = Field(..., min_length=1, description="Mapping status: unresolved, candidate, confirmed, rejected")
     evidence_source: str | None = Field(default=None, description="Optional source of the evidence")
     confidence: float | None = Field(default=None, ge=0, le=1, description="Optional confidence score (0-1)")
 
-    @root_validator
-    def validate_entity_type(self, values: dict) -> dict:
+    @field_validator("entity_type")
+    @classmethod
+    def validate_entity_type(cls, entity_type: str) -> str:
         """Validate that entity_type is either 'issue' or 'series'."""
-        entity_type = values.get("entity_type", "")
         if entity_type not in {"issue", "series"}:
             raise ValueError(f"unsupported entity_type: {entity_type}")
-        return values
+        return entity_type
 
 
 class IssueAttachResponse(BaseModel):
@@ -105,7 +109,7 @@ class CatalogSeriesSearchResponse(BaseModel):
     entity_type: str
     external_id: str
     external_url: str | None = None
-    metadata_json: dict
+    metadata_json: dict[str, object]
     provider_updated_at: float | None = None
     created_at: float
     updated_at: float
@@ -119,7 +123,7 @@ class CatalogIssueSearchResponse(BaseModel):
     entity_type: str
     external_id: str
     external_url: str | None = None
-    metadata_json: dict
+    metadata_json: dict[str, object]
     provider_updated_at: float | None = None
     created_at: float
     updated_at: float

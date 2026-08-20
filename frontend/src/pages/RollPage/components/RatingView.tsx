@@ -27,8 +27,6 @@ interface RatingViewProps {
   onRefreshThread: () => void
 }
 
-const hasReadingContextContent = readingOrders.length > 0 || connectedThreads.length > 0
-
 export function RatingView({
   activeRatingThread,
   currentDie,
@@ -50,6 +48,7 @@ export function RatingView({
   onRefreshThread,
 }: RatingViewProps) {
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
+  const hasReadingContextContent = readingOrders.length > 0 || connectedThreads.length > 0
   const gridCols = hasReadingContextContent
     ? 'xl:grid-cols-[minmax(0,26fr)_minmax(0,46fr)_minmax(0,28fr)]'
     : 'xl:grid-cols-[minmax(0,50fr)_minmax(0,50fr)]'
