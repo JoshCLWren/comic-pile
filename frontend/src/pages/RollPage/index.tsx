@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import LazyDice3D from '../../components/LazyDice3D'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
@@ -53,6 +53,16 @@ export default function RollPage() {
     mainDieRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [])
 
+  const prevIsRatingViewRef = useRef(state.isRatingView)
+  useEffect(() => {
+    const wasRatingView = prevIsRatingViewRef.current
+    const isRatingView = state.isRatingView
+    prevIsRatingViewRef.current = isRatingView
+    if (wasRatingView && !isRatingView) {
+      scrollToDice()
+    }
+  }, [state.isRatingView, scrollToDice])
+
   const setDieMutation = useSetDie()
   const clearManualDieMutation = useClearManualDie()
   const rollMutation = useRoll()
@@ -84,7 +94,6 @@ export default function RollPage() {
     rateMutation,
     dismissPendingMutation,
     refetchBootstrap,
-    scrollToDice,
   })
 
   const snooze = useRollSnooze({
@@ -92,7 +101,6 @@ export default function RollPage() {
     snoozeMutation,
     unsnoozeMutation,
     refetchBootstrap,
-    scrollToDice,
   })
 
   const dependencies = useRollDependencies({ state, bootstrap })

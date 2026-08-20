@@ -16,7 +16,6 @@ interface UseRollRatingParams {
   rateMutation: { mutate: (payload: RatePayload) => Promise<Thread | undefined>; isPending: boolean }
   dismissPendingMutation: { mutate: () => Promise<unknown>; isPending: boolean }
   refetchBootstrap: () => Promise<RollBootstrapResponse | undefined>
-  scrollToDice: () => void
 }
 
 /**
@@ -31,7 +30,6 @@ export function useRollRating({
   rateMutation,
   dismissPendingMutation,
   refetchBootstrap,
-  scrollToDice,
 }: UseRollRatingParams) {
   const {
     activeRatingThread,
@@ -281,7 +279,6 @@ export function useRollRating({
       setSelectedThreadId(null)
       setActiveRatingThread(null)
       setErrorMessage('')
-      scrollToDice()
     } catch (error: unknown) {
       setErrorMessage(getApiErrorDetail(error))
     }
@@ -325,7 +322,6 @@ export function useRollRating({
     setSelectedThreadId(null)
     setActiveRatingThread(null)
     setErrorMessage('')
-    scrollToDice()
   }
 
   return {

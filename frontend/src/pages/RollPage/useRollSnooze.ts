@@ -7,7 +7,6 @@ interface UseRollSnoozeParams {
   snoozeMutation: { mutate: (expectedPendingThreadId?: number) => Promise<unknown> }
   unsnoozeMutation: { mutate: (threadId: number) => Promise<unknown> }
   refetchBootstrap: () => Promise<RollBootstrapResponse | undefined>
-  scrollToDice: () => void
 }
 
 /**
@@ -21,7 +20,6 @@ export function useRollSnooze({
   snoozeMutation,
   unsnoozeMutation,
   refetchBootstrap,
-  scrollToDice,
 }: UseRollSnoozeParams) {
   const {
     setIsRolling,
@@ -50,7 +48,6 @@ export function useRollSnooze({
       setRolledResult(null)
       setSelectedThreadId(null)
       setActiveRatingThread(null)
-      scrollToDice()
     } catch (error: unknown) {
       setErrorMessage(getApiErrorDetail(error))
     }
