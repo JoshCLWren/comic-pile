@@ -6,7 +6,7 @@ import Tooltip from '../../components/Tooltip'
 import MigrationDialog from '../../components/MigrationDialog'
 import SimpleMigrationDialog from '../../components/SimpleMigrationDialog'
 import { useNavigate } from 'react-router-dom'
-import { DICE_LADDER, RATING_THRESHOLD } from '../../components/diceLadder'
+import { DICE_LADDER } from '../../components/diceLadder'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import {
