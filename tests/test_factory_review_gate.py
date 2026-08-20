@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import importlib
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -14,13 +15,12 @@ SCRIPTS = Path(__file__).resolve().parents[1] / ".github" / "scripts"
 WORKFLOWS = Path(__file__).resolve().parents[1] / ".github" / "workflows"
 sys.path.insert(0, str(SCRIPTS))
 
-from factory_review_policy import (  # noqa: E402
-    approval_can_promote,
-    current_head_approvers,
-    head_has_authorized_approval,
-    producer_worker_from_pr,
-    review_marker,
-)
+_review_policy = importlib.import_module("factory_review_policy")
+approval_can_promote = _review_policy.approval_can_promote
+current_head_approvers = _review_policy.current_head_approvers
+head_has_authorized_approval = _review_policy.head_has_authorized_approval
+producer_worker_from_pr = _review_policy.producer_worker_from_pr
+review_marker = _review_policy.review_marker
 
 REVIEWED_HEAD = "a" * 40
 MOVED_HEAD = "b" * 40
@@ -307,7 +307,7 @@ def test_controller_mechanical_failure_never_promotes(
         review_log="/tmp/model.log",
     )
     assert result["status"] == "approved-not-ready"
-    assert result["mechanical"] is False
+    assert result["mechanical"]["decision"] == "deny"
     assert transitions[-1]["pr_stage"] == "factory:review"
 
 

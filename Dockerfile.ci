@@ -20,6 +20,8 @@ RUN apt-get update -qq && \
         curl \
         git \
         gpg \
+        gh \
+        jq \
         postgresql-client \
         tar \
         ripgrep \

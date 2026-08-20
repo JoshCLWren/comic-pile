@@ -395,12 +395,17 @@ def no_diff_attempts_from_comments(comments: Iterable[dict[str, Any]], *, now_ep
     return counts
 
 
-def lease_is_stale(owner: str, *, active_fixed_workers: set[int], has_unresolved_active_runs: bool, latest_activity_epoch: int | None, now_epoch: int, local_ttl_seconds: int=LOCAL_LEASE_TTL_SECONDS, fixed_ttl_seconds: int=FIXED_LEASE_TTL_SECONDS) -> bool:
+def lease_is_stale(owner: str, *, active_fixed_workers: set[int], has_unresolved_active_runs: bool | None = None, latest_activity_epoch: int | None, now_epoch: int, local_ttl_seconds: int=LOCAL_LEASE_TTL_SECONDS, fixed_ttl_seconds: int=FIXED_LEASE_TTL_SECONDS) -> bool:
     """Return whether a factory lease can be proven stale."""
     if owner == 'factory:local':
         return latest_activity_epoch is not None and now_epoch - latest_activity_epoch > local_ttl_seconds
     match = FIXED_OWNER_RE.fullmatch(owner)
     if match:
+        # Callers predating the run-identity fence did not provide this bit.
+        # Preserve their conservative legacy decision while current callers
+        # pass an explicit value and therefore fail closed on unknown runs.
+        if has_unresolved_active_runs is None:
+            return int(match.group('worker')) not in active_fixed_workers
         if has_unresolved_active_runs:
             return False
         worker = int(match.group('worker'))

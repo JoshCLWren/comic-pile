@@ -451,6 +451,10 @@ async def undo_to_snapshot(
             if pre_active_event and pre_active_event.selected_thread_id:
                 pre_thread = await db.get(Thread, pre_active_event.selected_thread_id)
                 if pre_thread is not None:
+                    # Refresh identity-mapped state before reading it. An earlier
+                    # commit may have expired this instance, and implicit lazy
+                    # loads are not safe from an async endpoint.
+                    await db.refresh(pre_thread)
                     pre_active_info = ActiveThreadInfo(
                         id=pre_thread.id,
                         title=pre_thread.title,
