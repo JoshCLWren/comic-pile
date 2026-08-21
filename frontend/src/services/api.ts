@@ -304,6 +304,20 @@ rawApi.interceptors.response.use(
 
 export default api
 
+export const crossoversApi = {
+  list: () => api.get<any[]>('/v1/crossovers/'),
+  get: (id: number) => api.get<any>(`/v1/crossovers/${id}`),
+  create: (data: { name: string }) => api.post<any, { name: string }>('/v1/crossovers/', data),
+  update: (id: number, data: { name: string }) => api.patch<any, { name: string }>(`/v1/crossovers/${id}`, data),
+  delete: (id: number) => api.delete<void>(`/v1/crossovers/${id}`),
+  listThreadGroups: (threadId: number) => api.get<any[]>(`/v1/crossovers/threads/${threadId}/groups`),
+  addIssueRange: (groupId: number, data: { thread_id: number; start_position: number; end_position: number }) =>
+    api.post<any, { thread_id: number; start_position: number; end_position: number }>(`/v1/crossovers/${groupId}/issue-ranges`, data),
+  addMember: (groupId: number, data: { thread_id?: number; issue_id?: number }) =>
+    api.post<any, { thread_id?: number; issue_id?: number }>(`/v1/crossovers/${groupId}/members`, data),
+  removeMember: (groupId: number, memberId: number) => api.delete<void>(`/v1/crossovers/${groupId}/members/${memberId}`),
+}
+
 export const threadsApi = {
   list: async (params?: ThreadQueryParams, pageToken?: string | null): Promise<ThreadListResponse> => {
     const queryParams = {
