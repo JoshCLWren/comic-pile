@@ -4,6 +4,8 @@ import importlib.util
 import subprocess
 from pathlib import Path
 
+import pytest
+
 SCRIPT_DIR = Path(__file__).parent
 CONTROLLER_PATH = SCRIPT_DIR / "factory-review-controller.py"
 VERDICT_PATH = SCRIPT_DIR / "factory-semantic-verdict.sh"
@@ -164,6 +166,68 @@ def test_reconcile_ci_routes_conflicted_green_pr_to_repair(monkeypatch):
 
     assert result["status"] == "changes-requested"
     assert writes == [(123, "factory:unowned", "factory:changes-requested")]
+
+
+def test_reconcile_ci_returns_changed_head_to_review(monkeypatch):
+    """Require fresh authorization when the head changes during reconciliation."""
+    controller = load_controller()
+    head = "c" * 40
+    changed_head = "d" * 40
+    states = iter(
+        [
+            {
+                "state": "OPEN",
+                "headRefOid": head,
+                "headRefName": "factory/10-123-fix",
+                "body": "Worker: opencode-free-model-factory-10",
+                "labels": [{"name": "factory:ci"}, {"name": "factory:unowned"}],
+            },
+            {"headRefOid": changed_head},
+        ]
+    )
+    monkeypatch.setattr(controller, "pr_json", lambda _pr: next(states))
+    monkeypatch.setattr(
+        controller,
+        "required_checks_gate",
+        lambda _pr: {"decision": "pass", "reason": "green"},
+    )
+    monkeypatch.setattr(
+        controller,
+        "review_comment_bodies",
+        lambda _pr: [
+            controller.review_marker(
+                pr=123, head=head, reviewer="11", producer="10", verdict="approve"
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        controller,
+        "mechanical_merge_gate",
+        lambda _pr, _head: {"decision": "deny", "reason": "pull request head changed"},
+    )
+    writes = []
+    monkeypatch.setattr(controller, "replace_factory_labels", lambda *args: writes.append(args))
+
+    result = controller.reconcile_ci_pr(123)
+
+    assert result == {"pr": 123, "status": "review", "head": changed_head}
+    assert writes == [(123, "factory:unowned", "factory:review")]
+
+
+def test_reconcile_ci_propagates_github_failures(monkeypatch, capsys):
+    """Fail the dispatcher when a PR cannot be read or updated."""
+    controller = load_controller()
+    monkeypatch.setattr(controller, "list_ci_pr_numbers", lambda: [123])
+
+    def fail_reconciliation(_pr):
+        raise RuntimeError("GitHub update failed")
+
+    monkeypatch.setattr(controller, "reconcile_ci_pr", fail_reconciliation)
+
+    with pytest.raises(RuntimeError, match="GitHub update failed"):
+        controller.reconcile_ci()
+
+    assert '"status": "retry-ci"' in capsys.readouterr().err
 
 
 def test_mergeable_unknown_then_mergeable(monkeypatch):
