@@ -75,6 +75,19 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
     location.pathname === path || location.pathname.startsWith(`${path}/`),
   )
 
+  const setTheme = async (themeId: string) => {
+    const validThemes = ['classic', 'ink-gold', 'command-center']
+    if (!validThemes.includes(themeId)) return
+    try {
+      document.documentElement.setAttribute('data-theme', themeId)
+      await api.patch('/v1/users/me/preferences', { theme: themeId })
+    } catch (err: unknown) {
+      console.error('Failed to persist theme preference:', err)
+      // Preserve the currently-rendered theme rather than rolling back,
+      // so the UI is never stranded in an unusable state.
+    }
+  }
+
   const handleLogout = async () => {
     try {
       await api.post('/v1/auth/logout', null, { skipAuthRedirect: true })
@@ -113,21 +126,21 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
           <div className="mt-3 text-sm text-stone-400">
             <span>Appearance</span>
           </div>
-          <div id="appearance-menu" className="mt-2 select-none hidden sm:block sm:relative sm:mt-0 sm:w-auto">
-            <button data-theme="classic" 
-                onclick="setTheme('classic')" 
+          <div id="appearance-menu" className="mt-2 select-none">
+            <button data-theme="classic"
+                onClick={() => setTheme('classic')}
                 className="w-full flex items-center justify-between px-3 py-2 rounded-md text-left hover:bg-stone-800 transition-colors classic:text-stone-100 ink-gold:text-stone-900 command-center:text-stone-100"
                 aria-label="Classic theme">
               <span>Classic</span>
             </button>
-            <button data-theme="ink-gold" 
-                onclick="setTheme('ink-gold')" 
+            <button data-theme="ink-gold"
+                onClick={() => setTheme('ink-gold')}
                 className="w-full flex items-center justify-between px-3 py-2 rounded-md text-left hover:bg-stone-800 transition-colors classic:text-stone-400 ink-gold:text-stone-100 command-center:text-stone-400"
                 aria-label="Ink-gold theme">
               <span>Ink Gold</span>
             </button>
-            <button data-theme="command-center" 
-                onclick="setTheme('command-center')" 
+            <button data-theme="command-center"
+                onClick={() => setTheme('command-center')}
                 className="w-full flex items-center justify-between px-3 py-2 rounded-md text-left hover:bg-stone-800 transition-colors classic:text-stone-400 ink-gold:text-stone-400 command-center:text-stone-100"
                 aria-label="Command center theme">
               <span>Command Center</span>
