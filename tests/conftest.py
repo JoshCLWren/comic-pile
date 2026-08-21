@@ -353,57 +353,11 @@ async def clear_test_cache() -> AsyncIterator[None]:
 
 @pytest_asyncio.fixture(scope="function", autouse=True)
 async def reset_global_engine_pool(db_engine: AsyncEngine) -> AsyncIterator[None]:
-    """Reset the global engine's connection pool after each test to prevent
-    cross-test contamination from background tasks that use AsyncSessionLocal."""
+    """Release global-engine connections before their test event loop closes."""
     from app.database import async_engine
-    from sqlalchemy.ext.asyncio import async_sessionmaker
 
     yield
-    # Dispose the global engine's pool to release connections bound to the old event loop
     await async_engine.dispose()
-    # Recreate the engine with the same configuration
-    from app.config import get_database_settings
-    import os
-
-    _db_settings = get_database_settings()
-    if (
-        os.getenv("ENVIRONMENT") == "test" or os.getenv("TEST_ENVIRONMENT") == "true"
-    ) and _db_settings.test_database_url:
-        DATABASE_URL = _db_settings.test_database_url
-    else:
-        DATABASE_URL = _db_settings.database_url
-    ASYNC_DATABASE_URL = _db_settings.async_url
-
-    POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "2"))
-    MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "0"))
-    POOL_PRE_PING = os.getenv("DB_POOL_PRE_PING", "false").lower() == "true"
-    POOL_RECYCLE = int(os.getenv("DB_POOL_RECYCLE", "3600"))
-    DATABASE_CONNECT_TIMEOUT_SECONDS = 3.0
-    DATABASE_COMMAND_TIMEOUT_SECONDS = 8.0
-
-    # Recreate the engine
-    from sqlalchemy.ext.asyncio import create_async_engine
-    new_engine = create_async_engine(
-        ASYNC_DATABASE_URL,
-        pool_recycle=POOL_RECYCLE,
-        pool_size=POOL_SIZE,
-        max_overflow=MAX_OVERFLOW,
-        pool_timeout=DATABASE_CONNECT_TIMEOUT_SECONDS,
-        pool_pre_ping=POOL_PRE_PING,
-        connect_args={
-            "timeout": DATABASE_CONNECT_TIMEOUT_SECONDS,
-            "command_timeout": DATABASE_COMMAND_TIMEOUT_SECONDS,
-        },
-    )
-    # Replace the global engine
-    import app.database
-    app.database.async_engine = new_engine
-    app.database.AsyncSessionLocal = async_sessionmaker(
-        new_engine,
-        autocommit=False,
-        autoflush=True,
-        expire_on_commit=False,
-    )
 
 
 def get_test_database_url() -> str:
