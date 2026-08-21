@@ -178,8 +178,6 @@ async def snooze_thread(
         excluded_thread_ids=current_session.snoozed_thread_ids,
     )
 
-    from app.models import Thread
-
     snoozed_ids = (
         list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
     )
