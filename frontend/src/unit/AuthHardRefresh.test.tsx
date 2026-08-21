@@ -8,7 +8,7 @@ const mockApiPost = vi.fn()
 const mockGetAccessToken = vi.fn<() => string | null>(() => null)
 const mockSetAccessToken = vi.fn()
 const mockClearAccessToken = vi.fn()
-const mockReadStoredAccessToken = vi.fn() => string | null>(() => null)
+const mockReadStoredAccessToken = vi.fn<() => string | null>(() => null)
 
 vi.mock('../services/api', () => ({
   default: {

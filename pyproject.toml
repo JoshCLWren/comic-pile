@@ -105,7 +105,7 @@ exclude = [".venv", "__pycache__", "*.pyc", ".git", "node_modules", "alembic/ver
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "C4", "D", "ANN401"]
 ignore = ["D203", "D213", "E501", "B008", "I001"]
-per-file-ignores = { "alembic/env.py" = ["F401"], "alembic/versions/*.py" = ["D415"], "app/cache.py" = ["D102", "D107", "ANN401"], "tests/test_queue_cursor_semantics.py" = ["D102", "F401"], ".github/scripts/*.py" = ["D", "ANN401", "UP017"], "tests/test_factory_*.py" = ["D"] }
+per-file-ignores = { "alembic/env.py" = ["F401"], "alembic/versions/*.py" = ["D415"], "app/cache.py" = ["D102", "D107", "ANN401"], "tests/conftest.py" = ["D205", "D209", "N806", "F841"], "tests/test_queue_cursor_semantics.py" = ["D102", "F401"], ".github/scripts/*.py" = ["D", "ANN401", "UP017"], "tests/test_factory_*.py" = ["D"] }
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

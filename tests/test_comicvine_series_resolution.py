@@ -1,17 +1,19 @@
 """Regression tests for deterministic ComicVine series-based issue resolution.
 
 These tests exercise the resolution service without live ComicVine access by
-substituting a fake provider client.  They guard against regressions in the
+substituting a fake provider client. They guard against regressions in the
 deterministic mapping logic and the post-commit attribute handling that previously
 risked ``MissingGreenlet`` errors under async SQLAlchemy.
 """
 
+from collections.abc import AsyncIterator
 from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
+import pytest_asyncio
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.models import Issue, Thread, User
 from app.models.external_identity import (
@@ -27,6 +29,16 @@ from app.services.comicvine_series_resolution import (
     schedule_series_issue_resolution,
 )
 from comic_pile.comicvine_provider import ComicVineResponse, ComicVineRateLimitError
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def bind_resolution_session_factory(
+    db_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> AsyncIterator[None]:
+    """Bind background resolution sessions to the current test engine."""
+    session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
+    monkeypatch.setattr(resolution_module, "AsyncSessionLocal", session_factory)
+    yield
 
 
 class _FakeComicVineClient:
