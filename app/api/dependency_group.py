@@ -26,7 +26,7 @@ from app.schemas.dependency_group import (
 )
 from comic_pile.dependencies import refresh_user_blocked_status
 
-router = APIRouter(prefix="/crossovers", tags=["crossovers"])
+router = APIRouter(prefix="/reading-order-groups", tags=["reading-order-groups"])
 MAX_RANGE_SIZE = 250
 
 
