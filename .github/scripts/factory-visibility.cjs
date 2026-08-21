@@ -1,4 +1,4 @@
-const WORKER_OWNER_LABELS = Array.from({ length: 46 }, (_, index) => `factory:${index + 1}`);
+const WORKER_OWNER_LABELS = Array.from({ length: 48 }, (_, index) => `factory:${index + 1}`);
 const VISIBILITY_MANAGED_OWNER_LABELS = WORKER_OWNER_LABELS.slice(0, 16);
 
 const DEFINITIONS = {
@@ -59,7 +59,7 @@ function ownerFor(worker) {
   const fixedModel = worker?.match(/^opencode-(?:free-model|nvidia)-factory-(\d+)$/);
   if (fixedModel) {
     const number = Number(fixedModel[1]);
-    if (number >= 6 && number <= 46) return `factory:${number}`;
+    if (number >= 6 && number <= 48) return `factory:${number}`;
   }
 
   if (worker === 'local' || worker === 'local-opencode' || worker?.startsWith('local-opencode-')) {

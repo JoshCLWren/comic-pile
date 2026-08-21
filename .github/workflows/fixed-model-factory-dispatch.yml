@@ -189,7 +189,7 @@ jobs:
           set -Eeuo pipefail
           manifest='.github/free-model-factories.tsv'
           controller='.github/scripts/factory-work-controller.py'
-          owner_pattern='^factory:(local|([1-9]|[1-3][0-9]|4[0-6]))$'
+          owner_pattern='^factory:(local|([1-9]|[1-3][0-9]|4[0-8]))$'
 
           heartbeat_worker_for_run() {
             local run_id="$1"
@@ -210,7 +210,7 @@ jobs:
             local owner="factory:${worker}"
             local number current_labels other_owner latest_labels target_labels
 
-            [[ "$worker" =~ ^[0-9]+$ ]] && (( worker >= 6 && worker <= 46 )) || {
+            [[ "$worker" =~ ^[0-9]+$ ]] && (( worker >= 6 && worker <= 48 )) || {
               echo "Refusing lease recovery for unknown historical fixed-model worker ${worker}" >&2
               return 1
             }
