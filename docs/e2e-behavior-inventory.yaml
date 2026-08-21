@@ -49,3 +49,8 @@
   description: Reading order follows declared dependency graph
   priority: P0
   status: uncovered
+- id: MOBILE-001
+  area: mobile
+  description: Primary mobile interaction path works for core user journeys
+  priority: P0
+  status: uncovered
