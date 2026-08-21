@@ -973,6 +973,7 @@ async def restore_session_start(
                 session.start_die = snapshot.session_state.get("start_die", session.start_die)
                 session.manual_die = snapshot.session_state.get("manual_die", session.manual_die)
 
+
             await db.commit()
             await db.refresh(session)
             await refresh_user_blocked_status(current_user.id, db)
@@ -983,7 +984,7 @@ async def restore_session_start(
 
             from sqlalchemy import func
 
-            active_thread = await get_active_thread(session.id, db)
+
 
             snapshot_count_result = await db.execute(
                 select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session.id)

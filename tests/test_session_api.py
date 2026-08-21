@@ -1188,3 +1188,80 @@ async def test_simple_migration_creates_correct_issues(
     assert len(read_issues) == 0
     assert unread_issues[0].issue_number == "1"
     assert unread_issues[-1].issue_number == "5"
+
+@pytest.mark.asyncio
+async def test_restore_session_allows_thread_attribute_access(auth_client: AsyncClient, async_db: AsyncSession) -> None:
+    """Test that restoring a session does not raise MissingGreenlet when accessing thread attributes."""
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    # Create a session
+    session = SessionModel(start_die=10, user_id=user.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    # Create a migrated thread with issue tracking
+    thread = Thread(
+        title="Restored Thread",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=5,
+        reading_progress="in_progress",
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    # Link thread to session via an event
+    event = Event(
+        type="roll",
+        die=10,
+        result=1,
+        selected_thread_id=thread.id,
+        selection_method="random",
+        session_id=session.id,
+        thread_id=thread.id,
+    )
+    async_db.add(event)
+    await async_db.commit()
+
+    # Mark thread as completed to trigger restore logic
+    thread.status = "completed"
+    thread.issues_remaining = 0
+    thread.reading_progress = "completed"
+    thread.next_unread_issue_id = None
+    await async_db.refresh(thread)
+
+    # Create a rating event to trigger migration
+    rating_event = Event(
+        type="rate",
+        session_id=session.id,
+        thread_id=thread.id,
+        rating=4.0,
+        issues_read=1,
+        die=10,
+        die_after=8,
+    )
+    async_db.add(rating_event)
+    await async_db.commit()
+
+    # Call the restore endpoint
+    response = await auth_client.post(f"/api/sessions/{session.id}/restore-session-start")
+    assert response.status_code == 200, f"Response: {response.text}"
+
+    # Verify the response includes active_thread with accessible attributes
+    data = response.json()
+    assert "active_thread" in data
+    active_thread = data["active_thread"]
+    # Accessing attributes should not raise MissingGreenlet
+    assert active_thread["title"] == "Restored Thread"
+    assert active_thread["format"] == "Comic"
+    assert active_thread["issues_remaining"] == 0
+    assert active_thread["queue_position"] == 1
+    assert active_thread["total_issues"] == 5
+    assert active_thread["reading_progress"] == "completed"
