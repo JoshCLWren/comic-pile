@@ -127,6 +127,7 @@ test('puts the mobile Sign out action inside More', async () => {
 test('shows loading and non-auth failure states and logs out gracefully', async () => {
   mockApiGet.mockResolvedValueOnce({ username: 'user', email: 'user@example.com' })
     .mockRejectedValueOnce(new Error('server unavailable'))
+    .mockRejectedValueOnce(new Error('server unavailable'))
   render(
     <MemoryRouter initialEntries={['/queue']}>
       <AuthProvider>
@@ -146,6 +147,7 @@ test('shows loading and non-auth failure states and logs out gracefully', async 
 
 test('clears authentication when the user lookup returns unauthorized', async () => {
   mockApiGet.mockResolvedValueOnce({ username: 'user', email: 'user@example.com' })
+    .mockRejectedValueOnce({ isAxiosError: true, response: { status: 401 } })
     .mockRejectedValueOnce({ isAxiosError: true, response: { status: 401 } })
   render(
     <MemoryRouter initialEntries={['/']}>
