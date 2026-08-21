@@ -1,9 +1,8 @@
-import { useState, useEffect, useCallback, useContext, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { threadsApi } from '../services/api';
 import type { ReactivateThreadPayload, Thread, ThreadCreatePayload, ThreadUpdatePayload } from '../types';
-import { CacheContext } from '../contexts/CacheContextValue';
-import { applyUpdatedThreadCache } from '../query/cacheEffects';
+import { applyEditedThreadToQueuePages, invalidateAfterQueueMutation } from '../query/cacheEffects';
 import { queryClient } from '../query/queryClient';
 
 export function useThread(id?: number | null) {
@@ -104,8 +103,6 @@ export function useStaleThreads(days?: number) {
 }
 
 export function useCreateThread() {
-  const cache = useContext(CacheContext);
-  const invalidateQueries = useMemo(() => cache?.invalidateQueries ?? (() => {}), [cache]);
   const [isPending, setIsPending] = useState(false);
   const [isError, setIsError] = useState(false);
 
@@ -116,7 +113,7 @@ export function useCreateThread() {
 
       try {
         const result = await threadsApi.create(data);
-        invalidateQueries(['threads']);
+        await invalidateAfterQueueMutation(queryClient);
         return result;
       } catch (error: unknown) {
         const detail = axios.isAxiosError<{ detail?: string }>(error)
@@ -129,7 +126,7 @@ export function useCreateThread() {
         setIsPending(false);
       }
     },
-    [invalidateQueries]
+    []
   );
 
   return { mutate, isPending, isError };
@@ -146,7 +143,7 @@ export function useUpdateThread() {
 
       try {
         const result = await threadsApi.update(id, data);
-        await applyUpdatedThreadCache(queryClient, result);
+        applyEditedThreadToQueuePages(queryClient, result);
         return result;
       } catch (error: unknown) {
         const detail = axios.isAxiosError<{ detail?: string }>(error)
@@ -166,8 +163,6 @@ export function useUpdateThread() {
 }
 
 export function useDeleteThread() {
-  const cache = useContext(CacheContext);
-  const invalidateQueries = useMemo(() => cache?.invalidateQueries ?? (() => {}), [cache]);
   const [isPending, setIsPending] = useState(false);
   const [isError, setIsError] = useState(false);
 
@@ -178,7 +173,7 @@ export function useDeleteThread() {
 
       try {
         const result = await threadsApi.delete(id);
-        invalidateQueries(['threads']);
+        await invalidateAfterQueueMutation(queryClient);
         return result;
       } catch (error: unknown) {
         const detail = axios.isAxiosError<{ detail?: string }>(error)
@@ -191,15 +186,13 @@ export function useDeleteThread() {
         setIsPending(false);
       }
     },
-    [invalidateQueries]
+    []
   );
 
   return { mutate, isPending, isError };
 }
 
 export function useReactivateThread() {
-  const cache = useContext(CacheContext);
-  const invalidateQueries = useMemo(() => cache?.invalidateQueries ?? (() => {}), [cache]);
   const [isPending, setIsPending] = useState(false);
   const [isError, setIsError] = useState(false);
 
@@ -210,7 +203,7 @@ export function useReactivateThread() {
 
       try {
         const result = await threadsApi.reactivate(data);
-        invalidateQueries(['threads']);
+        await invalidateAfterQueueMutation(queryClient);
         return result;
       } catch (error: unknown) {
         const detail = axios.isAxiosError<{ detail?: string }>(error)
@@ -223,7 +216,7 @@ export function useReactivateThread() {
         setIsPending(false);
       }
     },
-    [invalidateQueries]
+    []
   );
 
   return { mutate, isPending, isError };

@@ -86,13 +86,11 @@ beforeEach(() => {
 
 describe('useQueueThreadActions', () => {
   it('persists drag state across start, over, drop, and end', () => {
-    const refetch = vi.fn().mockResolvedValue(undefined)
     const { result } = renderHook(
       () =>
         useQueueThreadActions({
           navigateToRoll: vi.fn(),
           refetchSession: vi.fn(),
-          refetch,
         }),
       { wrapper },
     )
@@ -111,13 +109,11 @@ describe('useQueueThreadActions', () => {
   it('moves to position using the target thread queue position', async () => {
     const movePosition = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false }
     mockedMoveToPosition.mockReturnValue(movePosition)
-    const refetch = vi.fn().mockResolvedValue(undefined)
     const { result } = renderHook(
       () =>
         useQueueThreadActions({
           navigateToRoll: vi.fn(),
           refetchSession: vi.fn(),
-          refetch,
         }),
       { wrapper },
     )
@@ -128,7 +124,6 @@ describe('useQueueThreadActions', () => {
     ))
 
     await waitFor(() => expect(movePosition.mutate).toHaveBeenCalledWith({ id: 1, position: 2 }))
-    expect(refetch).toHaveBeenCalled()
   })
 
   it('reports move-to-position failures as a reorder error without crashing', async () => {
@@ -139,7 +134,6 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions({
           navigateToRoll: vi.fn(),
           refetchSession: vi.fn(),
-          refetch: vi.fn(),
         }),
       { wrapper },
     )
@@ -178,7 +172,6 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions({
           navigateToRoll: navigate,
           refetchSession: vi.fn(),
-          refetch: vi.fn(),
         }),
       { wrapper },
     )
@@ -203,7 +196,6 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions({
           navigateToRoll: vi.fn(),
           refetchSession,
-          refetch: vi.fn(),
         }),
       { wrapper },
     )
@@ -223,7 +215,6 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions({
           navigateToRoll: vi.fn(),
           refetchSession: vi.fn(),
-          refetch: vi.fn(),
         }),
       { wrapper },
     )
@@ -240,7 +231,6 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions({
           navigateToRoll: vi.fn(),
           refetchSession: vi.fn(),
-          refetch: vi.fn(),
         }),
       { wrapper },
     )

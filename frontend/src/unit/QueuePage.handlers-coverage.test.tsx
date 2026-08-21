@@ -86,7 +86,6 @@ describe('QueuePage callback coverage', () => {
     await user.click(screen.getByText('dependency changed'))
     await user.click(screen.getByText('close dependencies'))
     expect(mocks.mutate).toHaveBeenCalled()
-    expect(mocks.refetch).toHaveBeenCalled()
   })
 
   it('covers action errors, rejected actions, and reposition validation', async () => {

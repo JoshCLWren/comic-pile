@@ -1,5 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query'
-import type { Thread } from '../types'
+import type { InfiniteData } from '@tanstack/react-query'
+import type { Thread, ThreadListResponse } from '../types'
 import { queryKeys } from './queryKeys'
 
 export type ThreadCacheRollback = () => void
@@ -115,4 +116,57 @@ export async function invalidateAfterQueueMovement(
       exact: true,
     }),
   ])
+}
+
+/**
+ * Invalidate all Queue-affecting queries after a mutation that changes queue
+ * ordering or membership (create, delete, reposition, shuffle, snooze,
+ * unsnooze, reactivate). TanStack Query refetches invalidated queries
+ * automatically — callers must not also call `refetch()`.
+ */
+export async function invalidateAfterQueueMutation(
+  client: QueryClient,
+): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
+    client.invalidateQueries({
+      queryKey: queryKeys.session.current(),
+      exact: true,
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    }),
+  ])
+}
+
+/**
+ * Update a single thread's metadata in every loaded Queue infinite-query page
+ * in-place. Use this for mutations that change thread metadata (title, format,
+ * notes, issues_remaining, rating) without changing queue ordering or membership.
+ *
+ * Returns immediately — no network refetch is triggered for the Queue list.
+ */
+export function applyEditedThreadToQueuePages(
+  client: QueryClient,
+  updatedThread: Thread,
+): void {
+  client.setQueriesData<InfiniteData<ThreadListResponse>>(
+    { queryKey: queryKeys.queue.pages() },
+    (old) => {
+      if (!old) return old
+      return {
+        ...old,
+        pages: old.pages.map((page) => ({
+          ...page,
+          threads: page.threads.map((t) =>
+            t.id === updatedThread.id ? { ...t, ...updatedThread } : t,
+          ),
+        })),
+      }
+    },
+  )
+
+  client.setQueryData(queryKeys.thread.detail(updatedThread.id), updatedThread)
+  client.setQueryData(queryKeys.thread.summary(updatedThread.id), updatedThread)
 }
