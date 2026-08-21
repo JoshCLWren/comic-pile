@@ -36,7 +36,6 @@ export default function QueuePage() {
     data: threads,
     isPending,
     isError,
-    refetch,
     nextPageToken,
     loadMore,
   } = useQueueThreads(searchQuery, sortBy)
