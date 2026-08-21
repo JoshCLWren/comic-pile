@@ -10,9 +10,9 @@ from typing import Any
 from factory_review_policy import producer_worker_from_pr as producer_worker_from_values
 NON_EXECUTABLE_ISSUES = {679, 1093, 1109}
 
-OWNER_RE = re.compile('^factory:(?:unowned|local|[1-9]|[1-3][0-9]|4[0-6])$')
+OWNER_RE = re.compile('^factory:(?:unowned|local|[1-9]|[1-3][0-9]|4[0-8])$')
 
-FIXED_OWNER_RE = re.compile('^factory:(?P<worker>[6-9]|[1-3][0-9]|4[0-6])$')
+FIXED_OWNER_RE = re.compile('^factory:(?P<worker>[6-9]|[1-3][0-9]|4[0-8])$')
 
 STAGE_LABELS = {'factory:building', 'factory:review', 'factory:changes-requested', 'factory:ci', 'factory:ready', 'factory:blocked'}
 STAGE_PRECEDENCE = ('factory:blocked', 'factory:ready', 'factory:review', 'factory:changes-requested', 'factory:ci', 'factory:building')

@@ -72,7 +72,9 @@ test('fixed-model worker tokens map across the complete fleet range', () => {
   assert.equal(ownerFor('opencode-nvidia-factory-6'), 'factory:6');
   assert.equal(ownerFor('opencode-free-model-factory-32'), 'factory:32');
   assert.equal(ownerFor('opencode-free-model-factory-46'), 'factory:46');
-  assert.equal(ownerFor('opencode-free-model-factory-47'), 'factory:unowned');
+  assert.equal(ownerFor('opencode-free-model-factory-47'), 'factory:47');
+  assert.equal(ownerFor('opencode-free-model-factory-48'), 'factory:48');
+  assert.equal(ownerFor('opencode-free-model-factory-49'), 'factory:unowned');
 });
 
 test('fixed-model label metadata is recognized without being rewritten', async () => {
@@ -273,7 +275,7 @@ test('released fixed-model PR resolves closing issue instead of worker branch nu
   const owners = calls[0].labels.filter(label => (
     label === 'factory:unowned'
     || label === 'factory:local'
-    || /^factory:(?:[1-9]|[1-3][0-9]|4[0-6])$/.test(label)
+    || /^factory:(?:[1-9]|[1-3][0-9]|4[0-8])$/.test(label)
   ));
   assert.deepEqual(owners, ['factory:unowned']);
   assert.ok(calls[0].labels.includes('factory:review'));
@@ -323,7 +325,7 @@ test('PR refresh preserves one external owner after the linked issue is released
   const owners = calls[0].labels.filter(label => (
     label === 'factory:unowned'
     || label === 'factory:local'
-    || /^factory:(?:[1-9]|[1-3][0-9]|4[0-6])$/.test(label)
+    || /^factory:(?:[1-9]|[1-3][0-9]|4[0-8])$/.test(label)
   ));
   assert.deepEqual(owners, ['factory:13']);
   assert.ok(calls[0].labels.includes('factory:review'));

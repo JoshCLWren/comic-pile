@@ -331,16 +331,21 @@ def test_workflows_delegate_mechanical_gates_to_controller():
         text = (root / name).read_text()
         assert 'factory-review-controller.py' in text
         assert ' gates --pr ' in text
-        assert 'gh pr checks' not in text
+        for line_number, line in enumerate(text.splitlines(), 1):
+            if 'gh pr checks' in line and '--help' not in line:
+                raise AssertionError(
+                    f'{name} evaluates PR checks inline at line {line_number}; '
+                    'gate evaluation must stay in factory-review-controller.py'
+                )
         assert 'reviewThreads(first:100)' not in text
         assert '--json state,isDraft,mergeable,headRefOid' not in text
 
 
-def test_paused_schedule_blocks_remain_commented():
+def test_fixed_model_factory_schedules_are_active():
     root = SCRIPT_DIR.parent / "workflows"
     drain = (root / "factory-ready-merge-drain.yml").read_text()
     dispatcher = (root / "fixed-model-factory-dispatch.yml").read_text()
-    assert "  # schedule:" in drain
-    assert "  #   - cron: '2-57/5 * * * *'" in drain
-    assert "  # schedule:" in dispatcher
-    assert dispatcher.count("  #   - cron:") == 12
+    assert "  schedule:\n    - cron: '2-57/5 * * * *'" in drain
+    assert dispatcher.count("    - cron: '") == 12
+    for minute in range(0, 60, 5):
+        assert f"    - cron: '{minute} 0-23 * * *'" in dispatcher
