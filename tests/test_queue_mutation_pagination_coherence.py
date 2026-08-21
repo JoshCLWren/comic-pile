@@ -66,15 +66,13 @@ async def test_mutation_reset_keeps_first_page_bounded(
     assert len(page1.threads) == 50
     assert page1.next_page_token is not None
 
-    # Mutation (reposition the first thread to back) should reset pagination
-    # when the frontend refetches, and should not break cursor semantics.
-    # We verify the API remains bounded after mutation by fetching first page.
-    first_thread_id = page1.threads[0].id
-    await async_db.execute(
-        select(Thread).where(Thread.id == first_thread_id)
-    )
+    # Mutation: reposition first thread to the back (position 56)
+    first_thread = page1.threads[0]
+    first_thread.queue_position = 56
+    await async_db.flush()
+    await async_db.commit()
 
-    # Re-fetch first page — must remain bounded (<= 50 items)
+    # Re-fetch first page — must remain bounded (<= 50 items) with no gaps
     page_after = await route(
         request=request,
         current_user=SimpleNamespace(id=user.id),
@@ -85,10 +83,11 @@ async def test_mutation_reset_keeps_first_page_bounded(
         page_token=None,
     )
     assert len(page_after.threads) == 50
-    # No duplicates compared to original first page
-    original_ids = {t.id for t in page1.threads}
-    new_ids = {t.id for t in page_after.threads}
-    assert original_ids == new_ids or len(new_ids) == 50
+    after_ids = {t.id for t in page_after.threads}
+    # First thread should no longer be on the first page
+    assert first_thread.id not in after_ids
+    # All threads on first page must have distinct IDs (no duplicates)
+    assert len(after_ids) == 50
 
 
 @pytest.mark.asyncio
@@ -124,7 +123,8 @@ async def test_pagination_no_gaps_or_duplicates_after_mutation(
     )
     route = __import__("inspect").unwrap(list_threads)
 
-    all_ids: list[int] = []
+    # Fetch all threads to get IDs
+    all_ids_before: list[int] = []
     token = None
     for _ in range(10):
         resp = await route(
@@ -136,21 +136,51 @@ async def test_pagination_no_gaps_or_duplicates_after_mutation(
             page_size=3,
             page_token=token,
         )
-        all_ids.extend(t.id for t in resp.threads)
+        all_ids_before.extend(t.id for t in resp.threads)
         token = resp.next_page_token
         if token is None:
             break
 
-    # All 7 threads appear exactly once across pages
-    assert len(all_ids) == 7
-    assert len(set(all_ids)) == 7
+    assert len(all_ids_before) == 7
+    assert len(set(all_ids_before)) == 7
+
+    # Mutation: move thread at position 1 to position 4 (cross-boundary)
+    thread_to_move = (await async_db.execute(
+        select(Thread).where(Thread.id == all_ids_before[0])
+    )).scalar_one()
+    thread_to_move.queue_position = 4
+    await async_db.flush()
+    await async_db.commit()
+
+    # Re-fetch all pages — must still have no duplicates or gaps
+    all_ids_after: list[int] = []
+    token = None
+    for _ in range(10):
+        resp = await route(
+            request=request,
+            current_user=SimpleNamespace(id=user.id),
+            db=async_db,
+            search=None,
+            sort="position",
+            page_size=3,
+            page_token=token,
+        )
+        all_ids_after.extend(t.id for t in resp.threads)
+        token = resp.next_page_token
+        if token is None:
+            break
+
+    # All 7 threads still present exactly once
+    assert len(all_ids_after) == 7
+    assert len(set(all_ids_after)) == 7
+    assert set(all_ids_before) == set(all_ids_after)
 
 
 @pytest.mark.asyncio
 async def test_large_library_remains_bounded(
     async_db: AsyncSession,
 ) -> None:
-    """Queue pagination remains bounded even with a 5,000-thread library."""
+    """Queue pagination remains bounded even with a large library."""
     user = await get_or_create_user_async(async_db)
     await async_db.commit()
 
