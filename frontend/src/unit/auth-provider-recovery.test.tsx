@@ -82,7 +82,12 @@ describe('AuthProvider transient recovery', () => {
     expect(auth?.isLoading).toBe(false)
     expect(auth?.isAuthenticated).toBe(true)
     expect(mocks.clearAccessToken).not.toHaveBeenCalled()
-    expect(mocks.get).toHaveBeenLastCalledWith('/v1/auth/me', {
+    expect(mocks.get).toHaveBeenCalledTimes(3)
+    expect(mocks.get).toHaveBeenNthCalledWith(2, '/v1/auth/me', {
+      timeout: 15000,
+      skipAuthRedirect: true,
+    })
+    expect(mocks.get).toHaveBeenNthCalledWith(3, '/v1/users/me/preferences', {
       timeout: 15000,
       skipAuthRedirect: true,
     })

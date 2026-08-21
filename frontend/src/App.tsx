@@ -37,6 +37,27 @@ type BugReportSubmit = (
 const AUTH_BOOTSTRAP_TIMEOUT_MS = 15000
 const AUTH_BOOTSTRAP_RETRY_DELAY_MS = 1000
 
+const THEME_IDS = ['classic', 'ink-gold', 'command-center']
+
+function applyPersistedTheme(theme: string | undefined | null): void {
+  const safeTheme = theme && THEME_IDS.includes(theme) ? theme : 'classic'
+  document.documentElement.setAttribute('data-theme', safeTheme)
+}
+
+async function fetchAndApplyPersistedTheme(timeout?: number): Promise<void> {
+  try {
+    const prefResponse = await api.get<{ theme?: string }>('/v1/users/me/preferences', {
+      timeout,
+      skipAuthRedirect: true,
+    })
+    applyPersistedTheme(prefResponse?.theme)
+  } catch {
+    // If preference fetch fails, fall back to the classic theme so a
+    // preference outage never strands the app in an unusable state.
+    applyPersistedTheme(undefined)
+  }
+}
+
 const RollPage = lazyRoute('roll')
 const QueuePage = lazyRoute('queue')
 const ThreadDetailView = lazyRoute('threadDetail')
@@ -100,6 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           throw error
         }
+        await fetchAndApplyPersistedTheme(timeout)
       })().finally(() => {
         recoveryPromise.current = null
       })
@@ -160,6 +182,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (isMounted) {
           setUser(response)
           setIsAuthenticated(true)
+        }
+        // Resolve the persisted theme after the user is loaded
+        await fetchAndApplyPersistedTheme(AUTH_BOOTSTRAP_TIMEOUT_MS)
+        if (isMounted) {
           setIsLoading(false)
         }
       } catch (error) {
@@ -217,6 +243,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await api.get<AuthUser>('/v1/auth/me', { skipAuthRedirect: true })
       setUser(response)
       setIsAuthenticated(true)
+      void fetchAndApplyPersistedTheme()
     } catch (error) {
       clearAccessToken()
       setIsAuthenticated(false)
