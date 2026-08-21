@@ -3,7 +3,6 @@
 9	nvidia	stepfun-ai/step-3.7-flash	15	dispatcher	Step 3.7 Flash
 10	nvidia	nvidia/nemotron-3-ultra-550b-a55b	20	dispatcher	Nemotron 3 Ultra
 11	nvidia	poolside/laguna-xs-2.1	25	dispatcher	Laguna XS 2.1
-12	opencode-free	x-preview-f-free	30	dispatcher	OpenCode Ox Alpha Free
 14	nvidia	minimaxai/minimax-m3	40	dispatcher	MiniMax M3
 16	nvidia	nvidia/nemotron-3-super-120b-a12b	50	dispatcher	Nemotron 3 Super
 17	nvidia	nvidia/nemotron-3-nano-omni-30b-a3b-reasoning	55	dispatcher	Nemotron 3 Omni
