@@ -351,6 +351,286 @@ async def test_preview_target_story_arc_marks_core_members(
 
 
 @pytest.mark.asyncio
+async def test_preview_x_of_swords_contextual_outside_core(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """X of Swords: CBL entries tagged only as Dawn of X remain contextual, not core.
+
+    Acceptance criterion from #1016: contextual CBL entries can remain outside
+    ComicVine's core event membership while still appearing in a suggested template.
+    """
+    user = await get_or_create_user_async(async_db)
+
+    # Create issues that ARE in the X of Swords story arc (core members)
+    x_of_swords_issues = []
+    for i in range(3):
+        thread = Thread(
+            title=f"X-Threads {i}",
+            format="comic",
+            issues_remaining=1,
+            queue_position=1,
+            status="active",
+            user_id=user.id,
+            total_issues=1,
+            reading_progress="unstarted",
+            created_at=datetime.now(UTC),
+        )
+        async_db.add(thread)
+        await async_db.flush()
+        issue = Issue(
+            thread_id=thread.id,
+            issue_number="1",
+            position=i + 1,
+            status="unread",
+        )
+        async_db.add(issue)
+        await async_db.flush()
+        x_of_swords_issues.append(issue)
+
+    # Seed CBL evidence where some issues have story arc 60653 (X of Swords core)
+    # and some have only "Dawn of X" (contextual prelude entries)
+    source = CBLSource(
+        repository="repo/events",
+        revision_sha="sha-1",
+        synced_at=datetime.now(UTC),
+    )
+    async_db.add(source)
+    await async_db.flush()
+    source_list = CBLSourceList(
+        source_id=source.id,
+        source_path="Events/X-of-Swords.cbl",
+        name="X of Swords",
+        declared_issue_count=5,
+        content_hash="hash-1",
+        revision_sha="sha-1",
+        active=True,
+    )
+    async_db.add(source_list)
+    await async_db.flush()
+    list_id = source_list.id
+
+    # Issue 1: in X of Swords core (story arc 60653)
+    identity1 = ExternalIdentity(
+        provider="comicvine",
+        entity_type="issue",
+        external_id="4000-1",
+        metadata_json={"story_arcs": [{"id": "60653"}]},
+    )
+    async_db.add(identity1)
+    await async_db.flush()
+    mapping1 = IssueExternalIdentityMapping(
+        issue_id=x_of_swords_issues[0].id,
+        external_identity_id=identity1.id,
+        status="confirmed",
+    )
+    async_db.add(mapping1)
+    await async_db.flush()
+    await _seed_template_entry(
+        async_db,
+        source_list=source_list,
+        position=1,
+        series_name="X of Swords",
+        issue_number="1",
+        external_issue_identity_id=identity1.id,
+    )
+
+    # Issue 2: in X of Swords core (story arc 60653)
+    identity2 = ExternalIdentity(
+        provider="comicvine",
+        entity_type="issue",
+        external_id="4000-2",
+        metadata_json={"story_arcs": [{"id": "60653"}]},
+    )
+    async_db.add(identity2)
+    await async_db.flush()
+    mapping2 = IssueExternalIdentityMapping(
+        issue_id=x_of_swords_issues[1].id,
+        external_identity_id=identity2.id,
+        status="confirmed",
+    )
+    async_db.add(mapping2)
+    await async_db.flush()
+    await _seed_template_entry(
+        async_db,
+        source_list=source_list,
+        position=2,
+        series_name="X of Swords",
+        issue_number="2",
+        external_issue_identity_id=identity2.id,
+    )
+
+    # Issue 3: in X of Swords core (story arc 60653)
+    identity3 = ExternalIdentity(
+        provider="comicvine",
+        entity_type="issue",
+        external_id="4000-3",
+        metadata_json={"story_arcs": [{"id": "60653"}]},
+    )
+    async_db.add(identity3)
+    await async_db.flush()
+    mapping3 = IssueExternalIdentityMapping(
+        issue_id=x_of_swords_issues[2].id,
+        external_identity_id=identity3.id,
+        status="confirmed",
+    )
+    async_db.add(mapping3)
+    await async_db.flush()
+    await _seed_template_entry(
+        async_db,
+        source_list=source_list,
+        position=3,
+        series_name="X of Swords",
+        issue_number="3",
+        external_issue_identity_id=identity3.id,
+    )
+
+    # Issue 4: contextual prelude - Excalibur #12 tagged only as Dawn of X, NOT X of Swords
+    identity4 = ExternalIdentity(
+        provider="comicvine",
+        entity_type="issue",
+        external_id="4000-4",
+        metadata_json={"story_arcs": [{"id": "5248"}]},  # Dawn of X story arc
+    )
+    async_db.add(identity4)
+    await async_db.flush()
+    mapping4 = IssueExternalIdentityMapping(
+        issue_id=x_of_swords_issues[0].id,
+        external_identity_id=identity4.id,
+        status="confirmed",
+    )
+    async_db.add(mapping4)
+    await async_db.flush()
+    await _seed_template_entry(
+        async_db,
+        source_list=source_list,
+        position=4,
+        series_name="X of Swords",
+        issue_number="12",
+        external_issue_identity_id=identity4.id,
+    )
+
+    # Issue 5: contextual prelude - X-Men #12 tagged only as Dawn of X, NOT X of Swords
+    identity5 = ExternalIdentity(
+        provider="comicvine",
+        entity_type="issue",
+        external_id="4000-5",
+        metadata_json={"story_arcs": [{"id": "5248"}]},  # Dawn of X story arc
+    )
+    async_db.add(identity5)
+    await async_db.flush()
+    mapping5 = IssueExternalIdentityMapping(
+        issue_id=x_of_swords_issues[1].id,
+        external_identity_id=identity5.id,
+        status="confirmed",
+    )
+    async_db.add(mapping5)
+    await async_db.flush()
+    await _seed_template_entry(
+        async_db,
+        source_list=source_list,
+        position=5,
+        series_name="X of Swords",
+        issue_number="12",
+        external_issue_identity_id=identity5.id,
+    )
+
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/v1/crossover-templates/preview",
+        json={"source_list_ids": [list_id]},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    # Core members (in story arc 60653) should have role "core"
+    core_items = [item for item in body["items"] if item["role"] == "core"]
+    assert len(core_items) == 3, f"Expected 3 core items, got {len(core_items)}: {core_items}"
+
+    # Contextual prelude entries (Dawn of X only, not X of Swords) should NOT have role "core"
+    contextual_items = [item for item in body["items"] if item["role"] != "core"]
+    assert len(contextual_items) == 2, f"Expected 2 contextual items, got {len(contextual_items)}: {contextual_items}"
+    for item in contextual_items:
+        assert item["role"] in ("context/prelude", "unknown"), (
+            f"Expected contextual role 'context/prelude' or 'unknown', got '{item['role']}'"
+        )
+
+    # Verify the template still includes all 5 items
+    assert len(body["items"]) == 5, f"Expected 5 total items, got {len(body['items'])}"
+        provider="comicvine",
+        entity_type="issue",
+        external_id="4000-4",
+        metadata_json={"story_arcs": [{"id": "5248"}]},  # Dawn of X story arc
+    )
+    async_db.add(identity4)
+    await async_db.flush()
+    mapping4 = IssueExternalIdentityMapping(
+        issue_id=x_of_swords_issues[0].id,
+        external_identity_id=identity4.id,
+        status="confirmed",
+    )
+    async_db.add(mapping4)
+    await async_db.flush()
+    await _seed_template_entry(
+        async_db,
+        source_list=source_list,
+        position=4,
+        series_name="X of Swords",
+        issue_number="12",
+        external_issue_identity_id=identity4.id,
+    )
+
+    # Issue 5: contextual prelude - X-Men #12 tagged only as Dawn of X, NOT X of Swords
+    identity5 = ExternalIdentity(
+        provider="comicvine",
+        entity_type="issue",
+        external_id="4000-5",
+        metadata_json={"story_arcs": [{"id": "5248"}]},  # Dawn of X story arc
+    )
+    async_db.add(identity5)
+    await async_db.flush()
+    mapping5 = IssueExternalIdentityMapping(
+        issue_id=x_of_swords_issues[1].id,
+        external_identity_id=identity5.id,
+        status="confirmed",
+    )
+    async_db.add(mapping5)
+    await async_db.flush()
+    await _seed_template_entry(
+        async_db,
+        source_list=source_list,
+        position=5,
+        series_name="X of Swords",
+        issue_number="12",
+        external_issue_identity_id=identity5.id,
+    )
+
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/v1/crossover-templates/preview",
+        json={"source_list_ids": [list_id]},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    # Core members (in story arc 60653) should have role "core"
+    core_items = [item for item in body["items"] if item["role"] == "core"]
+    assert len(core_items) == 3, f"Expected 3 core items, got {len(core_items)}: {core_items}"
+
+    # Contextual prelude entries (Dawn of X only, not X of Swords) should NOT have role "core"
+    contextual_items = [item for item in body["items"] if item["role"] != "core"]
+    assert len(contextual_items) == 2, f"Expected 2 contextual items, got {len(contextual_items)}: {contextual_items}"
+    for item in contextual_items:
+        assert item["role"] in ("context/prelude", "unknown"), (
+            f"Expected contextual role 'context/prelude' or 'unknown', got '{item['role']}'"
+        )
+
+    # Verify the template still includes all 5 items
+    assert len(body["items"]) == 5, f"Expected 5 total items, got {len(body['items'])}"
+
+
+@pytest.mark.asyncio
 async def test_preview_rejects_boolean_source_list_id(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
