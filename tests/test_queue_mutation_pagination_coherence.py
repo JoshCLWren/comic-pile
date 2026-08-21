@@ -67,8 +67,11 @@ async def test_mutation_reset_keeps_first_page_bounded(
     assert page1.next_page_token is not None
 
     # Mutation: reposition first thread to the back (position 56)
-    first_thread = page1.threads[0]
-    first_thread.queue_position = 56
+    first_thread_id = page1.threads[0].id
+    orm_thread = (
+        await async_db.execute(select(Thread).where(Thread.id == first_thread_id))
+    ).scalar_one()
+    orm_thread.queue_position = 56
     await async_db.flush()
     await async_db.commit()
 
@@ -85,7 +88,7 @@ async def test_mutation_reset_keeps_first_page_bounded(
     assert len(page_after.threads) == 50
     after_ids = {t.id for t in page_after.threads}
     # First thread should no longer be on the first page
-    assert first_thread.id not in after_ids
+    assert first_thread_id not in after_ids
     # All threads on first page must have distinct IDs (no duplicates)
     assert len(after_ids) == 50
 
