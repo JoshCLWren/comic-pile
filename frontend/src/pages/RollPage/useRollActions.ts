@@ -31,6 +31,7 @@ interface UseRollActionsParams {
     result?: number | null,
     metadata?: ThreadMetadata | null,
   ) => Promise<void>
+  threadsApi: typeof import('../../../services/api').threadsApi
 }
 
 /**
@@ -149,6 +150,10 @@ export function useRollActions({
             suppressPendingAutoOpenRef.current = true
             enterRatingView(response.thread_id, response.result, threadMetadata)
           }
+          break
+        }
+        case 'set-current-issue': {
+          setIsSetCurrentIssueOpen(true)
           break
         }
         case 'move-front':

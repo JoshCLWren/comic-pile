@@ -20,6 +20,7 @@ import type {
   SessionListResponse,
   SessionSnapshotsResponse,
   SessionSummary,
+  SetCurrentIssueResponse,
   Thread,
   ThreadCreatePayload,
   ThreadDependenciesResponse,
@@ -323,6 +324,8 @@ export const threadsApi = {
     api.post<Thread, ReactivateThreadPayload>('/v1/threads/reactivate', data),
   listStale: (days = 30) => api.get<Thread[]>('/v1/threads/stale', { params: { days } }),
   setPending: (id: number) => api.post<RollResponse>(`/v1/threads/${id}/set-pending`),
+  setCurrentIssue: (id: number, issueNumber: string) =>
+    api.post<SetCurrentIssueResponse, { issue_number: string }>(`/v1/threads/${id}:setCurrentIssue`, { issue_number: issueNumber }),
 }
 
 export const rollApi = {

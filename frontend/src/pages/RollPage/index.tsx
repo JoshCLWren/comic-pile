@@ -15,6 +15,8 @@ import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../../hooks/useQ
 import { useRate } from '../../hooks'
 import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 import { isDiceSide } from '../../components/diceTypes'
+import { threadsApi } from '../../services/api'
+import type { ThreadMetadata } from './types'
 import { useRollPageState } from './useRollPageState'
 import { useRollBootstrapSync } from './useRollBootstrapSync'
 import { useRollPendingSession } from './useRollPendingSession'
@@ -122,6 +124,7 @@ export default function RollPage() {
     },
     refetchBootstrap,
     enterRatingView: rating.enterRatingView,
+    threadsApi,
   })
 
   const modals = useRollModals({
@@ -132,6 +135,33 @@ export default function RollPage() {
     setRestoreAction,
     clearRestoreAction,
   })
+
+  const handleSetCurrentIssue = async (issueNumber: string) => {
+    if (!state.selectedThread) return
+    try {
+      const response = await threadsApi.setCurrentIssue(state.selectedThread.id, issueNumber)
+      await refetchBootstrap()
+      const threadMetadata: ThreadMetadata = {
+        id: response.thread_id,
+        title: response.title,
+        format: response.format,
+        issues_remaining: response.issues_remaining,
+        queue_position: response.queue_position,
+        total_issues: response.total_issues,
+        reading_progress: response.reading_progress ?? null,
+        issue_id: response.issue_id,
+        issue_number: response.issue_number,
+        next_issue_id: response.next_issue_id,
+        next_issue_number: response.next_issue_number,
+        last_rolled_result: null,
+      }
+      suppressPendingAutoOpenRef.current = true
+      rating.enterRatingView(response.thread_id, null, threadMetadata)
+    } catch (error) {
+      console.error('Set current issue failed:', error)
+      throw error
+    }
+  }
 
   const snoozedThreads = bootstrap?.snoozed_threads ?? []
   const blockedThreads = bootstrap?.blocked_threads ?? []
@@ -313,6 +343,9 @@ export default function RollPage() {
           selectedThread={state.selectedThread}
           onCloseActionSheet={() => state.setIsActionSheetOpen(false)}
           onAction={actions.handleAction}
+          isSetCurrentIssueOpen={state.isSetCurrentIssueOpen}
+          onCloseSetCurrentIssue={() => state.setIsSetCurrentIssueOpen(false)}
+          onSetCurrentIssue={handleSetCurrentIssue}
         />
       </div>
     </div>
