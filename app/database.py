@@ -30,18 +30,36 @@ else:
 ASYNC_DATABASE_URL = _db_settings.async_url
 
 # Keep a missing or sleeping Neon endpoint from holding a serverless request open
-# indefinitely. The dependency timeout covers the first pool acquisition, while
-# asyncpg's connect and command timeouts bound lower-level network waits.
+# indefinitely. The dependency timeout bounds total acquisition recovery, while
+# asyncpg's connect and command timeouts bound lower-level network waits. The
+# frontend HTTP client aborts at 10 seconds, so the dependency budget must stay
+# within that end-to-end window.
 DATABASE_DEPENDENCY_TIMEOUT_SECONDS = 10.0
 DATABASE_CONNECT_TIMEOUT_SECONDS = 10.0
 DATABASE_COMMAND_TIMEOUT_SECONDS = 8.0
 
+# Bounded wake-up/reconnect recovery for transient database unavailability
+# (Neon scale-to-zero wakes, stale pooled connections). Attempts only run at the
+# pre-yield acquisition boundary, so route mutations are never replayed.
+DATABASE_ACQUISITION_ATTEMPTS = 2
+DATABASE_RETRY_BACKOFF_SECONDS = 0.25
+
+# Process-local short circuit opened after the recovery budget is exhausted so a
+# sustained outage does not turn every request into another full-budget retry
+# storm. Serverless instances do not share this value; each warm instance bounds
+# its own retry cost.
+DATABASE_CIRCUIT_COOLDOWN_SECONDS = 5.0
+_database_circuit_open_until = 0.0
+
 # Pool configuration from environment (with optimized defaults for Vercel Fluid Compute)
-# Recommended based on benchmarking: size=2, no overflow, no pre-ping
-# See docs/pool_benchmark_results.md for rationale
+# size=2 with no overflow matches docs/pool_benchmark_results.md. Pre-ping is
+# enabled by default because production evidence (issues #1578/#1590) showed
+# stale pooled connections still fail on the Neon pooled endpoint and surface
+# 503s to users during core actions; the ~34ms measured checkout ping is the
+# price of recovering a dead connection transparently inside the same request.
 POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "2"))
 MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "0"))
-POOL_PRE_PING = os.getenv("DB_POOL_PRE_PING", "false").lower() == "true"
+POOL_PRE_PING = os.getenv("DB_POOL_PRE_PING", "true").lower() == "true"
 POOL_RECYCLE = int(os.getenv("DB_POOL_RECYCLE", "3600"))
 
 # Log only an allowlisted metadata projection. Rendering a URL, even with its
@@ -186,40 +204,138 @@ class Base(DeclarativeBase):
 
 
 async def get_db() -> AsyncIterator[AsyncSession]:
-    """Get an async database session with bounded first connection acquisition.
+    """Get an async database session with bounded acquisition recovery.
+
+    Transient failures at the acquisition boundary (a Neon scale-to-zero wake,
+    a stale pooled connection, a refused connect during a restart) are retried
+    with bounded attempts inside the configured dependency budget. Recovery is
+    restricted to the pre-yield boundary: no route code has run yet, so a retry
+    can never replay or duplicate a mutation such as a rating. A database error
+    raised after the session is handed to a route is converted to a clear 503
+    without any retry for the same data-safety reason.
+
+    After the recovery budget is exhausted, a short process-local circuit
+    rejects further requests for a cooldown window so a sustained outage does
+    not turn every request into another full-budget retry storm.
 
     Yields:
         AsyncSession: Database session for use in dependency injection.
 
     Raises:
-        HTTPException: If the first pool acquisition cannot complete within the
-            configured dependency timeout.
+        HTTPException: If connection acquisition cannot complete within the
+            configured dependency budget (or the failure circuit is open), or
+            when route work fails with a database error after the session was
+            handed out.
     """
+    global _database_circuit_open_until
+
     started_at = time.perf_counter()
-    try:
-        async with AsyncSessionLocal() as session:
-            async with asyncio.timeout(DATABASE_DEPENDENCY_TIMEOUT_SECONDS):
-                await session.connection()
-            logger.info(
-                "database_dependency_opened duration_ms=%.2f",
-                (time.perf_counter() - started_at) * 1000,
-            )
-            try:
-                yield session
-            finally:
-                await session.close()
-    except (TimeoutError, sqlalchemy_exc.TimeoutError, sqlalchemy_exc.DBAPIError) as error:
-        elapsed_ms = (time.perf_counter() - started_at) * 1000
+    if started_at < _database_circuit_open_until:
         logger.warning(
-            "database_dependency_unavailable duration_ms=%.2f limit_seconds=%.1f error=%s",
-            elapsed_ms,
+            "database_dependency_circuit_open retry_in_ms=%.2f",
+            (_database_circuit_open_until - started_at) * 1000,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database temporarily unavailable",
+        )
+
+    opened_context: AsyncSession | None = None
+    session: AsyncSession | None = None
+    last_error: BaseException | None = None
+
+    for attempt in range(1, DATABASE_ACQUISITION_ATTEMPTS + 1):
+        remaining = DATABASE_DEPENDENCY_TIMEOUT_SECONDS - (time.perf_counter() - started_at)
+        if remaining <= 0:
+            break
+
+        candidate_context = AsyncSessionLocal()
+        try:
+            candidate = await candidate_context.__aenter__()
+            async with asyncio.timeout(remaining):
+                await candidate.connection()
+        except (
+            TimeoutError,
+            sqlalchemy_exc.TimeoutError,
+            sqlalchemy_exc.DBAPIError,
+        ) as error:
+            last_error = error
+            try:
+                await candidate_context.__aexit__(type(error), error, error.__traceback__)
+            except Exception as close_error:
+                # A failing teardown must never mask the acquisition failure or
+                # skip the bounded retry/503 path below.
+                logger.warning(
+                    "database_dependency_close_after_failure error=%s",
+                    type(close_error).__name__,
+                )
+            remaining_after = DATABASE_DEPENDENCY_TIMEOUT_SECONDS - (
+                time.perf_counter() - started_at
+            )
+            if attempt >= DATABASE_ACQUISITION_ATTEMPTS or remaining_after <= 0:
+                break
+            logger.warning(
+                "database_dependency_reconnect attempt=%d next_attempt=%d "
+                "elapsed_ms=%.2f remaining_ms=%.2f error=%s",
+                attempt,
+                attempt + 1,
+                (time.perf_counter() - started_at) * 1000,
+                remaining_after * 1000,
+                type(error).__name__,
+            )
+            backoff = min(DATABASE_RETRY_BACKOFF_SECONDS, remaining_after)
+            if backoff > 0:
+                await asyncio.sleep(backoff)
+        else:
+            opened_context = candidate_context
+            session = candidate
+            if attempt > 1:
+                logger.info(
+                    "database_dependency_recovered attempt=%d duration_ms=%.2f",
+                    attempt,
+                    (time.perf_counter() - started_at) * 1000,
+                )
+            break
+
+    if opened_context is None or session is None:
+        _database_circuit_open_until = (
+            time.perf_counter() + DATABASE_CIRCUIT_COOLDOWN_SECONDS
+        )
+        logger.warning(
+            "database_dependency_exhausted duration_ms=%.2f limit_seconds=%.1f "
+            "attempts=%d circuit_seconds=%.1f error=%s",
+            (time.perf_counter() - started_at) * 1000,
             DATABASE_DEPENDENCY_TIMEOUT_SECONDS,
+            DATABASE_ACQUISITION_ATTEMPTS,
+            DATABASE_CIRCUIT_COOLDOWN_SECONDS,
+            type(last_error).__name__ if last_error else "budget-exhausted",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database temporarily unavailable",
+        ) from last_error
+
+    _database_circuit_open_until = 0.0
+    logger.info(
+        "database_dependency_opened duration_ms=%.2f",
+        (time.perf_counter() - started_at) * 1000,
+    )
+    try:
+        yield session
+    except (TimeoutError, sqlalchemy_exc.TimeoutError, sqlalchemy_exc.DBAPIError) as error:
+        # Route mutations are never replayed here: partial route work may have
+        # run, so retrying could duplicate writes. Surface a clear 503 instead;
+        # closing the context rolls back anything uncommitted.
+        logger.warning(
+            "database_dependency_unavailable_after_open error=%s",
             type(error).__name__,
         )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Database temporarily unavailable",
         ) from error
+    finally:
+        await opened_context.__aexit__(None, None, None)
 
 
 async def test_database_connection() -> bool:

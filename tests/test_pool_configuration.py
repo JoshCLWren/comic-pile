@@ -35,14 +35,26 @@ def _clean_pool_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_default_pool_configuration() -> None:
-    """Default pool values match the Vercel Fluid Compute recommendation."""
+    """Default pool values match the tuned Vercel Fluid Compute configuration."""
     import app.database as db_mod
 
     importlib.reload(db_mod)
     assert db_mod.POOL_SIZE == 2
     assert db_mod.MAX_OVERFLOW == 0
-    assert db_mod.POOL_PRE_PING is False
+    # Pre-ping defaults on since production evidence (issues #1578/#1590) showed
+    # stale pooled connections still fail through the Neon pooled endpoint and
+    # surface 503s during core user actions.
+    assert db_mod.POOL_PRE_PING is True
     assert db_mod.POOL_RECYCLE == 3600
+
+
+def test_pre_ping_false_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """DB_POOL_PRE_PING='false' disables pre-ping for measured rollback."""
+    monkeypatch.setenv("DB_POOL_PRE_PING", "false")
+    import app.database as db_mod
+
+    importlib.reload(db_mod)
+    assert db_mod.POOL_PRE_PING is False
 
 
 def test_custom_pool_size_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
