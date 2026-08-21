@@ -248,6 +248,7 @@ Use the existing canonical marker schemas:
 - ready: `<!-- comic-pile-factory-ready-v2:<sha> -->`
 - needs human: `<!-- comic-pile-factory-needs-human-v2:<sha-or-issue> -->`
 - released: `<!-- comic-pile-factory-claim-released-v3:<target>:<worker>:<epoch>:<reason> -->`
+- merge closure: `<!-- comic-pile-factory-merge-closure-v1:pr-<pr>:issue-<issue> -->`
 
 ## Durable resume packet
 
