@@ -352,8 +352,14 @@ async def clear_test_cache() -> AsyncIterator[None]:
 
 
 @pytest_asyncio.fixture(scope="function", autouse=True)
-async def reset_global_engine_pool(db_engine: AsyncEngine) -> AsyncIterator[None]:
-    """Release global-engine connections before their test event loop closes."""
+async def reset_global_engine_pool() -> AsyncIterator[None]:
+    """Release global-engine connections before their test event loop closes.
+
+    This fixture must not depend on ``db_engine``: it applies to every test,
+    and a dependency would force schema initialization (a live PostgreSQL
+    connection) even for pure unit tests such as the markdown docs suite,
+    which runs in CI without a database service.
+    """
     from app.database import async_engine
 
     yield
