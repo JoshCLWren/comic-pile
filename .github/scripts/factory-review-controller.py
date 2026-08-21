@@ -378,6 +378,11 @@ def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
         return {"pr": pr_number, "status": "review", "head": head}
 
     mechanical = mechanical_merge_gate(pr_number, head)
+    current_head = str(pr_json(pr_number).get("headRefOid") or "")
+    if current_head != head:
+        replace_factory_labels(pr_number, "factory:unowned", "factory:review")
+        return {"pr": pr_number, "status": "review", "head": current_head}
+
     status = classify_ci_reconciliation(
         checks_decision=checks["decision"],
         authorized=True,
@@ -403,6 +408,8 @@ def reconcile_ci() -> list[dict[str, Any]]:
             result = reconcile_ci_pr(pr_number)
         except (RuntimeError, json.JSONDecodeError) as exc:
             result = {"pr": pr_number, "status": "retry-ci", "reason": str(exc)}
+            print(json.dumps(result, sort_keys=True), file=sys.stderr)
+            raise
         results.append(result)
         print(json.dumps(result, sort_keys=True), file=sys.stderr)
     return results
