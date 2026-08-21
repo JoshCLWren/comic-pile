@@ -426,7 +426,7 @@ async def test_preview_x_of_swords_contextual_outside_core(
 
     response = await auth_client.post(
         "/api/v1/crossover-templates/preview",
-        json={"source_list_ids": [list_id], "target_story_arc_id": "60653"},
+        json={"source_list_ids": [source_list.id], "target_story_arc_id": "60653"},
     )
     assert response.status_code == 200, response.text
     body = response.json()
