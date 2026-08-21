@@ -31,7 +31,7 @@ interface UseRollActionsParams {
     result?: number | null,
     metadata?: ThreadMetadata | null,
   ) => Promise<void>
-  threadsApi: typeof import('../../../services/api').threadsApi
+  threadsApi: typeof import('../../services/api').threadsApi
 }
 
 /**
@@ -58,6 +58,7 @@ export function useRollActions({
     staleThread,
     setSelectedThread,
     setIsActionSheetOpen,
+    setIsSetCurrentIssueOpen,
     setErrorMessage,
     setCurrentDie,
     setThreadToMigrate,

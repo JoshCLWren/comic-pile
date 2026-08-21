@@ -155,7 +155,7 @@ export default function RollPage() {
         next_issue_number: response.next_issue_number,
         last_rolled_result: null,
       }
-      suppressPendingAutoOpenRef.current = true
+      state.suppressPendingAutoOpenRef.current = true
       rating.enterRatingView(response.thread_id, null, threadMetadata)
     } catch (error) {
       console.error('Set current issue failed:', error)
