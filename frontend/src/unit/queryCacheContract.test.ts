@@ -204,14 +204,17 @@ describe('targeted cache effects', () => {
   })
 
   it('limits queue movement refreshes to queue pages, current session, and roll state', async () => {
-    const { client, invalidateQueries } = createSpiedClient()
+    const client = new QueryClient()
+    const resetQueries = vi.spyOn(client, 'resetQueries').mockResolvedValue()
+    const invalidateQueries = vi.spyOn(client, 'invalidateQueries').mockResolvedValue()
 
     await invalidateAfterQueueMovement(client)
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(3)
-    expect(invalidateQueries).toHaveBeenCalledWith({
+    expect(resetQueries).toHaveBeenCalledOnce()
+    expect(resetQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.queue.pages(),
     })
+    expect(invalidateQueries).toHaveBeenCalledTimes(2)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
