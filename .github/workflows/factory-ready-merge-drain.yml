@@ -10,6 +10,7 @@ on:
       - '.github/workflows/factory-ready-merge-drain.yml'
       - '.github/scripts/factory-review-controller.py'
       - '.github/scripts/factory_review_policy.py'
+      - '.github/scripts/factory_post_merge_closure.py'
 
 permissions:
   contents: write
@@ -49,6 +50,11 @@ jobs:
           "$gh_dir/gh" pr checks --help | grep -q -- '--json'
           echo "$gh_dir" >> "$GITHUB_PATH"
 
+      - name: Self-test post-merge closure logic
+        shell: bash
+        run: |
+          python3 .github/scripts/factory_post_merge_closure.py --self-test
+
       - name: Drain exact-head ready factory PRs
         shell: bash
         env:
@@ -56,6 +62,20 @@ jobs:
         run: |
           set -Eeuo pipefail
           review_controller='.github/scripts/factory-review-controller.py'
+          closure_script='.github/scripts/factory_post_merge_closure.py'
+
+          complete_post_merge_closure() {
+            local pr="$1"
+            python3 "$closure_script" --pr "$pr" || {
+              echo "Post-merge closure for PR #${pr} failed; the stranded-closure sweep will retry" >&2
+              return 1
+            }
+          }
+
+          echo 'Sweeping recently merged factory PRs for stranded issue closures'
+          python3 "$closure_script" --sweep || {
+            echo 'Stranded-closure sweep failed; retrying on the next drain' >&2
+          }
 
           mapfile -t ready_prs < <(
             gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 200 \
@@ -112,11 +132,15 @@ jobs:
             if gh pr merge "$pr" --repo "$GITHUB_REPOSITORY" \
               --merge --match-head-commit "$expected_head"; then
               echo "Merged ready PR #${pr}"
+              complete_post_merge_closure "$pr" || true
               continue
             fi
 
             state="$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" --json state --jq .state 2>/dev/null || true)"
-            [[ "$state" == "MERGED" ]] || {
-              echo "Unable to merge ready PR #${pr}; it will retry on the next drain" >&2
-            }
+            if [[ "$state" == "MERGED" ]]; then
+              echo "PR #${pr} was merged by another actor; completing any interrupted post-merge closure"
+              complete_post_merge_closure "$pr" || true
+              continue
+            fi
+            echo "Unable to merge ready PR #${pr}; it will retry on the next drain" >&2
           done
