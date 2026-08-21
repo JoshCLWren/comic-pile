@@ -123,21 +123,15 @@ export async function invalidateAfterQueueMovement(
  * ordering or membership (create, delete, reposition, shuffle, snooze,
  * unsnooze, reactivate). TanStack Query refetches invalidated queries
  * automatically — callers must not also call `refetch()`.
+ *
+ * This is intentionally an alias of `invalidateAfterQueueMovement` — both
+ * operations refresh the same three retained resources (queue pages, current
+ * session, roll bootstrap) and must stay in sync.
  */
 export async function invalidateAfterQueueMutation(
   client: QueryClient,
 ): Promise<void> {
-  await Promise.all([
-    client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
-    client.invalidateQueries({
-      queryKey: queryKeys.session.current(),
-      exact: true,
-    }),
-    client.invalidateQueries({
-      queryKey: queryKeys.roll.bootstrap(),
-      exact: true,
-    }),
-  ])
+  return invalidateAfterQueueMovement(client)
 }
 
 /**
