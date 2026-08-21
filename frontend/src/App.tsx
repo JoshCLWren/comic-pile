@@ -16,9 +16,6 @@ import { useBugReport } from './hooks/useBugReport'
 import { usePingHeartbeat } from './hooks/usePingHeartbeat'
 import { useScrollRestoration } from './hooks/useScrollRestoration'
 import type { DiagnosticData } from './hooks/useDiagnostics'
-import { ToastProvider } from './contexts/ToastProvider'
-import { CacheProvider } from './contexts/CacheContext'
-import { BugReportRestoreProvider } from './contexts/BugReportRestoreContext'
 import './index.css'
 
 declare global {
@@ -160,6 +157,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (isMounted) {
           setUser(response)
           setIsAuthenticated(true)
+        }
+        // Fetch persisted theme preferences after user is loaded
+        try {
+          const prefResponse = await api.get('/v1/users/me/preferences', {
+            timeout: AUTH_BOOTSTRAP_TIMEOUT_MS,
+            skipAuthRedirect: true,
+          })
+          const theme = prefResponse.theme
+          // Set data-theme on <html> for semantic theme runtime
+          if (isMounted) {
+            document.documentElement.setAttribute('data-theme', theme)
+          }
+        } catch (prefError) {
+          // If preference fetch fails, preserve classic theme (sensible default)
+          if (isMounted) {
+            document.documentElement.setAttribute('data-theme', 'classic')
+          }
+        }
+        if (isMounted) {
           setIsLoading(false)
         }
       } catch (error) {

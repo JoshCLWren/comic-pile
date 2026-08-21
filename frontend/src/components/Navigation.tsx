@@ -110,6 +110,29 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
               <span aria-hidden="true">⎋</span><span>Sign out</span>
             </button>
           </div>
+          <div className="mt-3 text-sm text-stone-400">
+            <span>Appearance</span>
+          </div>
+          <div id="appearance-menu" className="mt-2 select-none hidden sm:block sm:relative sm:mt-0 sm:w-auto">
+            <button data-theme="classic" 
+                onclick="setTheme('classic')" 
+                className="w-full flex items-center justify-between px-3 py-2 rounded-md text-left hover:bg-stone-800 transition-colors classic:text-stone-100 ink-gold:text-stone-900 command-center:text-stone-100"
+                aria-label="Classic theme">
+              <span>Classic</span>
+            </button>
+            <button data-theme="ink-gold" 
+                onclick="setTheme('ink-gold')" 
+                className="w-full flex items-center justify-between px-3 py-2 rounded-md text-left hover:bg-stone-800 transition-colors classic:text-stone-400 ink-gold:text-stone-100 command-center:text-stone-400"
+                aria-label="Ink-gold theme">
+              <span>Ink Gold</span>
+            </button>
+            <button data-theme="command-center" 
+                onclick="setTheme('command-center')" 
+                className="w-full flex items-center justify-between px-3 py-2 rounded-md text-left hover:bg-stone-800 transition-colors classic:text-stone-400 ink-gold:text-stone-400 command-center:text-stone-100"
+                aria-label="Command center theme">
+              <span>Command Center</span>
+            </button>
+          </div>
         </nav>
       )}
 
