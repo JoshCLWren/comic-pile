@@ -204,12 +204,9 @@ def issue_is_static_candidate(
     """Return whether an issue is structurally eligible for assignment."""
     number = int(issue['number'])
     labels = labels_of(issue)
-    title = str(issue.get('title') or '')
     if str(issue.get('state') or 'OPEN').upper() != 'OPEN':
         return False
     if number in NON_EXECUTABLE_ISSUES or number in suppressing_pr_issues:
-        return False
-    if title.startswith(('Epic:', 'PRD:')):
         return False
     if labels & BLOCKED_LABELS:
         return False
