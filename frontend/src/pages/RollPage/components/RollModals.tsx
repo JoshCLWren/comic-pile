@@ -9,12 +9,11 @@ import type { RollBootstrapThread } from '../../../types/rollBootstrap'
 import type { RatingThread } from '../types'
 
 interface SetCurrentIssueModalProps {
-  thread: RollBootstrapThread
   onSubmit: (issueNumber: string) => Promise<void>
   onClose: () => void
 }
 
-function SetCurrentIssueModal({ thread, onSubmit, onClose }: SetCurrentIssueModalProps) {
+function SetCurrentIssueModal({ onSubmit, onClose }: SetCurrentIssueModalProps) {
   const [issueNumber, setIssueNumber] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -150,6 +149,9 @@ export function RollModals({
   selectedThread,
   onCloseActionSheet,
   onAction,
+  isSetCurrentIssueOpen,
+  onCloseSetCurrentIssue,
+  onSetCurrentIssue,
 }: RollModalsProps) {
   return (
     <>
@@ -329,7 +331,6 @@ export function RollModals({
           onClose={onCloseSetCurrentIssue}
         >
           <SetCurrentIssueModal
-            thread={selectedThread}
             onSubmit={onSetCurrentIssue}
             onClose={onCloseSetCurrentIssue}
           />
