@@ -16,6 +16,7 @@ from app.models import Event, Issue, Snapshot, Thread
 from app.models import Session as SessionModel
 from app.models.user import User
 from app.schemas import RateRequest, ThreadResponse
+from app.services.reading_mode import clear_snooze_streak
 from app.services.snapshot_contract import (
     BLOCKED_CHANGES_KEY,
     QUEUE_CHANGES_KEY,
@@ -460,6 +461,10 @@ async def rate_thread(
         issue_number=rated_issue_number,
     )
     db.add(event)
+
+    # A durable read+rating is the strongest signal the current mode was right;
+    # it clears the consecutive-snooze mismatch streak.
+    clear_snooze_streak(current_session)
 
     should_complete_thread = thread_issues_remaining <= 0
     if should_complete_thread:

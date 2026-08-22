@@ -24,6 +24,12 @@ from app.schemas.issue import (
     IssueUpdate,
 )
 from app.schemas.migration import MigrateToIssuesRequest
+from app.schemas.reading_mode import (
+    CorrectionGuidance,
+    CorrectionOption,
+    SessionModeState,
+    SessionModeUpdateRequest,
+)
 from app.schemas.preferences import ThemeId, UserPreferencesPatchRequest, UserPreferencesResponse
 from app.schemas.rate import RateRequest
 from app.schemas.roll import (
@@ -88,6 +94,11 @@ __all__ = [
     "IssueOrderValidationResponse",
     # Migration
     "MigrateToIssuesRequest",
+    # Reading mode
+    "CorrectionGuidance",
+    "CorrectionOption",
+    "SessionModeState",
+    "SessionModeUpdateRequest",
     # Preferences
     "ThemeId",
     "UserPreferencesResponse",

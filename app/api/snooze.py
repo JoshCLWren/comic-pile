@@ -16,7 +16,14 @@ from app.models import Event, Snapshot, Thread
 from app.models import Session as SessionModel
 from app.models.user import User
 from app.schemas import ActiveThreadInfo, SessionResponse
+from app.schemas.reading_mode import CorrectionGuidance, SessionModeState
 from app.schemas.session import SnoozedThreadInfo
+from app.services.reading_mode import (
+    build_correction_guidance,
+    build_mode_state,
+    clear_snooze_streak,
+    record_snooze_streak,
+)
 from comic_pile.dice_ladder import step_up
 from comic_pile.queue import move_to_safe_position
 from comic_pile.session import get_current_die_for_session
@@ -75,6 +82,8 @@ async def build_session_response(
     snapshot_count: int | None = None,
     snoozed_threads: list[SnoozedThreadInfo] | None = None,
     snoozed_thread_ids: list[int] | None = None,
+    session_mode: SessionModeState | None = None,
+    correction_guidance: CorrectionGuidance | None = None,
 ) -> SessionResponse:
     """Build a SessionResponse from a session model.
 
@@ -92,6 +101,7 @@ async def build_session_response(
         snapshot_count: Pre-computed snapshot count (skips COUNT query).
         snoozed_threads: Pre-fetched snoozed thread info (skips snoozed thread query).
         snoozed_thread_ids: Pre-fetched snoozed thread IDs (avoids expired session read).
+        session_mode: Pre-computed canonical reading-mode state.
 
     Returns:
         A SessionResponse with all required fields populated.
@@ -149,6 +159,8 @@ async def build_session_response(
         snapshot_count=snapshot_count,
         snoozed_thread_ids=resolved_ids,
         snoozed_threads=snoozed_threads,
+        session_mode=session_mode or build_mode_state(session),
+        correction_guidance=correction_guidance,
     )
 
 
@@ -288,6 +300,11 @@ async def snooze_thread(
     )
     db.add(event)
 
+    # Track consecutive snoozes so backend policy can ask for clarification
+    # only when the mismatch repeats; a normal snooze stays interruption-free.
+    record_snooze_streak(current_session)
+    correction_guidance = build_correction_guidance(current_session)
+
     current_session.pending_thread_id = None
     current_session.pending_thread_updated_at = None
 
@@ -327,6 +344,8 @@ async def snooze_thread(
         snapshot_count=pre_snapshot_count,
         snoozed_threads=pre_snoozed_threads,
         snoozed_thread_ids=pre_snoozed_ids,
+        session_mode=build_mode_state(current_session),
+        correction_guidance=correction_guidance,
     )
 
 
@@ -363,6 +382,9 @@ async def unsnooze_thread(
 
     snoozed_ids.remove(thread_id)
     current_session.snoozed_thread_ids = snoozed_ids
+
+    # Restoring a snoozed thread is a mild signal the current mode is fine.
+    current_session.consecutive_snoozes = max(0, (current_session.consecutive_snoozes or 0) - 1)
 
     event = Event(
         type="unsnooze",

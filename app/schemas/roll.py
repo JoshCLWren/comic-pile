@@ -5,6 +5,7 @@ from typing import ClassVar, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.continuity_readiness import ContinuityBlocker
+from app.schemas.reading_mode import SessionModeState
 from app.schemas.session import ActiveThreadInfo
 
 
@@ -137,6 +138,7 @@ class RollBootstrapResponse(BaseModel):
     blocked_threads: list[RollBootstrapThread]
     stale_thread_count: int
     stale_thread: RollBootstrapThread | None
+    session_mode: SessionModeState
 
     @model_validator(mode="before")
     @classmethod

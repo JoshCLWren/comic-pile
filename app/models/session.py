@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -42,6 +42,31 @@ class Session(Base):
     )
     # Thread IDs temporarily excluded from roll selection during this session
     snoozed_thread_ids: Mapped[list[int] | None] = mapped_column(JSON, nullable=True)
+    # Ephemeral reading-mode state: how demanding the current session is and what
+    # the reader wants out of it. Values are canonical enums owned by
+    # app.services.reading_mode; source tracks how each dimension was set.
+    bandwidth: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="balanced", server_default="balanced"
+    )
+    bandwidth_source: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="inferred", server_default="inferred"
+    )
+    bandwidth_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    intent: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="balanced", server_default="balanced"
+    )
+    intent_source: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="inferred", server_default="inferred"
+    )
+    intent_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    mode_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    # Consecutive snoozes without a durable rating; drives the repeated-mismatch
+    # correction-guidance policy in app.services.reading_mode.
+    consecutive_snoozes: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
     __table_args__ = (
         Index("ix_session_started_at", "started_at"),

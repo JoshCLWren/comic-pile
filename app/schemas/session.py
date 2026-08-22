@@ -9,6 +9,8 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field, field_serializer
 
+from app.schemas.reading_mode import CorrectionGuidance, SessionModeState
+
 
 def _to_utc_iso(value: datetime) -> str:
     """Convert datetime to ISO 8601 format with timezone.
@@ -77,6 +79,8 @@ class SessionResponse(BaseModel):
     snoozed_thread_ids: list[int] = []
     snoozed_threads: list[SnoozedThreadInfo] = []
     pending_thread_id: int | None = None
+    session_mode: SessionModeState | None = None
+    correction_guidance: CorrectionGuidance | None = None
 
     @field_serializer("started_at", "ended_at")
     def serialize_datetime(self, value: datetime | None) -> str | None:

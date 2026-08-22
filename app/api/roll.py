@@ -28,6 +28,12 @@ from app.schemas import (
     RollBootstrapThread,
     RollRequest,
     RollResponse,
+    SessionModeState,
+    SessionModeUpdateRequest,
+)
+from app.services.reading_mode import (
+    apply_manual_mode_change,
+    build_mode_state,
 )
 from comic_pile.queue import get_roll_pool_rows
 from comic_pile.session import get_current_die_for_session, get_or_create
@@ -129,6 +135,17 @@ async def roll_dice(
         die=current_die,
         result=selected_index + 1,
         selection_method="random",
+        context={
+            "bandwidth": current_session.bandwidth,
+            "intent": current_session.intent,
+            # Phase 5 keeps every intent on the bounded unweighted control path;
+            # `random` is the explicit escape hatch to that same legacy behavior.
+            "control_path": (
+                "random_escape_hatch"
+                if current_session.intent == "random"
+                else "legacy_unweighted"
+            ),
+        },
     )
     db.add(event)
 
@@ -530,8 +547,8 @@ async def roll_bootstrap(
         pending_thread_id=pending_thread_id,
         last_rolled_result=last_rolled_result,
         active_thread=active_thread,
-        roll_pool=roll_pool,
         roll_recovery=roll_recovery,
+        roll_pool=roll_pool,
         snoozed_threads=snoozed_threads,
         snoozed_count=len(snoozed_threads),
         blocked_count=blocked_count,
@@ -540,4 +557,64 @@ async def roll_bootstrap(
         stale_thread=stale_thread,
         session_id=current_session_id,
         user_id=user_id,
+        session_mode=build_mode_state(current_session),
     )
+
+
+@router.post("/session-mode", response_model=SessionModeState)
+async def update_session_mode(
+    mode_request: SessionModeUpdateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> SessionModeState:
+    """Explicitly change the active session's bandwidth and/or intent.
+
+    This is the one canonical mutation for manual reading-mode changes. Omitted
+    dimensions are preserved, changed dimensions are marked with source
+    ``manual``, and a compact ``mode_change`` event records the transition.
+
+    Args:
+        mode_request: Optional bandwidth and/or intent values to apply.
+        current_user: The authenticated user making the request.
+        db: Async database session.
+
+    Returns:
+        The canonical updated SessionModeState.
+    """
+    current_session = await get_or_create(db, user_id=current_user.id, existing_user=current_user)
+
+    previous_bandwidth = current_session.bandwidth
+    previous_intent = current_session.intent
+
+    updated_mode = apply_manual_mode_change(
+        current_session,
+        bandwidth=mode_request.bandwidth,
+        intent=mode_request.intent,
+    )
+
+    changed_dimensions: dict[str, dict[str, str | None]] = {}
+    if mode_request.bandwidth is not None and mode_request.bandwidth != previous_bandwidth:
+        changed_dimensions["bandwidth"] = {
+            "from": previous_bandwidth,
+            "to": mode_request.bandwidth,
+        }
+    if mode_request.intent is not None and mode_request.intent != previous_intent:
+        changed_dimensions["intent"] = {"from": previous_intent, "to": mode_request.intent}
+
+    event = Event(
+        type="mode_change",
+        session_id=current_session.id,
+        context={
+            "source": "manual",
+            "changed": changed_dimensions,
+            "bandwidth": updated_mode.bandwidth,
+            "intent": updated_mode.intent,
+            "mode_version": updated_mode.mode_version,
+        },
+    )
+    db.add(event)
+
+    await db.commit()
+    await _invalidate_session_caches(current_user.id)
+
+    return updated_mode
