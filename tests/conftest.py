@@ -35,7 +35,8 @@ load_dotenv(".env.test")
 
 TRUNCATE_TEST_DATA_SQL = text(
     "TRUNCATE TABLE sessions, events, threads, issues, snapshots, dependencies, "
-    "revoked_tokens, failed_login_attempts, user_preferences, users "
+    "revoked_tokens, failed_login_attempts, user_preferences, "
+    "taste_signals, taste_evidence, users "
     "RESTART IDENTITY CASCADE;"
 )
 _SHARED_TEST_ENGINE: AsyncEngine | None = None
@@ -114,6 +115,8 @@ def _has_schema_drift(conn: Connection) -> bool:
         "revoked_tokens",
         "failed_login_attempts",
         "user_preferences",
+        "taste_signals",
+        "taste_evidence",
     }
 
     for table_name in required_table_names:
@@ -399,6 +402,8 @@ async def async_db(db_engine: AsyncEngine) -> AsyncIterator[SQLAlchemyAsyncSessi
         # Ensure a clean state for tables that may have been left with committed data from async_db_committed tests
         transaction = await connection.begin()
         await connection.execute(text("TRUNCATE TABLE failed_login_attempts CASCADE"))
+        await connection.execute(text("TRUNCATE TABLE taste_evidence CASCADE"))
+        await connection.execute(text("TRUNCATE TABLE taste_signals CASCADE"))
         await connection.execute(text("TRUNCATE TABLE users CASCADE"))
         await connection.execute(text("TRUNCATE TABLE issue_external_identity_mappings CASCADE"))
         await connection.execute(text("TRUNCATE TABLE thread_external_series_mappings CASCADE"))
@@ -450,6 +455,8 @@ async def async_db_committed(db_engine: AsyncEngine) -> AsyncIterator[SQLAlchemy
         await session.execute(text("DELETE FROM revoked_tokens"))
         await session.execute(text("DELETE FROM failed_login_attempts"))
         await session.execute(text("DELETE FROM user_preferences"))
+        await session.execute(text("DELETE FROM taste_evidence"))
+        await session.execute(text("DELETE FROM taste_signals"))
         await session.execute(text("DELETE FROM users"))
         await session.execute(text("DELETE FROM issue_external_identity_mappings"))
         await session.execute(text("DELETE FROM thread_external_series_mappings"))
@@ -470,6 +477,8 @@ async def async_db_committed(db_engine: AsyncEngine) -> AsyncIterator[SQLAlchemy
         await cleanup_session.execute(text("DELETE FROM revoked_tokens"))
         await cleanup_session.execute(text("DELETE FROM failed_login_attempts"))
         await cleanup_session.execute(text("DELETE FROM user_preferences"))
+        await cleanup_session.execute(text("DELETE FROM taste_evidence"))
+        await cleanup_session.execute(text("DELETE FROM taste_signals"))
         await cleanup_session.execute(text("DELETE FROM users"))
         await cleanup_session.execute(text("DELETE FROM issue_external_identity_mappings"))
         await cleanup_session.execute(text("DELETE FROM thread_external_series_mappings"))

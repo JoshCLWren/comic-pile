@@ -23,6 +23,7 @@ from app.services.snapshot_contract import (
     SNAPSHOT_VERSION_KEY,
     USES_ISSUE_TRACKING_KEY,
 )
+from app.services.taste_bank import rebuild_user_taste_bank
 from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.dice_ladder import step_down, step_up
 from comic_pile.queue import move_to_back, move_to_front, move_to_safe_position
@@ -573,6 +574,11 @@ async def rate_thread(
     await db.commit()
 
     await invalidate_user_view(user_id)
+
+    try:
+        await rebuild_user_taste_bank(db, user_id)
+    except Exception:
+        pass
 
     return ThreadResponse(
         id=resp_id,

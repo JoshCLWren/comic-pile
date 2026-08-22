@@ -37,6 +37,7 @@ from app.api import (
     roll,
     session,
     snooze,
+    taste_bank,
     test_helpers,
     thread,
     traffic_metrics,
@@ -255,6 +256,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(catalog.router, tags=["catalog"])
     if os.getenv("TEST_ENVIRONMENT") == "true":
         app.include_router(test_helpers.router, prefix="/api", tags=["test"])
+    app.include_router(taste_bank.router)
 
     def _assert_production_frontend_assets() -> None:
         """Ensure required frontend artifacts exist in production.

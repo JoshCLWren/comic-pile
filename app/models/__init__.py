@@ -19,6 +19,7 @@ from app.models.release import Release
 from app.models.revoked_token import RevokedToken
 from app.models.session import Session
 from app.models.snapshot import Snapshot
+from app.models.taste_bank import TasteEvidence, TasteSignal
 from app.models.thread import Thread
 from app.models.user import User
 from app.models.user_preferences import UserPreferences
@@ -45,6 +46,8 @@ __all__ = [
     "RevokedToken",
     "Session",
     "Snapshot",
+    "TasteEvidence",
+    "TasteSignal",
     "Thread",
     "ThreadExternalSeriesMapping",
     "User",
