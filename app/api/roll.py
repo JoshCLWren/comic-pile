@@ -20,6 +20,7 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.middleware import limiter
 from app.models import DependencyGroup, DependencyGroupMembership, Event, Issue, Thread
+from app.models.recommendation_context import RecommendationContext
 from app.models.user import User
 from app.roll_recovery import build_roll_recovery
 from app.schemas import (
@@ -29,6 +30,7 @@ from app.schemas import (
     RollRequest,
     RollResponse,
 )
+from app.schemas.recommendation_context import RecommendationContextCreate
 from comic_pile.queue import get_roll_pool_rows
 from comic_pile.session import get_current_die_for_session, get_or_create
 
@@ -133,6 +135,44 @@ async def roll_dice(
         issue_number=selected_thread_issue_number,
     )
     db.add(event)
+
+    # Record recommendation context for auditability
+    # Current system uses random selection with balanced intent (no weighting)
+    # and balanced bandwidth (no effort inference). Record this explicitly.
+    context_data = RecommendationContextCreate(
+        schema_version=1,
+        intent="balanced",
+        intent_source="default",
+        intent_confidence=0.0,
+        bandwidth="balanced",
+        bandwidth_source="default",
+        bandwidth_confidence=0.0,
+        candidate_factors=None,
+        final_weight=1.0,
+        random_bypass=True,
+        balanced_neutrality=True,
+    )
+
+    # Flush event to get its ID for the recommendation context FK
+    await db.flush()
+
+    rec_context = RecommendationContext(
+        event_id=event.id,
+        schema_version=context_data.schema_version,
+        intent=context_data.intent,
+        intent_source=context_data.intent_source,
+        intent_confidence=context_data.intent_confidence,
+        bandwidth=context_data.bandwidth,
+        bandwidth_source=context_data.bandwidth_source,
+        bandwidth_confidence=context_data.bandwidth_confidence,
+        candidate_factors=[f.model_dump() for f in context_data.candidate_factors]
+        if context_data.candidate_factors
+        else None,
+        final_weight=context_data.final_weight,
+        random_bypass=context_data.random_bypass,
+        balanced_neutrality=context_data.balanced_neutrality,
+    )
+    db.add(rec_context)
 
     if current_session:
         current_session.pending_thread_id = selected_thread_id
@@ -274,6 +314,43 @@ async def override_roll(
         issue_number=override_thread_issue_number,
     )
     db.add(event)
+
+    # Record recommendation context for override selection
+    # Override is a manual selection, not a weighted recommendation
+    context_data = RecommendationContextCreate(
+        schema_version=1,
+        intent="balanced",
+        intent_source="manual_override",
+        intent_confidence=1.0,
+        bandwidth="balanced",
+        bandwidth_source="manual_override",
+        bandwidth_confidence=1.0,
+        candidate_factors=None,
+        final_weight=1.0,
+        random_bypass=False,
+        balanced_neutrality=True,
+    )
+
+    # Flush event to get its ID for the recommendation context FK
+    await db.flush()
+
+    rec_context = RecommendationContext(
+        event_id=event.id,
+        schema_version=context_data.schema_version,
+        intent=context_data.intent,
+        intent_source=context_data.intent_source,
+        intent_confidence=context_data.intent_confidence,
+        bandwidth=context_data.bandwidth,
+        bandwidth_source=context_data.bandwidth_source,
+        bandwidth_confidence=context_data.bandwidth_confidence,
+        candidate_factors=[f.model_dump() for f in context_data.candidate_factors]
+        if context_data.candidate_factors
+        else None,
+        final_weight=context_data.final_weight,
+        random_bypass=context_data.random_bypass,
+        balanced_neutrality=context_data.balanced_neutrality,
+    )
+    db.add(rec_context)
 
     current_session.pending_thread_id = override_thread_id
     current_session.pending_thread_updated_at = datetime.now(UTC)

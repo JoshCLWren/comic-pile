@@ -35,6 +35,10 @@ from app.schemas.roll import (
     SetCurrentIssueRequest,
     SetCurrentIssueResponse,
 )
+from app.schemas.recommendation_context import (
+    RecommendationContextCreate,
+    RecommendationContextResponse,
+)
 from app.schemas.session import (
     ActiveThreadInfo,
     EventDetail,
@@ -100,6 +104,9 @@ __all__ = [
     "RollBootstrapResponse",
     "SetCurrentIssueRequest",
     "SetCurrentIssueResponse",
+    # Recommendation Context
+    "RecommendationContextCreate",
+    "RecommendationContextResponse",
     # Rate
     "RateRequest",
     # Session

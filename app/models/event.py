@@ -12,6 +12,7 @@ from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.issue import Issue
+    from app.models.recommendation_context import RecommendationContext
     from app.models.session import Session
     from app.models.snapshot import Snapshot
     from app.models.thread import Thread
@@ -114,4 +115,10 @@ class Event(Base):
     issue: Mapped[Issue | None] = relationship("Issue", foreign_keys=[issue_id], lazy="raise")
     snapshots: Mapped[list[Snapshot]] = relationship(
         "Snapshot", back_populates="event", cascade="all, delete-orphan", lazy="raise"
+    )
+    recommendation_context: Mapped[RecommendationContext | None] = relationship(
+        "RecommendationContext",
+        back_populates="event",
+        cascade="all, delete-orphan",
+        lazy="raise",
     )
