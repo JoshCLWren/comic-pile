@@ -563,7 +563,7 @@ async def delete_thread(
                 for n in pruned:
                     by_lane.setdefault(str(n.get("lane_id", "")), []).append(n)
                 normalized: list[dict[str, object]] = []
-                for lane_id, lane_nodes in by_lane.items():
+                for _lane_id, lane_nodes in by_lane.items():
                     lane_nodes.sort(key=lambda x: int(x.get("position", 0)))  # type: ignore[arg-type]
                     for idx, n in enumerate(lane_nodes):
                         n["position"] = idx

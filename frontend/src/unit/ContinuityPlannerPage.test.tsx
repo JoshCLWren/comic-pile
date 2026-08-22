@@ -524,7 +524,7 @@ describe('ContinuityPlannerPage', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('[deleted series]')).toBeVisible()
+    expect(await screen.findByText('Mister Miracle #Annual 1')).toBeVisible()
     expect(mocks.getIssue).not.toHaveBeenCalled()
   })
 
@@ -548,7 +548,7 @@ describe('ContinuityPlannerPage', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('[deleted crossover]')).toBeVisible()
+    expect(await screen.findByText('Missing crossover')).toBeVisible()
   })
 
   it('shows a plan-level load error when fetching the plan fails', async () => {
