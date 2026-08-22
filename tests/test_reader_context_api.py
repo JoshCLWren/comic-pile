@@ -566,6 +566,9 @@ async def test_reader_context_cross_thread_edge_without_expansion(
             "source_issue_id": issues[2].id,
             "target_issue_id": other_issues[0].id,
             "note": "cross-thread",
+            "source_label": f"Neighborhood #3",
+            "target_label": f"Distant #1",
+            "explanation": f"Finish Neighborhood #3 before resuming Distant #1",
         }
     ]
 
@@ -609,6 +612,9 @@ async def test_reader_context_continuity_rule_edges(
             "source_issue_id": issues[1].id,
             "target_issue_id": issues[3].id,
             "note": "directive",
+            "source_label": f"Rules #2",
+            "target_label": f"Rules #4",
+            "explanation": f"Rules #2 has a continuity relationship with Rules #4",
         }
     ]
 

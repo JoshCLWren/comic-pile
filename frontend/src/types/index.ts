@@ -513,7 +513,7 @@ export interface ReaderContextSeries {
   average_rating: number | null
   ratings_count: number
   previous_issue: ReaderContextPreviousIssue | null
-  recent_ratings: ReaderContextRating[]  // max 5
+  recent_ratings: ReaderContextRecentRating[]  // max 5
   highest_rating: number | null
   lowest_rating: number | null
 }
@@ -528,13 +528,12 @@ export interface ReaderContextPreviousIssue {
 }
 
 /**
- * Rating information in series
+ * Recent rating information in series
  */
-export interface ReaderContextRating {
+export interface ReaderContextRecentRating {
   issue_id: number
   issue_number: string
-  rating: number | null
-  timestamp: string  // ISO 8601 timestamp
+  rating: number
 }
 
 /**
@@ -556,14 +555,6 @@ export interface ReaderContextCrossover {
 }
 
 /**
- * Next member information in crossover
- */
-export interface ReaderContextNextMember {
-  issue_id: number
-  issue_number: string
-}
-
-/**
  * Local chain information in reader-context response
  */
 export interface ReaderContextLocalChain {
@@ -578,7 +569,7 @@ export interface ReaderContextLocalIssue {
   issue_id: number
   issue_number: string
   position: number
-  status: 'unread' | 'read'
+  status: string
   relation: 'previous' | 'current' | 'next' | 'future'
   rating: number | null
   crossover_memberships: ReaderContextCrossoverMembership[]  // exact crossover memberships for this issue
@@ -600,5 +591,8 @@ export interface ReaderContextEdge {
   kind: 'dependency' | 'continuity'
   source_issue_id: number
   target_issue_id: number
+  source_label: string | null
+  target_label: string | null
   note: string | null
+  explanation: string | null
 }

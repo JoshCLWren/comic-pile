@@ -512,11 +512,12 @@ async def _local_edges(
     """
     if not neighborhood_ids:
         return []
+    neighborhood_ids_list = list(neighborhood_ids)
     dependency_result = await db.execute(
         select(Dependency).where(
             or_(
-                Dependency.source_issue_id.in_(neighborhood_ids),
-                Dependency.target_issue_id.in_(neighborhood_ids),
+                Dependency.source_issue_id.in_(neighborhood_ids_list),
+                Dependency.target_issue_id.in_(neighborhood_ids_list),
             )
         )
     )
@@ -526,8 +527,8 @@ async def _local_edges(
             ContinuityRule.source_type == "issue",
             ContinuityRule.target_type == "issue",
             or_(
-                ContinuityRule.source_id.in_(neighborhood_ids),
-                ContinuityRule.target_id.in_(neighborhood_ids),
+                ContinuityRule.source_id.in_(neighborhood_ids_list),
+                ContinuityRule.target_id.in_(neighborhood_ids_list),
             ),
         )
     )
