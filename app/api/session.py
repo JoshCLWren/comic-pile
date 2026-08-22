@@ -1047,6 +1047,36 @@ async def restore_session_start(
             if snapshot.session_state:
                 session.start_die = snapshot.session_state.get("start_die", session.start_die)
                 session.manual_die = snapshot.session_state.get("manual_die", session.manual_die)
+                session.active_bandwidth = snapshot.session_state.get(
+                    "active_bandwidth", session.active_bandwidth
+                )
+                session.predicted_bandwidth = snapshot.session_state.get(
+                    "predicted_bandwidth", session.predicted_bandwidth
+                )
+                session.bandwidth_confidence = snapshot.session_state.get(
+                    "bandwidth_confidence", session.bandwidth_confidence
+                )
+                session.bandwidth_source = snapshot.session_state.get(
+                    "bandwidth_source", session.bandwidth_source
+                )
+                session.bandwidth_version = snapshot.session_state.get(
+                    "bandwidth_version", session.bandwidth_version
+                )
+                session.active_intent = snapshot.session_state.get(
+                    "active_intent", session.active_intent
+                )
+                session.predicted_intent = snapshot.session_state.get(
+                    "predicted_intent", session.predicted_intent
+                )
+                session.intent_confidence = snapshot.session_state.get(
+                    "intent_confidence", session.intent_confidence
+                )
+                session.intent_source = snapshot.session_state.get(
+                    "intent_source", session.intent_source
+                )
+                session.intent_version = snapshot.session_state.get(
+                    "intent_version", session.intent_version
+                )
 
             await db.commit()
             await db.refresh(session)

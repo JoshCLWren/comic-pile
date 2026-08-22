@@ -34,6 +34,8 @@ from app.schemas.roll import (
     RollResponse,
     SetCurrentIssueRequest,
     SetCurrentIssueResponse,
+    SessionModeResponse,
+    SessionModeUpdateRequest,
 )
 from app.schemas.session import (
     ActiveThreadInfo,
@@ -42,6 +44,7 @@ from app.schemas.session import (
     SessionHistoryListResponse,
     SessionListItem,
     SessionListResponse,
+    SessionMode,
     SessionResponse,
 )
 from app.schemas.snapshot import SnapshotResponse, SnapshotsListResponse
@@ -100,6 +103,8 @@ __all__ = [
     "RollBootstrapResponse",
     "SetCurrentIssueRequest",
     "SetCurrentIssueResponse",
+    "SessionModeResponse",
+    "SessionModeUpdateRequest",
     # Rate
     "RateRequest",
     # Session
@@ -110,6 +115,10 @@ __all__ = [
     "SessionDetailsResponse",
     "ActiveThreadInfo",
     "EventDetail",
+    "SessionMode",
+    # Roll mode
+    "SessionModeUpdateRequest",
+    "SessionModeResponse",
     # Snapshot
     "SnapshotResponse",
     "SnapshotsListResponse",

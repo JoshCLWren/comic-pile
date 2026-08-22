@@ -668,6 +668,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/roll/session-mode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update Session Mode */
+        patch: {
+            requestBody: {
+                content: {
+                    "application/json": {
+                        schema: components["schemas"]["SessionModeUpdateRequest"];
+                    };
+                };
+                required: true;
+            };
+            responses: {
+                /** OK */
+                200: {
+                    content: {
+                        "application/json": {
+                            schema: components["schemas"]["SessionModeResponse"];
+                        };
+                    };
+                    description: "OK";
+                };
+                /** Method Not Allowed */
+                405: {
+                    content: {
+                        "application/json": {
+                            schema: components["schemas"]["HTTPValidationError"];
+                        };
+                    };
+                    description: "Method Not Allowed";
+                };
+                /** Not Acceptable */
+                406: {
+                    content: {
+                        "application/json": {
+                            schema: components["schemas"]["HTTPValidationError"];
+                        };
+                    };
+                    description: "Not Acceptable";
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+    };
     "/api/roll/clear-manual-die": {
         parameters: {
             query?: never;
@@ -5810,6 +5864,36 @@ export interface components {
             visibility: "public" | "internal";
         };
         /**
+         * SessionModeResponse
+         * @description Canonical session mode returned from manual change and bootstrap endpoints.
+         */
+        SessionModeResponse: {
+            /** Active Bandwidth */
+            active_bandwidth: string | null;
+            /** Active Intent */
+            active_intent: string | null;
+            /** Bandwidth Confidence */
+            bandwidth_confidence?: number | null;
+            /** Bandwidth Source */
+            // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
+            bandwidth_source?: ("manual" | "inferred") | null;
+            /** Bandwidth Version */
+            bandwidth_version?: string | null;
+            /** Intent Confidence */
+            intent_confidence?: number | null;
+            /** Intent Source */
+            // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
+            intent_source?: ("manual" | "inferred") | null;
+            /** Intent Version */
+            intent_version?: string | null;
+            /** Predicted Bandwidth */
+            predicted_bandwidth: string | null;
+            /** Predicted Intent */
+            predicted_intent: string | null;
+            /** Session Mode Correction Guidance */
+            session_mode_correction_guidance?: Record<string, unknown> | null;
+        };
+        /**
          * RollBootstrapResponse
          * @description Bounded bootstrap payload for the Roll initial render.
          *
@@ -5817,6 +5901,7 @@ export interface components {
          *     Does not include the full queue, collection data, or secondary detail panels.
          */
         RollBootstrapResponse: {
+            /** Active Thread */
             active_thread: components["schemas"]["ActiveThreadInfo"] | null;
             /** Blocked Count */
             blocked_count: number;
@@ -5835,6 +5920,8 @@ export interface components {
             roll_recovery?: components["schemas"]["RollRecoveryInfo"] | null;
             /** Session Id */
             session_id: number;
+            /** Session Mode */
+            session_mode: components["schemas"]["SessionModeResponse"];
             /** Snoozed Count */
             snoozed_count: number;
             /** Snoozed Threads */
