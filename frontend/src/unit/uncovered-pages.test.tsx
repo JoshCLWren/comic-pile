@@ -20,8 +20,11 @@ describe('HelpPage', () => {
   it('renders the complete glossary', () => {
     render(<HelpPage />)
     expect(screen.getByRole('heading', { name: 'Help / Glossary' })).toBeInTheDocument()
-    expect(screen.getAllByTestId('glossary-term')).toHaveLength(6)
-    expect(screen.getByText('Reading order rules: "read X before Y".')).toBeInTheDocument()
+    expect(screen.getAllByTestId('glossary-term')).toHaveLength(7)
+    expect(
+      screen.getByText(/Reading order rules: "read X before Y"\./),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Dependency Builder')).toBeInTheDocument()
   })
 })
 
