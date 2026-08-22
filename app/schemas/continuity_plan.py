@@ -38,6 +38,25 @@ class ContinuityPlanLane(BaseModel):
     order: int = Field(ge=0)
 
 
+SourceRole = Literal["core", "context/prelude", "epilogue", "unknown"]
+SourceConfidence = Literal["high", "medium", "low"]
+ReaderRole = Literal[
+    "required/core",
+    "recommended",
+    "optional",
+    "context/prelude",
+    "aftermath/epilogue",
+    "skipped/excluded",
+]
+
+
+class CBLPlacement(BaseModel):
+    """One ordered CBL observation with inseparable provenance."""
+
+    source_path: str
+    position: int
+
+
 class ContinuityPlanNode(BaseModel):
     """One ordered reference in a continuity plan."""
 
@@ -46,6 +65,19 @@ class ContinuityPlanNode(BaseModel):
     ref_id: int = Field(gt=0)
     lane_id: str = Field(min_length=1, max_length=80)
     position: int = Field(ge=0)
+
+    # Source-derived metadata (populated at adoption, never modified by user)
+    source_role: SourceRole | None = None
+    source_confidence: SourceConfidence | None = None
+    source_explanation: str | None = None
+    source_paths: tuple[str, ...] | None = None
+    source_cbl_placements: tuple[CBLPlacement, ...] | None = None
+    source_story_arc_ids: tuple[str, ...] | None = None
+    source_target_story_arc_id: str | None = None
+
+    # Reader override fields (user can modify independently of source)
+    reader_role: ReaderRole | None = None
+    reader_optional: bool | None = None
 
 
 class ContinuityPlanWrite(BaseModel):
