@@ -46,6 +46,7 @@ class ContinuityPlanNode(BaseModel):
     ref_id: int = Field(gt=0)
     lane_id: str = Field(min_length=1, max_length=80)
     position: int = Field(ge=0)
+    label: str | None = Field(default=None, max_length=200)
 
 
 class ContinuityPlanWrite(BaseModel):
