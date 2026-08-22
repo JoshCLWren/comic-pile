@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-
 from sqlalchemy import and_, or_, select, text
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Dependency, Issue, Thread
@@ -84,7 +84,9 @@ def _series(metadata: dict[str, object]) -> tuple[int | None, str | None]:
     return _integer(metadata.get("volume_id")), _string(metadata.get("volume_name"))
 
 
-async def _confirmed_identity(db: AsyncSession, issue_id: int) -> ExternalIdentity | None:
+async def _confirmed_identity(
+    db: AsyncSession, issue_id: int
+) -> ExternalIdentity | None:
     """Return the confirmed ComicVine issue identity for an owned issue.
 
     Args:
@@ -144,8 +146,8 @@ async def _same_series_read_issues(
              AND ei.entity_type = 'issue'
             WHERE i.status = 'read'
               AND (
-                  ei.metadata_json::jsonb @> CAST(:volume_shape AS jsonb)
-                  OR ei.metadata_json::jsonb @> CAST(:volume_id_shape AS jsonb)
+                ei.metadata_json::jsonb @> CAST(:volume_shape AS jsonb)
+                OR ei.metadata_json::jsonb @> CAST(:volume_id_shape AS jsonb)
               )
             ORDER BY i.id
             """
@@ -222,7 +224,10 @@ async def _relevant_crossover_groups(
     """
     result = await db.execute(
         select(DependencyGroup)
-        .join(DependencyGroupMembership, DependencyGroupMembership.group_id == DependencyGroup.id)
+        .join(
+            DependencyGroupMembership,
+            DependencyGroupMembership.group_id == DependencyGroup.id,
+        )
         .where(
             DependencyGroup.user_id == user_id,
             or_(
@@ -304,7 +309,10 @@ def _build_series(
     ]
     if ratings:
         average_rating = round(
-            sum(candidate_rating for _candidate, (candidate_rating, _timestamp) in ratings)
+            sum(
+                candidate_rating
+                for _candidate, (candidate_rating, _timestamp) in ratings
+            )
             / len(ratings),
             2,
         )
@@ -328,7 +336,9 @@ def _build_series(
     previous: ReaderContextPreviousIssue | None = None
     if previous_issue is not None:
         previous_rating = (
-            effective[previous_issue.id][0] if previous_issue.id in effective else None
+            effective[previous_issue.id][0]
+            if previous_issue.id in effective
+            else None
         )
         previous = ReaderContextPreviousIssue(
             issue_id=previous_issue.id,
@@ -397,7 +407,9 @@ def _build_crossovers(
         ]
         next_member: ReaderContextCrossoverNextMember | None = None
         if same_thread_future:
-            nearest = min(same_thread_future, key=lambda member: (member.position, member.id))
+            nearest = min(
+                same_thread_future, key=lambda member: (member.position, member.id)
+            )
             next_member = ReaderContextCrossoverNextMember(
                 issue_id=nearest.id,
                 issue_number=nearest.issue_number,
@@ -433,7 +445,7 @@ def _build_local_issues(
         current_issue_id: Requested issue identifier.
         current_position: Requested issue position inside the thread.
         groups: Deterministically ordered relevant groups.
-        members_by_group: Exact owned member issues per group.
+        members_by_group: Exact owned issue members per group.
         effective: Effective ratings for relevant owned issues.
 
     Returns:
@@ -475,6 +487,9 @@ async def _local_edges(
 ) -> list[ReaderContextEdge]:
     """Load bounded one-hop dependency/continuity edges touching the neighborhood.
 
+    Each edge carries human-readable source and target labels (issue number
+    plus thread title) so callers never surface raw database identifiers.
+
     Continuity rules mirrored from legacy dependencies are excluded so each
     persisted edge is represented exactly once. Edges are deterministically
     ordered and capped.
@@ -488,7 +503,8 @@ async def _local_edges(
     """
     if not neighborhood_ids:
         return []
-    dependency_result = await db.execute(
+
+    dependency_rows = await db.execute(
         select(Dependency).where(
             or_(
                 Dependency.source_issue_id.in_(neighborhood_ids),
@@ -496,7 +512,7 @@ async def _local_edges(
             )
         )
     )
-    rule_result = await db.execute(
+    rule_rows = await db.execute(
         select(ContinuityRule).where(
             ContinuityRule.legacy_dependency_id.is_(None),
             ContinuityRule.source_type == "issue",
@@ -507,26 +523,62 @@ async def _local_edges(
             ),
         )
     )
-    edges: list[ReaderContextEdge] = [
-        ReaderContextEdge(
-            id=dependency.id,
-            kind="dependency",
-            source_issue_id=dependency.source_issue_id,
-            target_issue_id=dependency.target_issue_id,
-            note=dependency.note,
+
+    all_edge_ids: set[int] = set()
+    for dep in dependency_rows.scalars():
+        all_edge_ids.add(dep.source_issue_id)
+        all_edge_ids.add(dep.target_issue_id)
+    for rule in rule_rows.scalars():
+        all_edge_ids.add(rule.source_id)
+        all_edge_ids.add(rule.target_id)
+
+    issue_label_map: dict[int, tuple[str, str]] = {}
+    if all_edge_ids:
+        lookup = await db.execute(
+            select(Issue, Thread.title)
+            .join(Thread, Thread.id == Issue.thread_id)
+            .where(Issue.id.in_(all_edge_ids))
         )
-        for dependency in dependency_result.scalars()
-    ]
-    edges.extend(
-        ReaderContextEdge(
-            id=rule.id,
-            kind="continuity",
-            source_issue_id=rule.source_id,
-            target_issue_id=rule.target_id,
-            note=rule.note,
+        for row in lookup.mappings():
+            issue: Issue = row[Issue]
+            issue_label_map[issue.id] = (issue.issue_number, row["Thread.title"])
+
+    def _edge_label(issue_id: int) -> tuple[str, str]:
+        return issue_label_map.get(issue_id, ("?", "?"))
+
+    edges: list[ReaderContextEdge] = []
+    for dep in dependency_rows.scalars():
+        src_number, src_title = _edge_label(dep.source_issue_id)
+        tgt_number, tgt_title = _edge_label(dep.target_issue_id)
+        edges.append(
+            ReaderContextEdge(
+                id=dep.id,
+                kind="dependency",
+                source_issue_id=dep.source_issue_id,
+                target_issue_id=dep.target_issue_id,
+                source_issue_number=src_number,
+                target_issue_number=tgt_number,
+                source_thread_title=src_title,
+                target_thread_title=tgt_title,
+                note=dep.note,
+            )
         )
-        for rule in rule_result.scalars()
-    )
+    for rule in rule_rows.scalars():
+        src_number, src_title = _edge_label(rule.source_id)
+        tgt_number, tgt_title = _edge_label(rule.target_id)
+        edges.append(
+            ReaderContextEdge(
+                id=rule.id,
+                kind="continuity",
+                source_issue_id=rule.source_id,
+                target_issue_id=rule.target_id,
+                source_issue_number=src_number,
+                target_issue_number=tgt_number,
+                source_thread_title=src_title,
+                target_thread_title=tgt_title,
+                note=rule.note,
+            )
+        )
     edges.sort(key=lambda edge: (edge.kind, edge.id))
     return edges[:MAX_CHAIN_EDGES]
 
@@ -554,18 +606,29 @@ async def get_reader_context(
     current_position = issue.position
 
     thread_issues_result = await db.execute(
-        select(Issue).where(Issue.thread_id == thread_id).order_by(Issue.position, Issue.id)
+        select(Issue)
+        .options(
+            selectinload(Issue.thread),
+        )
+        .where(Issue.thread_id == thread_id)
+        .order_by(Issue.position, Issue.id)
     )
     thread_issues = list(thread_issues_result.scalars())
-    ordered_issues = sorted(thread_issues, key=lambda candidate: (candidate.position, candidate.id))
+    ordered_issues = sorted(
+        thread_issues, key=lambda candidate: (candidate.position, candidate.id)
+    )
     current_index = next(
-        index for index, candidate in enumerate(ordered_issues) if candidate.id == issue_id
+        index
+        for index, candidate in enumerate(ordered_issues)
+        if candidate.id == issue_id
     )
     previous_issue = ordered_issues[current_index - 1] if current_index > 0 else None
     neighborhood = ordered_issues[max(0, current_index - 2) : current_index + 3]
 
     identity = await _confirmed_identity(db, issue_id)
-    series_id, series_name = _series(identity.metadata_json) if identity else (None, None)
+    series_id, series_name = (
+        _series(identity.metadata_json) if identity else (None, None)
+    )
     if identity is not None and series_id is not None:
         identity_source = "comicvine"
         series_issues = await _same_series_read_issues(db, user_id, series_id)
