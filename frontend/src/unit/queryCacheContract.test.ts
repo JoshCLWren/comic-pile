@@ -27,9 +27,8 @@ function createSpiedClient() {
   const client = new QueryClient()
   const setQueryData = vi.spyOn(client, 'setQueryData')
   const invalidateQueries = vi.spyOn(client, 'invalidateQueries').mockResolvedValue()
-  const resetQueries = vi.spyOn(client, 'resetQueries').mockResolvedValue()
 
-  return { client, setQueryData, invalidateQueries, resetQueries }
+  return { client, setQueryData, invalidateQueries }
 }
 
 describe('canonical query keys', () => {
@@ -205,15 +204,14 @@ describe('targeted cache effects', () => {
   })
 
   it('limits queue movement refreshes to queue pages, current session, and roll state', async () => {
-    const { client, resetQueries, invalidateQueries } = createSpiedClient()
+    const { client, invalidateQueries } = createSpiedClient()
 
     await invalidateAfterQueueMovement(client)
 
-    expect(resetQueries).toHaveBeenCalledOnce()
-    expect(resetQueries).toHaveBeenCalledWith({
+    expect(invalidateQueries).toHaveBeenCalledTimes(3)
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.queue.pages(),
     })
-    expect(invalidateQueries).toHaveBeenCalledTimes(2)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,

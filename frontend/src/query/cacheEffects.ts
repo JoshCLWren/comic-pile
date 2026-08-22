@@ -105,11 +105,7 @@ export async function invalidateAfterQueueMovement(
   client: QueryClient,
 ): Promise<void> {
   await Promise.all([
-    // Reset (not invalidate) the paginated Queue loader: re-fetching already
-    // loaded pages through their pre-mutation cursors can duplicate or skip
-    // rows after ordering shifts (#933). Resetting drops every loaded page so
-    // each active list re-requests exactly one bounded first page.
-    client.resetQueries({ queryKey: queryKeys.queue.pages() }),
+    client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
     client.invalidateQueries({
       queryKey: queryKeys.session.current(),
       exact: true,
