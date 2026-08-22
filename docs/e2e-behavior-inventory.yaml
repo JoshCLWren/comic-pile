@@ -1,0 +1,56 @@
+# E2E Behavior Inventory
+#
+# This file enumerates the user-contract level behaviors that the E2E suite should cover.
+# Each entry contains a stable scenario ID, product area, a brief description of the
+# user-visible behavior or invariant, a priority level, and a coverage status.
+#
+# Status values:
+#  - uncovered: not yet covered by Playwright tests
+#  - covered: known to be implemented
+#  - blocked: not coverable due to current technical limitations
+
+- id: AUTH-001
+  area: authentication
+  description: User can sign in with email/password and obtain a session
+  priority: P0
+  status: uncovered
+- id: QUEUE-001
+  area: queue
+  description: Queue page displays pending comics in order and allows marking as completed
+  priority: P0
+  status: uncovered
+- id: ROLL-001
+  area: roll
+  description: User can roll a comic and see the result
+  priority: P0
+  status: uncovered
+- id: RATE-001
+  area: rating
+  description: User can rate a comic after viewing
+  priority: P0
+  status: uncovered
+- id: SNOOZE-001
+  area: snooze
+  description: User can snooze or unsnooze a comic and it appears appropriately in the queue
+  priority: P0
+  status: uncovered
+- id: THREAD-001
+  area: thread
+  description: Users can create, edit, and delete thread topics
+  priority: P0
+  status: uncovered
+- id: DEP-001
+  area: dependencies
+  description: Dependency relations between comics are resolved correctly
+  priority: P0
+  status: uncovered
+- id: ORDER-001
+  area: order
+  description: Reading order follows declared dependency graph
+  priority: P0
+  status: uncovered
+- id: MOBILE-001
+  area: mobile
+  description: Primary mobile interaction path works for core user journeys
+  priority: P0
+  status: uncovered
