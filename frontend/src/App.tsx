@@ -94,6 +94,7 @@ const HelpPage = lazyRoute('help')
 const WhatsNewPage = lazyRoute('whatsNew')
 const LoginPage = lazyRoute('login')
 const RegisterPage = lazyRoute('register')
+const IdentityInboxPage = lazyRoute('identityInbox')
 
 export interface AuthContextValue {
   isAuthenticated: boolean
@@ -345,6 +346,7 @@ function AppRoutes() {
         <Route path="/continuity-plans/:id" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><ContinuityPlannerPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/whats-new" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><WhatsNewPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/help" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><HelpPage /></AuthenticatedLayout></ProtectedRoute>} />
+        <Route path="/identity-inbox" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><IdentityInboxPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/glossary" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><HelpPage /></AuthenticatedLayout></ProtectedRoute>} />
       </Routes>
       {isAuthenticated && <BugReportConnected onSubmit={submit} />}
