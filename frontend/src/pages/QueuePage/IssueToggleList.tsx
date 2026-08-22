@@ -17,8 +17,9 @@ import {
 } from './issueUtils'
 import type { IssueMutation, QueuedIssueMutation } from './types'
 
-export function IssueToggleList({ threadId }: {
+export function IssueToggleList({ threadId, onOpenDependencies }: {
   threadId: number
+  onOpenDependencies?: () => void
 }) {
   const [issues, setIssues] = useState<Issue[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -568,6 +569,26 @@ if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p
                 dependencies[selectedDepsIssue.id].outgoing.length === 0) && (
                 <p className="text-xs text-stone-500">No dependencies found</p>
               )}
+            <div className="pt-2 border-t border-white/10">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500 mb-2">Manage dependencies</p>
+              {onOpenDependencies ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedDepsIssue(null)
+                    onOpenDependencies()
+                  }}
+                  className="w-full py-2 glass-button text-xs font-black uppercase tracking-widest text-left"
+                  data-testid="open-dependency-builder"
+                >
+                  Open Dependency Builder →
+                </button>
+              ) : (
+                <p className="text-xs text-stone-500">
+                  Save a Continuity Plan or use the Dependency Builder from the Queue to create and manage dependencies.
+                </p>
+              )}
+            </div>
           </div>
         </Modal>
       )}
