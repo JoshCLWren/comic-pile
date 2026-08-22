@@ -351,6 +351,104 @@ async def test_preview_target_story_arc_marks_core_members(
 
 
 @pytest.mark.asyncio
+async def test_preview_x_of_swords_contextual_outside_core(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """X of Swords: CBL preludes tagged only as Dawn of X stay contextual.
+
+    Acceptance criterion from #1016: ``Excalibur #12`` and ``X-Men #12`` sit in
+    the official CBL reading list while ComicVine tags them only as Dawn of X,
+    so they must remain outside the X of Swords core (story arc 60653) yet still
+    appear in the suggested template instead of being dropped or promoted.
+    """
+    user = await get_or_create_user_async(async_db)
+    preludes = [
+        await _make_issue(async_db, user_id=user.id, suffix="excalibur-12"),
+        await _make_issue(async_db, user_id=user.id, suffix="xmen-12"),
+    ]
+    core_issues = [
+        await _make_issue(async_db, user_id=user.id, suffix=f"xos-core-{i}") for i in range(3)
+    ]
+    await async_db.commit()
+
+    source = CBLSource(
+        repository="repo/events",
+        revision_sha="sha-1",
+        synced_at=datetime.now(UTC),
+    )
+    async_db.add(source)
+    await async_db.flush()
+    source_list = CBLSourceList(
+        source_id=source.id,
+        source_path="Events/X-of-Swords.cbl",
+        name="X of Swords",
+        declared_issue_count=5,
+        content_hash="hash-xos",
+        revision_sha="sha-1",
+        active=True,
+    )
+    async_db.add(source_list)
+    await async_db.flush()
+
+    entries = [
+        ("Excalibur", "12", "5248", preludes[0]),
+        ("X-Men", "12", "5248", preludes[1]),
+        ("X of Swords", "1", "60653", core_issues[0]),
+        ("X of Swords", "2", "60653", core_issues[1]),
+        ("X of Swords", "3", "60653", core_issues[2]),
+    ]
+    for position, (series_name, issue_number, arc_id, issue) in enumerate(entries, start=1):
+        identity = ExternalIdentity(
+            provider="comicvine",
+            entity_type="issue",
+            external_id=f"4400-{issue.id}",
+            metadata_json={"story_arcs": [{"id": arc_id}]},
+        )
+        async_db.add(identity)
+        await async_db.flush()
+        async_db.add(
+            IssueExternalIdentityMapping(
+                issue_id=issue.id,
+                external_identity_id=identity.id,
+                status="confirmed",
+            )
+        )
+        await async_db.flush()
+        await _seed_template_entry(
+            async_db,
+            source_list=source_list,
+            position=position,
+            series_name=series_name,
+            issue_number=issue_number,
+            external_issue_identity_id=identity.id,
+        )
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/v1/crossover-templates/preview",
+        json={"source_list_ids": [source_list.id], "target_story_arc_id": "60653"},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    # All five CBL entries stay in the suggested template in list order.
+    assert [item["issue_id"] for item in body["items"]] == [
+        preludes[0].id,
+        preludes[1].id,
+        core_issues[0].id,
+        core_issues[1].id,
+        core_issues[2].id,
+    ]
+    roles = {item["issue_id"]: item["role"] for item in body["items"]}
+    assert [roles[issue.id] for issue in core_issues] == ["core", "core", "core"]
+    assert [roles[prelude.id] for prelude in preludes] == [
+        "context/prelude",
+        "context/prelude",
+    ]
+    assert body["unresolved"] == []
+
+
+@pytest.mark.asyncio
 async def test_preview_rejects_boolean_source_list_id(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
