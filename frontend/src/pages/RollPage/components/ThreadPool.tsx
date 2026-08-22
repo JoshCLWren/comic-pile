@@ -230,27 +230,35 @@ export function ThreadPool({
             )}
 
             {/* Stale thread section - collapsed by default */}
-            {staleThread && !isRatingView && (
-              <div
-                onClick={onReadStale}
-                className="mt-4 md:mt-8 animate-[fade-in_0.5s_ease-out] cursor-pointer hover:bg-amber-500/5 transition-colors rounded-xl"
-              >
-                <div className="px-4 py-3 bg-amber-500/5 border border-amber-500/10 rounded-xl flex items-center gap-3">
-                  <div className="w-8 h-8 bg-amber-500/10 rounded-lg flex items-center justify-center shrink-0">
-                    <span className="text-sm">⏳</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-bold text-amber-200/70 uppercase tracking-wider leading-relaxed">
-                      {staleThreadCount} stale thread{staleThreadCount !== 1 ? 's' : ''}: <span className="text-amber-400 font-black">{staleThread.title}</span> neglected for{' '}
-                      <span className="text-amber-400 font-black">{staleThread.days}</span> days
-                    </p>
-                    <p className="text-[9px] text-amber-300/70 text-center mt-1">
-                      Tap to read now
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+{staleThread && !isRatingView && (
+  <div
+    onClick={onReadStale}
+    onKeyDown={(e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault()
+        onReadStale()
+      }
+    }}
+    role="button"
+    tabIndex={0}
+    className="mt-4 md:mt-8 animate-[fade-in_0.5s_ease-out] cursor-pointer hover:bg-amber-500/5 transition-colors rounded-xl"
+  >
+    <div className="px-4 py-3 bg-amber-500/5 border border-amber-500/10 rounded-xl flex items-center gap-3">
+      <div className="w-8 h-8 bg-amber-500/10 rounded-lg flex items-center justify-center shrink-0">
+        <span className="text-sm">⏳</span>
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-[10px] font-bold text-amber-200/70 uppercase tracking-wider leading-relaxed">
+          {staleThreadCount} stale thread{staleThreadCount !== 1 ? 's' : ''}: <span className="text-amber-400 font-black">{staleThread.title}</span> neglected for{' '}
+          <span className="text-amber-400 font-black">{staleThread.days}</span> days
+        </p>
+        <p className="text-[9px] text-amber-300/70 text-center mt-1">
+          Tap to read now
+        </p>
+      </div>
+    </div>
+  </div>
+)}
 
             {/* Snoozed threads section - collapsed by default */}
             {snoozedThreads && snoozedThreads.length > 0 && !isRatingView && (
