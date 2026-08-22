@@ -28,7 +28,7 @@ export function MarqueeTitle({ title, className = '' }: MarqueeTitleProps) {
   }, [title])
 
   return (
-    <div ref={containerRef} className="overflow-hidden flex-1 whitespace-nowrap">
+    <div ref={containerRef} className="overflow-hidden whitespace-nowrap min-w-0">
       <h3
         ref={h3Ref}
         className={`text-lg font-bold text-white ${overflows ? 'inline-block marquee-runner' : 'truncate'} ${className}`}
