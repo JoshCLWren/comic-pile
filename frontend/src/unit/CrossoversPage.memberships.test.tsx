@@ -129,10 +129,10 @@ describe('CrossoversPage membership editing', () => {
   })
 
   it('renders a readable fallback when member metadata cannot be resolved', async () => {
-    api.list.mockResolvedValue({
+    api.list.mockResolvedValue([{
       ...crossover,
       memberships: [{ id: 9, issue_id: 99, thread_id: null, series_title: null, issue_number: null }],
-    })
+    }])
     render(<CrossoversPage />)
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*1 member/ }))
 

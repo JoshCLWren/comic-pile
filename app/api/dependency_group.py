@@ -79,7 +79,7 @@ async def _member_responses(
             series_title = thread_titles.get(member.thread_id)
             issue_number = None
         else:
-            issue_number, series_title = issue_metadata.get(member.issue_id, (None, None))
+            issue_number, series_title = issue_metadata.get(member.issue_id) or (None, None)
         responses.append(
             DependencyGroupMemberResponse(
                 id=member.id,
@@ -99,16 +99,22 @@ async def _group_response(
 
     Args:
         db: The asynchronous database session.
-        group: The owned group with memberships eagerly loaded.
+        group: The owned group whose memberships should be described.
 
     Returns:
         The group payload whose members carry resolved comic metadata.
     """
+    result = await db.execute(
+        select(DependencyGroupMembership)
+        .where(DependencyGroupMembership.group_id == group.id)
+        .order_by(DependencyGroupMembership.id)
+    )
+    memberships = list(result.scalars())
     return DependencyGroupResponse(
         id=group.id,
         name=group.name,
         created_at=group.created_at,
-        memberships=await _member_responses(db, group.memberships),
+        memberships=await _member_responses(db, memberships),
     )
 
 
