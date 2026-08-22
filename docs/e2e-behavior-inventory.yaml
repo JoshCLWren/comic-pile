@@ -1,345 +1,61 @@
-# Canonical E2E behavior inventory for ComicPile
+# E2E Behavior Inventory
 #
-# Epic:       #1476 — Rebuild ComicPile E2E from a canonical behavior inventory
-# Child work: #1479 — inventory canonical user behaviors with stable scenario IDs
+# This file enumerates the user-contract level behaviors that the E2E suite should cover.
+# Each entry contains a stable scenario ID, product area, a brief description of the
+# user-visible behavior or invariant, a priority level, and a coverage status.
 #
-# This file is the single, authoritative inventory of what ComicPile's browser
-# E2E suite must protect. It is the source of truth for coverage work; the
-# retired Playwright suite and closed bug history were consulted only as
-# supporting evidence, not copied as the new specification.
-#
-# Ownership rule (from #1479): the stable scenario ID is the permanent identity
-# for E2E coverage. Future implementation work must cite the inventory IDs it
-# owns so two factories do not independently create coverage for the same
-# behavior.
-#
-# Field contract per behavior:
-#   id       — stable scenario ID (e.g. ROLL-001)
-#   area     — product area (auth, queue, roll, rate, snooze, thread, dep,
-#              order, mobile, regression, security, feature)
-#   behavior — user-visible behavior / invariant at the user-contract level
-#   priority — P0 | P1 | P2
-#   status   — uncovered | covered | blocked
-#   mobile   — optional note when behavior materially differs on mobile
-#   evidence — optional supporting references (legacy tests / bug history)
+# Status values:
+#  - uncovered: not yet covered by Playwright tests
+#  - covered: known to be implemented
+#  - blocked: not coverable due to current technical limitations
 
-meta:
-  version: 1
-  generated_for: "current product behavior (after #1478 legacy suite removal)"
-  source_of_truth: "current routes, UI, APIs, user workflows, business invariants"
-  priority_definitions:
-    P0: "Core user journey that must never regress; protects startup and primary flows."
-    P1: "Important historical regression or secondary flow that should be covered."
-    P2: "Useful but non-critical surface; covered opportunistically."
-  status_definitions:
-    uncovered: "No fresh Chromium coverage exists yet for this behavior."
-    covered: "A deterministic fresh Chromium spec owns this scenario ID."
-    blocked: "Cannot be covered until a prerequisite (infra/feature) lands."
-
-behaviors:
-  # ---- Authentication & startup (P0) ----
-  - id: AUTH-001
-    area: auth
-    behavior: "A new visitor can register an account and receive auth tokens."
-    priority: P0
-    status: uncovered
-
-  - id: AUTH-002
-    area: auth
-    behavior: "A registered user can log in with credentials and receive access/refresh tokens."
-    priority: P0
-    status: uncovered
-
-  - id: AUTH-003
-    area: auth
-    behavior: "Unauthenticated users are redirected from protected routes to /login."
-    priority: P0
-    status: uncovered
-
-  - id: AUTH-004
-    area: auth
-    behavior: "Authenticated users are redirected away from /login and /register to the app."
-    priority: P0
-    status: uncovered
-
-  - id: AUTH-005
-    area: auth
-    behavior: "App start bootstraps the shell, current user, and active session before interactive use."
-    priority: P0
-    status: uncovered
-    mobile: "Same bootstrap on mobile viewport without layout collapse."
-
-  - id: AUTH-006
-    area: auth
-    behavior: "Expired access token is refreshed via the refresh cookie without forcing re-login."
-    priority: P1
-    status: uncovered
-
-  - id: AUTH-007
-    area: auth
-    behavior: "Logout clears tokens and the active session and returns the user to the public area."
-    priority: P0
-    status: uncovered
-
-  # ---- Queue availability (P0) ----
-  - id: QUEUE-001
-    area: queue
-    behavior: "The queue page lists the user's active threads in queue order."
-    priority: P0
-    status: uncovered
-
-  - id: QUEUE-002
-    area: queue
-    behavior: "When no active threads remain, the queue shows an explicit empty/completed state, not a crash."
-    priority: P0
-    status: uncovered
-
-  - id: QUEUE-003
-    area: queue
-    behavior: "The user can manually reorder the queue (move front / back / to a position)."
-    priority: P1
-    status: uncovered
-
-  - id: QUEUE-004
-    area: queue
-    behavior: "Shuffle reorders the queue deterministically for the user and persists."
-    priority: P1
-    status: uncovered
-
-  - id: QUEUE-005
-    area: queue
-    behavior: "Blocked threads are visually marked and excluded from available selection in the queue."
-    priority: P1
-    status: uncovered
-
-  # ---- Roll selection (P0) ----
-  - id: ROLL-001
-    area: roll
-    behavior: "Rolling dice selects an available thread and sets it as the pending thread for the session."
-    priority: P0
-    status: uncovered
-
-  - id: ROLL-002
-    area: roll
-    behavior: "Rolling with no available threads returns a clear empty/blocked state instead of failing."
-    priority: P0
-    status: uncovered
-
-  - id: ROLL-003
-    area: roll
-    behavior: "The roll result reflects the configured die size and the selection method shown to the user."
-    priority: P0
-    status: uncovered
-
-  # ---- Rating / advance (P0) ----
-  - id: RATE-001
-    area: rate
-    behavior: "Rating the pending thread records the rating, decrements issues remaining, and clears pending."
-    priority: P0
-    status: uncovered
-
-  - id: RATE-002
-    area: rate
-    behavior: "Rating the final issue marks the thread completed and removes it from the active pool."
-    priority: P0
-    status: uncovered
-
-  - id: RATE-003
-    area: rate
-    behavior: "Rating is rejected gracefully when there is no pending thread."
-    priority: P0
-    status: uncovered
-
-  - id: RATE-004
-    area: rate
-    behavior: "A rating outside the configured min/max range is rejected with a clear error."
-    priority: P1
-    status: uncovered
-
-  # ---- Snooze / unsnooze (P0) ----
-  - id: SNOOZE-001
-    area: snooze
-    behavior: "Snoozing the pending thread removes it from selection and records a snooze event."
-    priority: P0
-    status: uncovered
-
-  - id: SNOOZE-002
-    area: snooze
-    behavior: "Unsnoozing restores a snoozed thread to the available selection pool."
-    priority: P0
-    status: uncovered
-
-  - id: SNOOZE-003
-    area: snooze
-    behavior: "Snoozed threads are excluded from the roll pool until unsnoozed."
-    priority: P0
-    status: uncovered
-
-  # ---- Core thread management (P0) ----
-  - id: THREAD-001
-    area: thread
-    behavior: "A user can create a thread with title, format, and issue count."
-    priority: P0
-    status: uncovered
-
-  - id: THREAD-002
-    area: thread
-    behavior: "A user can edit an existing thread's details."
-    priority: P0
-    status: uncovered
-
-  - id: THREAD-003
-    area: thread
-    behavior: "A user can delete a thread and it disappears from the active queue."
-    priority: P0
-    status: uncovered
-
-  - id: THREAD-004
-    area: thread
-    behavior: "The thread detail view shows issues, reading progress, and queue position."
-    priority: P0
-    status: uncovered
-
-  - id: THREAD-005
-    area: thread
-    behavior: "Marking an issue read/unread updates the thread's reading progress consistently."
-    priority: P1
-    status: uncovered
-
-  - id: THREAD-006
-    area: thread
-    behavior: "Setting the current issue (or migrating to issue tracking) updates the next unread pointer."
-    priority: P1
-    status: uncovered
-
-  - id: THREAD-007
-    area: thread
-    behavior: "A completed thread can be reactivated and returns to the available pool."
-    priority: P1
-    status: uncovered
-
-  # ---- Dependency behavior (P0) ----
-  - id: DEP-001
-    area: dep
-    behavior: "A thread blocked by an unread prerequisite is excluded from rolls and marked blocked."
-    priority: P0
-    status: uncovered
-
-  - id: DEP-002
-    area: dep
-    behavior: "Blocking info reports accurate blocking/blocked-by relationships for a thread."
-    priority: P0
-    status: uncovered
-
-  - id: DEP-003
-    area: dep
-    behavior: "Resolving a prerequisite unblocks its dependent threads for selection."
-    priority: P1
-    status: uncovered
-
-  - id: DEP-004
-    area: dep
-    behavior: "Switching or overriding a prerequisite updates blocking state without orphaned links."
-    priority: P2
-    status: uncovered
-
-  # ---- Reading-order behavior (P0) ----
-  - id: ORDER-001
-    area: order
-    behavior: "Reading orders list and display their ordered items for the current user."
-    priority: P0
-    status: uncovered
-
-  - id: ORDER-002
-    area: order
-    behavior: "A thread's reading orders are surfaced on its detail view."
-    priority: P0
-    status: uncovered
-
-  - id: ORDER-003
-    area: order
-    behavior: "Reading-order / crossover projection recomputes when underlying threads change."
-    priority: P1
-    status: uncovered
-
-  # ---- Primary mobile interaction path (P0) ----
-  - id: MOBILE-001
-    area: mobile
-    behavior: "The core roll -> rate/snooze flow works on the primary mobile viewport."
-    priority: P0
-    status: uncovered
-
-  - id: MOBILE-002
-    area: mobile
-    behavior: "Mobile layout keeps core controls (queue, roll, rate) reachable and not hidden."
-    priority: P0
-    status: uncovered
-
-  - id: MOBILE-003
-    area: mobile
-    behavior: "Touch interactions drive the core flows without requiring hover/desktop affordances."
-    priority: P1
-    status: uncovered
-
-  # ---- Historical regression contracts (P1) ----
-  - id: STATE-001
-    area: regression
-    behavior: "After a page refresh, the queue and active session reconcile to a consistent state."
-    priority: P1
-    status: uncovered
-
-  - id: DUP-001
-    area: regression
-    behavior: "Rapid or repeated actions do not create duplicate/phantom roll or rate events."
-    priority: P1
-    status: uncovered
-
-  - id: TIMEOUT-001
-    area: regression
-    behavior: "Slow responses time out gracefully and idempotent retries do not double-apply mutations."
-    priority: P1
-    status: uncovered
-
-  - id: AUTH-REC-001
-    area: regression
-    behavior: "Auth recovery restores the session after token expiry without data loss."
-    priority: P1
-    status: uncovered
-
-  # ---- Security (P1) ----
-  - id: CSRF-001
-    area: security
-    behavior: "State-changing requests require a CSRF token and are rejected without it."
-    priority: P1
-    status: uncovered
-
-  # ---- Secondary features (P2) ----
-  - id: CROS-001
-    area: feature
-    behavior: "The crossovers view lists the user's crossover groups and supports creating, renaming, and deleting them plus managing their thread membership."
-    priority: P2
-    status: uncovered
-
-  - id: CONT-001
-    area: feature
-    behavior: "The continuity planner can create and update continuity plans."
-    priority: P2
-    status: uncovered
-
-  - id: ANALYTICS-001
-    area: feature
-    behavior: "Aggregate analytics metrics load via the metrics API for the current user; no dedicated analytics view is routed (/analytics redirects to the roll view)."
-    priority: P2
-    status: uncovered
-
-  - id: HISTORY-001
-    area: feature
-    behavior: "Session history lists past reading sessions with summaries."
-    priority: P2
-    status: uncovered
-
-  - id: WHATSNEW-001
-    area: feature
-    behavior: "The what's-new view loads and displays release notes."
-    priority: P2
-    status: uncovered
+- id: AUTH-001
+  area: authentication
+  description: User can sign in with email/password and obtain a session
+  priority: P0
+  status: uncovered
+- id: QUEUE-001
+  area: queue
+  description: Queue page displays pending comics in order and allows marking as completed
+  priority: P0
+  status: covered
+- id: ROLL-001
+  area: roll
+  description: User can roll a comic and see the result
+  priority: P0
+  status: uncovered
+- id: RATE-001
+  area: rating
+  description: User can rate a comic after viewing
+  priority: P0
+  status: uncovered
+- id: SNOOZE-001
+  area: snooze
+  description: User can snooze or unsnooze a comic and it appears appropriately in the queue
+  priority: P0
+  status: uncovered
+- id: THREAD-001
+  area: thread
+  description: Users can create, edit, and delete thread topics
+  priority: P0
+  status: uncovered
+- id: DEP-001
+  area: dependencies
+  description: Dependency relations between comics are resolved correctly
+  priority: P0
+  status: uncovered
+- id: ORDER-001
+  area: order
+  description: Reading order follows declared dependency graph
+  priority: P0
+  status: uncovered
+- id: MOBILE-001
+  area: mobile
+  description: Primary mobile interaction path works for core user journeys
+  priority: P0
+  status: uncovered
+- id: CONT-001
+  area: continuity
+  description: User can create and modify continuity plans with parallel lanes
+  priority: P2
+  status: covered
