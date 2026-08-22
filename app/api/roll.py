@@ -544,4 +544,7 @@ async def roll_bootstrap(
         stale_thread=stale_thread,
         session_id=current_session_id,
         user_id=user_id,
+        bandwidth=current_session.bandwidth,
+        intent=current_session.intent,
+        mode_source=current_session.mode_source,
     )

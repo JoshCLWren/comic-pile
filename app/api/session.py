@@ -6,7 +6,8 @@ import asyncio
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +23,7 @@ from app.schemas import (
     SessionDetailsResponse,
     SessionHistoryListResponse,
     SessionListItem,
+    SessionModeResponse,
     SessionResponse,
     SnapshotResponse,
     SnapshotsListResponse,
@@ -439,6 +441,9 @@ async def get_current_session(
                 snoozed_thread_ids=active_session.snoozed_thread_ids or [],
                 snoozed_threads=snoozed_threads,
                 pending_thread_id=active_session.pending_thread_id,
+                bandwidth=active_session.bandwidth,
+                intent=active_session.intent,
+                mode_source=active_session.mode_source,
             )
         except OperationalError as e:
             if "deadlock" in str(e).lower():
@@ -643,6 +648,9 @@ async def list_sessions(
             has_restore_point=snapshot_count_num > 0,
             snapshot_count=snapshot_count_num,
             pending_thread_id=session.pending_thread_id,
+            bandwidth=session.bandwidth,
+            intent=session.intent,
+            mode_source=session.mode_source,
         )
         responses.append(_to_session_list_item(sr))
 
@@ -699,6 +707,9 @@ async def get_session(
         has_restore_point=snapshot_count > 0,
         snapshot_count=snapshot_count,
         pending_thread_id=session.pending_thread_id,
+        bandwidth=session.bandwidth,
+        intent=session.intent,
+        mode_source=session.mode_source,
     )
 
 
@@ -1079,6 +1090,9 @@ async def restore_session_start(
                 has_restore_point=snapshot_count > 0,
                 snapshot_count=snapshot_count,
                 pending_thread_id=session.pending_thread_id,
+                bandwidth=session.bandwidth,
+                intent=session.intent,
+                mode_source=session.mode_source,
             )
         except OperationalError as e:
             if "deadlock" in str(e).lower():
@@ -1092,3 +1106,43 @@ async def restore_session_start(
                 raise
 
     raise RuntimeError(f"Failed to restore session after {max_retries} retries")
+
+
+class ModeUpdateRequest(BaseModel):
+    bandwidth: str | None = None
+    intent: str | None = None
+
+
+BANDWIDTH_OPTIONS = {"light", "balanced", "deep"}
+INTENT_OPTIONS = {"balanced", "momentum", "familiar", "explore", "random"}
+
+
+@router.post("/current/mode/", response_model=SessionModeResponse)
+@limiter.limit("60/minute")
+async def update_session_mode(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+    payload: ModeUpdateRequest = Body(default_factory=ModeUpdateRequest),
+) -> SessionModeResponse:
+    """Update the active session's reading-mode state (bandwidth/intent)."""
+    session = await get_owned_session_or_404(db, current_user.id, (await get_or_create(db, user_id=current_user.id, existing_user=current_user)).id)
+
+    if payload.bandwidth is not None:
+        if payload.bandwidth not in BANDWIDTH_OPTIONS:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Invalid bandwidth: {payload.bandwidth}")
+        session.bandwidth = payload.bandwidth
+    if payload.intent is not None:
+        if payload.intent not in INTENT_OPTIONS:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Invalid intent: {payload.intent}")
+        session.intent = payload.intent
+    if payload.bandwidth is not None or payload.intent is not None:
+        session.mode_source = "manual"
+    await db.commit()
+    await db.refresh(session)
+    await _invalidate_session_caches(current_user.id)
+    return SessionModeResponse(
+        bandwidth=session.bandwidth,
+        intent=session.intent,
+        source=session.mode_source,
+    )

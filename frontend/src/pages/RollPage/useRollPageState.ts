@@ -25,6 +25,7 @@ export interface RollPageState {
   threadToMigrate: RatingThread | null
   showSimpleMigration: boolean
   isRatingView: boolean
+  isReadingModeSheetOpen: boolean
   rating: number
   predictedDie: number
   errorMessage: string
@@ -56,6 +57,7 @@ export interface RollPageStateSetters {
   setThreadToMigrate: (value: RatingThread | null) => void
   setShowSimpleMigration: (value: boolean) => void
   setIsRatingView: (value: boolean) => void
+  setIsReadingModeSheetOpen: (value: boolean) => void
   setRating: (value: number) => void
   setPredictedDie: (value: number) => void
   setErrorMessage: (value: string) => void
@@ -84,6 +86,7 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const [threadToMigrate, setThreadToMigrate] = useState<RatingThread | null>(null)
   const [showSimpleMigration, setShowSimpleMigration] = useState(false)
   const [isRatingView, setIsRatingView] = useState(false)
+  const [isReadingModeSheetOpen, setIsReadingModeSheetOpen] = useState(false)
   const [rating, setRating] = useState(4.0)
   const [predictedDie, setPredictedDie] = useState(6)
   const [errorMessage, setErrorMessage] = useState('')
@@ -137,6 +140,8 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
     setShowSimpleMigration,
     isRatingView,
     setIsRatingView,
+    isReadingModeSheetOpen,
+    setIsReadingModeSheetOpen,
     rating,
     setRating,
     predictedDie,

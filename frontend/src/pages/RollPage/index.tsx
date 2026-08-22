@@ -28,6 +28,7 @@ import { useRollModals } from './useRollModals'
 import { RatingView } from './components/RatingView'
 import { ThreadPool } from './components/ThreadPool'
 import { RollHeader } from './components/RollHeader'
+import { ReadingModeSheet } from './components/ReadingModeSheet'
 import { RollModals } from './components/RollModals'
 
 /**
@@ -231,6 +232,8 @@ export default function RollPage() {
         onClearManualDie={actions.handleClearManualDie}
         onOpenOverride={modals.openOverrideModal}
         onOpenDieModal={() => state.setIsDieModalOpen(true)}
+        onOpenModeSelector={() => state.setIsReadingModeSheetOpen(true)}
+        currentMode={bootstrap?.bandwidth && bootstrap?.intent ? `${bootstrap.bandwidth} · ${bootstrap.intent}` : undefined}
       />
 
       <div className="flex-1 flex flex-col min-h-0">

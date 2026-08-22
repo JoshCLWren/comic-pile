@@ -61,6 +61,14 @@ class ActiveThreadInfo(BaseModel):
     )
 
 
+class SessionModeResponse(BaseModel):
+    """Schema for the current session reading-mode state."""
+
+    bandwidth: str | None = None
+    intent: str | None = None
+    source: str | None = None
+
+
 class SessionResponse(BaseModel):
     """Schema for session response."""
 
@@ -79,6 +87,9 @@ class SessionResponse(BaseModel):
     snoozed_thread_ids: list[int] = []
     snoozed_threads: list[SnoozedThreadInfo] = []
     pending_thread_id: int | None = None
+    bandwidth: str | None = None
+    intent: str | None = None
+    mode_source: str | None = None
 
     @field_serializer("started_at", "ended_at")
     def serialize_datetime(self, value: datetime | None) -> str | None:

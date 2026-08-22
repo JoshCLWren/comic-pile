@@ -18,6 +18,8 @@ interface RollHeaderProps {
   onClearManualDie: () => void
   onOpenOverride: () => void
   onOpenDieModal: () => void
+  onOpenModeSelector?: () => void
+  currentMode?: string
 }
 
 /**
@@ -39,6 +41,8 @@ export function RollHeader({
   onClearManualDie,
   onOpenOverride,
   onOpenDieModal,
+  onOpenModeSelector,
+  currentMode,
 }: RollHeaderProps) {
   return (
     <header className="flex justify-between items-center px-2 md:px-3 py-2 shrink-0 z-10">
@@ -138,6 +142,16 @@ export function RollHeader({
             </span>
           </div>
         </div>
+        {onOpenModeSelector && (
+          <button
+            type="button"
+            onClick={onOpenModeSelector}
+            aria-label="Open reading mode selector"
+            className="min-h-11 px-2 md:px-3 py-1.5 md:py-2 bg-white/5 border border-white/10 text-stone-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all shrink-0"
+          >
+            {currentMode ? `${currentMode}` : 'Mode'}
+          </button>
+        )}
         <Tooltip content="Pick a specific eligible thread for the next result.">
           <button
             type="button"
