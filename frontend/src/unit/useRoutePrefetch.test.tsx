@@ -3,6 +3,8 @@ import type { Mock } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
+import { queryKeys, type QueueSort } from '../query/queryKeys'
+import { QUEUE_PAGE_SIZE } from '../hooks/useQueue'
 
 const { routeLoaderKeys, routeLoaders } = vi.hoisted(() => {
   const routeLoaderKeys = [
@@ -30,6 +32,16 @@ vi.mock('../routes/routeModules', () => ({
   lazyRoute: vi.fn(),
 }))
 
+const mockPrefetchQuery = vi.hoisted(() => {
+  return vi.fn()
+})
+
+vi.mock('../query/queryClient', () => ({
+  queryClient: {
+    prefetchQuery: mockPrefetchQuery,
+  },
+}))
+
 import { useRoutePrefetch } from '../hooks/useRoutePrefetch'
 import { resetRoutePrefetchState } from '../query/routePrefetch'
 
@@ -51,6 +63,7 @@ beforeEach(() => {
   vi.stubGlobal('cancelIdleCallback', undefined)
   resetRoutePrefetchState()
   for (const key of routeLoaderKeys) routeLoaders[key].mockClear()
+  mockPrefetchQuery.mockClear()
 })
 
 afterEach(() => {
@@ -96,6 +109,7 @@ describe('useRoutePrefetch', () => {
     for (const key of routeLoaderKeys) {
       expect(routeLoaders[key]).not.toHaveBeenCalled()
     }
+    expect(mockPrefetchQuery).not.toHaveBeenCalled()
   })
 
   it('deduplicates across route changes while the screen is mounted', () => {
@@ -105,10 +119,100 @@ describe('useRoutePrefetch', () => {
     })
     flushIdleWork()
 
+    expect(routeLoaders.roll).toHaveBeenCalledTimes(1)
+    expect(routeLoaders.threadDetail).toHaveBeenCalledTimes(1)
+  })
+
+  // Data prefetching tests
+  it('prefetches bootstrap data for Roll screen', () => {
+    renderHook(() => useRoutePrefetch(true), { wrapper: wrapper('/') })
+    flushIdleWork()
+
+    expect(mockPrefetchQuery).toHaveBeenCalledWith(
+      queryKeys.roll.bootstrap(),
+      { staleTime: 1000, retry: false }
+    )
+  })
+
+  it('prefetches queue list data for Queue screen', () => {
+    renderHook(() => useRoutePrefetch(true), { wrapper: wrapper('/queue') })
+    flushIdleWork()
+
+    expect(mockPrefetchQuery).toHaveBeenCalledWith(
+      queryKeys.queue.list({ search: undefined, sort: 'position' as QueueSort, pageSize: QUEUE_PAGE_SIZE }),
+      { staleTime: 1000, retry: false }
+    )
+  })
+
+  it('prefetches thread detail data for Thread detail screen', () => {
+    renderHook(() => useRoutePrefetch(true), { wrapper: wrapper('/thread/123') })
+    flushIdleWork()
+
+    expect(mockPrefetchQuery).toHaveBeenCalledWith(
+      queryKeys.thread.detail(123),
+      { staleTime: 1000, retry: false }
+    )
+  })
+
+  it('prefetches session list data for History screen', () => {
+    renderHook(() => useRoutePrefetch(true), { wrapper: wrapper('/history') })
+    flushIdleWork()
+
+    expect(mockPrefetchQuery).toHaveBeenCalledWith(
+      queryKeys.session.pages(),
+      { staleTime: 1000, retry: false }
+    )
+  })
+
+  it('prefetches session detail data for Session screen', () => {
+    renderHook(() => useRoutePrefetch(true), { wrapper: wrapper('/sessions/456') })
+    flushIdleWork()
+
+    expect(mockPrefetchQuery).toHaveBeenCalledWith(
+      queryKeys.session.detail(456),
+      { staleTime: 1000, retry: false }
+    )
+  })
+
+  it('does not prefetch data for non-retained routes', () => {
+    // Using a non-retained route such as '/crossovers' with prefetch enabled
+    renderHook(() => useRoutePrefetch(true), { wrapper: wrapper('/crossovers') })
+    flushIdleWork()
+
+    for (const key of routeLoaderKeys) {
+      expect(routeLoaders[key]).not.toHaveBeenCalled()
+    }
+    expect(mockPrefetchQuery).not.toHaveBeenCalled()
+  })
+
+  it('does not prefetch data when prefetching is disabled', () => {
+    renderHook(() => useRoutePrefetch(false), { wrapper: wrapper('/') })
+    flushIdleWork()
+
+    for (const key of routeLoaderKeys) {
+      expect(routeLoaders[key]).not.toHaveBeenCalled()
+    }
+    expect(mockPrefetchQuery).not.toHaveBeenCalled()
+  })
+
+  it('deduplicates data prefetching across route changes while the screen is mounted', () => {
+    const { rerender } = renderHook(({ enabled }) => useRoutePrefetch(enabled), {
+      initialProps: { enabled: true },
+      wrapper: wrapper('/'),
+    })
+    flushIdleWork()
+
+    // First call to prefetch bootstrap data
+    expect(mockPrefetchQuery).toHaveBeenCalledWith(
+      queryKeys.roll.bootstrap(),
+      { staleTime: 1000, retry: false }
+    )
+    mockPrefetchQuery.mockClear()
+
+    // Second call should not prefetch again due to deduplication
     rerender({ enabled: true })
     flushIdleWork()
 
-    expect(routeLoaders.roll).toHaveBeenCalledTimes(1)
-    expect(routeLoaders.threadDetail).toHaveBeenCalledTimes(1)
+    expect(mockPrefetchQuery).not.toHaveBeenCalled()
   })
 })
