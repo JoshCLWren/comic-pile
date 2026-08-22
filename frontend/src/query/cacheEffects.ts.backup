@@ -106,7 +106,7 @@ export async function invalidateAfterQueueMovement(
   client: QueryClient,
 ): Promise<void> {
   await Promise.all([
-    client.resetQueries({ queryKey: queryKeys.queue.pages() }),
+    client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
     client.invalidateQueries({
       queryKey: queryKeys.session.current(),
       exact: true,
