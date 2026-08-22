@@ -86,6 +86,7 @@ export function QueueModals({
   onMigrationSkip,
   onCloseMigration,
   onOpenMigrationDialog,
+  onOpenDependencies,
   isPendingCreate,
   isPendingEdit,
   isPendingReactivate,
