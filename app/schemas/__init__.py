@@ -26,6 +26,10 @@ from app.schemas.issue import (
 from app.schemas.migration import MigrateToIssuesRequest
 from app.schemas.preferences import ThemeId, UserPreferencesPatchRequest, UserPreferencesResponse
 from app.schemas.rate import RateRequest
+from app.schemas.recommendation_explanation import (
+    ExplainableFactorResponse,
+    RecommendationExplanationResponse,
+)
 from app.schemas.roll import (
     OverrideRequest,
     RollBootstrapResponse,
@@ -100,6 +104,8 @@ __all__ = [
     "RollBootstrapResponse",
     "SetCurrentIssueRequest",
     "SetCurrentIssueResponse",
+    "RecommendationExplanationResponse",
+    "ExplainableFactorResponse",
     # Rate
     "RateRequest",
     # Session
