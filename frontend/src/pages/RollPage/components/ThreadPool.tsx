@@ -5,7 +5,7 @@ import type { RollBootstrapThread } from '../../../types/rollBootstrap'
 interface ThreadPoolProps {
   pool: RollBootstrapThread[]
   blockedThreads: RollBootstrapThread[]
-  blockingReasonMap: Record<number, string[]]
+  blockingReasonMap: Record<number, string[]>
   dieSize?: number
   isRatingView: boolean
   isRolling: boolean
@@ -153,7 +153,7 @@ export function ThreadPool({
                     }}
                     role="button"
                     tabIndex={0}
-                    aria-label={`Die face ${index + 1}: ${thread.title}${thread.issue_number ? `, issue ${thread.issue_number}` : ''}${thread.route_labels?.length ? `, routes ${thread.route_labels.join(', ')}` : ''}. Open thread actions.`
+                    aria-label={`Die face ${index + 1}: ${thread.title}${thread.issue_number ? `, issue ${thread.issue_number}` : ''}${thread.route_labels?.length ? `, connected to ${thread.route_labels.join(', ')}` : ''}. Open thread actions.`
                     className={`flex items-center gap-3 px-4 py-3 bg-white/5 border border-white/5 rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-amber-500/30' : ''
                       }`}
                   >
@@ -171,7 +171,7 @@ export function ThreadPool({
                       
                       {/* Issue number with comic title context */}
                       <p className="truncate text-xs text-stone-400">
-                        {thread.issue_number ? `Issue ${thread.issue_number} - ${thread.title}` : 'Next unread issue'}
+                        {thread.issue_number ? `#${thread.issue_number}` : 'Next unread issue'}
                       </p>
                       
                       {/* Format label */}
