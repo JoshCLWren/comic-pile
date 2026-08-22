@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from sqlalchemy import or_, select
@@ -387,13 +388,7 @@ def _sort_key(item: TemplateEvidence) -> tuple[float, int]:
 
 
 def _median_position(item: TemplateEvidence) -> float | None:
-    positions = sorted(placement.position for placement in item.cbl_placements)
-    if not positions:
-        return None
-    midpoint = len(positions) // 2
-    if len(positions) % 2:
-        return float(positions[midpoint])
-    return (positions[midpoint - 1] + positions[midpoint]) / 2
+    return _median_position_from_placements(item.cbl_placements)
 
 
 def _order_conflicts(
@@ -556,3 +551,150 @@ def _story_arc_ids(metadata: dict[str, object]) -> set[str]:
         elif isinstance(raw_id, str) and raw_id.strip():
             result.add(raw_id.strip())
     return result
+
+
+class ReconciliationError(ValueError):
+    """A reader decision cannot be applied to the derived template.
+
+    Attributes:
+        detail: Structured payload suitable for an HTTP 422 response body.
+    """
+
+    def __init__(self, detail: dict[str, object]) -> None:
+        """Store the structured failure detail and a stable human message."""
+        super().__init__(str(detail.get("code", "reconciliation_failed")))
+        self.detail = detail
+
+
+@dataclass(frozen=True, slots=True)
+class ReconciliationDecisionInput:
+    """Framework-neutral view of one reader reconciliation decision."""
+
+    source_path: str
+    position: int
+    action: str
+    issue_id: int | None = None
+
+
+def resolve_adoption_order(
+    template: DerivedCrossoverTemplate,
+    decisions: Sequence[ReconciliationDecisionInput],
+    skipped_issue_ids: Sequence[int],
+) -> tuple[int, ...]:
+    """Resolve the final adopted issue order from explicit reader decisions.
+
+    Every unresolved source entry must receive exactly one decision; resolved
+    template members may be explicitly removed via ``skipped_issue_ids``.
+    Mapped entries interleave at their original source position so adoption
+    preserves the external reading order instead of silently dropping gaps.
+
+    Args:
+        template: The derived template containing items and unresolved matches.
+        decisions: One decision per unresolved entry (map or skip).
+        skipped_issue_ids: Template member issues the reader removed.
+
+    Returns:
+        Ordered ComicPile issue identifiers for the adopted plan.
+
+    Raises:
+        ReconciliationError: When a decision references an unknown entry,
+            maps an already-present issue, or leaves an entry undecided.
+    """
+    item_median_by_issue = {
+        item.issue_id: _median_position_from_placements(item.cbl_placements)
+        for item in template.items
+    }
+    placement_keys: dict[tuple[str, int], int] = {}
+    for item in template.items:
+        for placement in item.cbl_placements:
+            placement_keys.setdefault((placement.source_path, placement.position), item.issue_id)
+    unresolved_keys = {
+        (match.source_path, match.position): match for match in template.unresolved
+    }
+
+    decided_keys: set[tuple[str, int]] = set()
+    mapped_entries: list[tuple[float, int, int]] = []
+    skipped_items: set[int] = set(skipped_issue_ids)
+    for issue_id in skipped_issue_ids:
+        if issue_id not in item_median_by_issue:
+            raise ReconciliationError(
+                {
+                    "code": "skip_target_not_in_template",
+                    "issue_id": issue_id,
+                }
+            )
+
+    for decision in decisions:
+        key = (decision.source_path, decision.position)
+        if key in unresolved_keys:
+            if decision.action == "map":
+                if decision.issue_id is None:  # pragma: no cover - schema-validated
+                    raise ReconciliationError({"code": "map_decision_requires_issue"})
+                if decision.issue_id in item_median_by_issue:
+                    raise ReconciliationError(
+                        {
+                            "code": "mapped_issue_already_in_template",
+                            "issue_id": decision.issue_id,
+                            "source_path": decision.source_path,
+                            "position": decision.position,
+                        }
+                    )
+                mapped_entries.append(
+                    (float(decision.position), len(mapped_entries), decision.issue_id)
+                )
+        elif key in placement_keys:
+            if decision.action != "skip":
+                raise ReconciliationError(
+                    {
+                        "code": "resolved_entry_only_supports_skip",
+                        "source_path": decision.source_path,
+                        "position": decision.position,
+                    }
+                )
+            skipped_items.add(placement_keys[key])
+        else:
+            raise ReconciliationError(
+                {
+                    "code": "unknown_reconciliation_entry",
+                    "source_path": decision.source_path,
+                    "position": decision.position,
+                }
+            )
+        decided_keys.add(key)
+
+    undecided = sorted(unresolved_keys.keys() - decided_keys)
+    if undecided:
+        raise ReconciliationError(
+            {
+                "code": "unresolved_entries_require_decision",
+                "entries": [
+                    {"source_path": path, "position": position}
+                    for path, position in undecided
+                ],
+            }
+        )
+
+    entries: list[tuple[float, int, int]] = []
+    for index, item in enumerate(template.items):
+        if item.issue_id in skipped_items:
+            continue
+        median = item_median_by_issue[item.issue_id]
+        entries.append((median if median is not None else float("inf"), index, item.issue_id))
+    entries.extend(mapped_entries)
+    entries.sort(key=lambda entry: (entry[0], entry[1]))
+    ordered = tuple(entry[2] for entry in entries)
+    if len(set(ordered)) != len(ordered):
+        raise ReconciliationError({"code": "duplicate_adopted_issue"})
+    return ordered
+
+
+def _median_position_from_placements(
+    placements: tuple[CBLPlacement, ...],
+) -> float | None:
+    positions = sorted(placement.position for placement in placements)
+    if not positions:
+        return None
+    midpoint = len(positions) // 2
+    if len(positions) % 2:
+        return float(positions[midpoint])
+    return (positions[midpoint - 1] + positions[midpoint]) / 2

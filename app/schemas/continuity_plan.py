@@ -201,6 +201,29 @@ class CrossoverTemplatePreviewRequest(BaseModel):
         return self
 
 
+class CrossoverReconciliationDecision(BaseModel):
+    """One explicit reader decision for an unresolved external-list entry.
+
+    ``map`` binds the entry to a specific ComicPile issue; ``skip`` excludes it
+    from adoption. Decisions are keyed by source provenance so one preview can
+    span several source lists without ambiguity.
+    """
+
+    source_path: str = Field(min_length=1, max_length=400)
+    position: int = Field(ge=1)
+    action: Literal["map", "skip"]
+    issue_id: TemplateSourceListId | None = None
+
+    @model_validator(mode="after")
+    def validate_action_payload(self) -> CrossoverReconciliationDecision:
+        """Require an issue for map decisions and forbid one for skips."""
+        if self.action == "map" and self.issue_id is None:
+            raise ValueError("map decisions must include issue_id")
+        if self.action == "skip" and self.issue_id is not None:
+            raise ValueError("skip decisions must not include issue_id")
+        return self
+
+
 class CrossoverTemplateAdoptRequest(BaseModel):
     """Adopt an external template into an editable continuity plan."""
 
@@ -232,6 +255,23 @@ class CrossoverTemplateAdoptRequest(BaseModel):
     lane_id: str = Field(min_length=1, max_length=80, default="imported")
     lane_name: str = Field(min_length=1, max_length=120, default="Imported")
     issue_node_id_prefix: str = Field(min_length=1, max_length=40, default="tpl-")
+    reconciliations: tuple[CrossoverReconciliationDecision, ...] = Field(
+        default_factory=tuple, max_length=1000
+    )
+    skipped_issue_ids: tuple[TemplateSourceListId, ...] = Field(default_factory=tuple)
+
+    @model_validator(mode="after")
+    def validate_reconciliation_keys(self) -> CrossoverTemplateAdoptRequest:
+        """Reject duplicate reconciliation keys and duplicate skip targets."""
+        keys = [
+            (decision.source_path, decision.position)
+            for decision in self.reconciliations
+        ]
+        if len(set(keys)) != len(keys):
+            raise ValueError("reconciliation decisions must reference unique entries")
+        if len(set(self.skipped_issue_ids)) != len(self.skipped_issue_ids):
+            raise ValueError("skipped_issue_ids must not contain duplicates")
+        return self
 
     @model_validator(mode="after")
     def validate_positive_ids(self) -> CrossoverTemplateAdoptRequest:
