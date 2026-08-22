@@ -34,9 +34,13 @@ import json
 import logging
 import time
 from collections.abc import Awaitable, Callable
+from datetime import datetime, timedelta
 from typing import Any, ParamSpec, TypeVar, cast
 
+import asyncpg
 import redis.asyncio as aioredis
+from sqlalchemy import Column, DateTime, Integer, String, Table, create_engine, event, text
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from upstash_redis.asyncio import Redis as UpstashRedis
 
 logger = logging.getLogger(__name__)
@@ -155,6 +159,246 @@ class CircuitBreaker:
                 )
                 self._state = CircuitState.OPEN
                 self._opened_at = time.time()
+        elif self._state == CircuitState.CLOSED:
+            if self._failure_count >= self.failure_threshold:
+                logger.warning(
+                    "Circuit '%s': CLOSED -> OPEN (%d failures)",
+                    self.name,
+                    self._failure_count,
+                )
+                self._state = CircuitState.OPEN
+                self._opened_at = time.time()
+
+
+_cache_table = Table(
+    "comic_pile_cache",
+    Column("key", String(512), primary_key=True),
+    Column("value", String, nullable=False),
+    Column("created_at", DateTime, default=datetime.utcnow, nullable=False),
+)
+
+
+class PostgresCacheClient:
+    """PostgreSQL-backed cache client using asyncpg.
+
+    Provides get/set/delete operations backed by PostgreSQL table storage.
+    Implements the same interface as UpstashCache but stores data in PostgreSQL
+    for fail-open behavior when Redis is unavailable.
+    """
+
+    _instance: PostgresCacheClient | None = None
+    _engine: AsyncEngine | None = None
+    _session_maker: async_sessionmaker | None = None
+
+    def __new__(cls) -> PostgresCacheClient:
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+
+    def __init__(self) -> None:
+        if hasattr(self, "_initialized") and self._initialized:
+            return
+        self._pool: asyncpg.Connection | None = None
+        self._circuit_breaker = CircuitBreaker(name="postgres_cache")
+        self._initialized = False
+        self._url: str | None = None
+
+    @classmethod
+    async def _create_schema(cls) -> None:
+        """Create the cache table if it doesn't exist."""
+        if cls._engine is None:
+            return
+        from sqlalchemy import text as sa_text
+
+        async with cls._engine.begin() as conn:
+            await conn.execute(
+                sa_text(
+                    "CREATE TABLE IF NOT EXISTS comic_pile_cache ("
+                    "key VARCHAR(512) PRIMARY KEY, "
+                    "value TEXT NOT NULL, "
+                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+                    ")"
+                )
+            )
+            await conn.execute(
+                sa_text(
+                    "CREATE INDEX IF NOT EXISTS idx_cache_created_at "
+                    "ON comic_pile_cache (created_at)"
+                )
+            )
+
+    @property
+    def is_initialized(self) -> bool:
+        return self._initialized and self._pool is not None
+
+    async def initialize(self, url: str) -> None:
+        """Initialize the PostgreSQL connection pool.
+
+        Args:
+            url: PostgreSQL connection URL.
+        """
+        if self._initialized:
+            logger.warning("PostgresCache already initialized")
+            return
+
+        self._url = url
+        try:
+            self._pool = await asyncpg.connect(url, command_timeout=5.0)
+            self._circuit_breaker.reset()
+            self._initialized = True
+            logger.info("PostgreSQL cache configured for lazy connection")
+
+            if cls._engine is None:
+                cls._engine = create_async_engine(url, echo=False)
+                await cls._create_schema()
+        except Exception as e:
+            logger.warning("Failed to initialize PostgreSQL cache: %s", e)
+            self._pool = None
+            self._initialized = False
+
+    async def close(self) -> None:
+        """Close the PostgreSQL connection."""
+        if self._pool is not None:
+            await self._pool.close()
+        self._pool = None
+        self._initialized = False
+        logger.info("PostgreSQL cache connection closed")
+
+    @staticmethod
+    def _reconstruct_value(value: str) -> Any:
+        """Reconstruct a value from serialized JSON."""
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            return value
+        return json.loads(value)
+
+    @staticmethod
+    def _prepare_value(value: Any) -> str:
+        """Prepare a value for storage."""
+        if isinstance(value, (str, int, float, bool)):
+            return json.dumps(value)
+        if hasattr(value, "model_dump"):
+            return json.dumps(value.model_dump())
+        if hasattr(value, "dict"):
+            return json.dumps(value.dict())
+        return json.dumps(value)
+
+    async def get(self, key: str) -> Any | None:
+        """Get a value from cache."""
+        if not self.is_initialized or not self._circuit_breaker.can_attempt():
+            return None
+
+        if self._pool is None:
+            return None
+
+        try:
+            row = await self._pool.fetchrow(
+                "SELECT value FROM comic_pile_cache WHERE key = $1", key
+            )
+            self._circuit_breaker.record_success()
+            if row is None:
+                return None
+            return PostgresCacheClient._reconstruct_value(row["value"])
+        except Exception as e:
+            self._circuit_breaker.record_failure()
+            logger.warning("Cache get failed: %s", e)
+            return None
+
+    async def set(self, key: str, value: Any, ttl: int | None = None) -> bool:
+        """Set a value in cache."""
+        if not self.is_initialized or not self._circuit_breaker.can_attempt():
+            return False
+
+        if self._pool is None:
+            return False
+
+        try:
+            serialized = PostgresCacheClient._prepare_value(value)
+            now = datetime.utcnow()
+            await self._pool.execute(
+                """
+                INSERT INTO comic_pile_cache (key, value, created_at)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (key) DO UPDATE SET value = $2, created_at = $3
+                """,
+                key,
+                serialized,
+                now,
+            )
+            self._circuit_breaker.record_success()
+            return True
+        except Exception as e:
+            self._circuit_breaker.record_failure()
+            logger.warning("Cache set failed: %s", e)
+            return False
+
+    async def delete(self, key: str) -> bool:
+        """Delete a value from cache."""
+        if not self.is_initialized or not self._circuit_breaker.can_attempt():
+            return False
+
+        if self._pool is None:
+            return False
+
+        try:
+            await self._pool.execute(
+                "DELETE FROM comic_pile_cache WHERE key = $1", key
+            )
+            self._circuit_breaker.record_success()
+            return True
+        except Exception as e:
+            self._circuit_breaker.record_failure()
+            logger.warning("Cache delete failed: %s", e)
+            return False
+
+    async def incr(self, key: str) -> int:
+        """Increment and return a generation counter value."""
+        if not self.is_initialized or not self._circuit_breaker.can_attempt():
+            return 1
+
+        if self._pool is None:
+            return 1
+
+        try:
+            row = await self._pool.fetchrow(
+                """
+                INSERT INTO comic_pile_cache (key, value, created_at)
+                VALUES ($1, '0', CURRENT_TIMESTAMP)
+                ON CONFLICT (key) DO UPDATE SET value = (value::int + 1)::text
+                RETURNING value
+                """,
+                key,
+            )
+            self._circuit_breaker.record_success()
+            return int(row["value"]) if row else 1
+        except Exception as e:
+            self._circuit_breaker.record_failure()
+            logger.warning("Cache incr failed: %s", e)
+            return 1
+
+    async def eval(self, script: str, keys: list[str], args: list[str]) -> list[object | None]:
+        """Evaluate a Lua script (no-op for PostgreSQL - returns None for compatibility)."""
+        logger.warning("eval command not supported in PostgresCacheClient")
+        return [None, None]
+
+    async def clear_pattern(self, pattern: str) -> int:
+        """Clear all keys matching a pattern."""
+        if not self.is_initialized or not self._circuit_breaker.can_attempt():
+            return 0
+
+        try:
+            result = await self._pool.fetch(
+                "SELECT key FROM comic_pile_cache WHERE key LIKE $1", pattern
+            )
+            keys = [row["key"] for row in result]
+            for key in keys:
+                await self._pool.execute("DELETE FROM comic_pile_cache WHERE key = $1", key)
+            self._circuit_breaker.record_success()
+            return len(keys)
+        except Exception as e:
+            self._circuit_breaker.record_failure()
+            logger.warning("Cache clear_pattern failed: %s", e)
+            return 0
 
 
 class UpstashCache:
