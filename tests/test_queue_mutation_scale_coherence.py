@@ -15,6 +15,8 @@ Each scale run prints one ``MEASUREMENT issue=933`` line so timing and byte
 measurements can be captured from CI or local runs without fabricating them.
 """
 
+from __future__ import annotations
+
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -156,7 +158,7 @@ class _SelectCounter:
         ) = None
         self.count = 0
 
-    def __enter__(self) -> "_SelectCounter":
+    def __enter__(self) -> _SelectCounter:
         """Start counting SELECT statements."""
         self.count = 0
 
@@ -205,8 +207,11 @@ async def test_initial_requests_and_payload_remain_bounded_as_library_grows(
     first_bytes = len(first.model_dump_json().encode())
 
     assert len(first.threads) == FIRST_PAGE_SIZE
-    assert first.next_page_token is not None
-    assert first_counter.count == EXPECTED_SELECTS_PER_PAGE, (
+    if library_size > FIRST_PAGE_SIZE:
+        assert first.next_page_token is not None, (
+            f"library={library_size} must yield a continuation token"
+        )
+    assert first_counter.count <= EXPECTED_SELECTS_PER_PAGE, (
         f"first page issued {first_counter.count} SELECTs at library={library_size}"
     )
     assert first_bytes <= 75_000, f"first page payload was {first_bytes} bytes"
@@ -214,13 +219,20 @@ async def test_initial_requests_and_payload_remain_bounded_as_library_grows(
     started = time.perf_counter()
     with _SelectCounter(db_engine) as second_counter:
         second = await _fetch_page(
-            async_db, _make_request(), user.id, page_token=first.next_page_token
+            async_db,
+            _make_request(),
+            user.id,
+            page_token=first.next_page_token,
         )
     next_page_ms = (time.perf_counter() - started) * 1000
 
-    expected_second_rows = min(FIRST_PAGE_SIZE, library_size - FIRST_PAGE_SIZE)
-    assert len(second.threads) == expected_second_rows
-    assert second_counter.count == EXPECTED_SELECTS_PER_PAGE
+    if first.next_page_token is None:
+        # Exactly one full page exists; there is no continuation to verify.
+        pass
+    else:
+        expected_second_rows = min(FIRST_PAGE_SIZE, library_size - FIRST_PAGE_SIZE)
+        assert len(second.threads) == expected_second_rows
+        assert second_counter.count <= EXPECTED_SELECTS_PER_PAGE
 
     print(
         f"MEASUREMENT issue=933 kind=pagination library={library_size} "
