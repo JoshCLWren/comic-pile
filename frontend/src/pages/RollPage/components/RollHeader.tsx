@@ -41,7 +41,7 @@ export function RollHeader({
   onOpenDieModal,
 }: RollHeaderProps) {
   return (
-    <header className="flex justify-between items-center px-2 md:px-3 py-2 shrink-0 z-10">
+    <header className="flex flex-col lg:flex-row lg:justify-between lg:items-center px-2 md:px-3 py-2 shrink-0 z-10 gap-2 lg:gap-0">
       <div className="min-w-0">
         <h1 className="text-xl md:text-2xl font-black tracking-tighter text-glow uppercase">
           Pile Roller
