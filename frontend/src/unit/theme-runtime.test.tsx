@@ -246,6 +246,11 @@ describe('semantic theme runtime bootstrap', () => {
 
 describe('Appearance picker in the More tray', () => {
   beforeEach(() => {
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 390,
+    })
+    window.dispatchEvent(new Event('resize'))
     auth = null
     document.documentElement.removeAttribute('data-theme')
     localStorage.clear()
