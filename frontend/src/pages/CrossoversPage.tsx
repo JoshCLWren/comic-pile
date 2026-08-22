@@ -324,7 +324,7 @@ export default function CrossoversPage() {
                       <ul className="grid gap-2" aria-label={`${group.name} members`}>
                         {group.memberships.map((member) => (
                           <li key={member.id} className="flex items-center justify-between gap-3 rounded-xl border border-stone-800 px-3 py-2">
-                            <span>{member.issue_id !== null ? `Issue ${member.issue_id}` : `Thread ${member.thread_id}`}</span>
+                            <span>{member.issue_id ? (await getComicTitle(member.issue_id)) : (await getComicTitleFromThread(member.thread_id))}</span>
                             <button type="button" onClick={() => void removeMember(group.id, member.id)} disabled={hasPendingMutation} aria-label={`Remove ${member.issue_id !== null ? `issue ${member.issue_id}` : `thread ${member.thread_id}`} from ${group.name}`}>Remove</button>
                           </li>
                         ))}
