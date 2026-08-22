@@ -538,7 +538,7 @@ export const comicVineApi = {
 }
 
 export const tasksApi = {
-  getMetrics: () => api.get<AnalyticsMetrics>('/analytics/metrics'),
+  getMetrics: () => api.get<AnalyticsMetrics>('/v1/analytics/metrics'),
 }
 
 export const snoozeApi = {
@@ -553,5 +553,5 @@ export const migrationApi = {
 
 export const bugReportsApi = {
   create: (data: { title: string; description: string; diagnostics?: unknown }) =>
-    api.post<BugReportResponse>('/bug-reports/', data),
+    api.post<BugReportResponse>('/v1/bug-reports/', data),
 }
