@@ -540,6 +540,11 @@ export interface ReaderContextRating {
 /**
  * Crossover information in reader-context response
  */
+export interface ReaderContextNextMember {
+  issue_id: number
+  issue_number: string
+}
+
 export interface ReaderContextCrossover {
   id: number
   name: string
