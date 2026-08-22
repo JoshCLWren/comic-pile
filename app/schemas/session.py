@@ -44,6 +44,8 @@ class ActiveThreadInfo(BaseModel):
     last_rolled_result: int | None
     total_issues: int | None = None
     reading_progress: str | None = None
+    issues_read: int | None = None
+    last_rating: float | None = None
 
     issue_id: int | None = Field(
         default=None,
@@ -102,6 +104,7 @@ class EventDetail(BaseModel):
     type: str
     timestamp: datetime
     thread_title: str | None
+    description: str | None = None
     die: int | None = None
     result: int | None = None
     selection_method: str | None = None

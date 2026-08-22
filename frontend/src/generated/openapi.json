@@ -43,9 +43,31 @@
             "description": "DEPRECATED: Always equals next_issue_number. Use next_issue_number instead.",
             "title": "Issue Number"
           },
+          "issues_read": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issues Read"
+          },
           "issues_remaining": {
             "title": "Issues Remaining",
             "type": "integer"
+          },
+          "last_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Rating"
           },
           "last_rolled_result": {
             "anyOf": [
@@ -2577,6 +2599,17 @@
       "EventDetail": {
         "description": "Schema for event detail in session details.",
         "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
           "die": {
             "anyOf": [
               {
