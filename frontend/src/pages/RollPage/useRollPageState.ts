@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import type { BlockingDependency } from '../../types'
 import type { RollBootstrapThread } from '../../types/rollBootstrap'
 import type { RatingThread } from './types'
 
@@ -20,7 +21,7 @@ export interface RollPageState {
   selectedThread: RollBootstrapThread | null
   isActionSheetOpen: boolean
   activeRatingThread: RatingThread | null
-  blockingReasonMap: Record<number, string[]>
+  blockingDependencyMap: Record<number, BlockingDependency[]>
   showMigrationDialog: boolean
   threadToMigrate: RatingThread | null
   showSimpleMigration: boolean
@@ -51,7 +52,7 @@ export interface RollPageStateSetters {
   setSelectedThread: (value: RollBootstrapThread | null) => void
   setIsActionSheetOpen: (value: boolean) => void
   setActiveRatingThread: (value: RatingThread | null) => void
-  setBlockingReasonMap: (value: Record<number, string[]>) => void
+  setBlockingDependencyMap: (value: Record<number, BlockingDependency[]>) => void
   setShowMigrationDialog: (value: boolean) => void
   setThreadToMigrate: (value: RatingThread | null) => void
   setShowSimpleMigration: (value: boolean) => void
@@ -79,7 +80,7 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const [selectedThread, setSelectedThread] = useState<RollBootstrapThread | null>(null)
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
   const [activeRatingThread, setActiveRatingThread] = useState<RatingThread | null>(null)
-  const [blockingReasonMap, setBlockingReasonMap] = useState<Record<number, string[]>>({})
+  const [blockingDependencyMap, setBlockingDependencyMap] = useState<Record<number, BlockingDependency[]>>({})
   const [showMigrationDialog, setShowMigrationDialog] = useState(false)
   const [threadToMigrate, setThreadToMigrate] = useState<RatingThread | null>(null)
   const [showSimpleMigration, setShowSimpleMigration] = useState(false)
@@ -127,8 +128,8 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
     setIsActionSheetOpen,
     activeRatingThread,
     setActiveRatingThread,
-    blockingReasonMap,
-    setBlockingReasonMap,
+    blockingDependencyMap,
+    setBlockingDependencyMap,
     showMigrationDialog,
     setShowMigrationDialog,
     threadToMigrate,

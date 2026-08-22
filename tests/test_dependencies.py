@@ -8,6 +8,7 @@ from app.models import Dependency, Issue, Thread, User
 from sqlalchemy import text
 from comic_pile.dependencies import (
     detect_circular_dependency,
+    format_blocking_reason,
     get_blocked_thread_ids,
     get_blocking_explanations,
     refresh_user_blocked_status,
@@ -66,7 +67,10 @@ async def test_get_blocked_thread_ids_and_explanations(async_db):
 
     reasons = await get_blocking_explanations(b.id, user.id, async_db)
     assert reasons
-    assert "issue #1" in reasons[0].lower()
+    assert isinstance(reasons[0], object)
+    assert reasons[0].thread_id == a.id
+    assert reasons[0].thread_title == "A"
+    assert "issue #1" in format_blocking_reason(reasons[0]).lower()
 
 
 @pytest.mark.asyncio
@@ -384,7 +388,7 @@ async def test_issue_dependency_blocks_by_next_unread_issue(async_db):
     assert target_thread.id in blocked
 
     reasons = await get_blocking_explanations(target_thread.id, user.id, async_db)
-    assert any("issue #1" in reason.lower() for reason in reasons)
+    assert any("issue #1" in format_blocking_reason(reason).lower() for reason in reasons)
 
     source_issue_1.status = "read"
     source_issue_1.read_at = datetime.now(UTC)

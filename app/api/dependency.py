@@ -16,6 +16,7 @@ from app.models.user import User
 from app.schemas.dependency import (
     BatchBlockingExplanationRequest,
     BatchBlockingExplanationResponse,
+    BlockingDependency,
     BlockingExplanation,
     ConnectedThreadInfo,
     DependencyCreate,
@@ -30,7 +31,9 @@ from app.schemas.dependency import (
     ThreadDependencyOrderCheckResponse,
 )
 from comic_pile.dependencies import (
+    BlockingDependency as InternalBlockingDependency,
     detect_circular_dependency,
+    format_blocking_reason,
     get_blocked_thread_ids,
     get_blocking_explanations,
     get_blocking_explanations_batch,
@@ -49,6 +52,18 @@ class _ConnectedThreadEntry(TypedDict):
 
 
 router = APIRouter(tags=["dependencies"])
+
+
+def _to_blocking_dependency_schema(
+    dependency: InternalBlockingDependency,
+) -> BlockingDependency:
+    """Convert an internal blocking dependency into its API schema form."""
+    return BlockingDependency(
+        thread_id=dependency.thread_id,
+        thread_title=dependency.thread_title,
+        issue_number=dependency.issue_number,
+        label=dependency.label,
+    )
 
 
 async def _invalidate_dependency_caches(user_id: int) -> None:
@@ -295,8 +310,12 @@ async def get_thread_blocking_info(
     if thread_id not in blocked_ids:
         return BlockingExplanation(is_blocked=False, blocking_reasons=[])
 
-    reasons = await get_blocking_explanations(thread_id, current_user.id, db)
-    return BlockingExplanation(is_blocked=True, blocking_reasons=reasons)
+    dependencies = await get_blocking_explanations(thread_id, current_user.id, db)
+    return BlockingExplanation(
+        is_blocked=True,
+        blocking_reasons=[format_blocking_reason(dep) for dep in dependencies],
+        blocking_dependencies=[_to_blocking_dependency_schema(dep) for dep in dependencies],
+    )
 
 
 @router.post("/threads:getBlockingInfo", response_model=BatchBlockingExplanationResponse)
@@ -327,9 +346,11 @@ async def get_threads_blocking_info(
     result: dict[int, BlockingExplanation] = {}
     for tid in request.thread_ids:
         if tid in blocked_ids:
+            dependencies = reasons_map.get(tid, [])
             result[tid] = BlockingExplanation(
                 is_blocked=True,
-                blocking_reasons=reasons_map.get(tid, []),
+                blocking_reasons=[format_blocking_reason(dep) for dep in dependencies],
+                blocking_dependencies=[_to_blocking_dependency_schema(dep) for dep in dependencies],
             )
         else:
             result[tid] = BlockingExplanation(
