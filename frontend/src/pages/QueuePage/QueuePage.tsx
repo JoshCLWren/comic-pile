@@ -127,6 +127,8 @@ export default function QueuePage() {
       const snoozeIcon = isSnoozed ? '🔔' : '😴'
       const snoozeLabel = isSnoozed ? 'Unsnooze' : 'Snooze'
       const snoozeDisabled = !isSnoozed && session?.pending_thread_id !== thread.id
+      const readDisabled = isBlocked
+      const readDisabledReason = blockingReasons.length > 0 ? blockingReasons.join('\n') : 'Blocked by dependency'
 
       return (
         <QueueThreadCard
@@ -139,6 +141,8 @@ export default function QueuePage() {
           snoozeIcon={snoozeIcon}
           snoozeLabel={snoozeLabel}
           snoozeDisabled={snoozeDisabled}
+          readDisabled={readDisabled}
+          readDisabledReason={readDisabledReason}
           onCardClick={() => navigate(`/thread/${thread.id}`)}
           onDragStart={actions.handleDragStart(thread.id)}
           onDragEnd={actions.handleDragEnd}
