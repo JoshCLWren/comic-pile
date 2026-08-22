@@ -471,6 +471,23 @@ export interface RollResponse {
   last_rolled_result?: number | null;
 }
 
+/**
+ * Response from atomically correcting the current issue in an active thread
+ */
+export interface SetCurrentIssueResponse {
+  thread_id: number;
+  title: string;
+  format: string;
+  issues_remaining: number;
+  queue_position: number;
+  issue_id: number | null;
+  issue_number: string | null;
+  next_issue_id: number | null;
+  next_issue_number: string | null;
+  total_issues: number | null;
+  reading_progress: string | null;
+}
+
 export interface BugReportResponse {
   issue_url: string
 }

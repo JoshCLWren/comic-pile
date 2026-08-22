@@ -24,7 +24,6 @@ let staleData: never[] = []
 let threadsValue: unknown = threadData
 
 vi.mock('react-router-dom', () => ({ useNavigate: () => spies.navigate }))
-vi.mock('../contexts/CollectionContext', () => ({ useCollections: () => ({ activeCollectionId: null, collections: [] }) }))
 vi.mock('../contexts/useBugReportRestore', () => ({
   useBugReportRestore: () => ({
     setRestoreAction: vi.fn((restore: () => void) => restore()),

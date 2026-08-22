@@ -1188,3 +1188,4 @@ async def test_simple_migration_creates_correct_issues(
     assert len(read_issues) == 0
     assert unread_issues[0].issue_number == "1"
     assert unread_issues[-1].issue_number == "5"
+
