@@ -524,30 +524,33 @@ async def _local_edges(
         )
     )
 
+    dependencies = list(dependency_rows.scalars())
+    rules = list(rule_rows.scalars())
+
     all_edge_ids: set[int] = set()
-    for dep in dependency_rows.scalars():
+    for dep in dependencies:
         all_edge_ids.add(dep.source_issue_id)
         all_edge_ids.add(dep.target_issue_id)
-    for rule in rule_rows.scalars():
+    for rule in rules:
         all_edge_ids.add(rule.source_id)
         all_edge_ids.add(rule.target_id)
 
     issue_label_map: dict[int, tuple[str, str]] = {}
     if all_edge_ids:
         lookup = await db.execute(
-            select(Issue, Thread.title)
+            select(Issue, Thread.title.label("thread_title"))
             .join(Thread, Thread.id == Issue.thread_id)
             .where(Issue.id.in_(all_edge_ids))
         )
         for row in lookup.mappings():
             issue: Issue = row[Issue]
-            issue_label_map[issue.id] = (issue.issue_number, row["Thread.title"])
+            issue_label_map[issue.id] = (issue.issue_number, row["thread_title"])
 
     def _edge_label(issue_id: int) -> tuple[str, str]:
         return issue_label_map.get(issue_id, ("?", "?"))
 
     edges: list[ReaderContextEdge] = []
-    for dep in dependency_rows.scalars():
+    for dep in dependencies:
         src_number, src_title = _edge_label(dep.source_issue_id)
         tgt_number, tgt_title = _edge_label(dep.target_issue_id)
         edges.append(
@@ -563,7 +566,7 @@ async def _local_edges(
                 note=dep.note,
             )
         )
-    for rule in rule_rows.scalars():
+    for rule in rules:
         src_number, src_title = _edge_label(rule.source_id)
         tgt_number, tgt_title = _edge_label(rule.target_id)
         edges.append(
