@@ -81,6 +81,10 @@ class Event(Base):
     )
     # Denormalized issue_number preserved for historical display even if Issue is deleted
     issue_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Recommendation algorithm version recorded at decision time for rollback
+    # and metrics comparison (e.g., contextual vs legacy unweighted).
+    algorithm_version: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    algorithm_control_state: Mapped[str | None] = mapped_column(String(30), nullable=True)
 
     __table_args__ = (
         Index("ix_event_session_id", "session_id"),

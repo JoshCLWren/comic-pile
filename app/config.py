@@ -254,6 +254,18 @@ class GitHubSettings(BaseSettings):
         )
 
 
+class RecommendationVersionSettings(BaseSettings):
+    """Recommendation algorithm version and rollback settings."""
+
+    model_config = SettingsConfigDict(env_file=[".env.test", ".env", ".envrc"], extra="ignore")
+
+    recommendation_use_legacy_unweighted: bool = Field(
+        default=False,
+        description="Force legacy unweighted roll selection (kill switch); does not destroy learned data",
+        json_schema_extra={"env": "RECOMMENDATION_USE_LEGACY_UNWEIGHTED"},
+    )
+
+
 class RedisSettings(BaseSettings):
     """Redis/Upstash caching configuration settings."""
 
@@ -342,8 +354,13 @@ class Settings(BaseSettings):
 
     @property
     def redis(self) -> RedisSettings:
-        """Get Redis settings."""
+        """Get redis settings."""
         return get_redis_settings()
+
+    @property
+    def recommendation_version(self) -> RecommendationVersionSettings:
+        """Get recommendation version settings."""
+        return get_recommendation_version_settings()
 
 
 @lru_cache
@@ -384,8 +401,14 @@ def get_github_settings() -> GitHubSettings:
 
 @lru_cache
 def get_redis_settings() -> RedisSettings:
-    """Get cached Redis settings instance."""
+    """Get cached redis settings instance."""
     return RedisSettings()
+
+
+@lru_cache
+def get_recommendation_version_settings() -> RecommendationVersionSettings:
+    """Get cached recommendation version settings instance."""
+    return RecommendationVersionSettings()
 
 
 @lru_cache
@@ -403,4 +426,5 @@ def clear_settings_cache() -> None:
     get_rating_settings.cache_clear()
     get_github_settings.cache_clear()
     get_redis_settings.cache_clear()
+    get_recommendation_version_settings.cache_clear()
     get_settings.cache_clear()
