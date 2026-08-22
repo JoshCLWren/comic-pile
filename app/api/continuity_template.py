@@ -14,7 +14,6 @@ from app.models.issue import Issue
 from app.models.thread import Thread
 from app.models.user import User
 from app.schemas.continuity_plan import (
-    CBLPlacement,
     CrossoverTemplateConflictPreview,
     CrossoverTemplateIntersectionPreview,
     CrossoverTemplateItemPreview,
@@ -26,8 +25,6 @@ from app.schemas.continuity_plan import (
     CrossoverTemplateAdoptRequest,
     CrossoverTemplatePreviewRequest,
     DerivedCrossoverTemplatePreview,
-    SourceConfidence,
-    SourceRole,
 )
 from app.services.crossover_templates import (
     DerivedCrossoverTemplate,
