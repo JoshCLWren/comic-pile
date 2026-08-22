@@ -77,18 +77,23 @@ export function RatingView({
           predictedDie={predictedDie}
           onUpdateRating={onUpdateRating}
         />
-      </div>
 
-      <RatingActionPanel
-        errorMessage={errorMessage}
-        rateIsPending={rateIsPending}
-        snoozeIsPending={snoozeIsPending}
-        dismissIsPending={dismissIsPending}
-        issuesRemaining={issuesRemaining}
-        onSubmitRating={onSubmitRating}
-        onSnooze={onSnooze}
-        onCancel={onCancel}
-      />
+        <div
+          className="md:col-span-2 md:row-start-3 xl:col-start-2 xl:col-span-2 xl:row-start-2"
+          data-testid="rating-actions-grid-cell"
+        >
+          <RatingActionPanel
+            errorMessage={errorMessage}
+            rateIsPending={rateIsPending}
+            snoozeIsPending={snoozeIsPending}
+            dismissIsPending={dismissIsPending}
+            issuesRemaining={issuesRemaining}
+            onSubmitRating={onSubmitRating}
+            onSnooze={onSnooze}
+            onCancel={onCancel}
+          />
+        </div>
+      </div>
     </div>
   )
 }

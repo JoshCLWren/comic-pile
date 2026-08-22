@@ -241,6 +241,15 @@ describe('RatingView responsive pillar contract', () => {
     expect(comicWrapper!.className).toContain('xl:row-span-1')
   })
 
+  it('places action panel inside the grid cell on large viewports to use blank space (issue #1676)', () => {
+    const { container } = render(ratingView())
+    const gridCell = container.querySelector('[data-testid="rating-actions-grid-cell"]')
+    expect(gridCell).not.toBeNull()
+    expect(gridCell!.className).toContain('xl:col-start-2')
+    expect(gridCell!.className).toContain('xl:col-span-2')
+    expect(gridCell!.className).toContain('xl:row-start-2')
+  })
+
   it('keeps the pillars in DOM order without decorative numeric prefixes', () => {
     const { container } = render(ratingView())
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
