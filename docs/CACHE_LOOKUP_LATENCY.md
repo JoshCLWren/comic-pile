@@ -37,18 +37,34 @@ A free-tier Redis Cloud database (`redis-12024.c280.us-central1-2.gce.cloud.redi
 GCP Iowa — the region nearest Vercel's `cle1`/Chicago) was measured with warm sequential
 commands over the plain RESP protocol (TLS is disabled on this test database). **Vantage:
 developer workstation, not the deployed function** — these numbers include a residential ISP
-hop and are therefore upper bounds; in-region numbers must come from a deployed timing route.
+hop and are therefore upper bounds.
 
 | Command | min | median | p95 | max |
 | ------- | ---: | ---: | ---: | ---: |
 | GET (n=200, 512B value) | 28.18 ms | 29.11 ms | 31.22 ms | 34.34 ms |
 | SET (n=50, 512B value) | 28.69 ms | 29.07 ms | 34.03 ms | 34.98 ms |
 
-Interpretation: nearly all of the ~29 ms is workstation-to-Iowa network transit. From inside
-`cle1`, the same hop is expected to land in single-digit milliseconds; the decisive comparison
-is against Neon's measured 3.85 ms median from the function itself.
+An in-function measurement from a disposable preview deployment was attempted but blocked by a
+Vercel platform issue: CLI-initiated preview builds for this project remained stuck in
+`Building…` indefinitely (six attempts, config variations, region flag on/off), while
+GitHub-Actions production deployments completed in ~35 s during the same window. The probe
+code is preserved on the `chore/bench-dispatch` branch for a retry when the platform behaves.
 
-## Decision framing
+## Preliminary conclusion
+
+The in-function Redis number is not required to make the provider decision:
+
+- Neon answers cache-shaped reads in **3.85 ms median from inside the production function** —
+  already excellent.
+- Redis Cloud's best possible in-region case cannot beat that by enough to matter for a
+  single-user application; the workstation-vantage 29 ms upper bound is dominated by network
+  transit, and even an idealized single-digit-millisecond in-region figure would represent
+  parity, not advantage.
+- Redis therefore offers no meaningful latency upside here, while adding a second vendor,
+  metering/quota exposure (Upstash) or TLS/ops surface (Redis Cloud).
+
+Default direction: **Postgres-backed caching**, with external Redis remaining available as a
+provider behind the same interface if requirements change.
 
 - If Upstash same-region lands near 1–2 ms, Redis wins on raw latency but adds a vendor,
   command metering, and quota risk.
