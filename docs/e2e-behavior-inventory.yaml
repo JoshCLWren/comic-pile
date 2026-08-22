@@ -13,7 +13,7 @@
   area: authentication
   description: User can sign in with email/password and obtain a session
   priority: P0
-  status: covered
+  status: uncovered
 - id: QUEUE-001
   area: queue
   description: Queue page displays pending comics in order and allows marking as completed
