@@ -638,6 +638,10 @@ async def test_reader_context_cross_thread_edge_without_expansion(
             "kind": "dependency",
             "source_issue_id": issues[2].id,
             "target_issue_id": other_issues[0].id,
+            "source_issue_number": issues[2].issue_number,
+            "target_issue_number": other_issues[0].issue_number,
+            "source_thread_title": "Neighborhood",
+            "target_thread_title": "Distant",
             "note": "cross-thread",
         }
     ]
@@ -681,6 +685,10 @@ async def test_reader_context_continuity_rule_edges(
             "kind": "continuity",
             "source_issue_id": issues[1].id,
             "target_issue_id": issues[3].id,
+            "source_issue_number": issues[1].issue_number,
+            "target_issue_number": issues[3].issue_number,
+            "source_thread_title": "Rules",
+            "target_thread_title": "Rules",
             "note": "directive",
         }
     ]
@@ -760,3 +768,41 @@ async def test_reader_context_no_synchronous_provider_dependency(
 
     assert response.status_code == 200
     assert response.json()["series"]["identity_source"] == "comicvine"
+
+
+@pytest.mark.asyncio
+async def test_reader_context_edge_labels_expose_issue_number_and_thread_title(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Edge labels carry issue numbers and thread titles, not raw database IDs."""
+    source_thread, source_issues = await _make_thread(
+        async_db, default_user, title="Observer", issue_count=3, queue_position=1
+    )
+    target_thread, target_issues = await _make_thread(
+        async_db, default_user, title="Targeter", issue_count=2, queue_position=2
+    )
+    dep = Dependency(
+        source_issue_id=source_issues[0].id,
+        target_issue_id=target_issues[0].id,
+        note="cross-team",
+    )
+    async_db.add(dep)
+    await async_db.flush()
+
+    response = await auth_client.get(
+        f"/api/v1/issues/{source_issues[1].id}/reader-context"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    edges = body["local_chain"]["edges"]
+    assert len(edges) >= 1
+    edge = next(e for e in edges if e["id"] == dep.id)
+    assert edge["kind"] == "dependency"
+    assert edge["source_issue_number"] == "1"
+    assert edge["source_thread_title"] == "Observer"
+    assert edge["target_issue_number"] == "1"
+    assert edge["target_thread_title"] == "Targeter"
+    assert edge["note"] == "cross-team"

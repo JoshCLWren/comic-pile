@@ -596,5 +596,9 @@ export interface ReaderContextEdge {
   kind: 'dependency' | 'continuity'
   source_issue_id: number
   target_issue_id: number
+  source_issue_number: string
+  target_issue_number: string
+  source_thread_title: string
+  target_thread_title: string
   note: string | null
 }

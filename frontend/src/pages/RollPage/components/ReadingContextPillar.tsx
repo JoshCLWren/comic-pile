@@ -263,9 +263,9 @@ export function ReadingContextPillar({
                   }}></div>
                   <div className="flex-1 space-y-0.5">
                     <div className="flex items-center justify-between text-[8px]">
-                      <span>#{edge.source_issue_id}</span>
+                      <span>{edge.source_thread_title} #{edge.source_issue_number}</span>
                       <span className="text-stone-400">{edge.kind === 'dependency' ? '→' : '↝'}</span>
-                      <span>#{edge.target_issue_id}</span>
+                      <span>{edge.target_thread_title} #{edge.target_issue_number}</span>
                     </div>
                     {edge.note && (
                       <div className="text-[8px] text-stone-400 italic">
