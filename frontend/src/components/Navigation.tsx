@@ -5,6 +5,7 @@ import BugReportButton from './BugReportButton'
 import type { ReportType } from './BugReportModal'
 import { useAuth } from '../App'
 import api from '../services/api'
+import { selectTheme } from '../services/theme'
 import type { AuthUser } from '../types'
 import type { DiagnosticData } from '../hooks/useDiagnostics'
 
@@ -19,19 +20,26 @@ interface NavigationProps {
   onBugReportSubmit: BugReportSubmit
 }
 
-const MAIN_NAV_ITEMS = [
+interface NavItem {
+  path: string
+  label: string
+  icon: string
+  ariaLabel: string
+}
+
+const MAIN_NAV_ITEMS: NavItem[] = [
   { path: '/', label: 'Roll', icon: '🎲', ariaLabel: 'Roll page' },
   { path: '/queue', label: 'Queue', icon: '📚', ariaLabel: 'Queue page' },
   { path: '/history', label: 'History', icon: '📜', ariaLabel: 'History page' },
   { path: '/crossovers', label: 'Crossovers', icon: '🔀', ariaLabel: 'Crossovers page' },
-] as const
+]
 
-const SECONDARY_NAV_ITEMS = [
+const SECONDARY_NAV_ITEMS: NavItem[] = [
   { path: '/continuity-plans', label: 'Planner', icon: '🧭', ariaLabel: 'Continuity Planner page' },
   { path: '/whats-new', label: 'New', icon: '✨', ariaLabel: "What's New page" },
   { path: '/help', label: 'Help', icon: '❓', ariaLabel: 'Help page' },
   { path: '/glossary', label: 'Glossary', icon: '📘', ariaLabel: 'Glossary page' },
-] as const
+]
 
 export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   const location = useLocation()
@@ -98,13 +106,18 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   )
 
   const setTheme = async (themeId: string) => {
-    const validThemes = ['classic', 'ink-gold', 'command-center']
-    if (!validThemes.includes(themeId)) return
+    // Apply and mirror the choice in localStorage first so the theme takes
+    // effect immediately and survives reloads even when persistence fails
+    // (issue #1611). Server sync below is a reconciliation, not the source
+    // of truth for this device.
+    if (selectTheme(themeId) === null) return
     try {
-      document.documentElement.setAttribute('data-theme', themeId)
       await api.patch('/v1/users/me/preferences', { theme: themeId })
     } catch (err: unknown) {
       console.error('Failed to persist theme preference:', err)
+      // Preserve the currently-rendered theme rather than rolling back,
+      // so the UI is never stranded in an unusable state. The local mirror
+      // keeps the choice durable until the next successful PATCH.
     }
   }
 
@@ -125,7 +138,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
       active ? 'active' : 'hover:bg-white/5'
     }`
 
-  const renderNavItem = (item: typeof MAIN_NAV_ITEMS[0], active: boolean) => (
+  const renderNavItem = (item: NavItem, active: boolean) => (
     <Link
       key={item.path}
       to={item.path}
