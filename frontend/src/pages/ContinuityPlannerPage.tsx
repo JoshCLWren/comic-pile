@@ -5,7 +5,7 @@ import {
   ContinuityIssueSelector,
   ContinuityThreadSelector,
 } from '../components/continuity'
-import { continuityPlansApi, type ContinuityPlanNode } from '../services/api-continuity-plans'
+import { continuityPlansApi, type ContinuityPlanCheckpoint, type ContinuityPlanConvergenceGate, type ContinuityPlanConvergenceTarget, type ContinuityPlanNode } from '../services/api-continuity-plans'
 import { dependencyGroupsApi, type DependencyGroup } from '../services/api-dependency-groups'
 import { issuesApi } from '../services/api-issues'
 import { threadsApi } from '../services/api'
@@ -89,7 +89,13 @@ function normalizePositions(nodeList: PlannerNode[]): PlannerNode[] {
   return out
 }
 
-function buildPayload(name: string, lanes: PlannerLane[], nodeList: PlannerNode[]) {
+function buildPayload(
+  name: string,
+  lanes: PlannerLane[],
+  nodeList: PlannerNode[],
+  checkpointList: ContinuityPlanCheckpoint[],
+  gateList: ContinuityPlanConvergenceGate[],
+) {
   const normalized = normalizePositions(nodeList)
   const orderedLanes = [...lanes].sort((a, b) => a.order - b.order)
   const orderingMode: import('../services/api-continuity-plans').ContinuityPlanOrderingMode =
@@ -104,6 +110,12 @@ function buildPayload(name: string, lanes: PlannerLane[], nodeList: PlannerNode[
       ref_id: node.ref_id,
       lane_id: node.lane_id,
       position: node.position,
+    })),
+    checkpoints: checkpointList.map((checkpoint) => ({ node_id: checkpoint.node_id })),
+    convergence_gates: gateList.map((gate) => ({
+      id: gate.id,
+      gate_node_id: gate.gate_node_id,
+      wait_for: gate.wait_for.map((target) => ({ node_id: target.node_id })),
     })),
   }
 }
@@ -125,6 +137,13 @@ export default function ContinuityPlannerPage() {
   const [savedName, setSavedName] = useState('')
   const [savedLanes, setSavedLanes] = useState<PlannerLane[]>([])
   const [savedNodes, setSavedNodes] = useState<PlannerNode[]>([])
+  const [checkpoints, setCheckpoints] = useState<ContinuityPlanCheckpoint[]>([])
+  const [convergenceGates, setConvergenceGates] = useState<ContinuityPlanConvergenceGate[]>([])
+  const [savedCheckpoints, setSavedCheckpoints] = useState<ContinuityPlanCheckpoint[]>([])
+  const [savedConvergenceGates, setSavedConvergenceGates] = useState<ContinuityPlanConvergenceGate[]>([])
+  const [gateSeq, setGateSeq] = useState(0)
+  const [gateNodeSelect, setGateNodeSelect] = useState('')
+  const [gateWaitSelect, setGateWaitSelect] = useState<string[]>([])
   const [threads, setThreads] = useState<Thread[]>([])
   const [groups, setGroups] = useState<DependencyGroup[]>([])
   const [selectedThread, setSelectedThread] = useState<Thread | null>(null)
@@ -146,7 +165,9 @@ export default function ContinuityPlannerPage() {
   const isDirty =
     name !== savedName ||
     JSON.stringify(lanes) !== JSON.stringify(savedLanes) ||
-    JSON.stringify(nodes) !== JSON.stringify(savedNodes)
+    JSON.stringify(nodes) !== JSON.stringify(savedNodes) ||
+    JSON.stringify(checkpoints) !== JSON.stringify(savedCheckpoints) ||
+    JSON.stringify(convergenceGates) !== JSON.stringify(savedConvergenceGates)
 
   const hydrateLabels = useCallback(async (rawNodes: ContinuityPlanNode[], loadedGroups: DependencyGroup[]) => {
     const groupNames = new Map(loadedGroups.map((group) => [group.id, group.name]))
@@ -198,13 +219,28 @@ export default function ContinuityPlannerPage() {
           [...plan.nodes].sort((a, b) => a.position - b.position),
           loadedGroups,
         )
+        const loadedCheckpoints: ContinuityPlanCheckpoint[] = (plan.checkpoints ?? []).map(
+          (checkpoint) => ({ node_id: checkpoint.node_id }),
+        )
+        const loadedGates: ContinuityPlanConvergenceGate[] = (plan.convergence_gates ?? []).map(
+          (gate) => ({
+            id: gate.id,
+            gate_node_id: gate.gate_node_id,
+            wait_for: gate.wait_for.map((target) => ({ node_id: target.node_id })),
+          }),
+        )
         if (!active) return
         setName(plan.name)
         setLanes(loadedLanes)
         setNodes(normalizePositions(hydrated))
+        setCheckpoints(loadedCheckpoints)
+        setConvergenceGates(loadedGates)
         setSavedName(plan.name)
         setSavedLanes(loadedLanes)
         setSavedNodes(normalizePositions(hydrated))
+        setSavedCheckpoints(loadedCheckpoints)
+        setSavedConvergenceGates(loadedGates)
+        setGateSeq(loadedGates.length)
         setActiveLaneId(loadedLanes[0]?.id ?? DEFAULT_LANE_ID)
         window.localStorage.setItem(LAST_PLAN_KEY, String(plan.id))
       })
@@ -308,6 +344,53 @@ export default function ContinuityPlannerPage() {
     setNodes((current) =>
       normalizePositions(current.filter((candidate) => candidate.id !== nodeId)),
     )
+    setCheckpoints((current) => current.filter((checkpoint) => checkpoint.node_id !== nodeId))
+    setConvergenceGates((current) =>
+      current
+        .filter((gate) => gate.gate_node_id !== nodeId)
+        .map((gate) => ({
+          ...gate,
+          wait_for: gate.wait_for.filter((target) => target.node_id !== nodeId),
+        }))
+        .filter((gate) => gate.wait_for.length > 0),
+    )
+  }
+
+  const isCheckpoint = (nodeId: string): boolean =>
+    checkpoints.some((checkpoint) => checkpoint.node_id === nodeId)
+
+  const toggleCheckpoint = (nodeId: string) => {
+    setCheckpoints((current) => {
+      if (current.some((checkpoint) => checkpoint.node_id === nodeId)) {
+        return current.filter((checkpoint) => checkpoint.node_id !== nodeId)
+      }
+      return [...current, { node_id: nodeId }]
+    })
+  }
+
+  const addConvergenceGate = () => {
+    if (!gateNodeSelect || gateWaitSelect.length === 0) return
+    if (gateWaitSelect.includes(gateNodeSelect)) {
+      setSaveError('A convergence gate cannot wait for itself.')
+      return
+    }
+    const id = `gate-${gateSeq + 1}`
+    setGateSeq((currentSeq) => currentSeq + 1)
+    setConvergenceGates((current) => [
+      ...current,
+      {
+        id,
+        gate_node_id: gateNodeSelect,
+        wait_for: gateWaitSelect.map((nodeId) => ({ node_id: nodeId })),
+      },
+    ])
+    setGateNodeSelect('')
+    setGateWaitSelect([])
+    setSaveError(null)
+  }
+
+  const removeConvergenceGate = (gateId: string) => {
+    setConvergenceGates((current) => current.filter((gate) => gate.id !== gateId))
   }
 
   const addLane = () => {
@@ -354,8 +437,8 @@ export default function ContinuityPlannerPage() {
     }
     setIsSaving(true)
     setSaveError(null)
-    try {
-      const payload = buildPayload(name, lanes, nodes)
+     try {
+      const payload = buildPayload(name, lanes, nodes, checkpoints, convergenceGates)
       const saved = planId
         ? await continuityPlansApi.update(planId, payload)
         : await continuityPlansApi.create(payload)
@@ -365,12 +448,27 @@ export default function ContinuityPlannerPage() {
       ).map((lane) => ({ id: lane.id, name: lane.name, order: lane.order }))
         .sort((a, b) => a.order - b.order)
       const normalized = normalizePositions(nodes)
+      const savedCheckpoints: ContinuityPlanCheckpoint[] = (saved.checkpoints ?? []).map(
+        (checkpoint) => ({ node_id: checkpoint.node_id }),
+      )
+      const savedGates: ContinuityPlanConvergenceGate[] = (saved.convergence_gates ?? []).map(
+        (gate) => ({
+          id: gate.id,
+          gate_node_id: gate.gate_node_id,
+          wait_for: gate.wait_for.map((target) => ({ node_id: target.node_id })),
+        }),
+      )
       setName(saved.name)
       setLanes(savedLanes)
       setNodes(normalized)
+      setCheckpoints(savedCheckpoints)
+      setConvergenceGates(savedGates)
       setSavedName(saved.name)
       setSavedLanes(savedLanes)
       setSavedNodes(normalized)
+      setSavedCheckpoints(savedCheckpoints)
+      setSavedConvergenceGates(savedGates)
+      setGateSeq(savedGates.length)
       window.localStorage.setItem(LAST_PLAN_KEY, String(saved.id))
       setReadinessRefreshKey((key) => key + 1)
       if (!planId) navigate(`/continuity-plans/${saved.id}`, { replace: true })
@@ -385,6 +483,8 @@ export default function ContinuityPlannerPage() {
     setName(savedName || DEFAULT_PLAN_NAME)
     setLanes(savedLanes.length > 0 ? savedLanes : [{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }])
     setNodes(savedNodes)
+    setCheckpoints(savedCheckpoints)
+    setConvergenceGates(savedConvergenceGates)
     setActiveLaneId(savedLanes[0]?.id ?? DEFAULT_LANE_ID)
     setSaveError(null)
   }
@@ -559,6 +659,22 @@ export default function ContinuityPlannerPage() {
                             )}
                             <button type="button" onClick={() => moveInLane(node.id, -1)} disabled={index === 0} aria-label={`Move ${node.label} earlier`} className="min-h-11 min-w-11 rounded-lg border border-stone-700 disabled:opacity-30">↑</button>
                             <button type="button" onClick={() => moveInLane(node.id, 1)} disabled={index === laneNodes.length - 1} aria-label={`Move ${node.label} later`} className="min-h-11 min-w-11 rounded-lg border border-stone-700 disabled:opacity-30">↓</button>
+                            {node.node_type === 'issue' && (
+                              <button
+                                type="button"
+                                onClick={() => toggleCheckpoint(node.id)}
+                                aria-pressed={isCheckpoint(node.id)}
+                                aria-label={`Mark ${node.label} as a checkpoint`}
+                                data-testid={`checkpoint-toggle-${node.id}`}
+                                className={`min-h-11 rounded-lg border px-3 ${
+                                  isCheckpoint(node.id)
+                                    ? 'border-amber-500 bg-amber-500/20 text-amber-200'
+                                    : 'border-stone-700 text-stone-300'
+                                }`}
+                              >
+                                {isCheckpoint(node.id) ? 'Checkpoint' : 'Set checkpoint'}
+                              </button>
+                            )}
                             <button type="button" onClick={() => removeNode(node.id)} aria-label={`Remove ${node.label}`} className="min-h-11 rounded-lg border border-red-900 px-3 text-red-300">Remove</button>
                           </div>
                         </li>
@@ -571,6 +687,93 @@ export default function ContinuityPlannerPage() {
               </div>
             )
           })}
+        </div>
+      </section>
+
+      <section aria-labelledby="convergence-gates-heading" className="rounded-2xl border border-stone-800 bg-stone-900/40 p-4">
+        <h2 id="convergence-gates-heading" className="text-xl font-black text-stone-100">Convergence gates</h2>
+        <p className="text-xs text-stone-500">
+          A convergence gate keeps one step blocked until every selected step is read. This compiles through the same continuity engine as raw rules.
+        </p>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <div className="space-y-2">
+            <h3 className="font-bold text-stone-200">Add a gate</h3>
+            <label className="block text-xs font-bold uppercase tracking-widest text-stone-500">
+              Gate step
+              <select
+                value={gateNodeSelect}
+                onChange={(event) => setGateNodeSelect(event.target.value)}
+                data-testid="gate-node-select"
+                className="mt-1 min-h-11 w-full rounded-xl border border-stone-700 bg-stone-950 px-3 text-stone-100"
+              >
+                <option value="">Select the step to gate</option>
+                {nodes.map((node) => (
+                  <option key={node.id} value={node.id} disabled={node.node_type === 'thread'}>
+                    {node.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-xs font-bold uppercase tracking-widest text-stone-500">
+              Wait for
+              <select
+                multiple
+                value={gateWaitSelect}
+                onChange={(event) =>
+                  setGateWaitSelect(
+                    Array.from(event.target.selectedOptions).map((option) => option.value),
+                  )
+                }
+                data-testid="gate-wait-select"
+                className="mt-1 min-h-[6rem] w-full rounded-xl border border-stone-700 bg-stone-950 px-3 py-2 text-stone-100"
+              >
+                {nodes.map((node) => (
+                  <option key={node.id} value={node.id} disabled={node.node_type === 'thread'}>
+                    {node.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={addConvergenceGate}
+              disabled={!gateNodeSelect || gateWaitSelect.length === 0}
+              className="min-h-11 w-full rounded-xl bg-violet-500 px-4 font-black text-stone-950 disabled:opacity-50"
+            >
+              Add convergence gate
+            </button>
+          </div>
+          <div className="space-y-2">
+            <h3 className="font-bold text-stone-200">Active gates</h3>
+            {convergenceGates.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-stone-700 p-4 text-center text-stone-500">No convergence gates yet.</p>
+            ) : (
+              <ul className="grid gap-2">
+                {convergenceGates.map((gate) => (
+                  <li
+                    key={gate.id}
+                    data-testid={`convergence-gate-${gate.id}`}
+                    className="flex flex-wrap items-center gap-2 rounded-2xl border border-violet-900/50 bg-stone-900 p-3"
+                  >
+                    <span className="flex-1 text-sm font-bold text-stone-100">
+                      {nodes.find((node) => node.id === gate.gate_node_id)?.label ?? gate.gate_node_id} waits for{' '}
+                      {gate.wait_for
+                        .map((target) => nodes.find((node) => node.id === target.node_id)?.label ?? target.node_id)
+                        .join(', ')}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeConvergenceGate(gate.id)}
+                      aria-label={`Remove gate ${gate.id}`}
+                      className="min-h-9 rounded-lg border border-red-900 px-3 text-red-300"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       </section>
 

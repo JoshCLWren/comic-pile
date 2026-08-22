@@ -17,7 +17,38 @@ PlanReadinessDiagnosticCode = Literal[
     "cycle_detected",
     "depth_limit_exceeded",
     "node_limit_exceeded",
+    "checkpoint_blocking",
+    "convergence_blocking",
+    "plan_gate_cycle",
 ]
+
+
+class ContinuityPlanCheckpoint(BaseModel):
+    """A plan node marked as a checkpoint that blocks later same-lane content.
+
+    A checkpoint pins a concrete issue. Every node positioned after the checkpoint
+    in the same lane stays blocked until that checkpoint issue is read.
+    """
+
+    node_id: str = Field(min_length=1, max_length=80)
+
+
+class ContinuityPlanConvergenceTarget(BaseModel):
+    """One plan node a convergence gate waits for before releasing its gate node."""
+
+    node_id: str = Field(min_length=1, max_length=80)
+
+
+class ContinuityPlanConvergenceGate(BaseModel):
+    """A convergence gate that blocks one plan node until selected nodes are read.
+
+    The gate node becomes readable only after every referenced ``wait_for`` node is
+    fully read. Each referenced node must be an issue or crossover inside the plan.
+    """
+
+    id: str = Field(min_length=1, max_length=80)
+    gate_node_id: str = Field(min_length=1, max_length=80)
+    wait_for: list[ContinuityPlanConvergenceTarget] = Field(min_length=1, max_length=500)
 
 
 def _reject_boolean_item_id(value: object) -> object:
@@ -55,6 +86,8 @@ class ContinuityPlanWrite(BaseModel):
     ordering_mode: PlanOrderingMode = "informational"
     lanes: list[ContinuityPlanLane] = Field(min_length=1, max_length=100)
     nodes: list[ContinuityPlanNode] = Field(default_factory=list, max_length=1000)
+    checkpoints: list[ContinuityPlanCheckpoint] = Field(default_factory=list, max_length=500)
+    convergence_gates: list[ContinuityPlanConvergenceGate] = Field(default_factory=list, max_length=500)
 
     @model_validator(mode="after")
     def validate_structure(self) -> ContinuityPlanWrite:
@@ -76,6 +109,7 @@ class ContinuityPlanWrite(BaseModel):
             positions_by_lane.setdefault(node.lane_id, []).append(node.position)
         if any(len(values) != len(set(values)) for values in positions_by_lane.values()):
             raise ValueError("node positions must be unique within each lane")
+
         if self.ordering_mode == "strict_sequential":
             if len(self.lanes) != 1:
                 raise ValueError("strict sequential plans must use exactly one lane")
@@ -87,6 +121,48 @@ class ContinuityPlanWrite(BaseModel):
         return self
 
 
+def _has_cycle(nodes: set[str], edges: list[tuple[str, str]]) -> bool:
+    """Return whether the directed edge set contains a cycle (DFS coloring).
+
+    Args:
+        nodes: Every node identifier that may appear in the edge set.
+        edges: Directed edges between node identifiers.
+
+    Returns:
+        True when at least one directed cycle exists.
+    """
+    adjacency: dict[str, list[str]] = {node: [] for node in nodes}
+    for source, target in edges:
+        if source in adjacency and target in adjacency:
+            adjacency[source].append(target)
+    color: dict[str, int] = {node: 0 for node in nodes}
+    for start in sorted(nodes):
+        if color[start] != 0:
+            continue
+        stack: list[tuple[str, int]] = [(start, 0)]
+        path: list[str] = []
+        while stack:
+            node, state = stack.pop()
+            if state == 0:
+                if color[node] == 1:
+                    continue
+                if color[node] == 2:
+                    continue
+                color[node] = 1
+                path.append(node)
+                stack.append((node, 1))
+                for nxt in reversed(adjacency.get(node, ())):
+                    if color[nxt] == 0:
+                        stack.append((nxt, 0))
+                    elif color[nxt] == 1:
+                        return True
+            else:
+                if path and path[-1] == node:
+                    path.pop()
+                color[node] = 2
+    return False
+
+
 class ContinuityPlanResponse(ContinuityPlanWrite):
     """Persisted continuity plan response."""
 
@@ -94,6 +170,8 @@ class ContinuityPlanResponse(ContinuityPlanWrite):
     user_id: int
     created_at: datetime
     updated_at: datetime
+    checkpoints: list[ContinuityPlanCheckpoint] = Field(default_factory=list)
+    convergence_gates: list[ContinuityPlanConvergenceGate] = Field(default_factory=list)
 
 
 TemplateRole = Literal["core", "context/prelude", "epilogue", "unknown"]

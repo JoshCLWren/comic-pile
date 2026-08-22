@@ -386,6 +386,26 @@ async def evaluate_plan_readiness(
                     node_id=ref_id,
                 )
             )
+        elif not is_readable and any(
+            blocker.satisfaction_type == "checkpoint" for blocker in blockers
+        ):
+            node_diagnostics.append(
+                ContinuityPlanReadinessDiagnostic(
+                    code="checkpoint_blocking",
+                    node_type=node_type,
+                    node_id=ref_id,
+                )
+            )
+        elif not is_readable and any(
+            blocker.satisfaction_type == "converged" for blocker in blockers
+        ):
+            node_diagnostics.append(
+                ContinuityPlanReadinessDiagnostic(
+                    code="convergence_blocking",
+                    node_type=node_type,
+                    node_id=ref_id,
+                )
+            )
 
         blockers, evaluated_issue_id = _readiness_blockers(node_type, ref_id, snapshot)
         is_readable = not blockers
