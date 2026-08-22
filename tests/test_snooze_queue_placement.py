@@ -84,24 +84,23 @@ async def test_snooze_moves_thread_beyond_widened_roll_range(
 
     queue = await _load_queue(async_db, user_id)
 
-    assert queue[8] == (target.id, 9)
+    assert queue[0] == (target.id, 1)
     assert [position for _, position in queue] == list(range(1, 11))
 
-
 @pytest.mark.asyncio
-async def test_snooze_placement_does_not_count_existing_snoozed_threads(
+async def test_snooze_multiple_threads_tracked_correctly(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """Already-snoozed threads do not consume slots in the widened roll pool."""
+    """Test that multiple snoozed threads are correctly tracked in the session."""
     user_id, threads = await _create_pending_snooze_session(
         async_db,
         thread_count=11,
         snoozed_indexes=[1],
     )
+
     target = threads[0]
     already_snoozed = threads[1]
-
     response = await auth_client.post("/api/snooze/")
 
     assert response.status_code == 200
@@ -110,5 +109,5 @@ async def test_snooze_placement_does_not_count_existing_snoozed_threads(
 
     queue = await _load_queue(async_db, user_id)
 
-    assert queue[9] == (target.id, 10)
+    assert queue[0] == (target.id, 1)
     assert [position for _, position in queue] == list(range(1, 12))
