@@ -27,8 +27,9 @@ function createSpiedClient() {
   const client = new QueryClient()
   const setQueryData = vi.spyOn(client, 'setQueryData')
   const invalidateQueries = vi.spyOn(client, 'invalidateQueries').mockResolvedValue()
+  const resetQueries = vi.spyOn(client, 'resetQueries').mockResolvedValue()
 
-  return { client, setQueryData, invalidateQueries }
+  return { client, setQueryData, invalidateQueries, resetQueries }
 }
 
 describe('canonical query keys', () => {
@@ -127,7 +128,7 @@ describe('canonical query keys', () => {
 
 describe('targeted cache effects', () => {
   it('uses an authoritative rating response and invalidates only current session', async () => {
-    const { client, setQueryData, invalidateQueries } = createSpiedClient()
+    const { client, setQueryData, invalidateQueries, resetQueries } = createSpiedClient()
 
     await applyRatedThreadCache(client, thread)
 
@@ -146,10 +147,11 @@ describe('targeted cache effects', () => {
       queryKey: queryKeys.session.current(),
       exact: true,
     })
+    expect(resetQueries).not.toHaveBeenCalled()
   })
 
   it('updates a thread and narrowly refreshes queue, current session, and roll state', async () => {
-    const { client, setQueryData, invalidateQueries } = createSpiedClient()
+    const { client, setQueryData, invalidateQueries, resetQueries } = createSpiedClient()
 
     await applyUpdatedThreadCache(client, thread)
 
@@ -166,10 +168,11 @@ describe('targeted cache effects', () => {
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
     })
+    expect(resetQueries).not.toHaveBeenCalled()
   })
 
   it('invalidates only the edited thread issue, detail, summary, and session keys', async () => {
-    const { client, invalidateQueries } = createSpiedClient()
+    const { client, invalidateQueries, resetQueries } = createSpiedClient()
 
     await invalidateAfterIssueEdit(client, thread.id)
 
@@ -189,10 +192,11 @@ describe('targeted cache effects', () => {
       queryKey: queryKeys.session.current(),
       exact: true,
     })
+    expect(resetQueries).not.toHaveBeenCalled()
   })
 
   it('limits snooze reconciliation to the exact current session key', async () => {
-    const { client, invalidateQueries } = createSpiedClient()
+    const { client, invalidateQueries, resetQueries } = createSpiedClient()
 
     await invalidateCurrentSessionAfterSnooze(client)
 
@@ -201,17 +205,19 @@ describe('targeted cache effects', () => {
       queryKey: queryKeys.session.current(),
       exact: true,
     })
+    expect(resetQueries).not.toHaveBeenCalled()
   })
 
   it('limits queue movement refreshes to queue pages, current session, and roll state', async () => {
-    const { client, invalidateQueries } = createSpiedClient()
+    const { client, invalidateQueries, resetQueries } = createSpiedClient()
 
     await invalidateAfterQueueMovement(client)
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(3)
-    expect(invalidateQueries).toHaveBeenCalledWith({
+    expect(resetQueries).toHaveBeenCalledOnce()
+    expect(resetQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.queue.pages(),
     })
+    expect(invalidateQueries).toHaveBeenCalledTimes(2)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
