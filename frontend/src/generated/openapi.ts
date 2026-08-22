@@ -4009,8 +4009,12 @@ export interface components {
              * @description DEPRECATED: Always equals next_issue_number. Use next_issue_number instead.
              */
             issue_number?: string | null;
+            /** Issues Read */
+            issues_read?: number | null;
             /** Issues Remaining */
             issues_remaining: number;
+            /** Last Rating */
+            last_rating?: number | null;
             /** Last Rolled Result */
             last_rolled_result: number | null;
             /**
@@ -5056,6 +5060,8 @@ export interface components {
          * @description Schema for event detail in session details.
          */
         EventDetail: {
+            /** Description */
+            description?: string | null;
             /** Die */
             die?: number | null;
             /** Die After */

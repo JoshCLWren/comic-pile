@@ -46,6 +46,18 @@ EVENT_TYPE_DESCRIPTIONS: dict[str, str] = {
 }
 
 
+def _event_word(event_type: str) -> str:
+    """Return a reader-friendly verb for a session event type.
+
+    Args:
+        event_type: Raw event type identifier.
+
+    Returns:
+        Human-readable past-tense verb for timeline descriptions.
+    """
+    return EVENT_TYPE_DESCRIPTIONS.get(event_type, event_type.replace("_", " ").capitalize())
+
+
 def _to_session_list_item(sr: SessionResponse) -> SessionListItem:
     """Convert a full SessionResponse to a narrow SessionListItem.
 
@@ -770,7 +782,8 @@ async def get_session_details(
             if thread_title:
                 parts.append(thread_title)
             if event.issues_read:
-                parts.append(f"{event.issues_read} issue{'s' if event.issues_read != 1 else ''} read")
+                noun = "issue" if event.issues_read == 1 else "issues"
+                parts.append(f"{event.issues_read} {noun} read")
             if event.rating is not None:
                 parts.append(f"{event.rating:.1f}/5")
             event_data.description = " · ".join(parts)
@@ -785,7 +798,7 @@ async def get_session_details(
         elif event.type in ("skip", "complete", "completion"):
             event_data.die = event.die
             event_data.die_after = event.die_after
-            word = EVENT_TYPE_DESCRIPTIONS.get(event.type, event.type.replace("_", " ").capitalize())
+            word = _event_word(event.type)
             event_data.description = f"{word} {thread_title or 'thread'}"
         elif event.type == "move":
             event_data.die = event.die
@@ -796,7 +809,7 @@ async def get_session_details(
             event_data.die_after = event.die_after
             event_data.description = f"Shuffled {thread_title or 'thread'}"
         elif event.type in ("reorder", "undo", "restore"):
-            word = EVENT_TYPE_DESCRIPTIONS.get(event.type, event.type.replace("_", " ").capitalize())
+            word = _event_word(event.type)
             event_data.description = f"{word} {thread_title or 'thread'}"
 
         formatted_events.append(event_data)

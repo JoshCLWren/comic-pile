@@ -117,11 +117,9 @@ export default function HistoryPage() {
                         </div>
                       ) : (
                         <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest">
-                          {session.snapshot_count != null && session.snapshot_count > 0
-                            ? `${session.snapshot_count} read`
-                            : session.active_thread.issues_remaining != null
-                              ? `${session.active_thread.issues_remaining} left in queue`
-                              : null}
+                          {session.active_thread.issues_remaining != null
+                            ? `${session.active_thread.issues_remaining} left in queue`
+                            : null}
                         </p>
                       )}
                     </div>
@@ -152,7 +150,12 @@ export default function HistoryPage() {
                         <span> · </span>
                       )}
                       {(session.snapshot_count ?? 0) > 0 && (
-                        <span>Comics read: {session.snapshot_count ?? 0}</span>
+                        <Link
+                          to={`/sessions/${session.id}`}
+                          className="underline decoration-dotted underline-offset-2 hover:text-stone-300"
+                        >
+                          Snapshots ({session.snapshot_count})
+                        </Link>
                       )}
                     </div>
                   )}
