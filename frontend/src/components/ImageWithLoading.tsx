@@ -36,16 +36,8 @@ export default function ImageWithLoading({
   return (
     <>
       {!isLoaded && !hasError && (
-        <div className={className}>
-<div className="relative w-full h-full flex items-center justify-center">
-             <LoadingSpinner size="sm" />
-             {!width && !height && (
-               <div className="w-16 h-24 bg-stone-900/50 rounded" />
-             )}
-             {width && height && (
-               <div className={`w-[${width}] h-[${height}] bg-stone-900/50 rounded`} />
-             )}
-           </div>
+        <div className={`${className} flex items-center justify-center`}>
+          <LoadingSpinner size="sm" message="" />
         </div>
       )}
       <img

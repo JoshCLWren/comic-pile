@@ -4,16 +4,36 @@ import ImageWithLoading from '../components/ImageWithLoading'
 
 describe('ImageWithLoading', () => {
   it('shows loading spinner initially', () => {
-    const { getByRole } = render(
+    const { getByRole, queryByText } = render(
       <ImageWithLoading src="https://example.com/image.jpg" />
     )
 
     // Should show loading spinner (role="status")
     expect(getByRole('status')).toBeInTheDocument()
-    
+
+    // Placeholder shows only a bare spinner, no text message
+    expect(queryByText('Loading...')).not.toBeInTheDocument()
+
     // Should not show the actual image yet (should be transparent)
     const img = document.querySelector('img')
     expect(img).toHaveClass('opacity-0')
+  })
+
+  it('centers the spinner inside the sized placeholder box', () => {
+    const { getByRole } = render(
+      <ImageWithLoading
+        src="https://example.com/image.jpg"
+        className="w-10 h-14 shrink-0"
+      />
+    )
+
+    const status = getByRole('status')
+    const placeholder = status.closest('div.w-10')
+    expect(placeholder).not.toBeNull()
+    expect(placeholder).toHaveClass('flex', 'items-center', 'justify-center')
+
+    // Placeholder contains only the spinner subtree, no stray skeleton rectangles
+    expect(placeholder?.children).toHaveLength(1)
   })
 
   it('shows image when loaded', async () => {
