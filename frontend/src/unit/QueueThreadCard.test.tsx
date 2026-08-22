@@ -233,7 +233,7 @@ describe('QueueThreadCard', () => {
     renderCard(thread)
 
     const notes = screen.getByText(/Imported: https:\/\/www\.leagueofcomicgeeks\.com/)
-    expect(notes).toHaveClass('[overflow-wrap:anywhere]')
+    expect(notes).toHaveClass('[overflow-wrap:anywhere]', 'break-words')
   })
 
   it('exposes the full thread title via native tooltip on the title button', () => {
