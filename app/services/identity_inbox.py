@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.external_identities import (
     ExternalIdentityMappingError,
