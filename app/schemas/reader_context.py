@@ -50,6 +50,7 @@ class ReaderContextCrossover(BaseModel):
     id: int
     name: str
     applies_to_current_issue: bool
+    membership_kind: Literal["issue", "thread"]
     next_member: ReaderContextCrossoverNextMember | None = None
     average_rating: float | None = None
     ratings_count: int = 0

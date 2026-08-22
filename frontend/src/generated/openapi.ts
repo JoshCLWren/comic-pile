@@ -5365,6 +5365,8 @@ export interface components {
             average_rating?: number | null;
             /** Id */
             id: number;
+            /** Membership Kind */
+            membership_kind: "issue" | "thread";
             /** Name */
             name: string;
             next_member?: components["schemas"]["ReaderContextCrossoverNextMember"] | null;
