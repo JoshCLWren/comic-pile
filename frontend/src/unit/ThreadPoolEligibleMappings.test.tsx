@@ -148,9 +148,9 @@ describe('ThreadPool eligible mappings', () => {
 
     const row = screen.getByRole('button', { name: /Die face 1: Amazing Adventures/i })
     expect(row).toHaveAccessibleName(/Open thread actions/i)
-    // Note: The implementation now shows all information visually and uses aria-label for screen readers.
-// No elements are hidden with aria-hidden="true" as all content is visible.
-expect(row.querySelector('[aria-hidden="true"]')).toBeNull()
+    // The implementation shows all information visually and uses aria-label for screen
+    // readers; no elements are hidden with aria-hidden="true" as all content is visible.
+    expect(row.querySelector('[aria-hidden="true"]')).toBeNull()
 
     row.click()
     expect(onThreadClick).toHaveBeenCalledWith({ id: 7, title: 'Amazing Adventures', format: 'ongoing', issue_number: '12' })

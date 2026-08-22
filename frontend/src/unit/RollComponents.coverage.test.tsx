@@ -34,37 +34,30 @@ const callbacks = () => ({
 describe('ThreadPool', () => {
   it('renders empty, blocked, pool, stale, and snoozed states', async () => {
     const empty = callbacks()
-    const { rerender } = render(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[]} blockingReasonMap={{}} isRatingView={false} isRolling={false} rolledResult={null} selectedThreadId={null} staleThread={null} staleThreadCount={0} snoozedThreads=[] snoozedExpanded=false blockedExpanded=false unsnoozeIsPending=false shuffleIsPending=false {...empty} /></MemoryRouter>)
+    const { rerender } = render(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[]} blockingReasonMap={{}} isRatingView={false} isRolling={false} rolledResult={null} selectedThreadId={null} staleThread={null} staleThreadCount={0} snoozedThreads={[]} snoozedExpanded={false} blockedExpanded={false} unsnoozeIsPending={false} shuffleIsPending={false} {...empty} /></MemoryRouter>)
     expect(screen.getByText('Nothing to roll yet')).toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: /add a thread/i }))
     expect(empty.onShuffle).not.toHaveBeenCalled()
+
+    const actions = callbacks()
+    rerender(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingReasonMap={{ 2: ['Read Saga first'] }} isRatingView={false} isRolling={false} rolledResult={null} selectedThreadId={null} staleThread={{ ...thread, days: 4 } as never} staleThreadCount={2} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={false} blockedExpanded={false} unsnoozeIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
+    expect(screen.getByText(/All threads are blocked/)).toBeInTheDocument()
+    await userEvent.setup().click(screen.getByRole('button', { name: /go to queue/i }))
+    expect(actions.onToggleBlocked).not.toHaveBeenCalled()
+
+    rerender(<MemoryRouter><ThreadPool pool={[thread]} blockedThreads={[]} blockingReasonMap={{}} isRatingView={false} isRolling={false} rolledResult={null} selectedThreadId={1} staleThread={{ ...thread, days: 2 } as never} staleThreadCount={1} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={false} blockedExpanded={false} unsnoozeIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
+    await userEvent.setup().click(screen.getByRole('button', { name: /snoozed/i }))
+    await userEvent.setup().click(screen.getAllByText('Saga')[0]!)
+    expect(actions.onThreadClick).toHaveBeenCalledWith(thread)
+    fireEvent.keyDown(screen.getAllByText('Saga')[0]!.closest('[role="button"]')!, { key: 'Enter' })
+    expect(actions.onThreadClick).toHaveBeenCalledTimes(2)
   })
-
-  const actions = callbacks()
-  rerender(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingReasonMap={{ 2: ['Read Saga first'] }} isRatingView={false} isRolling={false} rolledResult={null} selectedThreadId={null} staleThread={{ ...thread, days: 4 } as never} staleThreadCount={2} snoozedThreads=[{ id: 3, title: 'Snoozed', format: 'Comic' }] snoozedExpanded=false blockedExpanded=false unsnoozeIsPending=false shuffleIsPending=false {...actions} /></MemoryRouter>)
-  expect(screen.getByText(/All threads are blocked/)).toBeInTheDocument()
-  await userEvent.setup().click(screen.getByRole('button', { name: /go to queue/i }))
-  expect(actions.onToggleBlocked).not.toHaveBeenCalled()
-
-  const actions = callbacks()
-  rerender(<MemoryRouter><ThreadPool pool={[thread]} blockedThreads={[]} blockingReasonMap={{}} isRatingView={false} isRolling={false} rolledResult={null} selectedThreadId={1} staleThread={{ ...thread, days: 2 } as never} staleThreadCount={1} snoozedThreads=[{ id: 3, title: 'Snoozed', format: 'Comic' }] snoozedExpanded=false blockedExpanded=false unsnoozeIsPending=false shuffleIsPending=false {...actions} /></MemoryRouter>)
-  await userEvent.setup().click(screen.getByRole('button', { name: /snoozed/i }))
-  await userEvent.setup().click(screen.getAllByText('Saga')[0]!)
-  expect(actions.onThreadClick).toHaveBeenCalledWith(thread)
-  fireEvent.keyDown(screen.getAllByText('Saga')[0]!.closest('[role="button"]')!, { key: 'Enter' })
-  expect(actions.onThreadClick).toHaveBeenCalledTimes(2)
-})
 
   it('covers expanded blocked, stale, snoozed, selected, rolling, and disabled controls', async () => {
     const actions = callbacks()
     const stale = { ...thread, title: 'Stale Saga', days: 9 } as never
-    render(<MemoryRouter><ThreadPool pool=[{
-  id: 1,
-  title: 'Dummy Thread',
-  format: 'Comic',
-  issue_number: '1'
-}] blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingReasonMap={{ 2: ['Prerequisite'] }} isRatingView={false} isRolling={false} rolledResult={null} selectedThreadId={null} staleThread={stale} staleThreadCount={2} snoozedThreads=[{ id: 3, title: 'Snoozed', format: 'Comic' }] snoozedExpanded=true blockedExpanded=true unsnoozeIsPending=false shuffleIsPending=false {...actions} /></MemoryRouter>)
-    await userEvent.setup().click(screen.getByRole('button', { name: /hidden \(blocked/i ))
+    render(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingReasonMap={{ 2: ['Prerequisite'] }} isRatingView={false} isRolling={false} rolledResult={null} selectedThreadId={null} staleThread={stale} staleThreadCount={2} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={true} blockedExpanded={true} unsnoozeIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
+    await userEvent.setup().click(screen.getByRole('button', { name: /hidden \(blocked/i }))
     expect(screen.getByText('Prerequisite')).toBeInTheDocument()
     fireEvent.keyDown(screen.getByRole('button', { name: /hidden \(blocked/i }), { key: 'ArrowDown' })
     await userEvent.setup().click(screen.getByRole('button', { name: /Snoozed \(1\)/i }))
@@ -88,7 +81,7 @@ describe('ThreadPool', () => {
       selectedThreadId={null}
       staleThread={{ ...thread, days: 1 } as never}
       staleThreadCount={1}
-      snoozedThreads=[{ id: 6, title: 'Snoozed', format: 'Comic' }]}
+      snoozedThreads={[{ id: 6, title: 'Snoozed', format: 'Comic' }]}
       snoozedExpanded
       blockedExpanded
       unsnoozeIsPending
@@ -114,11 +107,11 @@ describe('ThreadPool', () => {
       selectedThreadId={null}
       staleThread={stale as never}
       staleThreadCount={1}
-      snoozedThreads=[]
-      snoozedExpanded=false
+      snoozedThreads={[]}
+      snoozedExpanded={false}
       blockedExpanded
-      unsnoozeIsPending=false
-      shuffleIsPending=false
+      unsnoozeIsPending={false}
+      shuffleIsPending={false}
       {...actions}
     /></MemoryRouter>)
     expect(screen.getByText(/2 threads hidden/)).toBeInTheDocument()
@@ -133,7 +126,7 @@ describe('RatingView', () => {
   it('renders rating states and invokes controls', async () => {
     const onUpdateRating = vi.fn(); const onSubmitRating = vi.fn(); const onSnooze = vi.fn(); const onCancel = vi.fn(); const onRefreshThread = vi.fn()
     const user = userEvent.setup()
-    render(<RatingView activeRatingThread={{ ...thread, id: 1, issue_number: '2', next_issue_number: '3', reading_progress: 'in_progress' } as never} currentDie={20} rolledResult={19} rating={5} predictedDie={6} errorMessage="Problem" rateIsPending=false snoozeIsPending=false dismissIsPending=false readingOrders=[] connectedThreads=[{ thread_id: 2, title: 'Other', connection_type: 'blocks', dependency_id: 1 }] onUpdateRating={onUpdateRating} onSubmitRating={onSubmitRating} onSnooze=onSnooze onCancel=onCancel onRefreshThread=onRefreshThread />)
+    render(<RatingView activeRatingThread={{ ...thread, id: 1, issue_number: '2', next_issue_number: '3', reading_progress: 'in_progress' } as never} currentDie={20} rolledResult={19} rating={5} predictedDie={6} errorMessage="Problem" rateIsPending={false} snoozeIsPending={false} dismissIsPending={false} readingOrders={[]} connectedThreads={[{ thread_id: 2, title: 'Other', connection_type: 'blocks', dependency_id: 1 }]} onUpdateRating={onUpdateRating} onSubmitRating={onSubmitRating} onSnooze={onSnooze} onCancel={onCancel} onRefreshThread={onRefreshThread} />)
     expect(screen.getByText(/Rolled 19 on d20/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /correct issue number/i }))
     await user.click(screen.getByRole('button', { name: /close correction/i }))
@@ -147,17 +140,17 @@ describe('RatingView', () => {
   })
 
   it('renders empty, low-rating, progress, reading-order, and correction states', async () => {
-    const callbacks = { onUpdateRating: vi.fn(), onSubmitRating = vi.fn(), onSnooze = vi.fn(), onCancel = vi.fn(), onRefreshThread = vi.fn() }
+    const callbacks = { onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onSnooze: vi.fn(), onCancel: vi.fn(), onRefreshThread: vi.fn() }
     const user = userEvent.setup()
-    render(<RatingView activeRatingThread={{ ...thread, issue_number: '2', next_issue_number: null, reading_progress: 'completed', issues_remaining: 1 } as never} currentDie={4} rolledResult={0} rating={1} predictedDie={6} errorMessage="Oops" rateIsPending=false snoozeIsPending=false dismissIsPending=false readingOrders=[[{ id: 2, name: 'Order', description: '', completed_items: 0, total_items: 0 } as never}] connectedThreads=[{ thread_id: 2, title: 'Other', connection_type: 'blocks', dependency_id: 1 }] {...callbacks} />)
+    render(<RatingView activeRatingThread={{ ...thread, issue_number: '2', next_issue_number: null, reading_progress: 'completed', issues_remaining: 1 } as never} currentDie={4} rolledResult={null} rating={1} predictedDie={6} errorMessage="Oops" rateIsPending snoozeIsPending dismissIsPending readingOrders={[{ id: 1, name: 'Order', description: '', completed_items: 0, total_items: 0 } as never]} connectedThreads={[{ thread_id: 2, title: 'Other', connection_type: 'blocks', dependency_id: 1 }]} {...callbacks} />)
     expect(screen.getByText(/This is the last issue/)).toBeInTheDocument()
     expect(screen.getByText('Oops')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /correct issue number/i }))
     await user.click(screen.getByRole('button', { name: 'Correct successfully' }))
     expect(callbacks.onRefreshThread).toHaveBeenCalled()
     fireEvent.change(screen.getByRole('slider'), { target: { value: '2' } })
-    await user.click(screen.getByRole('button', { name: /snooze/i }))
-    await user.click(screen.getRole('button', { name: /Cancel roll/i }))
+    await user.click(screen.getByRole('button', { name: 'Snoozing…' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel roll' }))
   })
 
   it('renders safe fallbacks for missing thread metadata and populated reading-order details', () => {
@@ -168,24 +161,24 @@ describe('RatingView', () => {
       rating={3}
       predictedDie={7 as never}
       errorMessage=""
-      rateIsPending=false
-      snoozeIsPending=false
-      dismissIsPending=false
-      readingOrders=[[{ id: 2, name: 'Main order', description: '', completed_items: 0, total_items: 0 } as never}]
-      connectedThreads=[]
+      rateIsPending={false}
+      snoozeIsPending={false}
+      dismissIsPending={false}
+      readingOrders={[{ id: 2, name: 'Main order', description: 'A description', completed_items: 1, total_items: 2 } as never]}
+      connectedThreads={[]}
       onUpdateRating={vi.fn()}
       onSubmitRating={vi.fn()}
       onSnooze={vi.fn()}
       onCancel={vi.fn()}
       onRefreshThread={vi.fn()}
     />)
-    <|tool_call_begin|>Expected "{" but found "["<|tool_call_begin|><|tool_call_begin|>Expected "{" but found "["<|tool_calls_section_begin|><|tool_call_begin|><|tool_call_begin|>Loading…")).toBeInTheDocument()
+    expect(screen.getByText('Loading…')).toBeInTheDocument()
     expect(screen.getByText('Main order')).toBeInTheDocument()
     expect(screen.getByText('0 left')).toBeInTheDocument()
   })
 
   it('renders alternate rating, progress, and order boundaries', async () => {
-    const callbacks = { onUpdateRating: vi.fn(), onSubmitRating = vi.fn(), onSnooze = vi.fn(), onCancel = vi.fn(), onRefreshThread = vi.fn() }
+    const callbacks = { onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onSnooze: vi.fn(), onCancel: vi.fn(), onRefreshThread: vi.fn() }
     const user = userEvent.setup()
     render(<RatingView
       activeRatingThread={{ ...thread, issue_number: null, next_issue_number: null, total_issues: 0, issues_remaining: 2, reading_progress: null } as never}
@@ -194,16 +187,16 @@ describe('RatingView', () => {
       rating={5}
       predictedDie={6}
       errorMessage=""
-      rateIsPending=false
-      snoozeIsPending=false
-      dismissIsPending=false
-      readingOrders=[[{ id: 3, name: 'Empty order', description: '', completed_items: 0, total_items: 0 } as never}]
-      connectedThreads=[{ thread_id: 2, title: 'Only connection', connection_type: 'blocks', dependency_id: 2 }]
+      rateIsPending={false}
+      snoozeIsPending={false}
+      dismissIsPending={false}
+      readingOrders={[{ id: 3, name: 'Empty order', description: '', completed_items: 0, total_items: 0 } as never]}
+      connectedThreads={[{ thread_id: 2, title: 'Only connection', connection_type: 'blocks', dependency_id: 2 }]}
       {...callbacks}
     />)
     expect(screen.getByText('Saga')).toBeInTheDocument()
     expect(screen.getByText('Die stays the same')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /Mark read & save/i }))
+    await user.click(screen.getByRole('button', { name: 'Mark read & save' }))
     expect(callbacks.onSubmitRating).toHaveBeenCalledWith(false)
   })
 
@@ -216,19 +209,19 @@ describe('RatingView', () => {
       rating={3}
       predictedDie={6}
       errorMessage=""
-      rateIsPending=false
-      snoozeIsPending=false
-      dismissIsPending=false
-      readingOrders=[]
-      connectedThreads=[
+      rateIsPending={false}
+      snoozeIsPending={false}
+      dismissIsPending={false}
+      readingOrders={[]}
+      connectedThreads={[
         { thread_id: 2, title: 'Alpha', connection_type: 'blocks', dependency_id: 1 },
         { thread_id: 3, title: 'Beta', connection_type: 'blocks', dependency_id: 2 },
-      ]
-      onUpdateRating=vi.fn()
-      onSubmitRating=vi.fn()
-      onSnooze=vi.fn()
-      onCancel=vi.fn()
-      onRefreshThread=vi.fn()
+      ]}
+      onUpdateRating={vi.fn()}
+      onSubmitRating={vi.fn()}
+      onSnooze={vi.fn()}
+      onCancel={vi.fn()}
+      onRefreshThread={vi.fn()}
     />)
     expect(screen.getByRole('button', { name: /correct continuity/i })).toBeInTheDocument()
   })
