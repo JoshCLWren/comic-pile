@@ -64,6 +64,22 @@ export function getStateLabel(state: MemberState): string {
 }
 
 /**
+ * Normalizes a story-arc display name.
+ * Strips common redundant suffixes, collapses whitespace, and title-cases
+ * the result for consistent presentation.
+ */
+export function normalizeArcName(name: string): string {
+  let normalized = name.trim()
+  normalized = normalized.replace(/\s*\(storyline\)\s*$/i, '')
+  normalized = normalized.replace(/\s*\(collect(?:ion|ed)\)\s*$/i, '')
+  normalized = normalized.replace(/\s*\(trade paperback\)\s*$/i, '')
+  normalized = normalized.replace(/\s*\(hardcover\)\s*$/i, '')
+  normalized = normalized.replace(/\s*\(omnibus\)\s*$/i, '')
+  normalized = normalized.replace(/\s{2,}/g, ' ')
+  return normalized.trim()
+}
+
+/**
  * Gets the state color class for display.
  */
 export function getStateColorClass(state: MemberState): string {

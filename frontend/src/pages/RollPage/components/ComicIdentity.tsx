@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueIntelligence'
 import { type ComicVineRelatedIssue } from '../../../services/api'
-import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass } from '../../../utils/comicIdentity'
-import { useToast } from '../../../contexts/useToast'
+import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass, normalizeArcName } from '../../../utils/comicIdentity'
+import AddToComicPileDialog from '../../../components/AddToComicPileDialog'
 
 interface ComicIdentityProps {
   issueId: number | null | undefined
@@ -42,13 +42,17 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
     }
   }, [metadata])
 
-  const { showToast } = useToast()
+  const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [addDialogData, setAddDialogData] = useState<{
+    seriesName: string | null
+    issueNumber: string | null
+    comicvineIssueId: string
+    imageUrl: string | null
+  } | null>(null)
 
-  const handleAddToComicPile = (identity: { primary: string; secondary: string | null }, _comicvineIssueId: string) => {
-    showToast(
-      `Add "${identity.primary}" to ComicPile — feature coming soon`,
-      'info'
-    )
+  const handleAddToComicPile = (identity: { primary: string; secondary: string | null }, comicvineIssueId: string, seriesName: string | null, issueNumber: string | null, imageUrl: string | null) => {
+    setAddDialogData({ seriesName, issueNumber, comicvineIssueId, imageUrl })
+    setAddDialogOpen(true)
   }
 
   if (!issueId || (!isLoading && !metadata)) return null
@@ -64,6 +68,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
   const hasMoreCreators = metadata.creators.length > CREATOR_LIMIT
 
   return (
+    <>
     <section
       aria-labelledby={metadata.name ? 'comic-identity-heading' : undefined}
       aria-label={metadata.name ? undefined : 'Comic details'}
@@ -159,10 +164,13 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
 
                   return (
                     <section key={arc.comicvine_arc_id} className="space-y-2">
-                      <h3 className="text-xs font-bold text-blue-300">{arc.name}</h3>
+                      <h3 className="text-xs font-bold text-blue-300">{normalizeArcName(arc.name)}</h3>
                       <p className="text-[9px] text-stone-500">
                         {arc.related_issues.filter((issue) => issue.comicpile_matches.length > 0).length} in ComicPile ·{' '}
                         {arc.related_issues.filter((issue) => issue.comicpile_matches.length === 0).length} missing
+                        {arc.total_related_count != null && arc.total_related_count > arc.related_issues.length && (
+                          <span className="ml-1 text-stone-600">({arc.related_issues.length} of {arc.total_related_count} shown)</span>
+                        )}
                       </p>
                       <p className="text-[9px] text-stone-500">Related by story-arc membership, not reading order.</p>
                       <div className="space-y-1.5 max-h-48 overflow-y-auto overscroll-contain">
@@ -191,7 +199,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                                   {state === 'missing' && (
                                     <button
                                       type="button"
-                                      onClick={() => handleAddToComicPile(identity, issue.comicvine_issue_id)}
+                                      onClick={() => handleAddToComicPile(identity, issue.comicvine_issue_id, issue.series_name, issue.issue_number, null)}
                                       className="text-[9px] font-bold text-amber-500 hover:text-amber-400 shrink-0 px-2 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 transition-colors"
                                       aria-label={`Add ${identity.primary} to ComicPile`}
                                     >
@@ -258,5 +266,17 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
         )}
       </div>
     </section>
+    {addDialogData && (
+      <AddToComicPileDialog
+        isOpen={addDialogOpen}
+        seriesName={addDialogData.seriesName}
+        issueNumber={addDialogData.issueNumber}
+        comicvineIssueId={addDialogData.comicvineIssueId}
+        imageUrl={addDialogData.imageUrl}
+        onClose={() => setAddDialogOpen(false)}
+        onAdded={() => setAddDialogOpen(false)}
+      />
+    )}
+    </>
   )
 }
