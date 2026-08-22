@@ -2,7 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { ThreadPool } from '../pages/RollPage/components/ThreadPool'
-import type { RollBootstrapThread } from '../../types/rollBootstrap'
+import type { RollBootstrapThread } from '../types/rollBootstrap'
 
 const mockPool: RollBootstrapThread[] = [
   {
