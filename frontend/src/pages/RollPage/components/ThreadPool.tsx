@@ -5,7 +5,7 @@ import type { RollBootstrapThread } from '../../../types/rollBootstrap'
 interface ThreadPoolProps {
   pool: RollBootstrapThread[]
   blockedThreads: RollBootstrapThread[]
-  blockingReasonMap: Record<number, string[]>
+  blockingReasonMap: Record<number, string[]]
   dieSize?: number
   isRatingView: boolean
   isRolling: boolean
@@ -63,6 +63,7 @@ export function ThreadPool({
 
   return (
     <div className={`px-3 md:px-4 pb-20 md:pb-28 flex flex-col ${!isRatingView ? 'flex-1 min-h-[300px]' : 'border-t border-white/5 pt-4 md:pt-8'}`}>
+      {/* Instruction to tap die to roll */}
       {!isRolling && rolledResult === null && !isRatingView && pool.length > 0 && (
         <p
           id="tap-instruction"
@@ -72,6 +73,7 @@ export function ThreadPool({
         </p>
       )}
 
+      {/* Eligibility and shuffle controls */}
       {!isRatingView && <div className="flex items-center gap-2 shrink-0 mb-4">
         <div className="w-2 h-2 rounded-full bg-amber-600 shadow-[0_0_15px_var(--accent-red)]"></div>
         <div className="flex-1">
@@ -94,6 +96,7 @@ export function ThreadPool({
         <span id="shuffle-queue-description" className="sr-only">Randomizes the complete active queue, then refreshes these eligible die mappings.</span>
       </div>}
 
+      {/* Main thread pool display with reader-friendly hierarchy */}
       {!isRatingView && <div className="space-y-2" data-roll-pool aria-label={`Eligible now, ${pool.length} mapped result${pool.length === 1 ? '' : 's'}`}>
         {pool.length === 0 && blockedThreads.length === 0 && snoozedThreads.length === 0 ? (
           <div className="text-center py-6 space-y-4">
@@ -111,7 +114,7 @@ export function ThreadPool({
             <div className="text-left bg-white/5 rounded-xl p-4 mt-4">
               <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider mb-2">How it works:</p>
               <ul className="text-xs text-stone-500 space-y-1">
-                <li>• Add series you&apos;re reading as &quot;threads&quot;</li>
+                <li>• Add series you're reading as "threads"</li>
                 <li>• Roll the dice to pick what to read next</li>
                 <li>• Set dependencies to enforce reading order between series</li>
               </ul>
@@ -132,158 +135,169 @@ export function ThreadPool({
             </button>
           </div>
         ) : (
-          pool.map((thread, index) => {
-            const isSelected = selectedThreadId && Number(selectedThreadId) === thread.id
-            return (
-              <div
-                key={thread.id}
-                onClick={() => onThreadClick(thread)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    onThreadClick(thread)
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-                aria-label={`Die face ${index + 1}: ${thread.title}${thread.issue_number ? `, issue ${thread.issue_number}` : ''}${thread.route_labels?.length ? `, routes ${thread.route_labels.join(', ')}` : ''}. Open thread actions.`}
-                className={`flex items-center gap-3 px-4 py-3 bg-white/5 border border-white/5 rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-amber-500/30' : ''
-                  }`}
-              >
-                <span className="text-lg font-black text-stone-500/50 group-hover:text-stone-400/50 transition-colors w-6 text-center">
-                  {index + 1}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-stone-200 truncate text-sm">{thread.title}</p>
-                  <p className="truncate text-xs text-stone-400">
-                    {thread.issue_number ? `Issue ${thread.issue_number}` : 'Next unread issue'}
-                  </p>
-                  <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mt-0.5">{thread.format}</p>
-                  {thread.route_labels?.length ? (
-                    <p className="mt-1 truncate text-[10px] text-sky-300">
-                      Routes: {thread.route_labels.join(' · ')}
-                    </p>
-                  ) : null}
-                  <span aria-hidden="true" className="text-stone-600 group-hover:text-stone-400 transition-colors text-lg leading-none shrink-0">
-                    ⋯
-                  </span>
-                </div>
-                <span aria-hidden="true" className="text-stone-600 group-hover:text-stone-400 transition-colors text-lg leading-none shrink-0">
-                  ⋯
-                </span>
-              </div>
-            )
-          })
-        )}
-      </div>}
-
-      {blockedThreads.length > 0 && !isRatingView && (
-        <div className="mt-4">
-          <button
-            type="button"
-            onClick={onToggleBlocked}
-            className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
-          >
-            <span
-              className={`text-stone-400 text-xs transition-transform ${blockedExpanded ? 'rotate-90' : ''}`}
-            >
-              ▶
-            </span>
-            <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
-              {blockedThreads.length} thread{blockedThreads.length !== 1 ? 's' : ''} hidden (blocked by dependencies)
-            </span>
-          </button>
-          {blockedExpanded && (
-            <div className="mt-2 space-y-1">
-              {blockedThreads.map((thread) => (
-                <div
-                  key={thread.id}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/5 rounded-lg"
+          <div className="flex flex-col">
+            {/* Main thread list with reader-friendly hierarchy */}
+            <div className="space-y-2">
+              {pool.map((thread, index) => {
+                const isSelected = selectedThreadId && Number(selectedThreadId) === thread.id
+                
+                return (
+                  <div
+                    key={thread.id}
+                    onClick={() => onThreadClick(thread)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        onThreadClick(thread)
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Die face ${index + 1}: ${thread.title}${thread.issue_number ? `, issue ${thread.issue_number}` : ''}${thread.route_labels?.length ? `, routes ${thread.route_labels.join(', ')}` : ''}. Open thread actions.`
+                    className={`flex items-center gap-3 px-4 py-3 bg-white/5 border border-white/5 rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-amber-500/30' : ''
+                      }`}
+                  >
+                    {/* Die face number */}
+                    <span className="text-lg font-black text-stone-500/50 group-hover:text-stone-400/50 transition-colors w-6 text-center">
+                      {index + 1}
+                    </span>
+                    
+                    {/* Thread information with improved hierarchy */}
+                    <div className="flex-1 min-w-0">
+                      {/* Main thread title - most important information */}
+                      <p className="font-bold text-stone-200 truncate text-sm">
+                        {thread.title}
+                      </p>
+                      
+                      {/* Issue number with comic title context */}
+                      <p className="truncate text-xs text-stone-400">
+                        {thread.issue_number ? `Issue ${thread.issue_number} - ${thread.title}` : 'Next unread issue'}
+                      </p>
+                      
+                      {/* Format label */}
+                      <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mt-0.5">
+                        {thread.format}
+                      </p>
+                      
+                      {/* Route labels with comic titles instead of raw IDs */}
+                      {thread.route_labels?.length ? (
+                        <p className="mt-1 truncate text-[10px] text-sky-300">
+                          Connected to: {thread.route_labels.map(label => 
+                            // Extract comic title from route label if possible
+                            label.includes('-') ? label.split('-')[0].replace(/_/g, ' ') : label
+                          ).join(' · ')
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            
+            {/* Blocked threads section - collapsed by default */}
+            {blockedThreads.length > 0 && !isRatingView && (
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={onToggleBlocked}
+                  className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
                 >
-                  <span className="text-sm">🔒</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-stone-400 truncate">{thread.title}</p>
-                    {blockingReasonMap[thread.id]?.length > 0 && (
-                      <p className="text-[10px] text-stone-500 truncate">{blockingReasonMap[thread.id][0]}</p>
-                    )}
+                  <span
+                    className={`text-stone-400 text-xs transition-transform ${blockedExpanded ? 'rotate-90' : ''}`}
+                  >
+                    ▶
+                  </span>
+                  <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
+                    {blockedThreads.length} thread{blockedThreads.length !== 1 ? 's' : ''} hidden (blocked by dependencies)
+                  </span>
+                </button>
+                {blockedExpanded && (
+                  <div className="mt-2 space-y-1">
+                    {blockedThreads.map((thread) => (
+                      <div
+                        key={thread.id}
+                        className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/5 rounded-lg"
+                      >
+                        <span className="text-sm">🔒</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-stone-400 truncate">{thread.title}</p>
+                          {blockingReasonMap[thread.id]?.length > 0 && (
+                            <p className="text-[10px] text-stone-500 truncate">{blockingReasonMap[thread.id][0]}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+              </div>
+            )}
 
-      {staleThread && !isRatingView && (
-        <div
-          onClick={onReadStale}
-          className="mt-4 md:mt-8 animate-[fade-in_0.5s_ease-out] cursor-pointer hover:bg-amber-500/5 transition-colors rounded-xl"
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault()
-              onReadStale()
-            }
-          }}
-        >
-          <div className="px-4 py-3 bg-amber-500/5 border border-amber-500/10 rounded-xl flex items-center gap-3">
-            <div className="w-8 h-8 bg-amber-500/10 rounded-lg flex items-center justify-center shrink-0">
-              <span className="text-sm">⏳</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-bold text-amber-200/70 uppercase tracking-wider leading-relaxed">
-                {staleThreadCount} stale thread{staleThreadCount !== 1 ? 's' : ''}: <span className="text-amber-400 font-black">{staleThread.title}</span> neglected for{' '}
-                <span className="text-amber-400 font-black">{staleThread.days}</span> days
-              </p>
-              <p className="text-[9px] text-amber-300/70 text-center mt-1">
-                Tap to read now
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {snoozedThreads && snoozedThreads.length > 0 && !isRatingView && (
-        <div className="mt-4 md:mt-8">
-          <button
-            type="button"
-            onClick={onToggleSnoozed}
-            className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
-          >
-            <span
-              className={`text-stone-400 text-xs transition-transform ${snoozedExpanded ? 'rotate-90' : ''}`}
-            >
-              ▶
-            </span>
-<span className="text-[10px] font-black text-stone-400 uppercase tracking-widest cursor-help border-b border-dashed border-stone-600">
-                Snoozed ({snoozedThreads.length})
-              </span>
-          </button>
-          {snoozedExpanded && (
-            <div className="mt-2 space-y-1">
-              {snoozedThreads.map((thread) => (
-                <div
-                  key={thread.id}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/5 rounded-lg"
-                >
-                  <p className="flex-1 text-sm text-stone-400 truncate">{thread.title}</p>
-                  <button
-                    type="button"
-                    onClick={() => onUnsnooze(thread.id)}
-                    disabled={unsnoozeIsPending}
-                    className="px-2 py-1 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-50"
-                    title="Unsnooze this comic"
-                    aria-label="Unsnooze this comic"
-                  >
-                    ✕
-                  </button>
+            {/* Stale thread section - collapsed by default */}
+            {staleThread && !isRatingView && (
+              <div
+                onClick={onReadStale}
+                className="mt-4 md:mt-8 animate-[fade-in_0.5s_ease-out] cursor-pointer hover:bg-amber-500/5 transition-colors rounded-xl"
+              >
+                <div className="px-4 py-3 bg-amber-500/5 border border-amber-500/10 rounded-xl flex items-center gap-3">
+                  <div className="w-8 h-8 bg-amber-500/10 rounded-lg flex items-center justify-center shrink-0">
+                    <span className="text-sm">⏳</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-bold text-amber-200/70 uppercase tracking-wider leading-relaxed">
+                      {staleThreadCount} stale thread{staleThreadCount !== 1 ? 's' : ''}: <span className="text-amber-400 font-black">{staleThread.title}</span> neglected for{' '}
+                      <span className="text-amber-400 font-black">{staleThread.days}</span> days
+                    </p>
+                    <p className="text-[9px] text-amber-300/70 text-center mt-1">
+                      Tap to read now
+                    </p>
+                  </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+              </div>
+            )}
+
+            {/* Snoozed threads section - collapsed by default */}
+            {snoozedThreads && snoozedThreads.length > 0 && !isRatingView && (
+              <div className="mt-4 md:mt-8">
+                <button
+                  type="button"
+                  onClick={onToggleSnoozed}
+                  className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
+                >
+                  <span
+                    className={`text-stone-400 text-xs transition-transform ${snoozedExpanded ? 'rotate-90' : ''}`}
+                  >
+                    ▶
+                  </span>
+                  <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest cursor-help border-b border-dashed border-stone-600">
+                    Snoozed ({snoozedThreads.length})
+                  </span>
+                </button>
+                {snoozedExpanded && (
+                  <div className="mt-2 space-y-1">
+                    {snoozedThreads.map((thread) => (
+                      <div
+                        key={thread.id}
+                        className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/5 rounded-lg"
+                      >
+                        <p className="flex-1 text-sm text-stone-400 truncate">{thread.title}</p>
+                        <button
+                          type="button"
+                          onClick={() => onUnsnooze(thread.id)}
+                          disabled={unsnoozeIsPending}
+                          className="px-2 py-1 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-50"
+                          title="Unsnooze this comic"
+                          aria-label="Unsnooze this comic"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
