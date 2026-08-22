@@ -12,6 +12,7 @@ from app.config import get_session_settings
 from app.models import Event, Issue, Session, Snapshot, Thread, User
 from app.performance_diagnostics import get_request_diagnostics
 from app.services.snapshot_contract import USES_ISSUE_TRACKING_KEY
+from comic_pile.reading_intent import initial_intent_state
 
 logger = logging.getLogger(__name__)
 _session_creation_lock = asyncio.Lock()
@@ -336,7 +337,9 @@ async def get_or_create(
                     )
                     return active_session
 
-                new_session = Session(start_die=start_die, user_id=user_id)
+                new_session = Session(
+                    start_die=start_die, user_id=user_id, **initial_intent_state()
+                )
                 db.add(new_session)
                 await create_session_start_snapshot(db, new_session)
                 await db.commit()
