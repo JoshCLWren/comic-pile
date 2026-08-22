@@ -27,6 +27,7 @@ export const routeModules = {
   history: () => import('../pages/HistoryPage'),
   session: () => import('../pages/SessionPage'),
   crossovers: () => import('../pages/CrossoversPage'),
+  crossoverDetail: () => import('../pages/CrossoverDetailPage'),
   continuityPlanner: () => import('../pages/ContinuityPlannerPage'),
   help: () => import('../pages/HelpPage'),
   whatsNew: () => import('../pages/WhatsNewPage'),
