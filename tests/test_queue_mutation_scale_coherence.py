@@ -230,20 +230,16 @@ async def test_initial_requests_and_payload_remain_bounded_as_library_grows(
         expected_second_rows = min(FIRST_PAGE_SIZE, library_size - FIRST_PAGE_SIZE)
         assert len(second.threads) == expected_second_rows
         assert second_counter.count == EXPECTED_SELECTS_PER_PAGE
-
-    if library_size > FIRST_PAGE_SIZE:
-        print(
-            f"MEASUREMENT issue=933 kind=pagination library={library_size} "
-            f"page_size={FIRST_PAGE_SIZE} first_page_ms={first_page_ms:.1f} "
-            f"next_page_ms={next_page_ms:.1f} "
-            f"first_page_selects={first_counter.count} first_page_bytes={first_bytes}"
-        )
     else:
-        print(
-            f"MEASUREMENT issue=933 kind=pagination library={library_size} "
-            f"page_size={FIRST_PAGE_SIZE} first_page_ms={first_page_ms:.1f} "
-            f"first_page_selects={first_counter.count} first_page_bytes={first_bytes}"
-        )
+        assert first.next_page_token is None
+        next_page_ms = 0.0
+
+    print(
+        f"MEASUREMENT issue=933 kind=pagination library={library_size} "
+        f"page_size={FIRST_PAGE_SIZE} first_page_ms={first_page_ms:.1f} "
+        f"next_page_ms={next_page_ms:.1f} "
+        f"first_page_selects={first_counter.count} first_page_bytes={first_bytes}"
+    )
 
 
 @pytest.mark.asyncio
