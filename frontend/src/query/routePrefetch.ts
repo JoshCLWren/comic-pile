@@ -1,5 +1,9 @@
 import { routeModules } from '../routes/routeModules'
 import type { RouteModuleKey } from '../routes/routeModules'
+import { queryClient } from './queryClient'
+import { queryKeys } from './queryKeys'
+import type { QueueSort } from './queryKeys'
+import { QUEUE_PAGE_SIZE } from '../hooks/useQueue'
 
 /**
  * Retained-route chunk prefetching.
@@ -28,6 +32,14 @@ import type { RouteModuleKey } from '../routes/routeModules'
 
 export interface RoutePrefetchCancel {
   (): void
+}
+
+/** Bounded data prefetching for retained screens. */
+interface BoundedDataPrefetch {
+  path: string
+  from: string
+  /** Query key to prefetch for this path */
+  queryKey: unknown[]
 }
 
 /** Chunks worth warming from each retained screen, with the navigation path each serves. */
@@ -69,6 +81,54 @@ const LIKELY_NEXT_CHUNKS: ReadonlyArray<{
   },
 ]
 
+/** Bounded data worth warming from each retained screen, with the navigation path each serves. */
+const LIKELY_NEXT_DATA: ReadonlyArray<BoundedDataPrefetch> = [
+  {
+    path: '/',
+    from: 'Roll',
+    // Bootstrap data is needed to initialize the roll screen
+    queryKey: queryKeys.roll.bootstrap(),
+  },
+  {
+    path: '/queue',
+    from: 'Queue',
+    // First page of queue list is needed to display threads
+    queryKey: queryKeys.queue.list({ search: undefined, sort: 'position' as QueueSort, pageSize: QUEUE_PAGE_SIZE }),
+  },
+  {
+    path: '/thread/:id',
+    from: 'Thread detail',
+    // Thread detail data is needed to display the thread
+    // Note: The actual thread ID will be extracted from the pathname
+    queryKey: (_pathname: string) => {
+      const match = _pathname.match(/^\/thread\/(\d+)$/i)
+      if (match) {
+        return queryKeys.thread.detail(Number(match[1]))
+      }
+      return null
+    },
+  },
+  {
+    path: '/history',
+    from: 'History',
+    // First page of session list is needed to display history
+    queryKey: queryKeys.session.pages(),
+  },
+  {
+    path: '/sessions/:id',
+    from: 'Session',
+    // Session detail data is needed to display the session
+    // Note: The actual session ID will be extracted from the pathname
+    queryKey: (_pathname: string) => {
+      const match = _pathname.match(/^\/sessions\/(\d+)$/i)
+      if (match) {
+        return queryKeys.session.detail(Number(match[1]))
+      }
+      return null
+    },
+  },
+]
+
 /**
  * Retained screens deliberately excluded from chunk prefetching because no
  * measured navigation benefit justifies the speculative fetch:
@@ -80,6 +140,7 @@ const IDLE_TIMEOUT_MS = 4000
 const FALLBACK_DELAY_MS = 800
 
 const prefetchedChunks = new Set<RouteModuleKey>()
+const prefetchedData = new Set<string>()
 
 type IdleHandle = { cancel: () => void }
 
@@ -113,6 +174,30 @@ export function prefetchRouteChunk(key: RouteModuleKey): void {
   })
 }
 
+/**
+ * Prefetches bounded data for a given query key.
+ *
+ * Idempotent: the data is requested once per client lifetime based on the
+ * stringified query key. Errors are swallowed so a prefetch failure never
+ * surfaces to the active screen.
+ */
+export function prefetchBoundedData(queryKey: unknown[]): void {
+  // Create a stable string key for deduplication
+  const key = JSON.stringify(queryKey)
+  if (prefetchedData.has(key)) return
+
+  prefetchedData.add(key)
+  queryClient.prefetchQuery({
+    queryKey,
+    // Prefetch with a short stale time since this is speculative
+    staleTime: 1000, // 1 second
+    // Don't retry prefetch failures - let the actual request handle retries
+    retry: false,
+  }).catch(() => {
+    // A failed warm-up must not affect navigation; the actual query will retry
+  })
+}
+
 function matchLikelyNext(pathname: string): readonly RouteModuleKey[] | null {
   const path = pathname.split('?')[0]
   for (const candidate of LIKELY_NEXT_CHUNKS) {
@@ -134,17 +219,69 @@ function matchLikelyNext(pathname: string): readonly RouteModuleKey[] | null {
 }
 
 /**
- * Schedules chunk prefetching for the likely next destinations from the given
+ * Gets the bounded data to prefetch for the likely next destinations from the
+ * given current pathname. Returns null if no data should be prefetched.
+ */
+function matchLikelyNextData(pathname: string): null | unknown[][] {
+  const path = pathname.split('?')[0]
+  
+  for (const candidate of LIKELY_NEXT_DATA) {
+    if (candidate.path === path) {
+      const queryKey = candidate.queryKey
+      return queryKey !== null ? [queryKey] : null
+    }
+    
+    if (
+      candidate.path === '/thread/:id'
+      && /^\/thread\/\d+$/i.test(path)
+    ) {
+      const queryKey = typeof candidate.queryKey === 'function' 
+        ? candidate.queryKey(pathname) 
+        : candidate.queryKey
+      return queryKey !== null ? [queryKey] : null
+    }
+    
+    if (
+      candidate.path === '/sessions/:id'
+      && /^\/sessions\/\d+$/i.test(path)
+    ) {
+      const queryKey = typeof candidate.queryKey === 'function' 
+        ? candidate.queryKey(pathname) 
+        : candidate.queryKey
+      return queryKey !== null ? [queryKey] : null
+    }
+  }
+  
+  return null
+}
+
+/**
+ * Schedules chunk and bounded data prefetching for the likely next destinations from the given
  * current pathname. Returns a cancel function; calling it before the idle work
  * flushes prevents any fetch.
  */
 export function scheduleRoutePrefetch(pathname: string): RoutePrefetchCancel {
   const chunks = matchLikelyNext(pathname)
-  if (!chunks || chunks.length === 0) return () => undefined
+  const dataKeys = matchLikelyNextData(pathname)
+  
+  // If nothing to prefetch, return empty cancel function
+  if ((!chunks || chunks.length === 0) && (!dataKeys || dataKeys.length === 0)) {
+    return () => undefined
+  }
 
   const pending = scheduleIdle(() => {
-    for (const chunk of chunks) {
-      prefetchRouteChunk(chunk)
+    // Prefetch chunks
+    if (chunks && chunks.length > 0) {
+      for (const chunk of chunks) {
+        prefetchRouteChunk(chunk)
+      }
+    }
+    
+    // Prefetch bounded data
+    if (dataKeys && dataKeys.length > 0) {
+      for (const queryKey of dataKeys) {
+        prefetchBoundedData(queryKey)
+      }
     }
   }, IDLE_TIMEOUT_MS)
 
@@ -154,4 +291,5 @@ export function scheduleRoutePrefetch(pathname: string): RoutePrefetchCancel {
 /** Test hook: clears the per-lifetime prefetch dedup set. */
 export function resetRoutePrefetchState(): void {
   prefetchedChunks.clear()
+  prefetchedData.clear()
 }
