@@ -29,6 +29,11 @@ export interface ReaderContextCrossoverNextMember {
   issue_number: string
 }
 
+export interface ReaderContextCrossoverMembership {
+  id: number
+  name: string
+}
+
 export interface ReaderContextCrossover {
   id: number
   name: string
@@ -39,10 +44,37 @@ export interface ReaderContextCrossover {
   read_count: number
 }
 
+export interface ReaderContextLocalIssue {
+  issue_id: number
+  issue_number: string
+  position: number
+  status: string
+  relation: 'previous' | 'current' | 'next' | 'future'
+  rating: number | null
+  crossover_memberships: ReaderContextCrossoverMembership[]
+}
+
+export interface ReaderContextEdge {
+  id: number
+  kind: 'dependency' | 'continuity'
+  source_issue_id: number
+  target_issue_id: number
+  source_label: string | null
+  target_label: string | null
+  note: string | null
+  explanation: string | null
+}
+
+export interface ReaderContextLocalChain {
+  issues: ReaderContextLocalIssue[]
+  edges: ReaderContextEdge[]
+}
+
 export interface ReaderContextResponse {
   issue_id: number
   series: ReaderContextSeries
   crossovers: ReaderContextCrossover[]
+  local_chain: ReaderContextLocalChain
 }
 
 export const readerContextApi = {
