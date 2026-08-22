@@ -21,6 +21,7 @@ body {
 }
 
 :root {
+  --bg-glow: #2a2018;
   --bg-main: #1a1410;
   --bg-darker: #110e0a;
   --accent-primary: #d4890e;
@@ -36,7 +37,10 @@ body {
   --desktop-nav-height: 5rem;
 }
 
-/* Semantic theme tokens applied via data-theme on <html> */
+/* Semantic theme tokens applied via data-theme on <html>.
+   Each theme also re-points the legacy palette aliases at its semantic
+   tokens so every surface consuming the older variables reskins with the
+   active theme instead of staying frozen in classic colors. */
 [data-theme="classic"] {
   --theme-bg-page: #1a1410;
   --theme-bg-panel: rgba(255, 255, 255, 0.04);
@@ -52,6 +56,16 @@ body {
   --theme-danger: #c0392b;
   --theme-danger-hover: #e74c3c;
   --theme-focus-ring: #d4890e;
+  --bg-glow: #2a2018;
+  --bg-main: var(--theme-bg-page);
+  --bg-darker: #110e0a;
+  --text-primary: var(--theme-text-primary);
+  --text-muted: var(--theme-text-muted);
+  --text-dim: var(--theme-text-dim);
+  --accent-primary: var(--theme-comic-accent);
+  --accent-red: var(--theme-danger);
+  --glass-bg: var(--theme-bg-panel);
+  --glass-border: var(--theme-border);
 }
 
 [data-theme="ink-gold"] {
@@ -69,6 +83,16 @@ body {
   --theme-danger: #b56a27;
   --theme-danger-hover: #d4890e;
   --theme-focus-ring: #c9a937;
+  --bg-glow: #241b10;
+  --bg-main: var(--theme-bg-page);
+  --bg-darker: #0f0b08;
+  --text-primary: var(--theme-text-primary);
+  --text-muted: var(--theme-text-muted);
+  --text-dim: var(--theme-text-dim);
+  --accent-primary: var(--theme-comic-accent);
+  --accent-red: var(--theme-danger);
+  --glass-bg: var(--theme-bg-panel);
+  --glass-border: var(--theme-border);
 }
 
 [data-theme="command-center"] {
@@ -86,6 +110,16 @@ body {
   --theme-danger: #ff4757;
   --theme-danger-hover: #ff6b7a;
   --theme-focus-ring: #00d4ff;
+  --bg-glow: #131640;
+  --bg-main: var(--theme-bg-page);
+  --bg-darker: #05060f;
+  --text-primary: var(--theme-text-primary);
+  --text-muted: var(--theme-text-muted);
+  --text-dim: var(--theme-text-dim);
+  --accent-primary: var(--theme-comic-accent);
+  --accent-red: var(--theme-danger);
+  --glass-bg: var(--theme-bg-panel);
+  --glass-border: var(--theme-border);
 }
 
 /* Keep mobile form controls inside their containers and at the iOS no-zoom font threshold. */
@@ -116,7 +150,7 @@ body {
 body {
   background: radial-gradient(
     circle at top left,
-    #2a2018 0%,
+    var(--bg-glow) 0%,
     var(--bg-main) 40%,
     var(--bg-darker) 100%
   );

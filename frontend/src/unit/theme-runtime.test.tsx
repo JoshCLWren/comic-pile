@@ -6,6 +6,7 @@ import type { AuthContextValue } from '../App'
 import { AuthProvider, useAuth } from '../App'
 import Navigation from '../components/Navigation'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
+import { ToastProvider } from '../contexts/ToastProvider'
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
   post: vi.fn(),
@@ -58,7 +59,9 @@ function renderNavigation() {
     <MemoryRouter initialEntries={['/']}>
       <AuthProvider>
         <BugReportRestoreProvider>
-          <Navigation onBugReportSubmit={vi.fn()} />
+          <ToastProvider>
+            <Navigation onBugReportSubmit={vi.fn()} />
+          </ToastProvider>
         </BugReportRestoreProvider>
       </AuthProvider>
     </MemoryRouter>,
@@ -208,7 +211,7 @@ describe('Appearance picker in the More tray', () => {
     )
   })
 
-  it('keeps the rendered theme when persisting the preference fails', async () => {
+  it('keeps the rendered theme when persisting the preference fails and shows a bounded error', async () => {
     mocks.patch.mockRejectedValueOnce(new Error('save failed'))
     const user = await openMoreTray()
 
@@ -216,6 +219,29 @@ describe('Appearance picker in the More tray', () => {
 
     expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold')
     await waitFor(() => expect(mocks.patch).toHaveBeenCalledTimes(1))
+    expect(
+      await screen.findByText(/saving your preference failed/i),
+    ).toBeInTheDocument()
+  })
+
+  it('indicates the currently active theme in the picker', async () => {
+    const user = await openMoreTray()
+
+    expect(screen.getByRole('button', { name: 'Classic theme' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Command center theme' }))
+
+    expect(screen.getByRole('button', { name: 'Command center theme' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByRole('button', { name: 'Classic theme' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
   })
 
   it('activates a theme with the keyboard', async () => {

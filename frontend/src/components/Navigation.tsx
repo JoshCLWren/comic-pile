@@ -5,6 +5,7 @@ import BugReportButton from './BugReportButton'
 import type { ReportType } from './BugReportModal'
 import { useAuth } from '../App'
 import api from '../services/api'
+import { useToast } from '../contexts/ToastContext'
 import type { AuthUser } from '../types'
 import type { DiagnosticData } from '../hooks/useDiagnostics'
 
@@ -27,8 +28,10 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [hasError, setHasError] = useState(false)
   const [isMoreOpen, setIsMoreOpen] = useState(false)
+  const [activeTheme, setActiveTheme] = useState('classic')
   const moreButtonRef = useRef<HTMLButtonElement>(null)
   const moreMenuRef = useRef<HTMLElement>(null)
+  const { showToast } = useToast()
 
   useEffect(() => {
     setIsMoreOpen(false)
@@ -75,16 +78,26 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
     location.pathname === path || location.pathname.startsWith(`${path}/`),
   )
 
+  const toggleMoreMenu = () => {
+    if (!isMoreOpen) {
+      setActiveTheme(document.documentElement.getAttribute('data-theme') ?? 'classic')
+    }
+    setIsMoreOpen(value => !value)
+  }
+
   const setTheme = async (themeId: string) => {
     const validThemes = ['classic', 'ink-gold', 'command-center']
     if (!validThemes.includes(themeId)) return
+    document.documentElement.setAttribute('data-theme', themeId)
+    setActiveTheme(themeId)
     try {
-      document.documentElement.setAttribute('data-theme', themeId)
       await api.patch('/v1/users/me/preferences', { theme: themeId })
     } catch (err: unknown) {
       console.error('Failed to persist theme preference:', err)
       // Preserve the currently-rendered theme rather than rolling back,
-      // so the UI is never stranded in an unusable state.
+      // so the UI is never stranded in an unusable state. Surface a bounded
+      // non-blocking notice because #1399 requires the failure not be silent.
+      showToast('Theme applied for this session, but saving your preference failed.', 'error')
     }
   }
 
@@ -108,15 +121,15 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
           <Link to="/queue" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/queue') ? 'active' : 'hover:bg-white/5'}`} aria-label="Queue page"><span className="text-lg md:text-2xl" aria-hidden="true">📚</span><span className="nav-label text-[9px] font-bold uppercase tracking-wide md:text-[10px] md:tracking-widest">Queue</span></Link>
           <Link to="/history" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/history') ? 'active' : 'hover:bg-white/5'}`} aria-label="History page"><span className="text-lg md:text-2xl" aria-hidden="true">📜</span><span className="nav-label text-[9px] font-bold uppercase tracking-wide md:text-[10px] md:tracking-widest">History</span></Link>
           <Link to="/crossovers" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/crossovers') ? 'active' : 'hover:bg-white/5'}`} aria-label="Crossovers page"><span className="text-lg md:text-2xl" aria-hidden="true">🔀</span><span className="nav-label text-[9px] font-bold uppercase tracking-wide md:text-[10px] md:tracking-widest">Crossovers</span></Link>
-          <button ref={moreButtonRef} type="button" onClick={() => setIsMoreOpen(value => !value)} aria-expanded={isMoreOpen} aria-controls="secondary-navigation" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isMoreOpen || isMoreRoute ? 'active' : 'hover:bg-white/5'}`} aria-label="More pages"><span className="text-lg md:text-2xl" aria-hidden="true">•••</span><span className="nav-label text-[9px] font-bold uppercase tracking-wide md:text-[10px] md:tracking-widest">More</span></button>
+          <button ref={moreButtonRef} type="button" onClick={toggleMoreMenu} aria-expanded={isMoreOpen} aria-controls="secondary-navigation" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isMoreOpen || isMoreRoute ? 'active' : 'hover:bg-white/5'}`} aria-label="More pages"><span className="text-lg md:text-2xl" aria-hidden="true">•••</span><span className="nav-label text-[9px] font-bold uppercase tracking-wide md:text-[10px] md:tracking-widest">More</span></button>
         </div>
       </nav>
 
       {isMoreOpen && (
         <nav ref={moreMenuRef} id="secondary-navigation" aria-label="More pages" className="fixed bottom-16 right-3 z-50 w-56 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)] p-2 shadow-2xl md:bottom-24 md:right-6">
-          <Link to="/continuity-plans" className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold" style={{ color: 'var(--theme-text-primary)' }} hover:bg-[var(--theme-bg-panel)]><span aria-hidden="true">🧭</span><span>Continuity Planner</span></Link>
-          <Link to="/whats-new" className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold" style={{ color: 'var(--theme-text-primary)' }} hover:bg-[var(--theme-bg-panel)]><span aria-hidden="true">✨</span><span>What’s New</span></Link>
-          <Link to="/help" className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold" style={{ color: 'var(--theme-text-primary)' }} hover:bg-[var(--theme-bg-panel)]><span aria-hidden="true">❓</span><span>Help</span></Link>
+          <Link to="/continuity-plans" className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-panel)]"><span aria-hidden="true">🧭</span><span>Continuity Planner</span></Link>
+          <Link to="/whats-new" className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-panel)]"><span aria-hidden="true">✨</span><span>What’s New</span></Link>
+          <Link to="/help" className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-panel)]"><span aria-hidden="true">❓</span><span>Help</span></Link>
           <div className="space-y-1 border-t border-[var(--theme-border)] pt-2 md:hidden">
             <BugReportButton onSubmit={onBugReportSubmit} variant="nav" />
             <button type="button" onClick={handleLogout} className="flex min-h-12 w-full items-center gap-3 rounded-xl px-4 py-3 text-left font-bold text-red-300 hover:bg-[var(--theme-bg-panel)]">
@@ -129,28 +142,34 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
           <div id="appearance-menu" className="mt-2 select-none">
             <button data-theme="classic"
                 onClick={() => setTheme('classic')}
-                className="w-full flex items-center justify-between px-3 py-2 rounded-md text-left hover:bg-[var(--theme-bg-panel)] transition-colors" style={{ color: 'var(--theme-text-primary)' }}
+                aria-pressed={activeTheme === 'classic'}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-left hover:bg-[var(--theme-bg-panel)] transition-colors text-[var(--theme-text-primary)] ${activeTheme === 'classic' ? 'ring-1 ring-[var(--theme-focus-ring)]' : ''}`}
                 aria-label="Classic theme">
               <span>Classic</span>
+              {activeTheme === 'classic' && <span aria-hidden="true">✓</span>}
             </button>
             <button data-theme="ink-gold"
                 onClick={() => setTheme('ink-gold')}
-                className="w-full flex items-center justify-between px-3 py-2 rounded-md text-left hover:bg-[var(--theme-bg-panel)] transition-colors" style={{ color: 'var(--theme-text-primary)' }}
+                aria-pressed={activeTheme === 'ink-gold'}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-left hover:bg-[var(--theme-bg-panel)] transition-colors text-[var(--theme-text-primary)] ${activeTheme === 'ink-gold' ? 'ring-1 ring-[var(--theme-focus-ring)]' : ''}`}
                 aria-label="Ink-gold theme">
               <span>Ink Gold</span>
+              {activeTheme === 'ink-gold' && <span aria-hidden="true">✓</span>}
             </button>
             <button data-theme="command-center"
                 onClick={() => setTheme('command-center')}
-                className="w-full flex items-center justify-between px-3 py-2 rounded-md text-left hover:bg-[var(--theme-bg-panel)] transition-colors" style={{ color: 'var(--theme-text-primary)' }}
+                aria-pressed={activeTheme === 'command-center'}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-left hover:bg-[var(--theme-bg-panel)] transition-colors text-[var(--theme-text-primary)] ${activeTheme === 'command-center' ? 'ring-1 ring-[var(--theme-focus-ring)]' : ''}`}
                 aria-label="Command center theme">
               <span>Command Center</span>
+              {activeTheme === 'command-center' && <span aria-hidden="true">✓</span>}
             </button>
           </div>
         </nav>
       )}
 
       <div className="fixed right-4 top-4 z-50 hidden items-center gap-3 md:flex">
-        {isLoading ? <span className="hidden md:inline font-medium xs text-xs" style={{ color: 'var(--theme-text-muted)' }} px-2 py-1">Loading...</span> : hasError ? <span className="hidden md:inline font-medium xs text-xs" title="Failed to load user data">User</span> : username ? <span className="hidden md:inline font-medium xs text-xs" style={{ color: 'var(--theme-text-muted)' }} px-2 py-1">{username}</span> : null}
+        {isLoading ? <span className="hidden md:inline text-xs font-medium px-2 py-1 text-[var(--theme-text-muted)]">Loading...</span> : hasError ? <span className="hidden md:inline text-xs font-medium px-2 py-1 text-amber-500" title="Failed to load user data">User</span> : username ? <span className="hidden md:inline text-xs font-medium px-2 py-1 text-[var(--theme-text-muted)]">{username}</span> : null}
         <button onClick={handleLogout} className="px-2 py-1.5 md:px-3 text-xs font-bold uppercase tracking-widest text-red-400 hover:text-red-300 bg-[#110e0a]/60 hover:bg-[#110e0a]/80 rounded-lg transition-colors" aria-label="Log out"><span className="md:hidden" aria-hidden="true">⎋</span><span className="hidden md:inline">Log Out</span></button>
       </div>
     </>

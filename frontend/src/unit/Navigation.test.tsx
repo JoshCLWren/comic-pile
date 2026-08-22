@@ -6,6 +6,10 @@ import { AuthProvider } from '../App'
 import Navigation from '../components/Navigation'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 
+vi.mock('../contexts/useToast', () => ({
+  useToast: () => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] }),
+}))
+
 const mockApiGet = vi.fn()
 const mockApiPost = vi.fn()
 const mockSetAccessToken = vi.fn()
