@@ -84,6 +84,7 @@ const ThreadDetailView = lazyRoute('threadDetail')
 const HistoryPage = lazyRoute('history')
 const SessionPage = lazyRoute('session')
 const CrossoversPage = lazyRoute('crossovers')
+const CrossoverDetailPage = lazyRoute('crossoverDetail')
 const ContinuityPlannerPage = lazyRoute('continuityPlanner')
 const HelpPage = lazyRoute('help')
 const WhatsNewPage = lazyRoute('whatsNew')
@@ -336,6 +337,7 @@ function AppRoutes() {
         <Route path="/history" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><HistoryPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/sessions/:id" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><SessionPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/crossovers" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><CrossoversPage /></AuthenticatedLayout></ProtectedRoute>} />
+        <Route path="/crossovers/:group" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><CrossoverDetailPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/continuity-plans" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><ContinuityPlannerPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/continuity-plans/:id" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><ContinuityPlannerPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/whats-new" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><WhatsNewPage /></AuthenticatedLayout></ProtectedRoute>} />
