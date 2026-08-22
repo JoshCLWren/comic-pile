@@ -46,49 +46,38 @@ export function RatingView({
   onRefreshThread,
 }: RatingViewProps) {
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
-  const hasReadingContextContent = readingOrders.length > 0 || connectedThreads.length > 0
-  const gridCols = hasReadingContextContent
-    ? 'xl:grid-cols-[minmax(0,26fr)_minmax(0,46fr)_minmax(0,28fr)]'
-    : 'xl:grid-cols-[minmax(0,50fr)_minmax(0,50fr)]'
 
   return (
     <div className="relative z-10 space-y-4 p-3 md:p-4">
-      <div className={`grid gap-4 md:grid-cols-2 md:gap-6 ${gridCols}`} data-testid="rating-pillars-grid">
-        <div className="md:row-span-2 xl:row-span-1">
+      <div className="grid gap-4 md:grid-cols-2 md:gap-6" data-testid="rating-pillars-grid">
+        {/* Column 1: The Comic */}
+        <div>
           <ComicPillar
             activeRatingThread={activeRatingThread}
             onRefreshThread={onRefreshThread}
           />
         </div>
-
-        <ReadingContextPillar
-          activeRatingThread={activeRatingThread}
-          readingOrders={readingOrders}
-          connectedThreads={connectedThreads}
-          onRefreshThread={onRefreshThread}
-          rolledResult={rolledResult}
-          currentDie={currentDie}
-        />
-
-        <YourContextPillar
-          activeRatingThread={activeRatingThread}
-          currentDie={currentDie}
-          rating={rating}
-          predictedDie={predictedDie}
-          onUpdateRating={onUpdateRating}
-        />
+        
+        {/* Column 2: Reading Context + Your Context */}
+        <div>
+          <ReadingContextPillar
+            activeRatingThread={activeRatingThread}
+            readingOrders={readingOrders}
+            connectedThreads={connectedThreads}
+            onRefreshThread={onRefreshThread}
+            rolledResult={rolledResult}
+            currentDie={currentDie}
+          />
+          
+          <YourContextPillar
+            activeRatingThread={activeRatingThread}
+            currentDie={currentDie}
+            rating={rating}
+            predictedDie={predictedDie}
+            onUpdateRating={onUpdateRating}
+          />
+        </div>
       </div>
-
-      <RatingActionPanel
-        errorMessage={errorMessage}
-        rateIsPending={rateIsPending}
-        snoozeIsPending={snoozeIsPending}
-        dismissIsPending={dismissIsPending}
-        issuesRemaining={issuesRemaining}
-        onSubmitRating={onSubmitRating}
-        onSnooze={onSnooze}
-        onCancel={onCancel}
-      />
     </div>
   )
 }
