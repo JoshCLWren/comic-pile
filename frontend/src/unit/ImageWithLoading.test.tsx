@@ -19,8 +19,8 @@ describe('ImageWithLoading', () => {
     expect(img).toHaveClass('opacity-0')
   })
 
-  it('centers the spinner inside the sized placeholder box', () => {
-    const { getByRole } = render(
+  it('overlays the spinner on reserved space without adding layout footprint', () => {
+    const { getByRole, container } = render(
       <ImageWithLoading
         src="https://example.com/image.jpg"
         className="w-10 h-14 shrink-0"
@@ -28,12 +28,20 @@ describe('ImageWithLoading', () => {
     )
 
     const status = getByRole('status')
-    const placeholder = status.closest('div.w-10')
-    expect(placeholder).not.toBeNull()
-    expect(placeholder).toHaveClass('flex', 'items-center', 'justify-center')
 
-    // Placeholder contains only the spinner subtree, no stray skeleton rectangles
-    expect(placeholder?.children).toHaveLength(1)
+    // Spinner sits in an absolutely positioned overlay so loading adds no
+    // extra flex/grid footprint next to the reserved image box.
+    const overlay = status.closest('div.absolute')
+    expect(overlay).not.toBeNull()
+    expect(overlay).toHaveClass('inset-0', 'flex', 'items-center', 'justify-center')
+
+    // The single wrapper reserves the final image size.
+    const wrapper = overlay?.parentElement
+    expect(wrapper).not.toBeNull()
+    expect(wrapper).toHaveClass('relative', 'w-10', 'h-14')
+
+    // Exactly one image element is rendered for one component instance.
+    expect(container.querySelectorAll('img')).toHaveLength(1)
   })
 
   it('shows image when loaded', async () => {
@@ -55,7 +63,7 @@ describe('ImageWithLoading', () => {
 
     // Should no longer show loading spinner
     expect(await waitFor(() => queryByRole('status'))).not.toBeInTheDocument()
-    
+
     // Should show the image with correct alt text and be opaque
     const img = await findByAltText('Test image')
     expect(img).toHaveClass('opacity-100')

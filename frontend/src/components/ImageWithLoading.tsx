@@ -12,8 +12,12 @@ interface ImageWithLoadingProps {
 }
 
 /**
- * Image component with loading state handling
- * Shows a spinner while the image is loading, then displays the image
+ * Image component with loading state handling.
+ *
+ * Reserves the final image footprint with a single wrapper element and
+ * overlays an animated spinner on top of it while the image loads, so the
+ * loading indicator never adds extra layout space or shifts surrounding
+ * content when the image arrives.
  */
 export default function ImageWithLoading({
   src,
@@ -34,9 +38,9 @@ export default function ImageWithLoading({
   }, [src])
 
   return (
-    <>
+    <div className={`relative ${className}`}>
       {!isLoaded && !hasError && (
-        <div className={`${className} flex items-center justify-center`}>
+        <div className="absolute inset-0 flex items-center justify-center">
           <LoadingSpinner size="sm" message="" />
         </div>
       )}
@@ -44,7 +48,7 @@ export default function ImageWithLoading({
         src={src}
         alt={alt}
         loading={loading}
-        className={`transition-opacity duration-300 ${isLoaded && !hasError ? 'opacity-100' : 'opacity-0'} ${hasError ? 'hidden' : ''}`}
+        className={`${className} transition-opacity duration-300 ${isLoaded && !hasError ? 'opacity-100' : 'opacity-0'} ${hasError ? 'hidden' : ''}`}
         width={width}
         height={height}
         onLoad={() => setIsLoaded(true)}
@@ -54,6 +58,6 @@ export default function ImageWithLoading({
           onError?.()
         }}
       />
-    </>
+    </div>
   )
 }
