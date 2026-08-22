@@ -439,6 +439,10 @@ async def get_current_session(
                 snoozed_thread_ids=active_session.snoozed_thread_ids or [],
                 snoozed_threads=snoozed_threads,
                 pending_thread_id=active_session.pending_thread_id,
+                reading_bandwidth=active_session.reading_bandwidth,
+                reading_intent=active_session.reading_intent,
+                reading_mode_source=active_session.reading_mode_source,
+                reading_mode_suggested=active_session.reading_mode_suggested,
             )
         except OperationalError as e:
             if "deadlock" in str(e).lower():
@@ -643,6 +647,10 @@ async def list_sessions(
             has_restore_point=snapshot_count_num > 0,
             snapshot_count=snapshot_count_num,
             pending_thread_id=session.pending_thread_id,
+            reading_bandwidth=session.reading_bandwidth,
+            reading_intent=session.reading_intent,
+            reading_mode_source=session.reading_mode_source,
+            reading_mode_suggested=session.reading_mode_suggested,
         )
         responses.append(_to_session_list_item(sr))
 
@@ -699,6 +707,10 @@ async def get_session(
         has_restore_point=snapshot_count > 0,
         snapshot_count=snapshot_count,
         pending_thread_id=session.pending_thread_id,
+        reading_bandwidth=session.reading_bandwidth,
+        reading_intent=session.reading_intent,
+        reading_mode_source=session.reading_mode_source,
+        reading_mode_suggested=session.reading_mode_suggested,
     )
 
 
@@ -1079,6 +1091,10 @@ async def restore_session_start(
                 has_restore_point=snapshot_count > 0,
                 snapshot_count=snapshot_count,
                 pending_thread_id=session.pending_thread_id,
+                reading_bandwidth=session.reading_bandwidth,
+                reading_intent=session.reading_intent,
+                reading_mode_source=session.reading_mode_source,
+                reading_mode_suggested=session.reading_mode_suggested,
             )
         except OperationalError as e:
             if "deadlock" in str(e).lower():

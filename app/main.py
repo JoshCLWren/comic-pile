@@ -33,6 +33,7 @@ from app.api import (
     ping,
     queue,
     rate,
+    reading_mode,
     reading_orders,
     roll,
     session,
@@ -245,6 +246,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(reading_orders.router, tags=["reading-orders"])
     app.include_router(session.router, prefix="/api/sessions", tags=["session"])
     app.include_router(session.router, prefix="/api/v1/sessions", tags=["session"])
+    app.include_router(reading_mode.router, tags=["reading-mode"])
     app.include_router(snooze.router, prefix="/api/snooze", tags=["snooze"])
     app.include_router(snooze.router, prefix="/api/v1/snooze", tags=["snooze"])
     app.include_router(undo.router, prefix="/api/undo", tags=["undo"])
