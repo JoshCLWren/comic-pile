@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { DICE_LADDER } from '../../components/diceLadder'
+import { computePredictedDie } from './utils'
 import type { RollBootstrapResponse, RollBootstrapThread } from '../../types/rollBootstrap'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 import type { ThreadMetadata } from './types'
@@ -96,10 +96,7 @@ export function useRollPendingSession({ state, bootstrap, rollPool }: UseRollPen
     if (shouldInitializeRatingView) {
       setRating(3.0)
       setErrorMessage('')
-      const die = currentDie || 6
-      const idx = DICE_LADDER.indexOf(die)
-      const newPredictedDie = idx > 0 ? DICE_LADDER[idx - 1] : DICE_LADDER[0]
-      setPredictedDie(newPredictedDie)
+      setPredictedDie(computePredictedDie(currentDie, 3.0))
       setIsRatingView(true)
     }
     setIsActionSheetOpen(false)
