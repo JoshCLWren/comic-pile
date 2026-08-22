@@ -570,9 +570,9 @@ async def test_reader_context_cross_thread_edge_without_expansion(
             "source_thread_title": "Neighborhood",
             "target_thread_title": "Distant",
             "note": "cross-thread",
-            "source_label": f"Neighborhood #3",
-            "target_label": f"Distant #1",
-            "explanation": f"Finish Neighborhood #3 before resuming Distant #1",
+            "source_label": "Neighborhood #3",
+            "target_label": "Distant #1",
+            "explanation": "Finish Neighborhood #3 before resuming Distant #1",
         }
     ]
 
@@ -620,9 +620,9 @@ async def test_reader_context_continuity_rule_edges(
             "source_thread_title": "Rules",
             "target_thread_title": "Rules",
             "note": "directive",
-            "source_label": f"Rules #2",
-            "target_label": f"Rules #4",
-            "explanation": f"Rules #2 has a continuity relationship with Rules #4",
+            "source_label": "Rules #2",
+            "target_label": "Rules #4",
+            "explanation": "Rules #2 has a continuity relationship with Rules #4",
         }
     ]
 

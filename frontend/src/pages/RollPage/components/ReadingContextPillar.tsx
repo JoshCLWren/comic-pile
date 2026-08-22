@@ -160,7 +160,6 @@ export function ReadingContextPillar({
             {[...previousIssues, ...(currentIssue ? [currentIssue] : []), ...nextIssues].map((issue) => {
               const isCurrent = issue.relation === 'current'
               const isPrevious = issue.relation === 'previous'
-              const isFuture = issue.relation === 'future' || issue.relation === 'next'
               return (
                 <div
                   key={issue.issue_id}
