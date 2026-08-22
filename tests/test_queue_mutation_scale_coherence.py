@@ -15,6 +15,8 @@ Each scale run prints one ``MEASUREMENT issue=933`` line so timing and byte
 measurements can be captured from CI or local runs without fabricating them.
 """
 
+from __future__ import annotations
+
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -209,7 +211,9 @@ async def test_initial_requests_and_payload_remain_bounded_as_library_grows(
     assert len(first.threads) == FIRST_PAGE_SIZE
     # For library_size == FIRST_PAGE_SIZE, all items fit in one page so next_page_token is None
     if library_size > FIRST_PAGE_SIZE:
-        assert first.next_page_token is not None
+        assert first.next_page_token is not None, (
+            f"library={library_size} must yield a continuation token"
+        )
     assert first_counter.count == EXPECTED_SELECTS_PER_PAGE, (
         f"first page issued {first_counter.count} SELECTs at library={library_size}"
     )
