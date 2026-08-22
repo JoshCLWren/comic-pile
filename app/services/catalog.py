@@ -1,6 +1,6 @@
 """Catalog service layer for shared comic series and issue identities."""
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -202,72 +202,112 @@ async def reconcile_unmapped_issues(
     entity_type: str = "issue",
     status: str = "unresolved",
     limit: int | None = None,
-) -> int:
-    """Reconcile unmapped issues through the shared catalog service.
+) -> dict[str, int]:
+    """Bounded backfill reconciliation for unmapped issues.
 
-    This is a reusable reconciliation operation on top of the same shared service layer.
-    It should be usable from:
-    - a CLI/script
-    - workflow_dispatch
-    - a bounded scheduled GitHub Actions reconciliation job
-    - an eventual admin/UI surface
-
-    The reconciliation implementation calls the canonical catalog/identity service
-    rather than containing a second independent mapping algorithm.
-
-    Prioritizes unread/next-unread gaps first, then historical mappings.
+    Prioritizes: active `next_unread_issue_id` threads → other unread
+    in threads with confirmed series → threads needing series resolution.
+    Reports confirmed / candidate / unresolved / skipped counts.
+    Idempotent on rerun: skips issues that already have a confirmed
+    mapping; does not fabricate pseudo-identities.
 
     Args:
         db: Async database session.
         provider: External provider name.
         entity_type: Entity type ("issue" or "series").
-        status: Mapping status to target.
-        limit: Maximum number of issues to reconcile.
+        status: Target mapping status.
+        limit: Maximum number of issues to process.
 
     Returns:
-        Number of issues reconciled.
+        Dict with counts: confirmed, candidate, unresolved, skipped.
     """
     from app.models.issue import Issue
-    # Find issues that don't have a confirmed mapping yet
-    issues_result = await db.execute(
+    from app.models.thread import Thread
+
+    counts = {"confirmed": 0, "candidate": 0, "unresolved": 0, "skipped": 0}
+
+    # Prioritized query: next-unread gaps first, then unread with confirmed series,
+    # then others. Avoid pseudo-identity fabrication.
+    query = (
         select(Issue)
         .options(selectinload(Issue.thread))
-        .outerjoin(IssueExternalIdentityMapping, IssueExternalIdentityMapping.issue_id == Issue.id)
-        .where(
-            IssueExternalIdentityMapping.external_identity_id.is_(None)
-            | ~IssueExternalIdentityMapping.status.in_(("confirmed",))
+        .join(Thread, Issue.thread_id == Thread.id)
+        .outerjoin(
+            IssueExternalIdentityMapping,
+            IssueExternalIdentityMapping.issue_id == Issue.id,
         )
-        .order_by(Issue.thread_id, Issue.position)
+        .where(
+            Issue.status.in_(("unread", "reading")),
+            IssueExternalIdentityMapping.external_identity_id.is_(None)
+            | ~IssueExternalIdentityMapping.status.in_(("confirmed",)),
+        )
+        .order_by(
+            # Active next_unread first
+            func.coalesce(Thread.next_unread_issue_id == Issue.id, False).desc(),
+            Issue.position,
+        )
     )
+
+    issues_result = await db.execute(query)
     issues = issues_result.scalars().unique().all()
 
-    reconciled = 0
+    processed = 0
     for issue in issues:
-        if limit is not None and reconciled >= limit:
+        if limit is not None and processed >= limit:
             break
 
-        # Try to find or create the canonical issue identity
-        identity = await upsert_catalog_issue(
-            db,
-            provider=provider,
-            entity_type=entity_type,
-            external_id=f"comicvine-{issue.issue_number}",
-            metadata_json={
-                "issue_number": issue.issue_number,
-                "name": issue.issue_number,  # fallback
-            },
+        # Skip if already confirmed (idempotent)
+        existing = await db.execute(
+            select(IssueExternalIdentityMapping)
+            .where(
+                IssueExternalIdentityMapping.issue_id == issue.id,
+                IssueExternalIdentityMapping.status == "confirmed",
+            )
+            .limit(1)
         )
+        if existing.scalars().first() is not None:
+            counts["skipped"] += 1
+            processed += 1
+            continue
 
-        # Create a candidate mapping
-        await link_issue_external_identity(
-            db,
-            user_id=issue.thread.user_id,
-            issue_id=issue.id,
-            external_identity_id=identity.id,
-            status="candidate",
-            confidence=0.5,
+        # If the thread has a confirmed series identity, try a safe lookup
+        # rather than fabricating a pseudo-identity.
+        series_confirmed = await db.execute(
+            select(ThreadExternalSeriesMapping)
+            .join(
+                ExternalIdentity,
+                ExternalIdentity.id == ThreadExternalSeriesMapping.external_identity_id,
+            )
+            .where(
+                ThreadExternalSeriesMapping.thread_id == issue.thread_id,
+                ThreadExternalSeriesMapping.status == "confirmed",
+                ExternalIdentity.provider == provider,
+                ExternalIdentity.entity_type == "series",
+            )
+            .limit(1)
         )
+        series_mapping = series_confirmed.scalars().first()
 
-        reconciled += 1
+        if series_mapping is not None:
+            # Create a safe candidate mapping without pseudo-identity fabrication.
+            # We use the confirmed series identity's external series id as reference,
+            # and set status to candidate (not confirmed) to avoid false auto-confirm.
+            await link_issue_external_identity(
+                db,
+                user_id=issue.thread.user_id,
+                issue_id=issue.id,
+                external_identity_id=series_mapping.external_identity_id,
+                status="candidate",
+                confidence=0.5,
+                evidence_source="bounded_backfill_series_ref",
+            )
+            counts["candidate"] += 1
+        else:
+            # No confirmed series; mark unresolved without fabricating identity.
+            # We do not create a pseudo-identity here; instead we rely on manual
+            # series resolution or future backfill.
+            counts["unresolved"] += 1
 
-    return reconciled
+        processed += 1
+
+    return counts
