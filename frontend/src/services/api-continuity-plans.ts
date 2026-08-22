@@ -19,11 +19,27 @@ export interface ContinuityPlanNode {
   position: number
 }
 
+export interface ContinuityPlanCheckpoint {
+  node_id: string
+}
+
+export interface ContinuityPlanConvergenceTarget {
+  node_id: string
+}
+
+export interface ContinuityPlanConvergenceGate {
+  id: string
+  gate_node_id: string
+  wait_for: ContinuityPlanConvergenceTarget[]
+}
+
 export interface ContinuityPlanWrite {
   name: string
   ordering_mode: ContinuityPlanOrderingMode
   lanes: ContinuityPlanLane[]
   nodes: ContinuityPlanNode[]
+  checkpoints?: ContinuityPlanCheckpoint[]
+  convergence_gates?: ContinuityPlanConvergenceGate[]
 }
 
 export interface ContinuityPlan extends ContinuityPlanWrite {
@@ -31,6 +47,8 @@ export interface ContinuityPlan extends ContinuityPlanWrite {
   user_id: number
   created_at: string
   updated_at: string
+  checkpoints: ContinuityPlanCheckpoint[]
+  convergence_gates: ContinuityPlanConvergenceGate[]
 }
 
 export type PlanReadinessDiagnosticCode =
@@ -39,6 +57,9 @@ export type PlanReadinessDiagnosticCode =
   | 'cycle_detected'
   | 'depth_limit_exceeded'
   | 'node_limit_exceeded'
+  | 'checkpoint_blocking'
+  | 'convergence_blocking'
+  | 'plan_gate_cycle'
 
 export interface ContinuityPlanReadinessDiagnostic {
   code: PlanReadinessDiagnosticCode

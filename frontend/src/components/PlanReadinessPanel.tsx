@@ -47,6 +47,15 @@ function blockerReason(node: ContinuityPlanNodeReadiness): string | null {
   if (node.is_readable) return 'Ready to read now.'
   const blocker = node.blockers[0]
   if (!blocker) return 'The server reported this step as blocked without prerequisite details.'
+  if (blocker.satisfaction_type === 'checkpoint') {
+    return `Blocked by a checkpoint until ${blocker.source_label} is read.`
+  }
+  if (blocker.satisfaction_type === 'converged') {
+    const waiting = blocker.unread_issue_details?.map((detail) => detail.label) ?? []
+    return waiting.length > 0
+      ? `Blocked by a convergence gate until ${waiting.join(', ')} are read.`
+      : 'Blocked by a convergence gate until the selected steps are read.'
+  }
   if (blocker.unread_issue_details && blocker.unread_issue_details.length > 0) {
     return `Waiting on ${blocker.unread_issue_details.map((detail) => detail.label).join(', ')}.`
   }

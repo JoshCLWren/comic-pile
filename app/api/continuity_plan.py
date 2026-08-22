@@ -18,12 +18,15 @@ from app.models.continuity_rule import ContinuityRule
 from app.models.thread import Thread
 from app.models.user import User
 from app.schemas.continuity_plan import (
+    ContinuityPlanCheckpoint,
+    ContinuityPlanConvergenceGate,
     ContinuityPlanNode,
     ContinuityPlanReadinessResponse,
     ContinuityPlanResponse,
     ContinuityPlanWrite,
+    _has_cycle,
 )
-from app.schemas.continuity_rule import ContinuityNodeType
+from app.schemas.continuity_rule import ContinuityNodeType, ConvergenceTarget
 
 router = APIRouter(tags=["continuity-plans"])
 
@@ -42,6 +45,8 @@ def _to_response(plan: ContinuityPlan) -> ContinuityPlanResponse:
         ordering_mode=plan.ordering_mode,
         lanes=plan.lanes_json,
         nodes=plan.nodes_json,
+        checkpoints=plan.checkpoints_json,
+        convergence_gates=plan.convergence_gates_json,
         created_at=plan.created_at,
         updated_at=plan.updated_at,
     )
@@ -93,6 +98,100 @@ async def _validate_node_ownership(
             ) from exc
 
 
+async def _edge_owned_by_other(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    marker: str,
+    source_type: ContinuityNodeType,
+    source_id: int,
+    target_type: ContinuityNodeType,
+    target_id: int,
+) -> bool:
+    """Return whether an identical edge already exists outside this plan's ownership."""
+    existing = (
+        await db.execute(
+            select(ContinuityRule).where(
+                ContinuityRule.user_id == user_id,
+                ContinuityRule.source_type == source_type,
+                ContinuityRule.source_id == source_id,
+                ContinuityRule.target_type == target_type,
+                ContinuityRule.target_id == target_id,
+            )
+        )
+    ).scalar_one_or_none()
+    return existing is not None and existing.note != marker
+
+
+async def _validate_plan_gate_semantics(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    payload: ContinuityPlanWrite,
+) -> None:
+    """Validate checkpoint/convergence references and plan-local cycles before write.
+
+    Args:
+        db: The asynchronous database session used for ownership checks.
+        user_id: Authenticated owner of the plan.
+        payload: The plan payload being validated.
+
+    Raises:
+        HTTPException: With structured codes for unknown nodes, self-waits, or cycles.
+    """
+    node_by_id = {node.id: node for node in payload.nodes}
+    gate_ids = [gate.id for gate in payload.convergence_gates]
+    if len(gate_ids) != len(set(gate_ids)):
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "convergence_gate_duplicate_id"},
+        )
+
+    for checkpoint in payload.checkpoints:
+        node = node_by_id.get(checkpoint.node_id)
+        if node is None or node.node_type != "issue":
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "checkpoint_invalid_node", "node_id": checkpoint.node_id},
+            )
+
+    edges: list[tuple[str, str]] = []
+    for gate in payload.convergence_gates:
+        gate_node = node_by_id.get(gate.gate_node_id)
+        if gate_node is None or gate_node.node_type not in {"issue", "crossover"}:
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "convergence_invalid_gate", "gate_node_id": gate.gate_node_id},
+            )
+        for target in gate.wait_for:
+            wait_node = node_by_id.get(target.node_id)
+            if wait_node is None or wait_node.node_type not in {"issue", "crossover"}:
+                raise HTTPException(
+                    status_code=422,
+                    detail={"code": "convergence_invalid_reference", "node_id": target.node_id},
+                )
+            if target.node_id == gate.gate_node_id:
+                raise HTTPException(
+                    status_code=422,
+                    detail={"code": "convergence_self_wait", "gate_node_id": gate.gate_node_id},
+                )
+            edges.append((target.node_id, gate.gate_node_id))
+
+    for checkpoint in payload.checkpoints:
+        checkpoint_node = node_by_id[checkpoint.node_id]
+        for node in payload.nodes:
+            if node.lane_id == checkpoint_node.lane_id and node.position > checkpoint_node.position:
+                edges.append((checkpoint.node_id, node.id))
+
+    if payload.ordering_mode == "strict_sequential":
+        ordered = sorted(payload.nodes, key=lambda node: node.position)
+        for source, target in zip(ordered, ordered[1:], strict=False):
+            edges.append((source.id, target.id))
+
+    if _has_cycle({edge[0] for edge in edges}, edges):
+        raise HTTPException(status_code=422, detail={"code": "plan_gate_cycle"})
+
+
 async def _replace_compiled_rules(
     db: AsyncSession,
     *,
@@ -100,7 +199,14 @@ async def _replace_compiled_rules(
     plan: ContinuityPlan,
     payload: ContinuityPlanWrite,
 ) -> bool:
-    """Replace only rules owned by this plan and compile strict linear intent explicitly."""
+    """Replace only rules owned by this plan and compile plan semantics atomically.
+
+    Checkpoints compile to checkpoint rules that block later same-lane content until
+    the checkpoint issue is read. Convergence gates compile to converged rules that
+    block the gate node until every selected plan node is read. Strict-sequential
+    intent still compiles to explicit linear item-read rules. Every branch deletes
+    only plan-owned rules first, so compilation is idempotent and isolated.
+    """
     marker = _marker(plan.id)
     await db.execute(
         delete(ContinuityRule).where(
@@ -108,6 +214,154 @@ async def _replace_compiled_rules(
             ContinuityRule.note == marker,
         )
     )
+    node_by_id = {node.id: node for node in payload.nodes}
+
+    for checkpoint in payload.checkpoints:
+        checkpoint_node = node_by_id.get(checkpoint.node_id)
+        if checkpoint_node is None or checkpoint_node.node_type != "issue":
+            continue
+        later_nodes = [
+            node
+            for node in payload.nodes
+            if node.lane_id == checkpoint_node.lane_id
+            and node.position > checkpoint_node.position
+            and node.node_type in {"issue", "crossover"}
+        ]
+        for later in later_nodes:
+            if later.node_type == checkpoint_node.node_type and later.ref_id == checkpoint_node.ref_id:
+                continue
+            source_type = cast(ContinuityNodeType, checkpoint_node.node_type)
+            target_type = cast(ContinuityNodeType, later.node_type)
+            if await _edge_owned_by_other(
+                db,
+                user_id=user_id,
+                marker=marker,
+                source_type=source_type,
+                source_id=checkpoint_node.ref_id,
+                target_type=target_type,
+                target_id=later.ref_id,
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "plan_rule_conflict",
+                        "source_node_id": checkpoint.node_id,
+                        "target_node_id": later.id,
+                    },
+                )
+            if await _would_create_cycle(
+                db,
+                user_id=user_id,
+                source_type=source_type,
+                source_id=checkpoint_node.ref_id,
+                target_type=target_type,
+                target_id=later.ref_id,
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "continuity_cycle",
+                        "source_node_id": checkpoint.node_id,
+                        "target_node_id": later.id,
+                    },
+                )
+            db.add(
+                ContinuityRule(
+                    user_id=user_id,
+                    source_type=source_type,
+                    source_id=checkpoint_node.ref_id,
+                    target_type=target_type,
+                    target_id=later.ref_id,
+                    satisfaction_type="checkpoint",
+                    checkpoint_issue_id=checkpoint_node.ref_id,
+                    note=marker,
+                )
+            )
+            await db.flush()
+
+    for gate in payload.convergence_gates:
+        gate_node = node_by_id.get(gate.gate_node_id)
+        if gate_node is None or gate_node.node_type not in {"issue", "crossover"}:
+            continue
+        convergence_targets: list[dict[str, object]] = []
+        for wait_target in gate.wait_for:
+            wait_node = node_by_id.get(wait_target.node_id)
+            if wait_node is None or wait_node.node_type not in {"issue", "crossover"}:
+                continue
+            convergence_targets.append({"type": wait_node.node_type, "id": wait_node.ref_id})
+        if not convergence_targets:
+            continue
+        source_type = cast(ContinuityNodeType, convergence_targets[0]["type"])
+        source_id = int(convergence_targets[0]["id"])
+        target_type = cast(ContinuityNodeType, gate_node.node_type)
+        target_id = gate_node.ref_id
+        if source_type == target_type and source_id == target_id:
+            continue
+        if await _edge_owned_by_other(
+            db,
+            user_id=user_id,
+            marker=marker,
+            source_type=source_type,
+            source_id=source_id,
+            target_type=target_type,
+            target_id=target_id,
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "plan_rule_conflict",
+                    "source_node_id": gate.wait_for[0].node_id,
+                    "target_node_id": gate.gate_node_id,
+                },
+            )
+        if await _would_create_cycle(
+            db,
+            user_id=user_id,
+            source_type=source_type,
+            source_id=source_id,
+            target_type=target_type,
+            target_id=target_id,
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "continuity_cycle",
+                    "source_node_id": gate.wait_for[0].node_id,
+                    "target_node_id": gate.gate_node_id,
+                },
+            )
+        if await _would_create_convergence_cycle(
+            db,
+            user_id=user_id,
+            target_type=target_type,
+            target_id=target_id,
+            convergence_targets=[
+                ConvergenceTarget(type=target["type"], id=int(target["id"]))
+                for target in convergence_targets
+            ],
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "continuity_cycle",
+                    "source_node_id": gate.wait_for[0].node_id,
+                    "target_node_id": gate.gate_node_id,
+                },
+            )
+        db.add(
+            ContinuityRule(
+                user_id=user_id,
+                source_type=source_type,
+                source_id=source_id,
+                target_type=target_type,
+                target_id=target_id,
+                satisfaction_type="converged",
+                convergence_targets=convergence_targets,
+                note=marker,
+            )
+        )
+        await db.flush()
+
     if payload.ordering_mode != "strict_sequential" or len(payload.nodes) < 2:
         return True
 
@@ -115,20 +369,15 @@ async def _replace_compiled_rules(
     for source, target in zip(ordered, ordered[1:], strict=False):
         source_type = cast(ContinuityNodeType, source.node_type)
         target_type = cast(ContinuityNodeType, target.node_type)
-        existing = (
-            await db.execute(
-                select(ContinuityRule).where(
-                    ContinuityRule.user_id == user_id,
-                    ContinuityRule.source_type == source_type,
-                    ContinuityRule.source_id == source.ref_id,
-                    ContinuityRule.target_type == target_type,
-                    ContinuityRule.target_id == target.ref_id,
-                )
-            )
-        ).scalar_one_or_none()
-        if existing is not None:
-            if existing.note == marker:
-                continue
+        if await _edge_owned_by_other(
+            db,
+            user_id=user_id,
+            marker=marker,
+            source_type=source_type,
+            source_id=source.ref_id,
+            target_type=target_type,
+            target_id=target.ref_id,
+        ):
             raise HTTPException(
                 status_code=409,
                 detail={
@@ -176,12 +425,15 @@ async def create_continuity_plan(
 ) -> ContinuityPlanResponse:
     """Create a plan and compile rules only when strict intent is explicit."""
     await _validate_node_ownership(db, user_id=current_user.id, nodes=payload.nodes)
+    await _validate_plan_gate_semantics(db, user_id=current_user.id, payload=payload)
     plan = ContinuityPlan(
         user_id=current_user.id,
         name=payload.name,
         ordering_mode=payload.ordering_mode,
         lanes_json=[lane.model_dump() for lane in payload.lanes],
         nodes_json=[node.model_dump() for node in payload.nodes],
+        checkpoints_json=[checkpoint.model_dump() for checkpoint in payload.checkpoints],
+        convergence_gates_json=[gate.model_dump() for gate in payload.convergence_gates],
     )
     db.add(plan)
     await db.flush()
@@ -249,10 +501,13 @@ async def update_continuity_plan(
     """Replace a plan atomically, including rules explicitly owned by that plan."""
     plan = await _get_owned_plan(db, current_user.id, plan_id)
     await _validate_node_ownership(db, user_id=current_user.id, nodes=payload.nodes)
+    await _validate_plan_gate_semantics(db, user_id=current_user.id, payload=payload)
     plan.name = payload.name
     plan.ordering_mode = payload.ordering_mode
     plan.lanes_json = [lane.model_dump() for lane in payload.lanes]
     plan.nodes_json = [node.model_dump() for node in payload.nodes]
+    plan.checkpoints_json = [checkpoint.model_dump() for checkpoint in payload.checkpoints]
+    plan.convergence_gates_json = [gate.model_dump() for gate in payload.convergence_gates]
     try:
         await _replace_compiled_rules(db, user_id=current_user.id, plan=plan, payload=payload)
         await db.commit()

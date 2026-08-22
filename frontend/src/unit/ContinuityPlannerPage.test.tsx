@@ -1,4 +1,4 @@
-import { render, screen, waitFor, act } from '@testing-library/react'
+import { render, screen, waitFor, act, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -205,7 +205,9 @@ describe('ContinuityPlannerPage', () => {
     )
 
     // Initially first item is "Mister Miracle #Annual 1" at position 1
-    await waitFor(() => expect(screen.getByText('Mister Miracle #Annual 1')).toBeInTheDocument())
+    await waitFor(() =>
+      expect(within(screen.getByTestId('lane-item-0')).getByText('Mister Miracle #Annual 1')).toBeInTheDocument(),
+    )
     await waitFor(() => expect(screen.getByTestId('lane-item-0')).toHaveTextContent('Mister Miracle #Annual 1'))
     await waitFor(() => expect(screen.getByTestId('lane-item-1')).toHaveTextContent('Fourth World'))
 
@@ -525,7 +527,8 @@ describe('ContinuityPlannerPage', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('Unavailable issue')).toBeVisible()
+    const laneItem = await screen.findByTestId('lane-item-0')
+    expect(await within(laneItem).findByText('Unavailable issue')).toBeVisible()
   })
 
   it('renders an Unavailable crossover label when the saved crossover is missing from the current group list', async () => {
@@ -548,7 +551,8 @@ describe('ContinuityPlannerPage', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('Unavailable crossover')).toBeVisible()
+    const laneItem = await screen.findByTestId('lane-item-0')
+    expect(await within(laneItem).findByText('Unavailable crossover')).toBeVisible()
   })
 
   it('shows a plan-level load error when fetching the plan fails', async () => {

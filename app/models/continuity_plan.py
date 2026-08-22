@@ -21,6 +21,10 @@ class ContinuityPlan(Base):
     ordering_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="informational")
     nodes_json: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False, default=list)
     lanes_json: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False, default=list)
+    checkpoints_json: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False, default=list)
+    convergence_gates_json: Mapped[list[dict[str, object]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
