@@ -71,9 +71,6 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   }, [isAuthenticated, logout])
 
   const isActive = (path: string) => location.pathname === path
-  const isMoreRoute = ['/continuity-plans', '/whats-new', '/help', '/glossary'].some((path) =>
-    location.pathname === path || location.pathname.startsWith(`${path}/`),
-  )
 
   const setTheme = async (themeId: string) => {
     const validThemes = ['classic', 'ink-gold', 'command-center']
@@ -108,7 +105,10 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
           <Link to="/queue" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/queue') ? 'active' : 'hover:bg-white/5'}`} aria-label="Queue page"><span className="text-lg md:text-2xl" aria-hidden="true">📚</span><span className="nav-label text-[9px] font-bold uppercase tracking-wide md:text-[10px] md:tracking-widest">Queue</span></Link>
           <Link to="/history" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/history') ? 'active' : 'hover:bg-white/5'}`} aria-label="History page"><span className="text-lg md:text-2xl" aria-hidden="true">📜</span><span className="nav-label text-[9px] font-bold uppercase tracking-wide md:text-[10px] md:tracking-widest">History</span></Link>
           <Link to="/crossovers" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/crossovers') ? 'active' : 'hover:bg-white/5'}`} aria-label="Crossovers page"><span className="text-lg md:text-2xl" aria-hidden="true">🔀</span><span className="nav-label text-[9px] font-bold uppercase tracking-wide md:text-[10px] md:tracking-widest">Crossovers</span></Link>
-          <button ref={moreButtonRef} type="button" onClick={() => setIsMoreOpen(value => !value)} aria-expanded={isMoreOpen} aria-controls="secondary-navigation" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isMoreOpen || isMoreRoute ? 'active' : 'hover:bg-white/5'}`} aria-label="More pages"><span className="text-lg md:text-2xl" aria-hidden="true">•••</span><span className="nav-label text-[9px] font-bold uppercase tracking-wide md:text-[10px] md:tracking-widest">More</span></button>
+          <Link to="/continuity-plans" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/continuity-plans') ? 'active' : 'hover:bg-white/5'}`} aria-label="Continuity Planner page"><span className="text-lg md:text-2xl" aria-hidden="true">🧭</span><span className="nav-label text-[9px] font-bold uppercase tracking-wide md:text-[10px] md:tracking-widest">Planner</span></Link>
+          <Link to="/whats-new" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/whats-new') ? 'active' : 'hover:bg-white/5'}`} aria-label="What's New page"><span className="text-lg md:text-2xl" aria-hidden="true">✨</span><span className="nav-label text-[9px] font-bold uppercase tracking-wide md:text-[10px] md:tracking-widest">New</span></Link>
+          <Link to="/help" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/help') ? 'active' : 'hover:bg-white/5'}`} aria-label="Help page"><span className="text-lg md:text-2xl" aria-hidden="true">❓</span><span className="nav-label text-[9px] font-bold uppercase tracking-wide md:text-[10px] md:tracking-widest">Help</span></Link>
+          <Link to="/glossary" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/glossary') ? 'active' : 'hover:bg-white/5'}`} aria-label="Glossary page"><span className="text-lg md:text-2xl" aria-hidden="true">📘</span><span className="nav-label text-[9px] font-bold uppercase tracking-wide md:text-[10px] md:tracking-widest">Glossary</span></Link>
         </div>
       </nav>
 
