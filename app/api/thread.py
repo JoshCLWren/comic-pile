@@ -662,6 +662,16 @@ async def set_pending_thread(
             detail=f"Thread {thread_id} is not active",
         )
 
+    if thread.is_blocked:
+        reason = ""
+        blocking = getattr(thread, "blocking_reasons", None)
+        if blocking:
+            reason = f": {blocking[0]}"
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Thread {thread_id} is blocked by a dependency{reason}",
+        )
+
     thread_id_int = thread.id
     thread_title = thread.title
     thread_format = thread.format

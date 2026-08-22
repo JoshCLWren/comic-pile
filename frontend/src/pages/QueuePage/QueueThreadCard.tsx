@@ -19,6 +19,8 @@ interface QueueThreadCardProps {
   snoozeIcon: string
   snoozeLabel: string
   snoozeDisabled: boolean
+  readDisabled?: boolean
+  readDisabledReason?: string
   onCardClick: () => void
   onDragStart: React.DragEventHandler<HTMLElement>
   onDragEnd: React.DragEventHandler<HTMLElement>
@@ -48,6 +50,8 @@ export default function QueueThreadCard({
   snoozeIcon,
   snoozeLabel,
   snoozeDisabled,
+  readDisabled,
+  readDisabledReason,
   onCardClick,
   onDragStart,
   onDragEnd,
@@ -187,6 +191,8 @@ export default function QueueThreadCard({
         snoozeIcon={snoozeIcon}
         snoozeLabel={snoozeLabel}
         snoozeDisabled={snoozeDisabled}
+        readDisabled={readDisabled}
+        readDisabledReason={readDisabledReason}
         onRead={onRead}
         onEdit={onOpenThread}
         onSnooze={onSnooze}
