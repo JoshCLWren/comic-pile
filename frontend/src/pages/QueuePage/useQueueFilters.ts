@@ -17,10 +17,13 @@ export function useQueueFilters(
   threads: Thread[] | null | undefined,
   sortBy: QueueSortBy,
 ) {
-  const activeThreads = useMemo(
-    () => threads?.filter((thread) => thread.status === 'active') ?? [],
-    [threads],
-  )
+const activeThreads = useMemo(
+  () => {
+    const filtered = threads?.filter((thread) => thread.status === 'active') ?? [];
+    return filtered.sort((a, b) => a.queue_position - b.queue_position);
+  },
+  [threads],
+)
 
   const completedThreads = useMemo(
     () => threads?.filter((thread) => thread.status === 'completed') ?? [],
