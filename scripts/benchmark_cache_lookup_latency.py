@@ -129,11 +129,48 @@ async def benchmark(database_url: str, samples: int) -> None:
     _print_row(_summarize("upstash REST GET", await rest_timings()))
 
 
+async def _benchmark_redis_protocol(url: str, samples: int) -> None:
+    """Time warm GET/SET round trips against a RESP-compatible server."""
+    import redis.asyncio as aioredis
+
+    client = aioredis.from_url(
+        url,
+        decode_responses=True,
+        socket_connect_timeout=6,
+        socket_timeout=6,
+    )
+    try:
+        await client.set("benchmark-probe-key", "x" * 512)
+
+        get_timings = await _timed(
+            lambda: client.get("benchmark-probe-key"),
+            samples,
+        )
+        _print_row(_summarize("redis RESP GET (warm)", get_timings))
+
+        set_timings = await _timed(
+            lambda: client.set("benchmark-probe-key", "x" * 512),
+            max(samples // 4, 1),
+        )
+        _print_row(_summarize("redis RESP SET", set_timings))
+    finally:
+        await client.aclose()
+
+
 def main() -> None:
     """Parse arguments and run the benchmark."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--samples", type=int, default=300)
+    parser.add_argument(
+        "--redis-only",
+        action="store_true",
+        help="Skip Postgres benchmarks; time only the RESP server from REDIS_BENCHMARK_URL.",
+    )
     args = parser.parse_args()
+
+    if args.redis_only:
+        asyncio.run(run_redis_only(args.samples))
+        return
 
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
@@ -146,6 +183,14 @@ def main() -> None:
             break
 
     asyncio.run(benchmark(database_url, args.samples))
+
+
+async def run_redis_only(samples: int) -> None:
+    """Run only the RESP benchmark (used when DATABASE_URL is unavailable)."""
+    url = os.getenv("REDIS_BENCHMARK_URL")
+    if not url:
+        raise SystemExit("REDIS_BENCHMARK_URL is required for --redis-only")
+    await _benchmark_redis_protocol(url, samples)
 
 
 if __name__ == "__main__":

@@ -31,6 +31,23 @@ approximately 2026-08-28), so no comparable REST round-trip could be captured. R
 `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` (or legacy `KV_REST_API_*`) set, ideally
 via a temporary timing route deployed in-region so both sides share one vantage.
 
+## Redis Cloud RESP lookup (GCP us-central1, preliminary)
+
+A free-tier Redis Cloud database (`redis-12024.c280.us-central1-2.gce.cloud.redislabs.com`,
+GCP Iowa — the region nearest Vercel's `cle1`/Chicago) was measured with warm sequential
+commands over the plain RESP protocol (TLS is disabled on this test database). **Vantage:
+developer workstation, not the deployed function** — these numbers include a residential ISP
+hop and are therefore upper bounds; in-region numbers must come from a deployed timing route.
+
+| Command | min | median | p95 | max |
+| ------- | ---: | ---: | ---: | ---: |
+| GET (n=200, 512B value) | 28.18 ms | 29.11 ms | 31.22 ms | 34.34 ms |
+| SET (n=50, 512B value) | 28.69 ms | 29.07 ms | 34.03 ms | 34.98 ms |
+
+Interpretation: nearly all of the ~29 ms is workstation-to-Iowa network transit. From inside
+`cle1`, the same hop is expected to land in single-digit milliseconds; the decisive comparison
+is against Neon's measured 3.85 ms median from the function itself.
+
 ## Decision framing
 
 - If Upstash same-region lands near 1–2 ms, Redis wins on raw latency but adds a vendor,
