@@ -48,18 +48,21 @@ export function RatingView({
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
 
   return (
-    <div className="relative z-10 space-y-4 p-3 md:p-4">
-      <div className="grid gap-4 md:grid-cols-2 md:gap-6" data-testid="rating-pillars-grid">
-        {/* Column 1: The Comic */}
-        <div>
+    <div className="relative z-10 flex min-h-0 flex-1 flex-col gap-3 p-3 md:gap-4 md:p-4">
+      <div
+        className="grid min-h-0 flex-1 gap-4 md:grid-cols-2 md:gap-6"
+        data-testid="rating-pillars-grid"
+      >
+        {/* Left column: The Comic visual/identity column */}
+        <div className="flex min-h-0 flex-col overflow-y-auto">
           <ComicPillar
             activeRatingThread={activeRatingThread}
             onRefreshThread={onRefreshThread}
           />
         </div>
-        
-        {/* Column 2: Reading Context + Your Context */}
-        <div>
+
+        {/* Right column: Reading Context (primary) above Your Context, then actions below */}
+        <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
           <ReadingContextPillar
             activeRatingThread={activeRatingThread}
             readingOrders={readingOrders}
@@ -68,7 +71,7 @@ export function RatingView({
             rolledResult={rolledResult}
             currentDie={currentDie}
           />
-          
+
           <YourContextPillar
             activeRatingThread={activeRatingThread}
             currentDie={currentDie}
@@ -78,6 +81,17 @@ export function RatingView({
           />
         </div>
       </div>
+
+      <RatingActionPanel
+        errorMessage={errorMessage}
+        rateIsPending={rateIsPending}
+        snoozeIsPending={snoozeIsPending}
+        dismissIsPending={dismissIsPending}
+        issuesRemaining={issuesRemaining}
+        onSubmitRating={onSubmitRating}
+        onSnooze={onSnooze}
+        onCancel={onCancel}
+      />
     </div>
   )
 }
