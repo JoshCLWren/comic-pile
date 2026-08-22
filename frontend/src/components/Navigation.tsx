@@ -170,36 +170,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
               <span className="nav-label text-[9px] font-bold uppercase tracking-wide md:text-[10px] md:tracking-widest">More</span>
             </button>
           )}
-        </div>
-      </nav>
-
-      {isMoreOpen && (
-        <nav
-          ref={moreMenuRef}
-          id="secondary-navigation"
-          aria-label="More pages"
-          className="fixed bottom-16 right-3 z-50 w-56 rounded-2xl border border-stone-700 bg-stone-950 p-2 shadow-2xl md:bottom-24 md:right-6"
-        >
-          {SECONDARY_NAV_ITEMS.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-stone-100 hover:bg-stone-800"
-            >
-              <span aria-hidden="true">{item.icon}</span>
-              <span>{item.label === 'New' ? "What's New" : item.label === 'Planner' ? 'Continuity Planner' : item.label}</span>
-            </Link>
-          ))}
-          <div className="space-y-1 border-t border-stone-800 pt-2 md:hidden">
-            <BugReportButton onSubmit={onBugReportSubmit} variant="nav" />
-            <button type="button" onClick={handleLogout} className="flex min-h-12 w-full items-center gap-3 rounded-xl px-4 py-3 text-left font-bold text-red-300 hover:bg-stone-800">
-              <span aria-hidden="true">⎋</span><span>Sign out</span>
-            </button>
-          </div>
-          <div className="mt-3 text-sm text-stone-400">
-            <span>Appearance</span>
-          </div>
-          <div id="appearance-menu" className="mt-2 select-none">
+          <div id="appearance-menu" className="mt-2 select-none w-full md:w-auto">
             <button
               data-theme="classic"
               onClick={() => setTheme('classic')}
@@ -225,8 +196,33 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
               <span>Command Center</span>
             </button>
           </div>
-        </nav>
-      )}
+        </div>
+      </nav>
+
+      <nav
+        ref={moreMenuRef}
+        id="secondary-navigation"
+        aria-label="More pages"
+        className="fixed bottom-16 right-3 z-50 w-56 rounded-2xl border border-stone-700 bg-stone-950 p-2 shadow-2xl md:bottom-24 md:right-6"
+        style={{ display: isMoreOpen ? 'block' : 'none' }}
+      >
+        {SECONDARY_NAV_ITEMS.map((item) => (
+          <Link
+            key={item.path}
+            to={item.path}
+            className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-stone-100 hover:bg-stone-800"
+          >
+            <span aria-hidden="true">{item.icon}</span>
+            <span>{item.label === 'New' ? "What's New" : item.label === 'Planner' ? 'Continuity Planner' : item.label}</span>
+          </Link>
+        ))}
+        <div className="space-y-1 border-t border-stone-800 pt-2 md:hidden">
+          <BugReportButton onSubmit={onBugReportSubmit} variant="nav" />
+          <button type="button" onClick={handleLogout} className="flex min-h-12 w-full items-center gap-3 rounded-xl px-4 py-3 text-left font-bold text-red-300 hover:bg-stone-800">
+            <span aria-hidden="true">⎋</span><span>Sign out</span>
+          </button>
+        </div>
+      </nav>
 
       <div className="fixed right-4 top-4 z-50 hidden items-center gap-3 md:flex">
         {isLoading ? (
