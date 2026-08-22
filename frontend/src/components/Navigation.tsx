@@ -5,6 +5,7 @@ import BugReportButton from './BugReportButton'
 import type { ReportType } from './BugReportModal'
 import { useAuth } from '../App'
 import api from '../services/api'
+import { selectTheme } from '../services/theme'
 import type { AuthUser } from '../types'
 import type { DiagnosticData } from '../hooks/useDiagnostics'
 
@@ -76,15 +77,18 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   )
 
   const setTheme = async (themeId: string) => {
-    const validThemes = ['classic', 'ink-gold', 'command-center']
-    if (!validThemes.includes(themeId)) return
+    // Apply and mirror the choice in localStorage first so the theme takes
+    // effect immediately and survives reloads even when persistence fails
+    // (issue #1611). Server sync below is a reconciliation, not the source
+    // of truth for this device.
+    if (selectTheme(themeId) === null) return
     try {
-      document.documentElement.setAttribute('data-theme', themeId)
       await api.patch('/v1/users/me/preferences', { theme: themeId })
     } catch (err: unknown) {
       console.error('Failed to persist theme preference:', err)
       // Preserve the currently-rendered theme rather than rolling back,
-      // so the UI is never stranded in an unusable state.
+      // so the UI is never stranded in an unusable state. The local mirror
+      // keeps the choice durable until the next successful PATCH.
     }
   }
 

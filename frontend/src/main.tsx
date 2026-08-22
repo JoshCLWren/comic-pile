@@ -4,8 +4,14 @@ import AppErrorBoundary from './components/AppErrorBoundary'
 import { SessionProvider } from './contexts/SessionContext'
 import { ToastProvider } from './contexts/ToastProvider'
 import { startBootstrapShellLifecycle } from './bootstrapShell'
+import { restoreStoredTheme } from './services/theme'
 import './index.css'
 import App from './App'
+
+// Render the locally persisted theme before any network/auth work so the
+// chosen appearance survives reloads even when the preferences API is
+// unavailable (issue #1611).
+restoreStoredTheme()
 
 const rootElement = document.getElementById('root')
 
