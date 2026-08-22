@@ -87,7 +87,7 @@ async def test_snooze_keeps_durable_queue_position(
     target = threads[0]
     queue_before = await _load_queue(async_db, user_id)
 
-    response = await auth_client.post("/api/snooze/")
+    response = await auth_client.post("/api/v1/snooze/")
 
     assert response.status_code == 200
     data = response.json()
@@ -115,7 +115,7 @@ async def test_snooze_leaves_queue_untouched_with_existing_snoozed_threads(
     already_snoozed = threads[1]
     queue_before = await _load_queue(async_db, user_id)
 
-    response = await auth_client.post("/api/snooze/")
+    response = await auth_client.post("/api/v1/snooze/")
 
     assert response.status_code == 200
     data = response.json()

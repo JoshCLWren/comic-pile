@@ -243,16 +243,16 @@ def test_current_session_contract_is_exact_and_named() -> None:
 
 def test_routes_publish_the_screen_specific_openapi_contracts() -> None:
     """Affected retained routes advertise their intended response models."""
-    assert _response_schema("/api/threads/") == {
+    assert _response_schema("/api/v1/threads/") == {
         "$ref": "#/components/schemas/QueueThreadListResponse"
     }
-    assert _response_schema("/api/threads/{thread_id}") == {
+    assert _response_schema("/api/v1/threads/{thread_id}") == {
         "$ref": "#/components/schemas/ThreadDetail"
     }
-    assert _response_schema("/api/sessions/") == {
+    assert _response_schema("/api/v1/sessions/") == {
         "$ref": "#/components/schemas/SessionHistoryListResponse"
     }
-    assert _response_schema("/api/sessions/current/") == {
+    assert _response_schema("/api/v1/sessions/current/") == {
         "$ref": "#/components/schemas/SessionResponse"
     }
     assert _response_schema("/api/v1/threads/{thread_id}/issues") == {
@@ -261,7 +261,7 @@ def test_routes_publish_the_screen_specific_openapi_contracts() -> None:
     assert _response_schema("/api/v1/threads/{thread_id}/dependencies") == {
         "$ref": "#/components/schemas/ThreadDependenciesResponse"
     }
-    assert _response_schema("/api/roll/", method="post") == {
+    assert _response_schema("/api/v1/roll/", method="post") == {
         "$ref": "#/components/schemas/RollResponse"
     }
     assert _response_schema(

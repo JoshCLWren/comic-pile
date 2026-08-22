@@ -46,7 +46,7 @@ def _make_request() -> Request:
         {
             "type": "http",
             "method": "GET",
-            "path": "/api/threads/",
+            "path": "/api/v1/threads/"
             "headers": [],
             "query_string": b"",
         }

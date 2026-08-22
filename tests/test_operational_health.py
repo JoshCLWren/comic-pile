@@ -200,7 +200,7 @@ async def test_legacy_health_is_dependency_free(
     monkeypatch.setattr(health, "_database_probe", fail_if_called)
     monkeypatch.setattr(health, "_cache_probe", fail_if_called)
 
-    response = await client.get("/api/health")
+    response = await client.get("/api/v1/health")
 
     assert response.status_code == 200
     assert response.json() == {"status": "alive"}

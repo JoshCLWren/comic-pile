@@ -259,7 +259,7 @@ async def test_bootstrap_pool_includes_threads_without_route_labels(
     async_db.add(thread)
     await async_db.commit()
 
-    response = await auth_client.get("/api/roll/bootstrap")
+    response = await auth_client.get("/api/v1/roll/bootstrap")
     assert response.status_code == 200
     pool = response.json()["roll_pool"]
 
@@ -348,7 +348,7 @@ async def test_bootstrap_pool_aggregates_membership_labels_once(
     )
     await async_db.commit()
 
-    response = await auth_client.get("/api/roll/bootstrap")
+    response = await auth_client.get("/api/v1/roll/bootstrap")
     assert response.status_code == 200
     pool = {item["id"]: item for item in response.json()["roll_pool"]}
 
@@ -374,7 +374,7 @@ async def test_bootstrap_pool_query_count_is_constant(
     """
     user = await get_or_create_user_async(async_db)
 
-    response = await auth_client.get("/api/roll/bootstrap")
+    response = await auth_client.get("/api/v1/roll/bootstrap")
     assert response.status_code == 200
 
     async def _add_pool(thread_count: int, groups_per_thread: int) -> None:
@@ -413,7 +413,7 @@ async def test_bootstrap_pool_query_count_is_constant(
 
         event.listen(db_engine.sync_engine, "before_cursor_execute", _capture)
         try:
-            response = await auth_client.get("/api/roll/bootstrap")
+            response = await auth_client.get("/api/v1/roll/bootstrap")
         finally:
             event.remove(db_engine.sync_engine, "before_cursor_execute", _capture)
         assert response.status_code == 200

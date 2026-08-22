@@ -58,7 +58,7 @@ async def test_delete_thread_with_issues_reproduces_lazy_raise_bug(
     await async_db.commit()
 
     # Try to delete the thread - this should trigger the lazy='raise' bug
-    response = await auth_client.delete(f"/api/threads/{thread_id}")
+    response = await auth_client.delete(f"/api/v1/threads/{thread_id}")
 
     # Currently this fails with 500 due to lazy='raise' on Issue.thread
     # After fix, this should return 204
@@ -79,5 +79,5 @@ async def test_delete_thread_not_found_returns_404(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
     """Test DELETE /api/threads/{id} returns 404 for non-existent thread."""
-    response = await auth_client.delete("/api/threads/999999")
+    response = await auth_client.delete("/api/v1/threads/999999")
     assert response.status_code == 404
