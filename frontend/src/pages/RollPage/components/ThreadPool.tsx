@@ -30,7 +30,7 @@ interface ThreadPoolProps {
 export function ThreadPool({
   pool,
   blockedThreads,
-  blockingReasonMap,
+  blockingDependencyMap,
   dieSize,
   isRatingView,
   isRolling,
@@ -198,8 +198,12 @@ export function ThreadPool({
                   <span className="text-sm">🔒</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-stone-400 truncate">{thread.title}</p>
-                    {blockingReasonMap[thread.id]?.length > 0 && (
-                      <p className="text-[10px] text-stone-500 truncate">{blockingReasonMap[thread.id][0]}</p>
+                    {blockingDependencyMap[thread.id]?.length > 0 && (
+                      <p className="text-[10px] text-stone-500 truncate">
+                        {blockingDependencyMap[thread.id][0].label}
+                        {blockingDependencyMap[thread.id].length > 1 &&
+                          ` +${blockingDependencyMap[thread.id].length - 1} more`}
+                      </p>
                     )}
                   </div>
                 </div>
