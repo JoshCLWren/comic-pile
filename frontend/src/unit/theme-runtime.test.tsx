@@ -151,6 +151,19 @@ describe('semantic theme runtime bootstrap', () => {
     expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold')
   })
 
+  it('keeps the locally stored theme when the server returns a stale preference', async () => {
+    localStorage.setItem('comic-pile-theme', 'ink-gold')
+    mocks.get
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
+    renderProvider()
+
+    await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    // After an outage the stored local choice must not be silently downgraded
+    // by older server preference data.
+    expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold')
+  })
+
   it('never downgrades an already-rendered theme when the preference fetch fails', async () => {
     document.documentElement.setAttribute('data-theme', 'command-center')
     mocks.get

@@ -15,6 +15,7 @@ import {
   ensureThemeApplied,
   getThemeSelectionToken,
   isSupportedTheme,
+  readStoredThemePreference,
 } from './services/theme'
 import { isDefinitiveAuthenticationFailure } from './services/authFailure'
 import type { AuthTokens, AuthUser } from './types'
@@ -57,7 +58,12 @@ async function fetchAndApplyPersistedTheme(timeout?: number): Promise<void> {
     }
     const theme = prefResponse?.theme
     if (isSupportedTheme(theme)) {
-      applyTheme(theme)
+      const storedTheme = readStoredThemePreference()
+      if (storedTheme === null || theme === storedTheme) {
+        applyTheme(theme)
+      } else {
+        ensureThemeApplied()
+      }
     } else {
       // Unknown/stale ids must not strand the tokens; keep any rendered theme
       // and only seed a default when nothing has been resolved yet.
