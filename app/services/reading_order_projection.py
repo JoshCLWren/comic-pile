@@ -140,18 +140,40 @@ def _flatten_plan(
     nodes: list[ContinuityPlanNode],
 ) -> tuple[list[ContinuityPlanNode], tuple[str, ...]]:
     """Apply the documented deterministic flattening policy.
-
+    
     Sequential plans already enforce a single lane with contiguous positions;
     parallel (informational) plans are flattened lane by lane using the lane
     ``order`` as the primary key and ``position`` as the secondary key. The
     plan is intentionally not mutated - lanes/positions are read directly.
     """
-    lane_orders = {lane["id"]: lane["order"] for lane in plan.lanes_json}
-    sorted_nodes = sorted(
-        nodes,
-        key=lambda node: (lane_orders.get(node.lane_id, 0), node.position, node.id),
-    )
-    dropped = tuple(node.id for node in nodes if node.lane_id not in lane_orders)
+    if plan.ordering_mode == "strict_sequential":
+        # Validate strict sequential constraints
+        if len(plan.lanes_json) != 1:
+            raise ValueError("strict sequential plans must use exactly one lane")
+        
+        single_lane_id = plan.lanes_json[0]["id"]
+        nodes_in_lane = [node for node in nodes if node.lane_id == single_lane_id]
+        
+        # Verify all nodes are in the single lane
+        if len(nodes) != len(nodes_in_lane):
+            raise ValueError("strict sequential plans must have all nodes in single lane")
+            
+        # Verify positions are contiguous starting at zero
+        positions = sorted(node.position for node in nodes_in_lane)
+        if positions != list(range(len(positions))):
+            raise ValueError("strict sequential positions must be contiguous starting at zero")
+            
+        # Sort nodes by position
+        sorted_nodes = sorted(nodes_in_lane, key=lambda node: node.position)
+    else:
+        # Informational plans: flatten lane by lane using lane order and position
+        lane_orders = {lane["id"]: lane["order"] for lane in plan.lanes_json}
+        sorted_nodes = sorted(
+            nodes,
+            key=lambda node: (lane_orders.get(node.lane_id, 0), node.position, node.id),
+        )
+    
+    dropped = tuple(node.id for node in nodes if node.lane_id not in {lane["id"] for lane in plan.lanes_json})
     return sorted_nodes, dropped
 
 
