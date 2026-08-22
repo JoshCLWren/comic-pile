@@ -46,13 +46,19 @@ export function ContinuityThreadSelector({
     if (value) setQuery(value.title)
   }, [value])
 
+  const isEmptyQuery = !query.trim()
   const results = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase()
+    if (!normalized) return []
     return threads
       .filter((thread) => thread.id !== excludeThreadId)
-      .filter((thread) => {
-        if (!normalized) return true
-        return `${thread.title} ${thread.format}`.toLocaleLowerCase().includes(normalized)
+      .filter((thread) => `${thread.title} ${thread.format}`.toLocaleLowerCase().includes(normalized))
+      .sort((a, b) => {
+        const titleRank = a.title.localeCompare(b.title)
+        if (titleRank !== 0) return titleRank
+        const formatRank = a.format.localeCompare(b.format)
+        if (formatRank !== 0) return formatRank
+        return a.id - b.id
       })
       .slice(0, 50)
   }, [excludeThreadId, query, threads])
@@ -90,7 +96,10 @@ export function ContinuityThreadSelector({
 
       {isLoading && <p className="text-xs text-stone-500">Loading comics…</p>}
       {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
-      {!isLoading && !error && !disabled && results.length === 0 && (
+      {!isLoading && !error && !disabled && isEmptyQuery && (
+        <p className="text-xs text-stone-500">Type to search comics</p>
+      )}
+      {!isLoading && !error && !disabled && !isEmptyQuery && results.length === 0 && (
         <p className="text-xs text-stone-500">No matching comics found.</p>
       )}
       {!isLoading && !error && !disabled && results.length > 0 && (
@@ -108,7 +117,15 @@ export function ContinuityThreadSelector({
               }`}
             >
               <span className="block font-semibold">{thread.title}</span>
-              <span className="block text-xs text-stone-500">{thread.format}</span>
+              <span className="block text-xs text-stone-500">
+                {[
+                  thread.format,
+                  typeof thread.issues_remaining === 'number' ? `${thread.issues_remaining} remaining` : null,
+                  typeof thread.total_issues === 'number' ? `${thread.total_issues} total` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' • ')}
+              </span>
             </button>
           ))}
         </div>
