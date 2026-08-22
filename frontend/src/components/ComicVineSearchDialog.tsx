@@ -11,6 +11,7 @@ interface ComicVineSearchDialogProps {
   issueId: number | null
   threadTitle: string
   issueNumber: string | null
+  mode?: 'confirm' | 'replace'
   onClose: () => void
   onConfirmed: () => void
 }
@@ -22,6 +23,7 @@ export default function ComicVineSearchDialog({
   issueId,
   threadTitle,
   issueNumber,
+  mode = 'confirm',
   onClose,
   onConfirmed,
 }: ComicVineSearchDialogProps) {
@@ -101,7 +103,11 @@ export default function ComicVineSearchDialog({
     setIsConfirming(true)
     setError(null)
     try {
-      await comicVineApi.confirmIdentity(issueId, selectedIssue.comicvine_issue_id)
+      if (mode === 'replace') {
+        await comicVineApi.replaceIdentity(issueId, selectedIssue.comicvine_issue_id)
+      } else {
+        await comicVineApi.confirmIdentity(issueId, selectedIssue.comicvine_issue_id)
+      }
       onConfirmed()
       onClose()
     } catch {
@@ -109,7 +115,7 @@ export default function ComicVineSearchDialog({
     } finally {
       setIsConfirming(false)
     }
-  }, [issueId, selectedIssue, onConfirmed, onClose])
+  }, [issueId, selectedIssue, mode, onConfirmed, onClose])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && step === 'search' && query.trim()) {

@@ -15,6 +15,8 @@ Each scale run prints one ``MEASUREMENT issue=933`` line so timing and byte
 measurements can be captured from CI or local runs without fabricating them.
 """
 
+from __future__ import annotations
+
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -33,6 +35,8 @@ from comic_pile.queue import move_to_back, move_to_position, shuffle_queue
 from tests.conftest import get_or_create_user_async
 
 FIRST_PAGE_SIZE = 50
+# Threads without issue tracking (no total_issues) only execute 1 SELECT for the thread list.
+# Migrated threads would execute 3 SELECTs (threads + unread counts + next issue numbers).
 EXPECTED_SELECTS_PER_PAGE = 1
 
 
@@ -205,14 +209,17 @@ async def test_initial_requests_and_payload_remain_bounded_as_library_grows(
     first_bytes = len(first.model_dump_json().encode())
 
     assert len(first.threads) == FIRST_PAGE_SIZE
+    # For library_size == FIRST_PAGE_SIZE, all items fit in one page so next_page_token is None
+    if library_size > FIRST_PAGE_SIZE:
+        assert first.next_page_token is not None, (
+            f"library={library_size} must yield a continuation token"
+        )
     assert first_counter.count == EXPECTED_SELECTS_PER_PAGE, (
         f"first page issued {first_counter.count} SELECTs at library={library_size}"
     )
     assert first_bytes <= 75_000, f"first page payload was {first_bytes} bytes"
 
     if library_size > FIRST_PAGE_SIZE:
-        assert first.next_page_token is not None
-
         started = time.perf_counter()
         with _SelectCounter(db_engine) as second_counter:
             second = await _fetch_page(

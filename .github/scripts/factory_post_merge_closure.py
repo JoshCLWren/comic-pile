@@ -45,6 +45,7 @@ FACTORY_LABEL = "factory"
 DONE_STATUS_LABEL = "ralph-status:done"
 
 OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-3][0-9]|4[0-8])$")
+ACTIVE_OWNER_RE = re.compile(r"^factory:(?:local|[1-9]|[1-3][0-9]|4[0-8])$")
 STAGE_LABELS = frozenset(
     {
         "factory:building",
@@ -53,14 +54,6 @@ STAGE_LABELS = frozenset(
         "factory:ci",
         "factory:ready",
         "factory:blocked",
-    }
-)
-ACTIVE_STAGE_LABELS = STAGE_LABELS - {"factory:ready"}
-ACTIVE_STATUS_LABELS = frozenset(
-    {
-        "ralph-status:in-progress",
-        "ralph-status:validation",
-        "ralph-status:todo",
     }
 )
 BLOCKED_STATUS_LABELS = frozenset({"ralph-status:blocked"})
@@ -120,19 +113,25 @@ def target_labels(current: list[str]) -> list[str]:
 
 
 def issue_is_quiescent(labels: list[str]) -> bool:
-    """Return whether an open issue shows no signal of active or blocked work.
+    """Return whether an open issue shows no signal of live continuation.
+
+    A stale workflow-stage or ralph-status label on an issue whose delivery
+    already merged is not liveness: the truthful liveness signals are a real
+    next-action owner lease and an open successor PR, which the caller checks
+    separately. Only genuine blockers refuse closure here.
 
     Args:
         labels: The issue's current label names.
 
     Returns:
-        True when the issue carries no active workflow stage, active ralph
-        status, or blocked marker, making automated closure truthful.
+        False when a real owner lease or a blocked marker is present; True
+        otherwise, including contradictory stale stages like ``in-progress``
+        alongside ``factory:ready`` under ``factory:unowned``.
     """
     for label in labels:
-        if label in ACTIVE_STAGE_LABELS or label in ACTIVE_STATUS_LABELS:
+        if label in BLOCKED_STATUS_LABELS or label == "factory:blocked":
             return False
-        if label in BLOCKED_STATUS_LABELS:
+        if ACTIVE_OWNER_RE.match(label):
             return False
     return True
 
@@ -521,15 +520,20 @@ class FactoryPostMergeClosureTests(unittest.TestCase):
             issue_is_quiescent(["bug", "user-reported", "factory", "factory:unowned", "factory:ready"])
         )
 
-    def test_active_or_blocked_issues_refuse_sweep_closure(self) -> None:
-        """Active stages, active statuses, and blockers stop the sweep."""
+    def test_stale_active_labels_under_no_owner_allow_closure(self) -> None:
+        """Contradictory stale stages without an owner lease are not liveness."""
+        self.assertTrue(
+            issue_is_quiescent(
+                ["bug", "factory", "factory:unowned", "factory:ready", "ralph-status:in-progress"]
+            )
+        )
+        self.assertTrue(issue_is_quiescent(["factory", "factory:unowned", "factory:review"]))
+        self.assertTrue(issue_is_quiescent(["factory", "factory:unowned", "ralph-status:validation"]))
+
+    def test_owner_leases_and_blockers_refuse_sweep_closure(self) -> None:
+        """Real owner leases and genuine blockers stop the sweep."""
         self.assertFalse(issue_is_quiescent(["factory", "factory:building", "factory:46"]))
-        self.assertFalse(issue_is_quiescent(["factory", "factory:review"]))
-        self.assertFalse(issue_is_quiescent(["factory", "factory:changes-requested"]))
-        self.assertFalse(issue_is_quiescent(["factory", "factory:ci"]))
-        self.assertFalse(issue_is_quiescent(["factory", "ralph-status:in-progress"]))
-        self.assertFalse(issue_is_quiescent(["factory", "ralph-status:validation"]))
-        self.assertFalse(issue_is_quiescent(["factory", "ralph-status:todo"]))
+        self.assertFalse(issue_is_quiescent(["factory", "factory:local"]))
         self.assertFalse(issue_is_quiescent(["factory", "factory:blocked"]))
         self.assertFalse(issue_is_quiescent(["factory", "ralph-status:blocked"]))
 

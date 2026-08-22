@@ -2,14 +2,7 @@
 """Regression coverage for factory eligibility of epic and PRD issues."""
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-SCRIPTS = Path(__file__).resolve().parent
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
-
-from factory_work_policy import build_candidates  # noqa: E402
+from factory_work_policy import build_candidates
 
 
 def issue(number: int, title: str, *extra_labels: str) -> dict[str, object]:

@@ -62,6 +62,9 @@ FAILING_CHECK_STATES = {
     "TIMED_OUT",
 }
 NO_REQUIRED_CHECKS_RE = re.compile(r"no checks reported|no required checks", re.IGNORECASE)
+NO_REQUIRED_CHECKS_REASON = (
+    "no required checks reported at this head; merge is blocked until CI runs and passes"
+)
 
 GateDecision = Literal["pass", "retry", "deny"]
 
@@ -263,17 +266,20 @@ def interpret_required_checks(
     command_status: int,
     stderr: str,
 ) -> GateResult:
-    """Pure interpretation of `gh pr checks --required --json state` output."""
+    """Pure interpretation of `gh pr checks --required --json state` output.
+
+    Fail-closed: a head with no reported required checks has not been
+    validated, so it can never satisfy the merge gates.
+    """
+    del command_status
     if checks is None:
         if NO_REQUIRED_CHECKS_RE.search(stderr):
-            return gate_result("pass", "no required checks configured or reported")
+            return gate_result("retry", NO_REQUIRED_CHECKS_REASON)
         return gate_result("retry", "required checks could not be determined")
     if not isinstance(checks, list):
         return gate_result("retry", "required check payload was not a list")
     if not checks:
-        if command_status == 0 or NO_REQUIRED_CHECKS_RE.search(stderr):
-            return gate_result("pass", "no required checks configured or reported")
-        return gate_result("retry", "required checks returned no usable result")
+        return gate_result("retry", NO_REQUIRED_CHECKS_REASON)
 
     states: list[str] = []
     for check in checks:
