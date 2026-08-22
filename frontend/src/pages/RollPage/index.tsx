@@ -29,6 +29,8 @@ import { RatingView } from './components/RatingView'
 import { ThreadPool } from './components/ThreadPool'
 import { RollHeader } from './components/RollHeader'
 import { RollModals } from './components/RollModals'
+import { TasteDiscoveryCard } from '../../components/TasteDiscoveryCard'
+import { useTasteDiscovery } from '../../hooks/useTasteDiscovery'
 
 /**
  * Route entry for the Roll page. The component composes the focused retained
@@ -135,6 +137,8 @@ export default function RollPage() {
     setRestoreAction,
     clearRestoreAction,
   })
+
+  const taste = useTasteDiscovery({ enabled: !isBootstrapLoading && !!bootstrap })
 
   const handleSetCurrentIssue = async (issueNumber: string) => {
     if (!state.selectedThread) return
@@ -311,6 +315,14 @@ export default function RollPage() {
         </div>
 
         <div id="explosion-layer" className="explosion-wrap"></div>
+
+        {taste.discoveries.length > 0 && (
+          <TasteDiscoveryCard
+            discovery={taste.discoveries[0]}
+            onVerdict={taste.submitVerdict}
+            onDismiss={taste.dismiss}
+          />
+        )}
 
         <RollModals
           showMigrationDialog={state.showMigrationDialog}

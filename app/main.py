@@ -37,6 +37,7 @@ from app.api import (
     roll,
     session,
     snooze,
+    taste_bank,
     test_helpers,
     thread,
     traffic_metrics,
@@ -253,6 +254,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(traffic_metrics.router, prefix="/api", tags=["traffic"])
     app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
     app.include_router(catalog.router, tags=["catalog"])
+    app.include_router(taste_bank.router, prefix="/api/v1/taste", tags=["taste-bank"])
     if os.getenv("TEST_ENVIRONMENT") == "true":
         app.include_router(test_helpers.router, prefix="/api", tags=["test"])
 
