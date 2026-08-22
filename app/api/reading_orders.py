@@ -1,6 +1,10 @@
-"""API endpoints for reading orders."""
+"""API endpoints for reading orders.
 
-from fastapi import APIRouter, Depends
+Reading orders are a legacy compatibility surface. The canonical reader
+order is the continuity plan (``ContinuityPlan``); see
+``docs/READING_PLAN_CANONICAL_MODEL.md``. These endpoints remain readable
+and adoptable but are not the source of truth for new ordering intent.
+"""
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload

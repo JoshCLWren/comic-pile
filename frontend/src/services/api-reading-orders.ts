@@ -93,5 +93,18 @@ export const readingOrdersApi = {
   },
   getForThread: async (threadId: number): Promise<ThreadReadingOrdersResponse> => {
     return api.get<ThreadReadingOrdersResponse>(`/v1/threads/${threadId}/reading-orders`)
-  }
+  },
+  adoptReadingOrder: async (params: {
+    readingOrderId: number
+    planName?: string
+    laneId?: string
+    laneName?: string
+  }): Promise<unknown> => {
+    return api.post(`/v1/continuity-plans/from-reading-order`, {
+      reading_order_id: params.readingOrderId,
+      plan_name: params.planName ?? null,
+      lane_id: params.laneId ?? 'adopted',
+      lane_name: params.laneName ?? 'Adopted',
+    })
+  },
 }
