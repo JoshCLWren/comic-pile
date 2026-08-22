@@ -108,4 +108,36 @@ describe('continuityPlansApi', () => {
       nodes: parallelPlan.nodes,
     })
   })
+
+  it('fetches live readiness for one saved plan', async () => {
+    const readiness = {
+      plan_id: 12,
+      plan_name: 'Kirby lane',
+      ordering_mode: 'strict_sequential' as const,
+      lanes: basePlan.lanes,
+      nodes: [
+        {
+          node_id: 'issue-40',
+          node_type: 'issue' as const,
+          ref_id: 40,
+          lane_id: 'main',
+          position: 0,
+          label: 'Mister Miracle #1',
+          is_readable: true,
+          is_complete: false,
+          blockers: [],
+          diagnostics: [],
+          chains: [],
+          readable_prerequisites: [],
+        },
+      ],
+      plan_diagnostics: [],
+      summary: { total: 1, readable: 1, blocked: 0, complete: 0, unavailable: 0 },
+      generated_at: '2026-08-12T00:00:00Z',
+    }
+    apiMock.get.mockResolvedValueOnce(readiness)
+
+    await expect(continuityPlansApi.readiness(12)).resolves.toEqual(readiness)
+    expect(apiMock.get).toHaveBeenCalledWith('/v1/continuity-plans/12/readiness')
+  })
 })

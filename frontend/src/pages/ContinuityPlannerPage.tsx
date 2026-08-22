@@ -10,6 +10,7 @@ import { dependencyGroupsApi, type DependencyGroup } from '../services/api-depen
 import { issuesApi } from '../services/api-issues'
 import { threadsApi } from '../services/api'
 import PlanProjectionDialog from '../components/PlanProjectionDialog'
+import PlanReadinessPanel from '../components/PlanReadinessPanel'
 import type { Issue, Thread } from '../types'
 
 const LAST_PLAN_KEY = 'comic-pile:last-continuity-plan'
@@ -138,6 +139,7 @@ export default function ContinuityPlannerPage() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [isProjectionOpen, setIsProjectionOpen] = useState(false)
   const [laneSeq, setLaneSeq] = useState(0)
+  const [readinessRefreshKey, setReadinessRefreshKey] = useState(0)
   const lastPlanId = typeof window === 'undefined' ? null : window.localStorage.getItem(LAST_PLAN_KEY)
   const issueRequestRef = useRef<AbortController | null>(null)
 
@@ -370,6 +372,7 @@ export default function ContinuityPlannerPage() {
       setSavedLanes(savedLanes)
       setSavedNodes(normalized)
       window.localStorage.setItem(LAST_PLAN_KEY, String(saved.id))
+      setReadinessRefreshKey((key) => key + 1)
       if (!planId) navigate(`/continuity-plans/${saved.id}`, { replace: true })
     } catch (error) {
       setSaveError(errorMessage(error, 'Unable to save this continuity plan.'))
@@ -570,6 +573,8 @@ export default function ContinuityPlannerPage() {
           })}
         </div>
       </section>
+
+      <PlanReadinessPanel planId={planId} refreshKey={readinessRefreshKey} />
 
       {saveError && <p role="alert" className="rounded-xl border border-red-800 bg-red-950/30 p-3 text-red-200">{saveError}</p>}
       <div className="sticky bottom-16 flex gap-3 rounded-2xl border border-stone-800 bg-stone-950/95 p-3 backdrop-blur md:bottom-24">
