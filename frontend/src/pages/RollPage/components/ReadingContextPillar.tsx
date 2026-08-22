@@ -222,7 +222,15 @@ export function ReadingContextPillar({
                     <div className="flex items-center justify-between text-[8px]">
                       <span>{crossover.name}</span>
                       <span className="text-stone-400">→</span>
-                      <span>#{crossover.next_member?.issue_number ?? '?'}</span>
+                      {crossover.next_member ? (
+                        <span>#{crossover.next_member.issue_number}</span>
+                      ) : (
+                        <span className="italic text-stone-500">
+                          {crossover.membership_kind === 'thread'
+                            ? 'issue unknown — membership covers a moving thread'
+                            : 'no upcoming issue'}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
