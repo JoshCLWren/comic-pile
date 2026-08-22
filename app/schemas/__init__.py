@@ -42,6 +42,8 @@ from app.schemas.session import (
     SessionHistoryListResponse,
     SessionListItem,
     SessionListResponse,
+    SessionModeResponse,
+    SessionModeUpdateRequest,
     SessionResponse,
 )
 from app.schemas.snapshot import SnapshotResponse, SnapshotsListResponse
@@ -110,6 +112,8 @@ __all__ = [
     "SessionDetailsResponse",
     "ActiveThreadInfo",
     "EventDetail",
+    "SessionModeUpdateRequest",
+    "SessionModeResponse",
     # Snapshot
     "SnapshotResponse",
     "SnapshotsListResponse",

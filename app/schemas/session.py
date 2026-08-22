@@ -6,8 +6,15 @@ backward compatibility but will be removed in a future version.
 """
 
 from datetime import UTC, datetime
+from typing import Literal
 
-from pydantic import BaseModel, Field, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
+
+SessionModeSource = Literal["quiz", "manual", "correction"]
+# Keep these literals in sync with app.services.reading_quiz value sets;
+# tests/test_reading_quiz.py guards the equivalence.
+SessionBandwidthValue = Literal["light", "balanced", "deep"]
+SessionIntentValue = Literal["balanced", "momentum", "familiar", "explore", "random"]
 
 
 def _to_utc_iso(value: datetime) -> str:
@@ -207,3 +214,41 @@ class SessionHistoryListResponse(BaseModel):
 
     sessions: list[SessionListItem]
     next_page_token: str | None = None
+
+
+class SessionModeUpdateRequest(BaseModel):
+    """Request to set the active session's reading mode.
+
+    ``bandwidth`` and ``intent`` are the resolved mode values. At least one must
+    be provided; ``source`` records where the setting came from (the two-question
+    quiz submits ``quiz``).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    bandwidth: SessionBandwidthValue | None = None
+    intent: SessionIntentValue | None = None
+    source: SessionModeSource = "quiz"
+
+    @model_validator(mode="after")
+    def require_at_least_one_axis(self) -> SessionModeUpdateRequest:
+        """Require at least one of bandwidth or intent.
+
+        Returns:
+            The validated model instance.
+
+        Raises:
+            ValueError: If neither bandwidth nor intent was provided.
+        """
+        if self.bandwidth is None and self.intent is None:
+            raise ValueError("At least one of bandwidth or intent is required")
+        return self
+
+
+class SessionModeResponse(BaseModel):
+    """Current reading-mode state for a session."""
+
+    session_id: int
+    bandwidth: str | None = None
+    intent: str | None = None
+    source: str | None = None
