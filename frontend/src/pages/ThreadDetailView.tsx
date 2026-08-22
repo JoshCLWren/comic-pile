@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import Modal from '../components/Modal'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { CrossoverTags } from '../components/CrossoverTags'
-import { threadsApi } from '../services/api'
+import { dependenciesApi, threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
-import type { Thread, Issue } from '../types'
+import type { ConnectedThreadInfo, Thread, Issue } from '../types'
 import { FormatSelect } from '../pages/QueuePage/FormatSelect'
 import { useCrossoverGroups } from '../hooks/useCrossoverGroups'
 import { useUpdateThread } from '../hooks/useThread'
@@ -39,6 +39,39 @@ export default function ThreadDetailView() {
     isPending: crossoversPending,
     error: crossoversError,
   } = useCrossoverGroups(thread ? [thread.id] : [])
+
+  const [connectedThreads, setConnectedThreads] = useState<ConnectedThreadInfo[] | null>(null)
+  const [connectedError, setConnectedError] = useState(false)
+  const activeThreadId = thread?.id ?? null
+
+  useEffect(() => {
+    if (activeThreadId === null) {
+      setConnectedThreads(null)
+      setConnectedError(false)
+      return
+    }
+
+    let cancelled = false
+    setConnectedThreads(null)
+    setConnectedError(false)
+
+    dependenciesApi
+      .getConnectedThreads(activeThreadId)
+      .then((response) => {
+        if (!cancelled && activeThreadIdRef.current === activeThreadId) {
+          setConnectedThreads(response.connected_threads)
+        }
+      })
+      .catch(() => {
+        if (!cancelled && activeThreadIdRef.current === activeThreadId) {
+          setConnectedError(true)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeThreadId])
 
   useEffect(() => {
     const threadId = id ? Number(id) : null
@@ -266,6 +299,63 @@ export default function ThreadDetailView() {
             <p className="text-sm text-stone-300 whitespace-pre-wrap">{thread.notes}</p>
           </div>
         )}
+
+        <div className="glass-card p-3 md:p-4 space-y-2">
+          <span className="text-xs font-black uppercase tracking-widest text-stone-500">
+            Dependencies
+          </span>
+          {connectedError && (
+            <p className="text-xs text-red-400" role="alert">Unable to load dependencies.</p>
+          )}
+          {!connectedError && connectedThreads === null && (
+            <p className="text-xs text-stone-500">Loading dependencies...</p>
+          )}
+          {connectedThreads !== null && connectedThreads.length === 0 && (
+            <p className="text-xs text-stone-500">No thread dependencies</p>
+          )}
+          {connectedThreads !== null && connectedThreads.length > 0 && (
+            <div className="space-y-3">
+              {(() => {
+                const blockedBy = connectedThreads.filter((t) => t.connection_type.includes('blocked_by'))
+                const blocking = connectedThreads.filter((t) => t.connection_type.includes('blocks'))
+                return (
+                  <>
+                    <div className="space-y-1">
+                      <h3 className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Blocked by</h3>
+                      {blockedBy.length === 0 && <p className="text-xs text-stone-500">Nothing blocks this thread</p>}
+                      {blockedBy.map((t) => (
+                        <Link
+                          key={`${t.dependency_id}-blocked-by`}
+                          to={`/thread/${t.thread_id}`}
+                          className="flex items-center gap-2 p-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+                          aria-label={`Open ${t.title}`}
+                        >
+                          <span aria-hidden="true">🔒</span>
+                          <span className="text-sm text-stone-300 truncate">{t.title}</span>
+                        </Link>
+                      ))}
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Blocking</h3>
+                      {blocking.length === 0 && <p className="text-xs text-stone-500">This thread blocks nothing</p>}
+                      {blocking.map((t) => (
+                        <Link
+                          key={`${t.dependency_id}-blocking`}
+                          to={`/thread/${t.thread_id}`}
+                          className="flex items-center gap-2 p-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+                          aria-label={`Open ${t.title}`}
+                        >
+                          <span aria-hidden="true">🔓</span>
+                          <span className="text-sm text-stone-300 truncate">{t.title}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  </>
+                )
+              })()}
+            </div>
+          )}
+        </div>
 
         <div className="glass-card p-3 md:p-4 space-y-2">
           <span className="text-xs font-black uppercase tracking-widest text-stone-500">

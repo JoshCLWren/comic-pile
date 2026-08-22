@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import type { BlockingDependency } from '../../../types'
 import type { RollBootstrapThread } from '../../../types/rollBootstrap'
 
 interface ThreadPoolProps {
   pool: RollBootstrapThread[]
   blockedThreads: RollBootstrapThread[]
-  blockingReasonMap: Record<number, string[]>
+  blockingDependencyMap: Record<number, BlockingDependency[]>
   dieSize?: number
   isRatingView: boolean
   isRolling: boolean
