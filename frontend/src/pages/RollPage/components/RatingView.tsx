@@ -79,7 +79,9 @@ export function RatingView({
         />
 
         <div
-          className="md:col-span-2 md:row-start-3 xl:col-start-2 xl:col-span-2 xl:row-start-2"
+          className={`md:col-span-2 md:row-start-3 xl:col-start-2 xl:row-start-2${
+            hasReadingContextContent ? ' xl:col-span-2' : ''
+          }`}
           data-testid="rating-actions-grid-cell"
         >
           <RatingActionPanel
