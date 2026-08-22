@@ -4063,6 +4063,17 @@ export interface components {
             blocking_reasons: string[];
             /** Is Blocked */
             is_blocked: boolean;
+            /** Blocking Dependencies */
+            blocking_dependencies?: Array<{
+                /** Thread Id */
+                thread_id: number;
+                /** Thread Title */
+                thread_title: string;
+                /** Issue Number */
+                issue_number: string;
+                /** Label */
+                label: string;
+            }>;
         };
         /** Body_import_csv_api_admin_import_csv__post */
         Body_import_csv_api_admin_import_csv__post: {
