@@ -1,5 +1,6 @@
 """Authenticated API for user-owned named dependency groups."""
 
+from collections.abc import Sequence
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -37,6 +38,80 @@ def _normalize_name(name: str) -> str:
     return normalized
 
 
+async def _member_responses(
+    db: AsyncSession, memberships: Sequence[DependencyGroupMembership]
+) -> list[DependencyGroupMemberResponse]:
+    """Resolve display metadata for memberships in two batched queries.
+
+    Thread titles come from one query over the referenced threads; issue numbers
+    and their series titles come from one joined query over the referenced
+    issues. This avoids per-member lazy loads regardless of membership count.
+
+    Args:
+        db: The asynchronous database session.
+        memberships: The persisted memberships to describe.
+
+    Returns:
+        Member payloads in input order with series titles and issue numbers.
+        Targets that no longer resolve keep ``None`` metadata so clients can
+        render a readable fallback instead of raw database IDs.
+    """
+    thread_ids = {member.thread_id for member in memberships if member.thread_id is not None}
+    issue_ids = {member.issue_id for member in memberships if member.issue_id is not None}
+
+    thread_titles: dict[int, str] = {}
+    if thread_ids:
+        result = await db.execute(select(Thread.id, Thread.title).where(Thread.id.in_(thread_ids)))
+        thread_titles = {row.id: row.title for row in result}
+
+    issue_metadata: dict[int, tuple[str | None, str | None]] = {}
+    if issue_ids:
+        result = await db.execute(
+            select(Issue.id, Issue.issue_number, Thread.title)
+            .join(Thread, Issue.thread_id == Thread.id)
+            .where(Issue.id.in_(issue_ids))
+        )
+        issue_metadata = {row.id: (row.issue_number, row.title) for row in result}
+
+    responses: list[DependencyGroupMemberResponse] = []
+    for member in memberships:
+        if member.thread_id is not None:
+            series_title = thread_titles.get(member.thread_id)
+            issue_number = None
+        else:
+            issue_number, series_title = issue_metadata.get(member.issue_id, (None, None))
+        responses.append(
+            DependencyGroupMemberResponse(
+                id=member.id,
+                thread_id=member.thread_id,
+                issue_id=member.issue_id,
+                series_title=series_title,
+                issue_number=issue_number,
+            )
+        )
+    return responses
+
+
+async def _group_response(
+    db: AsyncSession, group: DependencyGroup
+) -> DependencyGroupResponse:
+    """Serialize one group with enriched member display metadata.
+
+    Args:
+        db: The asynchronous database session.
+        group: The owned group with memberships eagerly loaded.
+
+    Returns:
+        The group payload whose members carry resolved comic metadata.
+    """
+    return DependencyGroupResponse(
+        id=group.id,
+        name=group.name,
+        created_at=group.created_at,
+        memberships=await _member_responses(db, group.memberships),
+    )
+
+
 async def _refresh_crossover_blocked_state(user_id: int, db: AsyncSession) -> None:
     """Persist blocked-state changes and invalidate dependent user-scoped reads."""
     await refresh_user_blocked_status(user_id, db)
@@ -64,7 +139,7 @@ async def _owned_group(db: AsyncSession, group_id: int, user_id: int) -> Depende
 async def list_groups(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> list[DependencyGroup]:
+) -> list[DependencyGroupResponse]:
     """List the current user's groups and memberships.
 
     Args:
@@ -72,7 +147,7 @@ async def list_groups(
         db: The asynchronous database session.
 
     Returns:
-        The user's groups with memberships eagerly loaded.
+        The user's groups with memberships resolved to comic metadata.
     """
     result = await db.execute(
         select(DependencyGroup)
@@ -80,7 +155,8 @@ async def list_groups(
         .where(DependencyGroup.user_id == current_user.id)
         .order_by(DependencyGroup.name, DependencyGroup.id)
     )
-    return list(result.scalars().unique())
+    groups = list(result.scalars().unique())
+    return [await _group_response(db, group) for group in groups]
 
 
 @router.post(
@@ -93,8 +169,8 @@ async def create_group(
     payload: DependencyGroupCreate,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> DependencyGroup:
-    """Create a user-owned named group.
+) -> DependencyGroupResponse:
+    """Create a named dependency group.
 
     Args:
         payload: The validated group creation request.
@@ -111,7 +187,7 @@ async def create_group(
     except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(status_code=409, detail="A group with this name already exists") from exc
-    return await _owned_group(db, group.id, current_user.id)
+    return await _group_response(db, await _owned_group(db, group.id, current_user.id))
 
 
 @router.get(
@@ -163,7 +239,7 @@ async def get_group(
     group_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> DependencyGroup:
+) -> DependencyGroupResponse:
     """Return one owned group.
 
     Args:
@@ -172,9 +248,9 @@ async def get_group(
         db: The asynchronous database session.
 
     Returns:
-        The requested owned group with memberships loaded.
+        The requested owned group with memberships resolved to comic metadata.
     """
-    return await _owned_group(db, group_id, current_user.id)
+    return await _group_response(db, await _owned_group(db, group_id, current_user.id))
 
 
 @router.patch(
@@ -187,7 +263,7 @@ async def update_group(
     payload: DependencyGroupUpdate,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> DependencyGroup:
+) -> DependencyGroupResponse:
     """Rename one owned group.
 
     Args:
@@ -197,7 +273,7 @@ async def update_group(
         db: The asynchronous database session.
 
     Returns:
-        The renamed group with memberships loaded.
+        The renamed group with memberships resolved to comic metadata.
     """
     group = await _owned_group(db, group_id, current_user.id)
     group.name = _normalize_name(payload.name)
@@ -206,7 +282,7 @@ async def update_group(
     except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(status_code=409, detail="A group with this name already exists") from exc
-    return await _owned_group(db, group_id, current_user.id)
+    return await _group_response(db, await _owned_group(db, group_id, current_user.id))
 
 
 @router.delete(
@@ -322,7 +398,7 @@ async def add_member(
     payload: DependencyGroupMemberCreate,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> DependencyGroupMembership:
+) -> DependencyGroupMemberResponse:
     """Add one owned thread or issue to an owned group.
 
     Args:
@@ -332,7 +408,7 @@ async def add_member(
         db: The asynchronous database session.
 
     Returns:
-        The newly persisted group membership.
+        The newly persisted membership with resolved comic metadata.
     """
     await _owned_group(db, group_id, current_user.id)
     if payload.thread_id is not None:
@@ -356,8 +432,9 @@ async def add_member(
         await db.rollback()
         raise HTTPException(status_code=409, detail="This member is already in the group") from exc
     await db.refresh(member)
+    response = (await _member_responses(db, [member]))[0]
     await _refresh_crossover_blocked_state(current_user.id, db)
-    return member
+    return response
 
 
 @router.delete(

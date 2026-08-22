@@ -9,6 +9,7 @@ import { threadsApi } from '../services/api'
 import {
   dependencyGroupsApi,
   type DependencyGroup,
+  type DependencyGroupMember,
 } from '../services/api-dependency-groups'
 import { issuesApi } from '../services/api-issues'
 import type { Issue, Thread } from '../types'
@@ -56,6 +57,18 @@ function errorMessage(error: unknown, fallback: string): string {
     if (typeof detail === 'string' && detail.trim()) return detail
   }
   return error instanceof Error && error.message ? error.message : fallback
+}
+
+function memberLabel(member: DependencyGroupMember): string {
+  const seriesTitle = member.series_title?.trim()
+  const seriesName = seriesTitle ? seriesTitle : 'Unavailable comic'
+  if (member.issue_id !== null && member.issue_number?.trim()) {
+    return `${seriesName} #${member.issue_number}`
+  }
+  if (member.thread_id !== null) {
+    return `${seriesName} (whole series)`
+  }
+  return 'Unavailable comic'
 }
 
 export default function CrossoversPage() {
@@ -322,12 +335,15 @@ export default function CrossoversPage() {
                   <div className="mt-4 space-y-4 border-t border-stone-800 pt-4 text-sm text-stone-400">
                     {group.memberships.length === 0 ? <p>This crossover has no comics yet.</p> : (
                       <ul className="grid gap-2" aria-label={`${group.name} members`}>
-                        {group.memberships.map((member) => (
-                          <li key={member.id} className="flex items-center justify-between gap-3 rounded-xl border border-stone-800 px-3 py-2">
-                            <span>{member.issue_id ? (await getComicTitle(member.issue_id)) : (await getComicTitleFromThread(member.thread_id))}</span>
-                            <button type="button" onClick={() => void removeMember(group.id, member.id)} disabled={hasPendingMutation} aria-label={`Remove ${member.issue_id !== null ? `issue ${member.issue_id}` : `thread ${member.thread_id}`} from ${group.name}`}>Remove</button>
-                          </li>
-                        ))}
+                        {group.memberships.map((member) => {
+                          const label = memberLabel(member)
+                          return (
+                            <li key={member.id} className="flex items-center justify-between gap-3 rounded-xl border border-stone-800 px-3 py-2">
+                              <span>{label}</span>
+                              <button type="button" onClick={() => void removeMember(group.id, member.id)} disabled={hasPendingMutation} aria-label={`Remove ${label} from ${group.name}`}>Remove</button>
+                            </li>
+                          )
+                        })}
                       </ul>
                     )}
 
