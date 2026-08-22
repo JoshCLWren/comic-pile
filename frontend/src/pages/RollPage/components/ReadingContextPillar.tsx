@@ -278,6 +278,13 @@ export function ReadingContextPillar({
               Dependency & Continuity Edges
             </h3>
           </div>
+{readerContext && (dependencyEdges.length > 0 || continuityEdges.length > 0) && (
+        <section aria-labelledby="dependency-edges-heading" className="rounded-2xl p-4" style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'rgba(6, 182, 212, 0.09)' }}>
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <h3 id="dependency-edges-heading" className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-continuity-accent)' }}>
+              Dependency & Continuity Edges
+            </h3>
+          </div>
 
           {(dependencyEdges.length > 0 || continuityEdges.length > 0) ? (
             <div className="space-y-2">
@@ -308,6 +315,62 @@ export function ReadingContextPillar({
                             {edge.explanation}
                           </div>
                         )}
+                        {edge.note && !edge.explanation && (
+                          <div className="text-[8px] text-stone-400 italic truncate">
+                            {edge.note}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {continuityEdges.length > 0 && (
+                <div className="space-y-1">
+                  <div className="font-bold text-[9px] text-stone-500 mb-1">
+                    {continuityEdges.length === 1 ? 'Continuity:' : 'Continuity edges:'}
+                  </div>
+                  {continuityEdges.map((edge) => (
+                    <div
+                      key={`${edge.source_issue_id}-${edge.target_issue_id}`}
+                      className="flex items-center gap-3 px-2 py-1 group cursor-pointer"
+                      style={{
+                        borderLeft: '3px solid rgb(165, 243, 252)',
+                        backgroundColor: 'rgba(165, 243, 252, 0.05)'
+                      }}
+                      onClick={() => undefined}
+                    >
+                      <div className="flex-shrink-0 w-2 h-2 rounded-full" style={{ backgroundColor: 'rgb(165, 243, 252)' }}></div>
+                      <div className="flex-1 space-y-0.5 min-w-0">
+                        <div className="flex items-center gap-2 text-[8px] flex-wrap">
+                          <span className="font-mono truncate">{edge.source_label ?? `#${edge.source_issue_id}`}</span>
+                          <span className="text-stone-400">↝</span>
+                          <span className="font-mono truncate">{edge.target_label ?? `#${edge.target_issue_id}`}</span>
+                        </div>
+                        {edge.explanation && (
+                          <div className="text-[8px] text-stone-400 italic truncate">
+                            {edge.explanation}
+                          </div>
+                        )}
+                        {edge.note && !edge.explanation && (
+                          <div className="text-[8px] text-stone-400 italic truncate">
+                            {edge.note}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-[9px] text-stone-500 text-center py-4">
+              No dependency or continuity edges in local neighborhood
+            </p>
+          )}
+        </section>
+      )}
                         {edge.note && !edge.explanation && (
                           <div className="text-[8px] text-stone-400 italic truncate">
                             {edge.note}

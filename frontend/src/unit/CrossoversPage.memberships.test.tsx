@@ -131,13 +131,13 @@ describe('CrossoversPage membership editing', () => {
     render(<CrossoversPage />)
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
 
-    selectThread('Whole comic series', 'uncanny', 'Uncanny X-Men')
-    expect(screen.getByLabelText('Whole comic series')).toHaveValue('Uncanny X-Men')
-    fireEvent.click(screen.getByRole('button', { name: 'Add series' }))
+    selectThread('Current thread of series', 'uncanny', 'Uncanny X-Men')
+    expect(screen.getByLabelText('Current thread of series')).toHaveValue('Uncanny X-Men')
+    fireEvent.click(screen.getByRole('button', { name: 'Add thread' }))
 
     expect(await screen.findByText('Thread 44')).toBeInTheDocument()
     expect(api.addMember).toHaveBeenCalledWith(7, { thread_id: 44 })
-    expect(screen.getByRole('status')).toHaveTextContent('Uncanny X-Men added to crossover.')
+    expect(screen.getByRole('status')).toHaveTextContent('Uncanny X-Men added to crossover as 1 thread member.')
   })
 
   it('preserves unrelated crossovers while adding and removing memberships', async () => {
@@ -153,8 +153,8 @@ describe('CrossoversPage membership editing', () => {
     render(<CrossoversPage />)
 
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
-    selectThread('Whole comic series', 'uncanny', 'Uncanny X-Men')
-    fireEvent.click(screen.getByRole('button', { name: 'Add series' }))
+    selectThread('Current thread of series', 'uncanny', 'Uncanny X-Men')
+    fireEvent.click(screen.getByRole('button', { name: 'Add thread' }))
     expect(await screen.findByText('Thread 44')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Remove issue 31 from Annihilation' }))
@@ -212,12 +212,12 @@ describe('CrossoversPage membership editing', () => {
     render(<CrossoversPage />)
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
 
-    selectThread('Whole comic series', 'uncanny', 'Uncanny X-Men')
-    fireEvent.click(screen.getByRole('button', { name: 'Add series' }))
+    selectThread('Current thread of series', 'uncanny', 'Uncanny X-Men')
+    fireEvent.click(screen.getByRole('button', { name: 'Add thread' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Thread lookup unavailable')
-    expect(screen.getByLabelText('Whole comic series')).toHaveValue('Uncanny X-Men')
-    expect(screen.getByRole('button', { name: 'Add series' })).toBeEnabled()
+    expect(screen.getByLabelText('Current thread of series')).toHaveValue('Uncanny X-Men')
+    expect(screen.getByRole('button', { name: 'Add thread' })).toBeEnabled()
   })
 
   it('never exposes raw thread ID inputs in crossover membership forms', async () => {
@@ -226,7 +226,7 @@ describe('CrossoversPage membership editing', () => {
 
     expect(screen.queryByLabelText('Whole thread ID')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Thread ID')).not.toBeInTheDocument()
-    expect(screen.getByLabelText('Whole comic series')).toHaveAttribute('type', 'search')
+    expect(screen.getByLabelText('Current thread of series')).toHaveAttribute('type', 'search')
     expect(screen.getByLabelText('Comic series for issue range')).toHaveAttribute('type', 'search')
   })
 
@@ -276,5 +276,47 @@ describe('CrossoversPage membership editing', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Removal unavailable')
     expect(screen.getByText('Issue 31')).toBeInTheDocument()
+  })
+
+  it('honestly labels the series thread addition and reports one thread member created', async () => {
+    api.addMember.mockResolvedValue({ id: 3, issue_id: null, thread_id: 44 })
+    render(<CrossoversPage />)
+    fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
+
+    expect(screen.getByLabelText('Current thread of series')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add thread' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Whole comic series')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Add series' })).not.toBeInTheDocument()
+
+    selectThread('Current thread of series', 'uncanny', 'Uncanny X-Men')
+    fireEvent.click(screen.getByRole('button', { name: 'Add thread' }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Uncanny X-Men added to crossover as 1 thread member.')
+  })
+
+  it('shows no unfiltered dump on empty series search and requires typing', async () => {
+    render(<CrossoversPage />)
+    fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
+
+    expect(screen.getAllByText('Type to search comics')).toHaveLength(2)
+    expect(screen.queryByRole('listbox', { name: 'Current thread of series results' })).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Current thread of series'), { target: { value: 'Nova' } })
+    expect(await screen.findByRole('listbox', { name: 'Current thread of series results' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /Nova/ })).toBeInTheDocument()
+  })
+
+  it('distinguishes ambiguous series with counts in dropdown', async () => {
+    const starman = { ...thread, id: 99, title: 'Starman', format: 'single issues', issues_remaining: 61, total_issues: 80 }
+    const starmanV2 = { ...thread, id: 100, title: 'Starman (Vol. 2) (1994 - 2001)', format: 'single issues', issues_remaining: 5, total_issues: 10 }
+    threadApi.list.mockResolvedValue({ threads: [starman, starmanV2], next_page_token: null })
+    render(<CrossoversPage />)
+    fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
+
+    fireEvent.change(screen.getByLabelText('Current thread of series'), { target: { value: 'Starman' } })
+    const options = await screen.findAllByRole('option')
+    const texts = options.map((o) => o.textContent ?? '')
+    expect(texts.some((t) => t.includes('61 remaining'))).toBe(true)
+    expect(texts.some((t) => t.includes('5 remaining'))).toBe(true)
   })
 })

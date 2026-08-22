@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-
 from sqlalchemy import and_, or_, select, text
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Dependency, Issue, Thread
@@ -84,7 +84,9 @@ def _series(metadata: dict[str, object]) -> tuple[int | None, str | None]:
     return _integer(metadata.get("volume_id")), _string(metadata.get("volume_name"))
 
 
-async def _confirmed_identity(db: AsyncSession, issue_id: int) -> ExternalIdentity | None:
+async def _confirmed_identity(
+    db: AsyncSession, issue_id: int
+) -> ExternalIdentity | None:
     """Return the confirmed ComicVine issue identity for an owned issue.
 
     Args:
@@ -144,8 +146,8 @@ async def _same_series_read_issues(
              AND ei.entity_type = 'issue'
             WHERE i.status = 'read'
               AND (
-                  ei.metadata_json::jsonb @> CAST(:volume_shape AS jsonb)
-                  OR ei.metadata_json::jsonb @> CAST(:volume_id_shape AS jsonb)
+                ei.metadata_json::jsonb @> CAST(:volume_shape AS jsonb)
+                OR ei.metadata_json::jsonb @> CAST(:volume_id_shape AS jsonb)
               )
             ORDER BY i.id
             """
@@ -222,7 +224,10 @@ async def _relevant_crossover_groups(
     """
     result = await db.execute(
         select(DependencyGroup)
-        .join(DependencyGroupMembership, DependencyGroupMembership.group_id == DependencyGroup.id)
+        .join(
+            DependencyGroupMembership,
+            DependencyGroupMembership.group_id == DependencyGroup.id,
+        )
         .where(
             DependencyGroup.user_id == user_id,
             or_(
@@ -304,7 +309,10 @@ def _build_series(
     ]
     if ratings:
         average_rating = round(
-            sum(candidate_rating for _candidate, (candidate_rating, _timestamp) in ratings)
+            sum(
+                candidate_rating
+                for _candidate, (candidate_rating, _timestamp) in ratings
+            )
             / len(ratings),
             2,
         )
@@ -328,7 +336,9 @@ def _build_series(
     previous: ReaderContextPreviousIssue | None = None
     if previous_issue is not None:
         previous_rating = (
-            effective[previous_issue.id][0] if previous_issue.id in effective else None
+            effective[previous_issue.id][0]
+            if previous_issue.id in effective
+            else None
         )
         previous = ReaderContextPreviousIssue(
             issue_id=previous_issue.id,
@@ -397,7 +407,9 @@ def _build_crossovers(
         ]
         next_member: ReaderContextCrossoverNextMember | None = None
         if same_thread_future:
-            nearest = min(same_thread_future, key=lambda member: (member.position, member.id))
+            nearest = min(
+                same_thread_future, key=lambda member: (member.position, member.id)
+            )
             next_member = ReaderContextCrossoverNextMember(
                 issue_id=nearest.id,
                 issue_number=nearest.issue_number,
@@ -433,7 +445,7 @@ def _build_local_issues(
         current_issue_id: Requested issue identifier.
         current_position: Requested issue position inside the thread.
         groups: Deterministically ordered relevant groups.
-        members_by_group: Exact owned member issues per group.
+        members_by_group: Exact owned issue members per group.
         effective: Effective ratings for relevant owned issues.
 
     Returns:
@@ -497,6 +509,9 @@ async def _local_edges(
     neighborhood_ids: set[int],
 ) -> list[ReaderContextEdge]:
     """Load bounded one-hop dependency/continuity edges touching the neighborhood.
+
+    Each edge carries human-readable source and target labels (issue number
+    plus thread title) so callers never surface raw database identifiers.
 
     Continuity rules mirrored from legacy dependencies are excluded so each
     persisted edge is represented exactly once. Edges are deterministically
@@ -625,18 +640,29 @@ async def get_reader_context(
     current_position = issue.position
 
     thread_issues_result = await db.execute(
-        select(Issue).where(Issue.thread_id == thread_id).order_by(Issue.position, Issue.id)
+        select(Issue)
+        .options(
+            selectinload(Issue.thread),
+        )
+        .where(Issue.thread_id == thread_id)
+        .order_by(Issue.position, Issue.id)
     )
     thread_issues = list(thread_issues_result.scalars())
-    ordered_issues = sorted(thread_issues, key=lambda candidate: (candidate.position, candidate.id))
+    ordered_issues = sorted(
+        thread_issues, key=lambda candidate: (candidate.position, candidate.id)
+    )
     current_index = next(
-        index for index, candidate in enumerate(ordered_issues) if candidate.id == issue_id
+        index
+        for index, candidate in enumerate(ordered_issues)
+        if candidate.id == issue_id
     )
     previous_issue = ordered_issues[current_index - 1] if current_index > 0 else None
     neighborhood = ordered_issues[max(0, current_index - 2) : current_index + 3]
 
     identity = await _confirmed_identity(db, issue_id)
-    series_id, series_name = _series(identity.metadata_json) if identity else (None, None)
+    series_id, series_name = (
+        _series(identity.metadata_json) if identity else (None, None)
+    )
     if identity is not None and series_id is not None:
         identity_source = "comicvine"
         series_issues = await _same_series_read_issues(db, user_id, series_id)

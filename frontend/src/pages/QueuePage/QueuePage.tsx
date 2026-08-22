@@ -278,6 +278,7 @@ export default function QueuePage() {
           onMigrationSkip={modals.handleMigrationSkip}
           onCloseMigration={modals.closeMigrationDialog}
           onOpenMigrationDialog={modals.openMigrationDialog}
+          onOpenDependencies={modals.editingThread ? () => modals.openDependenciesModal(modals.editingThread!) : undefined}
           isPendingCreate={modals.isPendingCreate}
           isPendingEdit={modals.isPendingEdit}
           isPendingReactivate={reactivateMutation.isPending}

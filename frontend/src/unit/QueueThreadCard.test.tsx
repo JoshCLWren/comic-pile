@@ -225,6 +225,27 @@ describe('QueueThreadCard', () => {
     expect(screen.getByText('This is a note')).toBeInTheDocument()
   })
 
+  it('wrap-breaks long imported URLs in notes so they cannot bleed across cards', () => {
+    const thread = createMockThread({
+      notes:
+        'Imported: https://www.leagueofcomicgeeks.com/issue/14276/annihilation-protocol-the-gathering-storm-annual-special-edition-collectors-variant',
+    })
+    renderCard(thread)
+
+    const notes = screen.getByText(/Imported: https:\/\/www\.leagueofcomicgeeks\.com/)
+    expect(notes).toHaveClass('[overflow-wrap:anywhere]')
+  })
+
+  it('exposes the full thread title via native tooltip on the title button', () => {
+    const thread = createMockThread({ title: 'Free Comic Book Day 2025: Amazing Spider-Man' })
+    renderCard(thread)
+
+    expect(screen.getByRole('button', { name: `Open ${thread.title}` })).toHaveAttribute(
+      'title',
+      thread.title,
+    )
+  })
+
   it('renders multiple crossover memberships supplied by the Queue batch loader', () => {
     renderCard(createMockThread(), {
       crossoverGroups: [

@@ -241,6 +241,37 @@ describe('RatingView responsive pillar contract', () => {
     expect(comicWrapper!.className).toContain('xl:row-span-1')
   })
 
+  it('places action panel beside Your Context on xl when Reading Context has no content (issue #1676)', () => {
+    const { container } = render(ratingView())
+    const gridCell = container.querySelector('[data-testid="rating-actions-grid-cell"]')
+    expect(gridCell).not.toBeNull()
+    expect(gridCell!.className).toContain('xl:col-start-2')
+    expect(gridCell!.className).toContain('xl:row-start-2')
+    expect(gridCell!.className).not.toContain('xl:col-span-2')
+  })
+
+  it('spans action panel under Reading and Your Context on xl when Reading Context has content (issue #1676)', () => {
+    const { container } = render(
+      ratingView({
+        readingOrders: [
+          {
+            id: 7,
+            name: 'Main route',
+            description: null,
+            total_items: 2,
+            completed_items: 1,
+            items: [],
+          },
+        ],
+      }),
+    )
+    const gridCell = container.querySelector('[data-testid="rating-actions-grid-cell"]')
+    expect(gridCell).not.toBeNull()
+    expect(gridCell!.className).toContain('xl:col-start-2')
+    expect(gridCell!.className).toContain('xl:col-span-2')
+    expect(gridCell!.className).toContain('xl:row-start-2')
+  })
+
   it('keeps the pillars in DOM order without decorative numeric prefixes', () => {
     const { container } = render(ratingView())
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
