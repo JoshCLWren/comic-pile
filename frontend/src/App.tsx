@@ -10,6 +10,13 @@ import BugReportButton from './components/BugReportButton'
 import type { ReportType } from './components/BugReportModal'
 import ResumeRecovery from './components/ResumeRecovery'
 import api, { clearAccessToken, setAccessToken, getAccessToken, readStoredAccessToken } from './services/api'
+import {
+  applyTheme,
+  ensureThemeApplied,
+  getThemeSelectionToken,
+  isSupportedTheme,
+  readStoredThemePreference,
+} from './services/theme'
 import { isDefinitiveAuthenticationFailure } from './services/authFailure'
 import type { AuthTokens, AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
@@ -37,24 +44,37 @@ type BugReportSubmit = (
 const AUTH_BOOTSTRAP_TIMEOUT_MS = 15000
 const AUTH_BOOTSTRAP_RETRY_DELAY_MS = 1000
 
-const THEME_IDS = ['classic', 'ink-gold', 'command-center']
-
-function applyPersistedTheme(theme: string | undefined | null): void {
-  const safeTheme = theme && THEME_IDS.includes(theme) ? theme : 'classic'
-  document.documentElement.setAttribute('data-theme', safeTheme)
-}
-
 async function fetchAndApplyPersistedTheme(timeout?: number): Promise<void> {
+  // Capture the local-selection generation before awaiting so a theme picked
+  // while this request is in flight always wins over the older server value.
+  const selectionTokenAtStart = getThemeSelectionToken()
   try {
     const prefResponse = await api.get<{ theme?: string }>('/v1/users/me/preferences', {
       timeout,
       skipAuthRedirect: true,
     })
-    applyPersistedTheme(prefResponse?.theme)
+    if (getThemeSelectionToken() !== selectionTokenAtStart) {
+      return
+    }
+    const theme = prefResponse?.theme
+    if (isSupportedTheme(theme)) {
+      const storedTheme = readStoredThemePreference()
+      if (storedTheme === null || theme === storedTheme) {
+        applyTheme(theme)
+      } else {
+        ensureThemeApplied()
+      }
+    } else {
+      // Unknown/stale ids must not strand the tokens; keep any rendered theme
+      // and only seed a default when nothing has been resolved yet.
+      ensureThemeApplied()
+    }
   } catch {
-    // If preference fetch fails, fall back to the classic theme so a
-    // preference outage never strands the app in an unusable state.
-    applyPersistedTheme(undefined)
+    // A transient preferences outage (for example 503 during a database
+    // blip, issue #1611) must never reset the rendered theme to classic.
+    // Keep whatever is applied; seed the stored choice/default only when the
+    // document has no valid theme yet.
+    ensureThemeApplied()
   }
 }
 
