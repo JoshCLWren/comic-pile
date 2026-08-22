@@ -94,6 +94,7 @@ const HelpPage = lazyRoute('help')
 const WhatsNewPage = lazyRoute('whatsNew')
 const LoginPage = lazyRoute('login')
 const RegisterPage = lazyRoute('register')
+const ExternalReadingListPage = lazyRoute('externalReadingList')
 
 export interface AuthContextValue {
   isAuthenticated: boolean
@@ -346,6 +347,7 @@ function AppRoutes() {
         <Route path="/whats-new" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><WhatsNewPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/help" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><HelpPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/glossary" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><HelpPage /></AuthenticatedLayout></ProtectedRoute>} />
+        <Route path="/external-reading-list" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><ExternalReadingListPage /></AuthenticatedLayout></ProtectedRoute>} />
       </Routes>
       {isAuthenticated && <BugReportConnected onSubmit={submit} />}
     </Suspense>
