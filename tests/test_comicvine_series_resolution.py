@@ -434,6 +434,7 @@ async def test_find_existing_mapping_hardened_against_multiple_rows(
         title="Hardening thread",
         format="Comic",
         issues_remaining=1,
+        queue_position=1,
         user_id=user.id,
         status="active",
     )
