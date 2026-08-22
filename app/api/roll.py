@@ -492,8 +492,9 @@ async def roll_bootstrap(
         RollBootstrapThread(id=row.id, title=row.title, format=row.format)
         for row in blocked_result.all()
     ]
-    snoozed_count = len(snoozed_ids)
+    snoozed_count = len(snoozed_threads)
     snoozed_threads = snoozed_threads[:RollBootstrapResponse.summary_limit]
+    blocked_threads = blocked_threads[:RollBootstrapResponse.summary_limit]
 
     stale_cutoff = datetime.now(UTC) - timedelta(days=7)
     effective_activity = func.coalesce(Thread.last_activity_at, Thread.created_at)
