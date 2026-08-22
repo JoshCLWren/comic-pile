@@ -155,7 +155,7 @@ export default function QueueThreadCard({
         {thread.notes && <p className="text-xs text-stone-400 mt-2">{thread.notes}</p>}
         {thread.issues_remaining !== null && (
           <p className="text-sm text-stone-300 mt-2 font-medium">
-            {isMigrated && thread.next_unread_issue_number
+            {isMigrated && !isBlocked && thread.next_unread_issue_number
               ? `Up next: #${thread.next_unread_issue_number} · ${thread.issues_remaining} remaining`
               : `${thread.issues_remaining} issues remaining`}
           </p>

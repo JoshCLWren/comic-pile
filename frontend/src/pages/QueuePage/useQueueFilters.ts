@@ -18,10 +18,7 @@ export function useQueueFilters(
   sortBy: QueueSortBy,
 ) {
   const activeThreads = useMemo(
-    () =>
-      threads
-        ?.filter((thread) => thread.status === 'active')
-        .sort((a, b) => a.queue_position - b.queue_position) ?? [],
+    () => threads?.filter((thread) => thread.status === 'active') ?? [],
     [threads],
   )
 
@@ -39,7 +36,13 @@ export function useQueueFilters(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
       )
     }
-    return activeThreads
+    // position: feasible-only ordering — unblocked threads first, then by user-controlled position
+    return [...activeThreads].sort((a, b) => {
+      if (a.is_blocked !== b.is_blocked) {
+        return a.is_blocked ? 1 : -1
+      }
+      return a.queue_position - b.queue_position
+    })
   }, [activeThreads, sortBy])
 
   // When search is applied on the backend, the threads array is already filtered.
