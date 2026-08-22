@@ -82,6 +82,10 @@ class ReaderContextEdge(BaseModel):
     kind: Literal["dependency", "continuity"]
     source_issue_id: int
     target_issue_id: int
+    source_issue_number: str
+    target_issue_number: str
+    source_thread_title: str
+    target_thread_title: str
     note: str | None = None
 
 

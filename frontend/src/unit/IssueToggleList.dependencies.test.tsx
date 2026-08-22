@@ -210,4 +210,52 @@ describe('IssueToggleList dependency loading', () => {
       screen.getByRole('button', { name: 'View dependencies for issue #1' }),
     ).toBeInTheDocument()
   })
+
+  it('shows manage dependencies instructions when no onOpenDependencies prop is provided', async () => {
+    render(<IssueToggleList threadId={99} />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Show all 40' })).toBeInTheDocument()
+    })
+
+    // Click the dependency indicator for issue #1
+    const depButton = screen.getByRole('button', { name: 'View dependencies for issue #1' })
+    await act(async () => {
+      depButton.click()
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('dependency-modal')).toBeInTheDocument()
+    })
+
+    // Should show instructions rather than builder button when prop is absent
+    expect(screen.queryByTestId('open-dependency-builder')).not.toBeInTheDocument()
+  })
+
+  it('opens dependency builder when onOpenDependencies prop is provided', async () => {
+    const openDependencies = vi.fn()
+    render(<IssueToggleList threadId={99} onOpenDependencies={openDependencies} />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Show all 40' })).toBeInTheDocument()
+    })
+
+    const depButton = screen.getByRole('button', { name: 'View dependencies for issue #1' })
+    await act(async () => {
+      depButton.click()
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('dependency-modal')).toBeInTheDocument()
+    })
+
+    const builderButton = screen.getByTestId('open-dependency-builder')
+    expect(builderButton).toBeInTheDocument()
+
+    await act(async () => {
+      builderButton.click()
+    })
+
+    expect(openDependencies).toHaveBeenCalledTimes(1)
+  })
 })
