@@ -314,19 +314,21 @@ async def _atomic_generation_value_get(
     key = generation_key(user_id)
     normalized = logical_key.removeprefix("cache:")
     value_prefix = f"{_VALUE_PREFIX}:{user_id}:g"
-    if cache._is_upstash:
-        raw = await client.eval(
-            _ATOMIC_GENERATION_READ_SCRIPT,
-            keys=[key],
-            args=[value_prefix, normalized],
+
+    from app.cache import PostgresCache
+
+    if isinstance(cache._client, PostgresCache):
+        from app.cache import PostgresCache as _PG
+
+        raw = await client._atomic_read_generation_value(
+            user_id,
+            logical_key,
         )
     else:
         raw = await client.eval(
             _ATOMIC_GENERATION_READ_SCRIPT,
-            1,
-            key,
-            value_prefix,
-            normalized,
+            keys=[key],
+            args=[value_prefix, normalized],
         )
 
     command_budget.record("generation_value_get")

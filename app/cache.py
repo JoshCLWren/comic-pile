@@ -1,9 +1,11 @@
-"""Redis/Upstash caching with circuit breaker and TTL tier support.
+"""Cache provider abstraction with circuit breaker and TTL tier support.
 
 This module provides:
 - TTL enum: SHORT, MEDIUM, LONG (values from config)
-- CircuitBreaker: Simple circuit breaker for Redis resilience
-- UpstashCache: Cache client (supports both Upstash cloud and local Redis)
+- CircuitBreaker: Simple circuit breaker for cache resilience (fail-open demotion)
+- BaseCache: Abstract base class for cache providers
+- UpstashCache: Redis cache client (Upstash cloud or local Redis), extends BaseCache
+- PostgresCache: Postgres-backed cache client, extends BaseCache
 - @cached decorator: Easy caching for async functions
 
 Usage:
@@ -14,18 +16,12 @@ Usage:
         # Expensive DB query
         ...
 
-    # Configure at startup without opening a network connection. The first
-    # real cache command performs the connection lazily.
-    from app.config import get_redis_settings
-    settings = get_redis_settings()
-    if settings.is_configured:
-        await cache.initialize(settings.upstash_redis_rest_url, settings.upstash_redis_rest_token)
-    elif settings.redis_url:
-        await cache.initialize(local_url=settings.redis_url)
+Cache provider is selected at startup via CACHE_PROVIDER setting (postgres|redis|off).
 """
 
 from __future__ import annotations
 
+import abc
 import enum
 import functools
 import hashlib
@@ -34,9 +30,13 @@ import json
 import logging
 import time
 from collections.abc import Awaitable, Callable
-from typing import Any, ParamSpec, TypeVar, cast
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator, ParamSpec, TypeVar, cast
 
 import redis.asyncio as aioredis
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from upstash_redis.asyncio import Redis as UpstashRedis
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,6 @@ logger = logging.getLogger(__name__)
 P = ParamSpec("P")
 T = TypeVar("T")
 
-# Types to skip when generating cache keys (request objects, db sessions)
 _SKIP_TYPES = frozenset({"AsyncSession", "Session", "Engine", "Request"})
 _CONNECT_TIMEOUT_SECONDS = 5.0
 
@@ -59,7 +58,6 @@ class TTL(enum.Enum):
 
 def _get_ttl_value(tier: TTL) -> int:
     """Get the actual TTL value in seconds for a tier."""
-    # Import here to avoid circular imports
     from app.config import get_redis_settings
 
     settings = get_redis_settings()
@@ -82,21 +80,24 @@ class CircuitState(enum.Enum):
 class CircuitBreaker:
     """Simple circuit breaker states.
 
-    Prevents cascading failures when Redis is unavailable.
+    Prevents cascading failures when the cache provider is unavailable.
+    Once opened, the circuit stays open for the process lifetime (fail-open
+    demotion policy): the reset_timeout_seconds parameter is retained for
+    interface compatibility but the demotion state is permanent.
     """
 
     def __init__(
         self,
-        name: str = "redis",
+        name: str = "cache",
         failure_threshold: int = 5,
         reset_timeout_seconds: int = 60,
     ) -> None:
         """Initialize the circuit breaker.
 
         Args:
-            name: Name for logging/metrics
-            failure_threshold: Number of failures before opening circuit
-            reset_timeout_seconds: Seconds before attempting recovery
+            name: Name for logging/metrics.
+            failure_threshold: Number of failures before opening circuit.
+            reset_timeout_seconds: Retention parameter for interface compatibility.
         """
         self.name = name
         self.failure_threshold = failure_threshold
@@ -111,18 +112,10 @@ class CircuitBreaker:
         return self._state
 
     def can_attempt(self) -> bool:
-        """Check if request should be allowed."""
+        """Check if a request should be allowed."""
         if self._state == CircuitState.CLOSED:
             return True
-
-        if self._state == CircuitState.OPEN and self._opened_at:
-            if time.time() - self._opened_at >= self.reset_timeout_seconds:
-                logger.info("Circuit '%s': OPEN -> HALF_OPEN", self.name)
-                self._state = CircuitState.HALF_OPEN
-                return True
-            return False
-
-        return True
+        return False
 
     def reset(self) -> None:
         """Reset the circuit after a confirmed healthy connection."""
@@ -132,36 +125,68 @@ class CircuitBreaker:
 
     def record_success(self) -> None:
         """Record successful request."""
-        if self._state == CircuitState.HALF_OPEN:
-            logger.info("Circuit '%s': HALF_OPEN -> CLOSED", self.name)
-            self.reset()
-        elif self._state == CircuitState.CLOSED:
+        if self._state == CircuitState.CLOSED:
             self._failure_count = 0
 
     def record_failure(self) -> None:
         """Record failed request."""
         self._failure_count += 1
-
-        if self._state == CircuitState.HALF_OPEN:
-            logger.warning("Circuit '%s': HALF_OPEN -> OPEN", self.name)
+        if self._state == CircuitState.CLOSED and self._failure_count >= self.failure_threshold:
+            logger.warning(
+                "Circuit %s: CLOSED -> OPEN (%d failures)",
+                self.name,
+                self._failure_count,
+            )
             self._state = CircuitState.OPEN
             self._opened_at = time.time()
-        elif self._state == CircuitState.CLOSED:
-            if self._failure_count >= self.failure_threshold:
-                logger.warning(
-                    "Circuit '%s': CLOSED -> OPEN (%d failures)",
-                    self.name,
-                    self._failure_count,
-                )
-                self._state = CircuitState.OPEN
-                self._opened_at = time.time()
 
 
-class UpstashCache:
+class BaseCache(abc.ABC):
+    """Abstract base class for all cache providers.
+
+    Subclasses implement the remote storage operations.  The active provider
+    instance is exposed via the module-level ``cache`` singleton.
+    """
+
+    def __init__(self) -> None:
+        self._initialized: bool = False
+        self._circuit_breaker = CircuitBreaker()
+
+    @property
+    def is_initialized(self) -> bool:
+        """Return True when this provider has finished startup configuration."""
+        return self._initialized
+
+    @abc.abstractmethod
+    async def initialize(self, *args: Any, **kwargs: Any) -> None:
+        """Configure this provider without opening a network connection."""
+
+    @abc.abstractmethod
+    async def close(self) -> None:
+        """Release resources held by this provider."""
+
+    @abc.abstractmethod
+    async def get(self, key: str) -> Any | None:
+        """Return the cached value for key, or None."""
+
+    @abc.abstractmethod
+    async def set(self, key: str, value: Any, ttl: int | None = None) -> bool:
+        """Store value under key; return whether the write succeeded."""
+
+    @abc.abstractmethod
+    async def delete(self, key: str) -> bool:
+        """Remove key; return whether the delete succeeded."""
+
+    @abc.abstractmethod
+    async def clear_pattern(self, pattern: str) -> int:
+        """Remove every key matching pattern; return the deletion count."""
+
+
+class UpstashCache(BaseCache):
     """Redis cache client with circuit breaker.
 
     Supports both Upstash cloud (via upstash-redis REST SDK) and local
-    Redis (via redis-py). Provides graceful fallback when Redis is unavailable.
+    Redis (via redis-py).  Provides graceful fallback when Redis is unavailable.
     """
 
     _instance: UpstashCache | None = None
@@ -173,12 +198,11 @@ class UpstashCache:
         return cls._instance
 
     def __init__(self) -> None:
-        if hasattr(self, "_initialized") and self._initialized:
+        if hasattr(self, "_initialized") and self._initialized and hasattr(self, "_client"):
             return
+        super().__init__()
         self._client: Any = None
-        self._circuit_breaker = CircuitBreaker(name="redis")
         self._initialized = False
-        self._is_upstash = False
 
     @property
     def is_initialized(self) -> bool:
@@ -191,10 +215,6 @@ class UpstashCache:
         local_url: str | None = None,
     ) -> None:
         """Configure a Redis client without opening a network connection.
-
-        Startup must remain independent from optional cache availability. Client
-        construction is local; the first real cache command performs the network
-        connection and is protected by the command-level failure handling.
 
         Supports two modes:
         - Upstash cloud: provide url (REST URL) and token
@@ -213,7 +233,6 @@ class UpstashCache:
             )
             self._circuit_breaker.reset()
             self._initialized = True
-            self._is_upstash = False
             logger.info("Local Redis cache configured for lazy connection")
             return
 
@@ -221,7 +240,6 @@ class UpstashCache:
             self._client = UpstashRedis(url=url, token=token)
             self._circuit_breaker.reset()
             self._initialized = True
-            self._is_upstash = True
             logger.info("Upstash Redis cache configured for lazy connection")
             return
 
@@ -233,7 +251,7 @@ class UpstashCache:
             client = self._client
             self._client = None
             self._initialized = False
-            if not self._is_upstash:
+            if hasattr(client, "aclose"):
                 await client.aclose()
             logger.info("Redis cache closed")
 
@@ -252,10 +270,7 @@ class UpstashCache:
 
     async def get(self, key: str) -> Any | None:
         """Get a value from cache."""
-        if not self.is_initialized or not self._circuit_breaker.can_attempt():
-            return None
-
-        if self._client is None:
+        if not self._circuit_breaker.can_attempt() or self._client is None:
             return None
 
         try:
@@ -277,55 +292,35 @@ class UpstashCache:
         """
         if value is None:
             return None
-
         if isinstance(value, (str, int, float, bool)):
             return value
-
         if isinstance(value, set):
             return {"__type__": "set", "values": [UpstashCache._prepare_value(v) for v in value]}
-
         if isinstance(value, dict):
             return {k: UpstashCache._prepare_value(v) for k, v in value.items()}
-
         if isinstance(value, list):
             return [UpstashCache._prepare_value(v) for v in value]
-
         if isinstance(value, tuple):
             return [UpstashCache._prepare_value(v) for v in value]
-
-        # Pydantic v2 models
         if hasattr(value, "model_dump"):
             return UpstashCache._prepare_value(value.model_dump())
-
-        # Pydantic v1 models / attrs
         if hasattr(value, "dict"):
             return UpstashCache._prepare_value(value.dict())
-
-        # SQLAlchemy models: convert to dict via __dict__ but skip internal attrs
         if hasattr(value, "_sa_instance_state"):
             state = {c.key: getattr(value, c.key) for c in value.__table__.columns}
             return UpstashCache._prepare_value(state)
-
-        # Datetime objects
         if hasattr(value, "isoformat"):
             return value.isoformat()
-
         return str(value)
 
     async def set(self, key: str, value: Any, ttl: int | None = None) -> bool:
         """Set a value in cache."""
-        if not self.is_initialized or not self._circuit_breaker.can_attempt():
-            return False
-
-        if self._client is None:
+        if not self._circuit_breaker.can_attempt() or self._client is None:
             return False
 
         try:
             prepared = UpstashCache._prepare_value(value)
-            data = json.dumps(
-                prepared,
-                default=str,
-            )
+            data = json.dumps(prepared, default=str)
             if ttl is not None and ttl <= 0:
                 await self._client.delete(key)
             elif ttl is not None:
@@ -341,10 +336,7 @@ class UpstashCache:
 
     async def delete(self, key: str) -> bool:
         """Delete a value from cache."""
-        if not self.is_initialized or not self._circuit_breaker.can_attempt():
-            return False
-
-        if self._client is None:
+        if not self._circuit_breaker.can_attempt() or self._client is None:
             return False
 
         try:
@@ -358,10 +350,7 @@ class UpstashCache:
 
     async def clear_pattern(self, pattern: str) -> int:
         """Clear all keys matching a pattern using SCAN (non-blocking)."""
-        if not self.is_initialized or not self._circuit_breaker.can_attempt():
-            return 0
-
-        if self._client is None:
+        if not self._circuit_breaker.can_attempt() or self._client is None:
             return 0
 
         try:
@@ -386,16 +375,340 @@ class UpstashCache:
             logger.warning("Cache clear_pattern failed: %s", e)
             return 0
 
+    async def get_generation(self, key: str) -> str | int | None:
+        """Return the cached value for a generation-counter key (Redis interface)."""
+        if not self._circuit_breaker.can_attempt() or self._client is None:
+            return None
+        try:
+            result = await self._client.get(key)
+            self._circuit_breaker.record_success()
+            return result
+        except Exception as e:
+            self._circuit_breaker.record_failure()
+            logger.warning("Cache get_generation failed: %s", e)
+            return None
 
-# Global cache instance
-cache = UpstashCache()
+    async def incr_generation(self, key: str) -> int:
+        """Atomically increment a generation counter and return the new value."""
+        if not self._circuit_breaker.can_attempt() or self._client is None:
+            raise RuntimeError("Cache client is unavailable for incr")
+        try:
+            result = await self._client.incr(key)
+            self._circuit_breaker.record_success()
+            return int(result)
+        except Exception as e:
+            self._circuit_breaker.record_failure()
+            logger.warning("Cache incr_generation failed: %s", e)
+            raise
 
+
+class PostgresCache(BaseCache):
+    """Postgres-backed cache implementation.
+
+    Provides the same GenerationCacheClient interface (get, incr) as the
+    Redis backends, enabling transparent use from ``cache_generation``.
+    Values are serialized to JSONB in the cache_entries table; generation
+    counters live in the cache_generations table.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._engine: Any = None
+        self._sessionmaker: Any = None
+
+    @property
+    def is_initialized(self) -> bool:
+        return self._initialized and self._sessionmaker is not None
+
+    async def initialize(self, database_url: str) -> None:
+        """Configure the Postgres cache backend from a database URL.
+
+        Opens a connection-pooled async engine and a session factory.  No
+        database round-trip occurs at this stage; the first cache command
+        lazily acquires a connection.
+        """
+        if self._initialized:
+            logger.warning("Postgres cache already initialized")
+            return
+
+        try:
+            self._engine = create_async_engine(
+                database_url,
+                pool_pre_ping=True,
+                pool_size=3,
+                max_overflow=5,
+                pool_recycle=300,
+                connect_args={
+                    "timeout": _CONNECT_TIMEOUT_SECONDS,
+                    "server_settings": {
+                        "application_name": "comic_pile_cache",
+                    },
+                },
+                pool_reset_on_return="rollback",
+            )
+
+            async def _noop_timeout(seconds: float) -> AsyncIterator[None]:
+                """No-op async context manager; placeholder for timeout instrumentation."""
+                yield
+
+            self._sessionmaker = async_sessionmaker(
+                self._engine,
+                class_=AsyncSession,
+                expire_on_commit=False,
+                autoflush=False,
+                autocommit=False,
+            )
+
+            async with self._sessionmaker() as session:
+                await session.execute(text("SELECT 1"))
+                await session.commit()
+
+            self._circuit_breaker.reset()
+            self._initialized = True
+            logger.info("Postgres cache initialized for database: %s", database_url)
+        except Exception as exc:
+            logger.error("Postgres cache initialization failed: %s", exc)
+            self._engine = None
+            self._sessionmaker = None
+            self._initialized = False
+            raise
+
+    async def close(self) -> None:
+        """Close the database engine used by the Postgres cache."""
+        if self._engine is not None:
+            try:
+                await self._engine.dispose()
+            except Exception as exc:
+                logger.warning("Postgres cache engine dispose failed: %s", exc)
+            self._engine = None
+            self._sessionmaker = None
+            self._initialized = False
+            logger.info("Postgres cache closed")
+
+    @asynccontextmanager
+    async def _session(self) -> AsyncIterator[AsyncSession]:
+        """Acquire and yield a database session for one cache operation."""
+        if self._sessionmaker is None:
+            raise RuntimeError("Postgres cache has not been initialized")
+        session = self._sessionmaker()
+        try:
+            yield session
+        except SQLAlchemyError:
+            await session.rollback()
+            raise
+        finally:
+            await session.aclose()
+
+    async def get(self, key: str) -> Any | None:
+        """Return the cached value for key, or None."""
+        if not self._circuit_breaker.can_attempt() or self._sessionmaker is None:
+            return None
+
+        try:
+            async with self._session() as session:
+                result = await session.execute(
+                    text(
+                        "SELECT value FROM cache_entries "
+                        "WHERE key = :key AND (expires_at IS NULL OR expires_at > now())"
+                    ),
+                    {"key": key},
+                )
+                row = result.one_or_none()
+            self._circuit_breaker.record_success()
+            if row is None:
+                return None
+            return json.loads(row[0])
+        except Exception as exc:
+            self._circuit_breaker.record_failure()
+            logger.warning("Postgres cache get failed: %s", exc)
+            return None
+
+    async def set(self, key: str, value: Any, ttl: int | None = None) -> bool:
+        """Store value under key; return whether the write succeeded."""
+        if not self._circuit_breaker.can_attempt() or self._sessionmaker is None:
+            return False
+
+        try:
+            serialized = json.dumps(value, default=str)
+            expires_clause = (
+                "now() + :ttl_seconds * interval \\'1 second\\'"
+                if ttl is not None
+                else "NULL"
+            )
+            async with self._session() as session:
+                await session.execute(
+                    text(
+                        "INSERT INTO cache_entries (key, value, ttl, expires_at) "
+                        "VALUES (:key, :value, :ttl, " + expires_clause + ") "
+                        "ON CONFLICT (key) DO UPDATE SET "
+                        "value = EXCLUDED.value, "
+                        "ttl = EXCLUDED.ttl, "
+                        "expires_at = EXCLUDED.expires_at"
+                    ),
+                    {"key": key, "value": serialized, "ttl": ttl},
+                )
+                await session.commit()
+            self._circuit_breaker.record_success()
+            return True
+        except Exception as exc:
+            self._circuit_breaker.record_failure()
+            logger.warning("Postgres cache set failed: %s", exc)
+            return False
+
+    async def delete(self, key: str) -> bool:
+        """Remove key; return whether the delete succeeded."""
+        if not self._circuit_breaker.can_attempt() or self._sessionmaker is None:
+            return False
+
+        try:
+            async with self._session() as session:
+                await session.execute(
+                    text("DELETE FROM cache_entries WHERE key = :key"),
+                    {"key": key},
+                )
+                await session.commit()
+            self._circuit_breaker.record_success()
+            return True
+        except Exception as exc:
+            self._circuit_breaker.record_failure()
+            logger.warning("Postgres cache delete failed: %s", exc)
+            return False
+
+    async def clear_pattern(self, pattern: str) -> int:
+        """Remove every key matching pattern; return the deletion count."""
+        if not self._circuit_breaker.can_attempt() or self._sessionmaker is None:
+            return 0
+
+        try:
+            async with self._session() as session:
+                result = await session.execute(
+                    text("DELETE FROM cache_entries WHERE key LIKE :pattern"),
+                    {"pattern": pattern},
+                )
+                row_count = result.rowcount
+                await session.commit()
+            self._circuit_breaker.record_success()
+            return row_count or 0
+        except Exception as exc:
+            self._circuit_breaker.record_failure()
+            logger.warning("Postgres cache clear_pattern failed: %s", exc)
+            return 0
+
+    def get_generation(self, key: str) -> str | int | None:
+        """Return the generation counter for a user (GenerationCacheClient interface)."""
+        if not self._circuit_breaker.can_attempt() or self._sessionmaker is None:
+            return None
+        try:
+            async def _get() -> str | int | None:
+                async with self._session() as session:
+                    result = await session.execute(
+                        text("SELECT generation FROM cache_generations WHERE user_id = :uid"),
+                        {"uid": key.split(chr(58))[-1]},
+                    )
+                    row = result.one_or_none()
+                    return str(row[0]) if row is not None else None
+            import asyncio
+            return asyncio.get_event_loop().run_until_complete(_get())
+        except Exception as exc:
+            self._circuit_breaker.record_failure()
+            logger.warning("Postgres cache get_generation failed: %s", exc)
+            return None
+
+    def incr_generation(self, key: str) -> int:
+        """Atomically increment a user generation counter and return the new value."""
+        if not self._circuit_breaker.can_attempt() or self._sessionmaker is None:
+            raise RuntimeError("Postgres cache is unavailable for incr")
+        try:
+            async def _incr() -> int:
+                user_id = key.split(chr(58))[-1]
+                async with self._session() as session:
+                    result = await session.execute(
+                        text(
+                            "INSERT INTO cache_generations (user_id, generation) "
+                            "VALUES (:uid, 1) "
+                            "ON CONFLICT (user_id) DO UPDATE SET "
+                            "generation = cache_generations.generation + 1 "
+                            "RETURNING generation"
+                        ),
+                        {"uid": user_id},
+                    )
+                    row = result.one_or_none()
+                    await session.commit()
+                    return int(row[0]) if row is not None else 1
+            import asyncio
+            result = asyncio.get_event_loop().run_until_complete(_incr())
+            self._circuit_breaker.record_success()
+            return result
+        except Exception as exc:
+            self._circuit_breaker.record_failure()
+            logger.warning("Postgres cache incr_generation failed: %s", exc)
+            raise
+
+
+# ---------------------------------------------------------------------------
+# Postgres key/value helpers (callable from sync wrappers used by the
+# async generation protocol via fallback context)
+# ---------------------------------------------------------------------------
+
+def _pg_get_generation(user_id_str: str) -> str | None:
+    """Return the generation counter (sync wrapper, used by PostgresCache)."""
+    cache_obj: PostgresCache = cast(PostgresCache, cache)
+
+    async def _run() -> str | None:
+        async with cache_obj._session() as session:
+            result = await session.execute(
+                text("SELECT generation FROM cache_generations WHERE user_id = :uid"),
+                {"uid": user_id_str},
+            )
+            row = result.one_or_none()
+            return str(row[0]) if row is not None else None
+
+    import asyncio
+    try:
+        loop = asyncio.get_running_loop()
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            return loop.run_in_executor(pool, lambda: asyncio.run(_run())).result()
+    except RuntimeError:
+        return asyncio.run(_run())
+
+
+def _pg_incr_generation(user_id_str: str) -> int:
+    """Atomically increment a Postgres generation counter (sync wrapper)."""
+    cache_obj: PostgresCache = cast(PostgresCache, cache)
+
+    async def _run() -> int:
+        async with cache_obj._session() as session:
+            result = await session.execute(
+                text(
+                    "INSERT INTO cache_generations (user_id, generation) "
+                    "VALUES (:uid, 1) "
+                    "ON CONFLICT (user_id) DO UPDATE SET "
+                    "generation = cache_generations.generation + 1 "
+                    "RETURNING generation"
+                ),
+                {"uid": user_id_str},
+            )
+            row = result.one_or_none()
+            await session.commit()
+            return int(row[0]) if row is not None else 1
+
+    import asyncio
+    try:
+        loop = asyncio.get_running_loop()
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            return loop.run_in_executor(pool, lambda: asyncio.run(_run())).result()
+    except RuntimeError:
+        return asyncio.run(_run())
+
+
+# ---------------------------------------------------------------------------
+# Key helpers
+# ---------------------------------------------------------------------------
 
 def _arg_to_cache_string(value: Any) -> str | None:
-    """Convert an argument value to a stable cache key string.
-
-    Returns None for types that should be skipped (e.g., db sessions, request objects).
-    """
+    """Convert an argument value to a stable cache key string."""
     if value is None:
         return "None"
 
@@ -406,7 +719,6 @@ def _arg_to_cache_string(value: Any) -> str | None:
     if arg_type in _SKIP_TYPES:
         return None
 
-    # For model objects with an id attribute, use TypeName:id for stability
     if hasattr(value, "id") and not isinstance(value, type):
         return f"{arg_type}:{value.id}"
 
@@ -419,12 +731,7 @@ def _generate_cache_key(
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
 ) -> str:
-    """Generate a cache key from function name and arguments.
-
-    Uses inspect.signature to bind arguments in declaration order,
-    producing stable keys regardless of whether callers use positional
-    or keyword arguments.
-    """
+    """Generate a cache key from function name and arguments."""
     key_parts: list[str] = [func_name]
 
     try:
@@ -437,7 +744,6 @@ def _generate_cache_key(
             if s is not None:
                 key_parts.append(s)
     except (TypeError, ValueError):
-        # Fallback: process args positionally, then kwargs sorted
         for arg in args:
             s = _arg_to_cache_string(arg)
             if s is not None:
@@ -477,6 +783,10 @@ def _has_user_cache_scope(
     return False
 
 
+# ---------------------------------------------------------------------------
+# @cached decorator
+# ---------------------------------------------------------------------------
+
 def cached(
     ttl: int | TTL = TTL.MEDIUM,
     *,
@@ -487,22 +797,9 @@ def cached(
     User-scoped calls are routed through the bounded generation namespace so
     mutations can invalidate every cached view for one user with one generation
     bump. Calls without a resolvable user identity retain the legacy key behavior.
-
-    Args:
-        ttl: Time-to-live in seconds or TTL tier enum
-        falsy_ttl: Optional different TTL for falsy results
-
-    Returns:
-        A decorator preserving the wrapped async function's parameter and return types.
-
-    Usage:
-        @cached(ttl=TTL.SHORT)
-        async def get_roll_pool(user_id: int, db: AsyncSession):
-            ...
     """
 
     def decorator(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitable[T]]:
-        # Resolve TTL enum to actual value
         actual_ttl = _get_ttl_value(ttl) if isinstance(ttl, TTL) else ttl
         generation_wrapper: Callable[P, Awaitable[T]] | None = None
 
@@ -512,8 +809,6 @@ def cached(
 
             if _has_user_cache_scope(func, *args, **kwargs):
                 if generation_wrapper is None:
-                    # Lazy import avoids a module cycle: cache_generation imports
-                    # this module's cache primitives to implement the namespace.
                     from app.cache_generation import generation_cached
 
                     generation_wrapper = generation_cached(
@@ -522,26 +817,21 @@ def cached(
                     )(func)
                 return await generation_wrapper(*args, **kwargs)
 
-            # Skip if cache not initialized
             if not cache.is_initialized:
                 return await func(*args, **kwargs)
 
             func_name = getattr(func, "__name__", func.__class__.__name__)
             cache_key = _generate_cache_key(func_name, func, args, kwargs)
 
-            # Try to get from cache
             cached_value = await cache.get(cache_key)
             if cached_value is not None:
                 logger.debug("Cache hit: %s", cache_key)
                 return cast(T, cached_value)
 
-            # Execute function and cache result
             logger.debug("Cache miss: %s", cache_key)
             result = await func(*args, **kwargs)
 
-            # Determine TTL for this result
             effective_ttl = falsy_ttl if falsy_ttl is not None and not result else actual_ttl
-
             if result or falsy_ttl is not None:
                 await cache.set(cache_key, result, ttl=effective_ttl)
 
@@ -552,13 +842,13 @@ def cached(
     return decorator
 
 
+# ---------------------------------------------------------------------------
+# Global cache singleton
+# ---------------------------------------------------------------------------
+
+cache: BaseCache = UpstashCache()
+
+
 async def invalidate_cache(pattern: str) -> int:
-    """Invalidate cache keys matching a pattern.
-
-    Args:
-        pattern: Pattern to match (e.g., "cache:threads:*")
-
-    Returns:
-        Number of keys deleted
-    """
+    """Invalidate cache keys matching a pattern."""
     return await cache.clear_pattern(pattern)
