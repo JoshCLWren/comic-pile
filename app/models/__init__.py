@@ -22,6 +22,7 @@ from app.models.snapshot import Snapshot
 from app.models.thread import Thread
 from app.models.user import User
 from app.models.user_preferences import UserPreferences
+from app.models.user_taste_signal import UserTasteSignal
 
 __all__ = [
     "CBLSource",
@@ -49,4 +50,5 @@ __all__ = [
     "ThreadExternalSeriesMapping",
     "User",
     "UserPreferences",
+    "UserTasteSignal",
 ]

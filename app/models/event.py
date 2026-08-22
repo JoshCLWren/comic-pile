@@ -81,6 +81,12 @@ class Event(Base):
     )
     # Denormalized issue_number preserved for historical display even if Issue is deleted
     issue_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Recommendation context snapshot recorded at decision time (schema version 2).
+    # Carries the active bandwidth/intent, contextual-bypass markers, and the exact
+    # per-candidate factors and final weights passed to the chooser.
+    recommendation_context: Mapped[dict[str, object] | None] = mapped_column(
+        JSON, nullable=True
+    )
 
     __table_args__ = (
         Index("ix_event_session_id", "session_id"),
