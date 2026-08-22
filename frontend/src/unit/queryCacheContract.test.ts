@@ -213,7 +213,7 @@ describe('targeted cache effects', () => {
 
     await invalidateAfterQueueMovement(client)
 
-    expect(resetQueries).toHaveBeenCalledOnce()
+expect(resetQueries).toHaveBeenCalledTimes(1)
     expect(resetQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.queue.pages(),
     })

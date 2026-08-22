@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   get: vi.fn(),
   update: vi.fn(),
+  readiness: vi.fn(),
   listGroups: vi.fn(),
   listIssues: vi.fn(),
   getIssue: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock('../services/api-continuity-plans', () => ({
     create: mocks.create,
     get: mocks.get,
     update: mocks.update,
+    readiness: mocks.readiness,
   },
 }))
 
@@ -79,6 +81,17 @@ beforeEach(() => {
   mocks.get.mockReset()
   mocks.create.mockReset()
   mocks.update.mockReset()
+  mocks.readiness.mockReset()
+  mocks.readiness.mockResolvedValue({
+    plan_id: 12,
+    plan_name: 'Saved lane',
+    ordering_mode: 'strict_sequential',
+    lanes: [{ id: 'main', name: 'Reading order', order: 0 }],
+    nodes: [],
+    plan_diagnostics: [],
+    summary: { total: 0, readable: 0, blocked: 0, complete: 0, unavailable: 0 },
+    generated_at: '2026-08-12T00:00:00Z',
+  })
   mocks.listIssues.mockReset()
   mocks.listThreads.mockResolvedValue({ threads: [thread, secondThread], next_page_token: null })
   mocks.listGroups.mockResolvedValue([{ id: 8, name: 'Fourth World', memberships: [], created_at: '2026-08-12T00:00:00Z' }])

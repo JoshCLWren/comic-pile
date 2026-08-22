@@ -21,12 +21,28 @@ def load_controller():
     return module
 
 
-def test_required_checks_no_checks_configured_passes():
+def test_required_checks_no_checks_configured_retries():
     controller = load_controller()
     result = controller.interpret_required_checks(
         [], command_status=1, stderr="no required checks reported for this branch"
     )
-    assert result["decision"] == "pass"
+    assert result["decision"] == "retry"
+    assert "blocked until CI runs" in result["reason"]
+
+
+def test_required_checks_empty_payload_with_success_status_retries():
+    """An empty required-check payload must never pass, whatever gh exit code says."""
+    controller = load_controller()
+    result = controller.interpret_required_checks([], command_status=0, stderr="")
+    assert result["decision"] == "retry"
+
+
+def test_required_checks_none_with_no_required_checks_stderr_retries():
+    controller = load_controller()
+    result = controller.interpret_required_checks(
+        None, command_status=1, stderr="no required checks reported for this branch"
+    )
+    assert result["decision"] == "retry"
 
 
 def test_required_checks_pending_retries():

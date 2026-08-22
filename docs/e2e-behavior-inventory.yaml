@@ -1,0 +1,108 @@
+# Canonical E2E behavior inventory for ComicPile
+#
+# Epic:       #1476 — Rebuild ComicPile E2E from a canonical behavior inventory
+# Child work: #1479 — inventory canonical user behaviors with stable scenario IDs
+#
+# This file is the single, authoritative inventory of what ComicPile's browser
+# E2E suite must protect. It is the source of truth for coverage work; the
+# retired Playwright suite and closed bug history were consulted only as
+# supporting evidence, not copied as the new specification.
+#
+# Ownership rule (from #1479): the stable scenario ID is the permanent identity
+# for E2E coverage. Future implementation work must cite the inventory IDs it
+# owns so two factories do not independently create coverage for the same
+# behavior.
+#
+# Field contract per behavior:
+#   id       — stable scenario ID (e.g. ROLL-001)
+#   area     — product area (auth, queue, roll, rate, snooze, thread, dep,
+#              order, mobile, regression, security, feature)
+#   behavior — user-visible behavior / invariant at the user-contract level
+#   priority — P0 | P1 | P2
+#   status   — uncovered | covered | blocked
+#   mobile   — optional note when behavior materially differs on mobile
+#   evidence — optional supporting references (legacy tests / bug history)
+
+meta:
+  version: 1
+  generated_for: "current product behavior (after #1478 legacy suite removal)"
+  source_of_truth: "current routes, UI, APIs, user workflows, business invariants"
+  priority_definitions:
+    P0: "Core user journey that must never regress; protects startup and primary flows."
+    P1: "Important historical regression or secondary flow that should be covered."
+    P2: "Useful but non-critical surface; covered opportunistically."
+  status_definitions:
+    uncovered: "No fresh Chromium coverage exists yet for this behavior."
+    covered: "A deterministic fresh Chromium spec owns this scenario ID."
+    blocked: "Cannot be covered until a prerequisite (infra/feature) lands."
+
+behaviors:
+  # ---- Authentication & startup (P0) ----
+  - id: AUTH-001
+    area: auth
+    behavior: "User can sign in with email/password and obtain a session"
+    priority: P0
+    status: uncovered
+
+  # ---- Queue availability (P0) ----
+  - id: QUEUE-001
+    area: queue
+    behavior: "Queue page displays pending comics in order and allows marking as completed"
+    priority: P0
+    status: covered
+
+  # ---- Roll selection (P0) ----
+  - id: ROLL-001
+    area: roll
+    behavior: "User can roll a comic and see the result"
+    priority: P0
+    status: uncovered
+
+  # ---- Rating / advance (P0) ----
+  - id: RATE-001
+    area: rate
+    behavior: "User can rate a comic after viewing"
+    priority: P0
+    status: uncovered
+
+  # ---- Snooze / unsnooze (P0) ----
+  - id: SNOOZE-001
+    area: snooze
+    behavior: "User can snooze or unsnooze a comic and it appears appropriately in the queue"
+    priority: P0
+    status: uncovered
+
+  # ---- Core thread management (P0) ----
+  - id: THREAD-001
+    area: thread
+    behavior: "Users can create, edit, and delete thread topics"
+    priority: P0
+    status: uncovered
+
+  # ---- Dependency behavior (P0) ----
+  - id: DEP-001
+    area: dep
+    behavior: "Dependency relations between comics are resolved correctly"
+    priority: P0
+    status: uncovered
+
+  # ---- Reading-order behavior (P0) ----
+  - id: ORDER-001
+    area: order
+    behavior: "Reading order follows declared dependency graph"
+    priority: P0
+    status: uncovered
+
+  # ---- Primary mobile interaction path (P0) ----
+  - id: MOBILE-001
+    area: mobile
+    behavior: "Primary mobile interaction path works for core user journeys"
+    priority: P0
+    status: uncovered
+
+  # ---- Secondary features (P2) ----
+  - id: CONT-001
+    area: feature
+    behavior: "User can create and modify continuity plans with parallel lanes"
+    priority: P2
+    status: covered

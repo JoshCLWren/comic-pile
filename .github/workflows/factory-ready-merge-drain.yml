@@ -77,6 +77,23 @@ jobs:
             echo 'Stranded-closure sweep failed; retrying on the next drain' >&2
           }
 
+          echo 'Rescuing factory PRs whose heads never received CI runs'
+          while IFS=$'\t' read -r pr head_sha branch; do
+            [[ -n "$pr" && -n "$head_sha" && -n "$branch" ]] || continue
+            check_count="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${head_sha}/check-runs?per_page=1" \
+              --jq '.total_count' 2>/dev/null || echo 0)"
+            if [[ "${check_count:-0}" == "0" ]]; then
+              echo "PR #${pr} has no check runs at head ${head_sha:0:12}; dispatching CI rescue"
+              gh workflow run ci.yml --ref "$branch" 2>/dev/null \
+                || echo "CI rescue dispatch for PR #${pr} failed; retrying on the next drain" >&2
+            fi
+          done < <(
+            gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 200 \
+              --label 'factory:ready' --label 'factory:ci' \
+              --json number,headRefName,headRefOid \
+              --jq '.[] | [.number, .headRefOid, .headRefName] | @tsv'
+          )
+
           mapfile -t ready_prs < <(
             gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 200 \
               --label 'factory:ready' \

@@ -19,6 +19,8 @@ export function ComicPillar({
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false)
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
   const [identityState, setIdentityState] = useState<IssueIdentityResponse | null>(null)
+  const [searchMode, setSearchMode] = useState<'confirm' | 'replace'>('confirm')
+
   const threadTitle = activeRatingThread?.title ?? 'Loading…'
   const issueNumber = activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number ?? null
   const issueId = activeRatingThread?.issue_id ?? activeRatingThread?.next_issue_id
@@ -141,7 +143,7 @@ export function ComicPillar({
           </p>
           <button
             type="button"
-            onClick={() => setIsSearchDialogOpen(true)}
+            onClick={() => { setSearchMode('confirm'); setIsSearchDialogOpen(true) }}
             className="min-h-9 rounded-lg px-3 text-[10px] font-black uppercase tracking-wider text-stone-900 bg-amber-500 hover:bg-amber-400 transition shrink-0"
           >
             Find ComicVine match
@@ -162,7 +164,7 @@ export function ComicPillar({
           </p>
           <button
             type="button"
-            onClick={() => setIsSearchDialogOpen(true)}
+            onClick={() => { setSearchMode('replace'); setIsSearchDialogOpen(true) }}
             className="min-h-9 rounded-lg px-3 text-[10px] font-black uppercase tracking-wider text-stone-400 hover:text-amber-400 transition shrink-0"
             style={{
               border: '1px solid rgba(255,255,255,0.1)',
@@ -197,6 +199,7 @@ export function ComicPillar({
           issueId={issueId}
           threadTitle={threadTitle}
           issueNumber={issueNumber}
+          mode={searchMode}
           onClose={() => setIsSearchDialogOpen(false)}
           onConfirmed={handleIdentityConfirmed}
         />
