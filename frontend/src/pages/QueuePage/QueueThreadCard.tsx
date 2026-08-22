@@ -124,7 +124,7 @@ export default function QueueThreadCard({
             </Tooltip>
             <button
               type="button"
-              className="min-w-0 flex-1 text-left"
+              className="min-w-0 flex-1 text-left overflow-hidden"
               onClick={onCardClick}
               aria-label={`Open ${thread.title}`}
             >
@@ -152,7 +152,7 @@ export default function QueueThreadCard({
 
       <div className="pl-8 md:pl-[2.75rem]">
         <p className="text-xs text-stone-500 uppercase tracking-widest font-bold">{thread.format}</p>
-        {thread.notes && <p className="text-xs text-stone-400 mt-2">{thread.notes}</p>}
+        {thread.notes && <p className="text-xs text-stone-400 mt-2 break-anywhere">{thread.notes}</p>}
         {thread.issues_remaining !== null && (
           <p className="text-sm text-stone-300 mt-2 font-medium">
             {isMigrated && thread.next_unread_issue_number

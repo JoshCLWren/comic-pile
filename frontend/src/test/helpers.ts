@@ -204,7 +204,14 @@ export async function submitRatingAndWaitForRateResponse(
 
 export async function createThread(
   page: Page,
-  threadData: { title: string; format: string; issues_remaining: number; total_issues?: number; issue_range?: string }
+  threadData: {
+    title: string;
+    format: string;
+    issues_remaining: number;
+    total_issues?: number;
+    issue_range?: string;
+    notes?: string;
+  }
 ): Promise<{ id: number }> {
   const token = await getAuthToken(page);
   const csrfToken = await getCsrfToken(page, token);
@@ -213,6 +220,7 @@ export async function createThread(
     title: threadData.title,
     format: threadData.format,
     issues_remaining: threadData.issues_remaining,
+    ...(threadData.notes !== undefined ? { notes: threadData.notes } : {}),
   };
 
   let success = false;
