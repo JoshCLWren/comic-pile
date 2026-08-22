@@ -83,7 +83,11 @@ class ReaderContextEdge(BaseModel):
     source_issue_id: int
     target_issue_id: int
     source_label: str | None = None
-    target_label: str | None = None
+        target_label: str | None = None
+        source_issue_number: str | None = None
+        target_issue_number: str | None = None
+        source_thread_title: str | None = None
+        target_thread_title: str | None = None
     note: str | None = None
     explanation: str | None = None
 
