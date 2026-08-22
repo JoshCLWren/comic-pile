@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueIntelligence'
 import { type ComicVineRelatedIssue } from '../../../services/api'
-import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass } from '../../../utils/comicIdentity'
-import { useToast } from '../../../contexts/useToast'
+import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass, normalizeArcName } from '../../../utils/comicIdentity'
+import AddToComicPileDialog from '../../../components/AddToComicPileDialog'
 
 interface ComicVineIssueCardProps {
   issueId: number | null | undefined
@@ -24,13 +24,17 @@ export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
   const { metadata, isLoading } = useComicVineIssueIntelligence(issueId)
   const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null)
   const [expandedArcs, setExpandedArcs] = useState<Set<number>>(new Set())
-  const { showToast } = useToast()
+  const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [addDialogData, setAddDialogData] = useState<{
+    seriesName: string | null
+    issueNumber: string | null
+    comicvineIssueId: string
+    imageUrl: string | null
+  } | null>(null)
 
-  const handleAddToComicPile = (identity: { primary: string; secondary: string | null }, _comicvineIssueId: string) => {
-    showToast(
-      `Add "${identity.primary}" to ComicPile — feature coming soon`,
-      'info'
-    )
+  const handleAddToComicPile = (identity: { primary: string; secondary: string | null }, comicvineIssueId: string, seriesName: string | null, issueNumber: string | null) => {
+    setAddDialogData({ seriesName, issueNumber, comicvineIssueId, imageUrl: metadata?.image_url ?? null })
+    setAddDialogOpen(true)
   }
 
   if (!issueId || (!isLoading && !metadata)) return null
@@ -98,10 +102,13 @@ export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
           return (
             <section key={arc.comicvine_arc_id}>
               <div className="flex items-center justify-between gap-2 mb-2">
-                <h3 className="text-xs font-black text-blue-300">{arc.name}</h3>
+                <h3 className="text-xs font-black text-blue-300">{normalizeArcName(arc.name)}</h3>
                 <span className="text-[9px] text-stone-500 shrink-0">
                   {arc.related_issues.filter((issue) => issue.comicpile_matches.length > 0).length} in ComicPile ·{' '}
                   {arc.related_issues.filter((issue) => issue.comicpile_matches.length === 0).length} missing
+                  {arc.total_related_count != null && arc.total_related_count > arc.related_issues.length && (
+                    <span className="ml-1 text-stone-600">({arc.related_issues.length} of {arc.total_related_count} shown)</span>
+                  )}
                 </span>
               </div>
               <p className="text-[9px] text-stone-500 mb-2">Related by story-arc membership, not reading order.</p>
@@ -131,7 +138,7 @@ export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
                           {state === 'missing' && (
                             <button
                               type="button"
-                              onClick={() => handleAddToComicPile(identity, issue.comicvine_issue_id)}
+                              onClick={() => handleAddToComicPile(identity, issue.comicvine_issue_id, issue.series_name, issue.issue_number)}
                               className="text-[9px] font-bold text-amber-500 hover:text-amber-400 shrink-0 px-2 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 transition-colors"
                               aria-label={`Add ${identity.primary} to ComicPile`}
                             >
@@ -190,5 +197,16 @@ export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
         )}
       </div>
     </details>
+    {addDialogData && (
+      <AddToComicPileDialog
+        isOpen={addDialogOpen}
+        seriesName={addDialogData.seriesName}
+        issueNumber={addDialogData.issueNumber}
+        comicvineIssueId={addDialogData.comicvineIssueId}
+        imageUrl={addDialogData.imageUrl}
+        onClose={() => setAddDialogOpen(false)}
+        onAdded={() => setAddDialogOpen(false)}
+      />
+    )}
   )
 }

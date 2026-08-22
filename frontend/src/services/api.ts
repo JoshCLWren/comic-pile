@@ -424,6 +424,7 @@ export interface ComicVineStoryArc {
   name: string
   comicvine_url: string | null
   related_issues: ComicVineRelatedIssue[]
+  total_related_count: number | null
 }
 
 export interface ComicVineIssueIntelligence {
