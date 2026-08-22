@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -42,6 +42,13 @@ class Session(Base):
     )
     # Thread IDs temporarily excluded from roll selection during this session
     snoozed_thread_ids: Mapped[list[int] | None] = mapped_column(JSON, nullable=True)
+    # Ephemeral session-mode state (bandwidth/intent) for personalized rolls.
+    # These columns never affect durable thread affinity or queue order.
+    session_bandwidth: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    bandwidth_source: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    bandwidth_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    session_intent: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    intent_source: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     __table_args__ = (
         Index("ix_session_started_at", "started_at"),

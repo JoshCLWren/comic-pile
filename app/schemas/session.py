@@ -6,8 +6,13 @@ backward compatibility but will be removed in a future version.
 """
 
 from datetime import UTC, datetime
+from typing import Literal
 
-from pydantic import BaseModel, Field, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
+
+BandwidthLevel = Literal["light", "balanced", "deep"]
+IntentLevel = Literal["balanced", "momentum", "familiar", "explore", "random"]
+ModeSource = Literal["manual", "snooze"]
 
 
 def _to_utc_iso(value: datetime) -> str:
@@ -31,6 +36,64 @@ class SnoozedThreadInfo(BaseModel):
 
     id: int
     title: str
+
+
+class SessionModeState(BaseModel):
+    """Canonical ephemeral session mode exposed to clients.
+
+    ``None`` fields mean the dimension has no explicit session state yet
+    (legacy or cold-start), so clients must treat them as unset rather than
+    defaulting to a specific mode.
+    """
+
+    bandwidth: BandwidthLevel | None = None
+    intent: IntentLevel | None = None
+    bandwidth_source: ModeSource | None = None
+    intent_source: ModeSource | None = None
+    bandwidth_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
+class SnoozeCorrectionGuidance(BaseModel):
+    """Structured correction result returned by the Snooze endpoint.
+
+    Lets the client decide whether to offer the clarification sheet without
+    parsing prose. Legacy and no-correction cases return a safe neutral result
+    with ``reason_code="none"`` and ``suggest_clarification=False``.
+    """
+
+    bandwidth_changed: bool = False
+    bandwidth: BandwidthLevel | None = None
+    bandwidth_source: ModeSource | None = None
+    bandwidth_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    reason_code: str = "none"
+    suggest_clarification: bool = False
+
+
+class SessionModeUpdateRequest(BaseModel):
+    """Request payload for manually setting the canonical session mode.
+
+    Both dimensions are optional; at least one must be provided. Changing one
+    dimension never resets the other.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    bandwidth: BandwidthLevel | None = None
+    intent: IntentLevel | None = None
+
+    @model_validator(mode="after")
+    def require_at_least_one_dimension(self) -> SessionModeUpdateRequest:
+        """Reject updates that would change nothing.
+
+        Returns:
+            The validated request.
+
+        Raises:
+            ValueError: When neither bandwidth nor intent is provided.
+        """
+        if self.bandwidth is None and self.intent is None:
+            raise ValueError("At least one of bandwidth or intent must be provided")
+        return self
 
 
 class ActiveThreadInfo(BaseModel):
@@ -79,6 +142,7 @@ class SessionResponse(BaseModel):
     snoozed_thread_ids: list[int] = []
     snoozed_threads: list[SnoozedThreadInfo] = []
     pending_thread_id: int | None = None
+    correction: SnoozeCorrectionGuidance | None = None
 
     @field_serializer("started_at", "ended_at")
     def serialize_datetime(self, value: datetime | None) -> str | None:

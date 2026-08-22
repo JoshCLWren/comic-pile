@@ -16,7 +16,11 @@ from app.models import Event, Snapshot, Thread
 from app.models import Session as SessionModel
 from app.models.user import User
 from app.schemas import ActiveThreadInfo, SessionResponse
-from app.schemas.session import SnoozedThreadInfo
+from app.schemas.session import SnoozedThreadInfo, SnoozeCorrectionGuidance
+from app.services.session_mode import (
+    decide_snooze_correction,
+    estimate_candidate_effort,
+)
 from comic_pile.dice_ladder import step_up
 from comic_pile.queue import move_to_safe_position
 from comic_pile.session import get_current_die_for_session
@@ -102,6 +106,7 @@ async def build_session_response(
     snapshot_count: int | None = None,
     snoozed_threads: list[SnoozedThreadInfo] | None = None,
     snoozed_thread_ids: list[int] | None = None,
+    correction: SnoozeCorrectionGuidance | None = None,
 ) -> SessionResponse:
     """Build a SessionResponse from a session model.
 
@@ -119,6 +124,7 @@ async def build_session_response(
         snapshot_count: Pre-computed snapshot count (skips COUNT query).
         snoozed_threads: Pre-fetched snoozed thread info (skips snoozed thread query).
         snoozed_thread_ids: Pre-fetched snoozed thread IDs (avoids expired session read).
+        correction: Structured snooze correction guidance, when applicable.
 
     Returns:
         A SessionResponse with all required fields populated.
@@ -176,6 +182,8 @@ async def build_session_response(
         snapshot_count=snapshot_count,
         snoozed_thread_ids=resolved_ids,
         snoozed_threads=snoozed_threads,
+        pending_thread_id=session.pending_thread_id,
+        correction=correction,
     )
 
 
