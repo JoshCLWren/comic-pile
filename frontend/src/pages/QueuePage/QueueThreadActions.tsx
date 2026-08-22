@@ -26,13 +26,16 @@ export default function QueueThreadActions({
     action()
   }
 
+  // Enable rule: snooze is only available for the pending thread
+  // (session.pending_thread_id) — the comic currently waiting to be read — or
+  // for already-snoozed threads via Unsnooze. See QueuePage.tsx snoozeDisabled.
   const snoozeTooltip = snoozeDisabled
     ? 'Only the comic currently waiting to be read can be snoozed.'
     : snoozeLabel === 'Unsnooze'
       ? 'Unsnooze to return this comic to the rolling pool.'
       : 'Snooze to temporarily exclude this comic from rolling.'
 
-  const snoozeDescriptionId = `snooze-description-${title.replace(/\s+/g, '-').toLowerCase()}`
+  const snoozeDescriptionId = `snooze-description-${title.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'thread'}`
 
   return (
     <div
@@ -48,8 +51,13 @@ export default function QueueThreadActions({
           aria-label={snoozeLabel}
           aria-disabled={snoozeDisabled || undefined}
           aria-describedby={snoozeDisabled ? snoozeDescriptionId : undefined}
+          title={snoozeTooltip}
           tabIndex={snoozeDisabled ? 0 : undefined}
-          onClick={snoozeDisabled ? undefined : stopCardClick(onSnooze)}
+          onClick={
+            snoozeDisabled
+              ? (event: React.MouseEvent<HTMLButtonElement>) => event.stopPropagation()
+              : stopCardClick(onSnooze)
+          }
           className={`px-3 py-2 rounded-lg bg-teal-600/15 text-teal-300 text-xs font-bold hover:bg-teal-600/25 ${snoozeDisabled ? 'opacity-40 cursor-not-allowed hover:bg-teal-600/15' : ''}`}
         >
           {snoozeIcon} {snoozeLabel}
