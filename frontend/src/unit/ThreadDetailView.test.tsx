@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 import ThreadDetailView from '../pages/ThreadDetailView'
+import { ToastProvider } from '../contexts/ToastProvider'
 import { useUpdateThread } from '../hooks/useThread'
 import { threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
@@ -35,7 +36,7 @@ beforeEach(() => {
 })
 
 function renderPage() {
-  return render(<ThreadDetailView />)
+  return render(<ToastProvider><ThreadDetailView /></ToastProvider>)
 }
 
 it('renders a thread without legacy rating content', async () => {

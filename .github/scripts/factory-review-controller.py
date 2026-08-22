@@ -23,8 +23,8 @@ producer_worker_from_pr = _review_policy.producer_worker_from_pr
 review_marker = _review_policy.review_marker
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
-OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-3][0-9]|4[0-8])$")
-FIXED_WORKER_RE = re.compile(r"^(?:[6-9]|[1-3][0-9]|4[0-8])$")
+OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-5][0-9])$")
+FIXED_WORKER_RE = re.compile(r"^(?:[6-9]|[1-3][0-9]|[4-5][0-9])$")
 HEAD_RE = re.compile(r"^[0-9a-f]{40}$")
 SENSITIVE_ASSIGNMENT_RE = re.compile(
     r"(?i)([\"']?[A-Z][A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|DATABASE_URL|REDIS_URL|POSTGRES_URL)[\"']?\s*[=:]\s*[\"']?)([^\"'\s,}]+)"

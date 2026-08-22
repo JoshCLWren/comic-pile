@@ -3,6 +3,7 @@ import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueI
 import { type ComicVineRelatedIssue } from '../../../services/api'
 import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass } from '../../../utils/comicIdentity'
 import { useToast } from '../../../contexts/useToast'
+import ImageWithLoading from '../../../components/ImageWithLoading'
 
 interface ComicVineIssueCardProps {
   issueId: number | null | undefined
@@ -44,7 +45,7 @@ export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
     <details className="group bg-white/5 border border-white/10 rounded-2xl overflow-hidden text-left">
       <summary className="min-h-16 p-3 flex items-center gap-3 cursor-pointer list-none focus:ring-2 focus:ring-amber-500">
         {metadata.image_url && metadata.image_url !== failedImageUrl && (
-          <img
+          <ImageWithLoading
             src={metadata.image_url}
             alt=""
             loading="lazy"
