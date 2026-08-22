@@ -223,8 +223,20 @@ export interface SessionListResponse {
   next_page_token: string | null;
 }
 
+export interface BlockingDependency {
+  thread_id: number
+  thread_title: string
+  issue_number: string
+  label: string
+}
+
 export interface BlockingInfoResponse {
-  blocking_reasons: string[];
+  blocking_reasons: string[]
+  blocking_dependencies?: BlockingDependency[]
+}
+
+export interface BatchBlockingInfoResponse {
+  threads: Record<string, BlockingInfoResponse>
 }
 
 export interface DependencyCreatePayload {

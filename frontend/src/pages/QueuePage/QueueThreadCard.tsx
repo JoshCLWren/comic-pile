@@ -4,14 +4,14 @@ import PositionMenu from '../../components/PositionMenu'
 import { CrossoverTags } from '../../components/CrossoverTags'
 import { useCrossoverGroups } from '../../hooks/useCrossoverGroups'
 import type { DependencyGroupSummary } from '../../services/api-dependency-groups'
-import type { Thread } from '../../types'
+import type { BlockingDependency, Thread } from '../../types'
 import QueueThreadActions from './QueueThreadActions'
 
 interface QueueThreadCardProps {
   thread: Thread
   index: number
   isBlocked: boolean
-  blockingReasons: string[]
+  blockingDependencies: BlockingDependency[]
   crossoverGroups?: DependencyGroupSummary[]
   crossoverGroupsLoading?: boolean
   crossoverGroupsError?: boolean
@@ -40,7 +40,7 @@ export default function QueueThreadCard({
   thread,
   index,
   isBlocked,
-  blockingReasons,
+  blockingDependencies,
   crossoverGroups,
   crossoverGroupsLoading,
   crossoverGroupsError,

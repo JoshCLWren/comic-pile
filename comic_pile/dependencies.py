@@ -45,7 +45,25 @@ async def get_blocked_thread_ids(user_id: int, db: AsyncSession) -> set[int]:
     return await _get_blocked_thread_ids_uncached(user_id, db)
 
 
-async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSession) -> list[str]:
+class BlockingDependency:
+    """A single dependency blocking a thread, described in reader language."""
+
+    def __init__(self, thread_id: int, thread_title: str, issue_number: str) -> None:
+        self.thread_id = thread_id
+        self.thread_title = thread_title
+        self.issue_number = str(issue_number)
+        self.label = f"Needs {thread_title}: #{issue_number}"
+
+
+def format_blocking_reason(dependency: BlockingDependency) -> str:
+    """Legacy plain-text reason retained for backward-compatible consumers."""
+    return (
+        f"Blocked by issue #{dependency.issue_number} "
+        f"in {dependency.thread_title} (thread #{dependency.thread_id})"
+    )
+
+
+async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSession) -> list[BlockingDependency]:
     """Human-readable reasons a thread is blocked."""
     source_issue = Issue.__table__.alias("source_issue")
     next_unread_issue = Issue.__table__.alias("next_unread_issue")
@@ -75,7 +93,7 @@ async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSessi
         .distinct()
     )
     return [
-        f"Blocked by issue #{issue_number} in {thread_title} (thread #{thread_id_val})"
+        BlockingDependency(thread_id=thread_id_val, thread_title=thread_title, issue_number=str(issue_number))
         for thread_id_val, thread_title, _issue_id, issue_number in issue_result.all()
     ]
 
@@ -116,10 +134,10 @@ async def get_blocking_explanations_batch(
         .where(target_thread.c.next_unread_issue_id.isnot(None))
     )
 
-    reasons_map: dict[int, list[str]] = {}
+    reasons_map: dict[int, list[BlockingDependency]] = {}
     for target_tid, src_tid, src_title, _src_iid, src_issue_num in result.all():
         reasons_map.setdefault(target_tid, []).append(
-            f"Blocked by issue #{src_issue_num} in {src_title} (thread #{src_tid})"
+            BlockingDependency(thread_id=src_tid, thread_title=src_title, issue_number=str(src_issue_num))
         )
     return reasons_map
 

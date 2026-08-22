@@ -7,6 +7,7 @@ import axios, {
 import type {
   AnalyticsMetrics,
   AuthTokens,
+  BatchBlockingInfoResponse,
   BlockingInfoResponse,
   BugReportResponse,
   ConnectedDependenciesResponse,
@@ -382,6 +383,8 @@ export const dependenciesApi = {
     api.get<IssueDependenciesResponse>(`/v1/issues/${issueId}/dependencies`),
   getBlockingInfo: (threadId: number) =>
     api.post<BlockingInfoResponse>(`/v1/threads/${threadId}:getBlockingInfo`),
+  getBatchBlockingInfo: (threadIds: number[]) =>
+    api.post<BatchBlockingInfoResponse>('/v1/threads:getBlockingInfo', { thread_ids: threadIds }),
   getConnectedThreads: (threadId: number) =>
     api.get<ConnectedDependenciesResponse>(`/v1/threads/${threadId}/connected`),
   createDependency: ({ sourceType = 'thread', sourceId, targetType = 'thread', targetId }: DependencyCreatePayload) =>
