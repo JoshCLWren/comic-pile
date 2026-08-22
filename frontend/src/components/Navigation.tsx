@@ -42,10 +42,10 @@ const SECONDARY_NAV_ITEMS: NavItem[] = [
   { path: '/glossary', label: 'Glossary', icon: '📘', ariaLabel: 'Glossary page' },
 ]
 
-const APPEARANCE_OPTIONS: Array<{ id: ThemeId; label: string; ariaLabel: string }> = [
-  { id: 'classic', label: 'Classic', ariaLabel: 'Classic theme' },
-  { id: 'ink-gold', label: 'Ink Gold', ariaLabel: 'Ink-gold theme' },
-  { id: 'command-center', label: 'Command Center', ariaLabel: 'Command center theme' },
+const APPEARANCE_OPTIONS: Array<{ id: ThemeId; label: string; ariaLabel: string; mobileClassName: string }> = [
+  { id: 'classic', label: 'Classic', ariaLabel: 'Classic theme', mobileClassName: 'classic:text-stone-100 ink-gold:text-stone-900 command-center:text-stone-100' },
+  { id: 'ink-gold', label: 'Ink Gold', ariaLabel: 'Ink-gold theme', mobileClassName: 'classic:text-stone-400 ink-gold:text-stone-100 command-center:text-stone-400' },
+  { id: 'command-center', label: 'Command Center', ariaLabel: 'Command center theme', mobileClassName: 'classic:text-stone-400 ink-gold:text-stone-400 command-center:text-stone-100' },
 ]
 
 export default function Navigation({ onBugReportSubmit }: NavigationProps) {
@@ -227,7 +227,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
                 key={option.id}
                 data-theme={option.id}
                 onClick={() => setTheme(option.id)}
-                className="w-full flex items-center justify-between px-3 py-2 rounded-md text-left hover:bg-stone-800 transition-colors classic:text-stone-100 ink-gold:text-stone-900 command-center:text-stone-100"
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-left hover:bg-stone-800 transition-colors ${option.mobileClassName}`}
                 aria-label={option.ariaLabel}
                 aria-pressed={activeTheme === option.id}
               >
