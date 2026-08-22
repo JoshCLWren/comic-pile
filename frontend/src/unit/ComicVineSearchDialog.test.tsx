@@ -2,12 +2,14 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 
-const confirmIdentitySpy = vi.fn().mockResolvedValue({} as never)
-const replaceIdentitySpy = vi.fn().mockResolvedValue({} as never)
-const searchSeriesSpy = vi.fn()
-const getSeriesIssuesSpy = vi.fn()
+const { confirmIdentitySpy, replaceIdentitySpy, searchSeriesSpy, getSeriesIssuesSpy } = vi.hoisted(() => ({
+  confirmIdentitySpy: vi.fn().mockResolvedValue({} as never),
+  replaceIdentitySpy: vi.fn().mockResolvedValue({} as never),
+  searchSeriesSpy: vi.fn(),
+  getSeriesIssuesSpy: vi.fn(),
+}))
 
-vi.mock('../../services/api', () => ({
+vi.mock('../services/api', () => ({
   comicVineApi: {
     searchSeries: searchSeriesSpy,
     getSeriesIssues: getSeriesIssuesSpy,
@@ -22,12 +24,12 @@ vi.mock('../../services/api', () => ({
   },
 }))
 
-vi.mock('../../components/Modal', () => ({
+vi.mock('../components/Modal', () => ({
   default: ({ isOpen, title, children }: { isOpen: boolean; title: string; children: ReactNode }) =>
     isOpen ? <div role="dialog"><h2>{title}</h2>{children}</div> : null,
 }))
 
-import ComicVineSearchDialog from '../../components/ComicVineSearchDialog'
+import ComicVineSearchDialog from '../components/ComicVineSearchDialog'
 
 const mockSeries = {
   comicvine_volume_id: 42,
@@ -70,6 +72,9 @@ describe('ComicVineSearchDialog mode branching', () => {
   it('calls confirmIdentity in confirm mode when the user confirms a selection', async () => {
     render(<ComicVineSearchDialog {...defaultProps()} />)
 
+    const input = screen.getByPlaceholderText('Search series title...')
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
     fireEvent.click(screen.getByText('Stormwatch'))
     await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
 
@@ -83,6 +88,9 @@ describe('ComicVineSearchDialog mode branching', () => {
   it('calls replaceIdentity in replace mode when the user confirms a selection', async () => {
     render(<ComicVineSearchDialog {...defaultProps({ mode: 'replace' })} />)
 
+    const input = screen.getByPlaceholderText('Search series title...')
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
     fireEvent.click(screen.getByText('Stormwatch'))
     await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
 
