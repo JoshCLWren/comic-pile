@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import QueueThreadCard from '../pages/QueuePage/QueueThreadCard'
-import type { Thread } from '../types'
+import type { BlockingDependency, Thread } from '../types'
 
 const { useCrossoverGroups } = vi.hoisted(() => ({
   useCrossoverGroups: vi.fn(() => ({ groupsByThreadId: {}, isPending: false, error: null })),
@@ -83,7 +83,7 @@ function renderCard(thread: Thread, overrides: Partial<Parameters<typeof QueueTh
     thread,
     index: 0,
     isBlocked: false,
-    blockingReasons: [] as string[],
+    blockingDependencies: [] as BlockingDependency[],
     isDragOver: false,
     snoozeIcon: '',
     snoozeLabel: '',
@@ -177,11 +177,34 @@ describe('QueueThreadCard', () => {
     const thread = createMockThread()
     renderCard(thread, {
       isBlocked: true,
-      blockingReasons: ['Blocked by: Prequel Thread'],
+      blockingDependencies: [],
     })
 
     const blockedButton = screen.getByRole('button', { name: /View dependencies for Test Thread/ })
     expect(blockedButton).toBeInTheDocument()
+  })
+
+  it('names the blocking dependency and links to the blocker thread', () => {
+    const blocker: BlockingDependency = {
+      thread_id: 42,
+      thread_title: 'Prequel Thread',
+      issue_number: '3',
+      label: 'Needs Prequel Thread: #3',
+    }
+    renderCard(createMockThread(), {
+      isBlocked: true,
+      blockingDependencies: [
+        blocker,
+        { ...blocker, thread_id: 43, thread_title: 'Other Blocker', label: 'Needs Other Blocker: #1' },
+      ],
+    })
+
+    const blockerLink = screen.getByRole('link', { name: 'Open Prequel Thread' })
+    expect(blockerLink).toHaveAttribute('href', '/thread/42')
+    expect(blockerLink).toHaveTextContent('Needs Prequel Thread: #3')
+    expect(screen.getByRole('button', { name: /View all dependencies for Test Thread/ })).toHaveTextContent(
+      '+1 more',
+    )
   })
 
   it('does not render blocked explanation when thread is not blocked', () => {
@@ -274,7 +297,7 @@ describe('QueueThreadCard', () => {
     ].map((name) => [name, vi.fn()])) as Record<string, ReturnType<typeof vi.fn>>
     renderCard(createMockThread({ total_issues: null, issues_remaining: 0, notes: null }), {
       isBlocked: true,
-      blockingReasons: ['Read A first', 'Read B first'],
+      blockingDependencies: [],
       isDragOver: true,
       ...callbacks,
     })
@@ -492,7 +515,7 @@ describe('QueueThreadCard', () => {
         onCardClick, 
         onDependencies,
         isBlocked: true,
-        blockingReasons: ['Blocked by: Prequel Thread']
+        blockingDependencies: []
       })
 
       // Test blocked dependency button
