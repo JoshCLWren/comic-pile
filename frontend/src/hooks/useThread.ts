@@ -1,105 +1,54 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import axios from 'axios';
+import { useQuery } from '@tanstack/react-query';
 import { threadsApi } from '../services/api';
 import type { ReactivateThreadPayload, Thread, ThreadCreatePayload, ThreadUpdatePayload } from '../types';
 import { applyEditedThreadToQueuePages, invalidateAfterQueueMutation } from '../query/cacheEffects';
 import { queryClient } from '../query/queryClient';
+import { queryKeys } from '../query/queryKeys';
 
 export function useThread(id?: number | null) {
-  const [data, setData] = useState<Thread | null>(null);
-  const [isPending, setIsPending] = useState(true);
-  const [isError, setIsError] = useState(false);
-
-  useEffect(() => {
-    if (!id) {
-      setData(null);
-      setIsError(false);
-      setIsPending(false);
-      return;
-    }
-
-    let isMounted = true;
-
-    const fetchData = async () => {
-      setIsPending(true);
-      setIsError(false);
-
-      try {
-        const result = await threadsApi.get(id);
-        if (isMounted) {
-          setData(result);
-        }
-    } catch {
-      if (isMounted) {
-        setIsError(true);
+  const query = useQuery({
+    queryKey: id != null ? queryKeys.thread.detail(id) : undefined,
+    queryFn: async () => {
+      if (id == null) {
+        throw new Error('No thread ID')
       }
-    } finally {
-      if (isMounted) {
-        setIsPending(false);
-      }
-    }
-  };
+      return threadsApi.get(id)
+    },
+    enabled: id != null,
+    staleTime: 30_000,
+    retry: false,
+  })
 
-  fetchData();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [id]);
-
-  return { data, isPending, isError };
+  return {
+    data: query.data ?? null,
+    isPending: query.isLoading,
+    isError: query.isError,
+  }
 }
 
 export function useStaleThreads(days?: number) {
-  const [data, setData] = useState<Thread[] | null>(null);
-  const [isPending, setIsPending] = useState(true);
-  const [isError, setIsError] = useState(false);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchData = async () => {
-      setIsPending(true);
-      setIsError(false);
-
-      try {
-        const result = await threadsApi.listStale(days);
-        if (isMounted) {
-          setData(result);
-        }
-      } catch {
-        if (isMounted) {
-          setIsError(true);
-        }
-      } finally {
-        if (isMounted) {
-          setIsPending(false);
-        }
-      }
-    };
-
-    fetchData();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [days]);
+  const query = useQuery({
+    queryKey: queryKeys.thread.stale({ days }),
+    queryFn: async () => {
+      return threadsApi.listStale(days)
+    },
+    enabled: true,
+    staleTime: 30_000,
+    retry: false,
+  })
 
   const refetch = useCallback(async () => {
-    setIsPending(true);
-    setIsError(false);
+    return query.refetch()
+  }, [query])
 
-    try {
-      const result = await threadsApi.listStale(days);
-      setData(result);
-    } catch {
-      setIsError(true);
-    } finally {
-      setIsPending(false);
-    }
-  }, [days]);
-
-  return { data, isPending, isError, refetch };
+  return {
+    data: query.data ?? null,
+    isPending: query.isLoading,
+    isError: query.isError,
+    refetch,
+  }
 }
 
 export function useCreateThread() {

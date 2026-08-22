@@ -65,6 +65,7 @@ export const queryKeys = {
     summary: (threadId: number) => ['thread', 'summary', threadId] as const,
     details: () => ['thread', 'detail'] as const,
     detail: (threadId: number) => ['thread', 'detail', threadId] as const,
+    stale: ({ days }: { days?: number }) => ['thread', 'stale', { days }] as const,
     issuePages: (threadId: number) => ['thread', threadId, 'issues'] as const,
     issuePage: (
       threadId: number,
@@ -89,5 +90,26 @@ export const queryKeys = {
   analytics: {
     all: ['analytics'] as const,
     overview: () => ['analytics', 'overview'] as const,
+  },
+  continuity: {
+    all: ['continuity'] as const,
+    readiness: (nodeType: string, nodeId: number) =>
+      ['continuity', 'readiness', { nodeType, nodeId }] as const,
+    chains: (nodeType: string, nodeId: number) =>
+      ['continuity', 'chains', { nodeType, nodeId }] as const,
+  },
+  dependencyGroups: {
+    all: ['dependencyGroups'] as const,
+    forThread: (threadId: number) => ['dependencyGroups', 'thread', threadId] as const,
+  },
+  session: {
+    all: ['session'] as const,
+    list: () => ['session', 'list'] as const,
+    current: () => ['session', 'current'] as const,
+    pages: () => ['session', 'pages'] as const,
+    page: ({ pageToken, pageSize }: SessionPageKeyOptions) =>
+      ['session', 'pages', { pageToken: pageToken ?? null, pageSize }] as const,
+    detail: (sessionId: number) => ['session', 'detail', sessionId] as const,
+    snapshots: (sessionId: number) => ['session', 'snapshots', sessionId] as const,
   },
 } as const

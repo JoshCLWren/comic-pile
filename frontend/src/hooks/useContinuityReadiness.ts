@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   continuityReadinessApi,
   type ContinuityReadinessResponse,
 } from '../services/api-continuity-readiness'
+import { queryKeys } from '../query/queryKeys'
 
 interface ContinuityReadinessState {
   readiness: ContinuityReadinessResponse | null
@@ -18,40 +19,35 @@ const EMPTY_STATE: ContinuityReadinessState = {
   refetch: () => undefined,
 }
 
+function normalizeError(error: unknown): Error {
+  if (error instanceof Error) {
+    return error
+  }
+  return new Error('Unable to load readiness')
+}
+
 export function useContinuityReadiness(
   issueId: number | null | undefined,
 ): ContinuityReadinessState {
-  const [state, setState] = useState(EMPTY_STATE)
-  const [attempt, setAttempt] = useState(0)
-  const refetch = useCallback(() => setAttempt((value) => value + 1), [])
+  const enabled = issueId != null
 
-  useEffect(() => {
-    if (issueId == null) {
-      setState({ ...EMPTY_STATE, refetch })
-      return
-    }
+  const query = useQuery({
+    queryKey: enabled ? queryKeys.continuity.readiness('issue', issueId) : undefined,
+    queryFn: async () => {
+      if (!enabled) {
+        throw new Error('No issue ID')
+      }
+      return continuityReadinessApi.evaluate('issue', issueId)
+    },
+    enabled,
+    staleTime: 30_000,
+    retry: false,
+  })
 
-    let isCurrent = true
-    setState({ readiness: null, isLoading: true, error: null, refetch })
-
-    continuityReadinessApi.evaluate('issue', issueId).then(
-      (readiness) => {
-        if (isCurrent) {
-          setState({ readiness, isLoading: false, error: null, refetch })
-        }
-      },
-      (reason: unknown) => {
-        if (isCurrent) {
-          const error = reason instanceof Error ? reason : new Error('Unable to load readiness')
-          setState({ readiness: null, isLoading: false, error, refetch })
-        }
-      },
-    )
-
-    return () => {
-      isCurrent = false
-    }
-  }, [attempt, issueId, refetch])
-
-  return state
+  return {
+    readiness: query.data ?? null,
+    isLoading: query.isLoading,
+    error: query.error ? normalizeError(query.error) : null,
+    refetch: query.refetch,
+  }
 }
