@@ -6,6 +6,7 @@ import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
 import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hooks/useThread'
 import { useMoveToPosition, useQueueThreads, useShuffleQueue } from '../../hooks/useQueue'
 import { useSession } from '../../hooks/useSession'
+import { useQueueBlockingInfo } from '../../hooks/useQueueBlockingInfo'
 import { invalidateAfterQueueMutation } from '../../query/cacheEffects'
 import { queryClient } from '../../query/queryClient'
 import { PositionMenuProvider } from '../../contexts/PositionMenuProvider'
@@ -49,6 +50,9 @@ export default function QueuePage() {
   const { activeThreads, completedThreads, filteredThreads } = useQueueFilters(
     threads,
     sortBy,
+  )
+  const blockingByThreadId = useQueueBlockingInfo(
+    activeThreads.map((thread) => thread.id),
   )
 
   const navigateToRoll = useCallback(
@@ -118,7 +122,7 @@ export default function QueuePage() {
     (thread: Thread, index: number) => {
       const isDragOver = actions.dragOverThreadId === thread.id
       const isBlocked = thread.is_blocked
-      const blockingReasons: string[] = thread.blocking_reasons ?? []
+      const blockingDependencies = blockingByThreadId[thread.id] ?? []
       const isSnoozed = session?.snoozed_threads?.some((t) => t.id === thread.id) ?? false
       const snoozeIcon = isSnoozed ? '🔔' : '😴'
       const snoozeLabel = isSnoozed ? 'Unsnooze' : 'Snooze'
@@ -130,7 +134,7 @@ export default function QueuePage() {
           thread={thread}
           index={index}
           isBlocked={isBlocked}
-          blockingReasons={blockingReasons}
+          blockingDependencies={blockingDependencies}
           isDragOver={isDragOver}
           snoozeIcon={snoozeIcon}
           snoozeLabel={snoozeLabel}
@@ -153,7 +157,7 @@ export default function QueuePage() {
         />
       )
     },
-    [actions, activeThreads, modals, navigate, session],
+    [actions, activeThreads, blockingByThreadId, modals, navigate, session],
   )
 
   const handleLoadMore = useCallback(() => {
@@ -199,7 +203,7 @@ export default function QueuePage() {
           >
             +
           </button>
-        )}
+        )>
 
         <QueueList
           activeThreads={activeThreads}
@@ -228,7 +232,7 @@ export default function QueuePage() {
               </button>
             )}
           </div>
-        )}
+        )>
 
         {nextPageToken && (
           <div
@@ -237,13 +241,13 @@ export default function QueuePage() {
             data-testid="queue-infinite-scroll-sentinel"
             aria-hidden="true"
           />
-        )}
+        )>
 
         {isPending && threads !== null && threads.length > 0 && (
           <div className="px-2 flex justify-center py-4" data-testid="queue-loading-more">
             <LoadingSpinner />
           </div>
-        )}
+        )>
 
         <QueueModals
           openModal={modals.openModal}

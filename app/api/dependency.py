@@ -31,6 +31,7 @@ from app.schemas.dependency import (
     ThreadDependencyOrderCheckResponse,
 )
 from comic_pile.dependencies import (
+    BlockingDependency as InternalBlockingDependency,
     detect_circular_dependency,
     format_blocking_reason,
     get_blocked_thread_ids,
@@ -53,14 +54,15 @@ class _ConnectedThreadEntry(TypedDict):
 router = APIRouter(tags=["dependencies"])
 
 
-def _to_blocking_dependency_schema(dependency: "object") -> BlockingDependency:
-    """Convert an internal BlockingDependency into its API schema form."""
-    internal = dependency  # type: ignore[assignment]
+def _to_blocking_dependency_schema(
+    dependency: InternalBlockingDependency,
+) -> BlockingDependency:
+    """Convert an internal blocking dependency into its API schema form."""
     return BlockingDependency(
-        thread_id=internal.thread_id,
-        thread_title=internal.thread_title,
-        issue_number=internal.issue_number,
-        label=internal.label,
+        thread_id=dependency.thread_id,
+        thread_title=dependency.thread_title,
+        issue_number=dependency.issue_number,
+        label=dependency.label,
     )
 
 
@@ -311,7 +313,7 @@ async def get_thread_blocking_info(
     dependencies = await get_blocking_explanations(thread_id, current_user.id, db)
     return BlockingExplanation(
         is_blocked=True,
-        blocking_reasons=[_format_blocking_reason(dep) for dep in dependencies],
+        blocking_reasons=[format_blocking_reason(dep) for dep in dependencies],
         blocking_dependencies=[_to_blocking_dependency_schema(dep) for dep in dependencies],
     )
 
@@ -347,7 +349,7 @@ async def get_threads_blocking_info(
             dependencies = reasons_map.get(tid, [])
             result[tid] = BlockingExplanation(
                 is_blocked=True,
-                blocking_reasons=[_format_blocking_reason(dep) for dep in dependencies],
+                blocking_reasons=[format_blocking_reason(dep) for dep in dependencies],
                 blocking_dependencies=[_to_blocking_dependency_schema(dep) for dep in dependencies],
             )
         else:

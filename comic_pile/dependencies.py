@@ -49,6 +49,7 @@ class BlockingDependency:
     """A single dependency blocking a thread, described in reader language."""
 
     def __init__(self, thread_id: int, thread_title: str, issue_number: str) -> None:
+        """Store blocker identity and derive the reader-facing label."""
         self.thread_id = thread_id
         self.thread_title = thread_title
         self.issue_number = str(issue_number)
