@@ -5,10 +5,10 @@ import { createThread, setupAuthenticatedPage, waitForQueueReady } from './helpe
  * Queue card text must stay inside its card (#1637).
  *
  * Covers:
- * - zero horizontal overflow at 900px when titles and notes contain long tokens
- * - longest full thread title remains discoverable (tooltip on the title button)
- * - imported long URLs in notes render without cross-card bleed (verified at
- *   both 900px and 1280px desktop widths)
+ * - zero horizontal text overflow at 900px when titles and notes contain long tokens
+ * - longest full thread title remains discoverable (native tooltip on the title button)
+ * - imported long URLs in notes wrap-break via `overflow-wrap: anywhere` and render
+ *   without cross-card bleed (verified at both 900px and 1280px desktop widths)
  */
 
 const LONG_TITLE =
@@ -16,8 +16,51 @@ const LONG_TITLE =
 const LONG_URL =
   'https://www.leagueofcomicgeeks.com/issue/14276/annihilation-protocol-the-gathering-storm-annual-special-edition-collectors-variant';
 
+/**
+ * Audits every queue card for horizontal text overflow that would paint outside
+ * its own card box.
+ *
+ * For each descendant element whose computed `overflow-x` is visible (i.e. it
+ * does not clip), `scrollWidth` must not exceed `clientWidth`: an excess means
+ * unbreakable content paints past the element box and can bleed into adjacent
+ * cards. Elements that clip horizontally are skipped along with their subtree
+ * because their content cannot paint beyond the clipping edge; their own boxes
+ * are still checked against the card bounds.
+ */
+function auditCardTextOverflow() {
+  const CLIPPING = new Set(['hidden', 'clip', 'auto', 'scroll']);
+  const violations: string[] = [];
+  const cards = Array.from(document.querySelectorAll('[data-testid="queue-thread-item"]'));
+  for (const card of cards) {
+    const cardRect = card.getBoundingClientRect();
+    if (cardRect.right > window.innerWidth + 1) {
+      violations.push('card extends past viewport right edge');
+    }
+    const stack = [card];
+    while (stack.length > 0) {
+      const el = stack.pop()!;
+      if (el.getBoundingClientRect().right > cardRect.right + 1) {
+        violations.push(`${el.tagName.toLowerCase()} paints past its card right edge`);
+      }
+      const clips = CLIPPING.has(window.getComputedStyle(el).overflowX);
+      if (!clips) {
+        if (el.scrollWidth > el.clientWidth + 1) {
+          violations.push(`${el.tagName.toLowerCase()} has unclipped horizontal content overflow`);
+        }
+        stack.push(...Array.from(el.children));
+      }
+    }
+  }
+  return {
+    cardCount: cards.length,
+    pageScrollWidth: document.documentElement.scrollWidth,
+    viewportWidth: window.innerWidth,
+    violations,
+  };
+}
+
 test.describe('Queue card text overflow (#1637)', () => {
-  test('renders 46 seeded threads with zero horizontal overflow at 900px', async ({ page }) => {
+  test('keeps long titles and notes inside their cards at 900px', async ({ page }) => {
     await setupAuthenticatedPage(page);
     await createThread(page, { title: LONG_TITLE, format: 'Annual', issues_remaining: 1, total_issues: 1 });
     await createThread(page, { title: 'Short Title', format: 'Issue', issues_remaining: 1, total_issues: 1 });
@@ -25,20 +68,15 @@ test.describe('Queue card text overflow (#1637)', () => {
     await page.setViewportSize({ width: 900, height: 800 });
     await page.goto('/queue', { waitUntil: 'domcontentloaded' });
     await waitForQueueReady(page);
+    await expect(page.getByTestId('queue-thread-item')).toHaveCount(2);
 
-    const { maxOverflow } = await page.evaluate(() => {
-      const cards = Array.from(document.querySelectorAll('[data-testid="queue-thread-item"]'));
-      const overflows = cards.map((card) => {
-        const rect = (card as HTMLElement).getBoundingClientRect();
-        return Math.max(0, rect.right - window.innerWidth);
-      });
-      return { maxOverflow: Math.max(...overflows), cardCount: cards.length };
-    });
-
-    expect(maxOverflow).toBe(0);
+    const report = await page.evaluate(auditCardTextOverflow);
+    expect(report.cardCount).toBe(2);
+    expect(report.violations).toEqual([]);
+    expect(report.pageScrollWidth).toBeLessThanOrEqual(report.viewportWidth);
   });
 
-  test('keeps longest thread title discoverable via tooltip', async ({ page }) => {
+  test('keeps the longest thread title discoverable via tooltip', async ({ page }) => {
     await setupAuthenticatedPage(page);
     await createThread(page, { title: LONG_TITLE, format: 'Annual', issues_remaining: 1, total_issues: 1 });
 
@@ -48,16 +86,7 @@ test.describe('Queue card text overflow (#1637)', () => {
 
     const titleButton = page.getByRole('button', { name: `Open ${LONG_TITLE}` });
     await expect(titleButton).toBeVisible();
-
-    await titleButton.hover();
-
-    const tooltip = page.getByRole('tooltip', { name: 'Drag to reorder within the queue.' }).locator('..');
-    const tooltipHidden = await page.evaluate(() => {
-      const tooltips = Array.from(document.querySelectorAll('[role="tooltip"]'));
-      return tooltips.length === 0;
-    });
-    
-    expect(tooltipHidden).toBe(false);
+    await expect(titleButton).toHaveAttribute('title', LONG_TITLE);
   });
 
   test('does not let imported URL notes bleed across adjacent cards at 900px and 1280px', async ({ page }) => {
@@ -81,18 +110,27 @@ test.describe('Queue card text overflow (#1637)', () => {
       await page.setViewportSize({ width, height: 800 });
       await page.goto('/queue', { waitUntil: 'domcontentloaded' });
       await waitForQueueReady(page);
+      await expect(page.getByTestId('queue-thread-item')).toHaveCount(2);
 
-      const urlCard = page
+      const urlCards = page
         .locator('[data-testid="queue-thread-item"]')
-        .filter({ hasText: 'leagueofcomicgeeks.com/issue/14276' });
-      await expect(urlCard).toBeVisible();
+        .filter({ hasText: 'leagueofcomicgeeks.com' });
+      await expect(urlCards).toHaveCount(2);
 
-      const hasOverflow = await urlCard.evaluate((card) => {
-        const rect = (card as HTMLElement).getBoundingClientRect();
-        return Math.max(0, rect.right - window.innerWidth) > 0;
-      });
+      // The issue requires notes to wrap-break with `overflow-wrap: anywhere`.
+      const wrapModes = await urlCards
+        .locator('p')
+        .filter({ hasText: 'leagueofcomicgeeks.com' })
+        .evaluateAll((notes) => notes.map((note) => window.getComputedStyle(note).overflowWrap));
+      expect(wrapModes).toHaveLength(2);
+      for (const wrapMode of wrapModes) {
+        expect(wrapMode).toBe('anywhere');
+      }
 
-      expect(hasOverflow).toBe(false);
+      const report = await page.evaluate(auditCardTextOverflow);
+      expect(report.cardCount).toBe(2);
+      expect(report.violations).toEqual([]);
+      expect(report.pageScrollWidth).toBeLessThanOrEqual(report.viewportWidth);
     }
   });
 });
