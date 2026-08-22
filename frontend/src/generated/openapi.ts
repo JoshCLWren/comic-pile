@@ -4861,6 +4861,10 @@ export interface components {
             id: number;
             /** Issue Id */
             issue_id: number | null;
+            /** Issue Number */
+            issue_number?: string | null;
+            /** Series Title */
+            series_title?: string | null;
             /** Thread Id */
             thread_id: number | null;
         };
