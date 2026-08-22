@@ -12,6 +12,7 @@ import { useUpdateThread } from '../hooks/useThread'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { ChangeEvent, FormEvent } from 'react'
 import { DEFAULT_CREATE_STATE, type QueueFormState } from '../pages/QueuePage/types'
+import DependencyBuilder from '../components/DependencyBuilder'
 import { IssueToggleList } from '../pages/QueuePage/IssueToggleList'
 import { IssueReadStatusButton } from './thread-detail/IssueReadStatusButton'
 import type { IssueMutationSnapshot } from './thread-detail/issueMutationState'
@@ -34,6 +35,7 @@ export default function ThreadDetailView() {
   const [issuesLoaded, setIssuesLoaded] = useState(false)
   const [nextPageToken, setNextPageToken] = useState<string | null>(null)
   const [issuesTotal, setIssuesTotal] = useState(0)
+  const [isDependencyOpen, setIsDependencyOpen] = useState(false)
   const {
     groupsByThreadId: crossoverGroupsByThreadId,
     isPending: crossoversPending,
@@ -475,7 +477,12 @@ export default function ThreadDetailView() {
             </div>
           </form>
 
-          {thread.total_issues !== null && <IssueToggleList threadId={thread.id} />}
+          {thread.total_issues !== null && (
+            <IssueToggleList
+              threadId={thread.id}
+              onOpenDependencies={() => setIsDependencyOpen(true)}
+            />
+          )}
 
           <button
             type="submit"
@@ -487,6 +494,18 @@ export default function ThreadDetailView() {
           </button>
         </div>
       </Modal>
+
+      <DependencyBuilder
+        thread={thread}
+        isOpen={isDependencyOpen}
+        onClose={() => setIsDependencyOpen(false)}
+        onChanged={() => {
+          // Refresh thread data when dependencies change
+          if (thread) {
+            threadsApi.get(thread.id).then((updated) => setThread(updated)).catch(() => undefined)
+          }
+        }}
+      />
     </div>
   )
 }

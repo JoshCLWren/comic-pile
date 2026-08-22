@@ -189,7 +189,7 @@ jobs:
           set -Eeuo pipefail
           manifest='.github/free-model-factories.tsv'
           controller='.github/scripts/factory-work-controller.py'
-          owner_pattern='^factory:(local|([1-9]|[1-3][0-9]|4[0-8]))$'
+          owner_pattern='^factory:(local|([1-9]|[1-3][0-9]|[4-5][0-9]))$'
 
           heartbeat_worker_for_run() {
             local run_id="$1"
