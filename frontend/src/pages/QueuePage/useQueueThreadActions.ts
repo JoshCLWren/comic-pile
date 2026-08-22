@@ -10,12 +10,13 @@ import {
 } from '../../hooks/useQueue'
 import { useDeleteThread } from '../../hooks/useThread'
 import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
+import { invalidateAfterQueueMutation } from '../../query/cacheEffects'
+import { queryClient } from '../../query/queryClient'
 import { getApiErrorDetail } from '../../utils/apiError'
 
 interface UseQueueThreadActionsParams {
   navigateToRoll: (thread: Thread, response: unknown) => void
   refetchSession: () => Promise<unknown> | unknown
-  refetch: () => Promise<unknown> | unknown
 }
 
 interface QueueThreadActionResult {
@@ -45,7 +46,7 @@ interface QueueThreadActionResult {
 export function useQueueThreadActions(
   params: UseQueueThreadActionsParams,
 ): QueueThreadActionResult {
-  const { navigateToRoll, refetchSession, refetch } = params
+  const { navigateToRoll, refetchSession } = params
   const deleteMutation = useDeleteThread()
   const moveToFrontMutation = useMoveToFront()
   const moveToBackMutation = useMoveToBack()
@@ -91,7 +92,6 @@ export function useQueueThreadActions(
           moveToPositionMutation
             .mutate({ id: draggedThreadId, position: targetThread.queue_position })
             .then(() => {
-              refetch()
               setReorderError(null)
             })
             .catch((error: unknown) => {
@@ -102,7 +102,7 @@ export function useQueueThreadActions(
         setDraggedThreadId(null)
         setDragOverThreadId(null)
       },
-    [draggedThreadId, moveToPositionMutation, refetch],
+    [draggedThreadId, moveToPositionMutation],
   )
 
   const handleDragEnd = useCallback(() => {
@@ -116,34 +116,31 @@ export function useQueueThreadActions(
         return
       }
       deleteMutation.mutate(threadId)
-        .then(() => refetch())
         .catch((err: unknown) => {
           window.alert(`Failed to delete thread: ${getApiErrorDetail(err)}`)
         })
     },
-    [deleteMutation, refetch],
+    [deleteMutation],
   )
 
   const handleMoveToFront = useCallback(
     (threadId: number) => {
       moveToFrontMutation.mutate(threadId)
-        .then(() => refetch())
         .catch(() => {
           window.alert('Failed to move thread to front. Please try again.')
         })
     },
-    [moveToFrontMutation, refetch],
+    [moveToFrontMutation],
   )
 
   const handleMoveToBack = useCallback(
     (threadId: number) => {
       moveToBackMutation.mutate(threadId)
-        .then(() => refetch())
         .catch(() => {
           window.alert('Failed to move thread to back. Please try again.')
         })
     },
-    [moveToBackMutation, refetch],
+    [moveToBackMutation],
   )
 
   const handleReposition = useCallback(
@@ -154,22 +151,20 @@ export function useQueueThreadActions(
       }
       moveToPositionMutation
         .mutate({ id: threadId, position: targetPosition })
-        .then(() => refetch())
         .catch(() => {
           window.alert('Failed to reposition thread. Please try again.')
         })
     },
-    [moveToPositionMutation, refetch],
+    [moveToPositionMutation],
   )
 
   const handleShuffle = useCallback(async () => {
     try {
       await shuffleQueueMutation.mutate()
-      await refetch()
     } catch {
       window.alert('Failed to shuffle queue. Please try again.')
     }
-  }, [shuffleQueueMutation, refetch])
+  }, [shuffleQueueMutation])
 
   const handleThreadRead = useCallback(
     async (thread: Thread) => {
@@ -197,6 +192,7 @@ export function useQueueThreadActions(
           await snoozeMutation.mutate(thread.id)
         }
         await refetchSession()
+        await invalidateAfterQueueMutation(queryClient)
       } catch (error: unknown) {
         console.error('Snooze action failed:', error)
         window.alert(

@@ -6,6 +6,8 @@ import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
 import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hooks/useThread'
 import { useMoveToPosition, useQueueThreads, useShuffleQueue } from '../../hooks/useQueue'
 import { useSession } from '../../hooks/useSession'
+import { invalidateAfterQueueMutation } from '../../query/cacheEffects'
+import { queryClient } from '../../query/queryClient'
 import { PositionMenuProvider } from '../../contexts/PositionMenuProvider'
 import type { Thread } from '../../types'
 import QueueThreadCard from './QueueThreadCard'
@@ -34,7 +36,6 @@ export default function QueuePage() {
     data: threads,
     isPending,
     isError,
-    refetch,
     nextPageToken,
     loadMore,
   } = useQueueThreads(searchQuery, sortBy)
@@ -60,7 +61,6 @@ export default function QueuePage() {
   const actions = useQueueThreadActions({
     navigateToRoll,
     refetchSession: () => refetchSession(),
-    refetch: () => refetch(),
   })
 
   const submitCreate = useCallback(
@@ -82,9 +82,9 @@ export default function QueuePage() {
 
   const modals = useQueueModalsHook({
     threads,
-    onCreated: () => refetch(),
-    onUpdated: () => refetch(),
-    onReactivated: () => refetch(),
+    onCreated: () => {},
+    onUpdated: () => {},
+    onReactivated: () => {},
     refetchSession: () => refetchSession(),
     submitCreate,
     submitEdit,
@@ -106,13 +106,12 @@ export default function QueuePage() {
           position: targetPosition,
         })
         modals.closeRepositionModal()
-        await refetch()
       } catch {
         modals.closeRepositionModal()
         window.alert('Failed to reposition thread. Please try again.')
       }
     },
-    [modals, moveToPositionMutation, refetch, activeThreads.length],
+    [modals, moveToPositionMutation, activeThreads.length],
   )
 
   const renderThreadCard = useCallback(
@@ -269,7 +268,7 @@ export default function QueuePage() {
           onEditSubmit={modals.handleEditSubmit}
           onReactivateSubmit={modals.handleReactivateSubmit}
           onRepositionConfirm={handleRepositionConfirm}
-          onDependencyChanged={() => refetch()}
+          onDependencyChanged={() => void invalidateAfterQueueMutation(queryClient)}
           onCloseCreate={modals.closeCreateModal}
           onCloseEdit={modals.closeEditModal}
           onCloseReactivate={modals.closeReactivateModal}

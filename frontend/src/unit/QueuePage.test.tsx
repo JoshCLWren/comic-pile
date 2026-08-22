@@ -212,7 +212,6 @@ beforeEach(() => {
   await user.click(screen.getByRole('button', { name: /shuffle/i }))
 
   expect(mockShuffle.mutate).toHaveBeenCalled()
-  expect(mockRefetch).toHaveBeenCalled()
 })
 
 describe('Visible action Snooze/Unsnooze', () => {
@@ -465,7 +464,6 @@ describe('Keyboard Accessibility', () => {
   await user.click(screen.getAllByRole('button', { name: /^reactivate$/i })[0]!)
   await user.selectOptions(screen.getAllByRole('combobox').at(-1)!, '2')
   await user.click(screen.getByRole('button', { name: /reactivate thread/i }))
-  expect(refetch).toHaveBeenCalled()
 })
 
   it('renders loading and empty queue states', () => {
@@ -626,7 +624,6 @@ describe('Keyboard Accessibility', () => {
   fireEvent.change(screen.getByRole('slider'), { target: { value: '1' } })
   await user.click(screen.getByTestId('position-slider-confirm'))
   await waitFor(() => expect(move).toHaveBeenCalled())
-  expect(refetch).toHaveBeenCalled()
 })
 
   it('creates complex ranges and marks the requested issues read', async () => {
