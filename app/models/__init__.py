@@ -1,5 +1,8 @@
 """SQLAlchemy database models."""
 
+from app.database import Base
+from app.models.user import User
+from app.models.taste_bank_signal import TasteBankSignal
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule, ContinuityRuleSelectedMember
@@ -22,31 +25,3 @@ from app.models.snapshot import Snapshot
 from app.models.thread import Thread
 from app.models.user import User
 from app.models.user_preferences import UserPreferences
-
-__all__ = [
-    "CBLSource",
-    "CBLSourceEntry",
-    "CBLSourceList",
-    "ContinuityPlan",
-    "ContinuityRule",
-    "ContinuityRuleSelectedMember",
-    "Dependency",
-    "DependencyGroup",
-    "DependencyGroupMembership",
-    "Event",
-    "ExternalIdentity",
-    "FailedLoginAttempt",
-    "Issue",
-    "IssueExternalIdentityMapping",
-    "IssueMetadataCorrection",
-    "ReadingOrder",
-    "ReadingOrderItem",
-    "Release",
-    "RevokedToken",
-    "Session",
-    "Snapshot",
-    "Thread",
-    "ThreadExternalSeriesMapping",
-    "User",
-    "UserPreferences",
-]

@@ -1,28 +1,28 @@
 """User model for database."""
-
+ 
 from __future__ import annotations
-
+ 
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
-
+ 
 from sqlalchemy import Boolean, DateTime, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
+ 
 from app.database import Base
-
+ 
 if TYPE_CHECKING:
     from app.models.revoked_token import RevokedToken
     from app.models.session import Session
     from app.models.thread import Thread
     from app.models.user_preferences import UserPreferences
-
-
+    from app.models.taste_bank_signal import TasteBankSignal
+ 
+ 
 class User(Base):
     """User model."""
-
+ 
     __tablename__ = "users"
-    __table_args__ = (UniqueConstraint("email", name="uq_users_email"),)
-
+ 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -31,7 +31,7 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
-
+ 
     sessions: Mapped[list[Session]] = relationship(
         "Session", back_populates="user", cascade="all, delete-orphan", lazy="raise"
     )
@@ -43,4 +43,9 @@ class User(Base):
     )
     preferences: Mapped[UserPreferences | None] = relationship(
         "UserPreferences", back_populates="user", uselist=False, lazy="raise"
+    )
+ 
+    # Taste Bank signals
+    taste_bank_signals: Mapped[list[TasteBankSignal]] = relationship(
+        "TasteBankSignal", back_populates="user", cascade="all, delete-orphan", lazy="raise"
     )

@@ -15,9 +15,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.constants import DEFAULT_THEME
 from app.database import Base
+from app.models import User, TasteBankSignal
+
 
 if TYPE_CHECKING:
     from app.models.user import User
+    from app.models.taste_bank_signal import TasteBankSignal
 
 
 class UserPreferences(Base):
@@ -50,6 +53,15 @@ class UserPreferences(Base):
 
     user: Mapped[User] = relationship(
         "User", back_populates="preferences", uselist=False, lazy="raise"
+    )
+
+    # Taste Bank signals - using explicit join condition to avoid circular references
+    taste_bank_signals: Mapped[list[TasteBankSignal]] = relationship(
+        "TasteBankSignal",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        primaryjoin=(TasteBankSignal.user_id == user_id)
     )
 
     __table_args__ = (Index("ix_user_preferences_user_id", "user_id"),)
