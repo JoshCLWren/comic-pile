@@ -1,9 +1,6 @@
 import { useMemo } from 'react'
 import { usePlanReadiness } from '../hooks/usePlanReadiness'
-import type {
-  ContinuityPlanLane,
-  ContinuityPlanNodeReadiness,
-} from '../services/api-continuity-plans'
+import type { ContinuityPlanNodeReadiness } from '../services/api-continuity-plans'
 
 interface PlanReadinessPanelProps {
   planId: number | null
@@ -58,12 +55,6 @@ function blockerReason(node: ContinuityPlanNodeReadiness): string | null {
 
 export default function PlanReadinessPanel({ planId, refreshKey = 0 }: PlanReadinessPanelProps) {
   const { readiness, isLoading, error, refetch } = usePlanReadiness(planId, refreshKey)
-
-  const lanesById = useMemo(() => {
-    const byId = new Map<string, ContinuityPlanLane>()
-    for (const lane of readiness?.lanes ?? []) byId.set(lane.id, lane)
-    return byId
-  }, [readiness])
 
   const grouped = useMemo(() => {
     if (!readiness) return []
