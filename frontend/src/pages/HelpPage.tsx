@@ -31,7 +31,11 @@ const DEFINITIONS: Term[] = [
   },
   {
     term: 'Dependencies',
-    def: 'Reading order rules: "read X before Y".'
+    def: 'Reading order rules: "read X before Y". Create or manage them via the Dependency Builder (open from a thread\'s Queue card or from the dependency dialog inside an issue list). Deleting a single rule does not require editing an entire plan.'
+  },
+  {
+    term: 'Dependency Builder',
+    def: 'The editable surface for creating, viewing, and removing issue-level dependency rules. Access it from any Queue card (Dependencies in the thread actions menu) or from the dependency dialog inside an issue list.'
   }
 ]
 
