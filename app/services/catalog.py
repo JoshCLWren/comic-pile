@@ -1,6 +1,6 @@
 """Catalog service layer for shared comic series and issue identities."""
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -199,75 +199,136 @@ async def reconcile_unmapped_issues(
     db: AsyncSession,
     *,
     provider: str = "comicvine",
-    entity_type: str = "issue",
-    status: str = "unresolved",
     limit: int | None = None,
-) -> int:
-    """Reconcile unmapped issues through the shared catalog service.
+) -> dict[str, int]:
+    """Bounded backfill reconciliation for unmapped issues.
 
-    This is a reusable reconciliation operation on top of the same shared service layer.
-    It should be usable from:
-    - a CLI/script
-    - workflow_dispatch
-    - a bounded scheduled GitHub Actions reconciliation job
-    - an eventual admin/UI surface
+    Prioritizes: active `next_unread_issue_id` threads → other unread
+    in threads with confirmed series → threads needing series resolution.
+    Reports confirmed / candidate / unresolved / skipped counts.
 
-    The reconciliation implementation calls the canonical catalog/identity service
-    rather than containing a second independent mapping algorithm.
+    Issues in threads with a confirmed series are resolved through the
+    deterministic series resolver, which only confirms an exactly-one provider
+    match and never fabricates pseudo-identities. Issues without a confirmed
+    series are reported unresolved and left untouched.
 
-    Prioritizes unread/next-unread gaps first, then historical mappings.
+    Idempotent on rerun: already-confirmed issues are skipped or excluded by
+    selection, and no duplicate mappings are created.
 
     Args:
         db: Async database session.
         provider: External provider name.
-        entity_type: Entity type ("issue" or "series").
-        status: Mapping status to target.
-        limit: Maximum number of issues to reconcile.
+        limit: Maximum number of issues to process.
 
     Returns:
-        Number of issues reconciled.
+        Dict with counts: confirmed, candidate, unresolved, skipped.
     """
     from app.models.issue import Issue
-    # Find issues that don't have a confirmed mapping yet
-    issues_result = await db.execute(
+    from app.models.thread import Thread
+    from app.services.comicvine_series_resolution import _run_series_resolution
+
+    counts = {"confirmed": 0, "candidate": 0, "unresolved": 0, "skipped": 0}
+
+    has_confirmed_series = (
+        select(ThreadExternalSeriesMapping.id)
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id == ThreadExternalSeriesMapping.external_identity_id,
+        )
+        .where(
+            ThreadExternalSeriesMapping.thread_id == Thread.id,
+            ThreadExternalSeriesMapping.status == "confirmed",
+            ExternalIdentity.provider == provider,
+            ExternalIdentity.entity_type == "series",
+        )
+        .exists()
+    )
+
+    query = (
         select(Issue)
         .options(selectinload(Issue.thread))
-        .outerjoin(IssueExternalIdentityMapping, IssueExternalIdentityMapping.issue_id == Issue.id)
-        .where(
-            IssueExternalIdentityMapping.external_identity_id.is_(None)
-            | ~IssueExternalIdentityMapping.status.in_(("confirmed",))
+        .join(Thread, Issue.thread_id == Thread.id)
+        .outerjoin(
+            IssueExternalIdentityMapping,
+            IssueExternalIdentityMapping.issue_id == Issue.id,
         )
-        .order_by(Issue.thread_id, Issue.position)
+        .where(
+            Issue.status.in_(("unread", "reading")),
+            IssueExternalIdentityMapping.external_identity_id.is_(None)
+            | ~IssueExternalIdentityMapping.status.in_(("confirmed",)),
+        )
+        .order_by(
+            func.coalesce(Thread.next_unread_issue_id == Issue.id, False).desc(),
+            has_confirmed_series.desc(),
+            Issue.position,
+        )
     )
+
+    issues_result = await db.execute(query)
     issues = issues_result.scalars().unique().all()
 
-    reconciled = 0
+    processed = 0
     for issue in issues:
-        if limit is not None and reconciled >= limit:
+        if limit is not None and processed >= limit:
             break
 
-        # Try to find or create the canonical issue identity
-        identity = await upsert_catalog_issue(
-            db,
-            provider=provider,
-            entity_type=entity_type,
-            external_id=f"comicvine-{issue.issue_number}",
-            metadata_json={
-                "issue_number": issue.issue_number,
-                "name": issue.issue_number,  # fallback
-            },
+        existing_confirmed = await db.execute(
+            select(IssueExternalIdentityMapping.id).where(
+                IssueExternalIdentityMapping.issue_id == issue.id,
+                IssueExternalIdentityMapping.status == "confirmed",
+            )
         )
+        if existing_confirmed.first() is not None:
+            counts["skipped"] += 1
+            processed += 1
+            continue
 
-        # Create a candidate mapping
-        await link_issue_external_identity(
-            db,
-            user_id=issue.thread.user_id,
-            issue_id=issue.id,
-            external_identity_id=identity.id,
-            status="candidate",
-            confidence=0.5,
+        series_confirmed = await db.execute(
+            select(ThreadExternalSeriesMapping)
+            .join(
+                ExternalIdentity,
+                ExternalIdentity.id == ThreadExternalSeriesMapping.external_identity_id,
+            )
+            .where(
+                ThreadExternalSeriesMapping.thread_id == issue.thread_id,
+                ThreadExternalSeriesMapping.status == "confirmed",
+                ExternalIdentity.provider == provider,
+                ExternalIdentity.entity_type == "series",
+            )
+            .limit(1)
         )
+        series_mapping = series_confirmed.scalars().first()
 
-        reconciled += 1
+        if series_mapping is None or issue.thread is None:
+            counts["unresolved"] += 1
+            processed += 1
+            continue
 
-    return reconciled
+        user_id = issue.thread.user_id
+        await _run_series_resolution(issue.id, user_id)
+
+        outcome = await db.execute(
+            select(IssueExternalIdentityMapping.status)
+            .join(
+                ExternalIdentity,
+                ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
+            )
+            .where(
+                IssueExternalIdentityMapping.issue_id == issue.id,
+                ExternalIdentity.provider == provider,
+            )
+            .order_by(IssueExternalIdentityMapping.id)
+            .limit(1)
+        )
+        outcome_status = outcome.scalar_one_or_none()
+
+        if outcome_status is None:
+            counts["unresolved"] += 1
+        elif outcome_status == "confirmed":
+            counts["confirmed"] += 1
+        else:
+            counts["candidate"] += 1
+
+        processed += 1
+
+    return counts
