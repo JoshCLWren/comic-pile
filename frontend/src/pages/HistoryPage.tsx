@@ -95,21 +95,49 @@ export default function HistoryPage() {
                     </span>
                   </div>
 
-                  {session.ladder_path && (
+                  {session.active_thread && (
                     <div className="space-y-2">
-                      <p className="text-sm font-black text-stone-300">
-                        Dice progression: {formatDiceProgression(session.ladder_path)}
+                      <p className="font-black text-stone-300 truncate">{session.active_thread.title}</p>
+                      <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest">
+                        {session.active_thread.format}
+                        {session.active_thread.next_issue_number ? (
+                          <span> · #{session.active_thread.next_issue_number}</span>
+                        ) : null}
                       </p>
+                      {(session.active_thread.issues_read != null && session.active_thread.issues_read > 0) || (
+                        session.active_thread.last_rating != null
+                      ) ? (
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[8px] font-black uppercase tracking-widest text-stone-400">
+                          {session.active_thread.issues_read != null && session.active_thread.issues_read > 0 && (
+                            <span>{session.active_thread.issues_read} read</span>
+                          )}
+                          {session.active_thread.last_rating != null && (
+                            <span className="text-amber-400">Rated {session.active_thread.last_rating.toFixed(1)}</span>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest">
+                          {session.snapshot_count != null && session.snapshot_count > 0
+                            ? `${session.snapshot_count} read`
+                            : session.active_thread.issues_remaining != null
+                              ? `${session.active_thread.issues_remaining} left in queue`
+                              : null}
+                        </p>
+                      )}
                     </div>
                   )}
 
-                  {session.active_thread && (
-                    <div className="text-sm space-y-1">
-                      <p className="font-black text-stone-300 truncate">{session.active_thread.title}</p>
-                      <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest">{session.active_thread.format}</p>
-                      {session.last_rolled_result !== null && session.last_rolled_result !== undefined && (
-                        <p className="text-[9px] font-black text-amber-400 uppercase tracking-widest">
-                          Rolled: {session.last_rolled_result} of d{session.current_die}
+                  {session.ladder_path && (
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[8px] font-black uppercase tracking-widest text-stone-500">
+                        <span>Die size</span>
+                        <span className="text-stone-300">
+                          {formatDiceProgression(session.ladder_path)}
+                        </span>
+                      </div>
+                      {session.last_rolled_result != null && session.last_rolled_result > 0 && (
+                        <p className="text-[9px] font-black text-amber-400/70 uppercase tracking-widest">
+                          Rolled {session.last_rolled_result}
                         </p>
                       )}
                     </div>
