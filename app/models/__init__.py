@@ -19,6 +19,14 @@ from app.models.release import Release
 from app.models.revoked_token import RevokedToken
 from app.models.session import Session
 from app.models.snapshot import Snapshot
+from app.models.taste_signal import (
+    SIGNAL_VERDICT_CONFIRMED,
+    SIGNAL_VERDICT_REJECTED,
+    SIGNAL_VERDICT_SOMETIMES,
+    SIGNAL_VERDICTS,
+    TasteSignal,
+    apply_inferred_evidence,
+)
 from app.models.thread import Thread
 from app.models.user import User
 from app.models.user_preferences import UserPreferences
@@ -44,9 +52,15 @@ __all__ = [
     "Release",
     "RevokedToken",
     "Session",
+    "SIGNAL_VERDICT_CONFIRMED",
+    "SIGNAL_VERDICT_REJECTED",
+    "SIGNAL_VERDICT_SOMETIMES",
+    "SIGNAL_VERDICTS",
     "Snapshot",
+    "TasteSignal",
     "Thread",
     "ThreadExternalSeriesMapping",
     "User",
     "UserPreferences",
+    "apply_inferred_evidence",
 ]

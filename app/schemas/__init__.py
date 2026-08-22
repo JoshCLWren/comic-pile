@@ -45,6 +45,13 @@ from app.schemas.session import (
     SessionResponse,
 )
 from app.schemas.snapshot import SnapshotResponse, SnapshotsListResponse
+from app.schemas.taste import (
+    TasteDiscovery,
+    TasteDiscoveryListResponse,
+    TasteSignalResponse,
+    TasteVerdict,
+    TasteVerdictRequest,
+)
 from app.schemas.thread import (
     QueueThreadListItem,
     QueueThreadListResponse,
@@ -113,4 +120,10 @@ __all__ = [
     # Snapshot
     "SnapshotResponse",
     "SnapshotsListResponse",
+    # Taste Bank
+    "TasteDiscovery",
+    "TasteDiscoveryListResponse",
+    "TasteSignalResponse",
+    "TasteVerdict",
+    "TasteVerdictRequest",
 ]

@@ -37,6 +37,7 @@ from app.api import (
     roll,
     session,
     snooze,
+    taste,
     test_helpers,
     thread,
     undo,
@@ -249,6 +250,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(undo.router, prefix="/api/undo", tags=["undo"])
     app.include_router(undo.router, prefix="/api/v1/undo", tags=["undo"])
     app.include_router(preferences.router, prefix="/api/v1", tags=["users"])
+    app.include_router(taste.router, prefix="/api/v1", tags=["taste"])
     app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
     app.include_router(catalog.router, tags=["catalog"])
     if os.getenv("TEST_ENVIRONMENT") == "true":
