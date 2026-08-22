@@ -30,6 +30,8 @@ from app.schemas import (
     RollResponse,
 )
 from comic_pile.queue import get_roll_pool_rows
+from app.services.recommendation import get_recommended_thread
+from app.services.explanation_projection import get_primary_explanation
 from comic_pile.session import get_current_die_for_session, get_or_create
 
 router = APIRouter(tags=["roll"])
@@ -90,11 +92,26 @@ async def roll_dice(
             detail="No active threads available to roll",
         )
 
-    # Bound the selection to the current die size, matching original semantics.
+    # Get recommended thread with explanation codes
+    selected_thread, selected_index, recommendation_reason_codes = await get_recommended_thread(
+        user_id=user_id,
+        db=db,
+        snoozed_ids=snoozed_ids,
+        die_size=current_die,
+    )
     bounded_rows = rows[:current_die]
     pool_size = len(bounded_rows)
-    selected_index = random.randint(0, pool_size - 1)
-    selected_thread, unread_count, issue_number = bounded_rows[selected_index]
+    # Verify the selected thread is in our bounded pool (should be, but double-check)
+    if selected_thread not in [row[0] for row in bounded_rows]:
+        # Fallback to random selection if something went wrong
+        selected_index = random.randint(0, pool_size - 1)
+        selected_thread, unread_count, issue_number = bounded_rows[selected_index]
+        recommendation_reason_codes = ["fallback_random"]
+    else:
+        # Find the index of the selected thread in the bounded rows
+        selected_index = [row[0] for row in bounded_rows].index(selected_thread)
+        unread_count = bounded_rows[selected_index][1]
+        issue_number = bounded_rows[selected_index][2]
 
     selected_thread_id = selected_thread.id
     selected_thread_title = selected_thread.title
@@ -122,43 +139,37 @@ async def roll_dice(
                 selected_thread_issue_id = next_issue.id
                 selected_thread_issue_number = next_issue.issue_number
 
-    event = Event(
-        type="roll",
-        session_id=current_session_id,
-        selected_thread_id=selected_thread_id,
-        die=current_die,
-        result=selected_index + 1,
-        selection_method="random",
-    )
-    db.add(event)
+event = Event(
+    type="roll",
+    session_id=current_session_id,
+    selected_thread_id=selected_thread_id,
+    die=current_die,
+    result=selected_index + 1,
+    selection_method="recommended" if "pure_random" not in recommendation_reason_codes else "random",
+    recommendation_reason_codes=recommendation_reason_codes,
+)
+db.add(event)
 
-    if current_session:
-        current_session.pending_thread_id = selected_thread_id
-        current_session.pending_thread_updated_at = datetime.now(UTC)
 
-    await db.commit()
-    await _invalidate_session_caches(current_user.id)
 
-    snoozed_count = len(snoozed_ids)
-    offset = snoozed_count
-
-    return RollResponse(
-        thread_id=selected_thread_id,
-        title=selected_thread_title,
-        format=selected_thread_format,
-        issues_remaining=selected_thread_issues_remaining,
-        queue_position=selected_thread_queue_position,
-        die_size=current_die,
-        result=selected_index + 1,
-        offset=offset,
-        snoozed_count=snoozed_count,
-        issue_id=selected_thread_issue_id,
-        issue_number=selected_thread_issue_number,
-        next_issue_id=selected_thread_issue_id,
-        next_issue_number=selected_thread_issue_number,
-        total_issues=selected_thread_total_issues,
-        reading_progress=selected_thread_reading_progress,
-    )
+return RollResponse(
+    thread_id=selected_thread_id,
+    title=selected_thread_title,
+    format=selected_thread_format,
+    issues_remaining=selected_thread_issues_remaining,
+    queue_position=selected_thread_queue_position,
+    die_size=current_die,
+    result=selected_index + 1,
+    offset=offset,
+    snoozed_count=snoozed_count,
+    issue_id=selected_thread_issue_id,
+    issue_number=selected_thread_issue_number,
+    next_issue_id=selected_thread_issue_id,
+    next_issue_number=selected_thread_issue_number,
+    total_issues=selected_thread_total_issues,
+    reading_progress=selected_thread_reading_progress,
+    explanation=get_primary_explanation(recommendation_reason_codes),
+)
 
 
 @router.post("/dismiss-pending", status_code=status.HTTP_204_NO_CONTENT)
@@ -261,14 +272,15 @@ async def override_roll(
             detail=f"Thread {override_thread_id} is snoozed. Please unsnooze it first before overriding.",
         )
 
-    event = Event(
-        type="roll",
-        session_id=current_session_id,
-        selected_thread_id=override_thread_id,
-        die=current_die,
-        result=0,
-        selection_method="override",
-    )
+event = Event(
+    type="roll",
+    session_id=current_session_id,
+    selected_thread_id=override_thread_id,
+    die=current_die,
+    result=0,
+    selection_method="override",
+    recommendation_reason_codes=[],  # No algorithmic reasoning for explicit override
+)
     db.add(event)
 
     current_session.pending_thread_id = override_thread_id
@@ -280,23 +292,24 @@ async def override_roll(
     snoozed_count = len(snoozed_ids)
     offset = snoozed_count
 
-    return RollResponse(
-        thread_id=override_thread_id,
-        title=override_thread_title,
-        format=override_thread_format,
-        issues_remaining=override_thread_issues_remaining,
-        queue_position=override_thread_queue_position,
-        die_size=current_die,
-        result=0,
-        offset=offset,
-        snoozed_count=snoozed_count,
-        issue_id=override_thread_issue_id,
-        issue_number=override_thread_issue_number,
-        next_issue_id=override_thread_issue_id,
-        next_issue_number=override_thread_issue_number,
-        total_issues=override_thread_total_issues,
-        reading_progress=override_thread_reading_progress,
-    )
+return RollResponse(
+    thread_id=override_thread_id,
+    title=override_thread_title,
+    format=override_thread_format,
+    issues_remaining=override_thread_issues_remaining,
+    queue_position=override_thread_queue_position,
+    die_size=current_die,
+    result=0,
+    offset=offset,
+    snoozed_count=snoozed_count,
+    issue_id=override_thread_issue_id,
+    issue_number=override_thread_issue_number,
+    next_issue_id=override_thread_issue_id,
+    next_issue_number=override_thread_issue_number,
+    total_issues=override_thread_total_issues,
+    reading_progress=override_thread_reading_progress,
+    explanation=get_primary_explanation([]),  # Empty list for override
+)
 
 
 @router.post("/set-die", response_class=HTMLResponse)
