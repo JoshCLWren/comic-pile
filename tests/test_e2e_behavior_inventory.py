@@ -7,7 +7,6 @@ ensures the inventory stays a valid, unique, and complete source of truth.
 
 from pathlib import Path
 
-import pytest
 import yaml
 
 INVENTORY_PATH = Path("docs/e2e-behavior-inventory.yaml")
