@@ -203,11 +203,11 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     # Expose the metrics router in every environment so production performance
     # tracking (issue #834) and future regression checks can read startup
     # telemetry. It returns only process startup epoch and duration.
-    app.include_router(metrics.router, prefix="/api", tags=["metrics"])
+    app.include_router(metrics.router, prefix="/api/v1/", tags=["metrics"])
 
     # Lightweight ping endpoint for cold-start mitigation (issue #1389).
     # Zero database/ORM overhead; keeps Vercel serverless functions warm.
-    app.include_router(ping.router, prefix="/api", tags=["ping"])
+    app.include_router(ping.router, prefix="/api/v1/", tags=["ping"])
 
     # Error-only request logging (body redaction + environment-aware sanitization).
     add_request_logging_middleware(app, app_settings.environment)
@@ -228,15 +228,15 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     # /api/* routes.
     app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
     app.include_router(roll.router, prefix="/api/v1/roll", tags=["roll"])
-    app.include_router(admin.router, prefix="/api", tags=["admin"])
-    app.include_router(analytics.router, prefix="/api", tags=["analytics"])
+    app.include_router(admin.router, prefix="/api/v1/", tags=["admin"])
+    app.include_router(analytics.router, prefix="/api/v1/", tags=["analytics"])
     app.include_router(bug_report.router, prefix="/api/bug-reports", tags=["bug-reports"])
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(thread.router, prefix="/api/threads", tags=["threads"])
     app.include_router(thread.router, prefix="/api/v1/threads", tags=["threads"])
     if app_settings.environment != "production":
-        app.include_router(debug.router, prefix="/api", tags=["debug"])
+        app.include_router(debug.router, prefix="/api/v1/", tags=["debug"])
     app.include_router(issue.router, tags=["issues"])
     app.include_router(comicvine_resolution.router, tags=["comicvine-resolution"])
     app.include_router(rate.router, prefix="/api/rate", tags=["rate"])
@@ -256,7 +256,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
     app.include_router(catalog.router, tags=["catalog"])
     if os.getenv("TEST_ENVIRONMENT") == "true":
-        app.include_router(test_helpers.router, prefix="/api", tags=["test"])
+        app.include_router(test_helpers.router, prefix="/api/v1/", tags=["test"])
 
     def _assert_production_frontend_assets() -> None:
         """Ensure required frontend artifacts exist in production.
