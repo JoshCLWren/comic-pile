@@ -33,6 +33,45 @@ class SnoozedThreadInfo(BaseModel):
     title: str
 
 
+class SnoozeCorrectionInfo(BaseModel):
+    """Structured Snooze correction guidance for the client.
+
+    Returned with every Snooze response so the frontend can later decide
+    whether to show a clarification sheet, without implementing UI in this
+    issue. The fields are compact and canonical through generated OpenAPI
+    types.
+    """
+
+    bandwidth_changed: bool = Field(
+        description="Whether the inferred bandwidth level changed after this snooze"
+    )
+    active_bandwidth: str | None = Field(
+        default=None,
+        description="Current active bandwidth after correction: light, balanced, or deep",
+    )
+    active_confidence: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Confidence in the active bandwidth (0.0–1.0)",
+    )
+    predicted_bandwidth: str | None = Field(
+        default=None,
+        description="Original launch prediction (preserved for accuracy analysis)",
+    )
+    reason_code: str | None = Field(
+        default=None,
+        description=(
+            "Compact reason code: heavy_snooze_shift, light_snooze_deflate, "
+            "confidence_degrade, no_correction, or clarification_needed"
+        ),
+    )
+    suggest_clarification: bool = Field(
+        default=False,
+        description="True when repeated contradictory snoozes indicate the user should clarify",
+    )
+
+
 class ActiveThreadInfo(BaseModel):
     """Schema for active thread information in session response."""
 
@@ -77,6 +116,33 @@ class SessionResponse(BaseModel):
     snoozed_thread_ids: list[int] = []
     snoozed_threads: list[SnoozedThreadInfo] = []
     pending_thread_id: int | None = None
+    # Ephemeral session bandwidth state (Phase 4)
+    inferred_bandwidth: str | None = Field(
+        default=None,
+        description="Current active bandwidth: light, balanced, or deep",
+    )
+    bandwidth_confidence: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Confidence in inferred bandwidth (0.0–1.0)",
+    )
+    bandwidth_source: str | None = Field(
+        default=None,
+        description="Source of bandwidth inference: launch, snooze, or manual",
+    )
+    predicted_bandwidth: str | None = Field(
+        default=None,
+        description="Original launch prediction for accuracy analysis",
+    )
+    # Structured correction guidance from the most recent Snooze (if any)
+    correction: SnoozeCorrectionInfo | None = Field(
+        default=None,
+        description=(
+            "Structured correction result from the most recent Snooze. "
+            "Null when no correction was applied."
+        ),
+    )
 
     @field_serializer("started_at", "ended_at")
     def serialize_datetime(self, value: datetime | None) -> str | None:

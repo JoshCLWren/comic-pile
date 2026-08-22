@@ -43,6 +43,7 @@ from app.schemas.session import (
     SessionListItem,
     SessionListResponse,
     SessionResponse,
+    SnoozeCorrectionInfo,
 )
 from app.schemas.snapshot import SnapshotResponse, SnapshotsListResponse
 from app.schemas.thread import (
@@ -110,6 +111,7 @@ __all__ = [
     "SessionDetailsResponse",
     "ActiveThreadInfo",
     "EventDetail",
+    "SnoozeCorrectionInfo",
     # Snapshot
     "SnapshotResponse",
     "SnapshotsListResponse",
