@@ -26,6 +26,12 @@ from app.schemas.issue import (
 from app.schemas.migration import MigrateToIssuesRequest
 from app.schemas.preferences import ThemeId, UserPreferencesPatchRequest, UserPreferencesResponse
 from app.schemas.rate import RateRequest
+from app.schemas.recommendation_diagnostics import (
+    ControlModeGroup,
+    CoverageInfo,
+    EffortBandOutcome,
+    RecommendationDiagnosticsResponse,
+)
 from app.schemas.roll import (
     OverrideRequest,
     RollBootstrapResponse,
@@ -115,4 +121,9 @@ __all__ = [
     # Snapshot
     "SnapshotResponse",
     "SnapshotsListResponse",
+    # Recommendation diagnostics
+    "RecommendationDiagnosticsResponse",
+    "ControlModeGroup",
+    "CoverageInfo",
+    "EffortBandOutcome",
 ]
