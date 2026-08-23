@@ -112,7 +112,7 @@ async def infer_bandwidth(
         return _neutral_result()
 
     # For each roll, find the subsequent rate event on the same thread
-    comparable_decisions: list[dict[str, float | str]] = []
+    comparable_decisions: list[dict[str, float | str | int | None]] = []
 
     for roll_row in roll_rows:
         rate_result = await db.execute(
@@ -150,6 +150,8 @@ async def infer_bandwidth(
                 "effort_band": effort_band,
                 "minutes": minutes_to_rate,
                 "rating": rate_row.rating or 0.0,
+                "session_id": roll_row.session_id,
+                "thread_id": roll_row.selected_thread_id,
             }
         )
 
@@ -165,12 +167,23 @@ async def infer_bandwidth(
 async def _count_snoozes_by_effort_band(
     db: AsyncSession,
     user_id: int,
-    decisions: list[dict[str, float | str]],
+    decisions: list[dict[str, float | str | int | None]],
 ) -> dict[str, int]:
     """Count snooze events that follow rolls by effort band."""
     snooze_counts: dict[str, int] = {"light": 0, "medium": 0, "deep": 0}
 
-    # Query recent snooze events
+    # Build decision pairs for matching snoozes
+    decision_pairs = {
+        (d.get("session_id"), d.get("thread_id")): d.get("effort_band", "medium")
+        for d in decisions
+    }
+
+    if not decision_pairs:
+        return snooze_counts
+
+    # Query snooze events for the user's sessions matching decision pairs
+    session_ids = {sid for sid, _ in decision_pairs if sid is not None}
+
     snooze_result = await db.execute(
         select(
             Event.session_id,
@@ -178,25 +191,58 @@ async def _count_snoozes_by_effort_band(
             Event.timestamp.label("snooze_timestamp"),
         )
         .where(Event.type == "snooze")
+        .where(Event.session_id.in_(session_ids))
         .where(Event.thread_id.is_not(None))
         .order_by(Event.timestamp.desc())
-        .limit(50)
+        .limit(200)
     )
     snooze_rows = snooze_result.all()
 
-    # Build a set of (session_id, thread_id) pairs that were snoozed
-    snoozed_pairs = {(row.session_id, row.thread_id) for row in snooze_rows}
+    # Aggregate snooze counts by band.
+    # For each snooze event matching a decision pair, add to the band's count.
+    # Cap at decision count per band to keep rate <= 1.0.
+    snooze_counts_aggregated: dict[str, float] = {"light": 0.0, "medium": 0.0, "deep": 0.0}
+    decision_counts_by_band: dict[str, int] = {"light": 0, "medium": 0, "deep": 0}
+    for d in decisions:
+        effort = d.get("effort_band", "medium")
+        if effort in decision_counts_by_band:
+            decision_counts_by_band[effort] += 1
 
-    for decision in decisions:
-        effort = decision["effort_band"]
-        if effort in snooze_counts:
-            snooze_counts[effort] += 1
+    snoozed_pair_counts: dict[tuple[int | None, int | None], int] = {}
+    for row in snooze_rows:
+        pair = (row.session_id, row.thread_id)
+        if pair in decision_pairs:
+            snoozed_pair_counts[pair] = snoozed_pair_counts.get(pair, 0) + 1
+
+    # For simplicity, associate snoozes with the band of matching decisions.
+    # If a pair has multiple decisions with different bands, split proportionally.
+    for pair, snooze_count in snoozed_pair_counts.items():
+        pair_decisions = [
+            d for d in decisions
+            if (d.get("session_id"), d.get("thread_id")) == pair
+        ]
+        for d in pair_decisions:
+            band = d.get("effort_band", "medium")
+            if band in snooze_counts_aggregated:
+                # Split snooze count proportionally across decisions in this pair
+                band_decisions_in_pair = [
+                    dd for dd in pair_decisions
+                    if dd.get("effort_band", "medium") == band
+                ]
+                count_in_band = len(band_decisions_in_pair)
+                if count_in_band > 0:
+                    snooze_counts_aggregated[band] += snooze_count / count_in_band
+
+    # Round down and cap at decision count per band
+    for band in snooze_counts_aggregated:
+        capped = min(int(snooze_counts_aggregated[band]), decision_counts_by_band.get(band, 0))
+        snooze_counts[band] = capped
 
     return snooze_counts
 
 
 def _classify_bandwidth(
-    decisions: list[dict[str, float | str]],
+    decisions: list[dict[str, float | str | int | None]],
     snooze_counts: dict[str, int],
 ) -> BandwidthInference:
     """Classify bandwidth from comparable decisions and snooze patterns.
