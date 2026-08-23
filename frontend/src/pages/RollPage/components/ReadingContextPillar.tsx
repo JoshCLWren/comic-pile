@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { ReadingOrder } from '../../../services/api-reading-orders'
 import type { ConnectedThreadInfo } from '../../../types'
 import type { RatingThread } from '../types'
@@ -29,6 +30,32 @@ function getSeriesNameFromContext(context: ReaderContextResponse): string | null
   return context.series.series_name ?? null
 }
 
+function EdgeEndpoint({
+  label,
+  fallbackLabel,
+  threadId,
+  onOpen,
+}: {
+  label: string | null
+  fallbackLabel: string
+  threadId: number | null
+  onOpen: (threadId: number) => void
+}) {
+  if (threadId === null) {
+    return <span className="font-mono truncate">{label ?? fallbackLabel}</span>
+  }
+  return (
+    <button
+      type="button"
+      className="font-mono truncate underline decoration-dotted underline-offset-2"
+      onClick={() => onOpen(threadId)}
+      aria-label={`Open thread for ${label ?? fallbackLabel}`}
+    >
+      {label ?? fallbackLabel}
+    </button>
+  )
+}
+
 export function ReadingContextPillar({
   activeRatingThread,
   readingOrders,
@@ -39,6 +66,7 @@ export function ReadingContextPillar({
 }: ReadingContextPillarProps) {
   const [isContinuityDialogOpen, setIsContinuityDialogOpen] = useState(false)
   const [isRouteExplanationOpen, setIsRouteExplanationOpen] = useState(false)
+  const navigate = useNavigate()
   const [readerContext, setReaderContext] = useState<ReaderContextResponse | null>(null)
   const [readerContextError, setReaderContextError] = useState<string | null>(null)
   const threadTitle = activeRatingThread?.title ?? 'Loading…'
@@ -104,6 +132,20 @@ export function ReadingContextPillar({
   const dependencyEdges = useMemo(() => readerContext?.local_chain.edges.filter(e => e.kind === 'dependency') ?? [], [readerContext])
   const continuityEdges = useMemo(() => readerContext?.local_chain.edges.filter(e => e.kind === 'continuity') ?? [], [readerContext])
 
+  const currentIssueId = readerContext?.issue_id ?? null
+  const dependencyHeading = useMemo(() => {
+    if (dependencyEdges.length === 0) return null
+    if (dependencyEdges.every(e => e.target_issue_id === currentIssueId)) return 'Blocked by:'
+    if (dependencyEdges.every(e => e.source_issue_id === currentIssueId)) return 'Blocks:'
+    return 'Dependency edges:'
+  }, [dependencyEdges, currentIssueId])
+
+  const openCurrentThread = () => {
+    if (activeRatingThread) navigate(`/thread/${activeRatingThread.id}`)
+  }
+  const openCrossoversPage = () => navigate('/crossovers')
+  const openThread = (threadId: number) => navigate(`/thread/${threadId}`)
+
   return (
     <div className="w-full space-y-4">
       <div className="flex items-center gap-2 border-b-2 pb-2" style={{ borderColor: 'var(--theme-continuity-accent)' }}>
@@ -166,8 +208,9 @@ export function ReadingContextPillar({
                   className={`flex items-center gap-3 ${isCurrent ? 'border-l-2 border-l-solid border-l-[var(--theme-continuity-accent)] pl-3' : 'pl-5'} group cursor-pointer`}
                   role="listitem"
                   tabIndex={0}
-                  onClick={() => undefined}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); }}}
+                  onClick={openCurrentThread}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCurrentThread(); } }}
+                  aria-label={`Open ${threadTitle} issue ${issue.issue_number}`}
                 >
                   <div className="flex-shrink-0 w-2 h-2 rounded-full" style={{
                     backgroundColor: isCurrent ? 'var(--theme-continuity-accent)' :
@@ -229,13 +272,15 @@ export function ReadingContextPillar({
                 {currentCrossovers.map((crossover) => (
                   <button
                     key={crossover.id}
+                    type="button"
                     className="rounded-full px-2 py-1 text-[9px] font-bold transition"
                     style={{
                       border: '1px solid rgba(212,137,14,0.4)',
                       backgroundColor: 'rgba(212, 137, 14, 0.12)',
                       color: 'rgb(250, 204, 139)',
                     }}
-                    onClick={() => undefined}
+                    onClick={openCrossoversPage}
+                    aria-label={`Open crossover ${crossover.name}`}
                   >
                     {crossover.name}
                   </button>
@@ -250,9 +295,11 @@ export function ReadingContextPillar({
               {upcomingCrossovers.map((crossover) => (
                 <button
                   key={crossover.id}
+                  type="button"
                   className="w-full flex items-center gap-3 px-2 py-1 text-left transition"
                   style={{ borderLeft: '3px solid rgb(250, 204, 139)', backgroundColor: 'rgba(250, 204, 139, 0.05)' }}
-                  onClick={() => undefined}
+                  onClick={openCrossoversPage}
+                  aria-label={`Open crossover ${crossover.name}`}
                 >
                   <div className="flex-shrink-0 w-2 h-2 rounded-full" style={{ backgroundColor: 'rgb(250, 204, 139)' }}></div>
                   <div className="flex-1 space-y-0.5">
@@ -278,89 +325,101 @@ export function ReadingContextPillar({
             </h3>
           </div>
 
-          {(dependencyEdges.length > 0 || continuityEdges.length > 0) ? (
-            <div className="space-y-2">
-              {dependencyEdges.length > 0 && (
-                <div className="space-y-1">
-                  <div className="font-bold text-[9px] text-stone-500 mb-1">
-                    {dependencyEdges.length === 1 ? 'Blocks:' : 'Blocked by:'}
-                  </div>
-                  {dependencyEdges.map((edge) => (
-                    <div
-                      key={`${edge.source_issue_id}-${edge.target_issue_id}`}
-                      className="flex items-center gap-3 px-2 py-1 group cursor-pointer"
-                      style={{
-                        borderLeft: '3px solid rgb(250, 204, 139)',
-                        backgroundColor: 'rgba(250, 204, 139, 0.05)'
-                      }}
-                      onClick={() => undefined}
-                    >
-                      <div className="flex-shrink-0 w-2 h-2 rounded-full" style={{ backgroundColor: 'rgb(250, 204, 139)' }}></div>
-                      <div className="flex-1 space-y-0.5 min-w-0">
-                        <div className="flex items-center gap-2 text-[8px] flex-wrap">
-                          <span className="font-mono truncate">{edge.source_label ?? `#${edge.source_issue_id}`}</span>
-                          <span className="text-stone-400">→</span>
-                          <span className="font-mono truncate">{edge.target_label ?? `#${edge.target_issue_id}`}</span>
-                        </div>
-                        {edge.explanation && (
-                          <div className="text-[8px] text-stone-400 italic truncate">
-                            {edge.explanation}
-                          </div>
-                        )}
-                        {edge.note && !edge.explanation && (
-                          <div className="text-[8px] text-stone-400 italic truncate">
-                            {edge.note}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+          <div className="space-y-2">
+            {dependencyEdges.length > 0 && (
+              <div className="space-y-1">
+                <div className="font-bold text-[9px] text-stone-500 mb-1">
+                  {dependencyHeading}
                 </div>
-              )}
+                {dependencyEdges.map((edge) => (
+                  <div
+                    key={`dependency-${edge.id}`}
+                    className="flex items-center gap-3 px-2 py-1"
+                    style={{
+                      borderLeft: '3px solid rgb(250, 204, 139)',
+                      backgroundColor: 'rgba(250, 204, 139, 0.05)'
+                    }}
+                  >
+                    <div className="flex-shrink-0 w-2 h-2 rounded-full" style={{ backgroundColor: 'rgb(250, 204, 139)' }}></div>
+                    <div className="flex-1 space-y-0.5 min-w-0">
+                      <div className="flex items-center gap-2 text-[8px] flex-wrap">
+                        <EdgeEndpoint
+                          label={edge.source_label}
+                          fallbackLabel={`#${edge.source_issue_id}`}
+                          threadId={edge.source_thread_id}
+                          onOpen={openThread}
+                        />
+                        <span className="text-stone-400" aria-hidden="true">→</span>
+                        <EdgeEndpoint
+                          label={edge.target_label}
+                          fallbackLabel={`#${edge.target_issue_id}`}
+                          threadId={edge.target_thread_id}
+                          onOpen={openThread}
+                        />
+                      </div>
+                      {edge.explanation && (
+                        <div className="text-[8px] text-stone-400 italic truncate">
+                          {edge.explanation}
+                        </div>
+                      )}
+                      {edge.note && !edge.explanation && (
+                        <div className="text-[8px] text-stone-400 italic truncate">
+                          {edge.note}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
-              {continuityEdges.length > 0 && (
-                <div className="space-y-1">
-                  <div className="font-bold text-[9px] text-stone-500 mb-1">
-                    {continuityEdges.length === 1 ? 'Continuity:' : 'Continuity edges:'}
-                  </div>
-                  {continuityEdges.map((edge) => (
-                    <div
-                      key={`${edge.source_issue_id}-${edge.target_issue_id}`}
-                      className="flex items-center gap-3 px-2 py-1 group cursor-pointer"
-                      style={{
-                        borderLeft: '3px solid rgb(165, 243, 252)',
-                        backgroundColor: 'rgba(165, 243, 252, 0.05)'
-                      }}
-                      onClick={() => undefined}
-                    >
-                      <div className="flex-shrink-0 w-2 h-2 rounded-full" style={{ backgroundColor: 'rgb(165, 243, 252)' }}></div>
-                      <div className="flex-1 space-y-0.5 min-w-0">
-                        <div className="flex items-center gap-2 text-[8px] flex-wrap">
-                          <span className="font-mono truncate">{edge.source_label ?? `#${edge.source_issue_id}`}</span>
-                          <span className="text-stone-400">↝</span>
-                          <span className="font-mono truncate">{edge.target_label ?? `#${edge.target_issue_id}`}</span>
-                        </div>
-                        {edge.explanation && (
-                          <div className="text-[8px] text-stone-400 italic truncate">
-                            {edge.explanation}
-                          </div>
-                        )}
-                        {edge.note && !edge.explanation && (
-                          <div className="text-[8px] text-stone-400 italic truncate">
-                            {edge.note}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+            {continuityEdges.length > 0 && (
+              <div className="space-y-1">
+                <div className="font-bold text-[9px] text-stone-500 mb-1">
+                  {continuityEdges.length === 1 ? 'Continuity:' : 'Continuity edges:'}
                 </div>
-              )}
-            </div>
-          ) : (
-            <p className="text-[9px] text-stone-500 text-center py-4">
-              No dependency or continuity edges in local neighborhood
-            </p>
-          )}
+                {continuityEdges.map((edge) => (
+                  <div
+                    key={`continuity-${edge.id}`}
+                    className="flex items-center gap-3 px-2 py-1"
+                    style={{
+                      borderLeft: '3px solid rgb(165, 243, 252)',
+                      backgroundColor: 'rgba(165, 243, 252, 0.05)'
+                    }}
+                  >
+                    <div className="flex-shrink-0 w-2 h-2 rounded-full" style={{ backgroundColor: 'rgb(165, 243, 252)' }}></div>
+                    <div className="flex-1 space-y-0.5 min-w-0">
+                      <div className="flex items-center gap-2 text-[8px] flex-wrap">
+                        <EdgeEndpoint
+                          label={edge.source_label}
+                          fallbackLabel={`#${edge.source_issue_id}`}
+                          threadId={edge.source_thread_id}
+                          onOpen={openThread}
+                        />
+                        <span className="text-stone-400" aria-hidden="true">↝</span>
+                        <EdgeEndpoint
+                          label={edge.target_label}
+                          fallbackLabel={`#${edge.target_issue_id}`}
+                          threadId={edge.target_thread_id}
+                          onOpen={openThread}
+                        />
+                      </div>
+                      {edge.explanation && (
+                        <div className="text-[8px] text-stone-400 italic truncate">
+                          {edge.explanation}
+                        </div>
+                      )}
+                      {edge.note && !edge.explanation && (
+                        <div className="text-[8px] text-stone-400 italic truncate">
+                          {edge.note}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </section>
       )}
 
