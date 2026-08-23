@@ -122,7 +122,7 @@ export default function QueuePage() {
     (thread: Thread, index: number) => {
       const isDragOver = actions.dragOverThreadId === thread.id
       const isBlocked = thread.is_blocked
-      const blockingDependencies=thread.blockingDependencies
+      const blockingDependencies = blockingByThreadId[thread.id] ?? []
       const isSnoozed = session?.snoozed_threads?.some((t) => t.id === thread.id) ?? false
       const snoozeIcon = isSnoozed ? '🔔' : '😴'
       const snoozeLabel = isSnoozed ? 'Unsnooze' : 'Snooze'
