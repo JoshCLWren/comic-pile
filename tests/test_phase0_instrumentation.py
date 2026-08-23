@@ -56,9 +56,8 @@ async def test_roll_populates_issue_id_and_number(
     thread.next_unread_issue_id = issue.id
     await async_db.commit()
 
-    session.pending_thread_id = thread.id
-    session.pending_thread_updated_at = None
-    await async_db.commit()
+    # Ensure no pending roll blocks the new roll (409 guard in app/api/roll.py:66).
+    assert session.pending_thread_id is None
 
     response = await auth_client.post("/api/roll/")
     assert response.status_code == 200
