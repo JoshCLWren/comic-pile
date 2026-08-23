@@ -145,7 +145,9 @@ async def insert_reading_order_item(
 ) -> InsertReadingOrderItemResponse:
     """Insert a thread into a reading order at a specified position.
 
-    Shifts existing items at or after the target position to make room.
+    Shifts existing items at or after the target position to make room. If the
+    thread already belongs to the reading order, it is moved to the target
+    position instead of being duplicated.
     """
     order = (
         await db.execute(
@@ -178,17 +180,31 @@ async def insert_reading_order_item(
     ).scalars().all()
 
     target_pos = payload.position
-    for item in existing:
-        if item.position >= target_pos:
-            item.position = item.position + 1
+    current_item = next((item for item in existing if item.thread_id == payload.thread_id), None)
 
-    db.add(
-        ReadingOrderItem(
-            reading_order_id=reading_order_id,
-            thread_id=payload.thread_id,
-            position=target_pos,
+    if current_item is not None:
+        old_pos = current_item.position
+        if old_pos < target_pos:
+            for item in existing:
+                if old_pos < item.position <= target_pos:
+                    item.position -= 1
+        elif target_pos < old_pos:
+            for item in existing:
+                if target_pos <= item.position < old_pos:
+                    item.position += 1
+        current_item.position = target_pos
+    else:
+        for item in existing:
+            if item.position >= target_pos:
+                item.position += 1
+
+        db.add(
+            ReadingOrderItem(
+                reading_order_id=reading_order_id,
+                thread_id=payload.thread_id,
+                position=target_pos,
+            )
         )
-    )
     await db.commit()
 
     result = await db.execute(

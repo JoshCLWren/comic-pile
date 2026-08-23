@@ -16,7 +16,6 @@ from app.database import get_db
 from app.main import app
 from app.models import Thread
 from app.models.reading_order import ReadingOrder, ReadingOrderItem
-from app.models.user import User
 
 
 @pytest_asyncio.fixture

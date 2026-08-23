@@ -71,13 +71,8 @@ export default function AddToComicPileDialog({
 
       if (selectedOrderId) {
         try {
-          const orderDetail = await readingOrdersApi.getForThread(thread.id)
-          const targetOrder = orderDetail.reading_orders.find(
-            (o) => o.id === Number(selectedOrderId),
-          )
-          const nextPos = targetOrder && targetOrder.items.length > 0
-            ? Math.max(...targetOrder.items.map((item) => item.position)) + 1
-            : 1
+          const targetOrder = readingOrders.find((o) => o.id === Number(selectedOrderId))
+          const nextPos = targetOrder ? targetOrder.total_items + 1 : 1
           await readingOrdersApi.insertItem(Number(selectedOrderId), {
             thread_id: thread.id,
             position: nextPos,
@@ -94,7 +89,7 @@ export default function AddToComicPileDialog({
       const detail = err instanceof Error ? err.message : 'Failed to create thread'
       setError(detail)
     }
-  }, [title, comicvineIssueId, selectedOrderId, createThread, onAdded, onClose, showToast])
+  }, [title, comicvineIssueId, selectedOrderId, readingOrders, createThread, onAdded, onClose, showToast])
 
   return (
     <Modal
