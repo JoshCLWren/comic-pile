@@ -1,4 +1,6 @@
 import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -68,7 +70,15 @@ const ALIAS_CONTRACT: ReadonlyArray<readonly [alias: string, target: string]> = 
 ]
 
 function loadStylesheet(): string {
-  return readFileSync(new URL('../styles.css', import.meta.url), 'utf8')
+  // The Vitest jsdom runner can surface import.meta.url as the simulated page
+  // origin (http://localhost:3000/) instead of a file URL, so anchor on file
+  // URLs when available and otherwise resolve against the frontend root.
+  const specifier = new URL('../styles.css', import.meta.url)
+  const stylesheet =
+    specifier.protocol === 'file:'
+      ? fileURLToPath(specifier)
+      : resolve(process.cwd(), 'src', 'styles.css')
+  return readFileSync(stylesheet, 'utf8')
 }
 
 function extractThemeBlock(css: string, theme: ThemeId): string {
