@@ -29,12 +29,64 @@ from app.schemas import (
     RollRequest,
     RollResponse,
 )
+from app.services.recommendation_context import (
+    SELECTION_METHOD_OVERRIDE,
+    SELECTION_METHOD_RANDOM,
+    ContextCandidate,
+    build_recommendation_context,
+)
+from app.services.reading_effort import resolve_candidate_efforts
 from comic_pile.queue import get_roll_pool_rows
 from comic_pile.session import get_current_die_for_session, get_or_create
 
 router = APIRouter(tags=["roll"])
 
 logger = logging.getLogger(__name__)
+
+
+def _candidate_snapshot(thread: Thread) -> ContextCandidate:
+    """Extract bounded decision-time facts from an attached Thread."""
+    return ContextCandidate(
+        thread_id=thread.id,
+        queue_position=thread.queue_position,
+        last_rating=thread.last_rating,
+        last_activity_at=thread.last_activity_at,
+    )
+
+
+async def _attach_recommendation_context(
+    event: Event,
+    *,
+    selection_method: str,
+    die_size: int,
+    candidate_threads: list[Thread],
+    selected_index: int,
+    result: int,
+    db: AsyncSession,
+) -> None:
+    """Attach the versioned decision-time context snapshot to a roll event.
+
+    Instrumentation only: any unexpected failure is logged and leaves the
+    context NULL so estimate problems can never block or alter a Roll.
+    """
+    try:
+        context_candidates = [_candidate_snapshot(thread) for thread in candidate_threads]
+        efforts_by_thread = await resolve_candidate_efforts(db, candidate_threads)
+        event.recommendation_context = build_recommendation_context(
+            selection_method=selection_method,
+            die_size=die_size,
+            candidates=context_candidates,
+            selected_index=selected_index,
+            result=result,
+            efforts_by_thread=efforts_by_thread,
+        )
+    except Exception:
+        logger.exception(
+            "Failed to build recommendation context for roll event "
+            "(selection_method=%s, die_size=%d); persisting without context",
+            selection_method,
+            die_size,
+        )
 
 
 @router.post("/", response_model=RollResponse)
@@ -129,6 +181,15 @@ async def roll_dice(
         die=current_die,
         result=selected_index + 1,
         selection_method="random",
+    )
+    await _attach_recommendation_context(
+        event,
+        selection_method=SELECTION_METHOD_RANDOM,
+        die_size=current_die,
+        candidate_threads=[row[0] for row in bounded_rows],
+        selected_index=selected_index,
+        result=selected_index + 1,
+        db=db,
     )
     db.add(event)
 
@@ -268,6 +329,15 @@ async def override_roll(
         die=current_die,
         result=0,
         selection_method="override",
+    )
+    await _attach_recommendation_context(
+        event,
+        selection_method=SELECTION_METHOD_OVERRIDE,
+        die_size=current_die,
+        candidate_threads=[override_thread],
+        selected_index=0,
+        result=0,
+        db=db,
     )
     db.add(event)
 

@@ -5,7 +5,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, JSON, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -38,6 +39,14 @@ class Event(Base):
           for the die after stepping up.
         - "unsnooze": User unsnoozed a thread. Uses `thread_id` to record which
           thread was removed from the snoozed list.
+
+    Recommendation Context:
+        New "roll" events persist a versioned decision-time snapshot in
+        `recommendation_context` covering the bounded candidate pool, the
+        selected candidate's queue position/rating/activity, and reading-effort
+        estimates. Historical events and non-roll types keep this NULL. The
+        payload schema and version history are documented in
+        `app/services/recommendation_context.py`.
 
     Thread ID Fields:
         This model has two thread reference fields with different purposes:
@@ -81,6 +90,13 @@ class Event(Base):
     )
     # Denormalized issue_number preserved for historical display even if Issue is deleted
     issue_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Versioned recommendation-context snapshot captured at roll decision time.
+    # NULL for historical events and non-roll event types. Schema documented in
+    # app/services/recommendation_context.py (context_version 2 adds effort fields).
+    recommendation_context: Mapped[dict | None] = mapped_column(
+        JSONB().with_variant(JSON(), "sqlite"),
+        nullable=True,
+    )
 
     __table_args__ = (
         Index("ix_event_session_id", "session_id"),
