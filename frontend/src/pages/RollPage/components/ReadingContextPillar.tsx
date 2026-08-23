@@ -9,6 +9,7 @@ import ContinuityCorrectionDialog from '../../../components/ContinuityCorrection
 import { ContinuityReadinessSummary } from './ContinuityReadinessSummary'
 import { ReadingOrderGroups } from './ReadingOrderGroups'
 import { ReadingRouteExplanation } from './ReadingRouteExplanation'
+import { readingContextType } from '../readingContextTypography'
 
 interface ReadingContextPillarProps {
   activeRatingThread: RatingThread | null
@@ -41,13 +42,19 @@ function EdgeEndpoint({
   threadId: number | null
   onOpen: (threadId: number) => void
 }) {
+  const endpointStyle = readingContextType('primaryValue')
   if (threadId === null) {
-    return <span className="font-mono truncate">{label ?? fallbackLabel}</span>
+    return (
+      <span className="min-w-0 break-words font-mono text-[var(--theme-text-primary)]" style={endpointStyle}>
+        {label ?? fallbackLabel}
+      </span>
+    )
   }
   return (
     <button
       type="button"
-      className="font-mono truncate underline decoration-dotted underline-offset-2"
+      className="min-w-0 break-words text-left font-mono underline decoration-dotted underline-offset-2 text-[var(--theme-text-primary)]"
+      style={endpointStyle}
       onClick={() => onOpen(threadId)}
       aria-label={`Open thread for ${label ?? fallbackLabel}`}
     >
@@ -146,55 +153,84 @@ export function ReadingContextPillar({
   const openCrossoversPage = () => navigate('/crossovers')
   const openThread = (threadId: number) => navigate(`/thread/${threadId}`)
 
+  const renderEdgeExplanation = (edge: { explanation: string | null; note: string | null }) => {
+    const copy = edge.explanation ?? (edge.note ? edge.note : null)
+    if (!copy) return null
+    return (
+      <div
+        className="break-words italic text-[var(--theme-text-muted)]"
+        style={readingContextType('bodyCopy')}
+      >
+        {copy}
+      </div>
+    )
+  }
+
   return (
     <div className="w-full space-y-4">
-      <div className="flex items-center gap-2 border-b-2 pb-2" style={{ borderColor: 'var(--theme-continuity-accent)' }}>
-        <span className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-continuity-accent)' }}>Reading Context</span>
+      <div className="flex items-center justify-between gap-2 border-b-2 pb-2" style={{ borderColor: 'var(--theme-continuity-accent)' }}>
+        <span
+          className="font-black uppercase tracking-[0.14em] text-[var(--theme-text-muted)]"
+          style={readingContextType('panelLabel')}
+        >
+          Reading Context
+        </span>
       </div>
       <ContinuityReadinessSummary issueId={issueId} />
 
-      <section className="grid grid-cols-2 gap-4 text-center pb-3 border-b border-[rgba(6,182,212,0.2)]">
-        <div>
-          {(rolledResult !== null && currentDie !== null) ? (
-            <>
-              <div className="text-[9px] font-bold text-stone-500">Roll Result</div>
-              <div className="text-[11px] font-mono text-amber-500">
-                Rolled {rolledResult} on d{currentDie}
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="text-[9px] font-bold text-stone-500">Roll Result</div>
-              <div className="text-[11px] text-stone-400">—</div>
-            </>
-          )}
+      <section className="grid grid-cols-2 gap-x-6 gap-y-3 border-b border-[var(--theme-border)] pb-3">
+        <div className="min-w-0">
+          <div
+            className="font-bold uppercase tracking-wider text-[var(--theme-text-muted)]"
+            style={readingContextType('statLabel')}
+          >
+            Roll Result
+          </div>
+          <div
+            className="mt-1 font-mono font-bold text-[var(--theme-comic-accent)]"
+            style={readingContextType('statValue')}
+          >
+            {(rolledResult !== null && currentDie !== null) ? `Rolled ${rolledResult} on d${currentDie}` : '—'}
+          </div>
         </div>
-        
-        <div>
-          <div className="text-[9px] font-bold text-stone-500">Series Progress</div>
-          <ReadingOrderGroups threadId={activeRatingThread?.id} className="text-[11px] font-mono text-amber-500" />
+
+        <div className="min-w-0">
+          <div
+            className="font-bold uppercase tracking-wider text-[var(--theme-text-muted)]"
+            style={readingContextType('statLabel')}
+          >
+            Series Progress
+          </div>
+          <ReadingOrderGroups
+            threadId={activeRatingThread?.id}
+            className="mt-1 font-mono font-bold text-[var(--theme-comic-accent)]"
+          />
         </div>
       </section>
 
       {readerContext && seriesName && (
         <section aria-labelledby="local-series-heading" className="rounded-2xl p-4" style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'rgba(6, 182, 212, 0.09)' }}>
-          <div className="flex items-center justify-between gap-2 mb-3">
-            <h3 id="local-series-heading" className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-continuity-accent)' }}>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h3
+              id="local-series-heading"
+              className="font-bold text-[var(--theme-text-primary)]"
+              style={readingContextType('sectionHeading')}
+            >
               Where you are in {seriesName}
             </h3>
           </div>
 
           {allCrossoverMemberships.length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-3" aria-label="Crossover memberships">
+            <div className="mb-3 flex flex-wrap gap-2" aria-label="Crossover memberships">
               {allCrossoverMemberships.map((crossover) => (
                 <button
                   key={crossover.id}
                   type="button"
-                  className="rounded-full px-2 py-0.5 text-[8px] font-bold transition"
+                  className="rounded-full px-3 py-1 font-bold text-[var(--theme-comic-accent)] transition hover:brightness-125"
                   style={{
+                    ...readingContextType('chipLabel'),
                     border: '1px solid rgba(212,137,14,0.4)',
                     backgroundColor: 'rgba(212, 137, 14, 0.12)',
-                    color: 'rgb(250, 204, 139)',
                   }}
                   onClick={openCrossoversPage}
                   aria-label={`Open ${crossover.name} crossover`}
@@ -212,34 +248,44 @@ export function ReadingContextPillar({
               return (
                 <div
                   key={issue.issue_id}
-                  className={`flex items-center gap-3 ${isCurrent ? 'border-l-2 border-l-solid border-l-[var(--theme-continuity-accent)] pl-3' : 'pl-5'} group cursor-pointer`}
+                  className={`group flex cursor-pointer items-center gap-3 ${isCurrent ? 'border-l-2 border-l-solid border-l-[var(--theme-continuity-accent)] pl-3' : 'pl-5'}`}
                   role="listitem"
                   tabIndex={0}
                   onClick={openCurrentThread}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCurrentThread(); } }}
                   aria-label={`Open ${threadTitle} issue ${issue.issue_number}`}
                 >
-                  <div className="flex-shrink-0 w-2 h-2 rounded-full" style={{
+                  <div className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{
                     backgroundColor: isCurrent ? 'var(--theme-continuity-accent)' :
                                 isPrevious ? 'rgba(6,182,212,0.3)' :
                                 'rgba(6,182,212,0.1)'
                   }}></div>
-                  
-                  <div className="flex-1 space-y-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex-1 min-w-0 flex items-center gap-2">
-                        <span className="font-mono text-[10px] truncate">{issue.issue_number}</span>
-                        {isPrevious && issue.rating !== null && (
-                          <span className="text-[9px] text-amber-500 whitespace-nowrap" aria-label={`Your rating: ${issue.rating} stars`}>
-                            {ratingToStars(issue.rating)}
-                          </span>
-                        )}
-                        {isCurrent && (
-                          <span className="text-[9px] font-bold text-stone-500 whitespace-nowrap" style={{ color: 'var(--theme-continuity-accent)' }}>
-                            You are here
-                          </span>
-                        )}
-                      </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                      <span
+                        className="min-w-0 break-words font-mono text-[var(--theme-text-primary)]"
+                        style={readingContextType('primaryValue')}
+                      >
+                        {issue.issue_number}
+                      </span>
+                      {isPrevious && issue.rating !== null && (
+                        <span
+                          className="whitespace-nowrap text-[var(--theme-comic-accent)]"
+                          style={readingContextType('metaLabel')}
+                          aria-label={`Your rating: ${issue.rating} stars`}
+                        >
+                          {ratingToStars(issue.rating)}
+                        </span>
+                      )}
+                      {isCurrent && (
+                        <span
+                          className="whitespace-nowrap font-bold uppercase tracking-wider text-[var(--theme-comic-accent)]"
+                          style={readingContextType('statLabel')}
+                        >
+                          You are here
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -251,10 +297,14 @@ export function ReadingContextPillar({
 
       {readerContextError && !readerContext ? (
         <section aria-labelledby="reader-context-unavailable-heading" className="rounded-2xl p-3" style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'rgba(6, 182, 212, 0.09)' }}>
-          <h3 id="reader-context-unavailable-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
+          <h3
+            id="reader-context-unavailable-heading"
+            className="font-bold text-rose-300"
+            style={readingContextType('sectionHeading')}
+          >
             Local reading context unavailable
           </h3>
-          <p className="mt-1 text-[11px] text-stone-400">
+          <p className="mt-1 text-stone-400" style={readingContextType('bodyCopy')}>
             {readerContextError}
           </p>
         </section>
@@ -262,29 +312,38 @@ export function ReadingContextPillar({
 
       {readerContext && (currentCrossovers.length > 0 || upcomingCrossovers.length > 0) && (
         <section aria-labelledby="exact-crossover-heading" className="rounded-2xl p-4" style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'rgba(6, 182, 212, 0.09)' }}>
-          <div className="flex items-center justify-between gap-2 mb-3">
-            <h3 id="exact-crossover-heading" className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-continuity-accent)' }}>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h3
+              id="exact-crossover-heading"
+              className="font-bold text-[var(--theme-text-primary)]"
+              style={readingContextType('sectionHeading')}
+            >
               Exact Crossover Context
             </h3>
           </div>
 
-          <p className="text-[9px] text-stone-500 mb-3">
-            Being part of a crossover doesn't block reading by itself.
+          <p className="mb-3 text-[var(--theme-text-muted)]" style={readingContextType('bodyCopy')}>
+            Being part of a crossover doesn&apos;t block reading by itself.
           </p>
 
           {currentCrossovers.length > 0 && (
-            <div className="space-y-2 mb-4">
-              <div className="font-bold text-[9px] text-stone-500 mb-1">Current Issue Crossovers</div>
-              <div className="flex flex-wrap gap-1">
+            <div className="mb-4 space-y-2">
+              <div
+                className="mb-1 font-bold uppercase tracking-wider text-[var(--theme-text-muted)]"
+                style={readingContextType('statLabel')}
+              >
+                Current Issue Crossovers
+              </div>
+              <div className="flex flex-wrap gap-2">
                 {currentCrossovers.map((crossover) => (
                   <button
                     key={crossover.id}
                     type="button"
-                    className="rounded-full px-2 py-1 text-[9px] font-bold transition"
+                    className="rounded-full px-3 py-1 font-bold text-[var(--theme-comic-accent)] transition hover:brightness-125"
                     style={{
+                      ...readingContextType('chipLabel'),
                       border: '1px solid rgba(212,137,14,0.4)',
                       backgroundColor: 'rgba(212, 137, 14, 0.12)',
-                      color: 'rgb(250, 204, 139)',
                     }}
                     onClick={openCrossoversPage}
                     aria-label={`Open crossover ${crossover.name}`}
@@ -298,24 +357,37 @@ export function ReadingContextPillar({
 
           {upcomingCrossovers.length > 0 && (
             <div className="space-y-2">
-              <div className="font-bold text-[9px] text-stone-500 mb-1">Upcoming Crossovers</div>
+              <div
+                className="mb-1 font-bold uppercase tracking-wider text-[var(--theme-text-muted)]"
+                style={readingContextType('statLabel')}
+              >
+                Upcoming Crossovers
+              </div>
               {upcomingCrossovers.map((crossover) => (
                 <button
                   key={crossover.id}
                   type="button"
-                  className="w-full flex items-center gap-3 px-2 py-1 text-left transition"
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition hover:bg-white/5"
                   style={{ borderLeft: '3px solid rgb(250, 204, 139)', backgroundColor: 'rgba(250, 204, 139, 0.05)' }}
                   onClick={openCrossoversPage}
                   aria-label={`Open crossover ${crossover.name}`}
                 >
-                  <div className="flex-shrink-0 w-2 h-2 rounded-full" style={{ backgroundColor: 'rgb(250, 204, 139)' }}></div>
-                  <div className="flex-1 space-y-0.5">
-                    <div className="flex items-center justify-between text-[8px]">
-                      <span>{crossover.name}</span>
-                      {crossover.next_member && (
-                        <span className="text-stone-400">— starts at #{crossover.next_member.issue_number}</span>
-                      )}
-                    </div>
+                  <div className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: 'rgb(250, 204, 139)' }}></div>
+                  <div className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                    <span
+                      className="min-w-0 break-words font-bold text-[var(--theme-text-primary)]"
+                      style={readingContextType('primaryValue')}
+                    >
+                      {crossover.name}
+                    </span>
+                    {crossover.next_member && (
+                      <span
+                        className="whitespace-nowrap text-[var(--theme-text-muted)]"
+                        style={readingContextType('metaLabel')}
+                      >
+                        — starts at #{crossover.next_member.issue_number}
+                      </span>
+                    )}
                   </div>
                 </button>
               ))}
@@ -326,37 +398,44 @@ export function ReadingContextPillar({
 
       {readerContext && (dependencyEdges.length > 0 || continuityEdges.length > 0) && (
         <section aria-labelledby="dependency-edges-heading" className="rounded-2xl p-4" style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'rgba(6, 182, 212, 0.09)' }}>
-          <div className="flex items-center justify-between gap-2 mb-3">
-            <h3 id="dependency-edges-heading" className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-continuity-accent)' }}>
-              Dependency & Continuity Edges
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h3
+              id="dependency-edges-heading"
+              className="font-bold text-[var(--theme-text-primary)]"
+              style={readingContextType('sectionHeading')}
+            >
+              Dependency &amp; Continuity Edges
             </h3>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-3">
             {dependencyEdges.length > 0 && (
-              <div className="space-y-1">
-                <div className="font-bold text-[9px] text-stone-500 mb-1">
+              <div className="space-y-2">
+                <div
+                  className="font-bold uppercase tracking-wider text-[var(--theme-text-muted)]"
+                  style={readingContextType('statLabel')}
+                >
                   {dependencyHeading}
                 </div>
                 {dependencyEdges.map((edge) => (
                   <div
                     key={`dependency-${edge.id}`}
-                    className="flex items-center gap-3 px-2 py-1"
+                    className="flex items-start gap-3 rounded-lg px-3 py-2"
                     style={{
                       borderLeft: '3px solid rgb(250, 204, 139)',
                       backgroundColor: 'rgba(250, 204, 139, 0.05)'
                     }}
                   >
-                    <div className="flex-shrink-0 w-2 h-2 rounded-full" style={{ backgroundColor: 'rgb(250, 204, 139)' }}></div>
-                    <div className="flex-1 space-y-0.5 min-w-0">
-                      <div className="flex items-center gap-2 text-[8px] flex-wrap">
+                    <div className="mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: 'rgb(250, 204, 139)' }}></div>
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <EdgeEndpoint
                           label={edge.source_label}
                           fallbackLabel={`#${edge.source_issue_id}`}
                           threadId={edge.source_thread_id}
                           onOpen={openThread}
                         />
-                        <span className="text-stone-400" aria-hidden="true">→</span>
+                        <span className="text-[var(--theme-text-muted)]" aria-hidden="true">→</span>
                         <EdgeEndpoint
                           label={edge.target_label}
                           fallbackLabel={`#${edge.target_issue_id}`}
@@ -364,16 +443,7 @@ export function ReadingContextPillar({
                           onOpen={openThread}
                         />
                       </div>
-                      {edge.explanation && (
-                        <div className="text-[8px] text-stone-400 italic truncate">
-                          {edge.explanation}
-                        </div>
-                      )}
-                      {edge.note && !edge.explanation && (
-                        <div className="text-[8px] text-stone-400 italic truncate">
-                          {edge.note}
-                        </div>
-                      )}
+                      {renderEdgeExplanation(edge)}
                     </div>
                   </div>
                 ))}
@@ -381,29 +451,32 @@ export function ReadingContextPillar({
             )}
 
             {continuityEdges.length > 0 && (
-              <div className="space-y-1">
-                <div className="font-bold text-[9px] text-stone-500 mb-1">
+              <div className="space-y-2">
+                <div
+                  className="font-bold uppercase tracking-wider text-[var(--theme-text-muted)]"
+                  style={readingContextType('statLabel')}
+                >
                   {continuityEdges.length === 1 ? 'Continuity:' : 'Continuity edges:'}
                 </div>
                 {continuityEdges.map((edge) => (
                   <div
                     key={`continuity-${edge.id}`}
-                    className="flex items-center gap-3 px-2 py-1"
+                    className="flex items-start gap-3 rounded-lg px-3 py-2"
                     style={{
                       borderLeft: '3px solid rgb(165, 243, 252)',
                       backgroundColor: 'rgba(165, 243, 252, 0.05)'
                     }}
                   >
-                    <div className="flex-shrink-0 w-2 h-2 rounded-full" style={{ backgroundColor: 'rgb(165, 243, 252)' }}></div>
-                    <div className="flex-1 space-y-0.5 min-w-0">
-                      <div className="flex items-center gap-2 text-[8px] flex-wrap">
+                    <div className="mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: 'rgb(165, 243, 252)' }}></div>
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <EdgeEndpoint
                           label={edge.source_label}
                           fallbackLabel={`#${edge.source_issue_id}`}
                           threadId={edge.source_thread_id}
                           onOpen={openThread}
                         />
-                        <span className="text-stone-400" aria-hidden="true">↝</span>
+                        <span className="text-[var(--theme-text-muted)]" aria-hidden="true">↝</span>
                         <EdgeEndpoint
                           label={edge.target_label}
                           fallbackLabel={`#${edge.target_issue_id}`}
@@ -411,16 +484,7 @@ export function ReadingContextPillar({
                           onOpen={openThread}
                         />
                       </div>
-                      {edge.explanation && (
-                        <div className="text-[8px] text-stone-400 italic truncate">
-                          {edge.explanation}
-                        </div>
-                      )}
-                      {edge.note && !edge.explanation && (
-                        <div className="text-[8px] text-stone-400 italic truncate">
-                          {edge.note}
-                        </div>
-                      )}
+                      {renderEdgeExplanation(edge)}
                     </div>
                   </div>
                 ))}
@@ -433,10 +497,14 @@ export function ReadingContextPillar({
       {readingOrders.length > 0 ? (
         <section aria-labelledby="routes-heading" className="space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <h3 id="routes-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
+            <h3
+              id="routes-heading"
+              className="font-bold uppercase tracking-wider text-[var(--theme-text-muted)]"
+              style={readingContextType('statLabel')}
+            >
               Reading Routes
             </h3>
-            <span className="text-[10px] font-bold text-stone-600">
+            <span className="font-bold text-[var(--theme-text-muted)]" style={readingContextType('metaLabel')}>
               {readingOrders.length} active
             </span>
           </div>
@@ -448,24 +516,29 @@ export function ReadingContextPillar({
               return (
                 <article key={order.id} className="rounded-xl p-3" style={{ border: '1px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.04)' }}>
                   <div className="flex items-center justify-between gap-3">
-                    <h4 className="truncate text-xs font-black text-stone-200">{order.name}</h4>
-                    <span className="shrink-0 text-[10px] font-bold text-stone-500">
+                    <h4
+                      className="min-w-0 break-words font-black text-stone-200"
+                      style={readingContextType('primaryValue')}
+                    >
+                      {order.name}
+                    </h4>
+                    <span className="shrink-0 font-bold text-stone-400" style={readingContextType('metaLabel')}>
                       {order.completed_items}/{order.total_items}
                     </span>
                   </div>
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }} aria-hidden="true">
                     <div className="h-full rounded-full" style={{ backgroundColor: 'var(--theme-primary-action)', width: `${routeProgress}%` }} />
                   </div>
-                  <div className="mt-2 flex items-center justify-between gap-2">
-                    <p className="text-[10px] font-bold text-stone-500">{routeProgress}% complete</p>
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-bold text-stone-400" style={readingContextType('metaLabel')}>{routeProgress}% complete</p>
                     <button
                       type="button"
                       onClick={() => setIsRouteExplanationOpen(true)}
-                      className="min-h-11 rounded-lg px-3 text-[10px] font-black transition focus:ring-2"
+                      className="min-h-11 rounded-lg px-3 font-black text-[var(--theme-comic-accent)] transition focus:ring-2 hover:brightness-125"
                       style={{
+                        ...readingContextType('actionLabel'),
                         border: '1px solid rgba(212,137,14,0.4)',
                         backgroundColor: 'rgba(212, 137, 14, 0.09)',
-                        color: 'rgb(250, 204, 139)',
                       }}
                       aria-label={`Explain why ${threadTitle} ${issueNumber != null ? `#${issueNumber}` : ''} is next in ${order.name}`}
                     >
@@ -482,17 +555,21 @@ export function ReadingContextPillar({
       {connectedThreads.length > 0 && activeRatingThread ? (
         <section aria-labelledby="correction-heading" className="space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <h3 id="correction-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
+            <h3
+              id="correction-heading"
+              className="font-bold uppercase tracking-wider text-[var(--theme-text-muted)]"
+              style={readingContextType('statLabel')}
+            >
               Continuity Correction
             </h3>
             <button
               type="button"
               onClick={() => setIsContinuityDialogOpen(true)}
-              className="min-h-11 rounded-lg px-3 text-[10px] font-black transition"
+              className="min-h-11 rounded-lg px-3 font-black text-[var(--theme-text-primary)] transition hover:brightness-125"
               style={{
+                ...readingContextType('actionLabel'),
                 border: '1px solid rgba(6,182,212,0.4)',
                 backgroundColor: 'rgba(6, 182, 212, 0.09)',
-                color: 'var(--theme-continuity-accent)',
               }}
             >
               Correct continuity
