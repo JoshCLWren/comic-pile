@@ -10,6 +10,8 @@ on:
     secrets:
       NVIDIA_API_KEY:
         required: false
+      OPENROUTER_API_KEY:
+        required: false
       PR_REBASE_TOKEN:
         required: true
 
@@ -43,6 +45,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       PR_REBASE_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}
       NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
     steps:
       - name: Require trusted push credential
         shell: bash
@@ -96,6 +99,11 @@ jobs:
               branch_suffix='opencode-free'
               configured=true
               reason='configured-keyless'
+              ;;
+            openrouter-free)
+              runtime_model="openrouter/${model}"
+              branch_suffix='openrouter'
+              if [[ -n "${OPENROUTER_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-OPENROUTER_API_KEY'; fi
               ;;
             kilo-auto)
               runtime_model="kilo/${model}"
