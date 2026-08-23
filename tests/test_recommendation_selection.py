@@ -6,6 +6,7 @@ already-bounded die pool (app/api/roll.py). Every control-mode draw here is
 compared against that exact stream under shared seeds.
 """
 
+import math
 import random
 from collections.abc import Sequence
 from typing import cast
@@ -60,6 +61,7 @@ class DeterministicRandom:
 @pytest.mark.parametrize("pool_size", POOL_SIZES)
 @pytest.mark.parametrize("seed", range(25))
 def test_balanced_default_matches_legacy_stream_exactly(seed: int, pool_size: int) -> None:
+    """Balanced/default draws reproduce the legacy randint stream under shared seeds."""
     expected = _legacy_stream(seed, pool_size, draws=40)
 
     control_rng = random.Random(seed)
@@ -76,6 +78,7 @@ def test_balanced_default_matches_legacy_stream_exactly(seed: int, pool_size: in
 
 
 def test_balanced_default_distribution_is_uniform() -> None:
+    """Balanced/default draws stay uniformly distributed across the bounded pool."""
     pool_size = 6
     draws = 6000
     expected_per_bucket = draws / pool_size
@@ -91,6 +94,7 @@ def test_balanced_default_distribution_is_uniform() -> None:
 
 
 def test_random_intent_bypasses_contextual_weights_completely() -> None:
+    """The random intent ignores adversarial weights and matches the legacy stream."""
     adversarial_weights = [0.000001] * 9 + [1000000000.0]
 
     for seed in range(10):
@@ -116,6 +120,7 @@ def test_random_intent_bypasses_contextual_weights_completely() -> None:
 
 
 def test_effort_biased_context_cannot_bias_balanced_mode() -> None:
+    """Effort-biased weights cannot change balanced/default draw counts."""
     pool_size = 8
     draws = 4000
     effort_biased_weights = [float(position**4) for position in range(1, pool_size + 1)]
@@ -143,6 +148,7 @@ def test_effort_biased_context_cannot_bias_balanced_mode() -> None:
 
 
 def test_context_data_recorded_without_influencing_selection() -> None:
+    """Context values are recorded on the outcome without changing the draw stream."""
     contexts: list[tuple[str | None, str | None]] = [
         (None, None),
         ("light", "momentum"),
@@ -171,6 +177,7 @@ def test_context_data_recorded_without_influencing_selection() -> None:
 
 
 def test_weighted_path_applies_valid_weights_when_explicitly_active() -> None:
+    """Valid weights shape a contextual-weighted draw toward the heavy candidates."""
     pool_size = 4
     draws = 2400
     weights = [8.0, 1.0, 1.0, 2.0]
@@ -196,6 +203,7 @@ def test_weighted_path_applies_valid_weights_when_explicitly_active() -> None:
 
 
 def test_weighted_boundary_mapping_is_exact() -> None:
+    """Weighted cumulative mapping places boundary floats in the expected buckets."""
     deterministic = DeterministicRandom(random_values=[0.0])
     outcome = select_from_pool(
         3,
@@ -238,6 +246,7 @@ def test_weighted_boundary_mapping_is_exact() -> None:
     ],
 )
 def test_invalid_weights_fall_back_to_uniform_safely(weights: object) -> None:
+    """Invalid weights safely fall back to the exact legacy uniform draw."""
     seed = 808
     pool_size = 3
     draws = 20
@@ -261,6 +270,7 @@ def test_invalid_weights_fall_back_to_uniform_safely(weights: object) -> None:
 
 
 def test_normalize_weights_accepts_numeric_sequences_only() -> None:
+    """Weight normalization accepts only finite positive numeric sequences of exact length."""
     assert normalize_weights(None, 3) is None
     assert normalize_weights((2, 4, 6), 3) == [2.0, 4.0, 6.0]
     assert normalize_weights([0.5, 0.25, 0.25], 3) == [0.5, 0.25, 0.25]
@@ -270,6 +280,7 @@ def test_normalize_weights_accepts_numeric_sequences_only() -> None:
 
 
 def test_single_candidate_pool_always_selects_first() -> None:
+    """Every selection mode picks the only candidate of a size-one pool."""
     uniform_outcome = select_from_pool(1, rng=random.Random(1))
     bypass_outcome = select_from_pool(1, bandwidth=None, intent="random", rng=random.Random(2))
     weighted_outcome = select_from_pool(
@@ -287,6 +298,7 @@ def test_single_candidate_pool_always_selects_first() -> None:
 
 
 def test_selection_stays_inside_bounded_pool() -> None:
+    """Weighted draws never select outside the bounded candidate pool."""
     for pool_size in range(1, 50):
         rng = random.Random(pool_size)
         for _ in range(50):
@@ -303,6 +315,7 @@ def test_selection_stays_inside_bounded_pool() -> None:
 
 @pytest.mark.parametrize("pool_size", [0, -3])
 def test_non_positive_pool_size_raises(pool_size: int) -> None:
+    """Non-positive pool sizes are rejected with a ValueError."""
     with pytest.raises(ValueError, match="pool_size"):
         select_from_pool(pool_size)
 
@@ -328,6 +341,7 @@ def test_non_positive_pool_size_raises(pool_size: int) -> None:
 def test_resolve_selection_mode_matrix(
     bandwidth: str | None, intent: str | None, expected: SelectionMode
 ) -> None:
+    """The mode-resolution matrix maps each bandwidth/intent pair to its path."""
     assert resolve_selection_mode(bandwidth, intent) is expected
 
 
@@ -338,11 +352,13 @@ def test_resolve_selection_mode_matrix(
 def test_resolve_selection_mode_rejects_unknown_values(
     bandwidth: str | None, intent: str | None
 ) -> None:
+    """Unknown bandwidth or intent values are rejected with a ValueError."""
     with pytest.raises(ValueError):
         resolve_selection_mode(bandwidth, intent)
 
 
 def test_math_import_guard_for_finite_validation() -> None:
+    """Normalized weights are finite floats usable by the weighted path."""
     assert math.isfinite(normalize_weights([1.0, 1.0, 1.0], 3)[0])
 
 
@@ -350,6 +366,7 @@ def test_math_import_guard_for_finite_validation() -> None:
 async def test_roll_with_random_intent_records_bypass_without_behavior_change(
     auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
 ) -> None:
+    """A random-intent roll stays uniform and records an unweighted roll event."""
     response = await auth_client.post(
         "/api/roll/", json={"bandwidth": "deep", "intent": "random"}
     )
@@ -374,6 +391,7 @@ async def test_roll_with_random_intent_records_bypass_without_behavior_change(
 async def test_roll_balanced_body_stays_neutral(
     auth_client: AsyncClient, sample_data: dict
 ) -> None:
+    """An explicit balanced roll body returns the unchanged legacy response shape."""
     response = await auth_client.post(
         "/api/roll/", json={"bandwidth": "balanced", "intent": "balanced"}
     )
@@ -393,6 +411,7 @@ async def test_roll_balanced_body_stays_neutral(
 async def test_roll_light_body_records_unweighted_event(
     auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
 ) -> None:
+    """A light-bandwidth roll records an unweighted random roll event."""
     _ = sample_data
     response = await auth_client.post("/api/roll/", json={"bandwidth": "light"})
     assert response.status_code == 200
@@ -406,6 +425,7 @@ async def test_roll_light_body_records_unweighted_event(
 
 @pytest.mark.asyncio
 async def test_roll_rejects_unknown_context_values(auth_client: AsyncClient) -> None:
+    """Unknown intent/bandwidth values and unknown fields are rejected with 422."""
     bad_intent = await auth_client.post("/api/roll/", json={"intent": "cheat"})
     assert bad_intent.status_code == 422
 
