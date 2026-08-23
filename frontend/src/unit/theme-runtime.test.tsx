@@ -16,6 +16,10 @@ import {
   restoreStoredTheme,
   selectTheme,
 } from '../services/theme'
+import {
+  resetThemePreferenceSyncForTests,
+  setThemePreferenceRetryDelaysForTests,
+} from '../services/themePreferenceSync'
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
   post: vi.fn(),
@@ -99,6 +103,8 @@ describe('semantic theme runtime bootstrap', () => {
     auth = null
     document.documentElement.removeAttribute('data-theme')
     localStorage.clear()
+    resetThemePreferenceSyncForTests()
+    setThemePreferenceRetryDelaysForTests([0, 0])
     resetApiMocks()
     mocks.getAccessToken.mockReturnValue('test-token')
     delete window.__COMIC_PILE_ACCESS_TOKEN
@@ -249,6 +255,8 @@ describe('Appearance picker in the More tray', () => {
     auth = null
     document.documentElement.removeAttribute('data-theme')
     localStorage.clear()
+    resetThemePreferenceSyncForTests()
+    setThemePreferenceRetryDelaysForTests([0, 0])
     resetApiMocks()
     mocks.getAccessToken.mockReturnValue('test-token')
     delete window.__COMIC_PILE_ACCESS_TOKEN
@@ -284,17 +292,20 @@ describe('Appearance picker in the More tray', () => {
     )
   })
 
-  it('keeps the rendered theme when persisting the preference fails and shows a bounded error', async () => {
+  it('retries a failed preference save and converges without an error', async () => {
     mocks.patch.mockRejectedValueOnce(new Error('save failed'))
     const user = await openMoreTray()
 
     await user.click(screen.getByRole('button', { name: 'Ink-gold theme' }))
 
     expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold')
-    await waitFor(() => expect(mocks.patch).toHaveBeenCalledTimes(1))
-    expect(
-      await screen.findByText(/saving your preference failed/i),
-    ).toBeInTheDocument()
+    await waitFor(() => expect(mocks.patch).toHaveBeenCalledTimes(2))
+    await waitFor(() =>
+      expect(mocks.patch).toHaveBeenLastCalledWith('/v1/users/me/preferences', {
+        theme: 'ink-gold',
+      }),
+    )
+    expect(screen.queryByText(/saving your preference failed/i)).not.toBeInTheDocument()
   })
 
   it('indicates the currently active theme in the picker', async () => {
