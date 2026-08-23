@@ -8,10 +8,23 @@ from app.schemas.continuity_readiness import ContinuityBlocker
 from app.schemas.session import ActiveThreadInfo
 
 
+Bandwidth = Literal["light", "balanced", "deep"]
+
+
 class RollRequest(BaseModel):
-    """Schema for roll request."""
+    """Schema for roll request.
+
+    ``bandwidth`` is optional ephemeral session context. ``light`` and ``deep``
+    weight selection inside the existing die-bounded pool; ``balanced`` or an
+    omitted value keeps the exact legacy uniform roll.
+    """
 
     model_config = ConfigDict(extra="forbid")
+
+    bandwidth: Bandwidth | None = Field(
+        default=None,
+        description="Ephemeral reading-bandwidth mode for contextual weighting.",
+    )
 
 
 class RollResponse(BaseModel):

@@ -46,6 +46,9 @@ class Thread(Base):
     queue_position: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="active")
     last_rating: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Estimated reading effort in minutes for the next unread issue. NULL means
+    # the estimate is unknown; unknown effort stays neutral in Roll weighting.
+    estimated_minutes: Mapped[float | None] = mapped_column(Float, nullable=True)
     last_activity_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

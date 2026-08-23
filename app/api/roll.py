@@ -30,11 +30,57 @@ from app.schemas import (
     RollResponse,
 )
 from comic_pile.queue import get_roll_pool_rows
+from comic_pile.recommendation_weights import (
+    BANDWIDTH_DEEP,
+    BANDWIDTH_LIGHT,
+    WeightedCandidate,
+    build_candidate_weights,
+    choose_weighted_index,
+)
 from comic_pile.session import get_current_die_for_session, get_or_create
 
 router = APIRouter(tags=["roll"])
 
 logger = logging.getLogger(__name__)
+
+
+def _weighted_rng() -> random.Random:
+    """Create the RNG used for weighted selection.
+
+    Returns:
+        A freshly seeded :class:`random.Random`. Isolated as a function so
+        regression tests can substitute a seeded instance.
+    """
+    return random.Random()
+
+
+def _serialize_weighting(
+    bandwidth: str,
+    candidates: list[WeightedCandidate],
+) -> dict[str, object]:
+    """Serialize candidate weights and reason codes for durable roll evidence.
+
+    Args:
+        bandwidth: The bandwidth mode used for this selection.
+        candidates: Weighted candidates in bounded-pool order.
+
+    Returns:
+        A JSON-serializable snapshot of the actual selection inputs.
+    """
+    return {
+        "bandwidth": bandwidth,
+        "candidates": [
+            {
+                "position": candidate.position,
+                "thread_id": candidate.thread_id,
+                "effort_minutes": candidate.effort_minutes,
+                "band": candidate.band,
+                "weight": candidate.weight,
+                "reason": candidate.reason,
+            }
+            for candidate in candidates
+        ],
+    }
 
 
 @router.post("/", response_model=RollResponse)
@@ -91,9 +137,28 @@ async def roll_dice(
         )
 
     # Bound the selection to the current die size, matching original semantics.
+    # Contextual weighting (issue #1685 Phase 3) only redistributes probability
+    # inside this boundary; it can never change pool membership.
     bounded_rows = rows[:current_die]
     pool_size = len(bounded_rows)
-    selected_index = random.randint(0, pool_size - 1)
+
+    weighting_payload: dict[str, object] | None = None
+    selection_method = "random"
+    requested_bandwidth = roll_request.bandwidth
+    if requested_bandwidth == BANDWIDTH_LIGHT or requested_bandwidth == BANDWIDTH_DEEP:
+        candidates = build_candidate_weights(
+            [(row[0].id, row[0].estimated_minutes) for row in bounded_rows],
+            requested_bandwidth,
+        )
+        selected_index = choose_weighted_index(
+            [candidate.weight for candidate in candidates], _weighted_rng()
+        )
+        weighting_payload = _serialize_weighting(requested_bandwidth, candidates)
+        selection_method = f"bandwidth_{requested_bandwidth}"
+    else:
+        # Balanced/default/unknown modes keep the exact legacy uniform roll.
+        selected_index = random.randint(0, pool_size - 1)
+
     selected_thread, unread_count, issue_number = bounded_rows[selected_index]
 
     selected_thread_id = selected_thread.id
@@ -128,7 +193,8 @@ async def roll_dice(
         selected_thread_id=selected_thread_id,
         die=current_die,
         result=selected_index + 1,
-        selection_method="random",
+        selection_method=selection_method,
+        bandwidth_weighting_json=weighting_payload,
     )
     db.add(event)
 
