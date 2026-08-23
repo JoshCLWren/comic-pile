@@ -110,9 +110,9 @@ def owner_of(labels: Iterable[str]) -> str | None:
 def priority_rank(labels: Iterable[str]) -> int:
     """Map explicit priority labels to a deterministic numeric rank."""
     labels = set(labels)
-    if 'ralph-priority:critical' in labels or 'priority:P0' in labels:
+    if 'ralph-priority:critical' in labels or 'priority:P0' in labels or 'priority: P0' in labels:
         return 4
-    if 'ralph-priority:high' in labels or 'priority: high' in labels:
+    if 'ralph-priority:high' in labels or 'priority:high' in labels or 'priority: high' in labels:
         return 3
     if 'ralph-priority:medium' in labels:
         return 2
@@ -144,12 +144,12 @@ def provenance_lane(labels: set[str]) -> int:
     """Return the deterministic assignment lane for a label set."""
     if 'main-breakage' in labels:
         return 0
+    if 'user-reported' in labels and 'bug' in labels:
+        return 1
     if labels & INFRA_LABELS:
         return 5
     if 'e2e-discovered' in labels:
         return 4
-    if 'user-reported' in labels and 'bug' in labels:
-        return 1
     return 3
 
 
@@ -186,7 +186,7 @@ def factory_review_backlog_count(prs: Iterable[dict[str, Any]]) -> int:
             continue
         if labels & BLOCKED_LABELS or 'factory:ready' in labels:
             continue
-        if stage_of(labels) in ('factory:review', 'factory:ci') and item_is_unowned(labels):
+        if stage_of(labels) in ('factory:review', 'factory:ci', 'factory:changes-requested') and item_is_unowned(labels):
             count += 1
     return count
 

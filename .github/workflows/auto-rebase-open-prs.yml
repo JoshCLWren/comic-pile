@@ -1,0 +1,68 @@
+name: Auto Rebase Open PRs
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auto-rebase-open-prs-main
+  cancel-in-progress: false
+
+jobs:
+  rebase-open-prs:
+    name: Rebase open factory PRs onto main
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}
+    steps:
+      - name: Require dedicated rebase credential
+        run: |
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::error::PR_REBASE_TOKEN is required so rebases trigger normal PR CI instead of approval-required runs."
+            exit 1
+          fi
+
+      - name: Rebase eligible factory PRs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # drain.yml:150-165 only rescues factory:ci+ready PRs whose heads
+          # never received CI runs. It does not rebase PRs that are behind
+          # main but already have CI. Without a rebase, those PRs stay stale
+          # and risk merge conflicts or stale checks. This workflow rebases
+          # all open factory/* PRs whenever main advances.
+
+          mapfile -t prs < <(
+            gh api --paginate \
+              "repos/${GITHUB_REPOSITORY}/pulls?state=open&base=main&per_page=100" \
+              --jq ".[] | select(.draft == false and .head.repo.full_name == \"${GITHUB_REPOSITORY}\" and (.head.ref | startswith(\"factory/\"))) | .number"
+          )
+
+          if (( ${#prs[@]} == 0 )); then
+            echo "No eligible factory PRs to rebase."
+            exit 0
+          fi
+
+          failures=()
+          for pr in "${prs[@]}"; do
+            echo "Rebasing factory PR #${pr} onto current main"
+            if ! gh pr update-branch "${pr}" --repo "${GITHUB_REPOSITORY}" --rebase; then
+              echo "::warning::PR #${pr} could not be rebased automatically and needs conflict repair."
+              failures+=("${pr}")
+            fi
+          done
+
+          if (( ${#failures[@]} > 0 )); then
+            joined="$(IFS=,; echo "${failures[*]}")"
+            echo "::error::Automatic rebase failed for PR(s): ${joined}"
+            exit 1
+          fi
+
+          echo "All eligible factory PRs are rebased onto current main."
