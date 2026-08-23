@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -98,6 +98,9 @@ class Event(Base):
     recommendation_reason_codes: Mapped[list[str] | None] = mapped_column(
         ARRAY(Text), nullable=True
     )
+    # Versioned decision-time context snapshot recorded on roll events
+    # (see app/services/reading_effort.py for the schema contract).
+    recommendation_context: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     __table_args__ = (
         Index("ix_event_session_id", "session_id"),
