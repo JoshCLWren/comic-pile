@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_session_settings
 from app.models import Event, Issue, Session, Snapshot, Thread, User
 from app.performance_diagnostics import get_request_diagnostics
+from app.services.bandwidth import BANDWIDTH_VERSION, infer_bandwidth
 from app.services.snapshot_contract import USES_ISSUE_TRACKING_KEY
 
 logger = logging.getLogger(__name__)
@@ -339,6 +340,30 @@ async def get_or_create(
                 new_session = Session(start_die=start_die, user_id=user_id)
                 db.add(new_session)
                 await create_session_start_snapshot(db, new_session)
+
+                # Phase 2: initialize ephemeral bandwidth state
+                try:
+                    inference = await infer_bandwidth(db, user_id)
+                    now = datetime.now(UTC)
+                    new_session.predicted_bandwidth = inference.predicted
+                    new_session.active_bandwidth = inference.predicted
+                    new_session.bandwidth_confidence = inference.confidence
+                    new_session.bandwidth_source = inference.source
+                    new_session.bandwidth_version = BANDWIDTH_VERSION
+                    new_session.bandwidth_updated_at = now
+                except Exception:
+                    logger.warning(
+                        "Bandwidth inference failed for user %d, defaulting to balanced",
+                        user_id,
+                    )
+                    now = datetime.now(UTC)
+                    new_session.predicted_bandwidth = "balanced"
+                    new_session.active_bandwidth = "balanced"
+                    new_session.bandwidth_confidence = 0.0
+                    new_session.bandwidth_source = "inferred"
+                    new_session.bandwidth_version = BANDWIDTH_VERSION
+                    new_session.bandwidth_updated_at = now
+
                 await db.commit()
                 await db.refresh(new_session)
                 _log_session_resolution(

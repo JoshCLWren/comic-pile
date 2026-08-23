@@ -138,6 +138,13 @@ class RollBootstrapResponse(BaseModel):
     stale_thread_count: int
     stale_thread: RollBootstrapThread | None
 
+    # Phase 2: ephemeral bandwidth state
+    predicted_bandwidth: str | None = None
+    active_bandwidth: str | None = None
+    bandwidth_confidence: float | None = None
+    bandwidth_source: str | None = None
+    bandwidth_version: int | None = None
+
     @model_validator(mode="before")
     @classmethod
     def bound_summary_lists(cls, data: object) -> object:

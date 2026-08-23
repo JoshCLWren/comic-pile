@@ -544,4 +544,9 @@ async def roll_bootstrap(
         stale_thread=stale_thread,
         session_id=current_session_id,
         user_id=user_id,
+        predicted_bandwidth=current_session.predicted_bandwidth,
+        active_bandwidth=current_session.active_bandwidth,
+        bandwidth_confidence=current_session.bandwidth_confidence,
+        bandwidth_source=current_session.bandwidth_source,
+        bandwidth_version=current_session.bandwidth_version,
     )
