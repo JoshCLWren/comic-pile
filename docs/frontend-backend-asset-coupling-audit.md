@@ -75,7 +75,6 @@ Recommendation:
 Severity: Medium
 
 Evidence:
-- `docker-compose.prod.yml` - app service `DATABASE_URL`
 - `docker-compose.yml` - app service `DATABASE_URL`
 - `pyproject.toml` - dependency declarations
 
