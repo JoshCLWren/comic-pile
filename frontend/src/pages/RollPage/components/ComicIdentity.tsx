@@ -70,13 +70,17 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
       aria-label={metadata.name ? undefined : 'Comic details'}
       className="w-full space-y-4"
     >
-      <div className="relative aspect-[2/3] w-full max-w-full rounded-xl overflow-hidden bg-stone-900" style={{ border: '1px solid var(--theme-border)' }}>
+      <div
+        data-testid="comic-cover"
+        className="relative mx-auto aspect-[2/3] w-full max-w-full max-h-[70vh] rounded-xl overflow-hidden bg-stone-900"
+        style={{ border: '1px solid var(--theme-border)' }}
+      >
         {metadata.image_url && metadata.image_url !== failedImageUrl ? (
           <ImageWithLoading
             src={metadata.image_url}
             alt=""
             loading="eager"
-            className="w-full h-full object-cover"
+            className="h-full w-full object-contain"
             onError={() => setFailedImageUrl(metadata.image_url)}
           />
         ) : (
