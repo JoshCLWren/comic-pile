@@ -42,6 +42,10 @@ class Session(Base):
     )
     # Thread IDs temporarily excluded from roll selection during this session
     snoozed_thread_ids: Mapped[list[int] | None] = mapped_column(JSON, nullable=True)
+    bandwidth: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    intent: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    source: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     __table_args__ = (
         Index("ix_session_started_at", "started_at"),

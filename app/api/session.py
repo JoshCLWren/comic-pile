@@ -25,6 +25,9 @@ from app.schemas import (
     SessionResponse,
     SnapshotResponse,
     SnapshotsListResponse,
+    ModeChangeRequest,
+    ModeChangeResponse,
+    ModeChangeHistoryEvent,
 )
 from app.schemas.session import SnoozedThreadInfo
 from app.services.ownership import get_owned_session_or_404
@@ -32,6 +35,7 @@ from app.services.session_history_projection import project_session_history_even
 from app.services.thread_issue_stats import load_next_issue_numbers, load_unread_counts
 from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.session import get_current_die, get_or_create, is_active
+from app.constants import EventType, ModeIntent, ModeSource
 
 router = APIRouter(tags=["sessions"])
 
@@ -1092,3 +1096,88 @@ async def restore_session_start(
                 raise
 
     raise RuntimeError(f"Failed to restore session after {max_retries} retries")
+
+
+@router.post("/mode/", response_model=ModeChangeResponse)
+async def set_session_mode(
+    request: ModeChangeRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> ModeChangeResponse:
+    """Set bandwidth and/or intent for the active session.
+
+    Accepts optional bandwidth (die size) and/or intent changes against the
+    active session. Unspecified dimensions are preserved (not reset). Changed
+    dimensions are marked with source `manual` and appropriate confidence
+    semantics. Invalid values fail safely with 422 validation.
+
+    Args:
+        request: The mode change request containing optional bandwidth and intent.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        The canonical updated mode state.
+
+    Raises:
+        HTTPException: If no active session exists.
+    """
+    user_id = current_user.id
+    current_session = await get_or_create(db, user_id=user_id, existing_user=current_user)
+    current_session_id = current_session.id
+
+    # Determine which dimensions are being changed.
+    changed_bandwidth = request.bandwidth is not None
+    changed_intent = request.intent is not None
+
+    # If neither dimension is provided, return current state without changes.
+    if not changed_bandwidth and not changed_intent:
+        return ModeChangeResponse(
+            bandwidth=current_session.bandwidth,
+            intent=current_session.intent,
+            source=current_session.source or ModeSource.MANUAL,
+            confidence=current_session.confidence or 1.0,
+            session_id=current_session_id,
+            updated_at=datetime.now(UTC).isoformat(),
+        )
+
+    # Track old values for reference.
+    old_bandwidth = current_session.bandwidth
+    old_intent = current_session.intent
+
+    if changed_bandwidth:
+        current_session.bandwidth = request.bandwidth
+
+    if changed_intent:
+        current_session.intent = request.intent
+
+    # Mark changed dimensions with source=manual and confidence semantics.
+    source = ModeSource.MANUAL
+    confidence = 1.0  # Manual changes have full confidence
+
+    # Record a compact mode-change event for later analytics.
+    event = Event(
+        type=EventType.MODE_CHANGE,
+        session_id=current_session_id,
+        die=request.bandwidth if changed_bandwidth else None,
+        selection_method=request.intent if changed_intent else None,
+    )
+    db.add(event)
+
+    # Activate Phase 3 contextual-weight bypass when intent is "random".
+    # When intent is "random", the roll will bypass dice-ladder weighting
+    # and use unweighted control behavior.
+    if request.intent == ModeIntent.RANDOM:
+        current_session.intent = ModeIntent.RANDOM
+
+    await db.commit()
+    await _invalidate_session_caches(user_id)
+
+    return ModeChangeResponse(
+        bandwidth=current_session.bandwidth,
+        intent=current_session.intent,
+        source=source,
+        confidence=confidence,
+        session_id=current_session_id,
+        updated_at=datetime.now(UTC).isoformat(),
+    )

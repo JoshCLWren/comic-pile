@@ -12,6 +12,7 @@ class EventType(StrEnum):
     DELETE = "delete"
     ROLLED_BUT_SKIPPED = "rolled_but_skipped"
     SNOOZE = "snooze"
+    MODE_CHANGE = "mode_change"
 
 
 class ThreadStatus(StrEnum):
@@ -19,6 +20,24 @@ class ThreadStatus(StrEnum):
 
     ACTIVE = "active"
     COMPLETED = "completed"
+
+
+class ModeSource(StrEnum):
+    """Source of a mode change."""
+
+    MANUAL = "manual"
+    SYSTEM = "system"
+    INFERRED = "inferred"
+
+
+class ModeIntent(StrEnum):
+    """Intent of a mode change."""
+
+    MANUAL = "manual"
+    RANDOM = "random"
+    SNOOZE = "snooze"
+    RATING = "rating"
+    OVERRIDE = "override"
 
 
 # Dice ladder - standard RPG dice progression

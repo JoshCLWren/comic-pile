@@ -28,9 +28,13 @@ from app.schemas import (
     RollBootstrapThread,
     RollRequest,
     RollResponse,
+    ModeChangeRequest,
+    ModeChangeResponse,
+    ModeChangeHistoryEvent,
 )
 from comic_pile.queue import get_roll_pool_rows
 from comic_pile.session import get_current_die_for_session, get_or_create
+from app.constants import ModeIntent
 
 router = APIRouter(tags=["roll"])
 
@@ -90,25 +94,42 @@ async def roll_dice(
             detail="No active threads available to roll",
         )
 
-    # Bound the selection to the current die size, matching original semantics.
-    bounded_rows = rows[:current_die]
-    pool_size = len(bounded_rows)
-    selected_index = random.randint(0, pool_size - 1)
-    selected_thread, unread_count, issue_number = bounded_rows[selected_index]
+    # If intent is "random", bypass dice-ladder weighting for unweighted control.
+    if current_session.intent == ModeIntent.RANDOM:
+        selected_thread, unread_count, issue_number = random.choice(rows)
+        selected_thread_id = selected_thread.id
+        selected_thread_title = selected_thread.title
+        selected_thread_format = selected_thread.format
+        selected_thread_queue_position = selected_thread.queue_position
+        selected_thread_issues_remaining = unread_count
+        selected_thread_total_issues = selected_thread.total_issues
+        selected_thread_reading_progress = selected_thread.reading_progress
+        selected_thread_next_unread_issue_id = selected_thread.next_unread_issue_id
+        selected_thread_issue_id = None
+        selected_thread_issue_number = None
+        die_size = current_die  # Still report current die for display
 
-    selected_thread_id = selected_thread.id
-    selected_thread_title = selected_thread.title
-    selected_thread_format = selected_thread.format
-    selected_thread_queue_position = selected_thread.queue_position
+    else:
+        # Bound the selection to the current die size, matching original semantics.
+        bounded_rows = rows[:current_die]
+        pool_size = len(bounded_rows)
+        selected_index = random.randint(0, pool_size - 1)
+        selected_thread, unread_count, issue_number = bounded_rows[selected_index]
 
-    selected_thread_issues_remaining = unread_count
+        selected_thread_id = selected_thread.id
+        selected_thread_title = selected_thread.title
+        selected_thread_format = selected_thread.format
+        selected_thread_queue_position = selected_thread.queue_position
 
-    selected_thread_total_issues = selected_thread.total_issues
-    selected_thread_reading_progress = selected_thread.reading_progress
-    selected_thread_next_unread_issue_id = selected_thread.next_unread_issue_id
+        selected_thread_issues_remaining = unread_count
 
-    selected_thread_issue_id = None
-    selected_thread_issue_number = None
+        selected_thread_total_issues = selected_thread.total_issues
+        selected_thread_reading_progress = selected_thread.reading_progress
+        selected_thread_next_unread_issue_id = selected_thread.next_unread_issue_id
+
+        selected_thread_issue_id = None
+        selected_thread_issue_number = None
+        die_size = current_die
     if selected_thread.uses_issue_tracking() and selected_thread_next_unread_issue_id:
         if unread_count > 0 and issue_number is not None:
             selected_thread_issue_id = selected_thread_next_unread_issue_id
