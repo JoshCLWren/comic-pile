@@ -137,6 +137,7 @@ class RollBootstrapResponse(BaseModel):
     blocked_threads: list[RollBootstrapThread]
     stale_thread_count: int
     stale_thread: RollBootstrapThread | None
+    timezone: str | None = None
 
     @model_validator(mode="before")
     @classmethod

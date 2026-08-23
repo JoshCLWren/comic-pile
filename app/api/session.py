@@ -439,6 +439,7 @@ async def get_current_session(
                 snoozed_thread_ids=active_session.snoozed_thread_ids or [],
                 snoozed_threads=snoozed_threads,
                 pending_thread_id=active_session.pending_thread_id,
+                timezone=active_session.timezone,
             )
         except OperationalError as e:
             if "deadlock" in str(e).lower():
@@ -643,6 +644,7 @@ async def list_sessions(
             has_restore_point=snapshot_count_num > 0,
             snapshot_count=snapshot_count_num,
             pending_thread_id=session.pending_thread_id,
+            timezone=session.timezone,
         )
         responses.append(_to_session_list_item(sr))
 
@@ -699,6 +701,7 @@ async def get_session(
         has_restore_point=snapshot_count > 0,
         snapshot_count=snapshot_count,
         pending_thread_id=session.pending_thread_id,
+        timezone=session.timezone,
     )
 
 
@@ -817,6 +820,7 @@ async def get_session_details(
         ladder_path=await build_ladder_path(session_obj.id, db),
         narrative_summary=await build_narrative_summary(session_id, db),
         current_die=await get_current_die(session_obj.id, db),
+        timezone=session_obj.timezone,
         events=formatted_events,
     )
 
@@ -1079,6 +1083,7 @@ async def restore_session_start(
                 has_restore_point=snapshot_count > 0,
                 snapshot_count=snapshot_count,
                 pending_thread_id=session.pending_thread_id,
+                timezone=session.timezone,
             )
         except OperationalError as e:
             if "deadlock" in str(e).lower():

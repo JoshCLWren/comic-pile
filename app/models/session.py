@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -42,6 +42,8 @@ class Session(Base):
     )
     # Thread IDs temporarily excluded from roll selection during this session
     snoozed_thread_ids: Mapped[list[int] | None] = mapped_column(JSON, nullable=True)
+    # Browser-resolved IANA timezone captured once per active reading session
+    timezone: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     __table_args__ = (
         Index("ix_session_started_at", "started_at"),

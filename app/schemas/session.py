@@ -79,6 +79,7 @@ class SessionResponse(BaseModel):
     snoozed_thread_ids: list[int] = []
     snoozed_threads: list[SnoozedThreadInfo] = []
     pending_thread_id: int | None = None
+    timezone: str | None = None
 
     @field_serializer("started_at", "ended_at")
     def serialize_datetime(self, value: datetime | None) -> str | None:
@@ -138,6 +139,7 @@ class SessionDetailsResponse(BaseModel):
     ladder_path: str
     narrative_summary: dict[str, list[str]]
     current_die: int
+    timezone: str | None = None
     events: list[EventDetail]
 
     @field_serializer("started_at", "ended_at")
@@ -184,6 +186,7 @@ class SessionListItem(BaseModel):
     last_rolled_result: int | None
     has_restore_point: bool
     snapshot_count: int
+    timezone: str | None = None
 
     @field_serializer("started_at", "ended_at")
     def serialize_datetime(self, value: datetime | None) -> str | None:

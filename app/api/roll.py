@@ -4,7 +4,7 @@ import logging
 import random
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
 from sqlalchemy import Text, func, or_, select
 from sqlalchemy.dialects.postgresql import ARRAY
@@ -367,6 +367,7 @@ async def clear_manual_die(
 async def roll_bootstrap(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
+    timezone: str | None = Query(default=None, description="Browser IANA timezone identifier"),
 ) -> RollBootstrapResponse:
     """Return bounded bootstrap data for the Roll initial render.
 
@@ -383,6 +384,23 @@ async def roll_bootstrap(
     user_id = current_user.id
     current_session = await get_or_create(db, user_id=user_id, existing_user=current_user)
     await db.refresh(current_session)
+
+    # Capture browser IANA timezone once for the active session if not already set.
+    # Invalid values fail safely: the field remains unset and roll continues.
+    if timezone is not None and current_session.timezone is None:
+        try:
+            safe_tz = str(timezone).strip()
+            if safe_tz and len(safe_tz) <= 100:
+                # Basic IANA identifier check: should contain only allowed characters.
+                # Fail safely for obviously invalid inputs rather than persisting garbage.
+                import re
+                if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_/+\-]*", safe_tz) is not None:
+                    current_session.timezone = safe_tz
+                    await db.commit()
+                    await db.refresh(current_session)
+        except Exception:
+            # Any failure during timezone persistence must not break roll.
+            pass
 
     current_session_id = current_session.id
 
@@ -544,4 +562,5 @@ async def roll_bootstrap(
         stale_thread=stale_thread,
         session_id=current_session_id,
         user_id=user_id,
+        timezone=current_session.timezone,
     )
