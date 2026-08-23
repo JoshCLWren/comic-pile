@@ -6,11 +6,11 @@ from typing import Literal
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.continuity_readiness import (
-    _GraphSnapshot,
-    _crossover_readiness,
-    _issue_readiness,
-    _load_snapshot,
+from app.services.continuity_graph import (
+    GraphSnapshot,
+    crossover_readiness,
+    issue_readiness,
+    load_snapshot,
 )
 from app.schemas.continuity_readiness import ContinuityBlocker, ContinuityReadinessNodeType
 
@@ -69,7 +69,7 @@ class _TraversalState:
 def _node_label(
     node_type: ContinuityTraversalNodeType,
     node_id: int,
-    snapshot: _GraphSnapshot,
+    snapshot: GraphSnapshot,
 ) -> str:
     """Return a stable label for a traversable continuity node."""
     if node_type == "crossover":
@@ -87,18 +87,18 @@ def _node_label(
 def _node_blockers(
     node_type: ContinuityTraversalNodeType,
     node_id: int,
-    snapshot: _GraphSnapshot,
+    snapshot: GraphSnapshot,
 ) -> list[ContinuityBlocker]:
     """Return direct blockers for a traversable issue or crossover."""
     if node_type == "crossover":
-        return _crossover_readiness(node_id, snapshot)
-    return _issue_readiness(node_id, snapshot)
+        return crossover_readiness(node_id, snapshot)
+    return issue_readiness(node_id, snapshot)
 
 
 def _make_node(
     node_type: ContinuityTraversalNodeType,
     node_id: int,
-    snapshot: _GraphSnapshot,
+    snapshot: GraphSnapshot,
     *,
     is_readable: bool,
 ) -> ContinuityTraversalNode:
@@ -145,7 +145,7 @@ def _blocker_issue_ids(blocker: ContinuityBlocker) -> tuple[int, ...]:
 def _traverse_node(
     node_type: ContinuityTraversalNodeType,
     node_id: int,
-    snapshot: _GraphSnapshot,
+    snapshot: GraphSnapshot,
     state: _TraversalState,
     *,
     path: tuple[tuple[ContinuityTraversalNodeType, int], ...],
@@ -231,7 +231,7 @@ def _traverse_node(
 
 def _root_paths(
     blockers: list[ContinuityBlocker],
-    snapshot: _GraphSnapshot,
+    snapshot: GraphSnapshot,
     state: _TraversalState,
 ) -> list[tuple[ContinuityTraversalNode, ...]]:
     """Resolve direct blockers into deterministic transitive prerequisite paths."""
@@ -280,27 +280,27 @@ def _root_paths(
 def _requested_blockers(
     node_type: ContinuityReadinessNodeType,
     node_id: int,
-    snapshot: _GraphSnapshot,
+    snapshot: GraphSnapshot,
 ) -> tuple[int | None, list[ContinuityBlocker]]:
     """Validate one requested node and return its evaluated issue plus direct blockers."""
     if node_type == "issue":
         if node_id not in snapshot.issues:
             raise HTTPException(status_code=404, detail=f"Issue {node_id} not found")
-        return None, _issue_readiness(node_id, snapshot)
+        return None, issue_readiness(node_id, snapshot)
     if node_type == "thread":
         thread = snapshot.threads.get(node_id)
         if thread is None:
             raise HTTPException(status_code=404, detail=f"Thread {node_id} not found")
         evaluated_issue_id = thread.next_unread_issue_id
         blockers = (
-            _issue_readiness(evaluated_issue_id, snapshot)
+            issue_readiness(evaluated_issue_id, snapshot)
             if evaluated_issue_id is not None
             else []
         )
         return evaluated_issue_id, blockers
     if node_id not in snapshot.groups:
         raise HTTPException(status_code=404, detail=f"Crossover {node_id} not found")
-    return None, _crossover_readiness(node_id, snapshot)
+    return None, crossover_readiness(node_id, snapshot)
 
 
 async def resolve_continuity_chains(
@@ -309,7 +309,7 @@ async def resolve_continuity_chains(
     user_id: int,
     node_type: ContinuityReadinessNodeType,
     node_id: int,
-    snapshot: _GraphSnapshot | None = None,
+    snapshot: GraphSnapshot | None = None,
 ) -> ContinuityTraversalResult:
     """Resolve every bounded prerequisite chain to currently readable leaves.
 
@@ -325,7 +325,7 @@ async def resolve_continuity_chains(
         Direct blockers, deterministic full chains, readable leaves, and diagnostics.
     """
     if snapshot is None:
-        snapshot = await _load_snapshot(db, user_id)
+        snapshot = await load_snapshot(db, user_id)
     evaluated_issue_id, blockers = _requested_blockers(node_type, node_id, snapshot)
     state = _TraversalState(visited_nodes=0, diagnostics=[])
     paths = _root_paths(blockers, snapshot, state)
