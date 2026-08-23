@@ -190,15 +190,26 @@ describe('ReadingContextPillar navigation (issue #1670)', () => {
     getReaderContextMock.mockResolvedValue(buildContext())
     renderPillar()
 
-    const source = await screen.findByRole('button', { name: 'Open thread for Saga #3' })
-    expect(screen.getByRole('button', { name: 'Open thread for Saga #5' })).toBeVisible()
-    await userEvent.setup().click(source)
+    const sources = await screen.findAllByRole('button', { name: 'Open thread for Saga #3' })
+    expect(sources).toHaveLength(2)
+    const targets = screen.getAllByRole('button', { name: 'Open thread for Saga #5' })
+    expect(targets).toHaveLength(2)
+    await userEvent.setup().click(sources[0])
     expect(navigateSpy).toHaveBeenLastCalledWith('/thread/42')
 
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Open thread for Saga #5' }))
+    await userEvent.setup().click(targets[1])
     expect(navigateSpy).toHaveBeenLastCalledWith('/thread/42')
-    expect(screen.getByText('Blocked by issue #3 in Saga (thread #42)')).toBeVisible()
+    expect(screen.getAllByText('Blocked by issue #3 in Saga (thread #42)')).toHaveLength(1)
     expect(screen.getByText('Saga #3 must be read before Saga #5')).toBeVisible()
+  })
+
+  it('links the membership chips above the series strip to the crossovers page', async () => {
+    getReaderContextMock.mockResolvedValue(buildContext())
+    renderPillar()
+
+    const chip = await screen.findByRole('button', { name: 'Open Ultimate Universe Reading Order crossover' })
+    await userEvent.setup().click(chip)
+    expect(navigateSpy).toHaveBeenLastCalledWith('/crossovers')
   })
 
   it('labels incoming dependency edges "Blocked by:" without counts', async () => {

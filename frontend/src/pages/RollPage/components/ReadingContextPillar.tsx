@@ -187,13 +187,20 @@ export function ReadingContextPillar({
           {allCrossoverMemberships.length > 0 && (
             <div className="flex flex-wrap gap-1 mb-3" aria-label="Crossover memberships">
               {allCrossoverMemberships.map((crossover) => (
-                <span key={crossover.id} className="rounded-full px-2 py-0.5 text-[8px] font-bold" style={{
-                  border: '1px solid rgba(212,137,14,0.4)',
-                  backgroundColor: 'rgba(212, 137, 14, 0.12)',
-                  color: 'rgb(250, 204, 139)',
-                }}>
+                <button
+                  key={crossover.id}
+                  type="button"
+                  className="rounded-full px-2 py-0.5 text-[8px] font-bold transition"
+                  style={{
+                    border: '1px solid rgba(212,137,14,0.4)',
+                    backgroundColor: 'rgba(212, 137, 14, 0.12)',
+                    color: 'rgb(250, 204, 139)',
+                  }}
+                  onClick={openCrossoversPage}
+                  aria-label={`Open ${crossover.name} crossover`}
+                >
                   {crossover.name}
-                </span>
+                </button>
               ))}
             </div>
           )}
