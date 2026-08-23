@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Literal
 from sqlalchemy import and_, or_, select, text
 from sqlalchemy.orm import aliased, selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,7 +33,6 @@ from app.schemas.reader_context import (
     ReaderContextSeries,
 )
 from app.services.ownership import get_owned_issue_or_404
-from comic_pile.dependencies import build_blocking_explanation
 
 COMICVINE_PROVIDER = "comicvine"
 MAX_RECENT_RATINGS = 5
@@ -483,45 +481,60 @@ def _build_local_issues(
     return issues
 
 
-def _build_edge_explanation(
-    kind: Literal["dependency", "continuity"],
+def _dependency_explanation(
     *,
     source_label: str,
     target_label: str,
-    source_issue_number: str | None,
-    source_thread_title: str | None,
-    source_thread_id: int | None,
-    satisfaction: str | None = None,
+    source_issue_id: int,
+    target_issue_id: int,
+    current_issue_id: int | None,
+    source_is_read: bool,
 ) -> str:
-    """Return a human-readable sentence explaining a persisted reader-context edge.
+    """Return a subject-explicit dependency sentence for the Roll reader.
 
-    Dependency edges reuse ``build_blocking_explanation`` — the same copy
-    generator as the queue's blocked-threads list — so wording stays consistent
-    app-wide. Continuity edges use truthful per-satisfaction templates because
-    their gate can differ from the source endpoint.
+    The served issue is the grammatical anchor of the panel, so every
+    sentence names the blocked or waiting comic outright instead of relying
+    on arrow direction. When the rolled issue is the prerequisite, the copy
+    states it is readable now and identifies the downstream waiter; when an
+    already-read prerequisite is involved, the edge is presented as satisfied
+    rather than blocking.
 
     Args:
-        kind: The type of edge.
         source_label: Human-readable source label (thread title + issue number).
         target_label: Human-readable target label (thread title + issue number).
-        source_issue_number: Source issue number, when resolvable.
-        source_thread_title: Source thread title, when resolvable.
-        source_thread_id: Source thread identifier, when resolvable.
-        satisfaction: Continuity-rule satisfaction type, for continuity edges.
+        source_issue_id: Source (prerequisite) issue identifier.
+        target_issue_id: Target (blocked) issue identifier.
+        current_issue_id: The requested/served issue, when known.
+        source_is_read: Whether the prerequisite issue is already read.
 
     Returns:
-        A concise explanation sentence.
+        A concise sentence whose subject is always explicit.
     """
-    if kind == "dependency":
-        if (
-            source_issue_number is not None
-            and source_thread_title is not None
-            and source_thread_id is not None
-        ):
-            return build_blocking_explanation(
-                source_issue_number, source_thread_title, source_thread_id
-            )
-        return f"Blocked by {source_label}"
+    if source_issue_id == current_issue_id and not source_is_read:
+        return f"You can read {source_label} now. {target_label} is waiting on it."
+    if source_is_read:
+        return f"You already read {source_label}, so {target_label} is unblocked."
+    if target_issue_id == current_issue_id:
+        return f"{target_label} is blocked until you read {source_label}."
+    return f"{target_label} is blocked by {source_label}."
+
+
+def _continuity_explanation(
+    satisfaction: str | None,
+    *,
+    source_label: str,
+    target_label: str,
+) -> str:
+    """Return a truthful sentence explaining one continuity-rule edge.
+
+    Args:
+        satisfaction: Continuity-rule satisfaction type.
+        source_label: Human-readable source label (thread title + issue number).
+        target_label: Human-readable target label (thread title + issue number).
+
+    Returns:
+        A concise explanation sentence naming both endpoints.
+    """
     if satisfaction in ("item_read", "all_members_read"):
         return f"{source_label} must be read before {target_label}"
     return f"{target_label} waits on a continuity checkpoint before it can be read"
@@ -531,12 +544,16 @@ async def _local_edges(
     db: AsyncSession,
     user_id: int,
     neighborhood_ids: set[int],
+    current_issue_id: int,
 ) -> list[ReaderContextEdge]:
     """Load bounded one-hop dependency/continuity edges touching the neighborhood.
 
     Each edge carries human-readable source and target labels (issue number
     plus thread title) plus both thread identifiers so callers can link each
     endpoint to its thread without surfacing raw database identifiers.
+    Dependency explanations are written relative to ``current_issue_id`` so a
+    served issue is never described as blocked merely because it unblocks a
+    downstream comic.
 
     Continuity rules mirrored from legacy dependencies are excluded so each
     persisted edge is represented exactly once. Only edges whose endpoint
@@ -547,6 +564,7 @@ async def _local_edges(
         db: Async database session.
         user_id: Authenticated owner of the requested issue.
         neighborhood_ids: Local-chain issue identifiers.
+        current_issue_id: The requested reader-context issue.
 
     Returns:
         At most 20 deterministically ordered one-hop edges.
@@ -636,6 +654,7 @@ async def _local_edges(
         target_label, target_number, target_title, target_thread_id = _label_parts(
             dependency.target_issue_id
         )
+        source_issue = issue_map.get(dependency.source_issue_id)
         edges.append(
             ReaderContextEdge(
                 id=dependency.id,
@@ -651,15 +670,17 @@ async def _local_edges(
                 source_thread_title=source_title,
                 target_thread_title=target_title,
                 note=dependency.note,
-                explanation=_build_edge_explanation(
-                    "dependency",
+                explanation=_dependency_explanation(
                     source_label=source_label
                     or f"Issue #{dependency.source_issue_id}",
                     target_label=target_label
                     or f"Issue #{dependency.target_issue_id}",
-                    source_issue_number=source_number,
-                    source_thread_title=source_title,
-                    source_thread_id=source_thread_id,
+                    source_issue_id=dependency.source_issue_id,
+                    target_issue_id=dependency.target_issue_id,
+                    current_issue_id=current_issue_id,
+                    source_is_read=(
+                        source_issue is not None and source_issue.status == "read"
+                    ),
                 ),
             )
         )
@@ -685,14 +706,10 @@ async def _local_edges(
                 source_thread_title=source_title,
                 target_thread_title=target_title,
                 note=rule.note,
-                explanation=_build_edge_explanation(
-                    "continuity",
+                explanation=_continuity_explanation(
+                    rule.satisfaction_type,
                     source_label=source_label or f"Issue #{rule.source_id}",
                     target_label=target_label or f"Issue #{rule.target_id}",
-                    source_issue_number=source_number,
-                    source_thread_title=source_title,
-                    source_thread_id=source_thread_id,
-                    satisfaction=rule.satisfaction_type,
                 ),
             )
         )
@@ -793,7 +810,7 @@ async def get_reader_context(
         effective=effective,
     )
     edges = await _local_edges(
-        db, user_id, {candidate.id for candidate in neighborhood}
+        db, user_id, {candidate.id for candidate in neighborhood}, issue_id
     )
 
     return ReaderContextResponse(
