@@ -137,38 +137,27 @@ async def roll_dice(
         current_session.pending_thread_updated_at = datetime.now(UTC)
 
     await db.commit()
-
-    selected_thread_id_after = selected_thread_id
-    selected_thread_title_after = selected_thread_title
-    selected_thread_format_after = selected_thread_format
-    selected_thread_issues_after = selected_thread_issues_remaining
-    selected_thread_queue_after = selected_thread_queue_position
-    selected_thread_issue_id_after = selected_thread_issue_id
-    selected_thread_issue_number_after = selected_thread_issue_number
-    selected_thread_total_issues_after = selected_thread_total_issues
-    selected_thread_reading_progress_after = selected_thread_reading_progress
-
     await _invalidate_session_caches(current_user.id)
 
     snoozed_count = len(snoozed_ids)
     offset = snoozed_count
 
     return RollResponse(
-        thread_id=selected_thread_id_after,
-        title=selected_thread_title_after,
-        format=selected_thread_format_after,
-        issues_remaining=selected_thread_issues_after,
-        queue_position=selected_thread_queue_after,
+        thread_id=selected_thread_id,
+        title=selected_thread_title,
+        format=selected_thread_format,
+        issues_remaining=selected_thread_issues_remaining,
+        queue_position=selected_thread_queue_position,
         die_size=current_die,
         result=selected_index + 1,
         offset=offset,
         snoozed_count=snoozed_count,
-        issue_id=selected_thread_issue_id_after,
-        issue_number=selected_thread_issue_number_after,
-        next_issue_id=selected_thread_issue_id_after,
-        next_issue_number=selected_thread_issue_number_after,
-        total_issues=selected_thread_total_issues_after,
-        reading_progress=selected_thread_reading_progress_after,
+        issue_id=selected_thread_issue_id,
+        issue_number=selected_thread_issue_number,
+        next_issue_id=selected_thread_issue_id,
+        next_issue_number=selected_thread_issue_number,
+        total_issues=selected_thread_total_issues,
+        reading_progress=selected_thread_reading_progress,
     )
 
 
