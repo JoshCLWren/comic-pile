@@ -49,6 +49,24 @@ class Event(Base):
         - `thread_id`: A proper foreign key to the threads table. Used by "rate"
           and "rolled_but_skipped" events where we need referential integrity
           and the relationship to the Thread model.
+
+    Source Roll Linkage:
+        `source_roll_event_id` is a nullable self-reference to the "roll" event
+        that produced the pending recommendation an outcome event acted on. It
+        exists so roll -> rate/snooze decision latency and prediction/outcome
+        comparisons can be reconstructed as a durable analytics contract instead
+        of being inferred from session ordering alone.
+
+        Contract:
+            - Nullable: historical events created before this field existed
+              remain valid with NULL linkage; no bulk backfill is performed.
+            - Foreign key to `events.id`; the database rejects references that
+              do not point at an existing event row.
+            - `ON DELETE SET NULL`: deleting the originating roll event (for
+              example during historical cleanup) keeps the outcome event intact
+              and only clears the linkage, so cascade deletes never fan out
+              from a roll into downstream rate/snooze history.
+            - Instrumentation only: no endpoint populates this field yet.
     """
 
     __tablename__ = "events"
@@ -81,6 +99,11 @@ class Event(Base):
     )
     # Denormalized issue_number preserved for historical display even if Issue is deleted
     issue_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Nullable self-reference to the originating "roll" event for outcome events.
+    # ON DELETE SET NULL keeps outcome history when the source roll is cleaned up.
+    source_roll_event_id: Mapped[int | None] = mapped_column(
+        ForeignKey("events.id", ondelete="SET NULL"), nullable=True
+    )
 
     __table_args__ = (
         Index("ix_event_session_id", "session_id"),
@@ -94,6 +117,7 @@ class Event(Base):
         ),
         Index("ix_event_session_type_die_after", "session_id", "type", "die_after"),
         Index("ix_event_type_issue_id", "type", "issue_id"),
+        Index("ix_event_source_roll_event_id", "source_roll_event_id"),
     )
 
     session: Mapped[Session | None] = relationship(
