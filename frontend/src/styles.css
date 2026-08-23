@@ -24,6 +24,7 @@ body {
   --bg-glow: #2a2018;
   --bg-main: #1a1410;
   --bg-darker: #110e0a;
+  --bg-highlight: #2a2018;
   --accent-primary: #d4890e;
   --accent-red: #c0392b;
   --accent-amber: var(--accent-primary);
@@ -340,7 +341,7 @@ body {
   left: 0;
   right: 0;
   z-index: 40;
-  background: rgba(17, 14, 10, 0.95);
+  background: var(--bg-darker);
   border-top: 1px solid var(--glass-border);
   padding-bottom: env(safe-area-inset-bottom);
 }

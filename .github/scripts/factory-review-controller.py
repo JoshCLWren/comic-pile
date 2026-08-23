@@ -591,15 +591,6 @@ def mechanical_merge_gate(pr_number: int, expected_head: str) -> GateResult:
     return gate_result("pass", "all exact-head mechanical gates passed")
 
 
-def mechanical_merge_gates_pass(pr_number: int, expected_head: str) -> bool:
-    """Return whether the exact-head mechanical merge gate is green.
-
-    This small compatibility wrapper keeps callers that only need a boolean
-    decision separate from the controller's richer retry/deny result.
-    """
-    return mechanical_merge_gate(pr_number, expected_head)["decision"] == "pass"
-
-
 def target_owned_by_worker(number: int, worker: str) -> bool:
     """Return whether exactly this fixed worker currently owns a target."""
     active = {
@@ -655,11 +646,13 @@ def return_to_review(
     status: str,
     head: str,
     producer: str | None,
+    marker: str | None = None,
+    stage: str = "factory:review",
 ) -> dict[str, Any]:
     """Record a non-authoritative result and safely release its lease."""
     post_review_comment(
         pr_number=pr_number,
-        marker=None,
+        marker=marker,
         reviewer=reviewer,
         verdict=verdict,
         excerpt=excerpt,
@@ -669,7 +662,7 @@ def return_to_review(
         pr_number=pr_number,
         branch=branch,
         worker=worker,
-        pr_stage="factory:review",
+        pr_stage=stage,
     )
     return {"status": status, "head": head, "producer": producer}
 
@@ -794,16 +787,15 @@ def handle_review(
         note="Semantic approval is scoped to this exact reviewed PR head.",
     )
 
-    mechanical_passed = mechanical_merge_gates_pass(pr_number, reviewed_head)
-    mechanical: GateResult = {
-        "decision": "pass" if mechanical_passed else "deny",
-        "reason": "all exact-head mechanical gates passed"
-        if mechanical_passed
-        else "exact-head mechanical gates failed",
-    }
+    mechanical = mechanical_merge_gate(pr_number, reviewed_head)
     latest = pr_json(pr_number)
     latest_head = str(latest.get("headRefOid") or "")
+
     if mechanical["decision"] == "retry":
+        # CI is pending or otherwise undecidable at this exact head. Park the
+        # approved PR at factory:ci where the dispatcher's reconcile-ci polls
+        # cheaply, instead of burning another semantic review pass on the
+        # same code.
         result = return_to_review(
             pr_number=pr_number,
             branch=branch,
@@ -813,16 +805,42 @@ def handle_review(
             excerpt="",
             note=(
                 "Semantic approval is preserved for this exact head, but mechanical gates "
-                f"are not yet decidable: {mechanical['reason']}. This is retry-later, not a denial."
+                f"are not yet decidable: {mechanical['reason']}. Parked at factory:ci for "
+                "cheap reconciliation instead of another review pass."
             ),
             status="approved-deferred",
             head=latest_head or reviewed_head,
             producer=producer,
+            marker=marker,
+            stage="factory:ci",
         )
         result["mechanical"] = mechanical
         return result
 
     mechanical_passed = mechanical["decision"] == "pass"
+    if not mechanical_passed:
+        # Mechanical gates genuinely failed (mergeability conflict or failing
+        # required checks). Route to the repair stage rather than re-reviewing
+        # identical code with another expensive model session.
+        result = return_to_review(
+            pr_number=pr_number,
+            branch=branch,
+            worker=worker,
+            reviewer=worker,
+            verdict=verdict,
+            excerpt="",
+            note=(
+                "Semantic approval recorded, but exact-head mechanical gates failed: "
+                f"{mechanical['reason']}. Routed to factory:changes-requested for repairs."
+            ),
+            status="approved-mechanical-failure",
+            head=latest_head or reviewed_head,
+            producer=producer,
+            stage="factory:changes-requested",
+        )
+        result["mechanical"] = mechanical
+        return result
+
     authorized = approval_can_promote(
         producer=producer,
         reviewer=worker,
