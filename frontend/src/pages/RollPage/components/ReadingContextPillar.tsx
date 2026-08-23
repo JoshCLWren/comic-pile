@@ -1,9 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { ReadingOrder } from '../../../services/api-reading-orders'
-import type { ConnectedThreadInfo } from '../../../types'
+import type { ConnectedThreadInfo, ReaderContextLocalIssue, ReaderContextResponse } from '../../../types'
 import type { RatingThread } from '../types'
-import type { ReaderContextResponse } from '../../../types'
 import { issuesApi } from '../../../services/api-issues'
 import ContinuityCorrectionDialog from '../../../components/ContinuityCorrectionDialog'
 import { ContinuityReadinessSummary } from './ContinuityReadinessSummary'
@@ -28,6 +27,19 @@ function ratingToStars(rating: number | null): string {
 
 function getSeriesNameFromContext(context: ReaderContextResponse): string | null {
   return context.series.series_name ?? null
+}
+
+function relationLabel(relation: ReaderContextLocalIssue['relation'], seriesName: string | null): string {
+  switch (relation) {
+    case 'previous':
+      return seriesName ? `Earlier in ${seriesName}` : 'Earlier in this series'
+    case 'current':
+      return 'You are here'
+    case 'next':
+      return 'Next up'
+    case 'future':
+      return seriesName ? `Later in ${seriesName}` : 'Later in this series'
+  }
 }
 
 function EdgeEndpoint({
@@ -66,6 +78,7 @@ export function ReadingContextPillar({
 }: ReadingContextPillarProps) {
   const [isContinuityDialogOpen, setIsContinuityDialogOpen] = useState(false)
   const [isRouteExplanationOpen, setIsRouteExplanationOpen] = useState(false)
+  const [expandedIssueId, setExpandedIssueId] = useState<number | null>(null)
   const navigate = useNavigate()
   const [readerContext, setReaderContext] = useState<ReaderContextResponse | null>(null)
   const [readerContextError, setReaderContextError] = useState<string | null>(null)
@@ -143,7 +156,11 @@ export function ReadingContextPillar({
   const openCurrentThread = () => {
     if (activeRatingThread) navigate(`/thread/${activeRatingThread.id}`)
   }
-  const openCrossoversPage = () => navigate('/crossovers')
+  const openCrossover = (crossoverId: number, nextMemberIssueNumber?: string | null) => {
+    const params = new URLSearchParams({ group: String(crossoverId) })
+    if (nextMemberIssueNumber) params.set('starts_at', String(nextMemberIssueNumber))
+    navigate(`/crossovers?${params.toString()}`)
+  }
   const openThread = (threadId: number) => navigate(`/thread/${threadId}`)
 
   return (
@@ -196,7 +213,7 @@ export function ReadingContextPillar({
                     backgroundColor: 'rgba(212, 137, 14, 0.12)',
                     color: 'rgb(250, 204, 139)',
                   }}
-                  onClick={openCrossoversPage}
+                  onClick={() => openCrossover(crossover.id)}
                   aria-label={`Open ${crossover.name} crossover`}
                 >
                   {crossover.name}
@@ -209,39 +226,102 @@ export function ReadingContextPillar({
             {[...previousIssues, ...(currentIssue ? [currentIssue] : []), ...nextIssues].map((issue) => {
               const isCurrent = issue.relation === 'current'
               const isPrevious = issue.relation === 'previous'
+              const isExpanded = expandedIssueId === issue.issue_id
+              const detailId = `chain-issue-context-${issue.issue_id}`
+              const toggleContext = () => setExpandedIssueId(isExpanded ? null : issue.issue_id)
               return (
                 <div
                   key={issue.issue_id}
-                  className={`flex items-center gap-3 ${isCurrent ? 'border-l-2 border-l-solid border-l-[var(--theme-continuity-accent)] pl-3' : 'pl-5'} group cursor-pointer`}
                   role="listitem"
-                  tabIndex={0}
-                  onClick={openCurrentThread}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCurrentThread(); } }}
-                  aria-label={`Open ${threadTitle} issue ${issue.issue_number}`}
+                  className={isCurrent ? 'border-l-2 border-l-solid border-l-[var(--theme-continuity-accent)] pl-3' : 'pl-5'}
                 >
-                  <div className="flex-shrink-0 w-2 h-2 rounded-full" style={{
-                    backgroundColor: isCurrent ? 'var(--theme-continuity-accent)' :
-                                isPrevious ? 'rgba(6,182,212,0.3)' :
-                                'rgba(6,182,212,0.1)'
-                  }}></div>
-                  
-                  <div className="flex-1 space-y-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex-1 min-w-0 flex items-center gap-2">
-                        <span className="font-mono text-[10px] truncate">{issue.issue_number}</span>
-                        {isPrevious && issue.rating !== null && (
-                          <span className="text-[9px] text-amber-500 whitespace-nowrap" aria-label={`Your rating: ${issue.rating} stars`}>
-                            {ratingToStars(issue.rating)}
-                          </span>
-                        )}
-                        {isCurrent && (
-                          <span className="text-[9px] font-bold text-stone-500 whitespace-nowrap" style={{ color: 'var(--theme-continuity-accent)' }}>
-                            You are here
-                          </span>
-                        )}
+                  <button
+                    type="button"
+                    className={`flex w-full items-center gap-3 py-0.5 text-left ${isExpanded ? 'cursor-default' : 'group cursor-pointer'}`}
+                    onClick={toggleContext}
+                    aria-expanded={isExpanded}
+                    aria-controls={detailId}
+                    aria-label={`${isExpanded ? 'Hide' : 'Show'} context for ${seriesName} issue ${issue.issue_number}`}
+                  >
+                    <div className="flex-shrink-0 w-2 h-2 rounded-full" style={{
+                      backgroundColor: isCurrent ? 'var(--theme-continuity-accent)' :
+                                  isPrevious ? 'rgba(6,182,212,0.3)' :
+                                  'rgba(6,182,212,0.1)'
+                    }}></div>
+
+                    <div className="flex-1 space-y-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex-1 min-w-0 flex items-center gap-2">
+                          <span className="font-mono text-[10px] truncate">{issue.issue_number}</span>
+                          {isPrevious && issue.rating !== null && (
+                            <span className="text-[9px] text-amber-500 whitespace-nowrap" aria-label={`Your rating: ${issue.rating} stars`}>
+                              {ratingToStars(issue.rating)}
+                            </span>
+                          )}
+                          {isCurrent && (
+                            <span className="text-[9px] font-bold text-stone-500 whitespace-nowrap" style={{ color: 'var(--theme-continuity-accent)' }}>
+                              You are here
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  </button>
+
+                  {isExpanded && (
+                    <div
+                      id={detailId}
+                      className="mt-1 mb-1 ml-4 space-y-1.5 rounded-xl p-2.5"
+                      style={{ border: '1px solid rgba(6,182,212,0.25)', backgroundColor: 'rgba(6, 182, 212, 0.07)' }}
+                      aria-label={`Context for ${seriesName} issue ${issue.issue_number}`}
+                    >
+                      <p
+                        className="text-[9px] font-black uppercase tracking-[0.14em]"
+                        style={{ color: 'var(--theme-continuity-accent)' }}
+                      >
+                        {relationLabel(issue.relation, seriesName)}
+                      </p>
+                      <p className="text-[10px] text-stone-400">
+                        Issue {issue.issue_number} · {issue.status === 'read' ? 'Already read' : 'Not read yet'}
+                        {isPrevious && issue.rating !== null ? ` · Your rating: ${ratingToStars(issue.rating)}` : ''}
+                      </p>
+                      {issue.crossover_memberships.length > 0 && (
+                        <div className="flex flex-wrap gap-1" aria-label={`Crossovers for issue ${issue.issue_number}`}>
+                          {issue.crossover_memberships.map((membership) => (
+                            <button
+                              key={membership.id}
+                              type="button"
+                              className="rounded-full px-2 py-0.5 text-[8px] font-bold transition"
+                              style={{
+                                border: '1px solid rgba(212,137,14,0.4)',
+                                backgroundColor: 'rgba(212, 137, 14, 0.12)',
+                                color: 'rgb(250, 204, 139)',
+                              }}
+                              onClick={() => openCrossover(membership.id)}
+                              aria-label={`Open ${membership.name} crossover`}
+                            >
+                              {membership.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {isCurrent && activeRatingThread && (
+                        <button
+                          type="button"
+                          className="rounded-lg px-2 py-1 text-[9px] font-black transition focus:ring-2"
+                          style={{
+                            border: '1px solid rgba(6,182,212,0.4)',
+                            backgroundColor: 'rgba(6, 182, 212, 0.09)',
+                            color: 'var(--theme-continuity-accent)',
+                          }}
+                          onClick={openCurrentThread}
+                          aria-label={`Open ${threadTitle} thread`}
+                        >
+                          Open {threadTitle}
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -286,7 +366,7 @@ export function ReadingContextPillar({
                       backgroundColor: 'rgba(212, 137, 14, 0.12)',
                       color: 'rgb(250, 204, 139)',
                     }}
-                    onClick={openCrossoversPage}
+                    onClick={() => openCrossover(crossover.id)}
                     aria-label={`Open crossover ${crossover.name}`}
                   >
                     {crossover.name}
@@ -305,8 +385,8 @@ export function ReadingContextPillar({
                   type="button"
                   className="w-full flex items-center gap-3 px-2 py-1 text-left transition"
                   style={{ borderLeft: '3px solid rgb(250, 204, 139)', backgroundColor: 'rgba(250, 204, 139, 0.05)' }}
-                  onClick={openCrossoversPage}
-                  aria-label={`Open crossover ${crossover.name}`}
+                  onClick={() => openCrossover(crossover.id, crossover.next_member?.issue_number ?? null)}
+                  aria-label={`Open crossover ${crossover.name}${crossover.next_member ? `, starts at issue ${crossover.next_member.issue_number}` : ''}`}
                 >
                   <div className="flex-shrink-0 w-2 h-2 rounded-full" style={{ backgroundColor: 'rgb(250, 204, 139)' }}></div>
                   <div className="flex-1 space-y-0.5">
