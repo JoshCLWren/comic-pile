@@ -216,12 +216,15 @@ def redact_review_text(text: str) -> str:
 
 
 def review_excerpt(path: str | None, *, worker: str) -> str:
-    """Read only the expected worker log and return a redacted bounded tail."""
+    """Read only an expected worker log and return a redacted bounded tail."""
     if not path:
         return ""
-    expected = Path(f"/tmp/opencode-factory-{worker}.log")
+    expected = {
+        Path(f"/tmp/opencode-factory-{worker}.log"),
+        Path(f"/tmp/opencode-factory-{worker}.sanitized.log"),
+    }
     candidate = Path(path)
-    if candidate != expected or candidate.is_symlink():
+    if candidate not in expected or candidate.is_symlink():
         return ""
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
@@ -231,6 +234,25 @@ def review_excerpt(path: str | None, *, worker: str) -> str:
     except OSError:
         return ""
     return redact_review_text(text[-7000:])
+
+
+def has_actionable_review_findings(excerpt: str) -> bool:
+    """Reject empty findings, terminal verdict tokens, and handoff boilerplate."""
+    boilerplate = {
+        "semantic blockers remain",
+        "the pr is returning to repair",
+        "semantic blockers remain. the pr is returning to repair",
+        "repair required",
+        "factory_gate_blocked",
+        "factory_gate_not_ready",
+        "factory_gate_ready",
+        "factory_gate_reject",
+    }
+    return any(
+        line.strip().strip("*` .").casefold() not in boilerplate
+        for line in excerpt.splitlines()
+        if line.strip().strip("*` .")
+    )
 
 
 def post_review_comment(
@@ -397,6 +419,17 @@ def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
     if status == "ready":
         replace_factory_labels(pr_number, "factory:unowned", "factory:ready")
     elif status == "changes-requested":
+        reason = redact_review_text(str(mechanical["reason"]))[-7000:]
+        if not has_actionable_review_findings(reason):
+            raise RuntimeError("mechanical repair requires durable actionable findings")
+        post_review_comment(
+            pr_number=pr_number,
+            marker=None,
+            reviewer="controller",
+            verdict="repair",
+            excerpt=reason,
+            note=f"Exact-head mechanical gates failed for {head}; repair is required.",
+        )
         replace_factory_labels(pr_number, "factory:unowned", "factory:changes-requested")
     return {
         "pr": pr_number,
@@ -735,6 +768,8 @@ def handle_review(
     )
 
     if verdict == "repair":
+        if not has_actionable_review_findings(excerpt):
+            raise RuntimeError("semantic repair requires durable actionable review findings")
         post_review_comment(
             pr_number=pr_number,
             marker=marker,
@@ -752,6 +787,8 @@ def handle_review(
         return {"status": "repair", "head": reviewed_head, "producer": producer}
 
     if verdict == "reject":
+        if not has_actionable_review_findings(excerpt):
+            raise RuntimeError("semantic rejection requires durable actionable review findings")
         post_review_comment(
             pr_number=pr_number,
             marker=marker,
