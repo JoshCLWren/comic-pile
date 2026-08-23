@@ -239,7 +239,7 @@ describe('QueueThreadCard', () => {
       next_unread_issue_number: '5',
       is_blocked: true,
     })
-    renderCard(thread, { isBlocked: true, blockingReasons: ['Blocked by dependency'] })
+    renderCard(thread, { isBlocked: true, blockingDependencies: [{ thread_id: 2, thread_title: 'Prerequisite', issue_number: '4', label: 'Blocked by dependency' }] })
     expect(screen.queryByText(/Up next/)).not.toBeInTheDocument()
     expect(screen.getByText('3 issues remaining')).toBeInTheDocument()
   })
