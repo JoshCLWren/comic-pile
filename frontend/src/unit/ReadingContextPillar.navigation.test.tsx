@@ -103,7 +103,7 @@ function buildContext(overrides: Partial<ReaderContextResponse> = {}): ReaderCon
           source_label: 'Saga #3',
           target_label: 'Saga #5',
           note: null,
-          explanation: 'Blocked by issue #3 in Saga (thread #42)',
+          explanation: 'Blocked by issue #3 in Saga',
         },
         {
           id: 12,
@@ -199,7 +199,7 @@ describe('ReadingContextPillar navigation (issue #1670)', () => {
 
     await userEvent.setup().click(targets[1])
     expect(navigateSpy).toHaveBeenLastCalledWith('/thread/42')
-    expect(screen.getAllByText('Blocked by issue #3 in Saga (thread #42)')).toHaveLength(1)
+    expect(screen.getAllByText('Blocked by issue #3 in Saga')).toHaveLength(1)
     expect(screen.getByText('Saga #3 must be read before Saga #5')).toBeVisible()
   })
 
@@ -236,7 +236,7 @@ describe('ReadingContextPillar navigation (issue #1670)', () => {
               source_label: 'Saga #5',
               target_label: 'Other #1',
               note: null,
-              explanation: 'Blocked by issue #5 in Saga (thread #42)',
+              explanation: 'Blocked by issue #5 in Saga',
             },
           ],
         },
