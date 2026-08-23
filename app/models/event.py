@@ -81,6 +81,11 @@ class Event(Base):
     )
     # Denormalized issue_number preserved for historical display even if Issue is deleted
     issue_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Explicit Phase 0 link from an outcome event ("rate") to its originating
+    # "roll" event. Null for legacy unlinked outcomes; never inferred after write.
+    source_roll_event_id: Mapped[int | None] = mapped_column(
+        ForeignKey("events.id", ondelete="SET NULL"), nullable=True
+    )
 
     __table_args__ = (
         Index("ix_event_session_id", "session_id"),
@@ -94,6 +99,7 @@ class Event(Base):
         ),
         Index("ix_event_session_type_die_after", "session_id", "type", "die_after"),
         Index("ix_event_type_issue_id", "type", "issue_id"),
+        Index("ix_event_source_roll_event_id", "source_roll_event_id"),
     )
 
     session: Mapped[Session | None] = relationship(
