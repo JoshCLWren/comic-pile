@@ -5,8 +5,17 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy import (
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    JSON,
+    String,
+    Text,
+)
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -40,6 +49,12 @@ class Event(Base):
         - "unsnooze": User unsnoozed a thread. Uses `thread_id` to record which
           thread was removed from the snoozed list.
 
+    Recommendation Context:
+        New "roll" events also persist ``recommendation_context``, a nullable
+        versioned JSON snapshot of the decision-time selection context built by
+        :mod:`app.services.recommendation_context`. Historical events with no
+        snapshot remain valid.
+
     Thread ID Fields:
         This model has two thread reference fields with different purposes:
 
@@ -70,6 +85,12 @@ class Event(Base):
     # Used by: "roll" events to record which thread was randomly selected
     selected_thread_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     selection_method: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Versioned recommendation-context snapshot captured at roll time.
+    # JSONB on PostgreSQL, generic JSON on other dialects (test fallbacks).
+    recommendation_context: Mapped[dict[str, object] | None] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql"),
+        nullable=True,
+    )
     rating: Mapped[float | None] = mapped_column(Float, nullable=True)
     issues_read: Mapped[int | None] = mapped_column(Integer, nullable=True)
     queue_move: Mapped[str | None] = mapped_column(String(20), nullable=True)

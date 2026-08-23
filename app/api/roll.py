@@ -37,7 +37,12 @@ from app.schemas import (
     SessionModeUpdateRequest,
 )
 from app.schemas.session import build_session_bandwidth_state
-from comic_pile.queue import get_bounded_roll_pool_rows
+from app.services.recommendation_context import (
+    SELECTION_METHOD_OVERRIDE,
+    SELECTION_METHOD_RANDOM,
+    build_recommendation_context,
+)
+from comic_pile.queue import get_bounded_roll_pool_rows, get_roll_pool_rows
 from comic_pile.session import get_current_die_for_session, get_or_create
 from app.momentum import weighted_momentum_selection
 
@@ -135,6 +140,18 @@ async def roll_dice(
     selected_thread_reading_progress = selected_thread.reading_progress
     selected_thread_next_unread_issue_id = selected_thread.next_unread_issue_id
 
+    recommendation_context = build_recommendation_context(
+        selection_method=SELECTION_METHOD_RANDOM,
+        die_size=current_die,
+        candidate_thread_ids=[row[0].id for row in bounded_rows],
+        selected_thread_id=selected_thread_id,
+        selected_queue_position=selected_thread_queue_position,
+        selected_candidate_index=selected_index,
+        selected_result=selected_index + 1,
+        selected_last_rating=selected_thread.last_rating,
+        selected_last_activity_at=selected_thread.last_activity_at,
+    )
+
     selected_thread_issue_id = None
     selected_thread_issue_number = None
     if selected_thread.uses_issue_tracking() and selected_thread_next_unread_issue_id:
@@ -158,6 +175,7 @@ async def roll_dice(
         result=selected_index + 1,
         selection_method="momentum" if max_bonus > 0 else "random",
         recommendation_reason_codes=recommendation_reason_codes,
+        recommendation_context=recommendation_context,
         issue_id=selected_thread_issue_id,
         issue_number=selected_thread_issue_number,
     )
@@ -293,6 +311,21 @@ async def override_roll(
             detail=f"Thread {override_thread_id} is snoozed. Please unsnooze it first before overriding.",
         )
 
+    override_pool_rows = await get_roll_pool_rows(current_user.id, db, snoozed_ids)
+    bounded_override_rows = override_pool_rows[:current_die]
+
+    override_recommendation_context = build_recommendation_context(
+        selection_method=SELECTION_METHOD_OVERRIDE,
+        die_size=current_die,
+        candidate_thread_ids=[row[0].id for row in bounded_override_rows],
+        selected_thread_id=override_thread_id,
+        selected_queue_position=override_thread_queue_position,
+        selected_candidate_index=None,
+        selected_result=0,
+        selected_last_rating=override_thread.last_rating,
+        selected_last_activity_at=override_thread.last_activity_at,
+    )
+
     event = Event(
         type="roll",
         session_id=current_session_id,
@@ -300,7 +333,9 @@ async def override_roll(
         die=current_die,
         result=0,
         selection_method="override",
+        selection_method="override",
         recommendation_reason_codes=[],
+        recommendation_context=override_recommendation_context,
         issue_id=override_thread_issue_id,
         issue_number=override_thread_issue_number,
     )
