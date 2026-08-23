@@ -9,9 +9,23 @@ from app.schemas.session import ActiveThreadInfo
 
 
 class RollRequest(BaseModel):
-    """Schema for roll request."""
+    """Schema for roll request.
+
+    Optional reading-mode context for contextual weighting. Absent values
+    resolve to the neutral ``balanced`` defaults, which preserve the legacy
+    uniform selection behavior exactly.
+    """
 
     model_config = ConfigDict(extra="forbid")
+
+    bandwidth: Literal["light", "balanced", "deep"] | None = Field(
+        default=None,
+        description="Active reader bandwidth; None resolves to balanced (neutral).",
+    )
+    intent: Literal["balanced", "momentum", "familiar", "explore", "random"] | None = Field(
+        default=None,
+        description="Active reader intent; None resolves to balanced (neutral).",
+    )
 
 
 class RollResponse(BaseModel):

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -27,7 +27,9 @@ class Event(Base):
     Event Types:
         - "roll": A random thread selection. Uses `selected_thread_id` to record
           which thread was picked, `die` for the die size, `result` for the roll
-          value, and `selection_method` (e.g., "random").
+          value, and `selection_method` (e.g., "random"). Contextually weighted
+          rolls also persist `recommendation_context`, a versioned decision-time
+          snapshot of candidate weights and reason codes.
         - "rate": User rated a reading session. Uses `thread_id` to link to the
           rated thread, `rating` for the score, `issues_read` for progress,
           `die` for current die, and `die_after` for the new die size.
@@ -64,6 +66,13 @@ class Event(Base):
     # Used by: "roll" events to record which thread was randomly selected
     selected_thread_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     selection_method: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Versioned recommendation-context snapshot recorded at roll time.
+    # Explains which bounded candidates carried which final weights and why;
+    # older/unversioned payloads remain readable via
+    # comic_pile.recommendation_context.read_recommendation_context.
+    recommendation_context: Mapped[dict[str, object] | None] = mapped_column(
+        JSON, nullable=True
+    )
     rating: Mapped[float | None] = mapped_column(Float, nullable=True)
     issues_read: Mapped[int | None] = mapped_column(Integer, nullable=True)
     queue_move: Mapped[str | None] = mapped_column(String(20), nullable=True)

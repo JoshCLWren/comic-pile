@@ -1,7 +1,6 @@
 """Roll API routes."""
 
 import logging
-import random
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
@@ -30,6 +29,13 @@ from app.schemas import (
     RollResponse,
 )
 from comic_pile.queue import get_roll_pool_rows
+from comic_pile.recommendation_context import (
+    BANDWIDTH_SOURCE_DEFAULT,
+    BANDWIDTH_SOURCE_REQUEST,
+    REQUESTED_BANDWIDTH_CONFIDENCE,
+    build_recommendation_context,
+    resolve_selection_plan,
+)
 from comic_pile.session import get_current_die_for_session, get_or_create
 
 router = APIRouter(tags=["roll"])
@@ -92,9 +98,15 @@ async def roll_dice(
 
     # Bound the selection to the current die size, matching original semantics.
     bounded_rows = rows[:current_die]
-    pool_size = len(bounded_rows)
-    selected_index = random.randint(0, pool_size - 1)
-    selected_thread, unread_count, issue_number = bounded_rows[selected_index]
+
+    active_bandwidth = roll_request.bandwidth
+    active_intent = roll_request.intent
+    plan = resolve_selection_plan(
+        [unread_count for _thread, unread_count, _issue_number in bounded_rows],
+        bandwidth=active_bandwidth,
+        intent=active_intent,
+    )
+    selected_thread, unread_count, issue_number = bounded_rows[plan.index]
 
     selected_thread_id = selected_thread.id
     selected_thread_title = selected_thread.title
@@ -127,8 +139,23 @@ async def roll_dice(
         session_id=current_session_id,
         selected_thread_id=selected_thread_id,
         die=current_die,
-        result=selected_index + 1,
-        selection_method="random",
+        result=plan.index + 1,
+        selection_method="weighted" if plan.weighting_applied else "random",
+        recommendation_context=build_recommendation_context(
+            thread_ids=[thread.id for thread, _unread_count, _issue_number in bounded_rows],
+            die_size=current_die,
+            bandwidth=active_bandwidth,
+            intent=active_intent,
+            plan=plan,
+            bandwidth_source=(
+                BANDWIDTH_SOURCE_REQUEST
+                if active_bandwidth is not None
+                else BANDWIDTH_SOURCE_DEFAULT
+            ),
+            bandwidth_confidence=(
+                REQUESTED_BANDWIDTH_CONFIDENCE if active_bandwidth is not None else None
+            ),
+        ),
     )
     db.add(event)
 
