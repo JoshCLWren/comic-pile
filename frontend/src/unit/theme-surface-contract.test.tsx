@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
 import type { AuthContextValue } from '../App'
 import { AuthProvider, useAuth } from '../App'
 import Navigation from '../components/Navigation'
@@ -67,7 +68,7 @@ const ALIAS_CONTRACT: ReadonlyArray<readonly [alias: string, target: string]> = 
 ]
 
 function loadStylesheet(): string {
-  return readFileSync(new URL('../../styles.css', import.meta.url), 'utf8')
+  return readFileSync(new URL('../styles.css', import.meta.url), 'utf8')
 }
 
 function extractThemeBlock(css: string, theme: ThemeId): string {
@@ -93,6 +94,18 @@ function tokenValuesPerTheme(css: string, token: string): string[] {
     expect(value, `${token} missing for ${theme}`).toBeTruthy()
     return value as string
   })
+}
+
+function extractGradientBodyRule(css: string): string | undefined {
+  const rules: string[] = []
+  let start = css.indexOf('\nbody {')
+  while (start >= 0) {
+    const closeBrace = css.indexOf('}', start)
+    if (closeBrace < 0) break
+    rules.push(css.slice(start, closeBrace + 1))
+    start = css.indexOf('\nbody {', closeBrace)
+  }
+  return rules.find((rule) => rule.includes('radial-gradient'))
 }
 
 describe('semantic theme stylesheet contract (#1646)', () => {
@@ -121,10 +134,8 @@ describe('semantic theme stylesheet contract (#1646)', () => {
   it('gives each theme a distinct page canvas through the body gradient aliases', () => {
     const css = loadStylesheet()
 
-    const bodyRuleStart = css.indexOf('\nbody {')
-    expect(bodyRuleStart, 'body rule missing').toBeGreaterThanOrEqual(0)
-    const bodyRuleEnd = css.indexOf('}', bodyRuleStart)
-    const bodyRule = css.slice(bodyRuleStart, bodyRuleEnd + 1)
+    const bodyRule = extractGradientBodyRule(css)
+    expect(bodyRule, 'gradient body rule missing').toBeTruthy()
     expect(bodyRule).toContain('var(--bg-glow)')
     expect(bodyRule).toContain('var(--bg-main)')
     expect(bodyRule).toContain('var(--bg-darker)')
@@ -173,26 +184,29 @@ describe('themed surfaces resolve through semantic tokens (#1646)', () => {
   }
 
   it('binds the More tray surfaces to semantic theme variables', async () => {
+    const user = userEvent.setup()
     renderNavigationAtWidth(390)
 
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
 
-    const tray = await screen.findByRole('navigation', { name: 'More pages' })
+    await user.click(await screen.findByRole('button', { name: 'More pages' }))
+
+    const tray = screen.getByRole('navigation', { name: 'More pages' })
     expect(tray.className).toContain('border-[var(--theme-border)]')
     expect(tray.className).toContain('bg-[var(--theme-bg-page)]')
 
-    const appearanceHeading = screen.getByText('Appearance')
+    const appearanceHeading = within(tray).getByText('Appearance')
     expect(appearanceHeading.parentElement?.getAttribute('style')).toContain(
       'var(--theme-text-muted)',
     )
 
-    for (const link of tray.querySelectorAll('a')) {
+    for (const link of within(tray).getAllByRole('link')) {
       expect(link.className).toContain('text-[var(--theme-text-primary)]')
       expect(link.className).toContain('hover:bg-[var(--theme-bg-panel)]')
     }
 
     for (const name of ['Classic theme', 'Ink-gold theme', 'Command center theme']) {
-      expect(screen.getByRole('button', { name }).className).toContain(
+      expect(within(tray).getByRole('button', { name }).className).toContain(
         'hover:bg-[var(--theme-bg-panel)]',
       )
     }
