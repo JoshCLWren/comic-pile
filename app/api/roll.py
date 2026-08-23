@@ -29,7 +29,7 @@ from app.schemas import (
     RollRequest,
     RollResponse,
 )
-from comic_pile.queue import get_roll_pool_rows
+from comic_pile.queue import get_bounded_roll_pool_rows
 from comic_pile.session import get_current_die_for_session, get_or_create
 
 router = APIRouter(tags=["roll"])
@@ -83,15 +83,16 @@ async def roll_dice(
 
     snoozed_ids = current_session.snoozed_thread_ids or []
 
-    rows = await get_roll_pool_rows(user_id, db, snoozed_ids)
-    if not rows:
+    bounded_rows = await get_bounded_roll_pool_rows(user_id, db, current_die, snoozed_ids)
+    if not bounded_rows:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No active threads available to roll",
         )
 
     # Bound the selection to the current die size, matching original semantics.
-    bounded_rows = rows[:current_die]
+    # get_bounded_roll_pool_rows already applied the die cap, so pool_size reflects
+    # only candidates within the bounded pool that contextual logic cannot expand.
     pool_size = len(bounded_rows)
     selected_index = random.randint(0, pool_size - 1)
     selected_thread, unread_count, issue_number = bounded_rows[selected_index]
