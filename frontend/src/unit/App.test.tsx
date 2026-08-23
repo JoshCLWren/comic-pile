@@ -35,10 +35,6 @@ vi.mock('../services/api', () => {
   }
 })
 
-vi.mock('../contexts/ToastContext', () => ({
-  useToast: () => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] }),
-}))
-
 vi.mock('../pages/LoginPage', () => ({
   default: () => <div data-testid="login-page">Welcome Back</div>,
 }))
@@ -55,6 +51,7 @@ vi.mock('../pages/HelpPage', () => ({ default: () => <div data-testid="help-page
 
 import App, { AuthProvider, AppRoutes, useAuth } from '../App'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
+import { ToastProvider } from '../contexts/ToastProvider'
 
 let authContextValue: AuthContextValue | null = null
 
@@ -72,8 +69,10 @@ const renderWithAuth = (initialEntry = '/') => {
     <MemoryRouter initialEntries={[initialEntry]}>
       <AuthProvider>
         <BugReportRestoreProvider>
-          <TestAuthConsumer />
-          <AppRoutes />
+          <ToastProvider>
+            <TestAuthConsumer />
+            <AppRoutes />
+          </ToastProvider>
         </BugReportRestoreProvider>
       </AuthProvider>
     </MemoryRouter>
