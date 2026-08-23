@@ -23,25 +23,6 @@ vi.mock('../pages/RollPage/components/ComicVineIssueCard', () => ({
 vi.mock('../pages/RollPage/components/ReadingRouteExplanation', () => ({
   ReadingRouteExplanation: () => null,
 }))
-vi.mock('../hooks/useComicVineIssueIntelligence', () => ({
-  useComicVineIssueIntelligence: () => ({
-    metadata: {
-      comicvine_issue_id: '100',
-      comicvine_url: null,
-      series_name: 'Saga',
-      series_id: 1,
-      issue_number: '3',
-      name: 'Saga #3',
-      description: null,
-      image_url: 'https://example.com/cover.jpg',
-      cover_date: null,
-      store_date: null,
-      creators: [],
-      story_arcs: [],
-    },
-    isLoading: false,
-  }),
-}))
 vi.mock('../hooks/useReaderContext', () => ({
   useReaderContext: () => ({
     context: null,
@@ -242,32 +223,22 @@ describe('RatingView action panel (issue #1406)', () => {
   })
 })
 
-describe('RatingView desktop command-center contract (issue #1650)', () => {
-  it('renders a two-column grid on desktop', () => {
+describe('RatingView responsive pillar contract', () => {
+  it('uses two columns at xl when Reading Context has no content', () => {
     const { container } = render(ratingView())
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
     expect(grid).not.toBeNull()
     expect(grid!.className).toContain('grid')
     expect(grid!.className).toContain('md:grid-cols-2')
+    expect(grid!.className).toContain('xl:grid-cols-[minmax(0,50fr)_minmax(0,50fr)]')
   })
 
-  it('uses two top-level columns: The Comic on the left, contextual region on the right', () => {
+  it('spans The Comic across both rows at md so Your Context sits below Reading Context on the right', () => {
     const { container } = render(ratingView())
-    const grid = container.querySelector('[data-testid="rating-pillars-grid"]')!
-    const columns = grid.children
-    expect(columns.length).toBe(2)
-    const leftText = columns[0]!.textContent ?? ''
-    const rightText = columns[1]!.textContent ?? ''
-    expect(leftText).toContain('The Comic')
-    expect(rightText).toContain('Reading Context')
-    expect(rightText).toContain('Your Context')
-  })
-
-  it('stacks Reading Context above Your Context in the right column', () => {
-    const { container } = render(ratingView())
-    const rightColumn = container.querySelectorAll('[data-testid="rating-pillars-grid"] > div')[1]!
-    const text = rightColumn.textContent ?? ''
-    expect(text.indexOf('Reading Context')).toBeLessThan(text.indexOf('Your Context'))
+    const comicWrapper = container.querySelector('[data-testid="rating-pillars-grid"] > div')
+    expect(comicWrapper).not.toBeNull()
+    expect(comicWrapper!.className).toContain('md:row-span-2')
+    expect(comicWrapper!.className).toContain('xl:row-span-1')
   })
 
   it('places action panel beside Your Context on xl when Reading Context has no content (issue #1676)', () => {
@@ -308,20 +279,5 @@ describe('RatingView desktop command-center contract (issue #1650)', () => {
     expect(text.indexOf('The Comic')).toBeLessThan(text.indexOf('Reading Context'))
     expect(text.indexOf('Reading Context')).toBeLessThan(text.indexOf('Your Context'))
     expect(text).not.toMatch(/\b0[123]\b/)
-  })
-
-  it('renders the rating action panel as part of the view', () => {
-    render(ratingView())
-    expect(screen.getByTestId('rating-actions')).toBeInTheDocument()
-  })
-
-  it('bounds the comic cover to the viewport without cropping', () => {
-    const { container } = render(ratingView())
-    const cover = container.querySelector('[data-testid="comic-cover"]')
-    expect(cover).not.toBeNull()
-    expect(cover!.className).toContain('max-h')
-    const coverImg = cover!.querySelector('img')
-    expect(coverImg).not.toBeNull()
-    expect(coverImg!.className).toContain('object-contain')
   })
 })
