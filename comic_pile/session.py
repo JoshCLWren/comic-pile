@@ -364,11 +364,19 @@ async def get_or_create(
 
 
 async def end_session(session_id: int, db: AsyncSession) -> None:
-    """Mark a session as ended."""
+    """Mark a session as ended and terminate its ephemeral bandwidth state.
+
+    Args:
+        session_id: ID of the session to end.
+        db: Async database session used for persistence.
+    """
+    from comic_pile.bandwidth import clear_ephemeral_bandwidth
+
     session_result = await db.execute(select(Session).where(Session.id == session_id))
     session = session_result.scalar_one_or_none()
     if session:
         session.ended_at = datetime.now(UTC)
+        clear_ephemeral_bandwidth(session)
         await db.commit()
 
 

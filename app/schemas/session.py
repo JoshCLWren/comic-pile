@@ -79,8 +79,28 @@ class SessionResponse(BaseModel):
     snoozed_thread_ids: list[int] = []
     snoozed_threads: list[SnoozedThreadInfo] = []
     pending_thread_id: int | None = None
+    # Ephemeral session-scoped bandwidth state (issue #1706). Read-only
+    # observation; no weighting or write API is introduced by this phase.
+    predicted_bandwidth: str | None = Field(
+        default=None, description="Predicted bandwidth (light | balanced | deep)"
+    )
+    active_bandwidth: str | None = Field(
+        default=None, description="Active bandwidth (light | balanced | deep)"
+    )
+    bandwidth_confidence: float | None = Field(
+        default=None, description="Bandwidth confidence between 0 and 1"
+    )
+    bandwidth_source: str | None = Field(
+        default=None, description="Bandwidth provenance (inferred | manual | snooze | quiz)"
+    )
+    bandwidth_mode_version: int | None = Field(
+        default=None, description="Mode contract version for the current bandwidth state"
+    )
+    bandwidth_updated_at: datetime | None = Field(
+        default=None, description="When the ephemeral bandwidth state last changed"
+    )
 
-    @field_serializer("started_at", "ended_at")
+    @field_serializer("started_at", "ended_at", "bandwidth_updated_at")
     def serialize_datetime(self, value: datetime | None) -> str | None:
         """Serialize datetime to ISO 8601 format with timezone.
 

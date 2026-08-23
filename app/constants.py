@@ -21,6 +21,29 @@ class ThreadStatus(StrEnum):
     COMPLETED = "completed"
 
 
+class Bandwidth(StrEnum):
+    """Ephemeral reading-bandwidth levels for an active session (issue #1706)."""
+
+    LIGHT = "light"
+    BALANCED = "balanced"
+    DEEP = "deep"
+
+
+class BandwidthSource(StrEnum):
+    """Provenance of a session's ephemeral bandwidth state (issue #1706)."""
+
+    INFERRED = "inferred"
+    MANUAL = "manual"
+    SNOOZE = "snooze"
+    QUIZ = "quiz"
+
+
+# Persisted value tuples backing the sessions CHECK constraints. Kept in sync
+# with the Bandwidth / BandwidthSource StrEnum members above.
+BANDWIDTH_VALUES: tuple[str, ...] = tuple(b.value for b in Bandwidth)
+BANDWIDTH_SOURCE_VALUES: tuple[str, ...] = tuple(s.value for s in BandwidthSource)
+
+
 # Dice ladder - standard RPG dice progression
 # Extended to support large thread pools (50+ threads)
 DICE_LADDER = [4, 6, 8, 10, 12, 20, 30, 50, 100]

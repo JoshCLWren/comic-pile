@@ -439,6 +439,12 @@ async def get_current_session(
                 snoozed_thread_ids=active_session.snoozed_thread_ids or [],
                 snoozed_threads=snoozed_threads,
                 pending_thread_id=active_session.pending_thread_id,
+                predicted_bandwidth=active_session.predicted_bandwidth,
+                active_bandwidth=active_session.active_bandwidth,
+                bandwidth_confidence=active_session.bandwidth_confidence,
+                bandwidth_source=active_session.bandwidth_source,
+                bandwidth_mode_version=active_session.bandwidth_mode_version,
+                bandwidth_updated_at=active_session.bandwidth_updated_at,
             )
         except OperationalError as e:
             if "deadlock" in str(e).lower():
@@ -699,6 +705,12 @@ async def get_session(
         has_restore_point=snapshot_count > 0,
         snapshot_count=snapshot_count,
         pending_thread_id=session.pending_thread_id,
+        predicted_bandwidth=session.predicted_bandwidth,
+        active_bandwidth=session.active_bandwidth,
+        bandwidth_confidence=session.bandwidth_confidence,
+        bandwidth_source=session.bandwidth_source,
+        bandwidth_mode_version=session.bandwidth_mode_version,
+        bandwidth_updated_at=session.bandwidth_updated_at,
     )
 
 
