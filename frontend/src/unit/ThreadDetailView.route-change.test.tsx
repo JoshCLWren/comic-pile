@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 import ThreadDetailView from '../pages/ThreadDetailView'
+import { ToastProvider } from '../contexts/ToastProvider'
 import { useUpdateThread } from '../hooks/useThread'
 import { threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
@@ -78,14 +79,14 @@ beforeEach(() => {
 
 it('clears loaded issues and fetches the new thread after a route change', async () => {
   const user = userEvent.setup()
-  const view = render(<ThreadDetailView />)
+  const view = render(<ToastProvider><ThreadDetailView /></ToastProvider>)
 
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   await user.click(screen.getByRole('button', { name: 'Expand' }))
   await waitFor(() => expect(screen.getByText('#Saga 1')).toBeInTheDocument())
 
   routeParams.id = '2'
-  view.rerender(<ThreadDetailView />)
+  view.rerender(<ToastProvider><ThreadDetailView /></ToastProvider>)
 
   await waitFor(() => expect(screen.getByText('Monstress')).toBeInTheDocument())
   expect(screen.queryByText('#Saga 1')).not.toBeInTheDocument()
@@ -101,10 +102,10 @@ it('ignores stale successful and failed thread requests after navigation', async
   mockedThreadsApiGet.mockImplementation((id: number) => (
     id === 1 ? firstRequest.promise : Promise.resolve(threadResult(id))
   ))
-  const view = render(<ThreadDetailView />)
+  const view = render(<ToastProvider><ThreadDetailView /></ToastProvider>)
 
   routeParams.id = '2'
-  view.rerender(<ThreadDetailView />)
+  view.rerender(<ToastProvider><ThreadDetailView /></ToastProvider>)
   await waitFor(() => expect(screen.getByText('Monstress')).toBeInTheDocument())
 
   firstRequest.resolve(threadResult(1))
@@ -115,9 +116,9 @@ it('ignores stale successful and failed thread requests after navigation', async
     id === 1 ? rejectedRequest.promise : Promise.resolve(threadResult(id))
   ))
   routeParams.id = '1'
-  view.rerender(<ThreadDetailView />)
+  view.rerender(<ToastProvider><ThreadDetailView /></ToastProvider>)
   routeParams.id = '2'
-  view.rerender(<ThreadDetailView />)
+  view.rerender(<ToastProvider><ThreadDetailView /></ToastProvider>)
   await waitFor(() => expect(screen.getByText('Monstress')).toBeInTheDocument())
 
   rejectedRequest.reject(new Error('stale failure'))
@@ -130,12 +131,12 @@ it('ignores stale successful and failed issue requests after navigation', async 
   mockedIssuesApiList.mockImplementation((threadId: number) => (
     threadId === 1 ? firstIssues.promise : Promise.resolve(issueResult(threadId))
   ))
-  const view = render(<ThreadDetailView />)
+  const view = render(<ToastProvider><ThreadDetailView /></ToastProvider>)
 
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   await user.click(screen.getByRole('button', { name: 'Expand' }))
   routeParams.id = '2'
-  view.rerender(<ThreadDetailView />)
+  view.rerender(<ToastProvider><ThreadDetailView /></ToastProvider>)
   await waitFor(() => expect(screen.getByText('Monstress')).toBeInTheDocument())
 
   firstIssues.resolve(issueResult(1))
@@ -146,11 +147,11 @@ it('ignores stale successful and failed issue requests after navigation', async 
     threadId === 1 ? rejectedIssues.promise : Promise.resolve(issueResult(threadId))
   ))
   routeParams.id = '1'
-  view.rerender(<ThreadDetailView />)
+  view.rerender(<ToastProvider><ThreadDetailView /></ToastProvider>)
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   await user.click(screen.getByRole('button', { name: 'Expand' }))
   routeParams.id = '2'
-  view.rerender(<ThreadDetailView />)
+  view.rerender(<ToastProvider><ThreadDetailView /></ToastProvider>)
   await waitFor(() => expect(screen.getByText('Monstress')).toBeInTheDocument())
 
   rejectedIssues.reject(new Error('stale issue failure'))
@@ -159,7 +160,7 @@ it('ignores stale successful and failed issue requests after navigation', async 
 
 it('handles a route without a thread id without making requests', async () => {
   routeParams.id = ''
-  render(<ThreadDetailView />)
+  render(<ToastProvider><ThreadDetailView /></ToastProvider>)
 
   await waitFor(() => expect(screen.getByText('Thread not found')).toBeInTheDocument())
   expect(mockedThreadsApiGet).not.toHaveBeenCalled()

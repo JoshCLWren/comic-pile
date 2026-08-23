@@ -6,6 +6,16 @@ import type { AuthContextValue } from '../App'
 import { AuthProvider, useAuth } from '../App'
 import Navigation from '../components/Navigation'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
+import { ToastProvider } from '../contexts/ToastProvider'
+import {
+  DEFAULT_THEME,
+  ensureThemeApplied,
+  getThemeSelectionToken,
+  isSupportedTheme,
+  readStoredThemePreference,
+  restoreStoredTheme,
+  selectTheme,
+} from '../services/theme'
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
   post: vi.fn(),
@@ -58,7 +68,9 @@ function renderNavigation() {
     <MemoryRouter initialEntries={['/']}>
       <AuthProvider>
         <BugReportRestoreProvider>
-          <Navigation onBugReportSubmit={vi.fn()} />
+          <ToastProvider>
+            <Navigation onBugReportSubmit={vi.fn()} />
+          </ToastProvider>
         </BugReportRestoreProvider>
       </AuthProvider>
     </MemoryRouter>,
@@ -86,6 +98,7 @@ describe('semantic theme runtime bootstrap', () => {
   beforeEach(() => {
     auth = null
     document.documentElement.removeAttribute('data-theme')
+    localStorage.clear()
     resetApiMocks()
     mocks.getAccessToken.mockReturnValue('test-token')
     delete window.__COMIC_PILE_ACCESS_TOKEN
@@ -115,7 +128,7 @@ describe('semantic theme runtime bootstrap', () => {
     expect(document.documentElement).toHaveAttribute('data-theme', 'classic')
   })
 
-  it('falls back to classic and still authenticates when the preference fetch fails', async () => {
+  it('seeds classic and still authenticates when the preference fetch fails with no local choice', async () => {
     mocks.get
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
       .mockRejectedValueOnce(new Error('preferences unavailable'))
@@ -124,6 +137,63 @@ describe('semantic theme runtime bootstrap', () => {
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
     expect(document.documentElement).toHaveAttribute('data-theme', 'classic')
     expect(mocks.get).toHaveBeenNthCalledWith(2, '/v1/users/me/preferences', PREFERENCES_CONFIG)
+  })
+
+  it('keeps the locally stored theme when the preference fetch fails with a 503-style outage', async () => {
+    localStorage.setItem('comic-pile-theme', 'ink-gold')
+    mocks.get
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
+      .mockRejectedValueOnce(axiosError(503))
+    renderProvider()
+
+    await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold')
+  })
+
+  it('keeps the locally stored theme when the server returns a stale preference', async () => {
+    localStorage.setItem('comic-pile-theme', 'ink-gold')
+    mocks.get
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
+    renderProvider()
+
+    await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold')
+  })
+
+  it('never downgrades an already-rendered theme when the preference fetch fails', async () => {
+    document.documentElement.setAttribute('data-theme', 'command-center')
+    mocks.get
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
+      .mockRejectedValueOnce(new Error('preferences unavailable'))
+    renderProvider()
+
+    await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    expect(document.documentElement).toHaveAttribute('data-theme', 'command-center')
+  })
+
+  it('ignores stale server preference data when a newer local selection exists', async () => {
+    let resolvePreferences: ((value: { theme: string; user_id: number }) => void) | undefined
+    mocks.get
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ theme: string; user_id: number }>((resolve) => {
+            resolvePreferences = resolve
+          }),
+      )
+    renderProvider()
+    await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+
+    act(() => {
+      selectTheme('ink-gold')
+    })
+    expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold')
+
+    await act(async () => {
+      resolvePreferences?.({ theme: 'classic', user_id: 1 })
+    })
+    expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold')
   })
 
   it('requests preferences with the same bounded bootstrap config as the session check', async () => {
@@ -171,8 +241,14 @@ describe('semantic theme runtime bootstrap', () => {
 
 describe('Appearance picker in the More tray', () => {
   beforeEach(() => {
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 390,
+    })
+    window.dispatchEvent(new Event('resize'))
     auth = null
     document.documentElement.removeAttribute('data-theme')
+    localStorage.clear()
     resetApiMocks()
     mocks.getAccessToken.mockReturnValue('test-token')
     delete window.__COMIC_PILE_ACCESS_TOKEN
@@ -208,7 +284,7 @@ describe('Appearance picker in the More tray', () => {
     )
   })
 
-  it('keeps the rendered theme when persisting the preference fails', async () => {
+  it('keeps the rendered theme when persisting the preference fails and shows a bounded error', async () => {
     mocks.patch.mockRejectedValueOnce(new Error('save failed'))
     const user = await openMoreTray()
 
@@ -216,6 +292,60 @@ describe('Appearance picker in the More tray', () => {
 
     expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold')
     await waitFor(() => expect(mocks.patch).toHaveBeenCalledTimes(1))
+    expect(
+      await screen.findByText(/saving your preference failed/i),
+    ).toBeInTheDocument()
+  })
+
+  it('indicates the currently active theme in the picker', async () => {
+    const user = await openMoreTray()
+
+    expect(screen.getByRole('button', { name: 'Classic theme' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Command center theme' }))
+
+    expect(screen.getByRole('button', { name: 'Command center theme' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByRole('button', { name: 'Classic theme' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+  })
+
+  it('mirrors the selection into localStorage even when the PATCH fails', async () => {
+    mocks.patch.mockRejectedValueOnce(axiosError(503))
+    const user = await openMoreTray()
+
+    await user.click(screen.getByRole('button', { name: 'Command center theme' }))
+
+    await waitFor(() => expect(mocks.patch).toHaveBeenCalledTimes(1))
+    expect(readStoredThemePreference()).toBe('command-center')
+    expect(localStorage.getItem('comic-pile-theme')).toBe('command-center')
+  })
+
+  it('survives a reload during an outage: stored choice renders instead of classic', async () => {
+    mocks.patch.mockRejectedValue(axiosError(503))
+    const user = await openMoreTray()
+    await user.click(screen.getByRole('button', { name: 'Ink-gold theme' }))
+    await waitFor(() => expect(readStoredThemePreference()).toBe('ink-gold'))
+
+    document.documentElement.removeAttribute('data-theme')
+    resetApiMocks()
+    mocks.getAccessToken.mockReturnValue('test-token')
+    mocks.get
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
+      .mockRejectedValueOnce(axiosError(503))
+
+    restoreStoredTheme()
+    renderProvider()
+
+    await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold')
   })
 
   it('activates a theme with the keyboard', async () => {
@@ -230,5 +360,52 @@ describe('Appearance picker in the More tray', () => {
     await waitFor(() =>
       expect(mocks.patch).toHaveBeenCalledWith('/v1/users/me/preferences', { theme: 'ink-gold' }),
     )
+  })
+})
+
+describe('theme service primitives', () => {
+  beforeEach(() => {
+    document.documentElement.removeAttribute('data-theme')
+    localStorage.clear()
+  })
+
+  it('validates theme ids strictly', () => {
+    expect(isSupportedTheme('ink-gold')).toBe(true)
+    expect(isSupportedTheme('classic')).toBe(true)
+    expect(isSupportedTheme('command-center')).toBe(true)
+    expect(isSupportedTheme('neon-vaporwave')).toBe(false)
+    expect(isSupportedTheme(null)).toBe(false)
+    expect(isSupportedTheme(undefined)).toBe(false)
+    expect(isSupportedTheme(42)).toBe(false)
+  })
+
+  it('ignores unsupported stored values instead of applying them', () => {
+    localStorage.setItem('comic-pile-theme', 'neon-vaporwave')
+    expect(readStoredThemePreference()).toBeNull()
+
+    ensureThemeApplied()
+    expect(document.documentElement).toHaveAttribute('data-theme', DEFAULT_THEME)
+  })
+
+  it('never downgrades a rendered theme in ensureThemeApplied', () => {
+    document.documentElement.setAttribute('data-theme', 'command-center')
+
+    ensureThemeApplied()
+
+    expect(document.documentElement).toHaveAttribute('data-theme', 'command-center')
+  })
+
+  it('advances the selection token only for supported selections', () => {
+    const before = getThemeSelectionToken()
+
+    expect(selectTheme('not-a-theme')).toBeNull()
+    expect(getThemeSelectionToken()).toBe(before)
+
+    act(() => {
+      selectTheme('ink-gold')
+    })
+    expect(getThemeSelectionToken()).toBe(before + 1)
+    expect(readStoredThemePreference()).toBe('ink-gold')
+    expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold')
   })
 })

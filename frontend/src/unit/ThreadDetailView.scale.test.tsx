@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import ThreadDetailView from '../pages/ThreadDetailView'
+import { ToastProvider } from '../contexts/ToastProvider'
 import { useUpdateThread } from '../hooks/useThread'
 import { threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
@@ -49,7 +50,7 @@ it.each([25, 250, 1_000, 10_000])(
       notes: null,
     } as never)
 
-    render(<ThreadDetailView />)
+    render(<ToastProvider><ThreadDetailView /></ToastProvider>)
 
     await waitFor(() => {
       expect(screen.getByText(`Scale Test ${totalIssues}`)).toBeInTheDocument()
@@ -73,7 +74,7 @@ it('keeps unmigrated threads independent from the issue-list endpoint', async ()
     notes: null,
   } as never)
 
-  render(<ThreadDetailView />)
+  render(<ToastProvider><ThreadDetailView /></ToastProvider>)
 
   await waitFor(() => {
     expect(screen.getByText('Legacy Thread')).toBeInTheDocument()

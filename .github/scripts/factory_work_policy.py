@@ -10,9 +10,9 @@ from typing import Any
 from factory_review_policy import producer_worker_from_pr as producer_worker_from_values
 NON_EXECUTABLE_ISSUES = {679, 1093, 1109}
 
-OWNER_RE = re.compile('^factory:(?:unowned|local|[1-9]|[1-3][0-9]|4[0-8])$')
+OWNER_RE = re.compile('^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-7][0-9])$')
 
-FIXED_OWNER_RE = re.compile('^factory:(?P<worker>[6-9]|[1-3][0-9]|4[0-8])$')
+FIXED_OWNER_RE = re.compile('^factory:(?P<worker>[6-9]|[1-3][0-9]|[4-7][0-9])$')
 
 STAGE_LABELS = {'factory:building', 'factory:review', 'factory:changes-requested', 'factory:ci', 'factory:ready', 'factory:blocked'}
 STAGE_PRECEDENCE = ('factory:blocked', 'factory:ready', 'factory:review', 'factory:changes-requested', 'factory:ci', 'factory:building')
@@ -55,6 +55,7 @@ def env_positive_int(name: str, default: int) -> int:
 LOCAL_LEASE_TTL_SECONDS = env_positive_int('FACTORY_LOCAL_LEASE_TTL_SECONDS', 3600)
 FIXED_LEASE_TTL_SECONDS = env_positive_int('FACTORY_FIXED_LEASE_TTL_SECONDS', 900)
 FACTORY_PR_WIP_LIMIT = env_positive_int('FACTORY_PR_WIP_LIMIT', 5)
+FACTORY_REVIEW_BACKLOG_LIMIT = env_positive_int('FACTORY_REVIEW_BACKLOG_LIMIT', 15)
 FACTORY_NO_DIFF_RETRY_LIMIT = env_positive_int('FACTORY_NO_DIFF_RETRY_LIMIT', 3)
 FACTORY_NO_DIFF_RETRY_RESET_SECONDS = env_positive_int('FACTORY_NO_DIFF_RETRY_RESET_SECONDS', 86400)
 
@@ -73,8 +74,8 @@ class Candidate:
     conflicted: bool = False
 
     def sort_key(self) -> tuple[int, int, float, int]:
-        """Return the deterministic queue ordering key."""
-        return (self.lane, -self.priority, -parse_time(self.created_at), -self.number)
+        """Return the deterministic queue ordering key (oldest work first)."""
+        return (self.lane, -self.priority, parse_time(self.created_at), self.number)
 
 
 def parse_time(value: str | None) -> float:
@@ -141,6 +142,8 @@ def stage_of(labels: Iterable[str]) -> str | None:
 
 def provenance_lane(labels: set[str]) -> int:
     """Return the deterministic assignment lane for a label set."""
+    if 'main-breakage' in labels:
+        return 0
     if labels & INFRA_LABELS:
         return 5
     if 'e2e-discovered' in labels:
@@ -159,10 +162,33 @@ def issue_bypasses_wip_limit(issue: dict[str, Any]) -> bool:
     """Keep genuinely urgent product defects executable while PR work is saturated."""
     labels = labels_of(issue)
     return (
-        ('user-reported' in labels and 'bug' in labels)
+        'main-breakage' in labels
+        or ('user-reported' in labels and 'bug' in labels)
         or 'priority:P0' in labels
         or 'ralph-priority:critical' in labels
     )
+
+
+def factory_review_backlog_count(prs: Iterable[dict[str, Any]]) -> int:
+    """Count unowned factory PRs waiting at the review or ci stage.
+
+    These targets consume no worker lease while they wait, so the WIP limit
+    cannot see them. The backlog counter exists to apply end-to-end
+    backpressure: when too much work is waiting for completion stages, fresh
+    issue intake must stop so the fleet drains what already exists.
+    """
+    count = 0
+    for pr in prs:
+        if str(pr.get('state') or 'OPEN').upper() != 'OPEN' or pr.get('isDraft'):
+            continue
+        labels = labels_of(pr)
+        if not str(pr.get('headRefName') or '').startswith('factory/'):
+            continue
+        if labels & BLOCKED_LABELS or 'factory:ready' in labels:
+            continue
+        if stage_of(labels) in ('factory:review', 'factory:ci') and item_is_unowned(labels):
+            count += 1
+    return count
 
 
 def factory_pr_wip_count(prs: Iterable[dict[str, Any]]) -> int:
@@ -278,6 +304,7 @@ def build_candidates(
         and pr_suppresses_issue_candidate(pr, issue_map)
     }
     pr_wip_full = factory_pr_wip_count(prs) >= FACTORY_PR_WIP_LIMIT
+    review_backlog_full = factory_review_backlog_count(prs) >= FACTORY_REVIEW_BACKLOG_LIMIT
     candidates: list[Candidate] = []
     for issue in issues:
         number = int(issue['number'])
@@ -288,6 +315,11 @@ def build_candidates(
         ):
             continue
         if pr_wip_full and not issue_bypasses_wip_limit(issue):
+            continue
+        if review_backlog_full and not issue_bypasses_wip_limit(issue):
+            # End-to-end backpressure: while the completion stages are
+            # saturated, the fleet drains existing PRs instead of
+            # manufacturing new ones. Urgent defects bypass this gate.
             continue
         labels = labels_of(issue)
         candidates.append(
@@ -351,19 +383,21 @@ def order_candidates_for_worker(candidates: list[Candidate], worker: str) -> lis
     review_first = review_capacity_worker(worker)
 
     def work_class(candidate: Candidate) -> int:
+        if candidate.lane == 0:
+            return 0
         if candidate.kind == 'pr':
             if candidate.conflicted:
-                return 0
-            if candidate.stage == 'factory:ci':
                 return 1
-            if candidate.stage == 'factory:changes-requested':
+            if candidate.stage == 'factory:ci':
                 return 2
+            if candidate.stage == 'factory:changes-requested':
+                return 3
             if candidate.stage == 'factory:review':
-                return 3 if review_first else 6
-            return 4 if review_first else 7
+                return 4 if review_first else 7
+            return 5 if review_first else 8
         if candidate.lane == 1:
-            return 5 if review_first else 3
-        return 6 if review_first else 4
+            return 6 if review_first else 4
+        return 7 if review_first else 5
 
     return sorted(
         eligible,

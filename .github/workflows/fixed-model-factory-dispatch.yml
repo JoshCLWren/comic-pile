@@ -2,18 +2,10 @@ name: Fixed Model Factory Dispatcher
 
 on:
   schedule:
-    - cron: '0 0-23 * * *'
-    - cron: '5 0-23 * * *'
-    - cron: '10 0-23 * * *'
-    - cron: '15 0-23 * * *'
-    - cron: '20 0-23 * * *'
-    - cron: '25 0-23 * * *'
-    - cron: '30 0-23 * * *'
-    - cron: '35 0-23 * * *'
-    - cron: '40 0-23 * * *'
-    - cron: '45 0-23 * * *'
-    - cron: '50 0-23 * * *'
-    - cron: '55 0-23 * * *'
+    # Single timer instead of twelve: GitHub silently drops scheduled
+    # occurrences under load, and fewer timers means a smaller drop surface.
+    # The minute is resolved from the clock at runtime, not from the event.
+    - cron: '*/5 * * * *'
   workflow_dispatch:
     inputs:
       worker:
@@ -91,6 +83,33 @@ jobs:
           chmod +x "$shim_dir/gh"
           echo "FACTORY_REAL_GH=$real_gh" >> "$GITHUB_ENV"
           echo "$shim_dir" >> "$GITHUB_PATH"
+
+      - name: Check main health (block merges onto red main)
+        id: main_health
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          sha="$(git rev-parse origin/main)"
+          total="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '.total_count // 0' 2>/dev/null || echo 0)"
+          failing="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '[.check_runs[] | select(.conclusion=="FAILURE" or .conclusion=="TIMED_OUT" or .conclusion=="CANCELLED" or .conclusion=="STARTUP_FAILURE")] | length' 2>/dev/null || echo 0)"
+          if [[ "${total:-0}" != "0" && "${failing:-0}" != "0" ]]; then
+            echo "Main $sha has $failing failing check(s) out of $total - factory will prioritize main-breakage lane 0 and drain will pause merges"
+            echo "failing=$failing" >> "$GITHUB_OUTPUT"
+            echo "main_red=true" >> "$GITHUB_OUTPUT"
+            # Ensure main-breakage P0 exists (best-effort, deduplicated by main-health-gate)
+            names="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq -r '[.check_runs[] | select(.conclusion=="FAILURE" or .conclusion=="TIMED_OUT") | .name] | join(", ")' 2>/dev/null || true)"
+            open_issue="$(gh issue list --state open --limit 100 --label "main-breakage" --json number --jq '.[0].number // empty' 2>/dev/null || true)"
+            if [[ -z "$open_issue" ]]; then
+              gh api "repos/${GITHUB_REPOSITORY}/labels/main-breakage" >/dev/null 2>&1 || gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" -f name="main-breakage" -f color="B60205" -f description="Main is red - factory blocked until base is green" >/dev/null 2>&1 || true
+              echo "No open main-breakage; main-health-gate will open one shortly (fallback create)"
+              gh issue create --title "Main is red at ${sha:0:12} - factory blocked" --body "Main ${sha} has ${failing} failing check(s): ${names}. Dispatcher detected red main. Fix main CI before factory merges." --label "user-reported" --label "bug" --label "priority:P0" --label "factory" --label "factory:unowned" --label "ralph-status:pending" --label "main-breakage" >/dev/null 2>&1 || true
+            fi
+          else
+            echo "Main $sha is green (total=$total failing=$failing)"
+            echo "main_red=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Reconcile unowned factory CI PRs
         shell: bash
@@ -177,19 +196,30 @@ jobs:
             fi
           done
 
+      - name: Trigger merge drain on dispatcher cadence
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          # The drain's own cron timer is chronically starved by GitHub's
+          # scheduler, so every healthy dispatcher tick drags it along.
+          gh workflow run factory-ready-merge-drain.yml \
+            --repo "$GITHUB_REPOSITORY" --ref main
+
       - name: Resolve and dispatch fixed workers
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
           DEPLOY_SHA: ${{ github.sha }}
-          SCHEDULE_EXPR: ${{ github.event.schedule }}
           DISPATCH_WORKER: ${{ inputs.worker }}
         run: |
           set -Eeuo pipefail
           manifest='.github/free-model-factories.tsv'
           controller='.github/scripts/factory-work-controller.py'
-          owner_pattern='^factory:(local|([1-9]|[1-3][0-9]|4[0-8]))$'
+          owner_pattern='^factory:(local|([1-9]|[1-3][0-9]|[4-7][0-9]))$'
 
           heartbeat_worker_for_run() {
             local run_id="$1"
@@ -210,7 +240,7 @@ jobs:
             local owner="factory:${worker}"
             local number current_labels other_owner latest_labels target_labels
 
-            [[ "$worker" =~ ^[0-9]+$ ]] && (( worker >= 6 && worker <= 48 )) || {
+            [[ "$worker" =~ ^[0-9]+$ ]] && (( worker >= 6 && worker <= 71 )) || {
               echo "Refusing lease recovery for unknown historical fixed-model worker ${worker}" >&2
               return 1
             }
@@ -344,11 +374,8 @@ jobs:
             awk -F '\t' -v worker="$DISPATCH_WORKER" '$1 == worker {found=1} END {exit !found}' "$manifest"
             workers="$(jq -nc --arg worker "$DISPATCH_WORKER" '[$worker]')"
           elif [[ "$EVENT_NAME" == schedule ]]; then
-            minute="${SCHEDULE_EXPR%% *}"
-            [[ "$minute" =~ ^(0|5|10|15|20|25|30|35|40|45|50|55)$ ]] || {
-              echo "Unexpected factory schedule expression: ${SCHEDULE_EXPR:-<empty>}" >&2
-              exit 1
-            }
+            minute="$(date -u +%M)"
+            minute="$(( 10#$minute / 5 * 5 ))"
             workers="$(awk -F '\t' -v minute="$minute" '$4 == minute {print $1}' "$manifest" | jq -Rsc 'split("\n") | map(select(length > 0))')"
             echo "Scheduled :$(printf '%02d' "$minute") batch"
           else
