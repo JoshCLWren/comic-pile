@@ -63,24 +63,28 @@ export function useScrollRestoration(): void {
     }
     const handleHide = () => saveCurrentScroll()
     const handleVisibility = () => {
-      if (document.visibilityState === 'hidden') {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
         saveCurrentScroll()
       }
     }
     window.addEventListener('scroll', handleScroll, { passive: true })
     window.addEventListener('pagehide', handleHide)
-    document.addEventListener('visibilitychange', handleVisibility)
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibility)
+    }
     return () => {
       window.removeEventListener('scroll', handleScroll)
       window.removeEventListener('pagehide', handleHide)
-      document.removeEventListener('visibilitychange', handleVisibility)
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibility)
+      }
     }
   }, [saveCurrentScroll])
 
   // Restore on navigation (including the initial load / reload).
   useEffect(() => {
     const restore = () => {
-      if (document.visibilityState !== 'visible') {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
         return
       }
       const saved = readStore()[pathname] ?? 0
@@ -102,7 +106,7 @@ export function useScrollRestoration(): void {
   // Restore immediately when returning to a backgrounded or restored tab.
   useEffect(() => {
     const handleVisible = () => {
-      if (document.visibilityState !== 'visible') {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
         return
       }
       const saved = readStore()[pathname] ?? 0
@@ -113,10 +117,14 @@ export function useScrollRestoration(): void {
         handleVisible()
       }
     }
-    document.addEventListener('visibilitychange', handleVisible)
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisible)
+    }
     window.addEventListener('pageshow', handlePageShow)
     return () => {
-      document.removeEventListener('visibilitychange', handleVisible)
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisible)
+      }
       window.removeEventListener('pageshow', handlePageShow)
     }
   }, [pathname])

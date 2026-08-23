@@ -376,8 +376,24 @@ jobs:
             2>&1 | tee "$RUNNER_TEMP/fixed-model-smoke.log"
           status=${PIPESTATUS[0]}
           set -e
-          (( status == 0 )) || exit "$status"
-          grep -q 'FIXED_MODEL_OPENCODE_OK' "$RUNNER_TEMP/fixed-model-smoke.log"
+          if (( status != 0 )); then
+            if grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$RUNNER_TEMP/fixed-model-smoke.log"; then
+              echo "Transient smoke failure detected for ${RUNTIME_MODEL}; allowing worker to proceed with built-in retry handling" >&2
+              cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
+              exit 0
+            fi
+            exit "$status"
+          fi
+          if ! grep -q 'FIXED_MODEL_OPENCODE_OK' "$RUNNER_TEMP/fixed-model-smoke.log"; then
+            if grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$RUNNER_TEMP/fixed-model-smoke.log"; then
+              echo "Transient smoke failure detected for ${RUNTIME_MODEL}; allowing worker to proceed with built-in retry handling" >&2
+              cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
+              exit 0
+            fi
+            echo "Smoke did not return FIXED_MODEL_OPENCODE_OK" >&2
+            cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
+            exit 1
+          fi
           [[ -z "$(git status --porcelain)" ]] || { echo 'Model smoke modified the worktree' >&2; exit 1; }
 
       - name: Smoke Kilo Auto Free through Kilo CLI
