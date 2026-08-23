@@ -44,6 +44,9 @@ export function useScrollRestoration(): void {
   const saveScheduled = useRef(false)
 
   const saveCurrentScroll = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
     const store = readStore()
     store[pathname] = window.scrollY
     writeStore(store)
@@ -51,15 +54,23 @@ export function useScrollRestoration(): void {
 
   // Capture the live scroll position for the active screen.
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
     const handleScroll = () => {
       if (saveScheduled.current) {
         return
       }
       saveScheduled.current = true
-      window.requestAnimationFrame(() => {
+      if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(() => {
+          saveScheduled.current = false
+          saveCurrentScroll()
+        })
+      } else {
         saveScheduled.current = false
         saveCurrentScroll()
-      })
+      }
     }
     const handleHide = () => saveCurrentScroll()
     const handleVisibility = () => {
@@ -67,14 +78,18 @@ export function useScrollRestoration(): void {
         saveCurrentScroll()
       }
     }
-    window.addEventListener('scroll', handleScroll, { passive: true })
-    window.addEventListener('pagehide', handleHide)
+    if (typeof window !== 'undefined') {
+      window.addEventListener('scroll', handleScroll, { passive: true })
+      window.addEventListener('pagehide', handleHide)
+    }
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', handleVisibility)
     }
     return () => {
-      window.removeEventListener('scroll', handleScroll)
-      window.removeEventListener('pagehide', handleHide)
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('scroll', handleScroll)
+        window.removeEventListener('pagehide', handleHide)
+      }
       if (typeof document !== 'undefined') {
         document.removeEventListener('visibilitychange', handleVisibility)
       }
@@ -83,8 +98,14 @@ export function useScrollRestoration(): void {
 
   // Restore on navigation (including the initial load / reload).
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
     const restore = () => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        return
+      }
+      if (typeof window === 'undefined') {
         return
       }
       const saved = readStore()[pathname] ?? 0
@@ -92,21 +113,38 @@ export function useScrollRestoration(): void {
       window.scrollTo(0, navType === 'POP' ? saved : 0)
     }
 
+    if (typeof window.requestAnimationFrame !== 'function') {
+      restore()
+      return
+    }
     const raf = window.requestAnimationFrame(() => {
       restore()
       // Late layout (deferred data renders) can shrink the scrollable area and
       // clamp the restored offset; re-apply once the screen has settled.
-      if (navType === 'POP') {
+      if (navType === 'POP' && typeof window.setTimeout === 'function') {
         window.setTimeout(restore, 150)
+      } else if (navType === 'POP' && typeof setTimeout === 'function') {
+        // Fallback when window is gone but global setTimeout survives teardown
+        setTimeout(restore, 150)
       }
     })
-    return () => window.cancelAnimationFrame(raf)
+    return () => {
+      if (typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
+        window.cancelAnimationFrame(raf)
+      }
+    }
   }, [currentKey, navType, pathname])
 
   // Restore immediately when returning to a backgrounded or restored tab.
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
     const handleVisible = () => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        return
+      }
+      if (typeof window === 'undefined') {
         return
       }
       const saved = readStore()[pathname] ?? 0
@@ -125,7 +163,9 @@ export function useScrollRestoration(): void {
       if (typeof document !== 'undefined') {
         document.removeEventListener('visibilitychange', handleVisible)
       }
-      window.removeEventListener('pageshow', handlePageShow)
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('pageshow', handlePageShow)
+      }
     }
   }, [pathname])
 }
