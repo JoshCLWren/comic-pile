@@ -100,4 +100,80 @@ describe('ComicVineSearchDialog mode branching', () => {
     await waitFor(() => expect(replaceIdentitySpy).toHaveBeenCalledWith(43, 36956))
     expect(confirmIdentitySpy).not.toHaveBeenCalled()
   })
+
+  it('renders same-title series results as distinguishable options', async () => {
+    searchSeriesSpy.mockResolvedValue({
+      query: 'Ultimate Spider-Man',
+      results: [
+        {
+          comicvine_volume_id: 471,
+          name: 'Ultimate Spider-Man',
+          publisher: 'Marvel',
+          start_year: 2000,
+          issue_count: 160,
+          site_detail_url: null,
+          image_url: null,
+        },
+        {
+          comicvine_volume_id: 114402,
+          name: 'Ultimate Spider-Man',
+          publisher: 'Marvel',
+          start_year: 2024,
+          issue_count: 18,
+          site_detail_url: null,
+          image_url: null,
+        },
+      ],
+      total_available: 2,
+    })
+    render(<ComicVineSearchDialog {...defaultProps({ threadTitle: 'Ultimate Spider-Man' })} />)
+
+    const input = screen.getByPlaceholderText('Search series title...')
+    fireEvent.change(input, { target: { value: 'Ultimate Spider-Man' } })
+
+    const options = await screen.findAllByRole('button', { name: /Ultimate Spider-Man/ })
+    expect(options).toHaveLength(2)
+
+    const [firstLabel, secondLabel] = options.map((option) => option.getAttribute('aria-label'))
+    expect(firstLabel).not.toEqual(secondLabel)
+    expect(firstLabel).toMatch(/2000/)
+    expect(secondLabel).toMatch(/2024/)
+
+    expect(options[0].textContent).toMatch(/2000/)
+    expect(options[0].textContent).toMatch(/160 issues/)
+    expect(options[1].textContent).toMatch(/2024/)
+    expect(options[1].textContent).toMatch(/18 issues/)
+
+    expect(screen.queryByText(/471/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/114402/)).not.toBeInTheDocument()
+  })
+
+  it('keeps the exact provider identity when a same-title result is selected', async () => {
+    const ultimate = {
+      comicvine_volume_id: 471,
+      name: 'Ultimate Spider-Man',
+      publisher: 'Marvel',
+      start_year: 2000,
+      issue_count: 160,
+      site_detail_url: null,
+      image_url: null,
+    }
+    const ultimate2024 = { ...ultimate, comicvine_volume_id: 114402, start_year: 2024 }
+    searchSeriesSpy.mockResolvedValue({
+      query: 'Ultimate Spider-Man',
+      results: [ultimate, ultimate2024],
+      total_available: 2,
+    })
+    render(<ComicVineSearchDialog {...defaultProps({ threadTitle: 'Ultimate Spider-Man' })} />)
+
+    const input = screen.getByPlaceholderText('Search series title...')
+    fireEvent.change(input, { target: { value: 'Ultimate Spider-Man' } })
+
+    const options = await screen.findAllByRole('button', { name: /Ultimate Spider-Man/ })
+    fireEvent.click(options[1])
+
+    await waitFor(() =>
+      expect(getSeriesIssuesSpy).toHaveBeenCalledWith(114402, 'Ultimate Spider-Man'),
+    )
+  })
 })
