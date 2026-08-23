@@ -71,6 +71,18 @@ describe('useQueueFilters', () => {
     expect(result.current.filteredThreads.map((t) => t.id)).toEqual([1, 2])
   })
 
+  it('sorts position with feasible-only ordering (unblocked before blocked)', () => {
+    const blockedFirst = makeThread({ id: 1, title: 'Blocked', queue_position: 1, is_blocked: true })
+    const unblockedSecond = makeThread({ id: 2, title: 'Readable', queue_position: 2, is_blocked: false })
+    const blockedThird = makeThread({ id: 3, title: 'Blocked Later', queue_position: 3, is_blocked: true })
+    const unblockedFourth = makeThread({ id: 4, title: 'Readable Later', queue_position: 4, is_blocked: false })
+
+    const { result } = renderHook(() =>
+      useQueueFilters([blockedFirst, unblockedSecond, blockedThird, unblockedFourth], 'position'),
+    )
+    expect(result.current.sortedThreads.map((t) => t.id)).toEqual([2, 4, 1, 3])
+  })
+
   it('returns all active threads when no search filter applied', () => {
     const threads = [
       makeThread({ id: 1, title: 'Saga', queue_position: 1 }),

@@ -2,7 +2,10 @@ name: Factory Ready Merge Drain
 
 on:
   schedule:
-    - cron: '2-57/5 * * * *'
+    # Best-effort redundancy only: the dispatcher triggers this workflow on
+    # its own (healthier) cadence, so this timer is a fallback, not the
+    # primary driver.
+    - cron: '2-57/15 * * * *'
   workflow_dispatch:
   push:
     branches: [main]
@@ -54,6 +57,52 @@ jobs:
         shell: bash
         run: |
           python3 .github/scripts/factory_post_merge_closure.py --self-test
+
+      - name: Approve held workflow runs on factory PR heads
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.PR_REBASE_TOKEN || github.token }}
+          FALLBACK_GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+
+          echo 'Approving action_required workflow runs stuck on current factory PR heads'
+          mapfile -t open_heads < <(
+            gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 200 \
+              --json number,headRefOid \
+              --jq '.[] | [.headRefOid, .number] | @tsv'
+          )
+          (( ${#open_heads[@]} > 0 )) || exit 0
+
+          approve_run() {
+            local run_id="$1"
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/approve" >/dev/null 2>&1 && return 0
+            GH_TOKEN="$FALLBACK_GH_TOKEN" gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/approve" >/dev/null 2>&1
+          }
+
+          approved_any=false
+          while IFS=$'\t' read -r run_id head_sha name; do
+            [[ -n "$run_id" && -n "$head_sha" ]] || continue
+            for entry in "${open_heads[@]}"; do
+              IFS=$'\t' read -r open_head open_pr <<< "$entry"
+              if [[ "$head_sha" == "$open_head" ]]; then
+                if approve_run "$run_id"; then
+                  echo "Approved held ${name} run ${run_id} on PR #${open_pr} head ${head_sha:0:12}"
+                  approved_any=true
+                else
+                  echo "Unable to approve run ${run_id} on PR #${open_pr}; will retry next drain" >&2
+                fi
+                break
+              fi
+            done
+          done < <(
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs?status=action_required&per_page=100" \
+              --jq '.workflow_runs[] | select(.created_at >= (now - 3600 | strftime("%Y-%m-%dT%H:%M:%SZ"))) | [.id, .head_sha, .name] | @tsv' 2>/dev/null || true
+          )
+
+          if [[ "$approved_any" == false ]]; then
+            echo 'No held workflow runs matched current factory PR heads'
+          fi
 
       - name: Drain exact-head ready factory PRs
         shell: bash

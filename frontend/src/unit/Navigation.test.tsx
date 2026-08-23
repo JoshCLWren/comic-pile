@@ -29,6 +29,11 @@ vi.mock('../services/api', () => {
 })
 
 beforeEach(() => {
+  Object.defineProperty(window, 'innerWidth', {
+    configurable: true,
+    value: 390,
+  })
+  window.dispatchEvent(new Event('resize'))
   mockApiGet.mockReset()
   mockApiPost.mockReset()
   mockSetAccessToken.mockReset()
@@ -180,4 +185,22 @@ test('falls back to an empty username when the user profile omits it', async () 
   await waitFor(() => expect(screen.getByRole('button', { name: /more pages/i })).toBeInTheDocument())
   // empty username is falsy, so no username span is rendered for it
   expect(screen.queryByText('testuser')).not.toBeInTheDocument()
+})
+
+test('renders all secondary nav links inline on a desktop viewport', async () => {
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 })
+  window.dispatchEvent(new Event('resize'))
+  renderWithAuth()
+
+  await waitFor(() => {
+    expect(screen.getByRole('link', { name: /roll page/i })).toBeInTheDocument()
+  })
+  expect(screen.getByRole('link', { name: /queue page/i })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /history page/i })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /crossovers page/i })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /continuity planner page/i })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /what's new page/i })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /help page/i })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /glossary page/i })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /more pages/i })).not.toBeInTheDocument()
 })
