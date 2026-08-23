@@ -118,7 +118,7 @@ export default function QueuePage() {
     (thread: Thread, index: number) => {
       const isDragOver = actions.dragOverThreadId === thread.id
       const isBlocked = thread.is_blocked
-      const blockingReasons: string[] = []
+      const blockingReasons: string[] = thread.blocking_reasons ?? []
       const isSnoozed = session?.snoozed_threads?.some((t) => t.id === thread.id) ?? false
       const snoozeIcon = isSnoozed ? '🔔' : '😴'
       const snoozeLabel = isSnoozed ? 'Unsnooze' : 'Snooze'
@@ -278,6 +278,7 @@ export default function QueuePage() {
           onMigrationSkip={modals.handleMigrationSkip}
           onCloseMigration={modals.closeMigrationDialog}
           onOpenMigrationDialog={modals.openMigrationDialog}
+          onOpenDependencies={modals.editingThread ? () => modals.openDependenciesModal(modals.editingThread!) : undefined}
           isPendingCreate={modals.isPendingCreate}
           isPendingEdit={modals.isPendingEdit}
           isPendingReactivate={reactivateMutation.isPending}

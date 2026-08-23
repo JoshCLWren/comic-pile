@@ -207,9 +207,10 @@ export default function CrossoversPage() {
     setBusyId(groupId)
     try {
       const member = await dependencyGroupsApi.addMember(groupId, { thread_id: memberThread.id })
+      const threadTitle = memberThread.title
       setGroups((current) => current.map((group) => group.id === groupId ? { ...group, memberships: [...group.memberships, member] } : group))
       setMemberThread(null)
-      setMembershipMessage(`${memberThread.title} added to crossover.`)
+      setMembershipMessage(`${threadTitle} added to crossover as 1 thread member.`)
     } catch (error) {
       setMutationError(errorMessage(error, 'Unable to add thread to crossover.'))
     } finally {
@@ -348,8 +349,11 @@ export default function CrossoversPage() {
                     )}
 
                     <form onSubmit={(event) => void addThreadMember(event, group.id)} aria-label={`Add thread to ${group.name}`} className="grid gap-2 rounded-xl border border-stone-800 bg-stone-950/50 p-3 sm:grid-cols-[1fr_auto]">
-                      <ContinuityThreadSelector threads={threads} value={memberThread} onChange={setMemberThread} label="Whole comic series" placeholder="Search comics by title" error={threadLoadError} disabled={hasPendingMutation} />
-                      <button type="submit" disabled={hasPendingMutation || !memberThread} className="self-end rounded-lg bg-violet-500 px-3 py-2 font-bold text-stone-950 disabled:opacity-50">{isBusy ? 'Saving…' : 'Add series'}</button>
+                      <div className="min-w-0">
+                        <ContinuityThreadSelector threads={threads} value={memberThread} onChange={setMemberThread} label="Current thread of series" placeholder="Search comics by title" error={threadLoadError} disabled={hasPendingMutation} />
+                        <p className="mt-1 text-xs text-stone-500">Adds one thread membership for the series. Use the issue range form below to add specific issues.</p>
+                      </div>
+                      <button type="submit" disabled={hasPendingMutation || !memberThread} className="self-end rounded-lg bg-violet-500 px-3 py-2 font-bold text-stone-950 disabled:opacity-50">{isBusy ? 'Saving…' : 'Add thread'}</button>
                     </form>
 
                     <form onSubmit={(event) => void addRange(event, group.id)} aria-label={`Add issue range to ${group.name}`} className="grid gap-3 rounded-xl border border-stone-800 bg-stone-950/50 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]">

@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react'
-import { DICE_LADDER } from '../../components/diceLadder'
 import { dependenciesApi } from '../../services/api'
 import { readingOrdersApi } from '../../services/api-reading-orders'
 import { getApiErrorDetail } from '../../utils/apiError'
@@ -8,7 +7,7 @@ import type { ReadingOrder } from '../../services/api-reading-orders'
 import type { RollBootstrapResponse } from '../../types/rollBootstrap'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
-import { RATING_THRESHOLD, buildRatingThread, createExplosion } from './utils'
+import { RATING_THRESHOLD, buildRatingThread, computePredictedDie, createExplosion } from './utils'
 
 interface UseRollRatingParams {
   state: RollPageState & RollPageStateSetters
@@ -79,17 +78,7 @@ export function useRollRating({
 
       setRating(3.0)
       setErrorMessage('')
-      const die = currentDie || 6
-      const idx = DICE_LADDER.indexOf(die)
-      const ratingNum = 3.0
-      let newPredictedDie
-      if (ratingNum >= RATING_THRESHOLD) {
-        newPredictedDie = idx > 0 ? DICE_LADDER[idx - 1] : DICE_LADDER[0]
-      } else {
-        newPredictedDie =
-          idx < DICE_LADDER.length - 1 ? DICE_LADDER[idx + 1] : DICE_LADDER[DICE_LADDER.length - 1]
-      }
-      setPredictedDie(newPredictedDie)
+      setPredictedDie(computePredictedDie(currentDie, 3.0))
       setIsRatingView(true)
       suppressPendingAutoOpenRef.current = false
 
@@ -211,15 +200,7 @@ export function useRollRating({
     const num = parseFloat(val)
     if (num === RATING_THRESHOLD) navigator.vibrate?.(8)
     setRating(num)
-    let newPredictedDie = currentDie
-    const idx = DICE_LADDER.indexOf(currentDie)
-    if (num >= RATING_THRESHOLD) {
-      newPredictedDie = idx > 0 ? DICE_LADDER[idx - 1] : DICE_LADDER[0]
-    } else {
-      newPredictedDie =
-        idx < DICE_LADDER.length - 1 ? DICE_LADDER[idx + 1] : DICE_LADDER[DICE_LADDER.length - 1]
-    }
-    setPredictedDie(newPredictedDie)
+    setPredictedDie(computePredictedDie(currentDie, num))
   }
 
   async function handleSubmitRating(finishSession = false) {
