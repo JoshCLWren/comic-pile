@@ -240,7 +240,7 @@ jobs:
             local owner="factory:${worker}"
             local number current_labels other_owner latest_labels target_labels
 
-            [[ "$worker" =~ ^[0-9]+$ ]] && (( worker >= 6 && worker <= 48 )) || {
+            [[ "$worker" =~ ^[0-9]+$ ]] && (( worker >= 6 && worker <= 71 )) || {
               echo "Refusing lease recovery for unknown historical fixed-model worker ${worker}" >&2
               return 1
             }
