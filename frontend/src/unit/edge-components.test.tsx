@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { MarqueeTitle } from '../components/MarqueeTitle'
@@ -11,56 +11,19 @@ const migration = vi.hoisted(() => ({ migrateThread: vi.fn() }))
 vi.mock('../services/api', () => ({ migrationApi: migration }))
 
 describe('edge component behavior', () => {
-  it('renders marquee overflow and responds to resize observation', async () => {
-    let callback: (() => void) | undefined
-    class Observer {
-      observe = vi.fn()
-      disconnect = vi.fn()
-      constructor(cb: () => void) { callback = cb }
-    }
-    vi.stubGlobal('ResizeObserver', Observer)
-    const { container, rerender } = render(<MarqueeTitle title="A title" className="extra" />)
-    const wrapper = container.firstElementChild as HTMLDivElement
-    const heading = wrapper.querySelector('h3') as HTMLElement
-    Object.defineProperty(wrapper, 'clientWidth', { configurable: true, value: 20 })
-    Object.defineProperty(heading, 'scrollWidth', { configurable: true, value: 100 })
-    act(() => callback?.())
-    await waitFor(() => expect(heading).toHaveClass('marquee-runner'))
-    rerender(<MarqueeTitle title="Short" />)
-    expect(container.querySelector('h3')).toHaveTextContent('Short')
-    vi.unstubAllGlobals()
+  it('renders wrapped title without overflow clipping', () => {
+    const { container } = render(<MarqueeTitle title="A title" className="extra" />)
+    expect(container).toHaveTextContent('A title')
+    const heading = container.querySelector('h3') as HTMLElement
+    expect(heading).toHaveClass('whitespace-normal', 'break-words', 'extra')
   })
 
-  it('keeps fitting titles truncated and disconnects resize observation', () => {
-    let callback: (() => void) | undefined
-    const observe = vi.fn()
-    const disconnect = vi.fn()
-    class Observer {
-      observe = observe
-      disconnect = disconnect
-      constructor(cb: () => void) { callback = cb }
-    }
-    vi.stubGlobal('ResizeObserver', Observer)
-    const { container, unmount } = render(<MarqueeTitle title="Fits" />)
-    const wrapper = container.firstElementChild as HTMLDivElement
-    const heading = wrapper.querySelector('h3') as HTMLElement
-    Object.defineProperty(wrapper, 'clientWidth', { configurable: true, value: 100 })
-    Object.defineProperty(heading, 'scrollWidth', { configurable: true, value: 20 })
-    act(() => callback?.())
-    expect(heading).toHaveClass('truncate')
-    expect(heading).not.toHaveClass('marquee-runner')
+  it('renders a compact title wrapped properly', () => {
+    const { container } = render(<MarqueeTitle title="Fits" />)
+    const heading = container.querySelector('h3') as HTMLElement
+    expect(heading).toHaveTextContent('Fits')
+    expect(heading).toHaveClass('whitespace-normal', 'break-words')
     expect(heading.querySelector('[aria-hidden="true"]')).not.toBeInTheDocument()
-    expect(observe).toHaveBeenCalledTimes(2)
-    unmount()
-    expect(disconnect).toHaveBeenCalledOnce()
-    vi.unstubAllGlobals()
-  })
-
-  it('keeps marquee usable when ResizeObserver is unavailable', () => {
-    vi.stubGlobal('ResizeObserver', undefined)
-    const { container } = render(<MarqueeTitle title="No observer" />)
-    expect(container).toHaveTextContent('No observer')
-    vi.unstubAllGlobals()
   })
 
   it('corrects existing and newly inserted issue numbers', async () => {

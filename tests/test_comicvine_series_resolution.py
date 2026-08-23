@@ -332,3 +332,149 @@ async def test_defers_on_rate_limit(
     ).scalar_one_or_none()
     assert mapping is None
     hydrate.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_duplicate_match_does_not_auto_confirm(
+    async_db_committed: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression test for defect 1 (#1628): ambiguous multi-match must not be confirmed."""
+    user, issue, _series = await _seed(
+        async_db_committed, username="series_res_duplicate", issue_number="5", confirmed_series=True
+    )
+
+    class _DuplicateClient(_FakeComicVineClient):
+        async def request(
+            self, endpoint_bucket: str, endpoint: str, params: dict[str, object], *, refresh: bool = False
+        ) -> ComicVineResponse:
+            return ComicVineResponse(
+                payload={
+                    "results": [
+                        {
+                            "id": 4005,
+                            "issue_number": "5",
+                            "name": "Test Series #5",
+                            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-4005/",
+                            "volume": {"id": 999},
+                        },
+                        {
+                            "id": 4010,
+                            "issue_number": "5",
+                            "name": "Test Series #5 (duplicate)",
+                            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-4010/",
+                            "volume": {"id": 999},
+                        },
+                    ],
+                    "number_of_total_results": 2,
+                    "limit": 100,
+                    "offset": 0,
+                },
+                from_cache=False,
+                cache_key="issues-duplicate",
+            )
+
+    monkeypatch.setattr(resolution_module, "ComicVineClient", _DuplicateClient)
+    monkeypatch.setenv("COMICVINE_API_KEY", "test-key")
+    hydrate = AsyncMock()
+    monkeypatch.setattr(resolution_module, "hydrate_issue", hydrate)
+
+    await _run_series_resolution(issue.id, user.id)
+
+    mappings = (
+        await async_db_committed.execute(
+            select(IssueExternalIdentityMapping).where(
+                IssueExternalIdentityMapping.issue_id == issue.id
+            )
+        )
+    ).scalars().all()
+    # Ambiguous multi-match must not produce a confirmed mapping
+    assert len(mappings) == 0 or all(m.status != "confirmed" for m in mappings)
+    hydrate.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_exception_containment_no_unretrieved_task(
+    async_db_committed: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression test for defect 4 (#1628): unhandled exceptions must not escape."""
+    user, issue, _series = await _seed(
+        async_db_committed, username="series_res_exception", issue_number="5", confirmed_series=True
+    )
+
+    monkeypatch.setattr(resolution_module, "ComicVineClient", _FakeComicVineClient)
+    monkeypatch.setenv("COMICVINE_API_KEY", "test-key")
+    # Force an unhandled exception inside resolution (simulate DB/advisory failure)
+    monkeypatch.setattr(
+        resolution_module,
+        "_run_series_resolution_impl",
+        AsyncMock(side_effect=RuntimeError("simulated crash")),
+    )
+
+    # Schedule and await the background task; no unretrieved exception should escape.
+    scheduled = await schedule_series_issue_resolution(async_db_committed, issue.id, user.id)
+    assert scheduled is True
+    task = resolution_module._pending_resolutions.get(issue.id)
+    assert task is not None
+    # Awaiting the task should complete without raising the simulated exception
+    # because the outer wrapper catches it.
+    await task
+
+
+@pytest.mark.asyncio
+async def test_find_existing_mapping_hardened_against_multiple_rows(
+    async_db_committed: AsyncSession
+) -> None:
+    """Regression test for defect 5 (#1628): multiple non-confirmed rows must not raise."""
+    from app.services.comicvine_series_resolution import _find_existing_mapping
+
+    user = User(username="hardening_user")
+    async_db_committed.add(user)
+    await async_db_committed.flush()
+    thread = Thread(
+        title="Hardening thread",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        user_id=user.id,
+        status="active",
+    )
+    async_db_committed.add(thread)
+    await async_db_committed.flush()
+    issue = Issue(thread_id=thread.id, issue_number="99", position=1, status="unread")
+    async_db_committed.add(issue)
+    await async_db_committed.flush()
+
+    identity1 = ExternalIdentity(
+        provider="comicvine",
+        entity_type="issue",
+        external_id="4000-1",
+    )
+    identity2 = ExternalIdentity(
+        provider="comicvine",
+        entity_type="issue",
+        external_id="4000-2",
+    )
+    async_db_committed.add(identity1)
+    async_db_committed.add(identity2)
+    await async_db_committed.flush()
+
+    mapping1 = IssueExternalIdentityMapping(
+        issue_id=issue.id,
+        external_identity_id=identity1.id,
+        status="candidate",
+        confidence=0.5,
+    )
+    mapping2 = IssueExternalIdentityMapping(
+        issue_id=issue.id,
+        external_identity_id=identity2.id,
+        status="candidate",
+        confidence=0.5,
+    )
+    async_db_committed.add(mapping1)
+    async_db_committed.add(mapping2)
+    await async_db_committed.commit()
+
+    # Should return the first row without raising MultipleResultsFound
+    result = await _find_existing_mapping(async_db_committed, issue.id)
+    assert result is not None
+    assert result.status == "candidate"

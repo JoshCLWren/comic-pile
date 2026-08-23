@@ -23,6 +23,7 @@ body {
 :root {
   --bg-main: #1a1410;
   --bg-darker: #110e0a;
+  --bg-highlight: #2a2018;
   --accent-primary: #d4890e;
   --accent-red: #c0392b;
   --accent-amber: var(--accent-primary);
@@ -35,6 +36,17 @@ body {
   --mobile-nav-height: 3.5rem;
   --desktop-nav-height: 5rem;
 }
+
+/*
+ * The legacy design tokens above (--bg-*, --glass-*, --text-*, --accent-*) were
+ * previously defined only at :root, so the dominant chrome — the page
+ * background, nav bar, glass panels, and body text — never changed when a user
+ * picked a theme (issue #1836: "nothing happens when I change themes").
+ *
+ * Each [data-theme] block now re-points those legacy tokens at the per-theme
+ * --theme-* values so the whole surface follows the selection. The :root
+ * defaults stay aligned with Classic so the default render is unchanged.
+ */
 
 /* Semantic theme tokens applied via data-theme on <html> */
 [data-theme="classic"] {
@@ -52,6 +64,17 @@ body {
   --theme-danger: #c0392b;
   --theme-danger-hover: #e74c3c;
   --theme-focus-ring: #d4890e;
+  --bg-main: #1a1410;
+  --bg-darker: #110e0a;
+  --bg-highlight: #2a2018;
+  --text-primary: var(--theme-text-primary);
+  --text-muted: var(--theme-text-muted);
+  --text-dim: var(--theme-text-dim);
+  --glass-bg: var(--theme-bg-panel);
+  --glass-border: var(--theme-border);
+  --accent-primary: var(--theme-primary-action);
+  --accent-amber: var(--theme-primary-action);
+  --accent-red: var(--theme-danger);
 }
 
 [data-theme="ink-gold"] {
@@ -69,6 +92,17 @@ body {
   --theme-danger: #b56a27;
   --theme-danger-hover: #d4890e;
   --theme-focus-ring: #c9a937;
+  --bg-main: #15100c;
+  --bg-darker: #0d0a07;
+  --bg-highlight: #241a10;
+  --text-primary: var(--theme-text-primary);
+  --text-muted: var(--theme-text-muted);
+  --text-dim: var(--theme-text-dim);
+  --glass-bg: var(--theme-bg-panel);
+  --glass-border: var(--theme-border);
+  --accent-primary: var(--theme-primary-action);
+  --accent-amber: var(--theme-primary-action);
+  --accent-red: var(--theme-danger);
 }
 
 [data-theme="command-center"] {
@@ -86,6 +120,17 @@ body {
   --theme-danger: #ff4757;
   --theme-danger-hover: #ff6b7a;
   --theme-focus-ring: #00d4ff;
+  --bg-main: #0b0c1e;
+  --bg-darker: #050614;
+  --bg-highlight: #161a36;
+  --text-primary: var(--theme-text-primary);
+  --text-muted: var(--theme-text-muted);
+  --text-dim: var(--theme-text-dim);
+  --glass-bg: var(--theme-bg-panel);
+  --glass-border: var(--theme-border);
+  --accent-primary: var(--theme-primary-action);
+  --accent-amber: var(--theme-primary-action);
+  --accent-red: var(--theme-danger);
 }
 
 /* Keep mobile form controls inside their containers and at the iOS no-zoom font threshold. */
@@ -116,7 +161,7 @@ body {
 body {
   background: radial-gradient(
     circle at top left,
-    #2a2018 0%,
+    var(--bg-highlight) 0%,
     var(--bg-main) 40%,
     var(--bg-darker) 100%
   );
@@ -306,7 +351,7 @@ body {
   left: 0;
   right: 0;
   z-index: 40;
-  background: rgba(17, 14, 10, 0.95);
+  background: var(--bg-darker);
   border-top: 1px solid var(--glass-border);
   padding-bottom: env(safe-area-inset-bottom);
 }
