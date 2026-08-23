@@ -359,9 +359,21 @@ def build_candidates(
     return sorted(candidates, key=Candidate.sort_key)
 
 
-def review_capacity_worker(worker: str) -> bool:
-    """Return whether this deterministic worker slot prioritizes review intake."""
-    return int(worker) % 4 == 2
+def review_capacity_worker(worker: str, *, review_backlog: int = 0) -> bool:
+    """Return whether this worker slot prioritizes review, scaled to demand.
+
+    Fixed 1-in-4 was arbitrary. When the review backlog is the dominant
+    queue, most workers should work the drain. Scale the share with backlog:
+    >=50 -> 90%, >=20 -> 75%, >=15 -> 50%, else 25%.
+    """
+    w = int(worker)
+    if review_backlog >= 50:
+        return w % 10 < 9
+    if review_backlog >= 20:
+        return w % 4 < 3
+    if review_backlog >= 15:
+        return w % 2 == 0
+    return w % 4 == 2
 
 
 def candidate_is_independent_for_worker(candidate: Candidate, worker: str) -> bool:
@@ -380,7 +392,8 @@ def order_candidates_for_worker(candidates: list[Candidate], worker: str) -> lis
         for candidate in candidates
         if candidate_is_independent_for_worker(candidate, worker)
     ]
-    review_first = review_capacity_worker(worker)
+    review_backlog = sum(1 for c in candidates if c.kind == "pr" and c.stage == "factory:review")
+    review_first = review_capacity_worker(worker, review_backlog=review_backlog)
 
     def work_class(candidate: Candidate) -> int:
         if candidate.lane == 0:
