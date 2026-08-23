@@ -21,8 +21,8 @@ CONTROLLER = Path('.github/scripts/factory-work-controller.py')
 POLICY = Path('.github/scripts/factory_work_policy.py')
 KILO_HELPER = Path('.github/scripts/kilo-auto-factory-run.sh')
 GUARD = Path('.github/scripts/fixed-model-guard.py')
-EXPECTED_WORKERS = {6, 9, 10, 11, 14, 16, 17, 18, 19, 20, 21, 23, 29} | set(range(39, 64))
-EXPECTED_SOURCE_COUNTS = {'nvidia': 13, 'opencode-free': 20, 'kilo-auto': 1, 'openrouter-free': 4}
+EXPECTED_WORKERS = {6, 9, 10, 11, 14, 16, 17, 18, 19, 20, 21, 23, 29} | set(range(39, 72))
+EXPECTED_SOURCE_COUNTS = {'nvidia': 13, 'opencode-free': 20, 'kilo-auto': 1, 'openrouter-free': 12}
 EXPECTED_OPENCODE_FREE_MODELS = {
     'big-pickle',
     'deepseek-v4-flash-free',
@@ -48,7 +48,7 @@ def main() -> None:
             delimiter='\t',
         ))
 
-    assert len(rows) == 38, f'expected 38 external factory lanes, got {len(rows)}'
+    assert len(rows) == 46, f'expected 38 external factory lanes, got {len(rows)}'
     workers = [int(row['worker']) for row in rows]
     assert set(workers) == EXPECTED_WORKERS
     assert len(workers) == len(set(workers)), 'duplicate worker IDs'
@@ -71,7 +71,7 @@ def main() -> None:
         counts[minute] += 1
     assert set(counts) == set(SCHEDULE_MINUTES)
     assert max(counts.values()) - min(counts.values()) <= 1
-    assert sum(counts.values()) == 38
+    assert sum(counts.values()) == 46
 
     dispatcher = DISPATCHER.read_text(encoding='utf-8')
     assert 'workflow_run:' not in dispatcher
