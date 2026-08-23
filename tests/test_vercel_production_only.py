@@ -1,54 +1,36 @@
 """Regression coverage for ComicPile's production-only Vercel deployment policy."""
 
 import json
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_vercel_deploys_main_and_disables_non_production_branches() -> None:
-    """Only main may receive an automatic Git deployment from Vercel."""
+def test_vercel_git_deployments_are_disabled() -> None:
+    """Production must be owned by the migration-aware GitHub workflow."""
     config = json.loads((REPOSITORY_ROOT / "vercel.json").read_text(encoding="utf-8"))
 
-    assert config["git"]["deploymentEnabled"] == {
-        "main": True,
-        "*": False,
-        "**/*": False,
-    }
+    assert config["git"]["deploymentEnabled"] is False
 
 
-def test_vercel_gate_covers_slash_containing_factory_branches() -> None:
-    """Factory branches must not escape the non-production deployment rule.
+def test_production_workflow_migrates_before_deploying() -> None:
+    """Application deployment must not bypass the production schema migration."""
+    workflow = (
+        REPOSITORY_ROOT / ".github" / "workflows" / "deploy-production.yml"
+    ).read_text(encoding="utf-8")
 
-    Args:
-        None.
+    migration = ".venv/bin/alembic upgrade head"
+    deployment = "vercel deploy"
 
-    Returns:
-        None.
-    """
-    config = json.loads((REPOSITORY_ROOT / "vercel.json").read_text(encoding="utf-8"))
-    deployment_rules = config["git"]["deploymentEnabled"]
-
-    assert deployment_rules["*"] is False
-    assert deployment_rules["**/*"] is False
-    assert deployment_rules["main"] is True
-
-    def deployment_enabled(branch: str) -> bool:
-        matching_rules = (
-            enabled
-            for pattern, enabled in deployment_rules.items()
-            if PurePosixPath(branch).full_match(pattern)
-        )
-        return any(matching_rules)
-
-    assert deployment_enabled("main") is True
-    assert deployment_enabled("feature") is False
-    assert deployment_enabled("factory/example") is False
+    assert migration in workflow
+    assert deployment in workflow
+    assert workflow.index(migration) < workflow.index(deployment)
+    assert "branches:\n      - main" in workflow
 
 
 def test_vercel_keeps_production_static_and_api_routes_intact() -> None:
-    """The branch gate must not disturb the production frontend/API split."""
+    """The deployment gate must not disturb the production frontend/API split."""
     config = json.loads((REPOSITORY_ROOT / "vercel.json").read_text(encoding="utf-8"))
     routes = config["routes"]
 
