@@ -26,6 +26,33 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+async def _find_source_roll_event(
+    db: AsyncSession,
+    session_id: int,
+    thread_id: int,
+) -> int | None:
+    """Find the originating roll event for a given thread in this session.
+
+    Args:
+        db: Database session.
+        session_id: Current reading session ID.
+        thread_id: Thread that was rolled/snoozed.
+
+    Returns:
+        The ID of the most recent roll event selecting this thread, or None.
+    """
+    result = await db.execute(
+        select(Event.id)
+        .where(Event.session_id == session_id)
+        .where(Event.type == "roll")
+        .where(Event.selected_thread_id == thread_id)
+        .order_by(Event.timestamp.desc(), Event.id.desc())
+        .limit(1)
+    )
+    row = result.scalar_one_or_none()
+    return row
+
+
 async def get_active_thread_info(
     session_id: int, db: AsyncSession
 ) -> tuple[int | None, ActiveThreadInfo | None]:
@@ -285,6 +312,7 @@ async def snooze_thread(
         thread_id=pending_thread_id,
         die=current_die,
         die_after=new_die,
+        source_roll_event_id=await _find_source_roll_event(db, current_session_id, pending_thread_id),
     )
     db.add(event)
 
