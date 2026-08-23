@@ -275,7 +275,7 @@ test('released fixed-model PR resolves closing issue instead of worker branch nu
   const owners = calls[0].labels.filter(label => (
     label === 'factory:unowned'
     || label === 'factory:local'
-    || /^factory:(?:[1-9]|[1-3][0-9]|[4-5][0-9])$/.test(label)
+    || /^factory:(?:[1-9]|[1-3][0-9]|[4-6][0-9])$/.test(label)
   ));
   assert.deepEqual(owners, ['factory:unowned']);
   assert.ok(calls[0].labels.includes('factory:review'));
@@ -325,7 +325,7 @@ test('PR refresh preserves one external owner after the linked issue is released
   const owners = calls[0].labels.filter(label => (
     label === 'factory:unowned'
     || label === 'factory:local'
-    || /^factory:(?:[1-9]|[1-3][0-9]|[4-5][0-9])$/.test(label)
+    || /^factory:(?:[1-9]|[1-3][0-9]|[4-6][0-9])$/.test(label)
   ));
   assert.deepEqual(owners, ['factory:13']);
   assert.ok(calls[0].labels.includes('factory:review'));

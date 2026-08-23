@@ -319,7 +319,7 @@ def worker_has_active_lease(worker: str) -> bool:
 
 def assign(worker: str) -> Candidate | None:
     """Assign the highest-ranked executable work to one fixed-model worker."""
-    if not re.fullmatch('(?:[6-9]|[1-3][0-9]|[4-5][0-9])', worker):
+    if not re.fullmatch('(?:[6-9]|[1-3][0-9]|[4-6][0-9])', worker):
         raise SystemExit(f'unsupported fixed-model worker: {worker}')
     if worker_has_active_lease(worker):
         print(f'[factory-controller] Factory {worker} already has an active lease; skipping dispatch', file=sys.stderr)
