@@ -101,6 +101,7 @@ async def _find_existing_mapping(
             ExternalIdentity.provider == COMICVINE_PROVIDER,
         )
         .order_by(IssueExternalIdentityMapping.id)
+        .limit(1)
     )
     return result.scalar_one_or_none()
 
@@ -155,6 +156,8 @@ async def _resolve_issue_from_series(
 
     provider_rows: list[dict[str, object]] = []
     offset = 0
+    max_pages = 500  # Cap pagination to prevent unbounded provider calls
+    max_offset = max_pages * COMICVINE_COLLECTION_PAGE_LIMIT
     while True:
         response = await client.request(
             "issues",
@@ -179,6 +182,8 @@ async def _resolve_issue_from_series(
         total = response.payload.get("number_of_total_results")
         if isinstance(total, int) and len(provider_rows) >= total:
             break
+        if offset >= max_offset:
+            break
         offset += len(page_rows)
 
     matched_rows: list[dict[str, object]] = []
@@ -202,6 +207,18 @@ async def _resolve_issue_from_series(
 
 
 async def _run_series_resolution(issue_id: int, user_id: int) -> None:
+    try:
+        await _run_series_resolution_impl(issue_id, user_id)
+    except Exception as exc:
+        logger.warning(
+            "comicvine_series_resolution_unhandled_exception issue_id=%s error=%s",
+            issue_id,
+            type(exc).__name__,
+            exc_info=True,
+        )
+
+
+async def _run_series_resolution_impl(issue_id: int, user_id: int) -> None:
     api_key = os.environ.get("COMICVINE_API_KEY", "").strip()
     if not api_key:
         logger.info(
@@ -276,6 +293,15 @@ async def _run_series_resolution(issue_id: int, user_id: int) -> None:
         if not identities:
             return
 
+        if len(identities) > 1:
+            # Ambiguous multi-match: must not auto-confirm; keep as unresolved/candidate
+            logger.info(
+                "comicvine_series_resolution_ambiguous issue_id=%s provider_count=%s",
+                issue_id,
+                len(identities),
+            )
+            return
+
         identity = identities[0]
         try:
             async with db.begin_nested():
@@ -299,7 +325,7 @@ async def _run_series_resolution(issue_id: int, user_id: int) -> None:
             if persisted is None:
                 return
 
-        confidence = 1.0 if len(identities) == 1 else 0.55
+        confidence = 1.0
         try:
             mapping = await link_issue_external_identity(
                 db,

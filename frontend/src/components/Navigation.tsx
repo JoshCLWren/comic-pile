@@ -5,7 +5,9 @@ import BugReportButton from './BugReportButton'
 import type { ReportType } from './BugReportModal'
 import { useAuth } from '../App'
 import api from '../services/api'
-import { selectTheme } from '../services/theme'
+import { useToast } from '../contexts/useToast'
+import { DEFAULT_THEME, getAppliedTheme, isSupportedTheme, readStoredThemePreference, selectTheme } from '../services/theme'
+import type { ThemeId } from '../services/theme'
 import type { AuthUser } from '../types'
 import type { DiagnosticData } from '../hooks/useDiagnostics'
 
@@ -41,6 +43,12 @@ const SECONDARY_NAV_ITEMS: NavItem[] = [
   { path: '/glossary', label: 'Glossary', icon: '📘', ariaLabel: 'Glossary page' },
 ]
 
+const APPEARANCE_OPTIONS: Array<{ id: ThemeId; label: string; ariaLabel: string; mobileClassName: string }> = [
+  { id: 'classic', label: 'Classic', ariaLabel: 'Classic theme', mobileClassName: 'classic:text-stone-100 ink-gold:text-stone-900 command-center:text-stone-100' },
+  { id: 'ink-gold', label: 'Ink Gold', ariaLabel: 'Ink-gold theme', mobileClassName: 'classic:text-stone-400 ink-gold:text-stone-100 command-center:text-stone-400' },
+  { id: 'command-center', label: 'Command Center', ariaLabel: 'Command center theme', mobileClassName: 'classic:text-stone-400 ink-gold:text-stone-400 command-center:text-stone-100' },
+]
+
 export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   const location = useLocation()
   const { isAuthenticated, logout } = useAuth()
@@ -50,14 +58,28 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   const [hasError, setHasError] = useState(false)
   const [isMoreOpen, setIsMoreOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [activeTheme, setActiveTheme] = useState<ThemeId>(
+    () => getAppliedTheme() ?? readStoredThemePreference() ?? DEFAULT_THEME,
+  )
   const moreButtonRef = useRef<HTMLButtonElement>(null)
   const moreMenuRef = useRef<HTMLElement>(null)
+  const { showToast } = useToast()
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768)
     checkMobile()
     window.addEventListener('resize', checkMobile)
     return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+
+  useEffect(() => {
+    const root = document.documentElement
+    const observer = new MutationObserver(() => {
+      const applied = getAppliedTheme()
+      if (applied) setActiveTheme(applied)
+    })
+    observer.observe(root, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => observer.disconnect()
   }, [])
 
   useEffect(() => {
@@ -105,19 +127,23 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
     location.pathname === item.path || location.pathname.startsWith(`${item.path}/`),
   )
 
+  const toggleMoreMenu = () => {
+    if (!isMoreOpen) {
+      const themeAttr = document.documentElement.getAttribute('data-theme')
+      setActiveTheme(isSupportedTheme(themeAttr) ? themeAttr : DEFAULT_THEME)
+    }
+    setIsMoreOpen(value => !value)
+  }
+
   const setTheme = async (themeId: string) => {
-    // Apply and mirror the choice in localStorage first so the theme takes
-    // effect immediately and survives reloads even when persistence fails
-    // (issue #1611). Server sync below is a reconciliation, not the source
-    // of truth for this device.
-    if (selectTheme(themeId) === null) return
+    const applied = selectTheme(themeId)
+    if (applied === null) return
+    setActiveTheme(applied)
     try {
       await api.patch('/v1/users/me/preferences', { theme: themeId })
     } catch (err: unknown) {
       console.error('Failed to persist theme preference:', err)
-      // Preserve the currently-rendered theme rather than rolling back,
-      // so the UI is never stranded in an unusable state. The local mirror
-      // keeps the choice durable until the next successful PATCH.
+      showToast('Theme applied for this session, but saving your preference failed.', 'error')
     }
   }
 
@@ -160,7 +186,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
             <button
               ref={moreButtonRef}
               type="button"
-              onClick={() => setIsMoreOpen((value) => !value)}
+              onClick={toggleMoreMenu}
               aria-expanded={isMoreOpen}
               aria-controls="secondary-navigation"
               className={navItemClass(isMoreOpen || isMoreRoute)}
@@ -178,64 +204,70 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
           ref={moreMenuRef}
           id="secondary-navigation"
           aria-label="More pages"
-          className="fixed bottom-16 right-3 z-50 w-56 rounded-2xl border border-stone-700 bg-stone-950 p-2 shadow-2xl md:bottom-24 md:right-6"
+          className="fixed bottom-16 right-3 z-50 w-56 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)] p-2 shadow-2xl md:bottom-24 md:right-6"
         >
           {SECONDARY_NAV_ITEMS.map((item) => (
             <Link
               key={item.path}
               to={item.path}
-              className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-stone-100 hover:bg-stone-800"
+              className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-panel)]"
             >
               <span aria-hidden="true">{item.icon}</span>
               <span>{item.label === 'New' ? "What's New" : item.label === 'Planner' ? 'Continuity Planner' : item.label}</span>
             </Link>
           ))}
-          <div className="space-y-1 border-t border-stone-800 pt-2 md:hidden">
+          <div className="space-y-1 border-t border-[var(--theme-border)] pt-2 md:hidden">
             <BugReportButton onSubmit={onBugReportSubmit} variant="nav" />
-            <button type="button" onClick={handleLogout} className="flex min-h-12 w-full items-center gap-3 rounded-xl px-4 py-3 text-left font-bold text-red-300 hover:bg-stone-800">
+            <button type="button" onClick={handleLogout} className="flex min-h-12 w-full items-center gap-3 rounded-xl px-4 py-3 text-left font-bold text-red-300 hover:bg-[var(--theme-bg-panel)]">
               <span aria-hidden="true">⎋</span><span>Sign out</span>
             </button>
           </div>
-          <div className="mt-3 text-sm text-stone-400">
+          <div className="mt-3 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
             <span>Appearance</span>
           </div>
           <div id="appearance-menu" className="mt-2 select-none">
-            <button
-              data-theme="classic"
-              onClick={() => setTheme('classic')}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-md text-left hover:bg-stone-800 transition-colors classic:text-stone-100 ink-gold:text-stone-900 command-center:text-stone-100"
-              aria-label="Classic theme"
-            >
-              <span>Classic</span>
-            </button>
-            <button
-              data-theme="ink-gold"
-              onClick={() => setTheme('ink-gold')}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-md text-left hover:bg-stone-800 transition-colors classic:text-stone-400 ink-gold:text-stone-100 command-center:text-stone-400"
-              aria-label="Ink-gold theme"
-            >
-              <span>Ink Gold</span>
-            </button>
-            <button
-              data-theme="command-center"
-              onClick={() => setTheme('command-center')}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-md text-left hover:bg-stone-800 transition-colors classic:text-stone-400 ink-gold:text-stone-400 command-center:text-stone-100"
-              aria-label="Command center theme"
-            >
-              <span>Command Center</span>
-            </button>
+            {APPEARANCE_OPTIONS.map((option) => (
+              <button
+                key={option.id}
+                data-theme={option.id}
+                onClick={() => setTheme(option.id)}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-left hover:bg-[var(--theme-bg-panel)] transition-colors text-[var(--theme-text-primary)] ${option.mobileClassName}`}
+                aria-label={option.ariaLabel}
+                aria-pressed={activeTheme === option.id}
+              >
+                <span>{option.label}</span>
+                {activeTheme === option.id && <span aria-hidden="true">✓</span>}
+              </button>
+            ))}
           </div>
         </nav>
       )}
 
       <div className="fixed right-4 top-4 z-50 hidden items-center gap-3 md:flex">
-        {isLoading ? (
-          <span className="hidden md:inline text-xs text-stone-500 font-medium px-2 py-1">Loading...</span>
-        ) : hasError ? (
-          <span className="hidden md:inline text-xs text-amber-500 font-medium px-2 py-1" title="Failed to load user data">User</span>
-        ) : username ? (
-          <span className="hidden md:inline text-xs text-stone-400 font-medium px-2 py-1">{username}</span>
-        ) : null}
+        {isLoading ? <span className="hidden md:inline text-xs font-medium px-2 py-1 text-[var(--theme-text-muted)]">Loading...</span> : hasError ? <span className="hidden md:inline text-xs font-medium px-2 py-1 text-amber-500" title="Failed to load user data">User</span> : username ? <span className="hidden md:inline text-xs font-medium px-2 py-1 text-[var(--theme-text-muted)]">{username}</span> : null}
+        <div
+          className="flex items-center gap-1 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-1"
+          role="group"
+          aria-label="Appearance"
+        >
+          <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--theme-text-muted)' }}>Theme</span>
+          {APPEARANCE_OPTIONS.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              data-theme={option.id}
+              onClick={() => setTheme(option.id)}
+              aria-pressed={activeTheme === option.id}
+              className={`rounded-md px-2 py-1 text-xs font-bold transition-colors ${
+                activeTheme === option.id
+                  ? 'bg-white/10 text-[var(--theme-text-primary)]'
+                  : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
         <button onClick={handleLogout} className="px-2 py-1.5 md:px-3 text-xs font-bold uppercase tracking-widest text-red-400 hover:text-red-300 bg-[#110e0a]/60 hover:bg-[#110e0a]/80 rounded-lg transition-colors" aria-label="Log out">
           <span className="md:hidden" aria-hidden="true">⎋</span>
           <span className="hidden md:inline">Log Out</span>
