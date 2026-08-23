@@ -6,7 +6,7 @@ import type { ReportType } from './BugReportModal'
 import { useAuth } from '../App'
 import api from '../services/api'
 import { useToast } from '../contexts/ToastContext'
-import { DEFAULT_THEME, getAppliedTheme, readStoredThemePreference, selectTheme } from '../services/theme'
+import { DEFAULT_THEME, getAppliedTheme, isSupportedTheme, readStoredThemePreference, selectTheme } from '../services/theme'
 import type { ThemeId } from '../services/theme'
 import type { AuthUser } from '../types'
 import type { DiagnosticData } from '../hooks/useDiagnostics'
@@ -129,7 +129,8 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
 
   const toggleMoreMenu = () => {
     if (!isMoreOpen) {
-      setActiveTheme(document.documentElement.getAttribute('data-theme') ?? DEFAULT_THEME)
+      const themeAttr = document.documentElement.getAttribute('data-theme')
+      setActiveTheme(isSupportedTheme(themeAttr) ? themeAttr : DEFAULT_THEME)
     }
     setIsMoreOpen(value => !value)
   }

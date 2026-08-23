@@ -35,6 +35,10 @@ vi.mock('../services/api', () => {
   }
 })
 
+vi.mock('../contexts/ToastContext', () => ({
+  useToast: () => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] }),
+}))
+
 vi.mock('../pages/LoginPage', () => ({
   default: () => <div data-testid="login-page">Welcome Back</div>,
 }))
