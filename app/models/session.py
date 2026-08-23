@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -42,6 +42,23 @@ class Session(Base):
     )
     # Thread IDs temporarily excluded from roll selection during this session
     snoozed_thread_ids: Mapped[list[int] | None] = mapped_column(JSON, nullable=True)
+
+    # Ephemeral session bandwidth state (Phase 4: Snooze as session correction).
+    # Reset naturally when the session ends; never derived from durable affinity.
+    inferred_bandwidth: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, comment="Current active bandwidth: light, balanced, or deep"
+    )
+    bandwidth_confidence: Mapped[float | None] = mapped_column(
+        Float, nullable=True, comment="Confidence in the active bandwidth (0.0-1.0)"
+    )
+    bandwidth_source: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, comment="Source of the active bandwidth: launch, snooze, manual"
+    )
+    predicted_bandwidth: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+        comment="Original launch prediction preserved for later accuracy analysis",
+    )
 
     __table_args__ = (
         Index("ix_session_started_at", "started_at"),
