@@ -69,12 +69,13 @@ function releaseDayLabel(value: string, timeZone?: string) {
   }).format(date)
 }
 
-function releaseTimeLabel(value: string): string {
+export function releaseTimeLabel(value: string, timeZone?: string): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
   return new Intl.DateTimeFormat(undefined, {
     hour: '2-digit',
     minute: '2-digit',
+    timeZone,
   }).format(date)
 }
 
