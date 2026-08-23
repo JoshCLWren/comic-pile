@@ -92,3 +92,45 @@ export function getStateColorClass(state: MemberState): string {
       return 'text-rose-400'
   }
 }
+
+export interface ArcNeighborAnchors {
+  anchorBeforeThreadId: number | null
+  anchorAfterThreadId: number | null
+}
+
+/**
+ * Finds the story-arc neighbors surrounding a missing member.
+ *
+ * Walks outward from `missingIndex` through the arc's canonical issue order
+ * and returns the first present member's ComicPile thread ID on each side.
+ * These anchors let the import flow insert the new thread between the
+ * surrounding arc members instead of blindly appending. Members with no
+ * ComicPile match (or matches without a thread) are skipped.
+ */
+export function computeArcNeighborAnchors(
+  relatedIssues: ComicVineRelatedIssue[],
+  missingIndex: number,
+): ArcNeighborAnchors {
+  const firstThreadId = (issue: ComicVineRelatedIssue): number | null =>
+    issue.comicpile_matches.find((match) => Number.isFinite(match.thread_id))?.thread_id ?? null
+
+  let anchorBeforeThreadId: number | null = null
+  for (let i = missingIndex - 1; i >= 0; i--) {
+    const threadId = firstThreadId(relatedIssues[i])
+    if (threadId !== null) {
+      anchorBeforeThreadId = threadId
+      break
+    }
+  }
+
+  let anchorAfterThreadId: number | null = null
+  for (let i = missingIndex + 1; i < relatedIssues.length; i++) {
+    const threadId = firstThreadId(relatedIssues[i])
+    if (threadId !== null) {
+      anchorAfterThreadId = threadId
+      break
+    }
+  }
+
+  return { anchorBeforeThreadId, anchorAfterThreadId }
+}

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import Modal from './Modal'
+import { comicVineApi } from '../services/api'
 import { readingOrdersApi, type ReadingOrderSummary } from '../services/api-reading-orders'
-import { useCreateThread } from '../hooks/useThread'
 import { useToast } from '../contexts/useToast'
 
 interface AddToComicPileDialogProps {
@@ -10,6 +10,8 @@ interface AddToComicPileDialogProps {
   issueNumber: string | null
   comicvineIssueId: string
   imageUrl: string | null
+  anchorBeforeThreadId?: number | null
+  anchorAfterThreadId?: number | null
   onClose: () => void
   onAdded: (threadId: number) => void
 }
@@ -20,10 +22,11 @@ export default function AddToComicPileDialog({
   issueNumber,
   comicvineIssueId,
   imageUrl,
+  anchorBeforeThreadId = null,
+  anchorAfterThreadId = null,
   onClose,
   onAdded,
 }: AddToComicPileDialogProps) {
-  const { mutate: createThread, isPending } = useCreateThread()
   const { showToast } = useToast()
 
   const [title, setTitle] = useState('')
@@ -31,6 +34,7 @@ export default function AddToComicPileDialog({
   const [selectedOrderId, setSelectedOrderId] = useState<string>('')
   const [isLoadingOrders, setIsLoadingOrders] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
@@ -58,38 +62,34 @@ export default function AddToComicPileDialog({
       setError('Title is required')
       return
     }
+    const parsedComicvineIssueId = Number.parseInt(comicvineIssueId, 10)
+    if (!Number.isFinite(parsedComicvineIssueId)) {
+      setError('This issue has no usable ComicVine identity to preserve')
+      return
+    }
 
     setError(null)
+    setIsSubmitting(true)
     try {
-      const thread = await createThread({
+      const result = await comicVineApi.importIssue({
         title: title.trim(),
-        format: 'Comics',
-        issues_remaining: 1,
-        total_issues: 1,
-        notes: `Imported from ComicVine (ID: ${comicvineIssueId})`,
+        comicvine_issue_id: parsedComicvineIssueId,
+        issue_number: issueNumber,
+        reading_order_id: selectedOrderId ? Number(selectedOrderId) : null,
+        anchor_before_thread_id: anchorBeforeThreadId,
+        anchor_after_thread_id: anchorAfterThreadId,
       })
 
-      if (selectedOrderId) {
-        try {
-          const targetOrder = readingOrders.find((o) => o.id === Number(selectedOrderId))
-          const nextPos = targetOrder ? targetOrder.total_items + 1 : 1
-          await readingOrdersApi.insertItem(Number(selectedOrderId), {
-            thread_id: thread.id,
-            position: nextPos,
-          })
-        } catch {
-          showToast('Thread created but failed to add to reading order', 'warning')
-        }
-      }
-
       showToast(`Added "${title.trim()}" to ComicPile`, 'success')
-      onAdded(thread.id)
+      onAdded(result.thread_id)
       onClose()
     } catch (err: unknown) {
-      const detail = err instanceof Error ? err.message : 'Failed to create thread'
+      const detail = err instanceof Error ? err.message : 'Failed to add to ComicPile'
       setError(detail)
+    } finally {
+      setIsSubmitting(false)
     }
-  }, [title, comicvineIssueId, selectedOrderId, readingOrders, createThread, onAdded, onClose, showToast])
+  }, [title, comicvineIssueId, issueNumber, selectedOrderId, anchorBeforeThreadId, anchorAfterThreadId, onAdded, onClose, showToast])
 
   return (
     <Modal
@@ -123,6 +123,15 @@ export default function AddToComicPileDialog({
             <p className="text-[10px] text-stone-500">ID: {comicvineIssueId}</p>
           </div>
         </div>
+
+        {(anchorBeforeThreadId != null || anchorAfterThreadId != null) && (
+          <p
+            className="text-[10px] text-stone-400"
+            data-testid="placement-anchor-hint"
+          >
+            Will be placed between its story-arc neighbors in the selected order.
+          </p>
+        )}
 
         <div>
           <label htmlFor="add-thread-title" className="block text-[10px] font-black uppercase tracking-wider text-stone-500 mb-1.5">
@@ -160,10 +169,10 @@ export default function AddToComicPileDialog({
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={isPending || !title.trim()}
+          disabled={isSubmitting || !title.trim()}
           className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-stone-900 bg-amber-500 hover:bg-amber-400 transition disabled:opacity-50"
         >
-          {isPending ? 'Adding...' : 'Add to ComicPile'}
+          {isSubmitting ? 'Adding...' : 'Add to ComicPile'}
         </button>
       </div>
     </Modal>

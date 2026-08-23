@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.external_identities import (
@@ -19,6 +19,7 @@ from app.models.external_identity import (
 )
 from app.models.issue import Issue
 from app.models.metadata_correction import IssueMetadataCorrection
+from app.models.reading_order import ReadingOrder, ReadingOrderItem
 from app.models.thread import Thread
 from app.schemas.comicvine_resolution import (
     CanonicalCorrection,
@@ -26,12 +27,15 @@ from app.schemas.comicvine_resolution import (
     ComicVineSeriesIssuesResponse,
     ComicVineSeriesSearchResponse,
     ComicVineSeriesResult,
+    ImportIssueRequest,
+    ImportIssueResponse,
     IssueIdentityMapping,
     IssueIdentityResponse,
     MetadataCorrectionRequest,
     MetadataCorrectionsResponse,
     MetadataRefreshResponse,
 )
+from app.services.reading_order_placement import apply_insert, resolve_anchored_position
 from comic_pile.comicvine_provider import ComicVineClient
 
 logger = logging.getLogger(__name__)
@@ -550,3 +554,121 @@ async def revert_metadata_correction(
         created_by=correction.created_by,
         created_at=correction.created_at,
     )
+
+
+class ImportTargetNotFoundError(Exception):
+    """A referenced import target (reading order) does not exist for the user."""
+
+
+async def import_comicvine_issue(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    request: ImportIssueRequest,
+) -> ImportIssueResponse:
+    """Import a ComicVine issue as a new thread with its exact identity preserved.
+
+    Atomically (pending the caller's commit) creates a thread, a single issue
+    row, and a confirmed external-identity mapping so story-arc panels can
+    match the imported thread back to its ComicVine issue. When a reading
+    order is requested, the thread is inserted between the surrounding arc
+    members using neighbor-anchored placement.
+
+    Args:
+        db: Async database session; the caller owns the transaction commit.
+        user_id: Owner who will receive the imported thread.
+        request: Validated import payload with optional anchored placement.
+
+    Returns:
+        The created identifiers plus final reading-order placement.
+
+    Raises:
+        ImportTargetNotFoundError: ``request.reading_order_id`` does not exist
+            for this user.
+    """
+    order: ReadingOrder | None = None
+    if request.reading_order_id is not None:
+        order = (
+            await db.execute(
+                select(ReadingOrder).where(
+                    ReadingOrder.id == request.reading_order_id,
+                    ReadingOrder.user_id == user_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if order is None:
+            raise ImportTargetNotFoundError(
+                f"Reading order {request.reading_order_id} not found"
+            )
+
+    max_position = (
+        await db.execute(
+            select(func.max(Thread.queue_position)).where(Thread.user_id == user_id)
+        )
+    ).scalar() or 0
+    thread = Thread(
+        title=request.title.strip(),
+        format="Comics",
+        issues_remaining=1,
+        total_issues=1,
+        queue_position=max_position + 1,
+        status="active",
+        user_id=user_id,
+    )
+    db.add(thread)
+    await db.flush()
+
+    issue = Issue(
+        thread_id=thread.id,
+        issue_number=request.issue_number or "1",
+        position=1,
+        status="unread",
+    )
+    db.add(issue)
+    await db.flush()
+
+    mapping = await confirm_comicvine_identity(
+        db,
+        user_id=user_id,
+        issue_id=issue.id,
+        comicvine_issue_id=request.comicvine_issue_id,
+    )
+
+    response = ImportIssueResponse(
+        thread_id=thread.id,
+        issue_id=issue.id,
+        external_identity_id=mapping.external_identity_id,
+    )
+
+    if order is not None:
+        existing_items = (
+            (
+                await db.execute(
+                    select(ReadingOrderItem)
+                    .where(ReadingOrderItem.reading_order_id == order.id)
+                    .order_by(ReadingOrderItem.position)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        positions_by_thread = {item.thread_id: item.position for item in existing_items}
+        target_pos = resolve_anchored_position(
+            positions_by_thread,
+            request.anchor_before_thread_id,
+            request.anchor_after_thread_id,
+            len(existing_items),
+        )
+        apply_insert(list(existing_items), thread.id, target_pos)
+        db.add(
+            ReadingOrderItem(
+                reading_order_id=order.id,
+                thread_id=thread.id,
+                position=target_pos,
+            )
+        )
+        response.reading_order_id = order.id
+        response.position = target_pos
+        response.total_items = len(existing_items) + 1
+
+    return response

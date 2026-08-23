@@ -13,6 +13,7 @@ from app.database import get_db
 from app.models import Issue, Thread
 from app.models.reading_order import ReadingOrder, ReadingOrderItem
 from app.models.user import User
+from app.services.reading_order_placement import apply_insert
 from app.schemas.reading_order import (
     ReadingOrderItemResponse,
     ReadingOrderListResponse,
@@ -180,24 +181,10 @@ async def insert_reading_order_item(
     ).scalars().all()
 
     target_pos = payload.position
-    current_item = next((item for item in existing if item.thread_id == payload.thread_id), None)
+    apply_insert(list(existing), payload.thread_id, target_pos)
 
-    if current_item is not None:
-        old_pos = current_item.position
-        if old_pos < target_pos:
-            for item in existing:
-                if old_pos < item.position <= target_pos:
-                    item.position -= 1
-        elif target_pos < old_pos:
-            for item in existing:
-                if target_pos <= item.position < old_pos:
-                    item.position += 1
-        current_item.position = target_pos
-    else:
-        for item in existing:
-            if item.position >= target_pos:
-                item.position += 1
-
+    already_present = any(item.thread_id == payload.thread_id for item in existing)
+    if not already_present:
         db.add(
             ReadingOrderItem(
                 reading_order_id=reading_order_id,

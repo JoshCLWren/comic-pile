@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueIntelligence'
 import { type ComicVineRelatedIssue } from '../../../services/api'
-import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass, normalizeArcName } from '../../../utils/comicIdentity'
+import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass, normalizeArcName, computeArcNeighborAnchors } from '../../../utils/comicIdentity'
 import AddToComicPileDialog from '../../../components/AddToComicPileDialog'
 import ImageWithLoading from '../../../components/ImageWithLoading'
 
@@ -26,7 +26,7 @@ const STORY_ARC_LIMIT = 3
 const RELATED_ISSUES_PER_ARC_LIMIT = 5
 
 export function ComicIdentity({ issueId }: ComicIdentityProps) {
-  const { metadata, isLoading } = useComicVineIssueIntelligence(issueId)
+  const { metadata, isLoading, refetch } = useComicVineIssueIntelligence(issueId)
   const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null)
   const [showAllCreators, setShowAllCreators] = useState(false)
   const [showAllStoryArcs, setShowAllStoryArcs] = useState(false)
@@ -49,10 +49,31 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
     issueNumber: string | null
     comicvineIssueId: string
     imageUrl: string | null
+    anchorBeforeThreadId: number | null
+    anchorAfterThreadId: number | null
   } | null>(null)
 
-  const handleAddToComicPile = (identity: { primary: string; secondary: string | null }, comicvineIssueId: string, seriesName: string | null, issueNumber: string | null, imageUrl: string | null) => {
-    setAddDialogData({ seriesName, issueNumber, comicvineIssueId, imageUrl })
+  const handleAddToComicPile = (
+    identity: { primary: string; secondary: string | null },
+    issue: ComicVineRelatedIssue,
+    relatedIssues: ComicVineRelatedIssue[],
+    imageUrl: string | null,
+  ) => {
+    const missingIndex = relatedIssues.findIndex(
+      (candidate) => candidate.comicvine_issue_id === issue.comicvine_issue_id,
+    )
+    const { anchorBeforeThreadId, anchorAfterThreadId } = computeArcNeighborAnchors(
+      relatedIssues,
+      missingIndex,
+    )
+    setAddDialogData({
+      seriesName: issue.series_name,
+      issueNumber: issue.issue_number,
+      comicvineIssueId: issue.comicvine_issue_id,
+      imageUrl,
+      anchorBeforeThreadId,
+      anchorAfterThreadId,
+    })
     setAddDialogOpen(true)
   }
 
@@ -200,7 +221,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                                   {state === 'missing' && (
                                     <button
                                       type="button"
-                                      onClick={() => handleAddToComicPile(identity, issue.comicvine_issue_id, issue.series_name, issue.issue_number, null)}
+                                      onClick={() => handleAddToComicPile(identity, issue, arc.related_issues, null)}
                                       className="text-[9px] font-bold text-amber-500 hover:text-amber-400 shrink-0 px-2 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 transition-colors"
                                       aria-label={`Add ${identity.primary} to ComicPile`}
                                     >
@@ -274,8 +295,13 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
         issueNumber={addDialogData.issueNumber}
         comicvineIssueId={addDialogData.comicvineIssueId}
         imageUrl={addDialogData.imageUrl}
+        anchorBeforeThreadId={addDialogData.anchorBeforeThreadId}
+        anchorAfterThreadId={addDialogData.anchorAfterThreadId}
         onClose={() => setAddDialogOpen(false)}
-        onAdded={() => setAddDialogOpen(false)}
+        onAdded={() => {
+          setAddDialogOpen(false)
+          refetch()
+        }}
       />
     )}
     </>
