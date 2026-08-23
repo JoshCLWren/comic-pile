@@ -200,7 +200,13 @@ export function ThreadPool({
                     <p className="text-sm text-stone-400 truncate">{thread.title}</p>
                     {blockingDependencyMap[thread.id]?.length > 0 && (
                       <p className="text-[10px] text-stone-500 truncate">
-                        {blockingDependencyMap[thread.id][0].label}
+                        <Link
+                          to={`/thread/${blockingDependencyMap[thread.id][0].thread_id}`}
+                          className="hover:text-stone-300 underline decoration-stone-600"
+                          aria-label={`Open ${blockingDependencyMap[thread.id][0].thread_title}`}
+                        >
+                          {blockingDependencyMap[thread.id][0].label}
+                        </Link>
                         {blockingDependencyMap[thread.id].length > 1 &&
                           ` +${blockingDependencyMap[thread.id].length - 1} more`}
                       </p>

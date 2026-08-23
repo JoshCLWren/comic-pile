@@ -53,7 +53,7 @@ vi.mock('../components/Modal', () => ({ default: ({ isOpen, title, children, onC
 vi.mock('../components/CollectionDialog', () => ({ default: ({ collection }: { collection: { name?: string } | null }) => <div data-testid="collection-dialog">collection dialog {collection?.name ?? 'new'}</div> }))
 vi.mock('../components/MigrationDialog', () => ({ default: ({ onComplete, onSkip, onClose }: { onComplete: (thread: unknown) => void; onSkip: () => void; onClose: () => void }) => <div><button onClick={onSkip}>skip migration</button><button onClick={onClose}>close migration</button><button onClick={() => onComplete({ id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10 })}>complete migration</button></div> }))
 vi.mock('../components/SimpleMigrationDialog', () => ({ default: ({ onComplete, onClose }: { onComplete: (issue: string) => void; onClose: () => void }) => <div><button onClick={() => onComplete('1')}>complete simple</button><button onClick={onClose}>close simple</button></div> }))
-vi.mock('../pages/RollPage/components/ThreadPool', () => ({ ThreadPool: (props: Record<string, unknown>) => <div><button onClick={() => (props.onThreadClick as (thread: unknown) => void)({ id: 1, title: 'Saga', format: 'Comic' })}>thread</button><button onClick={props.onShuffle as () => void}>shuffle pool</button><button onClick={props.onReadStale as () => void}>read stale</button><button onClick={props.onUnsnooze as () => void}>unsnooze</button><button onClick={props.onToggleSnoozed as () => void}>toggle snoozed</button><button onClick={props.onToggleBlocked as () => void}>toggle blocked</button><span>{JSON.stringify(props.blockingReasonMap)}</span></div> }))
+vi.mock('../pages/RollPage/components/ThreadPool', () => ({ ThreadPool: (props: Record<string, unknown>) => <div><button onClick={() => (props.onThreadClick as (thread: unknown) => void)({ id: 1, title: 'Saga', format: 'Comic' })}>thread</button><button onClick={props.onShuffle as () => void}>shuffle pool</button><button onClick={props.onReadStale as () => void}>read stale</button><button onClick={props.onUnsnooze as () => void}>unsnooze</button><button onClick={props.onToggleSnoozed as () => void}>toggle snoozed</button><button onClick={props.onToggleBlocked as () => void}>toggle blocked</button><span>{JSON.stringify(props.blockingDependencyMap)}</span></div> }))
 vi.mock('../pages/RollPage/components/RatingView', () => ({ RatingView: (props: Record<string, unknown>) => {
   const thread = props.activeRatingThread as { title?: string; issue_number?: string | null } | null
   return <div>
@@ -73,6 +73,9 @@ describe('RollPage parent handlers', () => {
     relatedApi.readingOrders.mockResolvedValue({ reading_orders: [] })
     relatedApi.connectedThreads.mockResolvedValue({ connected_threads: [] })
     relatedApi.blockingInfo.mockResolvedValue({ blocking_reasons: ['Read the prerequisite first'] })
+    relatedApi.batchBlockingInfo.mockResolvedValue({
+      threads: { 2: { blocking_dependencies: [{ thread_id: 9, thread_title: 'Prequel', issue_number: '1', label: 'Read the prerequisite first' }] } },
+    })
     staleData = []
     threadsValue = threadData
     sessionData.current_die = 6
@@ -429,7 +432,7 @@ describe('RollPage parent handlers', () => {
     bootstrapData.stale_thread = null
     bootstrapData.stale_thread_count = 0
     threadData.push({ id: 2, title: 'Blocked', format: 'Comic', status: 'active', is_blocked: true })
-    relatedApi.blockingInfo.mockResolvedValueOnce({})
+    relatedApi.batchBlockingInfo.mockResolvedValueOnce({ threads: {} })
     render(<RollPage />)
     await userEvent.setup().click(screen.getByRole('button', { name: 'read stale' }))
     expect(spies.setPending).not.toHaveBeenCalled()
@@ -476,7 +479,7 @@ describe('RollPage parent handlers', () => {
     spies.setPending.mockResolvedValueOnce({ thread_id: 7, title: 'Old', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: null, last_rolled_result: 5 })
     render(<RollPage />)
     await waitFor(() => expect(screen.getByRole('button', { name: 'read stale' })).toBeInTheDocument())
-    expect(relatedApi.blockingInfo).not.toHaveBeenCalled()
+    expect(relatedApi.batchBlockingInfo).not.toHaveBeenCalled()
     await userEvent.setup().click(screen.getByRole('button', { name: 'read stale' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
     expect(spies.setPending).toHaveBeenCalledWith(7)
@@ -486,13 +489,15 @@ describe('RollPage parent handlers', () => {
     threadData.push({ id: 2, title: 'Blocked', format: 'Comic', status: 'active', is_blocked: true })
     bootstrapData.blocked_threads = [{ id: 2, title: 'Blocked', format: 'Comic' }]
     bootstrapData.blocked_count = 1
-    relatedApi.blockingInfo.mockReset().mockResolvedValue({ blocking_reasons: ['Read the prerequisite first'] })
+    relatedApi.batchBlockingInfo.mockReset().mockResolvedValue({
+      threads: { 2: { blocking_dependencies: [{ thread_id: 9, thread_title: 'Prequel', issue_number: '1', label: 'Read the prerequisite first' }] } },
+    })
     render(<RollPage />)
-    expect(relatedApi.blockingInfo).not.toHaveBeenCalled()
+    expect(relatedApi.batchBlockingInfo).not.toHaveBeenCalled()
 
     await userEvent.setup().click(screen.getByRole('button', { name: 'toggle blocked' }))
 
-    await waitFor(() => expect(relatedApi.blockingInfo).toHaveBeenCalledWith(2))
+    await waitFor(() => expect(relatedApi.batchBlockingInfo).toHaveBeenCalledWith([2]))
     expect(screen.getByText(/Read the prerequisite first/)).toBeInTheDocument()
   })
 
@@ -1025,10 +1030,10 @@ describe('RollPage parent handlers', () => {
     threadData.push({ id: 2, title: 'Blocked', format: 'Comic', status: 'active', is_blocked: true })
     bootstrapData.blocked_threads = [{ id: 2, title: 'Blocked', format: 'Comic' }]
     bootstrapData.blocked_count = 1
-    relatedApi.blockingInfo.mockReset().mockRejectedValue(new Error('blocking down'))
+    relatedApi.batchBlockingInfo.mockReset().mockRejectedValue(new Error('blocking down'))
     render(<RollPage />)
     await userEvent.setup().click(screen.getByRole('button', { name: 'toggle blocked' }))
-    await waitFor(() => expect(relatedApi.blockingInfo).toHaveBeenCalledWith(2))
+    await waitFor(() => expect(relatedApi.batchBlockingInfo).toHaveBeenCalledWith([2]))
     threadData.splice(1)
   })
 
