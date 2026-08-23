@@ -13,7 +13,7 @@ import json
 from datetime import datetime
 from typing import Literal
 from sqlalchemy import and_, or_, select, text
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Dependency, Issue, Thread
@@ -34,6 +34,7 @@ from app.schemas.reader_context import (
     ReaderContextSeries,
 )
 from app.services.ownership import get_owned_issue_or_404
+from comic_pile.dependencies import build_blocking_explanation
 
 COMICVINE_PROVIDER = "comicvine"
 MAX_RECENT_RATINGS = 5
@@ -484,25 +485,46 @@ def _build_local_issues(
 
 def _build_edge_explanation(
     kind: Literal["dependency", "continuity"],
+    *,
     source_label: str,
     target_label: str,
+    source_issue_number: str | None,
+    source_thread_title: str | None,
+    source_thread_id: int | None,
+    satisfaction: str | None = None,
 ) -> str:
     """Return a human-readable sentence explaining a persisted reader-context edge.
 
-    Mirrors the style of blocked-thread explanations so the same copy generator
-    feeds both the blocked list and this panel.
+    Dependency edges reuse ``build_blocking_explanation`` — the same copy
+    generator as the queue's blocked-threads list — so wording stays consistent
+    app-wide. Continuity edges use truthful per-satisfaction templates because
+    their gate can differ from the source endpoint.
 
     Args:
         kind: The type of edge.
-        source_label: The human-readable source label (thread title + issue number).
-        target_label: The human-readable target label (thread title + issue number).
+        source_label: Human-readable source label (thread title + issue number).
+        target_label: Human-readable target label (thread title + issue number).
+        source_issue_number: Source issue number, when resolvable.
+        source_thread_title: Source thread title, when resolvable.
+        source_thread_id: Source thread identifier, when resolvable.
+        satisfaction: Continuity-rule satisfaction type, for continuity edges.
 
     Returns:
         A concise explanation sentence.
     """
     if kind == "dependency":
-        return f"Finish {source_label} before resuming {target_label}"
-    return f"{source_label} has a continuity relationship with {target_label}"
+        if (
+            source_issue_number is not None
+            and source_thread_title is not None
+            and source_thread_id is not None
+        ):
+            return build_blocking_explanation(
+                source_issue_number, source_thread_title, source_thread_id
+            )
+        return f"Blocked by {source_label}"
+    if satisfaction in ("item_read", "all_members_read"):
+        return f"{source_label} must be read before {target_label}"
+    return f"{target_label} waits on a continuity checkpoint before it can be read"
 
 
 async def _local_edges(
@@ -513,12 +535,13 @@ async def _local_edges(
     """Load bounded one-hop dependency/continuity edges touching the neighborhood.
 
     Each edge carries human-readable source and target labels (issue number
-    plus thread title) so callers never surface raw database identifiers.
+    plus thread title) plus both thread identifiers so callers can link each
+    endpoint to its thread without surfacing raw database identifiers.
 
     Continuity rules mirrored from legacy dependencies are excluded so each
-    persisted edge is represented exactly once, and only the caller's own
-    rules are considered because issue ids are global across users. Edges
-    are deterministically ordered and capped.
+    persisted edge is represented exactly once. Only edges whose endpoint
+    threads belong to the caller are considered because issue ids are global
+    across users. Edges are deterministically ordered and capped.
 
     Args:
         db: Async database session.
@@ -531,12 +554,23 @@ async def _local_edges(
     if not neighborhood_ids:
         return []
     neighborhood_ids_list = list(neighborhood_ids)
+    source_issue = aliased(Issue)
+    target_issue = aliased(Issue)
+    source_thread = aliased(Thread)
+    target_thread = aliased(Thread)
     dependency_result = await db.execute(
-        select(Dependency).where(
+        select(Dependency)
+        .join(source_issue, Dependency.source_issue_id == source_issue.id)
+        .join(source_thread, source_issue.thread_id == source_thread.id)
+        .join(target_issue, Dependency.target_issue_id == target_issue.id)
+        .join(target_thread, target_issue.thread_id == target_thread.id)
+        .where(
+            source_thread.user_id == user_id,
+            target_thread.user_id == user_id,
             or_(
                 Dependency.source_issue_id.in_(neighborhood_ids_list),
                 Dependency.target_issue_id.in_(neighborhood_ids_list),
-            )
+            ),
         )
     )
     rule_result = await db.execute(
@@ -577,26 +611,29 @@ async def _local_edges(
             for thread_row in thread_rows.scalars():
                 thread_map[thread_row.id] = thread_row
 
-    def _label_parts(raw_issue_id: int) -> tuple[str | None, str | None, str | None]:
-        """Return the display label, issue number, and thread title for an id."""
+    def _label_parts(
+        raw_issue_id: int,
+    ) -> tuple[str | None, str | None, str | None, int | None]:
+        """Return the display label, issue number, thread title, and thread id."""
         issue = issue_map.get(raw_issue_id)
         if issue is None:
-            return None, None, None
+            return None, None, None, None
         thread = thread_map.get(issue.thread_id)
         if thread is None:
-            return f"Issue #{issue.issue_number}", issue.issue_number, None
+            return f"Issue #{issue.issue_number}", issue.issue_number, None, None
         return (
             f"{thread.title} #{issue.issue_number}",
             issue.issue_number,
             thread.title,
+            thread.id,
         )
 
     edges: list[ReaderContextEdge] = []
     for dependency in dependencies:
-        source_label, source_number, source_title = _label_parts(
+        source_label, source_number, source_title, source_thread_id = _label_parts(
             dependency.source_issue_id
         )
-        target_label, target_number, target_title = _label_parts(
+        target_label, target_number, target_title, target_thread_id = _label_parts(
             dependency.target_issue_id
         )
         edges.append(
@@ -605,6 +642,8 @@ async def _local_edges(
                 kind="dependency",
                 source_issue_id=dependency.source_issue_id,
                 target_issue_id=dependency.target_issue_id,
+                source_thread_id=source_thread_id,
+                target_thread_id=target_thread_id,
                 source_label=source_label,
                 target_label=target_label,
                 source_issue_number=source_number,
@@ -614,20 +653,31 @@ async def _local_edges(
                 note=dependency.note,
                 explanation=_build_edge_explanation(
                     "dependency",
-                    source_label or f"Issue #{dependency.source_issue_id}",
-                    target_label or f"Issue #{dependency.target_issue_id}",
+                    source_label=source_label
+                    or f"Issue #{dependency.source_issue_id}",
+                    target_label=target_label
+                    or f"Issue #{dependency.target_issue_id}",
+                    source_issue_number=source_number,
+                    source_thread_title=source_title,
+                    source_thread_id=source_thread_id,
                 ),
             )
         )
     for rule in rules:
-        source_label, source_number, source_title = _label_parts(rule.source_id)
-        target_label, target_number, target_title = _label_parts(rule.target_id)
+        source_label, source_number, source_title, source_thread_id = _label_parts(
+            rule.source_id
+        )
+        target_label, target_number, target_title, target_thread_id = _label_parts(
+            rule.target_id
+        )
         edges.append(
             ReaderContextEdge(
                 id=rule.id,
                 kind="continuity",
                 source_issue_id=rule.source_id,
                 target_issue_id=rule.target_id,
+                source_thread_id=source_thread_id,
+                target_thread_id=target_thread_id,
                 source_label=source_label,
                 target_label=target_label,
                 source_issue_number=source_number,
@@ -637,8 +687,12 @@ async def _local_edges(
                 note=rule.note,
                 explanation=_build_edge_explanation(
                     "continuity",
-                    source_label or f"Issue #{rule.source_id}",
-                    target_label or f"Issue #{rule.target_id}",
+                    source_label=source_label or f"Issue #{rule.source_id}",
+                    target_label=target_label or f"Issue #{rule.target_id}",
+                    source_issue_number=source_number,
+                    source_thread_title=source_title,
+                    source_thread_id=source_thread_id,
+                    satisfaction=rule.satisfaction_type,
                 ),
             )
         )
