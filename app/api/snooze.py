@@ -286,6 +286,19 @@ async def snooze_thread(
         die=current_die,
         die_after=new_die,
     )
+    # Find the most recent roll event for this session to link the outcome back.
+    roll_event_result = await db.execute(
+        select(Event).where(
+            Event.type == "roll",
+            Event.session_id == current_session_id,
+        )
+        .order_by(Event.timestamp.desc())
+        .limit(1)
+    )
+    most_recent_roll = roll_event_result.scalar_one_or_none()
+    if most_recent_roll:
+        event.roll_event_id = most_recent_roll.id
+
     db.add(event)
 
     current_session.pending_thread_id = None

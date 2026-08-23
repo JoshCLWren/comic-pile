@@ -459,6 +459,19 @@ async def rate_thread(
         issue_id=rated_issue_id,
         issue_number=rated_issue_number,
     )
+    # Find the most recent roll event for this session to link the outcome back.
+    roll_event_result = await db.execute(
+        select(Event).where(
+            Event.type == "roll",
+            Event.session_id == current_session_id,
+        )
+        .order_by(Event.timestamp.desc())
+        .limit(1)
+    )
+    most_recent_roll = roll_event_result.scalar_one_or_none()
+    if most_recent_roll:
+        event.roll_event_id = most_recent_roll.id
+
     db.add(event)
 
     should_complete_thread = thread_issues_remaining <= 0

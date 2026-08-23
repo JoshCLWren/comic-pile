@@ -81,6 +81,9 @@ class Event(Base):
     )
     # Denormalized issue_number preserved for historical display even if Issue is deleted
     issue_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    roll_event_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("events.id", ondelete="SET NULL"), nullable=True
+    )
 
     __table_args__ = (
         Index("ix_event_session_id", "session_id"),
@@ -103,4 +106,7 @@ class Event(Base):
     issue: Mapped[Issue | None] = relationship("Issue", foreign_keys=[issue_id], lazy="raise")
     snapshots: Mapped[list[Snapshot]] = relationship(
         "Snapshot", back_populates="event", cascade="all, delete-orphan", lazy="raise"
+    )
+    roll_event: Mapped[Event | None] = relationship(
+        "Event", foreign_keys=[roll_event_id], lazy="raise"
     )

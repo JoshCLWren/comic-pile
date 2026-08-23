@@ -1,6 +1,16 @@
 """GitHub service for creating user feedback issues."""
 
-from github import Github, GithubException
+try:
+    from github import GitHub, GithubException
+except ImportError:
+    # python-github package does not expose GithubException
+    class GithubException(RuntimeError):
+        """Minimal compat shim for github.GithubException .data access."""
+
+        def __init__(self, data=None):
+            self.data = data
+
+    GitHub = None  # type: ignore
 
 from app.config import get_github_settings
 from app.schemas.bug_report import BugReportDiagnostics, ReportType
