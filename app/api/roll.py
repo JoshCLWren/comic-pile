@@ -29,6 +29,7 @@ from app.schemas import (
     RollRequest,
     RollResponse,
 )
+from app.schemas.session import build_session_bandwidth_state
 from comic_pile.queue import get_roll_pool_rows
 from comic_pile.session import get_current_die_for_session, get_or_create
 
@@ -386,6 +387,16 @@ async def roll_bootstrap(
 
     current_session_id = current_session.id
 
+    # Extract bandwidth state before any further awaits; nullable columns on
+    # legacy sessions serialize to a safe all-null canonical shape.
+    bandwidth_state = build_session_bandwidth_state(
+        predicted_bandwidth=current_session.predicted_bandwidth,
+        active_bandwidth=current_session.active_bandwidth,
+        confidence=current_session.bandwidth_confidence,
+        source=current_session.bandwidth_source,
+        mode_version=current_session.bandwidth_version,
+    )
+
     _, active_thread = await get_session_with_thread_safe(current_session_id, db)
 
     die_size = await get_current_die_for_session(current_session, db)
@@ -534,8 +545,8 @@ async def roll_bootstrap(
         pending_thread_id=pending_thread_id,
         last_rolled_result=last_rolled_result,
         active_thread=active_thread,
-        roll_pool=roll_pool,
         roll_recovery=roll_recovery,
+        bandwidth=bandwidth_state,
         snoozed_threads=snoozed_threads,
         snoozed_count=len(snoozed_threads),
         blocked_count=blocked_count,

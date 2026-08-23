@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from app.api import roll as roll_api
 from app.models import DependencyGroup, DependencyGroupMembership, Issue, Thread
 from app.schemas import RollBootstrapResponse, RollBootstrapThread
+from app.schemas.session import SessionBandwidthState
 from tests.conftest import get_or_create_user_async
 
 
@@ -43,6 +44,11 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
         manual_die=None,
         pending_thread_id=None,
         snoozed_thread_ids=[101, 202],
+        predicted_bandwidth=None,
+        active_bandwidth=None,
+        bandwidth_confidence=None,
+        bandwidth_source=None,
+        bandwidth_version=None,
     )
     current_user = SimpleNamespace(id=7)
     owned_snoozed = SimpleNamespace(id=101, title="Owned", format="ongoing")
@@ -101,6 +107,11 @@ async def test_bootstrap_roll_pool_is_never_paginated_below_current_die(monkeypa
         manual_die=100,
         pending_thread_id=None,
         snoozed_thread_ids=[],
+        predicted_bandwidth=None,
+        active_bandwidth=None,
+        bandwidth_confidence=None,
+        bandwidth_source=None,
+        bandwidth_version=None,
     )
     current_user = SimpleNamespace(id=7)
     pool_rows = [
@@ -164,6 +175,13 @@ def test_bootstrap_schema_bounds_summary_lists_without_losing_counts():
         pending_thread_id=None,
         last_rolled_result=None,
         active_thread=None,
+        bandwidth=SessionBandwidthState(
+            predicted_bandwidth=None,
+            active_bandwidth=None,
+            confidence=None,
+            source=None,
+            mode_version=None,
+        ),
         roll_pool=summaries,
         snoozed_threads=summaries,
         snoozed_count=len(summaries),

@@ -6,8 +6,15 @@ backward compatibility but will be removed in a future version.
 """
 
 from datetime import UTC, datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_serializer
+
+BandwidthLevel = Literal["light", "balanced", "deep"]
+BandwidthSource = Literal["inferred", "manual", "snooze", "quiz"]
+
+_BANDWIDTH_LEVELS: frozenset[str] = frozenset({"light", "balanced", "deep"})
+_BANDWIDTH_SOURCES: frozenset[str] = frozenset({"inferred", "manual", "snooze", "quiz"})
 
 
 def _to_utc_iso(value: datetime) -> str:
@@ -31,6 +38,59 @@ class SnoozedThreadInfo(BaseModel):
 
     id: int
     title: str
+
+
+class SessionBandwidthState(BaseModel):
+    """Canonical ephemeral bandwidth state for the active reading session.
+
+    Every field is always present but nullable so legacy sessions that predate
+    bandwidth tracking serialize to a stable, safe shape instead of a missing
+    or partially shaped object. This is the single canonical source consumed by
+    later weighting and UI work.
+    """
+
+    predicted_bandwidth: BandwidthLevel | None
+    active_bandwidth: BandwidthLevel | None
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    source: BandwidthSource | None
+    mode_version: str | None
+
+
+def build_session_bandwidth_state(
+    *,
+    predicted_bandwidth: str | None,
+    active_bandwidth: str | None,
+    confidence: float | None,
+    source: str | None,
+    mode_version: str | None,
+) -> SessionBandwidthState:
+    """Build a canonical bandwidth state from raw stored values, safely.
+
+    Unknown enum strings, out-of-range confidences, or other legacy garbage are
+    normalized to ``None`` so bootstrap never fails because of stored state.
+    Valid values pass through unchanged.
+
+    Args:
+        predicted_bandwidth: Stored predicted bandwidth value or None.
+        active_bandwidth: Stored active bandwidth value or None.
+        confidence: Stored confidence in ``[0.0, 1.0]`` or None.
+        source: Stored bandwidth source value or None.
+        mode_version: Stored mode/algorithm version tag or None.
+
+    Returns:
+        A SessionBandwidthState with invalid values normalized to None.
+    """
+    return SessionBandwidthState(
+        predicted_bandwidth=(
+            predicted_bandwidth if predicted_bandwidth in _BANDWIDTH_LEVELS else None
+        ),
+        active_bandwidth=active_bandwidth if active_bandwidth in _BANDWIDTH_LEVELS else None,
+        confidence=(
+            confidence if confidence is not None and 0.0 <= confidence <= 1.0 else None
+        ),
+        source=source if source in _BANDWIDTH_SOURCES else None,
+        mode_version=mode_version,
+    )
 
 
 class ActiveThreadInfo(BaseModel):
