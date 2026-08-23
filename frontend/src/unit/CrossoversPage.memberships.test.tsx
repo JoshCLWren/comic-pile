@@ -294,7 +294,7 @@ describe('CrossoversPage membership editing', () => {
   })
 
   it('honestly labels the series thread addition and reports one thread member created', async () => {
-    api.addMember.mockResolvedValue({ id: 3, issue_id: null, thread_id: 44 })
+    api.addMember.mockResolvedValue({ id: 3, issue_id: null, thread_id: 44, series_title: 'Uncanny X-Men', issue_number: null })
     render(<CrossoversPage />)
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
 
