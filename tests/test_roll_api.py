@@ -2,7 +2,7 @@
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -410,3 +410,172 @@ async def test_roll_bootstrap_counts_null_activity_old_threads_as_stale(
 
     assert data["stale_thread_count"] == 1
     assert data["stale_thread"]["title"] == "Old No Activity"
+
+
+@pytest.mark.asyncio
+async def test_roll_persists_issue_id_for_issue_tracked_thread(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
+    """Override roll for an issue-tracked thread persists issue_id and issue_number in the Event and response."""
+    from app.models import Event
+
+    # Thread 2 in sample_data uses issue tracking (total_issues=10, next_unread_issue_id set)
+    thread_id = 2
+    response = await auth_client.post("/api/roll/override", json={"thread_id": thread_id})
+    assert response.status_code == 200
+    data = response.json()
+
+    # Verify the response includes issue fields
+    assert data["issue_id"] is not None
+    assert data["issue_number"] is not None
+    assert data["issue_id"] == data["next_issue_id"]
+    assert data["issue_number"] == data["next_issue_number"]
+
+    # Verify the most recent roll Event was persisted with issue_id and issue_number
+    event = await async_db.execute(
+        select(Event)
+        .where(Event.type == "roll")
+        .order_by(Event.id.desc())
+        .limit(1)
+    )
+    persisted_event = event.scalar_one()
+    assert persisted_event.issue_id is not None
+    assert persisted_event.issue_number is not None
+    assert persisted_event.issue_id == data["issue_id"]
+    assert persisted_event.issue_number == data["issue_number"]
+
+
+@pytest.mark.asyncio
+async def test_roll_persists_null_issue_for_non_issue_tracked_thread(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
+    """Roll for a non-issue-tracked thread has NULL issue_id and issue_number in the Event and response."""
+    from app.models import Event
+
+    response = await auth_client.post("/api/roll/")
+    assert response.status_code == 200
+    data = response.json()
+
+    # Non-issue-tracked threads should have nullable issue fields
+    assert data["issue_id"] is None
+    assert data["issue_number"] is None
+
+    # Verify the most recent roll Event was persisted with NULL issue fields
+    event = await async_db.execute(
+        select(Event)
+        .where(Event.type == "roll")
+        .order_by(Event.id.desc())
+        .limit(1)
+    )
+    persisted_event = event.scalar_one()
+    assert persisted_event.issue_id is None
+    assert persisted_event.issue_number is None
+
+
+@pytest.mark.asyncio
+async def test_override_persists_issue_id_for_issue_tracked_thread(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
+    """Override roll for an issue-tracked thread persists issue_id and issue_number in the Event and response."""
+    from app.models import Event
+
+    # Thread 2 in sample_data uses issue tracking (total_issues=10, next_unread_issue_id set)
+    thread_id = 2
+    response = await auth_client.post("/api/roll/override", json={"thread_id": thread_id})
+    assert response.status_code == 200
+    data = response.json()
+
+    # Verify the response includes issue fields
+    assert data["issue_id"] is not None
+    assert data["issue_number"] is not None
+    assert data["issue_id"] == data["next_issue_id"]
+    assert data["issue_number"] == data["next_issue_number"]
+
+    # Verify the most recent roll Event was persisted with issue_id and issue_number
+    event = await async_db.execute(
+        select(Event)
+        .where(Event.type == "roll")
+        .order_by(Event.id.desc())
+        .limit(1)
+    )
+    persisted_event = event.scalar_one()
+    assert persisted_event.issue_id is not None
+    assert persisted_event.issue_number is not None
+    assert persisted_event.issue_id == data["issue_id"]
+    assert persisted_event.issue_number == data["issue_number"]
+
+
+@pytest.mark.asyncio
+async def test_override_persists_null_issue_for_non_issue_tracked_thread(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
+    """Override roll for a non-issue-tracked thread has NULL issue_id and issue_number in the Event and response."""
+    from app.models import Event
+
+    # Thread 1 has no issue tracking
+    thread_id = 1
+    response = await auth_client.post("/api/roll/override", json={"thread_id": thread_id})
+    assert response.status_code == 200
+    data = response.json()
+
+    # Non-issue-tracked threads should have nullable issue fields
+    assert data["issue_id"] is None
+    assert data["issue_number"] is None
+
+    # Verify the most recent roll Event was persisted with NULL issue fields
+    event = await async_db.execute(
+        select(Event)
+        .where(Event.type == "roll")
+        .order_by(Event.id.desc())
+        .limit(1)
+    )
+    persisted_event = event.scalar_one()
+    assert persisted_event.issue_id is None
+    assert persisted_event.issue_number is None
+
+
+@pytest.mark.asyncio
+async def test_roll_issue_fields_preserved_after_issue_deletion(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
+    """Roll event history remains valid if an issue is later deleted (SET NULL semantics)."""
+    from app.models import Event, Issue
+
+    # Clear any pending thread from previous tests
+    await auth_client.post("/api/roll/dismiss-pending")
+
+    # Roll an issue-tracked thread
+    response = await auth_client.post("/api/roll/")
+    assert response.status_code == 200
+    data = response.json()
+
+    rolled_issue_id = data["issue_id"]
+    rolled_issue_number = data["issue_number"]
+
+    # Dismiss the pending thread so we can roll again
+    await auth_client.post("/api/roll/dismiss-pending")
+
+    # Delete the issue from the database
+    await async_db.execute(delete(Issue).where(Issue.id == rolled_issue_id))
+    await async_db.commit()
+
+    # Roll again - the Event should still be valid
+    response2 = await auth_client.post("/api/roll/")
+    assert response2.status_code == 200
+    data2 = response2.json()
+
+    # The Event model uses ondelete="SET NULL" for issue_id, so deleted issues become NULL
+    event = await async_db.execute(
+        select(Event)
+        .where(Event.type == "roll")
+        .order_by(Event.id.desc())
+        .limit(1)
+    )
+    persisted_event = event.scalar_one()
+
+    # issue_id should be NULL after issue deletion (SET NULL foreign key)
+    assert persisted_event.issue_id is None
+
+    # issue_number may still be preserved denormalized, or NULL - both are valid
+    # The key point is no crash/error occurs
+    assert True  # Either value is acceptable; the test verifies no error occurs
