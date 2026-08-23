@@ -67,7 +67,7 @@ def wire_controller(
     payloads: list[dict[str, Any]],
     *,
     comments: Sequence[str] = (),
-    mechanical: bool = True,
+    mechanical: bool | str = True,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]], list[list[str]]]:
     """Replace GitHub I/O with deterministic state capture."""
     payload_iter = iter(payloads)
@@ -83,7 +83,18 @@ def wire_controller(
         lambda _path, **_kwargs: "semantic findings",
     )
     monkeypatch.setattr(module, "review_comment_bodies", lambda _pr: list(comments))
-    monkeypatch.setattr(module, "mechanical_merge_gates_pass", lambda _pr, _head: mechanical)
+    if mechanical == "retry":
+        gate_result = {"decision": "retry", "reason": "required checks are pending"}
+    else:
+        gate_result = {
+            "decision": "pass" if mechanical else "deny",
+            "reason": "green" if mechanical else "exact-head checks failed",
+        }
+    monkeypatch.setattr(
+        module,
+        "mechanical_merge_gate",
+        lambda _pr, _head: gate_result,
+    )
     monkeypatch.setattr(
         module,
         "transition_pr_and_linked_issue",
@@ -287,13 +298,13 @@ def test_controller_promotes_independent_green_review(monkeypatch: MonkeyPatch) 
     assert transitions[-1]["pr_stage"] == "factory:ready"
 
 
-def test_controller_mechanical_failure_never_promotes(
+def test_controller_mechanical_failure_routes_to_repair(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    """The controller itself fails closed when exact-head mechanical gates fail."""
+    """Failed exact-head gates route to repairs instead of re-reviewing the same code."""
     module = load_review_controller()
     payload = pr_payload(worker="17", branch_worker="43")
-    transitions, _posted, _commands = wire_controller(
+    transitions, posted, _commands = wire_controller(
         monkeypatch,
         module,
         [payload, payload],
@@ -306,9 +317,37 @@ def test_controller_mechanical_failure_never_promotes(
         reviewed_head=REVIEWED_HEAD,
         review_log="/tmp/model.log",
     )
-    assert result["status"] == "approved-not-ready"
+    assert result["status"] == "approved-mechanical-failure"
     assert result["mechanical"]["decision"] == "deny"
-    assert transitions[-1]["pr_stage"] == "factory:review"
+    assert transitions[-1]["pr_stage"] == "factory:changes-requested"
+    assert all(item["pr_stage"] != "factory:ready" for item in transitions)
+
+
+def test_controller_defers_pending_ci_to_cheap_reconciliation(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Pending CI parks an approved PR at factory:ci with its approval preserved."""
+    module = load_review_controller()
+    payload = pr_payload(worker="17", branch_worker="43")
+    transitions, posted, _commands = wire_controller(
+        monkeypatch,
+        module,
+        [payload, payload],
+        mechanical="retry",
+    )
+    result = module.handle_review(
+        worker="17",
+        pr_number=1390,
+        verdict="approve",
+        reviewed_head=REVIEWED_HEAD,
+        review_log="/tmp/model.log",
+    )
+    assert result["status"] == "approved-deferred"
+    assert result["mechanical"]["decision"] == "retry"
+    assert transitions[-1]["pr_stage"] == "factory:ci"
+    assert all(item["pr_stage"] != "factory:review" for item in transitions)
+    approval_markers = [item for item in posted if item.get("marker") is not None]
+    assert approval_markers, "deferred approvals must persist their exact-head marker"
 
 
 def test_controller_refuses_verdict_when_head_moved_during_review(

@@ -55,6 +55,7 @@ def env_positive_int(name: str, default: int) -> int:
 LOCAL_LEASE_TTL_SECONDS = env_positive_int('FACTORY_LOCAL_LEASE_TTL_SECONDS', 3600)
 FIXED_LEASE_TTL_SECONDS = env_positive_int('FACTORY_FIXED_LEASE_TTL_SECONDS', 900)
 FACTORY_PR_WIP_LIMIT = env_positive_int('FACTORY_PR_WIP_LIMIT', 5)
+FACTORY_REVIEW_BACKLOG_LIMIT = env_positive_int('FACTORY_REVIEW_BACKLOG_LIMIT', 15)
 FACTORY_NO_DIFF_RETRY_LIMIT = env_positive_int('FACTORY_NO_DIFF_RETRY_LIMIT', 3)
 FACTORY_NO_DIFF_RETRY_RESET_SECONDS = env_positive_int('FACTORY_NO_DIFF_RETRY_RESET_SECONDS', 86400)
 
@@ -73,8 +74,8 @@ class Candidate:
     conflicted: bool = False
 
     def sort_key(self) -> tuple[int, int, float, int]:
-        """Return the deterministic queue ordering key."""
-        return (self.lane, -self.priority, -parse_time(self.created_at), -self.number)
+        """Return the deterministic queue ordering key (oldest work first)."""
+        return (self.lane, -self.priority, parse_time(self.created_at), self.number)
 
 
 def parse_time(value: str | None) -> float:
@@ -163,6 +164,28 @@ def issue_bypasses_wip_limit(issue: dict[str, Any]) -> bool:
         or 'priority:P0' in labels
         or 'ralph-priority:critical' in labels
     )
+
+
+def factory_review_backlog_count(prs: Iterable[dict[str, Any]]) -> int:
+    """Count unowned factory PRs waiting at the review or ci stage.
+
+    These targets consume no worker lease while they wait, so the WIP limit
+    cannot see them. The backlog counter exists to apply end-to-end
+    backpressure: when too much work is waiting for completion stages, fresh
+    issue intake must stop so the fleet drains what already exists.
+    """
+    count = 0
+    for pr in prs:
+        if str(pr.get('state') or 'OPEN').upper() != 'OPEN' or pr.get('isDraft'):
+            continue
+        labels = labels_of(pr)
+        if not str(pr.get('headRefName') or '').startswith('factory/'):
+            continue
+        if labels & BLOCKED_LABELS or 'factory:ready' in labels:
+            continue
+        if stage_of(labels) in ('factory:review', 'factory:ci') and item_is_unowned(labels):
+            count += 1
+    return count
 
 
 def factory_pr_wip_count(prs: Iterable[dict[str, Any]]) -> int:
@@ -278,6 +301,7 @@ def build_candidates(
         and pr_suppresses_issue_candidate(pr, issue_map)
     }
     pr_wip_full = factory_pr_wip_count(prs) >= FACTORY_PR_WIP_LIMIT
+    review_backlog_full = factory_review_backlog_count(prs) >= FACTORY_REVIEW_BACKLOG_LIMIT
     candidates: list[Candidate] = []
     for issue in issues:
         number = int(issue['number'])
@@ -288,6 +312,11 @@ def build_candidates(
         ):
             continue
         if pr_wip_full and not issue_bypasses_wip_limit(issue):
+            continue
+        if review_backlog_full and not issue_bypasses_wip_limit(issue):
+            # End-to-end backpressure: while the completion stages are
+            # saturated, the fleet drains existing PRs instead of
+            # manufacturing new ones. Urgent defects bypass this gate.
             continue
         labels = labels_of(issue)
         candidates.append(
