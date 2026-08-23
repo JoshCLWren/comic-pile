@@ -49,6 +49,20 @@ class Event(Base):
         - `thread_id`: A proper foreign key to the threads table. Used by "rate"
           and "rolled_but_skipped" events where we need referential integrity
           and the relationship to the Thread model.
+
+    Source-Roll Linkage:
+        `source_roll_event_id` is an optional self-reference to the exact
+        originating "roll" event that produced the pending recommendation an
+        outcome event acted on. It exists purely as historical instrumentation:
+
+        - Only populated by flows that resolve a pending recommendation back to
+          its roll event (currently "snooze"); every other event type leaves it
+          NULL.
+        - Historical events written before this column existed remain valid with
+          NULL linkage and are never bulk-backfilled.
+        - Deleting the referenced roll event sets the link to NULL instead of
+          cascading further deletions, so cleanup never removes unrelated
+          history.
     """
 
     __tablename__ = "events"
@@ -81,6 +95,12 @@ class Event(Base):
     )
     # Denormalized issue_number preserved for historical display even if Issue is deleted
     issue_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Optional self-reference to the exact originating "roll" event for outcome
+    # events (e.g. "snooze"). Nullable forever: pre-linkage history stays NULL,
+    # and deleting the referenced roll nullifies the link instead of cascading.
+    source_roll_event_id: Mapped[int | None] = mapped_column(
+        ForeignKey("events.id", ondelete="SET NULL"), nullable=True
+    )
 
     __table_args__ = (
         Index("ix_event_session_id", "session_id"),
@@ -94,6 +114,7 @@ class Event(Base):
         ),
         Index("ix_event_session_type_die_after", "session_id", "type", "die_after"),
         Index("ix_event_type_issue_id", "type", "issue_id"),
+        Index("ix_event_source_roll_event_id", "source_roll_event_id"),
     )
 
     session: Mapped[Session | None] = relationship(

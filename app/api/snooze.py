@@ -240,17 +240,22 @@ async def snooze_thread(
             [str(current_session.start_die)] + [str(evt.die_after) for evt in die_events]
         )
 
+    # Resolve the exact roll event that produced this pending recommendation.
+    # Events are ordered newest-first, so the first match is the latest roll
+    # that selected the pending thread; rolls for other threads never match.
+    originating_roll_event_id: int | None = None
+    roll_result = None
+    for evt in all_events:
+        if evt.type == "roll" and evt.selected_thread_id == pending_thread_id:
+            originating_roll_event_id = evt.id
+            roll_result = evt.result
+            break
+
     # Active thread: use pending_thread_id from the already-loaded session.
     pre_active_thread = None
     if pending_thread_id is not None:
         active_thread = await db.get(Thread, pending_thread_id)
         if active_thread:
-            # Find the roll event result for this thread from pre-fetched events.
-            roll_result = None
-            for evt in all_events:
-                if evt.type == "roll" and evt.selected_thread_id == pending_thread_id:
-                    roll_result = evt.result
-                    break
             pre_active_thread = ActiveThreadInfo(
                 id=active_thread.id,
                 title=active_thread.title,
@@ -285,6 +290,7 @@ async def snooze_thread(
         thread_id=pending_thread_id,
         die=current_die,
         die_after=new_die,
+        source_roll_event_id=originating_roll_event_id,
     )
     db.add(event)
 
