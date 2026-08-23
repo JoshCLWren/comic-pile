@@ -170,7 +170,7 @@ describe('CrossoversPage membership editing', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
     selectThread('Current thread of series', 'uncanny', 'Uncanny X-Men')
     fireEvent.click(screen.getByRole('button', { name: 'Add thread' }))
-    expect(await screen.findByText('Thread 44')).toBeInTheDocument()
+    expect(await screen.findByText('Uncanny X-Men (whole series)')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Remove Nova #2 from Annihilation' }))
     await waitFor(() => expect(screen.queryByText('Nova #2')).not.toBeInTheDocument())
