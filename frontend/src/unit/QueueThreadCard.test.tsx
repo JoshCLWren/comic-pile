@@ -209,6 +209,18 @@ describe('QueueThreadCard', () => {
     expect(screen.getByText('7 issues remaining')).toBeInTheDocument()
   })
 
+  it('hides "Up next" for blocked threads even when a next unread issue exists', () => {
+    const thread = createMockThread({
+      total_issues: 10,
+      issues_remaining: 3,
+      next_unread_issue_number: '5',
+      is_blocked: true,
+    })
+    renderCard(thread, { isBlocked: true, blockingReasons: ['Blocked by dependency'] })
+    expect(screen.queryByText(/Up next/)).not.toBeInTheDocument()
+    expect(screen.getByText('3 issues remaining')).toBeInTheDocument()
+  })
+
   it('renders next unread issue number when migrated and available', () => {
     const thread = createMockThread({
       issues_remaining: 3,
