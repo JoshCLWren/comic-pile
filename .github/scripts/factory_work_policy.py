@@ -142,6 +142,8 @@ def stage_of(labels: Iterable[str]) -> str | None:
 
 def provenance_lane(labels: set[str]) -> int:
     """Return the deterministic assignment lane for a label set."""
+    if 'main-breakage' in labels:
+        return 0
     if labels & INFRA_LABELS:
         return 5
     if 'e2e-discovered' in labels:
@@ -160,7 +162,8 @@ def issue_bypasses_wip_limit(issue: dict[str, Any]) -> bool:
     """Keep genuinely urgent product defects executable while PR work is saturated."""
     labels = labels_of(issue)
     return (
-        ('user-reported' in labels and 'bug' in labels)
+        'main-breakage' in labels
+        or ('user-reported' in labels and 'bug' in labels)
         or 'priority:P0' in labels
         or 'ralph-priority:critical' in labels
     )
@@ -380,19 +383,21 @@ def order_candidates_for_worker(candidates: list[Candidate], worker: str) -> lis
     review_first = review_capacity_worker(worker)
 
     def work_class(candidate: Candidate) -> int:
+        if candidate.lane == 0:
+            return 0
         if candidate.kind == 'pr':
             if candidate.conflicted:
-                return 0
-            if candidate.stage == 'factory:ci':
                 return 1
-            if candidate.stage == 'factory:changes-requested':
+            if candidate.stage == 'factory:ci':
                 return 2
+            if candidate.stage == 'factory:changes-requested':
+                return 3
             if candidate.stage == 'factory:review':
-                return 3 if review_first else 6
-            return 4 if review_first else 7
+                return 4 if review_first else 7
+            return 5 if review_first else 8
         if candidate.lane == 1:
-            return 5 if review_first else 3
-        return 6 if review_first else 4
+            return 6 if review_first else 4
+        return 7 if review_first else 5
 
     return sorted(
         eligible,

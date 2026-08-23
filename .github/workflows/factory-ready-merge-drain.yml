@@ -104,7 +104,28 @@ jobs:
             echo 'No held workflow runs matched current factory PR heads'
           fi
 
+      - name: Check main health before merging
+        id: main_health
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          sha="$(git rev-parse HEAD 2>/dev/null || git rev-parse origin/main)"
+          # Drain checks out main at HEAD, so HEAD is origin/main
+          total="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '.total_count // 0' 2>/dev/null || echo 0)"
+          failing="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '[.check_runs[] | select(.conclusion=="FAILURE" or .conclusion=="TIMED_OUT" or .conclusion=="CANCELLED" or .conclusion=="STARTUP_FAILURE")] | length' 2>/dev/null || echo 0)"
+          if [[ "${total:-0}" != "0" && "${failing:-0}" != "0" ]]; then
+            echo "Main $sha is red ($failing/$total failing) - blocking factory merges until main-breakage is fixed" >&2
+            echo "main_red=true" >> "$GITHUB_OUTPUT"
+            echo "failing=$failing" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Main $sha is green (total=$total failing=$failing)"
+          echo "main_red=false" >> "$GITHUB_OUTPUT"
+
       - name: Drain exact-head ready factory PRs
+        if: steps.main_health.outputs.main_red != 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
