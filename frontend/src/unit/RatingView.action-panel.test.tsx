@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 import { RATING_THRESHOLD } from '../pages/RollPage/utils'
@@ -64,7 +65,7 @@ function ratingView(overrides: Record<string, unknown> = {}) {
     onRefreshThread: vi.fn(),
     ...overrides,
   }
-  return <RatingView {...defaults} />
+  return <MemoryRouter><RatingView {...defaults} /></MemoryRouter>
 }
 
 describe('RatingView action panel (issue #1406)', () => {

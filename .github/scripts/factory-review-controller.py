@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Controller-owned semantic review authorization and mechanical merge gates."""
+
 from __future__ import annotations
 
 import argparse
@@ -98,9 +99,7 @@ def run_gh(
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError(f"{' '.join(command)} timed out") from exc
     if check and proc.returncode:
-        raise RuntimeError(
-            f"{' '.join(command)} failed ({proc.returncode}): {proc.stderr.strip()}"
-        )
+        raise RuntimeError(f"{' '.join(command)} failed ({proc.returncode}): {proc.stderr.strip()}")
     return proc
 
 
@@ -150,9 +149,7 @@ def replace_factory_labels(number: int, owner: str, stage: str) -> None:
     labels = {
         label
         for label in current
-        if not OWNER_RE.fullmatch(label)
-        and label not in STAGE_LABELS
-        and label != "factory"
+        if not OWNER_RE.fullmatch(label) and label not in STAGE_LABELS and label != "factory"
     }
     labels.update({"factory", owner, stage})
     run_gh(
@@ -216,12 +213,15 @@ def redact_review_text(text: str) -> str:
 
 
 def review_excerpt(path: str | None, *, worker: str) -> str:
-    """Read only the expected worker log and return a redacted bounded tail."""
+    """Read only an expected worker log and return a redacted bounded tail."""
     if not path:
         return ""
-    expected = Path(f"/tmp/opencode-factory-{worker}.log")
+    expected = {
+        Path(f"/tmp/opencode-factory-{worker}.log"),
+        Path(f"/tmp/opencode-factory-{worker}.sanitized.log"),
+    }
     candidate = Path(path)
-    if candidate != expected or candidate.is_symlink():
+    if candidate not in expected or candidate.is_symlink():
         return ""
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
@@ -231,6 +231,25 @@ def review_excerpt(path: str | None, *, worker: str) -> str:
     except OSError:
         return ""
     return redact_review_text(text[-7000:])
+
+
+def has_actionable_review_findings(excerpt: str) -> bool:
+    """Reject empty findings, terminal verdict tokens, and handoff boilerplate."""
+    boilerplate = {
+        "semantic blockers remain",
+        "the pr is returning to repair",
+        "semantic blockers remain. the pr is returning to repair",
+        "repair required",
+        "factory_gate_blocked",
+        "factory_gate_not_ready",
+        "factory_gate_ready",
+        "factory_gate_reject",
+    }
+    return any(
+        line.strip().strip("*` .").casefold() not in boilerplate
+        for line in excerpt.splitlines()
+        if line.strip().strip("*` .")
+    )
 
 
 def post_review_comment(
@@ -251,13 +270,9 @@ def post_review_comment(
         parts.append(note)
     if excerpt:
         parts.append(
-            "<details><summary>Review output</summary>\n\n```text\n"
-            + excerpt
-            + "\n```\n</details>"
+            "<details><summary>Review output</summary>\n\n```text\n" + excerpt + "\n```\n</details>"
         )
-    run_gh(
-        ["issue", "comment", str(pr_number), "--repo", REPO, "--body", "\n\n".join(parts)]
-    )
+    run_gh(["issue", "comment", str(pr_number), "--repo", REPO, "--body", "\n\n".join(parts)])
 
 
 def interpret_required_checks(
@@ -346,6 +361,39 @@ def active_factory_owner(labels: set[str]) -> str | None:
     return sorted(active)[0] if active else None
 
 
+def persist_repair_handoff(
+    *,
+    pr_number: int,
+    findings: str,
+    reviewer: str,
+    note: str,
+    marker: str | None = None,
+    branch: str | None = None,
+    worker: str | None = None,
+) -> None:
+    """Persist validated repair findings before releasing a PR for changes."""
+    excerpt = redact_review_text(findings)[-7000:]
+    if not has_actionable_review_findings(excerpt):
+        raise RuntimeError("repair handoff requires durable actionable review findings")
+    post_review_comment(
+        pr_number=pr_number,
+        marker=marker,
+        reviewer=reviewer,
+        verdict="repair",
+        excerpt=excerpt,
+        note=note,
+    )
+    if branch is not None and worker is not None:
+        transition_pr_and_linked_issue(
+            pr_number=pr_number,
+            branch=branch,
+            worker=worker,
+            pr_stage="factory:changes-requested",
+        )
+    else:
+        replace_factory_labels(pr_number, "factory:unowned", "factory:changes-requested")
+
+
 def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
     """Reconcile one unowned CI PR using exact-head controller authorities."""
     pr = pr_json(pr_number)
@@ -357,9 +405,7 @@ def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
 
     checks = required_checks_gate(pr_number)
     if checks["decision"] != "pass":
-        status = classify_ci_reconciliation(
-            checks_decision=checks["decision"], authorized=False
-        )
+        status = classify_ci_reconciliation(checks_decision=checks["decision"], authorized=False)
         return {"pr": pr_number, "status": status, "reason": checks["reason"]}
 
     head = str(pr.get("headRefOid") or "")
@@ -397,7 +443,12 @@ def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
     if status == "ready":
         replace_factory_labels(pr_number, "factory:unowned", "factory:ready")
     elif status == "changes-requested":
-        replace_factory_labels(pr_number, "factory:unowned", "factory:changes-requested")
+        persist_repair_handoff(
+            pr_number=pr_number,
+            findings=str(mechanical["reason"]),
+            reviewer="controller",
+            note=f"Exact-head mechanical gates failed for {head}; repair is required.",
+        )
     return {
         "pr": pr_number,
         "status": status,
@@ -533,10 +584,7 @@ def current_head_review_gate(pr_number: int, head: str) -> GateResult:
         detail = redact_review_text(str(exc))[-500:]
         return gate_result("retry", f"review threads could not be inspected: {detail}")
     threads = (
-        result.get("data", {})
-        .get("repository", {})
-        .get("pullRequest", {})
-        .get("reviewThreads", {})
+        result.get("data", {}).get("repository", {}).get("pullRequest", {}).get("reviewThreads", {})
     )
     return interpret_review_threads(
         threads.get("nodes"),
@@ -735,23 +783,20 @@ def handle_review(
     )
 
     if verdict == "repair":
-        post_review_comment(
+        persist_repair_handoff(
             pr_number=pr_number,
+            findings=excerpt,
             marker=marker,
             reviewer=worker,
-            verdict=verdict,
-            excerpt=excerpt,
             note="Semantic blockers remain. The PR is returning to repair.",
-        )
-        transition_pr_and_linked_issue(
-            pr_number=pr_number,
             branch=branch,
             worker=worker,
-            pr_stage="factory:changes-requested",
         )
         return {"status": "repair", "head": reviewed_head, "producer": producer}
 
     if verdict == "reject":
+        if not has_actionable_review_findings(excerpt):
+            raise RuntimeError("semantic rejection requires durable actionable review findings")
         post_review_comment(
             pr_number=pr_number,
             marker=marker,
@@ -822,24 +867,23 @@ def handle_review(
         # Mechanical gates genuinely failed (mergeability conflict or failing
         # required checks). Route to the repair stage rather than re-reviewing
         # identical code with another expensive model session.
-        result = return_to_review(
+        persist_repair_handoff(
             pr_number=pr_number,
+            findings=str(mechanical["reason"]),
             branch=branch,
             worker=worker,
             reviewer=worker,
-            verdict=verdict,
-            excerpt="",
             note=(
-                "Semantic approval recorded, but exact-head mechanical gates failed: "
-                f"{mechanical['reason']}. Routed to factory:changes-requested for repairs."
+                "Semantic approval recorded, but exact-head mechanical gates failed. "
+                "The PR is returning to repair."
             ),
-            status="approved-mechanical-failure",
-            head=latest_head or reviewed_head,
-            producer=producer,
-            stage="factory:changes-requested",
         )
-        result["mechanical"] = mechanical
-        return result
+        return {
+            "status": "approved-mechanical-failure",
+            "head": latest_head or reviewed_head,
+            "producer": producer,
+            "mechanical": mechanical,
+        }
 
     authorized = approval_can_promote(
         producer=producer,

@@ -22,8 +22,8 @@ USER appuser
 - `postgres_password` and `pgadmin_password` are placeholder credentials
 
 #### Production Environment
-- Production uses environment variables from `.env.production`
-- `.env.production` is in `.gitignore` to prevent committing secrets
+- Production runs on Vercel + Neon; secrets are configured as Vercel project environment variables and GitHub Actions secrets
+- `.env.production` remains in `.gitignore` to prevent committing secrets locally
 - Strong secrets must be generated with: `openssl rand -base64 32`
 
 **Best Practices:**
@@ -47,65 +47,55 @@ USER appuser
 
 #### Production Architecture
 ```
-Internet → Nginx (port 80/443) → App (port 8000) → PostgreSQL (internal only)
+Internet → Vercel edge (TLS termination) → FastAPI API function → Neon PostgreSQL
 ```
 
 **Security Features:**
-- Nginx acts as reverse proxy, hiding app details
-- PostgreSQL only accessible within Docker network
-- App port 8000 not exposed publicly
-- SSL/TLS encryption for all traffic
+- TLS termination handled by the Vercel platform
+- Security headers applied by application middleware (`app/middleware/security_headers.py`)
+- Rate limiting enforced at the application layer (`app/middleware/rate_limit.py`)
+- Database reachable only through the configured Neon connection URL
 
 ### SSL/TLS Configuration
 
-#### SSL Certificates
-- Certificates stored in `./ssl/` directory
-- `.gitignore` prevents committing certificates
-- Obtain certificates using Certbot: `certbot certonly --standalone -d yourdomain.com`
-
-**Required Files:**
-- `./ssl/fullchain.pem` - Certificate chain
-- `./ssl/privkey.pem` - Private key
-
-**Nginx Configuration:**
-```nginx
-ssl_protocols TLSv1.2 TLSv1.3;
-ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:...';
-ssl_prefer_server_ciphers off;
-```
+TLS certificates are provisioned and renewed automatically by the Vercel platform;
+no certificate files are stored in this repository. Application responses also declare
+HSTS via `SecurityHeadersMiddleware`
+(`max-age=63072000; includeSubDomains; preload` in production environments).
 
 ### Security Headers
 
-Nginx implements security best practice headers:
+The FastAPI application sets security headers through `SecurityHeadersMiddleware`
+(`app/middleware/security_headers.py`):
 
-```nginx
-add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
-add_header X-Frame-Options "SAMEORIGIN" always;
-add_header X-Content-Type-Options "nosniff" always;
-add_header X-XSS-Protection "1; mode=block" always;
-add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+```http
+Content-Security-Policy: default-src 'self'; ...
+Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+X-XSS-Protection: 1; mode=block
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=()
 ```
 
 **Purpose:**
+- **CSP**: Restricts resource loading origins
 - **HSTS**: Forces HTTPS connections
 - **X-Frame-Options**: Prevents clickjacking
 - **X-Content-Type-Options**: Prevents MIME sniffing
 - **X-XSS-Protection**: XSS protection
 - **Referrer-Policy**: Controls referrer information
+- **Permissions-Policy**: Disables sensitive browser capabilities
 
 ### Rate Limiting
 
-API endpoints are rate-limited to prevent abuse:
-
-```nginx
-limit_req_zone $binary_remote_addr zone=api:10m;
-limit_req zone=api burst=20 nodelay;
-```
+API endpoints are rate-limited in the application using slowapi
+(`app/middleware/rate_limit.py`, registered in `app/main.py`):
 
 **Configuration:**
-- 10MB shared memory for tracking
-- Burst of 20 requests allowed
-- Rate limits defined per endpoint
+- Limits are applied per endpoint via the shared limiter
+- Requests are keyed by client IP address
+- Rate limiting responses return HTTP 429
 
 ### Health Checks
 
@@ -126,27 +116,18 @@ healthcheck:
   retries: 5
 ```
 
-**Nginx Container:**
-```yaml
-healthcheck:
-  test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
-  interval: 30s
-  timeout: 10s
-  retries: 3
-```
-
 ### Container Hardening Checklist
 
 ✅ **Implemented:**
 - [x] Non-root user
 - [x] Minimal base image (slim)
 - [x] Multi-stage build
-- [x] Health checks on all containers
+- [x] Health checks on containers
 - [x] Secrets in environment variables (not code)
 - [x] .env.production in .gitignore
-- [x] SSL/TLS for all traffic
-- [x] Security headers in Nginx
-- [x] Rate limiting on API
+- [x] TLS terminated by the Vercel platform
+- [x] Security headers in application middleware
+- [x] Rate limiting on API (slowapi)
 - [x] No direct database exposure
 - [x] Read-only file system where possible
 
@@ -173,10 +154,7 @@ git-secrets --scan
 Before deploying to production:
 
 - [ ] Generate strong secrets with `openssl rand -base64 32`
-- [ ] Update `.env.production` with production values
-- [ ] Obtain SSL certificates for domain
-- [ ] Place certificates in `./ssl/` directory
-- [ ] Update `nginx.conf` server_name if needed
+- [ ] Update Vercel project environment variables with production values
 - [ ] Run vulnerability scan on Docker image
 - [ ] Test health checks locally
 - [ ] Verify no secrets in git history
@@ -189,10 +167,9 @@ Before deploying to production:
 #### Compromised Secrets
 If secrets are leaked:
 1. Immediately rotate all secrets
-2. Revoke and regenerate SSL certificates
+2. Rotate the affected Vercel project environment variables and GitHub Actions secrets
 3. Check audit logs for unauthorized access
-4. Update `.env.production` with new secrets
-5. Restart containers with new secrets
+4. Redeploy so services pick up the new secrets
 
 #### Container Breach
 If container is compromised:
@@ -207,12 +184,10 @@ If container is compromised:
 - Monitor container logs for suspicious activity
 - Set up alerts for health check failures
 - Track rate limit violations
-- Monitor SSL certificate expiration
 - Regular security audits (quarterly)
 
 ### Additional Resources
 
 - [CIS Docker Benchmark](https://www.cisecurity.org/benchmark/docker)
 - [OWASP Docker Security](https://owasp.org/www-project-docker-security)
-- [Nginx Security Best Practices](https://nginx.org/en/docs/http/ngx_http_core_module.html#variables)
 - [Python Security](https://docs.python.org/3/security/index.html)
