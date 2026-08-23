@@ -21,6 +21,27 @@ class ThreadStatus(StrEnum):
     COMPLETED = "completed"
 
 
+class BandwidthLevel(StrEnum):
+    """Session bandwidth prediction levels.
+
+    Bandwidth represents the mentally demanding nature of a comic for the
+    reader right now, derived from historical reading behavior.
+    """
+
+    LIGHT = "light"
+    BALANCED = "balanced"
+    DEEP = "deep"
+
+
+class BandwidthSource(StrEnum):
+    """Source of bandwidth prediction or state assignment."""
+
+    INFERRED = "inferred"
+    MANUAL = "manual"
+    SNOOZE = "snooze"
+    QUIZ = "quiz"
+
+
 # Dice ladder - standard RPG dice progression
 # Extended to support large thread pools (50+ threads)
 DICE_LADDER = [4, 6, 8, 10, 12, 20, 30, 50, 100]
