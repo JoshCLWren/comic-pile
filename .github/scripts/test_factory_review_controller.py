@@ -176,12 +176,73 @@ def test_reconcile_ci_routes_conflicted_green_pr_to_repair(monkeypatch):
     ])
     monkeypatch.setattr(controller, "mechanical_merge_gate", lambda _pr, _head: {"decision": "deny", "reason": "pull request has merge conflicts"})
     writes = []
-    monkeypatch.setattr(controller, "replace_factory_labels", lambda *args: writes.append(args))
+    posted = []
+    events = []
+    monkeypatch.setattr(
+        controller,
+        "post_review_comment",
+        lambda **kwargs: (events.append("comment"), posted.append(kwargs)),
+    )
+    monkeypatch.setattr(
+        controller,
+        "replace_factory_labels",
+        lambda *args: (events.append("transition"), writes.append(args)),
+    )
 
     result = controller.reconcile_ci_pr(123)
 
     assert result["status"] == "changes-requested"
+    assert events == ["comment", "transition"]
+    assert posted[0]["excerpt"] == "pull request has merge conflicts"
+    assert head in posted[0]["note"]
     assert writes == [(123, "factory:unowned", "factory:changes-requested")]
+
+
+def test_reconcile_ci_does_not_transition_when_findings_persistence_fails(monkeypatch):
+    controller = load_controller()
+    head = "d" * 40
+    monkeypatch.setattr(
+        controller,
+        "pr_json",
+        lambda _pr: {
+            "state": "OPEN",
+            "headRefOid": head,
+            "headRefName": "factory/10-123-fix",
+            "body": "Worker: opencode-free-model-factory-10",
+            "labels": [{"name": "factory:ci"}, {"name": "factory:unowned"}],
+        },
+    )
+    monkeypatch.setattr(
+        controller,
+        "required_checks_gate",
+        lambda _pr: {"decision": "pass", "reason": "green"},
+    )
+    monkeypatch.setattr(
+        controller,
+        "review_comment_bodies",
+        lambda _pr: [
+            controller.review_marker(
+                pr=123, head=head, reviewer="11", producer="10", verdict="approve"
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        controller,
+        "mechanical_merge_gate",
+        lambda _pr, _head: {"decision": "deny", "reason": "pull request has merge conflicts"},
+    )
+    writes = []
+    monkeypatch.setattr(controller, "replace_factory_labels", lambda *args: writes.append(args))
+
+    def fail_comment(**_kwargs):
+        raise RuntimeError("GitHub comment write failed")
+
+    monkeypatch.setattr(controller, "post_review_comment", fail_comment)
+
+    with pytest.raises(RuntimeError, match="GitHub comment write failed"):
+        controller.reconcile_ci_pr(123)
+
+    assert writes == []
 
 
 def test_reconcile_ci_returns_changed_head_to_review(monkeypatch):

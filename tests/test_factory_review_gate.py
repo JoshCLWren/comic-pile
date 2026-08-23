@@ -9,6 +9,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+import pytest
 from pytest import MonkeyPatch
 
 SCRIPTS = Path(__file__).resolve().parents[1] / ".github" / "scripts"
@@ -239,6 +240,60 @@ def test_review_excerpt_rejects_arbitrary_paths(tmp_path: Path) -> None:
     assert module.review_excerpt(str(secret), worker="17") == ""
 
 
+def test_review_excerpt_accepts_expected_sanitized_worker_log(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    """The sanitized worker log is trusted without allowing arbitrary paths."""
+    module = load_review_controller()
+    findings = tmp_path / "findings.log"
+    findings.write_text(
+        "Fix the missing authorization guard.\nGH_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz1234567890\n",
+        encoding="utf-8",
+    )
+    real_open = module.os.open
+    monkeypatch.setattr(module.os, "open", lambda _path, flags: real_open(findings, flags))
+
+    excerpt = module.review_excerpt("/tmp/opencode-factory-17.sanitized.log", worker="17")
+
+    assert "Fix the missing authorization guard." in excerpt
+    assert "ghp_abcdefghijklmnopqrstuvwxyz1234567890" not in excerpt
+    assert "[REDACTED]" in excerpt
+
+
+def test_persisted_review_comment_contains_redacted_findings(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    """A durable GitHub handoff contains findings but never their embedded secrets."""
+    module = load_review_controller()
+    findings = tmp_path / "findings.log"
+    secret = "ghp_abcdefghijklmnopqrstuvwxyz1234567890"
+    findings.write_text(f"Fix authorization in app/routes.py.\nGH_TOKEN={secret}\n")
+    real_open = module.os.open
+    monkeypatch.setattr(module.os, "open", lambda _path, flags: real_open(findings, flags))
+    commands: list[list[str]] = []
+    monkeypatch.setattr(module, "run_gh", lambda args: commands.append(args))
+
+    excerpt = module.review_excerpt("/tmp/opencode-factory-17.sanitized.log", worker="17")
+    marker = review_marker(
+        pr=1390, head=REVIEWED_HEAD, reviewer="17", producer="43", verdict="repair"
+    )
+    module.post_review_comment(
+        pr_number=1390,
+        marker=marker,
+        reviewer="17",
+        verdict="repair",
+        excerpt=excerpt,
+        note="Semantic blockers remain. The PR is returning to repair.",
+    )
+
+    body = commands[0][-1]
+    assert marker in body
+    assert "Review output" in body
+    assert "Fix authorization in app/routes.py." in body
+    assert secret not in body
+    assert "[REDACTED]" in body
+
+
 def test_controller_blocks_self_review_even_with_approve_verdict(
     monkeypatch: MonkeyPatch,
 ) -> None:
@@ -393,7 +448,18 @@ def test_controller_routes_repair_to_changes_requested(
     """Actionable semantic findings become repair work, not ready work."""
     module = load_review_controller()
     payload = pr_payload(worker="17", branch_worker="43")
-    transitions, _posted, _commands = wire_controller(monkeypatch, module, [payload])
+    transitions, posted, _commands = wire_controller(monkeypatch, module, [payload])
+    events: list[str] = []
+    monkeypatch.setattr(
+        module,
+        "post_review_comment",
+        lambda **kwargs: (events.append("comment"), posted.append(kwargs)),
+    )
+    monkeypatch.setattr(
+        module,
+        "transition_pr_and_linked_issue",
+        lambda **kwargs: (events.append("transition"), transitions.append(kwargs)),
+    )
     result = module.handle_review(
         worker="17",
         pr_number=1390,
@@ -403,6 +469,111 @@ def test_controller_routes_repair_to_changes_requested(
     )
     assert result["status"] == "repair"
     assert transitions[-1]["pr_stage"] == "factory:changes-requested"
+    assert events == ["comment", "transition"]
+    assert posted[-1]["excerpt"] == "semantic findings"
+    assert posted[-1]["marker"] == review_marker(
+        pr=1390, head=REVIEWED_HEAD, reviewer="17", producer="43", verdict="repair"
+    )
+
+
+@pytest.mark.parametrize(
+    "findings",
+    [
+        "",
+        "   \n\t",
+        "FACTORY_GATE_BLOCKED",
+        "Semantic blockers remain.\nRepair required.",
+        "Semantic blockers remain. The PR is returning to repair.",
+    ],
+)
+def test_controller_refuses_repair_without_actionable_findings(
+    monkeypatch: MonkeyPatch, findings: str
+) -> None:
+    """A repair verdict without durable instructions remains an unsuccessful review."""
+    module = load_review_controller()
+    payload = pr_payload(worker="17", branch_worker="43")
+    transitions, posted, _commands = wire_controller(monkeypatch, module, [payload])
+    monkeypatch.setattr(module, "review_excerpt", lambda _path, **_kwargs: findings)
+
+    with pytest.raises(RuntimeError, match="durable actionable review findings"):
+        module.handle_review(
+            worker="17",
+            pr_number=1390,
+            verdict="repair",
+            reviewed_head=REVIEWED_HEAD,
+            review_log="/tmp/opencode-factory-17.sanitized.log",
+        )
+
+    assert posted == []
+    assert transitions == []
+
+
+def test_controller_refuses_repair_when_findings_cannot_be_persisted(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A failed GitHub comment cannot produce an actionable repair handoff."""
+    module = load_review_controller()
+    payload = pr_payload(worker="17", branch_worker="43")
+    transitions, posted, _commands = wire_controller(monkeypatch, module, [payload])
+
+    def fail_comment(**_kwargs: object) -> None:
+        raise RuntimeError("GitHub comment write failed")
+
+    monkeypatch.setattr(module, "post_review_comment", fail_comment)
+
+    with pytest.raises(RuntimeError, match="GitHub comment write failed"):
+        module.handle_review(
+            worker="17",
+            pr_number=1390,
+            verdict="repair",
+            reviewed_head=REVIEWED_HEAD,
+            review_log="/tmp/opencode-factory-17.sanitized.log",
+        )
+
+    assert posted == []
+    assert transitions == []
+
+
+def test_controller_allows_approval_without_findings(monkeypatch: MonkeyPatch) -> None:
+    """A clean semantic approval does not need a detailed findings payload."""
+    module = load_review_controller()
+    payload = pr_payload(worker="17", branch_worker="43")
+    transitions, _posted, _commands = wire_controller(monkeypatch, module, [payload, payload])
+    monkeypatch.setattr(module, "review_excerpt", lambda _path, **_kwargs: "")
+
+    result = module.handle_review(
+        worker="17",
+        pr_number=1390,
+        verdict="approve",
+        reviewed_head=REVIEWED_HEAD,
+        review_log=None,
+    )
+
+    assert result["status"] == "ready"
+    assert transitions[-1]["pr_stage"] == "factory:ready"
+
+
+def test_controller_refuses_rejection_without_actionable_findings(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Destructive rejection also requires durable discoverable findings."""
+    module = load_review_controller()
+    payload = pr_payload(worker="17", branch_worker="43")
+    transitions, posted, commands = wire_controller(monkeypatch, module, [payload])
+    monkeypatch.setattr(module, "review_excerpt", lambda _path, **_kwargs: "")
+
+    with pytest.raises(RuntimeError, match="durable actionable review findings"):
+        module.handle_review(
+            worker="17",
+            pr_number=1390,
+            verdict="reject",
+            reviewed_head=REVIEWED_HEAD,
+            review_log=None,
+        )
+
+    assert posted == []
+    assert transitions == []
+    assert not any("close" in command for command in commands)
 
 
 def test_controller_reject_closes_without_reopening(monkeypatch: MonkeyPatch) -> None:
