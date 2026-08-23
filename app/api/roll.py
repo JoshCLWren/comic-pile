@@ -1,7 +1,6 @@
 """Roll API routes."""
 
 import logging
-import random
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
@@ -30,6 +29,11 @@ from app.schemas import (
     RollResponse,
 )
 from comic_pile.queue import get_roll_pool_rows
+from comic_pile.recommendation_selection import (
+    DEFAULT_BANDWIDTH,
+    DEFAULT_INTENT,
+    select_from_pool,
+)
 from comic_pile.session import get_current_die_for_session, get_or_create
 
 router = APIRouter(tags=["roll"])
@@ -93,7 +97,19 @@ async def roll_dice(
     # Bound the selection to the current die size, matching original semantics.
     bounded_rows = rows[:current_die]
     pool_size = len(bounded_rows)
-    selected_index = random.randint(0, pool_size - 1)
+    selection_bandwidth = (
+        roll_request.bandwidth if roll_request.bandwidth is not None else DEFAULT_BANDWIDTH
+    )
+    selection_intent = roll_request.intent if roll_request.intent is not None else DEFAULT_INTENT
+
+    # Control path: balanced/default and pure-random intent reproduce the exact
+    # legacy uniform draw; only a future explicitly-weighted phase may deviate.
+    selection = select_from_pool(
+        pool_size,
+        bandwidth=selection_bandwidth,
+        intent=selection_intent,
+    )
+    selected_index = selection.index
     selected_thread, unread_count, issue_number = bounded_rows[selected_index]
 
     selected_thread_id = selected_thread.id
@@ -128,9 +144,18 @@ async def roll_dice(
         selected_thread_id=selected_thread_id,
         die=current_die,
         result=selected_index + 1,
-        selection_method="random",
+        selection_method="weighted" if selection.weights_applied else "random",
     )
     db.add(event)
+
+    logger.info(
+        "roll selection mode=%s bandwidth=%s intent=%s weights_applied=%s pool_size=%s",
+        selection.mode.value,
+        selection.bandwidth.value,
+        selection.intent.value,
+        selection.weights_applied,
+        pool_size,
+    )
 
     if current_session:
         current_session.pending_thread_id = selected_thread_id
