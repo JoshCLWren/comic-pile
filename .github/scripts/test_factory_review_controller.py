@@ -362,7 +362,9 @@ def test_approved_mechanical_failure_rejects_non_actionable_findings(monkeypatch
         lambda **kwargs: transitions.append(kwargs),
     )
 
-    with pytest.raises(RuntimeError, match="repair handoff requires durable actionable findings"):
+    with pytest.raises(
+        RuntimeError, match="repair handoff requires durable actionable review findings"
+    ):
         controller.handle_review(**arguments)
 
     assert [comment["verdict"] for comment in comments] == ["approve"]
@@ -428,7 +430,9 @@ def test_semantic_repair_rejects_non_actionable_findings(monkeypatch):
         lambda **kwargs: transitions.append(kwargs),
     )
 
-    with pytest.raises(RuntimeError, match="repair handoff requires durable actionable findings"):
+    with pytest.raises(
+        RuntimeError, match="repair handoff requires durable actionable review findings"
+    ):
         controller.handle_review(**arguments)
 
     assert comments == []
