@@ -42,6 +42,7 @@ describe('ComicIdentity', () => {
       creators: [{ name: 'Writer One', roles: ['writer'] }, { name: 'Artist One', roles: ['penciler', 'inker'] }],
       story_arcs: [{
         comicvine_arc_id: 42,
+        total_related_count: null,
         name: 'The Big Arc',
         comicvine_url: null,
         related_issues: [
@@ -249,6 +250,7 @@ describe('ComicIdentity', () => {
       creators: [{ name: 'Creator One', roles: ['writer'] }],
       story_arcs: [{
         comicvine_arc_id: 7,
+        total_related_count: null,
         name: 'Arc Seven',
         comicvine_url: null,
         related_issues: [],
@@ -294,6 +296,7 @@ describe('ComicIdentity', () => {
       comicvine_arc_id: i + 1,
       name: `Arc ${i + 1}`,
       comicvine_url: null,
+      total_related_count: null,
       related_issues: [],
     }))
 
@@ -360,6 +363,7 @@ describe('ComicIdentity', () => {
       creators: [],
       story_arcs: [{
         comicvine_arc_id: 1,
+        total_related_count: null,
         name: 'Big Arc',
         comicvine_url: null,
         related_issues: manyIssues,
@@ -447,6 +451,7 @@ describe('ComicIdentity', () => {
       story_arcs: [
         {
           comicvine_arc_id: 50,
+          total_related_count: null,
           name: 'First Arc',
           comicvine_url: null,
           related_issues: [{
@@ -467,6 +472,7 @@ describe('ComicIdentity', () => {
         },
         {
           comicvine_arc_id: 51,
+          total_related_count: null,
           name: 'Second Arc',
           comicvine_url: null,
           related_issues: [{
@@ -540,6 +546,7 @@ describe('ComicIdentity', () => {
       creators: [],
       story_arcs: [{
         comicvine_arc_id: 1,
+        total_related_count: null,
         name: 'Test Arc',
         comicvine_url: null,
         related_issues: [],

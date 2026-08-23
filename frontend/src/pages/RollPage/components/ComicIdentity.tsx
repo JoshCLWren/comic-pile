@@ -3,8 +3,6 @@ import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueI
 import { type ComicVineRelatedIssue } from '../../../services/api'
 import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass, normalizeArcName } from '../../../utils/comicIdentity'
 import AddToComicPileDialog from '../../../components/AddToComicPileDialog'
-import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass } from '../../../utils/comicIdentity'
-import { useToast } from '../../../contexts/useToast'
 import ImageWithLoading from '../../../components/ImageWithLoading'
 
 interface ComicIdentityProps {

@@ -46,6 +46,7 @@ describe('ComicVineIssueCard', () => {
       creators: [{ name: 'Writer One', roles: ['writer'] }],
       story_arcs: [{
         comicvine_arc_id: 42,
+        total_related_count: null,
         name: 'The Big Arc',
         comicvine_url: null,
         related_issues: [
@@ -93,6 +94,7 @@ describe('ComicVineIssueCard', () => {
       creators: [],
       story_arcs: [{
         comicvine_arc_id: 70,
+        total_related_count: null,
         name: 'Three',
         comicvine_url: null,
         related_issues: [
@@ -152,6 +154,7 @@ describe('ComicVineIssueCard', () => {
       story_arcs: [
         {
           comicvine_arc_id: 50,
+          total_related_count: null,
           name: 'First Arc',
           comicvine_url: null,
           related_issues: [{
@@ -172,6 +175,7 @@ describe('ComicVineIssueCard', () => {
         },
         {
           comicvine_arc_id: 51,
+          total_related_count: null,
           name: 'Second Arc',
           comicvine_url: null,
           related_issues: [{
@@ -250,6 +254,7 @@ describe('ComicVineIssueCard', () => {
         comicvine_arc_id: 100,
         name: 'Knightfall (Storyline)',
         comicvine_url: null,
+        total_related_count: 1,
         related_issues: [
           {
             comicvine_issue_id: '301', series_name: 'Batman', issue_number: '126',
