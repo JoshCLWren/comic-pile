@@ -576,7 +576,7 @@ async def test_reader_context_cross_thread_edge_without_expansion(
             "target_label": "Distant #1",
             "explanation": (
                 f"Blocked by issue #{issues[2].issue_number} in Neighborhood "
-                f"(thread #{thread.id})"
+                f"(thread #{_thread.id})"
             ),
         }
     ]
