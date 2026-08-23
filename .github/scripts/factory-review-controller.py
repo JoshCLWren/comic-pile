@@ -374,7 +374,7 @@ def persist_repair_handoff(
     """Persist validated repair findings before releasing a PR for changes."""
     excerpt = redact_review_text(findings)[-7000:]
     if not has_actionable_review_findings(excerpt):
-        raise RuntimeError("repair handoff requires durable actionable findings")
+        raise RuntimeError("repair handoff requires durable actionable review findings")
     post_review_comment(
         pr_number=pr_number,
         marker=marker,
