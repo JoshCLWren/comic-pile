@@ -1,0 +1,3 @@
+# Ignore generated benchmark output files
+results/
+control-environment*.json
