@@ -21,8 +21,8 @@ CONTROLLER = Path('.github/scripts/factory-work-controller.py')
 POLICY = Path('.github/scripts/factory_work_policy.py')
 KILO_HELPER = Path('.github/scripts/kilo-auto-factory-run.sh')
 GUARD = Path('.github/scripts/fixed-model-guard.py')
-EXPECTED_WORKERS = {6, 9, 10, 11, 14, 16, 17, 18, 19, 20, 21, 23, 29} | set(range(39, 60))
-EXPECTED_SOURCE_COUNTS = {'nvidia': 13, 'opencode-free': 20, 'kilo-auto': 1}
+EXPECTED_WORKERS = {6, 9, 10, 11, 14, 16, 17, 18, 19, 20, 21, 23, 29} | set(range(39, 72))
+EXPECTED_SOURCE_COUNTS = {'nvidia': 13, 'opencode-free': 20, 'kilo-auto': 1, 'openrouter-free': 12}
 EXPECTED_OPENCODE_FREE_MODELS = {
     'big-pickle',
     'deepseek-v4-flash-free',
@@ -34,6 +34,7 @@ EXPECTED_OPENCODE_FREE_MODELS = {
     'nemotron-3.5-lightning-free',
     'x-preview-f-free',
 }
+EXPECTED_OPENROUTER_FREE_MODELS = {'stealth/ox-alpha'}
 SCHEDULE_MINUTES = tuple(range(0, 60, 5))
 ENTRY_PERMISSIONS = ('contents: write', 'issues: write', 'pull-requests: write', 'actions: write', 'checks: read')
 
@@ -47,7 +48,7 @@ def main() -> None:
             delimiter='\t',
         ))
 
-    assert len(rows) == 34, f'expected 34 external factory lanes, got {len(rows)}'
+    assert len(rows) == 46, f'expected 38 external factory lanes, got {len(rows)}'
     workers = [int(row['worker']) for row in rows]
     assert set(workers) == EXPECTED_WORKERS
     assert len(workers) == len(set(workers)), 'duplicate worker IDs'
@@ -55,6 +56,8 @@ def main() -> None:
 
     opencode_models = {row['model'] for row in rows if row['source'] == 'opencode-free'}
     assert opencode_models == EXPECTED_OPENCODE_FREE_MODELS
+    openrouter_models = {row['model'] for row in rows if row['source'] == 'openrouter-free'}
+    assert openrouter_models == EXPECTED_OPENROUTER_FREE_MODELS
     kilo = [row for row in rows if row['source'] == 'kilo-auto']
     assert len(kilo) == 1 and kilo[0]['worker'] == '46'
     assert kilo[0]['model'] == 'kilo-auto/free'
@@ -68,16 +71,16 @@ def main() -> None:
         counts[minute] += 1
     assert set(counts) == set(SCHEDULE_MINUTES)
     assert max(counts.values()) - min(counts.values()) <= 1
-    assert sum(counts.values()) == 34
+    assert sum(counts.values()) == 46
 
     dispatcher = DISPATCHER.read_text(encoding='utf-8')
     assert 'workflow_run:' not in dispatcher
     assert 'schedule:' in dispatcher
-    for minute in SCHEDULE_MINUTES:
-        assert f"cron: '{minute} 0-23 * * *'" in dispatcher
-    assert 'SCHEDULE_EXPR: ${{ github.event.schedule }}' in dispatcher
+    assert "cron: '*/5 * * * *'" in dispatcher
+    assert dispatcher.count('    - cron:') == 1, 'dispatcher must use a single collapsed cron timer'
+    assert 'minute="$(date -u +%M)"' in dispatcher
+    assert 'gh workflow run factory-ready-merge-drain.yml' in dispatcher
     assert 'elif [[ "$EVENT_NAME" == schedule ]]; then' in dispatcher
-    assert 'minute="${SCHEDULE_EXPR%% *}"' in dispatcher
     assert 'workers=\'["6","39","46"]\'' in dispatcher
     assert 'gh workflow run free-model-factory-entry.yml' in dispatcher
     assert "'.github/scripts/factory-work-controller.py'" in dispatcher

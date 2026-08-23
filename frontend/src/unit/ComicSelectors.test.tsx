@@ -9,8 +9,8 @@ import {
 import type { Issue, Thread } from '../types'
 
 const threads = [
-  { id: 1, title: 'Alpha Flight', format: 'ongoing' },
-  { id: 2, title: 'New Mutants', format: 'ongoing' },
+  { id: 1, title: 'Alpha Flight', format: 'ongoing', issues_remaining: 5, total_issues: 10, queue_position: 1, status: 'active', is_blocked: false, blocking_reasons: [], created_at: '2026-01-01T00:00:00Z' },
+  { id: 2, title: 'New Mutants', format: 'ongoing', issues_remaining: 3, total_issues: 12, queue_position: 2, status: 'active', is_blocked: false, blocking_reasons: [], created_at: '2026-01-01T00:00:00Z' },
 ] as Thread[]
 const thread = threads[0]
 
@@ -37,6 +37,7 @@ describe('continuity comic selectors', () => {
     render(<ContinuityThreadSelector threads={threads} value={null} onChange={vi.fn()} />)
 
     const search = screen.getByRole('searchbox')
+    fireEvent.change(search, { target: { value: 'Alpha' } })
     fireEvent.keyDown(search, { key: 'ArrowDown' })
 
     expect(screen.getByRole('option', { name: /Alpha Flight/i })).toHaveFocus()
@@ -190,5 +191,35 @@ describe('continuity comic selectors', () => {
     const [resyncedStart, resyncedEnd] = screen.getAllByRole('combobox')
     expect(resyncedStart).toHaveValue('12')
     expect(resyncedEnd).toHaveValue('13')
+  })
+
+  it('shows no unfiltered dump on empty search and requires typing to show results', () => {
+    render(<ContinuityThreadSelector threads={threads} value={null} onChange={vi.fn()} />)
+
+    expect(screen.getByText('Type to search comics')).toBeInTheDocument()
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+
+    const search = screen.getByRole('searchbox')
+    fireEvent.change(search, { target: { value: 'Alpha' } })
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /Alpha Flight/i })).toBeInTheDocument()
+    expect(screen.queryByText('Type to search comics')).not.toBeInTheDocument()
+  })
+
+  it('distinguishes ambiguous series with issue counts in selector options', () => {
+    const ambiguous = [
+      { id: 1, title: 'Starman', format: 'ongoing', issues_remaining: 61, total_issues: 80, queue_position: 1, status: 'active', is_blocked: false, blocking_reasons: [], created_at: '2026-01-01T00:00:00Z' },
+      { id: 2, title: 'Starman (Vol. 2) (1994 - 2001)', format: 'ongoing', issues_remaining: 3, total_issues: 12, queue_position: 2, status: 'active', is_blocked: false, blocking_reasons: [], created_at: '2026-01-01T00:00:00Z' },
+    ] as Thread[]
+    render(<ContinuityThreadSelector threads={ambiguous} value={null} onChange={vi.fn()} />)
+
+    const search = screen.getByRole('searchbox')
+    fireEvent.change(search, { target: { value: 'Starman' } })
+
+    const options = screen.getAllByRole('option')
+    expect(options).toHaveLength(2)
+    expect(options[0]).toHaveTextContent('61 remaining')
+    expect(options[1]).toHaveTextContent('3 remaining')
+    expect(options[0]).toHaveTextContent('80 total')
   })
 })

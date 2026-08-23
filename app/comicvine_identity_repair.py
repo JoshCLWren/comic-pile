@@ -1,4 +1,14 @@
-"""Persistence boundary for confidence-aware ComicVine identity repair."""
+"""Persistence boundary for confidence-aware ComicVine identity repair.
+
+NOTE on Phase 3 (conservative series resolution / #1628):
+This module's scoring machinery (`CandidateScore`, `RepairDecision`, etc.)
+predates issue #1555 (see PR #1049) and has no production callers in the
+current application. Per issue #1628, Phase 3 (wiring a conservative series
+resolver) is consciously scoped out rather than delivered as part of #1555.
+No new production callers should be wired to this repair pipeline without
+an explicit follow-up issue that completes the Phase 3 contract.
+See parent epic #1555 and audit issue #1628 for full context.
+"""
 
 from __future__ import annotations
 

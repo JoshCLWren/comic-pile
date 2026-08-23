@@ -565,11 +565,19 @@ async def test_reader_context_cross_thread_edge_without_expansion(
             "kind": "dependency",
             "source_issue_id": issues[2].id,
             "target_issue_id": other_issues[0].id,
+            "source_thread_id": _thread.id,
+            "target_thread_id": other_thread.id,
             "source_issue_number": issues[2].issue_number,
             "target_issue_number": other_issues[0].issue_number,
             "source_thread_title": "Neighborhood",
             "target_thread_title": "Distant",
             "note": "cross-thread",
+            "source_label": "Neighborhood #3",
+            "target_label": "Distant #1",
+            "explanation": (
+                f"Blocked by issue #{issues[2].issue_number} in Neighborhood "
+                f"(thread #{_thread.id})"
+            ),
         }
     ]
 
@@ -612,11 +620,16 @@ async def test_reader_context_continuity_rule_edges(
             "kind": "continuity",
             "source_issue_id": issues[1].id,
             "target_issue_id": issues[3].id,
+            "source_thread_id": _thread.id,
+            "target_thread_id": _thread.id,
             "source_issue_number": issues[1].issue_number,
             "target_issue_number": issues[3].issue_number,
             "source_thread_title": "Rules",
             "target_thread_title": "Rules",
             "note": "directive",
+            "source_label": "Rules #2",
+            "target_label": "Rules #4",
+            "explanation": "Rules #2 must be read before Rules #4",
         }
     ]
 

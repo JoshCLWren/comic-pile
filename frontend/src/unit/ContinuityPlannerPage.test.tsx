@@ -134,6 +134,7 @@ describe('ContinuityPlannerPage', () => {
 
     await user.clear(await screen.findByLabelText('Plan name'))
     await user.type(screen.getByLabelText('Plan name'), 'Kirby lane')
+    await user.type(screen.getByLabelText('Comic series'), 'Mister');
     await user.click(screen.getByRole('option', { name: /Mister Miracle/i }))
     await screen.findByRole('option', { name: /Annual 1/i })
     await user.selectOptions(screen.getByLabelText('Issue'), '40')
@@ -278,8 +279,10 @@ describe('ContinuityPlannerPage', () => {
       </MemoryRouter>,
     )
 
+    await user.type(screen.getByLabelText('Comic series'), 'Mister');
     await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
     await user.clear(screen.getByLabelText('Comic series'))
+    await user.type(screen.getByLabelText('Comic series'), 'New');
     await user.click(screen.getByRole('option', { name: /New Gods/i }))
     await screen.findByRole('option', { name: /#7$/ })
     resolveFirst({ issues: [issue], total_count: 1, page_size: 100, next_page_token: null })
@@ -300,6 +303,7 @@ describe('ContinuityPlannerPage', () => {
       </MemoryRouter>,
     )
 
+    await user.type(screen.getByLabelText('Comic series'), 'Mister');
     await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
     expect(await screen.findByRole('alert')).toHaveTextContent(/network down/i)
   })
@@ -323,6 +327,7 @@ describe('ContinuityPlannerPage', () => {
 
     await user.clear(await screen.findByLabelText('Plan name'))
     await user.type(screen.getByLabelText('Plan name'), 'Kirby lane')
+    await user.type(screen.getByLabelText('Comic series'), 'Mister');
     await user.click(screen.getByRole('option', { name: /Mister Miracle/i }))
     await screen.findByRole('option', { name: /Annual 1/i })
     await user.selectOptions(screen.getByLabelText('Issue'), '40')
@@ -348,6 +353,7 @@ describe('ContinuityPlannerPage', () => {
       </MemoryRouter>,
     )
 
+    await user.type(screen.getByLabelText('Comic series'), 'Mister');
     await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
     await screen.findByRole('option', { name: /Annual 1/i })
     await user.selectOptions(screen.getByLabelText('Issue'), '40')
@@ -448,6 +454,7 @@ describe('ContinuityPlannerPage', () => {
     const nameInput = await screen.findByLabelText('Plan name')
     await user.clear(nameInput)
     await user.type(nameInput, 'Temporary name')
+    await user.type(screen.getByLabelText('Comic series'), 'Mister');
     await user.click(screen.getByRole('option', { name: /Mister Miracle/i }))
     await screen.findByRole('option', { name: /Annual 1/i })
     await user.selectOptions(screen.getByLabelText('Issue'), '40')
@@ -467,6 +474,7 @@ describe('ContinuityPlannerPage', () => {
       </MemoryRouter>,
     )
 
+    await user.type(screen.getByLabelText('Comic series'), 'Mister');
     await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
     await screen.findByRole('option', { name: /Annual 1/i })
     await user.selectOptions(screen.getByLabelText('Issue'), '40')
@@ -496,6 +504,7 @@ describe('ContinuityPlannerPage', () => {
     const nameInput = await screen.findByLabelText('Plan name')
     await user.clear(nameInput)
     await user.type(nameInput, '   ')
+    await user.type(screen.getByLabelText('Comic series'), 'Mister');
     await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
     await screen.findByRole('option', { name: /Annual 1/i })
     await user.selectOptions(screen.getByLabelText('Issue'), '40')
@@ -586,6 +595,7 @@ describe('ContinuityPlannerPage', () => {
       </MemoryRouter>,
     )
 
+    await user.type(screen.getByLabelText('Comic series'), 'Mister');
     await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
     await screen.findByRole('option', { name: /Annual 1/i })
     await user.selectOptions(screen.getByLabelText('Issue'), '40')
@@ -608,6 +618,7 @@ describe('ContinuityPlannerPage', () => {
       </MemoryRouter>,
     )
 
+    await user.type(screen.getByLabelText('Comic series'), 'Mister');
     await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
     await screen.findByRole('option', { name: /Annual 1/i })
     await user.selectOptions(screen.getByLabelText('Issue'), '40')
@@ -637,6 +648,7 @@ describe('ContinuityPlannerPage', () => {
     )
 
     await waitFor(() => expect(mocks.listThreads).toHaveBeenCalledTimes(2))
+    await user.type(screen.getByLabelText('Comic series'), 'New');
     expect(await screen.findByRole('option', { name: /New Gods/i })).toBeVisible()
     await user.click(screen.getByRole('option', { name: /New Gods/i }))
     await screen.findByRole('option', { name: /#7$/ })
@@ -784,6 +796,7 @@ describe('ContinuityPlannerPage', () => {
       </MemoryRouter>,
     )
 
+    await user.type(screen.getByLabelText('Comic series'), 'Mister');
     await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
     await screen.findByRole('option', { name: /Annual 1/i })
     await user.selectOptions(screen.getByLabelText('Issue'), '40')
@@ -808,6 +821,7 @@ describe('ContinuityPlannerPage', () => {
       </MemoryRouter>,
     )
 
+    await user.type(screen.getByLabelText('Comic series'), 'Mister');
     await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
     await waitFor(() => expect(mocks.listIssues).toHaveBeenCalledTimes(2))
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
@@ -829,8 +843,10 @@ describe('ContinuityPlannerPage', () => {
       </MemoryRouter>,
     )
 
+    await user.type(screen.getByLabelText('Comic series'), 'Mister');
     await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
     await user.clear(screen.getByLabelText('Comic series'))
+    await user.type(screen.getByLabelText('Comic series'), 'New');
     await user.click(screen.getByRole('option', { name: /New Gods/i }))
     await screen.findByRole('option', { name: /#7$/ })
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
@@ -875,6 +891,7 @@ describe('ContinuityPlannerPage', () => {
       </MemoryRouter>,
     )
 
+    await user.type(screen.getByLabelText('Comic series'), 'Mister');
     await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
     await screen.findByRole('option', { name: /Annual 1/i })
     await user.selectOptions(screen.getByLabelText('Issue'), '40')
@@ -930,6 +947,7 @@ describe('ContinuityPlannerPage', () => {
       </MemoryRouter>,
     )
 
+    await user.type(screen.getByLabelText('Comic series'), 'Mister');
     await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
     await screen.findByRole('option', { name: /Annual 1/i })
     await user.selectOptions(screen.getByLabelText('Issue'), '40')

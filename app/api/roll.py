@@ -129,6 +129,8 @@ async def roll_dice(
         die=current_die,
         result=selected_index + 1,
         selection_method="random",
+        issue_id=selected_thread_issue_id,
+        issue_number=selected_thread_issue_number,
     )
     db.add(event)
 
@@ -268,6 +270,8 @@ async def override_roll(
         die=current_die,
         result=0,
         selection_method="override",
+        issue_id=override_thread_issue_id,
+        issue_number=override_thread_issue_number,
     )
     db.add(event)
 
