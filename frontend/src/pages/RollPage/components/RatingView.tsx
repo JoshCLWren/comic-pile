@@ -511,8 +511,10 @@ export function RatingView({
 
       {/* Tier 4: Engine details - collapsed by default */}
       <details data-testid="tier-engine-details" open={engineOpen} onToggle={(e) => setEngineOpen((e.target as HTMLDetailsElement).open)} className="rounded-2xl p-3" style={{ border: '1px solid rgba(255,255,255,0.12)', backgroundColor: 'rgba(255,255,255,0.03)' }}>
-        <summary id="tier-engine-heading" className="cursor-pointer text-sm font-black uppercase tracking-[0.15em] text-stone-300 list-none flex items-center justify-between">
-          <span>Engine details</span>
+        <summary className="cursor-pointer list-none flex items-center justify-between">
+          <h2 id="tier-engine-heading" className="text-sm font-black uppercase tracking-[0.15em] text-stone-300">
+            Engine details
+          </h2>
           <span className="text-[10px] font-bold text-stone-500">{engineOpen ? 'Hide' : 'Show'}</span>
         </summary>
         <div className="mt-3 space-y-3">

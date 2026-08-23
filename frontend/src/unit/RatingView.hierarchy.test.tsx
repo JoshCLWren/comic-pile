@@ -97,7 +97,7 @@ beforeEach(() => {
         {
           id: 7,
           name: 'Test Crossover',
-          applies_to_current_issue: true,
+          applies_to_current_issue: false,
           next_member: null,
           average_rating: null,
           ratings_count: 0,
