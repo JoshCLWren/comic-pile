@@ -523,23 +523,18 @@ async def list_sessions(
         .where(
             or_(
                 (Event.type == "roll") & (Event.selected_thread_id.is_not(None)),
-                (Event.type.in_(("rate", "snooze", "undo"))) & (Event.die_after.is_not(None)),
+                Event.type == "rate",
+                (Event.type.in_(("snooze", "undo"))) & (Event.die_after.is_not(None)),
             )
         )
         .order_by(Event.session_id, Event.timestamp, Event.id)
     )
     history_events = history_events_result.scalars().all()
 
-    rate_events_result = await db.execute(
-        select(Event)
-        .where(Event.session_id.in_(session_ids))
-        .where(Event.type == "rate")
-        .order_by(Event.session_id, Event.timestamp, Event.id)
-    )
-    rate_events = rate_events_result.scalars().all()
-
     rate_agg: dict[int, dict] = {}
-    for ev in rate_events:
+    for ev in history_events:
+        if ev.type != "rate":
+            continue
         if ev.session_id not in rate_agg:
             rate_agg[ev.session_id] = {"issues_read": 0, "last_rating": None}
         if ev.issues_read is not None:
