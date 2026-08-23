@@ -237,6 +237,16 @@ async def rate_thread(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Thread {target_thread_id} not found",
             )
+
+        origin_result = await db.execute(
+            select(Event)
+            .where(Event.session_id == current_session_id)
+            .where(Event.type == "roll")
+            .where(Event.selected_thread_id == target_thread_id)
+            .order_by(Event.timestamp.desc(), Event.id.desc())
+        )
+        originating_roll = origin_result.scalars().first()
+        source_roll_event_id = originating_roll.id if originating_roll else None
     else:
         result = await db.execute(
             select(Event)
@@ -254,6 +264,7 @@ async def rate_thread(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No active thread. Please roll the dice first.",
             )
+        source_roll_event_id = latest_action_event.id
 
         result = await db.execute(
             select(Thread)
@@ -458,6 +469,7 @@ async def rate_thread(
         die_after=new_die,
         issue_id=rated_issue_id,
         issue_number=rated_issue_number,
+        source_roll_event_id=source_roll_event_id,
     )
     db.add(event)
 
