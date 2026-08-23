@@ -1,7 +1,6 @@
 """Roll API routes."""
 
 import logging
-import random
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
@@ -30,6 +29,7 @@ from app.schemas import (
     RollResponse,
 )
 from comic_pile.queue import get_roll_pool_rows
+from comic_pile.roll_weights import select_weighted
 from comic_pile.session import get_current_die_for_session, get_or_create
 
 router = APIRouter(tags=["roll"])
@@ -90,11 +90,11 @@ async def roll_dice(
             detail="No active threads available to roll",
         )
 
-    # Bound the selection to the current die size, matching original semantics.
     bounded_rows = rows[:current_die]
-    pool_size = len(bounded_rows)
-    selected_index = random.randint(0, pool_size - 1)
-    selected_thread, unread_count, issue_number = bounded_rows[selected_index]
+    bandwidth = roll_request.bandwidth
+    selected_index, (selected_thread, unread_count, issue_number), _ = select_weighted(
+        bounded_rows, bandwidth
+    )
 
     selected_thread_id = selected_thread.id
     selected_thread_title = selected_thread.title
@@ -128,7 +128,7 @@ async def roll_dice(
         selected_thread_id=selected_thread_id,
         die=current_die,
         result=selected_index + 1,
-        selection_method="random",
+        selection_method="weighted",
     )
     db.add(event)
 
@@ -137,27 +137,38 @@ async def roll_dice(
         current_session.pending_thread_updated_at = datetime.now(UTC)
 
     await db.commit()
+
+    selected_thread_id_after = selected_thread_id
+    selected_thread_title_after = selected_thread_title
+    selected_thread_format_after = selected_thread_format
+    selected_thread_issues_after = selected_thread_issues_remaining
+    selected_thread_queue_after = selected_thread_queue_position
+    selected_thread_issue_id_after = selected_thread_issue_id
+    selected_thread_issue_number_after = selected_thread_issue_number
+    selected_thread_total_issues_after = selected_thread_total_issues
+    selected_thread_reading_progress_after = selected_thread_reading_progress
+
     await _invalidate_session_caches(current_user.id)
 
     snoozed_count = len(snoozed_ids)
     offset = snoozed_count
 
     return RollResponse(
-        thread_id=selected_thread_id,
-        title=selected_thread_title,
-        format=selected_thread_format,
-        issues_remaining=selected_thread_issues_remaining,
-        queue_position=selected_thread_queue_position,
+        thread_id=selected_thread_id_after,
+        title=selected_thread_title_after,
+        format=selected_thread_format_after,
+        issues_remaining=selected_thread_issues_after,
+        queue_position=selected_thread_queue_after,
         die_size=current_die,
         result=selected_index + 1,
         offset=offset,
         snoozed_count=snoozed_count,
-        issue_id=selected_thread_issue_id,
-        issue_number=selected_thread_issue_number,
-        next_issue_id=selected_thread_issue_id,
-        next_issue_number=selected_thread_issue_number,
-        total_issues=selected_thread_total_issues,
-        reading_progress=selected_thread_reading_progress,
+        issue_id=selected_thread_issue_id_after,
+        issue_number=selected_thread_issue_number_after,
+        next_issue_id=selected_thread_issue_id_after,
+        next_issue_number=selected_thread_issue_number_after,
+        total_issues=selected_thread_total_issues_after,
+        reading_progress=selected_thread_reading_progress_after,
     )
 
 

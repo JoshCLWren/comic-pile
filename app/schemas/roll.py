@@ -13,6 +13,11 @@ class RollRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    bandwidth: Literal["light", "balanced", "deep"] = Field(
+        default="balanced",
+        description="Reader bandwidth mode that influences candidate weighting.",
+    )
+
 
 class RollResponse(BaseModel):
     """Schema for roll response."""
