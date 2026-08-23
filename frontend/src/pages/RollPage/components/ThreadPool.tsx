@@ -146,7 +146,7 @@ export function ThreadPool({
                 }}
                 role="button"
                 tabIndex={0}
-                aria-label={`Die face ${index + 1}: ${thread.title}${thread.issue_number ? `, issue ${thread.issue_number}` : ''}${thread.route_labels?.length ? `, routes ${thread.route_labels.join(', ')}` : ''}. Open thread actions.`}
+                aria-label={`Die face ${index + 1}: ${thread.title}${thread.issue_number ? `, issue ${thread.issue_number}` : ''}${thread.route_labels?.length ? `, connected to ${thread.route_labels.join(', ')}` : ''}. Open thread actions.`}
                 className={`flex items-center gap-3 px-4 py-3 bg-white/5 border border-white/5 rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-amber-500/30' : ''
                   }`}
               >
@@ -156,21 +156,15 @@ export function ThreadPool({
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-stone-200 truncate text-sm">{thread.title}</p>
                   <p className="truncate text-xs text-stone-400">
-                    {thread.issue_number ? `Issue ${thread.issue_number}` : 'Next unread issue'}
+                    {thread.issue_number ? `#${thread.issue_number}` : 'Next unread issue'}
                   </p>
                   <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mt-0.5">{thread.format}</p>
                   {thread.route_labels?.length ? (
                     <p className="mt-1 truncate text-[10px] text-sky-300">
-                      Routes: {thread.route_labels.join(' · ')}
+                      Connected to: {thread.route_labels.join(' · ')}
                     </p>
                   ) : null}
-                  <span aria-hidden="true" className="text-stone-600 group-hover:text-stone-400 transition-colors text-lg leading-none shrink-0">
-                    ⋯
-                  </span>
                 </div>
-                <span aria-hidden="true" className="text-stone-600 group-hover:text-stone-400 transition-colors text-lg leading-none shrink-0">
-                  ⋯
-                </span>
               </div>
             )
           })
@@ -256,9 +250,9 @@ export function ThreadPool({
             >
               ▶
             </span>
-<span className="text-[10px] font-black text-stone-400 uppercase tracking-widest cursor-help border-b border-dashed border-stone-600">
-                Snoozed ({snoozedThreads.length})
-              </span>
+            <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest cursor-help border-b border-dashed border-stone-600">
+              Snoozed ({snoozedThreads.length})
+            </span>
           </button>
           {snoozedExpanded && (
             <div className="mt-2 space-y-1">
