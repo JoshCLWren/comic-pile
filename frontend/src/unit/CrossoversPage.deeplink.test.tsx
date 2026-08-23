@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CrossoversPage from '../pages/CrossoversPage'
@@ -67,7 +67,7 @@ describe('CrossoversPage deep links (issue #1877)', () => {
     renderPage('/crossovers?group=8')
 
     const secretWarsButton = await screen.findByRole('button', { name: /Secret Wars.*0 members/ })
-    expect(screen.getByText('This crossover has no comics yet.')).toBeVisible()
+    expect(await screen.findByText('This crossover has no comics yet.')).toBeVisible()
     expect(secretWarsButton).toHaveAttribute('aria-expanded', 'true')
 
     const annihilationButton = screen.getByRole('button', { name: /Annihilation.*2 members/ })
@@ -79,8 +79,8 @@ describe('CrossoversPage deep links (issue #1877)', () => {
     renderPage('/crossovers?group=7&starts_at=14')
 
     const annihilationButton = await screen.findByRole('button', { name: /Annihilation.*2 members/ })
+    expect(await screen.findByText('Starts at #14')).toBeVisible()
     expect(screen.getByText('Issue 11')).toBeVisible()
-    expect(screen.getByText('Starts at #14')).toBeVisible()
     expect(annihilationButton).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByRole('button', { name: /Secret Wars.*0 members/ })).toHaveAttribute('aria-expanded', 'false')
   })
@@ -105,7 +105,7 @@ describe('CrossoversPage deep links (issue #1877)', () => {
     renderPage('/crossovers?group=7&starts_at=14')
 
     const annihilationButton = await screen.findByRole('button', { name: /Annihilation.*2 members/ })
-    expect(annihilationButton).toHaveAttribute('aria-expanded', 'true')
+    await waitFor(() => expect(annihilationButton).toHaveAttribute('aria-expanded', 'true'))
 
     fireEvent.click(annihilationButton)
     expect(annihilationButton).toHaveAttribute('aria-expanded', 'false')
