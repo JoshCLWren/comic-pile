@@ -150,6 +150,7 @@ class ReadingEffortEstimate:
     samples: int | None = None
 
     def __post_init__(self) -> None:
+        """Validate source, band, confidence, minutes, and sample invariants."""
         if self.source not in KNOWN_EFFORT_SOURCES:
             raise ValueError(f"Unknown effort source: {self.source!r}")
         if self.band is not None and self.band not in KNOWN_EFFORT_BANDS:
