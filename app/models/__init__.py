@@ -1,5 +1,6 @@
 """SQLAlchemy database models."""
 
+from app.models.cache import CacheEntry, CacheGeneration
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule, ContinuityRuleSelectedMember
@@ -20,11 +21,14 @@ from app.models.release import Release
 from app.models.revoked_token import RevokedToken
 from app.models.session import Session
 from app.models.snapshot import Snapshot
+from app.models.taste_signal import TasteSignal
 from app.models.thread import Thread
 from app.models.user import User
 from app.models.user_preferences import UserPreferences
 
 __all__ = [
+    "CacheEntry",
+    "CacheGeneration",
     "CBLSource",
     "CBLSourceEntry",
     "CBLSourceList",
@@ -47,6 +51,7 @@ __all__ = [
     "RevokedToken",
     "Session",
     "Snapshot",
+    "TasteSignal",
     "Thread",
     "ThreadExternalSeriesMapping",
     "User",

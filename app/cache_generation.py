@@ -9,14 +9,13 @@ from __future__ import annotations
 
 import functools
 import inspect
-import json
 import logging
 from collections import Counter
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import ParamSpec, Protocol, TypeVar, cast
 
-from app.cache import TTL, UpstashCache, _generate_cache_key, _get_ttl_value, cache
+from app.cache import TTL, cache, generate_cache_key, ttl_seconds
 
 logger = logging.getLogger(__name__)
 
@@ -212,11 +211,11 @@ async def invalidate_user_cache(user_id: int) -> bool:
         ``True`` when the generation was bumped, otherwise ``False`` when caching
         is unavailable or the cache command fails.
     """
-    if not cache.is_initialized or cache._client is None:
+    if not cache.is_initialized:
         return False
 
     try:
-        await bump_user_generation(cache._client, user_id)
+        await bump_user_generation(cache, user_id)
     except Exception as exc:
         logger.warning("Cache generation invalidation failed: %s", exc)
         return False
@@ -237,7 +236,7 @@ async def invalidate_user_caches(user_ids: Iterable[int]) -> int:
         Number of user namespaces successfully invalidated.
     """
     distinct_user_ids = sorted(set(user_ids))
-    if not distinct_user_ids or not cache.is_initialized or cache._client is None:
+    if not distinct_user_ids or not cache.is_initialized:
         return 0
 
     invalidated = 0
@@ -245,7 +244,7 @@ async def invalidate_user_caches(user_ids: Iterable[int]) -> int:
         if user_id <= 0:
             raise ValueError("user_id must be positive")
         try:
-            await bump_user_generation(cache._client, user_id)
+            await bump_user_generation(cache, user_id)
         except Exception as exc:
             logger.warning("Cache generation invalidation failed: %s", exc)
             continue
@@ -307,27 +306,15 @@ async def _atomic_generation_value_get(
         RuntimeError: If no cache client is configured.
         ValueError: If Redis returns an invalid generation value.
     """
-    client = cache._client
-    if client is None:
-        raise RuntimeError("Cache client is unavailable")
-
     key = generation_key(user_id)
     normalized = logical_key.removeprefix("cache:")
     value_prefix = f"{_VALUE_PREFIX}:{user_id}:g"
-    if cache._is_upstash:
-        raw = await client.eval(
-            _ATOMIC_GENERATION_READ_SCRIPT,
-            keys=[key],
-            args=[value_prefix, normalized],
-        )
-    else:
-        raw = await client.eval(
-            _ATOMIC_GENERATION_READ_SCRIPT,
-            1,
-            key,
-            value_prefix,
-            normalized,
-        )
+
+    raw = await cache.eval_script(
+        _ATOMIC_GENERATION_READ_SCRIPT,
+        keys=[key],
+        args=[value_prefix, normalized],
+    )
 
     command_budget.record("generation_value_get")
     if not isinstance(raw, (list, tuple)) or len(raw) != 2:
@@ -338,14 +325,7 @@ async def _atomic_generation_value_get(
     if raw_value is None:
         return generation, False, None
 
-    if isinstance(raw_value, bytes):
-        serialized = raw_value.decode()
-    elif isinstance(raw_value, str):
-        serialized = raw_value
-    else:
-        raise ValueError("Cached value must be JSON text")
-
-    return generation, True, UpstashCache._reconstruct_value(json.loads(serialized))
+    return generation, True, cache.decode_value(raw_value)
 
 
 def generation_cached(
@@ -374,7 +354,7 @@ def generation_cached(
     """
 
     def decorator(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitable[T]]:
-        actual_ttl = _get_ttl_value(ttl) if isinstance(ttl, TTL) else ttl
+        actual_ttl = ttl_seconds(ttl) if isinstance(ttl, TTL) else ttl
         signature = inspect.signature(func)
 
         @functools.wraps(func)
@@ -388,11 +368,11 @@ def generation_cached(
                 return await func(*args, **kwargs)
 
             user_id = user_id_from_arguments(bound.arguments)
-            if user_id is None or cache._client is None:
+            if user_id is None:
                 return await func(*args, **kwargs)
 
             func_name = getattr(func, "__name__", func.__class__.__name__)
-            logical_key = _generate_cache_key(func_name, func, args, kwargs)
+            logical_key = generate_cache_key(func_name, func, args, kwargs)
 
             try:
                 generation, cache_hit, cached_value = await _atomic_generation_value_get(

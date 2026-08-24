@@ -1,7 +1,6 @@
 """Roll API routes."""
 
 import logging
-import random
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
@@ -31,6 +30,7 @@ from app.schemas import (
     RollResponse,
 )
 from app.schemas.recommendation_context import RecommendationContextCreate
+from app.schemas.session import build_session_bandwidth_state
 from comic_pile.queue import get_roll_pool_rows
 from comic_pile.session import get_current_die_for_session, get_or_create
 
@@ -94,8 +94,21 @@ async def roll_dice(
 
     # Bound the selection to the current die size, matching original semantics.
     bounded_rows = rows[:current_die]
-    pool_size = len(bounded_rows)
-    selected_index = random.randint(0, pool_size - 1)
+
+    # Apply momentum weighting; weights fall back to uniform (pure-random)
+    # when no positive momentum applies, preserving the pure-random bypass.
+    session_events_result = await db.execute(
+        select(Event).where(Event.session_id == current_session_id)
+    )
+    session_events = list(session_events_result.scalars().all())
+
+    selected_index, max_bonus = await weighted_momentum_selection(
+        db=db,
+        bounded_rows=bounded_rows,
+        user_id=user_id,
+        session_events=session_events,
+        now=datetime.now(UTC),
+    )
     selected_thread, unread_count, issue_number = bounded_rows[selected_index]
 
     selected_thread_id = selected_thread.id
@@ -130,7 +143,7 @@ async def roll_dice(
         selected_thread_id=selected_thread_id,
         die=current_die,
         result=selected_index + 1,
-        selection_method="random",
+        selection_method="momentum" if max_bonus > 0 else "random",
         issue_id=selected_thread_issue_id,
         issue_number=selected_thread_issue_number,
     )
@@ -463,6 +476,16 @@ async def roll_bootstrap(
 
     current_session_id = current_session.id
 
+    # Extract bandwidth state before any further awaits; nullable columns on
+    # legacy sessions serialize to a safe all-null canonical shape.
+    bandwidth_state = build_session_bandwidth_state(
+        predicted_bandwidth=current_session.predicted_bandwidth,
+        active_bandwidth=current_session.active_bandwidth,
+        confidence=current_session.bandwidth_confidence,
+        source=current_session.bandwidth_source,
+        mode_version=current_session.bandwidth_version,
+    )
+
     _, active_thread = await get_session_with_thread_safe(current_session_id, db)
 
     die_size = await get_current_die_for_session(current_session, db)
@@ -569,6 +592,9 @@ async def roll_bootstrap(
         RollBootstrapThread(id=row.id, title=row.title, format=row.format)
         for row in blocked_result.all()
     ]
+    snoozed_count = len(snoozed_threads)
+    snoozed_threads = snoozed_threads[:RollBootstrapResponse.summary_limit]
+    blocked_threads = blocked_threads[:RollBootstrapResponse.summary_limit]
 
     stale_cutoff = datetime.now(UTC) - timedelta(days=7)
     effective_activity = func.coalesce(Thread.last_activity_at, Thread.created_at)
@@ -611,10 +637,11 @@ async def roll_bootstrap(
         pending_thread_id=pending_thread_id,
         last_rolled_result=last_rolled_result,
         active_thread=active_thread,
-        roll_pool=roll_pool,
         roll_recovery=roll_recovery,
+        bandwidth=bandwidth_state,
+        roll_pool=roll_pool,
         snoozed_threads=snoozed_threads,
-        snoozed_count=len(snoozed_threads),
+        snoozed_count=snoozed_count,
         blocked_count=blocked_count,
         blocked_threads=blocked_threads,
         stale_thread_count=stale_thread_count,

@@ -191,6 +191,17 @@ return RollResponse(
 
 ## API Patterns
 
+### Layering Rule (House Standard): Router → Service → Repository
+Routers validate and delegate; services decide; repositories persist.
+
+- **Routers (`app/api/`)** do request validation, auth dependencies, exactly one service call, and HTTP status/error mapping. **No query construction, no business rules, no persistence** — routers must not import or call `select`, `insert`, `update`, `delete`, `func`, `text`, `or_`/`and_`, loader options like `selectinload`, or session execution methods (`execute`, `scalars`, `scalar`, `stream`).
+- **Services (`app/services/`)** own all business logic and orchestration and coordinate repositories.
+- **Repositories (`app/repositories/`)** own ALL query construction and persistence for a model family. They return ORM models or plain tuples/dicts — never HTTP types or response schemas.
+
+New backend code must follow this layering without exceptions. Legacy modules are being migrated incrementally; the conformance test `tests/test_router_layering_conformance.py` enforces that router violations never grow beyond `tests/router_layering_baseline.json`, and every migrated module must shrink that baseline file.
+
+Remember the MissingGreenlet rule above when services/repositories commit: extract model attributes BEFORE `await db.commit()`.
+
 ### Pydantic Schemas
 All API input/output uses Pydantic models in `app/schemas/`:
 ```python
