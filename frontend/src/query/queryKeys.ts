@@ -102,14 +102,4 @@ export const queryKeys = {
     all: ['dependencyGroups'] as const,
     forThread: (threadId: number) => ['dependencyGroups', 'thread', threadId] as const,
   },
-  session: {
-    all: ['session'] as const,
-    list: () => ['session', 'list'] as const,
-    current: () => ['session', 'current'] as const,
-    pages: () => ['session', 'pages'] as const,
-    page: ({ pageToken, pageSize }: SessionPageKeyOptions) =>
-      ['session', 'pages', { pageToken: pageToken ?? null, pageSize }] as const,
-    detail: (sessionId: number) => ['session', 'detail', sessionId] as const,
-    snapshots: (sessionId: number) => ['session', 'snapshots', sessionId] as const,
-  },
 } as const

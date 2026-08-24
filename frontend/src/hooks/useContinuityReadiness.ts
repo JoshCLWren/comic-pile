@@ -12,13 +12,6 @@ interface ContinuityReadinessState {
   refetch: () => void
 }
 
-const EMPTY_STATE: ContinuityReadinessState = {
-  readiness: null,
-  isLoading: false,
-  error: null,
-  refetch: () => undefined,
-}
-
 function normalizeError(error: unknown): Error {
   if (error instanceof Error) {
     return error
@@ -32,7 +25,7 @@ export function useContinuityReadiness(
   const enabled = issueId != null
 
   const query = useQuery({
-    queryKey: enabled ? queryKeys.continuity.readiness('issue', issueId) : undefined,
+    queryKey: queryKeys.continuity.readiness('issue', issueId ?? -1),
     queryFn: async () => {
       if (!enabled) {
         throw new Error('No issue ID')
