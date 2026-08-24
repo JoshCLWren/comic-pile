@@ -106,7 +106,6 @@ describe('ReadingQuizModal', () => {
   })
 
   it('seeds selections from the current session mode when reopened', async () => {
-    const user = userEvent.setup()
     renderQuiz({
       initialBandwidthAnswerId: 'deep',
       initialIntentAnswerId: 'familiar',

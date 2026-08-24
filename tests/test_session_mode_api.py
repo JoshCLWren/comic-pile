@@ -57,7 +57,7 @@ async def test_get_mode_returns_persisted_state(
     user = await get_or_create_user_async(async_db)
     session = await _create_session(async_db, user.id)
 
-    empty = await auth_client.get(f"/api/sessions/{session.id}/mode")
+    empty = await auth_client.get(f"/api/v1/sessions/{session.id}/mode")
     assert empty.status_code == 200
     assert empty.json()["bandwidth"] is None
     assert empty.json()["intent"] is None
@@ -67,7 +67,7 @@ async def test_get_mode_returns_persisted_state(
         json={"bandwidth": "deep", "intent": "explore"},
     )
 
-    filled = await auth_client.get(f"/api/sessions/{session.id}/mode")
+    filled = await auth_client.get(f"/api/v1/sessions/{session.id}/mode")
     assert filled.status_code == 200
     data = filled.json()
     assert data["bandwidth"] == "deep"
