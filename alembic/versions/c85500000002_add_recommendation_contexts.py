@@ -1,8 +1,8 @@
 """Add recommendation_contexts table for intent/Taste Bank factor recording.
 
 Revision ID: c85500000002
-Revises: c85500000005
-Create Date: 2026-08-22 00:00:00.000000
+Revises: 05f8245be920
+Create Date: 2026-08-24 00:00:00.000000
 """
 
 from collections.abc import Sequence
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "c85500000002"
-down_revision: str | Sequence[str] | None = "c85500000005"
+down_revision: str | Sequence[str] | None = "05f8245be920"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
