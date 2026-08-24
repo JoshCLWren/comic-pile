@@ -6,6 +6,7 @@ import json
 import tempfile
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import TypeAdapter, ValidationError
@@ -240,7 +241,7 @@ async def list_cbl_source_lists(
     return [_to_list_response(cbllist) for cbllist in lists_result.scalars().all()]
 
 
-async def _read_and_parse_upload(file: UploadFile) -> tuple[str, object]:
+async def _read_and_parse_upload(file: UploadFile) -> tuple[str, CBLList]:
     """Validate and parse an uploaded CBL file without persisting it.
 
     Args:
