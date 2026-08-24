@@ -19,17 +19,17 @@ class ServiceError(Exception):
         super().__init__(detail)
 
 
-class NotFound(ServiceError):
+class NotFoundError(ServiceError):
     """A referenced entity does not exist or is not owned by the caller."""
 
 
-class InvalidRequest(ServiceError):
+class InvalidRequestError(ServiceError):
     """A request is syntactically valid but semantically unacceptable."""
 
 
-class Conflict(ServiceError):
+class ConflictError(ServiceError):
     """The request collides with existing state (duplicate key, stale order)."""
 
 
-class Forbidden(ServiceError):
+class ForbiddenError(ServiceError):
     """The caller is not authorized to perform this action."""

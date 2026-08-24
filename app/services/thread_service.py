@@ -23,13 +23,12 @@ from app.schemas import (
     QueueThreadListResponse,
     ReactivateRequest,
     RollResponse,
-    SetCurrentIssueResponse,
     ThreadCreate,
     ThreadDetail,
     ThreadResponse,
     ThreadUpdate,
 )
-from app.services.errors import Forbidden, InvalidRequest, NotFound
+from app.services.errors import ForbiddenError, InvalidRequestError, NotFoundError
 from app.services.queue_pagination import (
     QueueCursor,
     QueueSort,
@@ -51,7 +50,7 @@ async def _require_owned_thread(
     *,
     for_update: bool = False,
 ) -> Thread:
-    """Return a user-owned thread or raise a 404-mapped NotFound error.
+    """Return a user-owned thread or raise a 404-mapped NotFoundError.
 
     Args:
         db: Database session.
@@ -63,11 +62,11 @@ async def _require_owned_thread(
         The owned thread.
 
     Raises:
-        NotFound: When the thread does not exist for this user.
+        NotFoundError: When the thread does not exist for this user.
     """
     thread = await thread_repository.find_owned(db, user_id, thread_id, for_update=for_update)
     if thread is None:
-        raise NotFound(f"Thread {thread_id} not found")
+        raise NotFoundError(f"Thread {thread_id} not found")
     return thread
 
 
@@ -228,7 +227,7 @@ async def list_queue_threads(
         more exist.
 
     Raises:
-        InvalidRequest: When the page token is stale or malformed.
+        InvalidRequestError: When the page token is stale or malformed.
     """
     validated_sort: QueueSort = cast(QueueSort, sort)
     normalized_search = normalize_queue_search(search)
@@ -238,7 +237,7 @@ async def list_queue_threads(
         try:
             cursor = decode_queue_cursor(page_token, sort=validated_sort, search=search)
         except ValueError as exc:
-            raise InvalidRequest(str(exc)) from exc
+            raise InvalidRequestError(str(exc)) from exc
 
     threads = await thread_repository.fetch_queue_page(
         db,
@@ -378,7 +377,7 @@ async def get_thread_detail(db: AsyncSession, user_id: int, thread_id: int) -> T
         ThreadDetail for the thread.
 
     Raises:
-        NotFound: When the thread does not exist for this user.
+        NotFoundError: When the thread does not exist for this user.
     """
     thread = await _require_owned_thread(db, user_id, thread_id)
     tr = await thread_to_response(thread, db)
@@ -406,7 +405,7 @@ async def update_thread(
         ThreadResponse with updated thread details.
 
     Raises:
-        NotFound: When the thread does not exist for this user.
+        NotFoundError: When the thread does not exist for this user.
     """
     thread = await _require_owned_thread(db, user_id, thread_id)
     if thread_data.title is not None:
@@ -443,8 +442,8 @@ async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
         thread_id: Primary key of the thread.
 
     Raises:
-        NotFound: When the thread does not exist for this user.
-        InvalidRequest: When the database refuses the deletion.
+        NotFoundError: When the thread does not exist for this user.
+        InvalidRequestError: When the database refuses the deletion.
     """
     thread = await _require_owned_thread(db, user_id, thread_id)
 
@@ -461,11 +460,11 @@ async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
         await db.commit()
     except IntegrityError as exc:
         await db.rollback()
-        raise InvalidRequest(f"Cannot delete thread: {exc}") from exc
+        raise InvalidRequestError(f"Cannot delete thread: {exc}") from exc
     except Exception as exc:
         await db.rollback()
         logger.exception("Unexpected error deleting thread %s", thread_id)
-        raise InvalidRequest(f"Cannot delete thread: {exc}") from exc
+        raise InvalidRequestError(f"Cannot delete thread: {exc}") from exc
     await invalidate_user_view(user_id)
 
 
@@ -486,15 +485,15 @@ async def reactivate_completed_thread(
         ThreadResponse with reactivated thread details.
 
     Raises:
-        NotFound: When the thread does not exist for this user.
-        InvalidRequest: When the thread is not completed or the issue count
+        NotFoundError: When the thread does not exist for this user.
+        InvalidRequestError: When the thread is not completed or the issue count
             is not positive.
     """
     thread = await _require_owned_thread(db, user_id, request.thread_id)
     if thread.status != "completed":
-        raise InvalidRequest(f"Thread {request.thread_id} is not completed")
+        raise InvalidRequestError(f"Thread {request.thread_id} is not completed")
     if request.issues_to_add <= 0:
-        raise InvalidRequest("Must add at least 1 issue")
+        raise InvalidRequestError("Must add at least 1 issue")
 
     await thread_repository.shift_active_queue_positions(db, user_id)
 
@@ -561,13 +560,13 @@ async def set_pending_thread(
         RollResponse describing the selected thread.
 
     Raises:
-        NotFound: When the thread does not exist for this user.
-        InvalidRequest: When the thread is not active or has no issues left.
+        NotFoundError: When the thread does not exist for this user.
+        InvalidRequestError: When the thread is not active or has no issues left.
     """
     thread = await _require_owned_thread(db, user_id, thread_id)
 
     if thread.status != "active":
-        raise InvalidRequest(f"Thread {thread_id} is not active")
+        raise InvalidRequestError(f"Thread {thread_id} is not active")
 
     thread_id_int = thread.id
     thread_title = thread.title
@@ -587,7 +586,7 @@ async def set_pending_thread(
             thread_issue_number = next_issue.issue_number
 
     if thread_issues <= 0:
-        raise InvalidRequest(f"Thread {thread_id} has no issues remaining")
+        raise InvalidRequestError(f"Thread {thread_id} has no issues remaining")
 
     current_session = await get_or_create(db, user_id=user_id)
     current_session_id = current_session.id
@@ -658,11 +657,11 @@ async def backdate_thread_for_testing(
         ThreadResponse with updated thread details.
 
     Raises:
-        Forbidden: When not running in the test environment.
-        NotFound: When the thread does not exist for this user.
+        ForbiddenError: When not running in the test environment.
+        NotFoundError: When the thread does not exist for this user.
     """
     if not os.getenv("TEST_ENVIRONMENT"):
-        raise Forbidden("This endpoint is only available in test environment")
+        raise ForbiddenError("This endpoint is only available in test environment")
 
     thread = await _require_owned_thread(db, user_id, thread_id)
 
@@ -697,17 +696,17 @@ async def migrate_thread_to_issues(
         ThreadResponse with the migrated thread.
 
     Raises:
-        NotFound: When the thread does not exist for this user.
-        InvalidRequest: When the thread already tracks issues or the range is
+        NotFoundError: When the thread does not exist for this user.
+        InvalidRequestError: When the thread already tracks issues or the range is
             inconsistent.
     """
     thread = await _require_owned_thread(db, user_id, thread_id)
 
     if thread.total_issues is not None:
-        raise InvalidRequest(f"Thread {thread_id} already uses issue tracking")
+        raise InvalidRequestError(f"Thread {thread_id} already uses issue tracking")
 
     if last_issue_read > total_issues:
-        raise InvalidRequest("last_issue_read cannot exceed total_issues")
+        raise InvalidRequestError("last_issue_read cannot exceed total_issues")
 
     await thread.migrate_to_issues(last_issue_read, total_issues, db)
 
