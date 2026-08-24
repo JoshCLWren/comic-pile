@@ -1,14 +1,15 @@
 name: Factory Completion Drain
 
 on:
-  # Primary trigger: follow every dispatcher tick without adding another
-  # high-frequency cron surface that GitHub can silently starve under load.
+  # Follow every dispatcher tick so completion uses the same reliable heartbeat
+  # that already feeds implementation work.
   workflow_run:
     workflows: ["Fixed Model Factory Dispatcher"]
     types: [completed]
-  # Best-effort fallback if the dispatcher schedule itself loses occurrences.
+  # Independent five-minute recovery path. Severe review backlog must not wait
+  # fifteen minutes for another chance if a dispatcher completion event is lost.
   schedule:
-    - cron: '7-52/15 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -30,18 +31,19 @@ jobs:
         with:
           ref: main
 
-      - name: Assign bounded completion batch
+      - name: Assign full healthy completion fleet
         id: batch
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
-          result="$(python3 .github/scripts/factory_completion_controller.py)"
+          result="$(python3 .github/scripts/factory_full_completion_controller.py)"
           echo "$result" | jq .
           workers="$(jq -c '[.assignments[].worker]' <<< "$result")"
           echo "workers=$workers" >> "$GITHUB_OUTPUT"
           echo "backlog=$(jq -r '.backlog' <<< "$result")" >> "$GITHUB_OUTPUT"
+          echo "assigned=$(jq -r '.assignments | length' <<< "$result")" >> "$GITHUB_OUTPUT"
 
       - name: Dispatch assigned completion workers
         if: steps.batch.outputs.workers != '[]'
@@ -84,10 +86,10 @@ jobs:
             exit 1
           fi
 
-      - name: Report idle completion drain
-        if: steps.batch.outputs.workers == '[]'
+      - name: Report completion drain result
         shell: bash
-        run: |
-          echo "Completion backlog ${BACKLOG:-0} is below saturation or no safe assignments remain"
         env:
           BACKLOG: ${{ steps.batch.outputs.backlog }}
+          ASSIGNED: ${{ steps.batch.outputs.assigned }}
+        run: |
+          echo "Completion backlog ${BACKLOG:-0}; dispatched ${ASSIGNED:-0} healthy completion workers"
