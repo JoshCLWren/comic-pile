@@ -1,4 +1,6 @@
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
+import type { PropsWithChildren } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { useUpdateThread } from '../hooks/useThread'
 import { applyEditedThreadToQueuePages } from '../query/cacheEffects'
@@ -19,6 +21,17 @@ vi.mock('../query/cacheEffects', () => ({
 const mockedThreadsApi = vi.mocked(threadsApi)
 const mockedApplyEditedThreadToQueuePages = vi.mocked(applyEditedThreadToQueuePages)
 
+function renderHookWithClient<T>(hook: () => T) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
+  return renderHook(hook, {
+    wrapper: ({ children }: PropsWithChildren) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  })
+}
+
 beforeEach(() => {
   mockedThreadsApi.update.mockReset()
   mockedApplyEditedThreadToQueuePages.mockReset()
@@ -31,7 +44,7 @@ it('publishes the authoritative update through the targeted thread-cache contrac
   } as Thread
   mockedThreadsApi.update.mockResolvedValue(updatedThread)
 
-  const { result } = renderHook(() => useUpdateThread())
+  const { result } = renderHookWithClient(() => useUpdateThread())
 
   let returnedThread: Thread | undefined
   await act(async () => {
@@ -53,7 +66,7 @@ it('does not touch targeted cache state when the update request fails', async ()
   const failure = new Error('update failed')
   mockedThreadsApi.update.mockRejectedValue(failure)
 
-  const { result } = renderHook(() => useUpdateThread())
+  const { result } = renderHookWithClient(() => useUpdateThread())
 
   let caught: unknown
   await act(async () => {
@@ -69,6 +82,6 @@ it('does not touch targeted cache state when the update request fails', async ()
 
   expect(caught).toBe(failure)
   expect(mockedApplyEditedThreadToQueuePages).not.toHaveBeenCalled()
-  expect(result.current.isError).toBe(true)
+  await waitFor(() => expect(result.current.isError).toBe(true))
   expect(result.current.isPending).toBe(false)
 })

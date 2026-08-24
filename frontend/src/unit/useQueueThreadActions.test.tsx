@@ -2,23 +2,26 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import {
-  useDeleteThread,
   useMoveToBack,
   useMoveToFront,
   useMoveToPosition,
   useShuffleQueue,
 } from '../hooks/useQueue'
+import { useDeleteThread } from '../hooks/useThread'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { threadsApi } from '../services/api'
 import { useQueueThreadActions } from '../pages/QueuePage/useQueueThreadActions'
 import type { Thread } from '../types'
 
 vi.mock('../hooks/useQueue', () => ({
-  useDeleteThread: vi.fn(),
   useMoveToBack: vi.fn(),
   useMoveToFront: vi.fn(),
   useMoveToPosition: vi.fn(),
   useShuffleQueue: vi.fn(),
+}))
+
+vi.mock('../hooks/useThread', () => ({
+  useDeleteThread: vi.fn(),
 }))
 
 vi.mock('../hooks/useSnooze', () => ({
