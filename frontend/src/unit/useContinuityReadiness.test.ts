@@ -26,7 +26,9 @@ describe('useContinuityReadiness', () => {
     const { result } = renderHook(() => useContinuityReadiness(7))
 
     await waitFor(() => expect(result.current.readiness).toEqual(readiness))
-    act(() => result.current.refetch())
+    await act(async () => {
+      await result.current.refetch()
+    })
     await waitFor(() => expect(mocks.evaluate).toHaveBeenCalledTimes(2))
   })
 
