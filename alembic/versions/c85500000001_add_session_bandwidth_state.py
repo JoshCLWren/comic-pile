@@ -1,8 +1,8 @@
-"""Add ephemeral session bandwidth state for Phase 4 Snooze corrections.
+"""Add ephemeral session bandwidth state columns.
 
 Revision ID: c85500000001
-Revises: c85400000001
-Create Date: 2026-08-22 00:00:00.000000
+Revises: d4e5f6a7b8c9
+Create Date: 2026-08-23 00:00:00.000000
 """
 
 from collections.abc import Sequence
@@ -12,23 +12,27 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "c85500000001"
-down_revision: str | Sequence[str] | None = "c85400000001"
+down_revision: str | Sequence[str] | None = "d4e5f6a7b8c9"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    """Add ephemeral bandwidth columns to sessions table.
-
-    These nullable columns track inferred session bandwidth, confidence,
-    source, and the original launch prediction. They support Phase 4
-    Snooze-as-session-correction without affecting existing rows.
-    """
+    """Add nullable bandwidth state columns to the sessions table."""
     op.add_column(
         "sessions",
         sa.Column(
-            "inferred_bandwidth",
-            sa.String(20),
+            "predicted_bandwidth",
+            sa.String(length=20),
+            nullable=True,
+            comment="Predicted bandwidth at session start: light, balanced, or deep",
+        ),
+    )
+    op.add_column(
+        "sessions",
+        sa.Column(
+            "active_bandwidth",
+            sa.String(length=20),
             nullable=True,
             comment="Current active bandwidth: light, balanced, or deep",
         ),
@@ -39,32 +43,33 @@ def upgrade() -> None:
             "bandwidth_confidence",
             sa.Float(),
             nullable=True,
-            comment="Confidence in inferred bandwidth (0.0–1.0)",
+            comment="Confidence in the active bandwidth (0.0-1.0)",
         ),
     )
     op.add_column(
         "sessions",
         sa.Column(
             "bandwidth_source",
-            sa.String(20),
+            sa.String(length=30),
             nullable=True,
-            comment="Source of bandwidth inference: launch, snooze, or manual",
+            comment="Source of the bandwidth state: inferred, manual, snooze, or quiz",
         ),
     )
     op.add_column(
         "sessions",
         sa.Column(
-            "predicted_bandwidth",
-            sa.String(20),
+            "bandwidth_version",
+            sa.String(length=50),
             nullable=True,
-            comment="Original launch prediction for accuracy analysis",
+            comment="Mode/algorithm version that produced the bandwidth state",
         ),
     )
 
 
 def downgrade() -> None:
-    """Remove ephemeral bandwidth columns from sessions table."""
-    op.drop_column("sessions", "predicted_bandwidth")
+    """Remove the session bandwidth state columns."""
+    op.drop_column("sessions", "bandwidth_version")
     op.drop_column("sessions", "bandwidth_source")
     op.drop_column("sessions", "bandwidth_confidence")
-    op.drop_column("sessions", "inferred_bandwidth")
+    op.drop_column("sessions", "active_bandwidth")
+    op.drop_column("sessions", "predicted_bandwidth")

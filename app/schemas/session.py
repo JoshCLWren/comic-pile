@@ -6,8 +6,15 @@ backward compatibility but will be removed in a future version.
 """
 
 from datetime import UTC, datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_serializer
+
+BandwidthLevel = Literal["light", "balanced", "deep"]
+BandwidthSource = Literal["inferred", "manual", "snooze", "quiz"]
+
+_BANDWIDTH_LEVELS: frozenset[str] = frozenset({"light", "balanced", "deep"})
+_BANDWIDTH_SOURCES: frozenset[str] = frozenset({"inferred", "manual", "snooze", "quiz"})
 
 
 def _to_utc_iso(value: datetime) -> str:
@@ -33,34 +40,80 @@ class SnoozedThreadInfo(BaseModel):
     title: str
 
 
+class SessionBandwidthState(BaseModel):
+    """Canonical ephemeral bandwidth state for the active reading session.
+
+    Every field is always present but nullable so legacy sessions that predate
+    bandwidth tracking serialize to a stable, safe shape instead of a missing
+    or partially shaped object. This is the single canonical source consumed by
+    later weighting and UI work.
+    """
+
+    predicted_bandwidth: BandwidthLevel | None
+    active_bandwidth: BandwidthLevel | None
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    source: BandwidthSource | None
+    mode_version: str | None
+
+
+def build_session_bandwidth_state(
+    *,
+    predicted_bandwidth: str | None,
+    active_bandwidth: str | None,
+    confidence: float | None,
+    source: str | None,
+    mode_version: str | None,
+) -> SessionBandwidthState:
+    """Build a canonical bandwidth state from raw stored values, safely.
+
+    Unknown enum strings, out-of-range confidences, or other legacy garbage are
+    normalized to ``None`` so bootstrap never fails because of stored state.
+    Valid values pass through unchanged.
+
+    Args:
+        predicted_bandwidth: Stored predicted bandwidth value or None.
+        active_bandwidth: Stored active bandwidth value or None.
+        confidence: Stored confidence in ``[0.0, 1.0]`` or None.
+        source: Stored bandwidth source value or None.
+        mode_version: Stored mode/algorithm version tag or None.
+
+    Returns:
+        A SessionBandwidthState with invalid values normalized to None.
+    """
+    return SessionBandwidthState(
+        predicted_bandwidth=(
+            predicted_bandwidth if predicted_bandwidth in _BANDWIDTH_LEVELS else None
+        ),
+        active_bandwidth=active_bandwidth if active_bandwidth in _BANDWIDTH_LEVELS else None,
+        confidence=(
+            confidence if confidence is not None and 0.0 <= confidence <= 1.0 else None
+        ),
+        source=source if source in _BANDWIDTH_SOURCES else None,
+        mode_version=mode_version,
+    )
+
+
+SnoozeCorrectionReason = Literal[
+    "heavy_snooze_shift",
+    "light_snooze_deflate",
+    "confidence_degrade",
+    "no_correction",
+    "clarification_needed",
+]
+
+
 class SnoozeCorrectionInfo(BaseModel):
-    """Structured Snooze correction guidance for the client.
+    """Structured Snooze correction guidance for the client (#1726).
 
     Returned with every Snooze response so the frontend can later decide
-    whether to show a clarification sheet, without implementing UI in this
-    issue. The fields are compact and canonical through generated OpenAPI
-    types.
+    whether to show a clarification sheet, without implementing modal UI in
+    this phase. Fields are compact codes and flags, never prose.
     """
 
     bandwidth_changed: bool = Field(
-        description="Whether the inferred bandwidth level changed after this snooze"
+        description="Whether the active bandwidth level changed after this snooze",
     )
-    active_bandwidth: str | None = Field(
-        default=None,
-        description="Current active bandwidth after correction: light, balanced, or deep",
-    )
-    active_confidence: float | None = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description="Confidence in the active bandwidth (0.0–1.0)",
-    )
-    predicted_bandwidth: str | None = Field(
-        default=None,
-        description="Original launch prediction (preserved for accuracy analysis)",
-    )
-    reason_code: str | None = Field(
-        default=None,
+    reason_code: SnoozeCorrectionReason = Field(
         description=(
             "Compact reason code: heavy_snooze_shift, light_snooze_deflate, "
             "confidence_degrade, no_correction, or clarification_needed"
@@ -68,7 +121,7 @@ class SnoozeCorrectionInfo(BaseModel):
     )
     suggest_clarification: bool = Field(
         default=False,
-        description="True when repeated contradictory snoozes indicate the user should clarify",
+        description="True when repeated contradictory snoozes make the mode uncertain",
     )
 
 
@@ -83,6 +136,8 @@ class ActiveThreadInfo(BaseModel):
     last_rolled_result: int | None
     total_issues: int | None = None
     reading_progress: str | None = None
+    issues_read: int | None = None
+    last_rating: float | None = None
 
     issue_id: int | None = Field(
         default=None,
@@ -116,26 +171,13 @@ class SessionResponse(BaseModel):
     snoozed_thread_ids: list[int] = []
     snoozed_threads: list[SnoozedThreadInfo] = []
     pending_thread_id: int | None = None
-    # Ephemeral session bandwidth state (Phase 4)
-    inferred_bandwidth: str | None = Field(
+    bandwidth: SessionBandwidthState | None = Field(
         default=None,
-        description="Current active bandwidth: light, balanced, or deep",
+        description=(
+            "Canonical ephemeral bandwidth state for the session. Null on endpoints "
+            "that do not load bandwidth state."
+        ),
     )
-    bandwidth_confidence: float | None = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description="Confidence in inferred bandwidth (0.0–1.0)",
-    )
-    bandwidth_source: str | None = Field(
-        default=None,
-        description="Source of bandwidth inference: launch, snooze, or manual",
-    )
-    predicted_bandwidth: str | None = Field(
-        default=None,
-        description="Original launch prediction for accuracy analysis",
-    )
-    # Structured correction guidance from the most recent Snooze (if any)
     correction: SnoozeCorrectionInfo | None = Field(
         default=None,
         description=(
@@ -168,6 +210,7 @@ class EventDetail(BaseModel):
     type: str
     timestamp: datetime
     thread_title: str | None
+    description: str | None = None
     die: int | None = None
     result: int | None = None
     selection_method: str | None = None
