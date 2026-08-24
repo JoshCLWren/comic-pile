@@ -129,6 +129,7 @@ describe('ComicVineSearchDialog mode branching', () => {
     render(<ComicVineSearchDialog {...defaultProps({ threadTitle: 'Ultimate Spider-Man' })} />)
 
     const input = screen.getByPlaceholderText('Search series title...')
+    fireEvent.change(input, { target: { value: '' } })
     fireEvent.change(input, { target: { value: 'Ultimate Spider-Man' } })
 
     const options = await screen.findAllByRole('button', { name: /Ultimate Spider-Man/ })
@@ -167,6 +168,7 @@ describe('ComicVineSearchDialog mode branching', () => {
     render(<ComicVineSearchDialog {...defaultProps({ threadTitle: 'Ultimate Spider-Man' })} />)
 
     const input = screen.getByPlaceholderText('Search series title...')
+    fireEvent.change(input, { target: { value: '' } })
     fireEvent.change(input, { target: { value: 'Ultimate Spider-Man' } })
 
     const options = await screen.findAllByRole('button', { name: /Ultimate Spider-Man/ })
