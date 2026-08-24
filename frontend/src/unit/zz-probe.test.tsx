@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { type ReactNode } from 'react'
-import { expect, it, vi } from 'vitest'
+import { expect, it } from 'vitest'
 import { useMutation } from '@tanstack/react-query'
 
 function createTestWrapper() {
