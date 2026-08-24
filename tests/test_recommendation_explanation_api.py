@@ -1,6 +1,6 @@
 """API tests for GET /api/roll/events/{event_id}/recommendation-explanation.
 
-Requires aPhase 8 (or simulated) recommendation_context on the roll event record.
+Requires Phase 8 (or simulated) recommendation_context on the roll event record.
 Because the Event model does not yet carry a ``recommendation_context`` column
 at this phase boundary, these tests use ``setattr`` on the event instance after
 reading it from the database — a well-established SQLAlchemy test pattern that
@@ -9,10 +9,12 @@ keeps the migration with Phase 8 while making Phase 9 contract verifiable here.
 
 from __future__ import annotations
 
+from dataclasses import FrozenInstanceError
 from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 
 from app.models import Event, Session as SessionModel, Thread, User
 from app.services.recommendation_explanation import RecommendationExplanationProjection
@@ -26,23 +28,32 @@ def _make_roll_event_row(
 ) -> Event:
     """Attach simulated Phase 8 fields to an Event row fetched from the DB.
 
-    Uses ``setattr`` because the columns have not been added to the model yet.
+    Uses ``setattr`` because the columns have not been added to the model yet;
+    the API shares this test session, so the attached values are visible to the
+    endpoint without a persistence migration.
     """
     event.selection_method = selection_method
     if recommendation_context is not None:
-        event.recommendation_context = recommendation_context
+        setattr(event, "recommendation_context", recommendation_context)
     return event
+
+
+async def _get_auth_user(async_db, test_username: str) -> User:
+    """Fetch the authenticated test user row from the shared session."""
+    result = await async_db.execute(select(User).where(User.username == test_username))
+    user = result.scalar_one_or_none()
+    assert user is not None
+    return user
 
 
 @pytest.mark.asyncio
 async def test_explanation_with_full_context(
     auth_client: AsyncClient,
     async_db,
+    test_username: str,
 ) -> None:
-    """GET returns all factors when recommendation context is fully populated."""
-    result = await async_db.execute(select(User).where(User.id == auth_client.headers["X-User-Id"]))
-    user = result.scalar_one_or_none()
-    assert user is not None
+    """GET returns every factor family within the default cap, in order."""
+    user = await _get_auth_user(async_db, test_username)
 
     thread = Thread(
         title="Recommendation Thread",
@@ -60,10 +71,7 @@ async def test_explanation_with_full_context(
         user_id=user.id,
         start_die=8,
         manual_die=None,
-        ladder_path="8",
-        current_die=8,
-        has_restore_point=False,
-        snapshot_count=0,
+        started_at=datetime.now(UTC),
         snoozed_thread_ids=[],
         pending_thread_id=None,
     )
@@ -71,15 +79,13 @@ async def test_explanation_with_full_context(
     await async_db.commit()
     await async_db.refresh(session)
 
+    # One factor per family keeps the total at the default cap of five so the
+    # selection-method explanation is not trimmed by MAX_EXPLANATIONS.
     raw_context = {
         "bandwidth": "band_light",
         "intent": "intent_momentum",
-        "taste_bank_factors": [
-            {"code": "taste_high_affinity"},
-            {"code": "taste_confirmed_creator"},
-        ],
+        "taste_bank_factors": [{"code": "taste_high_affinity"}],
         "primary_score": {"code": "score_recency_boost"},
-        "affinity_notes": ["taste_series_momentum"],
         "selection_method": "random",
     }
 
@@ -103,39 +109,43 @@ async def test_explanation_with_full_context(
 
     body = response.json()
     assert body["event_id"] == event.id
-    assert len(body["factors"]) >= 1
+    assert len(body["factors"]) == 5
+
+    codes = [f["code"] for f in body["factors"]]
+    assert codes == [
+        "band_light",
+        "intent_momentum",
+        "taste_high_affinity",
+        "score_recency_boost",
+        "random",
+    ]
 
     labels = {f["label"] for f in body["factors"]}
     assert "Quick read" in labels
     assert "Recent series momentum" in labels
     assert "Strong affinity" in labels
-    assert "Creator you confirmed you like" in labels
     assert "Recently updated" in labels
     assert "Pure random" in labels
 
     for factor in body["factors"]:
-        assert "factor" in factor or "code" in factor
+        assert "code" in factor
         assert not any(ch.isdigit() for ch in factor["label"])
 
 
 @pytest.mark.asyncio
-async def test_explanation_empty_context_returns_empty_factors(
+async def test_explanation_absent_context_returns_selection_bypass(
     auth_client: AsyncClient,
     async_db,
+    test_username: str,
 ) -> None:
-    """GET returns empty factors when context is absent and selection_method alone is provided."""
-    result = await async_db.execute(select(User).where(User.id == auth_client.headers["X-User-Id"]))
-    user = result.scalar_one_or_none()
-    assert user is not None
+    """Absent context still explains a random roll's weighting bypass."""
+    user = await _get_auth_user(async_db, test_username)
 
     session = SessionModel(
         user_id=user.id,
         start_die=8,
         manual_die=None,
-        ladder_path="8",
-        current_die=8,
-        has_restore_point=False,
-        snapshot_count=0,
+        started_at=datetime.now(UTC),
         snoozed_thread_ids=[],
         pending_thread_id=None,
     )
@@ -162,27 +172,25 @@ async def test_explanation_empty_context_returns_empty_factors(
 
     body = response.json()
     assert body["event_id"] == event.id
-    assert body["factors"] == []
+    assert body["factors"] == [
+        {"code": "random", "label": "Pure random", "detail": "Weighting was bypassed"}
+    ]
 
 
 @pytest.mark.asyncio
 async def test_explanation_unknown_legacy_context_falls_back(
     auth_client: AsyncClient,
     async_db,
+    test_username: str,
 ) -> None:
     """GET succeeds even when context contains only unrecognized future codes."""
-    result = await async_db.execute(select(User).where(User.id == auth_client.headers["X-User-Id"]))
-    user = result.scalar_one_or_none()
-    assert user is not None
+    user = await _get_auth_user(async_db, test_username)
 
     session = SessionModel(
         user_id=user.id,
         start_die=8,
         manual_die=None,
-        ladder_path="8",
-        current_die=8,
-        has_restore_point=False,
-        snapshot_count=0,
+        started_at=datetime.now(UTC),
         snoozed_thread_ids=[],
         pending_thread_id=None,
     )
@@ -211,7 +219,9 @@ async def test_explanation_unknown_legacy_context_falls_back(
     await async_db.commit()
     await async_db.refresh(event)
 
-    _make_roll_event_row(event, selection_method="unknown_method", recommendation_context=future_context)
+    _make_roll_event_row(
+        event, selection_method="unknown_method", recommendation_context=future_context
+    )
 
     response = await auth_client.get(f"/api/roll/events/{event.id}/recommendation-explanation")
     assert response.status_code == 200
@@ -231,23 +241,19 @@ async def test_explanation_404_for_nonexistent_event(
 
 
 @pytest.mark.asyncio
-async def test_explanation_404_for_non_roll_event(
+async def test_explanation_422_for_non_roll_event(
     auth_client: AsyncClient,
     async_db,
+    test_username: str,
 ) -> None:
     """GET returns 422 when the event type is not 'roll'."""
-    result = await async_db.execute(select(User).where(User.id == auth_client.headers["X-User-Id"]))
-    user = result.scalar_one_or_none()
-    assert user is not None
+    user = await _get_auth_user(async_db, test_username)
 
     session = SessionModel(
         user_id=user.id,
         start_die=8,
         manual_die=None,
-        ladder_path="8",
-        current_die=8,
-        has_restore_point=False,
-        snapshot_count=0,
+        started_at=datetime.now(UTC),
         snoozed_thread_ids=[],
         pending_thread_id=None,
     )
@@ -258,15 +264,12 @@ async def test_explanation_404_for_non_roll_event(
     event = Event(
         type="rate",
         session_id=session.id,
-        thread_id=1,
         rating=4.5,
         timestamp=datetime.now(UTC),
     )
     async_db.add(event)
     await async_db.commit()
     await async_db.refresh(event)
-
-    _make_roll_event_row(event, selection_method="rate")
 
     response = await auth_client.get(f"/api/roll/events/{event.id}/recommendation-explanation")
     assert response.status_code == 422
@@ -276,20 +279,16 @@ async def test_explanation_404_for_non_roll_event(
 async def test_explanation_random_selection_mentions_bypass(
     auth_client: AsyncClient,
     async_db,
+    test_username: str,
 ) -> None:
     """The random-selection explanation explicitly notes that weighting was bypassed."""
-    result = await async_db.execute(select(User).where(User.id == auth_client.headers["X-User-Id"]))
-    user = result.scalar_one_or_none()
-    assert user is not None
+    user = await _get_auth_user(async_db, test_username)
 
     session = SessionModel(
         user_id=user.id,
         start_die=8,
         manual_die=None,
-        ladder_path="8",
-        current_die=8,
-        has_restore_point=False,
-        snapshot_count=0,
+        started_at=datetime.now(UTC),
         snoozed_thread_ids=[],
         pending_thread_id=None,
     )
@@ -328,10 +327,10 @@ async def test_explainable_factor_frozen_dataclass(
     factor = projection.translate_bandwidth("band_light")
     assert factor is not None
 
-    with pytest.raises(Exception):
-        factor.code = "mutated"  # type: ignore[misc]
+    with pytest.raises(FrozenInstanceError):
+        factor.code = "mutated"
 
     factor2 = projection.translate_intent("intent_momentum")
     assert factor2 is not None
-    with pytest.raises(Exception):
-        factor2.label = "mutated"  # type: ignore[misc]
+    with pytest.raises(FrozenInstanceError):
+        factor2.label = "mutated"

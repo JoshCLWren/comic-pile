@@ -14,9 +14,47 @@ Graceful degradation:
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
+
+_BANDWIDTH_EXPLANATIONS: dict[str, tuple[str, str | None]] = {
+    "band_light": ("Quick read", "~11-minute read"),
+    "band_balanced": ("Medium read", None),
+    "band_deep": ("Deep read", "Settling in for an extended session"),
+}
+
+_INTENT_EXPLANATIONS: dict[str, tuple[str, str | None]] = {
+    "intent_balanced": ("Balanced pick", None),
+    "intent_momentum": ("Recent series momentum", None),
+    "intent_familiar": ("Creator you confirmed you like", None),
+    "intent_explore": ("Novel but connected to your tastes", None),
+    "intent_random": ("No weighting applied", "Pure random selection"),
+}
+
+_SELECTION_EXPLANATIONS: dict[str, tuple[str, str | None]] = {
+    "random": ("Pure random", "Weighting was bypassed"),
+    "override": ("Manual pick", "Directly chosen"),
+}
+
+_TASTE_BANK_EXPLANATIONS: dict[str, tuple[str, str | None]] = {
+    "taste_high_affinity": ("Strong affinity", None),
+    "taste_confirmed_creator": ("Creator you confirmed you like", None),
+    "taste_confirmed_character": ("Character profile confirmed", None),
+    "taste_confirmed_team": ("Team profile confirmed", None),
+    "taste_confirmed_era": ("Era preference confirmed", None),
+    "taste_novel_adjacent": ("Novel but connected to your tastes", None),
+    "taste_series_momentum": ("Recent series momentum", None),
+    "taste_near_completion": ("Near completion — finish strong", None),
+}
+
+_PRIMARY_SCORE_EXPLANATIONS: dict[str, tuple[str, str | None]] = {
+    "score_affinity_strong": ("Strong affinity", None),
+    "score_affinity_moderate": ("Matches your history", None),
+    "score_recency_boost": ("Recently updated", None),
+    "score_staleness_penalty": ("Less active lately", None),
+    "score_familiar_component": ("Familiar component", None),
+    "score_explore_component": ("Explore component", None),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,11 +84,6 @@ def _bandwidth_label(bandwidth_code: str) -> ExplainableFactor | None:
         An ExplainableFactor with label and optional detail, or ``None`` for
         unrecognized codes.
     """
-    _BANDWIDTH_EXPLANATIONS: dict[str, tuple[str, str | None]] = {
-        "band_light": ("Quick read", "~11-minute read"),
-        "band_balanced": ("Medium read", None),
-        "band_deep": ("Deep read", "Settling in for an extended session"),
-    }
     entry = _BANDWIDTH_EXPLANATIONS.get(bandwidth_code)
     if entry is None:
         return None
@@ -69,13 +102,6 @@ def _intent_label(intent_code: str) -> ExplainableFactor | None:
     Returns:
         An ExplainableFactor for recognized codes, or ``None`` otherwise.
     """
-    _INTENT_EXPLANATIONS: dict[str, tuple[str, str | None]] = {
-        "intent_balanced": ("Balanced pick", None),
-        "intent_momentum": ("Recent series momentum", None),
-        "intent_familiar": ("Creator you confirmed you like", None),
-        "intent_explore": ("Novel but connected to your tastes", None),
-        "intent_random": ("No weighting applied", "Pure random selection"),
-    }
     entry = _INTENT_EXPLANATIONS.get(intent_code)
     if entry is None:
         return None
@@ -95,10 +121,6 @@ def _selection_label(selection_method: str) -> ExplainableFactor | None:
         An ExplainableFactor for recognized selection methods, or ``None``
         otherwise.
     """
-    _SELECTION_EXPLANATIONS: dict[str, tuple[str, str | None]] = {
-        "random": ("Pure random", "Weighting was bypassed"),
-        "override": ("Manual pick", "Directly chosen"),
-    }
     entry = _SELECTION_EXPLANATIONS.get(selection_method)
     if entry is None:
         return None
@@ -128,16 +150,6 @@ def _taste_bank_label(tb_factor: dict[str, Any]) -> ExplainableFactor | None:
     if not isinstance(code, str) or not code:
         return None
 
-    _TASTE_BANK_EXPLANATIONS: dict[str, tuple[str, str | None]] = {
-        "taste_high_affinity": ("Strong affinity", None),
-        "taste_confirmed_creator": ("Creator you confirmed you like", None),
-        "taste_confirmed_character": ("Character profile confirmed", None),
-        "taste_confirmed_team": ("Team profile confirmed", None),
-        "taste_confirmed_era": ("Era preference confirmed", None),
-        "taste_novel_adjacent": ("Novel but connected to your tastes", None),
-        "taste_series_momentum": ("Recent series momentum", None),
-        "taste_near_completion": ("Near completion — finish strong", None),
-    }
     entry = _TASTE_BANK_EXPLANATIONS.get(code)
     if entry is None:
         return None
@@ -165,14 +177,6 @@ def _primary_score_label(primary_score: dict[str, Any]) -> ExplainableFactor | N
     if not isinstance(code, str) or not code:
         return None
 
-    _PRIMARY_SCORE_EXPLANATIONS: dict[str, tuple[str, str | None]] = {
-        "score_affinity_strong": ("Strong affinity", None),
-        "score_affinity_moderate": ("Matches your history", None),
-        "score_recency_boost": ("Recently updated", None),
-        "score_staleness_penalty": ("Less active lately", None),
-        "score_familiar_component": ("Familiar component", None),
-        "score_explore_component": ("Explore component", None),
-    }
     entry = _PRIMARY_SCORE_EXPLANATIONS.get(code)
     if entry is None:
         return None
@@ -290,7 +294,9 @@ class RecommendationExplanationProjection:
         4. Primary-score explanation (at most one).
         5. Affinity-notes explanations (in provided order).
         6. Selection-method explanation (at most one, appended when other
-           factors are present or when context is absent altogether).
+           factors are present or when context is absent altogether). Legacy
+           contexts that record ``intent_random`` without an explicit
+           selection method still receive the random-bypass explanation.
 
         Unknown codes in any factor list are silently skipped.
 
@@ -352,11 +358,16 @@ class RecommendationExplanationProjection:
                     if factor is not None:
                         factors.append(factor)
 
-        selection_factor = _selection_label(
+        raw_method: Any = (
             selection_method
             if selection_method is not None
             else context.get("selection_method", "")
         )
+        if raw_method == "" and intent_code == "intent_random":
+            # Legacy control rolls recorded intent_random without an explicit
+            # selection method; the weighting-bypass explanation still applies.
+            raw_method = "random"
+        selection_factor = _selection_label(raw_method)
         if selection_factor is not None:
             factors.append(selection_factor)
 
