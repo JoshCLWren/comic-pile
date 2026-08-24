@@ -80,6 +80,7 @@ export interface ThreadCreatePayload {
   title: string;
   format: string;
   issues_remaining: number;
+  total_issues?: number;
   notes?: string | null;
 }
 

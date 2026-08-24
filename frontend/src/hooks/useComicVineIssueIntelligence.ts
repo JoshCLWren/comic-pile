@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { comicVineApi, type ComicVineIssueIntelligence } from '../services/api'
 
 interface ComicVineIssueIntelligenceState {
   metadata: ComicVineIssueIntelligence | null
   isLoading: boolean
+  refetch: () => void
 }
 
 export function useComicVineIssueIntelligence(
@@ -11,6 +12,7 @@ export function useComicVineIssueIntelligence(
 ): ComicVineIssueIntelligenceState {
   const [metadata, setMetadata] = useState<ComicVineIssueIntelligence | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [refreshCounter, setRefreshCounter] = useState(0)
 
   useEffect(() => {
     let active = true
@@ -30,7 +32,9 @@ export function useComicVineIssueIntelligence(
       })
 
     return () => { active = false }
-  }, [issueId])
+  }, [issueId, refreshCounter])
 
-  return { metadata, isLoading }
+  const refetch = useCallback(() => setRefreshCounter((counter) => counter + 1), [])
+
+  return { metadata, isLoading, refetch }
 }
