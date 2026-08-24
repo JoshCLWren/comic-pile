@@ -176,6 +176,12 @@ async def build_session_response(
         snapshot_count=snapshot_count,
         snoozed_thread_ids=resolved_ids,
         snoozed_threads=snoozed_threads,
+        predicted_bandwidth=session.predicted_bandwidth,
+        active_bandwidth=session.active_bandwidth,
+        bandwidth_confidence=session.bandwidth_confidence,
+        bandwidth_source=session.bandwidth_source,
+        bandwidth_mode_version=session.bandwidth_mode_version,
+        bandwidth_updated_at=session.bandwidth_updated_at,
     )
 
 

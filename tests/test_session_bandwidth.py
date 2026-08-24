@@ -23,7 +23,7 @@ from comic_pile.bandwidth import (
     restore_ephemeral_bandwidth,
     validate_bandwidth_state,
 )
-from comic_pile.session import end_session, get_or_create
+from comic_pile.session import end_session, get_or_create, resolve_current_session
 
 
 @pytest.mark.asyncio
@@ -63,6 +63,7 @@ async def test_predicted_and_active_bandwidth_stored_independently(
     assert session.bandwidth_source == "manual"
 
     persisted = await async_db.get(SessionModel, session.id)
+    assert persisted is not None
     assert persisted.predicted_bandwidth == "balanced"
     assert persisted.active_bandwidth == "light"
 
@@ -169,8 +170,13 @@ async def test_database_check_constraints_reject_invalid_rows(
     async_db: AsyncSession, default_user
 ) -> None:
     """AC3: Persisted CHECK constraints reject invalid enum and confidence values."""
+    # Capture the user id before any rollback: rollback expires loaded
+    # instances, and re-reading default_user.id would trigger a lazy refresh
+    # (sync IO) outside the async greenlet context.
+    user_id = default_user.id
+
     bad_bandwidth = SessionModel(
-        start_die=6, user_id=default_user.id, active_bandwidth="overwhelmed"
+        start_die=6, user_id=user_id, active_bandwidth="overwhelmed"
     )
     async_db.add(bad_bandwidth)
     with pytest.raises(IntegrityError):
@@ -179,7 +185,7 @@ async def test_database_check_constraints_reject_invalid_rows(
 
     bad_confidence = SessionModel(
         start_die=6,
-        user_id=default_user.id,
+        user_id=user_id,
         predicted_bandwidth="light",
         bandwidth_source="manual",
         bandwidth_confidence=1.25,
@@ -191,7 +197,7 @@ async def test_database_check_constraints_reject_invalid_rows(
 
     valid_boundary = SessionModel(
         start_die=6,
-        user_id=default_user.id,
+        user_id=user_id,
         predicted_bandwidth="deep",
         bandwidth_source="snooze",
         bandwidth_confidence=0.0,
@@ -234,10 +240,17 @@ async def test_active_session_keeps_its_own_bandwidth_on_reuse(
     async_db: AsyncSession, sample_data: dict
 ) -> None:
     """AC4: Reusing the current session preserves its in-lifetime state."""
-    session = sample_data["sessions"][0]
+    # The sample fixture intentionally contains multiple unended sessions;
+    # resolve whichever row the product treats as authoritative instead of
+    # assuming a specific fixture ordering.
+    authoritative = await resolve_current_session(
+        async_db, user_id=sample_data["sessions"][0].user_id
+    )
+    assert authoritative is not None
+
     await apply_bandwidth_state(
         async_db,
-        session,
+        authoritative,
         predicted_bandwidth="light",
         active_bandwidth=None,
         bandwidth_source="inferred",
@@ -245,8 +258,8 @@ async def test_active_session_keeps_its_own_bandwidth_on_reuse(
     )
     await async_db.commit()
 
-    resolved = await get_or_create(async_db, user_id=session.user_id)
-    assert resolved.id == session.id
+    resolved = await get_or_create(async_db, user_id=authoritative.user_id)
+    assert resolved.id == authoritative.id
     assert resolved.predicted_bandwidth == "light"
     assert resolved.bandwidth_confidence == 0.55
 
@@ -279,7 +292,12 @@ def test_capture_and_restore_round_trip() -> None:
     """AC4: Undo-style capture/restore returns bandwidth to pre-correction state."""
 
     class _StubSession:
-        pass
+        predicted_bandwidth: str | None
+        active_bandwidth: str | None
+        bandwidth_confidence: float | None
+        bandwidth_source: str | None
+        bandwidth_mode_version: int | None
+        bandwidth_updated_at: datetime | None
 
     source = _StubSession()
     source.predicted_bandwidth = "balanced"
@@ -314,7 +332,8 @@ def test_restore_ignores_snapshots_without_bandwidth_keys() -> None:
     """Older snapshots predating bandwidth tracking leave live values untouched."""
 
     class _StubSession:
-        pass
+        predicted_bandwidth: str | None
+        active_bandwidth: str | None
 
     session = _StubSession()
     session.predicted_bandwidth = "deep"
@@ -463,6 +482,7 @@ async def test_undo_delta_restore_recovers_pre_rating_bandwidth(
     assert latest is not None and latest.id == snapshot.id
 
     refreshed = await async_db.get(SessionModel, session.id)
+    assert refreshed is not None
     await _restore_from_delta_snapshot(async_db, refreshed, latest)
 
     assert refreshed.predicted_bandwidth == "balanced"

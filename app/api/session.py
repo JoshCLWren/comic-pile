@@ -1091,6 +1091,12 @@ async def restore_session_start(
                 has_restore_point=snapshot_count > 0,
                 snapshot_count=snapshot_count,
                 pending_thread_id=session.pending_thread_id,
+                predicted_bandwidth=session.predicted_bandwidth,
+                active_bandwidth=session.active_bandwidth,
+                bandwidth_confidence=session.bandwidth_confidence,
+                bandwidth_source=session.bandwidth_source,
+                bandwidth_mode_version=session.bandwidth_mode_version,
+                bandwidth_updated_at=session.bandwidth_updated_at,
             )
         except OperationalError as e:
             if "deadlock" in str(e).lower():
