@@ -101,7 +101,7 @@ async def test_diagnostics_legacy_coverage_labeled(
     await _seed_session(
         async_db,
         user_id=1,
-        started_at=now,
+        started_at=now - timedelta(hours=1),
         events=[
             {
                 "type": "roll",
@@ -142,7 +142,7 @@ async def test_diagnostics_full_representative_session(
     await _seed_session(
         async_db,
         user_id=1,
-        started_at=now,
+        started_at=now - timedelta(hours=4),
         events=[
             {
                 "type": "roll",
@@ -181,7 +181,7 @@ async def test_diagnostics_full_representative_session(
     await _seed_session(
         async_db,
         user_id=1,
-        started_at=now + timedelta(hours=2),
+        started_at=now - timedelta(hours=2),
         events=[
             {
                 "type": "roll",
@@ -246,7 +246,7 @@ async def test_diagnostics_user_scoped(
     await _seed_session(
         async_db,
         user_id=other_user.id,
-        started_at=now,
+        started_at=now - timedelta(hours=1),
         events=[
             {
                 "type": "roll",
