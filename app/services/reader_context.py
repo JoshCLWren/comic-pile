@@ -490,15 +490,16 @@ def _build_edge_explanation(
     target_label: str,
     source_issue_number: str | None,
     source_thread_title: str | None,
-    source_thread_id: int | None,
     satisfaction: str | None = None,
 ) -> str:
     """Return a human-readable sentence explaining a persisted reader-context edge.
 
     Dependency edges reuse ``build_blocking_explanation`` — the same copy
     generator as the queue's blocked-threads list — so wording stays consistent
-    app-wide. Continuity edges use truthful per-satisfaction templates because
-    their gate can differ from the source endpoint.
+    app-wide. Explanations identify comics with human identity only; raw
+    internal database identifiers must never be rendered. Continuity edges use
+    truthful per-satisfaction templates because their gate can differ from the
+    source endpoint.
 
     Args:
         kind: The type of edge.
@@ -506,21 +507,14 @@ def _build_edge_explanation(
         target_label: Human-readable target label (thread title + issue number).
         source_issue_number: Source issue number, when resolvable.
         source_thread_title: Source thread title, when resolvable.
-        source_thread_id: Source thread identifier, when resolvable.
         satisfaction: Continuity-rule satisfaction type, for continuity edges.
 
     Returns:
         A concise explanation sentence.
     """
     if kind == "dependency":
-        if (
-            source_issue_number is not None
-            and source_thread_title is not None
-            and source_thread_id is not None
-        ):
-            return build_blocking_explanation(
-                source_issue_number, source_thread_title, source_thread_id
-            )
+        if source_issue_number is not None and source_thread_title is not None:
+            return build_blocking_explanation(source_issue_number, source_thread_title)
         return f"Blocked by {source_label}"
     if satisfaction in ("item_read", "all_members_read"):
         return f"{source_label} must be read before {target_label}"
@@ -629,6 +623,18 @@ async def _local_edges(
         )
 
     edges: list[ReaderContextEdge] = []
+
+    def _human_label(raw_label: str | None) -> str:
+        """Return a reader-facing label that is never a bare internal identifier.
+
+        Args:
+            raw_label: Resolved human-readable label, when available.
+
+        Returns:
+            The resolved label, or human fallback copy when unresolved.
+        """
+        return raw_label if raw_label is not None else "a missing issue"
+
     for dependency in dependencies:
         source_label, source_number, source_title, source_thread_id = _label_parts(
             dependency.source_issue_id
@@ -653,13 +659,10 @@ async def _local_edges(
                 note=dependency.note,
                 explanation=_build_edge_explanation(
                     "dependency",
-                    source_label=source_label
-                    or f"Issue #{dependency.source_issue_id}",
-                    target_label=target_label
-                    or f"Issue #{dependency.target_issue_id}",
+                    source_label=_human_label(source_label),
+                    target_label=_human_label(target_label),
                     source_issue_number=source_number,
                     source_thread_title=source_title,
-                    source_thread_id=source_thread_id,
                 ),
             )
         )
@@ -687,11 +690,10 @@ async def _local_edges(
                 note=rule.note,
                 explanation=_build_edge_explanation(
                     "continuity",
-                    source_label=source_label or f"Issue #{rule.source_id}",
-                    target_label=target_label or f"Issue #{rule.target_id}",
+                    source_label=_human_label(source_label),
+                    target_label=_human_label(target_label),
                     source_issue_number=source_number,
                     source_thread_title=source_title,
-                    source_thread_id=source_thread_id,
                     satisfaction=rule.satisfaction_type,
                 ),
             )
