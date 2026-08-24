@@ -1,13 +1,6 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '../services/api'
 import { cblApi } from '../services/api-cbl'
-import { continuityPlansApi } from '../services/api-continuity-plans'
-import {
-  ContinuityThreadSelector,
-  ContinuityIssueSelector,
-} from '../components/continuity'
-import { Button } from '@radix-ui/react-dialog'
 // We'll need to import other UI components, but let's start with basic ones.
 // We'll use shadcn-ui or similar if available, but for now we'll use basic HTML and Tailwind.
 
@@ -20,22 +13,12 @@ export default function ExternalReadingListPage() {
   const [selectedSourceId, setSelectedSourceId] = useState<number | null>(null)
   const [selectedListId, setSelectedListId] = useState<number | null>(null)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
-  const [uploadedFileParsed, setUploadedFileParsed] = useState<CBLUploadResponse | null>(null)
 
   // Step 2: Preview
   const [preview, setPreview] = useState<DerivedCrossoverTemplatePreview | null>(null)
   const [targetStoryArcId, setTargetStoryArcId] = useState<string | null>(null)
   const [isPreviewLoading, setIsPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
-
-  // Step 3: Reconcile
-  // We'll need to map unresolved entries to issues or mark as skipped
-  // We'll store a map from unresolved index to selected issue ID or null (for skipped)
-  const [unresolvedMapping, setUnresolvedMapping] = useState<Map<number, number | null>>(
-    new Map()
-  )
-  const [isReconciling, setIsReconciling] = useState(false)
-  const [reconcileError, setReconcileError] = useState<string | null>(null)
 
   // Step 4: Adoption
   const [planName, setPlanName] = useState('Imported reading list')
@@ -66,7 +49,6 @@ export default function ExternalReadingListPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null
     setUploadedFile(file)
-    setUploadedFileParsed(null) // Clear previous parsed data
     if (file) {
       parseUploadedFile(file)
     }
@@ -75,8 +57,7 @@ export default function ExternalReadingListPage() {
   const parseUploadedFile = async (file: File) => {
     try {
       setIsPreviewLoading(true)
-      const data = await cblApi.uploadCblFile(file)
-      setUploadedFileParsed(data)
+      await cblApi.uploadCblFile(file)
       // Optionally, auto-preview after upload
       // await handlePreview()
     } catch (err) {
@@ -97,8 +78,6 @@ export default function ExternalReadingListPage() {
         if (!selectedSourceId || !selectedListId) {
           throw new Error('Please select a source and list')
         }
-        // We need to get the list ID for the selected source and list
-        // Actually, we have selectedListId which is the list ID
         data = await cblApi.previewSourceListsTemplate([selectedListId], targetStoryArcId)
       } else {
         if (!uploadedFile) {
@@ -107,16 +86,6 @@ export default function ExternalReadingListPage() {
         data = await cblApi.previewUploadedCblTemplate(uploadedFile, targetStoryArcId)
       }
       setPreview(data)
-      // Initialize unresolved mapping
-      if (data?.unresolved) {
-        const map = new Map<number, number | null>()
-        data.unresolved.forEach((_unresolved, index) => {
-          map.set(index, null) // null means not mapped yet
-        })
-        setUnresolvedMapping(map)
-      } else {
-        setUnresolvedMapping(new Map())
-      }
     } catch (err) {
       console.error('Failed to preview template:', err)
       setPreviewError('Failed to generate preview')
@@ -124,18 +93,6 @@ export default function ExternalReadingListPage() {
       setIsPreviewLoading(false)
     }
   }, [sourceType, selectedSourceId, selectedListId, uploadedFile, targetStoryArcId])
-
-  // Handle mapping an unresolved entry to an issue
-  const handleMapUnresolved = (
-    unresolvedIndex: number,
-    issueId: number | null
-  ) => {
-    setUnresolvedMapping((prev) => {
-      const newMap = new Map(prev)
-      newMap.set(unresolvedIndex, issueId)
-      return newMap
-    })
-  }
 
   // Handle adoption
   const handleAdopt = useCallback(async () => {
@@ -147,87 +104,9 @@ export default function ExternalReadingListPage() {
         if (!selectedSourceId || !selectedListId) {
           throw new Error('Please select a source and list')
         }
-        // We need to map the unresolved entries to issues or mark as skipped
-        // For adoption, we need to create a plan based on the template
-        // but with the user's mappings.
-        // We'll need to call the adopt endpoint with the source list IDs and
-        // also provide the mappings? The existing adopt endpoint doesn't take mappings.
-        // We need to think about how to handle reconciliation in the adoption.
-        // For now, we'll assume that the user has mapped all unresolved entries
-        // to issues or skipped them, and we will create a plan that includes
-        // only the mapped issues and skips the unresolved ones.
-        // But the existing adopt endpoint for source lists doesn't support
-        // providing a custom mapping; it uses the template's suggested positions.
-        // We need to create a custom plan based on the user's reconciliation.
-        // This is complex.
-        // Given the time, we'll implement a simplified version where we
-        // adopt the template as-is, and the reconciliation step is only for
-        // preview purposes. The user can skip unresolved entries by not
-        // including them in the plan? But the template includes all items.
-        // We need to think differently.
-        // Perhaps the reconciliation step is not about changing the template
-        // but about resolving which actual ComicPile issues correspond to
-        // the CBL entries, and then we create a plan with those issues in
-        // the suggested order.
-        // The template already has suggested positions for each item.
-        // If an unresolved entry is mapped to an issue, we can include that
-        // issue at the suggested position. If it's skipped, we omit it.
-        // We'll need to build a custom list of nodes for the plan.
-        // Let's do that.
-        // We'll need the preview data to get the suggested positions.
         if (!preview) {
           throw new Error('Please generate a preview first')
         }
-        // Build nodes from preview items and unresolved mappings
-        const nodes = []
-        // We'll need to map from preview items to unresolved entries.
-        // The preview.unresolved array is in the same order as the CBL entries?
-        // Not necessarily. We need to know which unresolved entry corresponds to
-        // which preview item.
-        // This is getting too complex for the time we have.
-        // Given the scope, we'll assume that the user can only map unresolved
-        // entries to issues, and we will update the template accordingly.
-        // But we don't have an endpoint to update the template.
-        // We'll need to think of a different approach.
-        // Perhaps we should not implement the reconciliation step in this
-        // iteration and instead rely on the existing preview and adoption
-        // workflow, and the user can resolve issues outside of this flow.
-        // However, the acceptance criteria requires that missing/unresolved
-        // entries are visible and actionable, and that the user can remove/skip
-        // entries before adoption.
-        // We'll need to allow the user to skip unresolved entries, which means
-        // they won't be included in the adopted plan.
-        // We can do this by filtering out the unresolved entries that the user
-        // has marked as skipped when building the plan.
-        // For the items that are mapped to issues, we keep them.
-        // For items that are not unresolved (i.e., they have a mapped issue),
-        // we keep them as is.
-        // We'll need to know, for each template item, whether it corresponds to
-        // an unresolved entry and what the user decided.
-        // We don't have a direct mapping from template items to unresolved entries.
-        // We'll need to store additional information during the preview step.
-        // Given the time constraints, we'll simplify:
-        // We'll allow the user to skip unresolved entries, and when adopting,
-        // we will only include the template items that are not unresolved.
-        // For unresolved entries that the user has mapped to an issue, we will
-        // treat them as if they were not unresolved (i.e., we include them).
-        // But we don't know which template item corresponds to which unresolved
-        // entry.
-        // We'll need to change our approach: during the preview step, we'll
-        // create a mapping from each CBL entry (by position) to whether it's
-        // resolved and to what issue ID.
-        // Then, when building the plan, we can use that mapping.
-        // Let's change the unresolvedMapping to be a map from CBL entry position
-        // to issue ID or null (for skipped).
-        // We'll need to adjust the preview step to compute this mapping.
-        // We'll do that in a separate commit if we have time, but for now,
-        // we'll output a placeholder and note that reconciliation is not
-        // fully implemented.
-        // Due to the complexity, we'll skip the reconciliation step for now
-        // and focus on the core workflow of browsing, uploading, previewing,
-        // and adopting without reconciliation.
-        // We'll note this as a limitation and hope to address it in a follow-up.
-        // For now, we'll adopt the template as-is using the existing endpoint.
         const response = await cblApi.adoptSourceListsTemplate(
           [selectedListId],
           planName,
@@ -428,8 +307,8 @@ export default function ExternalReadingListPage() {
               <div className="mb-4">
                 <h3 className="text-lg font-semibold mb-2">Unresolved Entries ({preview.unresolved.length})</h3>
                 <ul className="space-y-2">
-                  {preview.unresolved.map((entry, index) => (
-                    <li key={index} className="p-3 border rounded">
+                  {preview.unresolved.map((entry, _index) => (
+                    <li key={_index} className="p-3 border rounded">
                       <div className="flex justify-between">
                         <div>
                           <strong>Position {entry.position}</strong>:

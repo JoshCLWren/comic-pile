@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator
+
+from pydantic import BaseModel, Field
 
 
 class CBLSourceResponse(BaseModel):
@@ -26,7 +26,7 @@ class CBLSourceListResponse(BaseModel):
     source_id: int = Field(..., description="Foreign key to the CBL source")
     source_path: str = Field(..., description="Path within the source repository")
     name: str = Field(..., description="Human-readable name of the list")
-    declared_issue_count: Optional[int] = Field(
+    declared_issue_count: int | None = Field(
         default=None, description="Declared issue count from the list, if known"
     )
     content_hash: str = Field(..., description="Hash of the list content")
@@ -54,11 +54,11 @@ class CBLUploadResponse(BaseModel):
     # Instead, we can return the parsed CBLList in a serializable form.
     source_path: str = Field(..., description="Identifier for the uploaded file (filename)")
     name: str = Field(..., description="Name of the reading list")
-    declared_issue_count: Optional[int] = Field(
+    declared_issue_count: int | None = Field(
         default=None, description="Declared issue count from the list"
     )
     content_hash: str = Field(..., description="Hash of the file content")
-    books: list["CBLBookResponse"] = Field(..., description="Ordered book entries")
+    books: list[CBLBookResponse] = Field(..., description="Ordered book entries")
 
 
 class CBLBookResponse(BaseModel):
@@ -67,16 +67,16 @@ class CBLBookResponse(BaseModel):
     position: int = Field(..., description="1-based position in the list")
     series: str = Field(..., description="Series name")
     issue_number: str = Field(..., description="Issue number within the series")
-    volume_year: Optional[int] = Field(
+    volume_year: int | None = Field(
         default=None, description="Volume year, if known"
     )
-    publication_year: Optional[int] = Field(
+    publication_year: int | None = Field(
         default=None, description="Publication year, if known"
     )
-    comicvine_series_id: Optional[str] = Field(
+    comicvine_series_id: str | None = Field(
         default=None, description="ComicVine series ID, if present in the file"
     )
-    comicvine_issue_id: Optional[str] = Field(
+    comicvine_issue_id: str | None = Field(
         default=None, description="ComicVine issue ID, if present in the file"
     )
 

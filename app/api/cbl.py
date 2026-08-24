@@ -6,7 +6,6 @@ import json
 import tempfile
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Annotated, List
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import TypeAdapter, ValidationError
@@ -14,10 +13,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
-from app.cbl_ingest import CBLBook, CBLParseFailure, parse_cbl_file
+from app.cbl_ingest import CBLBook, CBLList, parse_cbl_file
 from app.database import get_db
 from app.models.cbl_reference import CBLSource, CBLSourceList
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+from app.models.issue import Issue
 from app.models.user import User
 from app.schemas.cbl import (
     CBLBookResponse,
@@ -43,6 +43,7 @@ from app.services.crossover_templates import (
     ReconciliationDecisionInput,
     ReconciliationError,
     TemplateEvidence,
+    _story_arc_ids,
     build_adopted_plan_nodes,
     derive_crossover_template,
     resolve_adoption_order,
@@ -139,13 +140,13 @@ def _raise_reconciliation_error(exc: ReconciliationError) -> None:
 
 @router.get(
     "/sources",
-    response_model=List[CBLSourceWithListsResponse],
+    response_model=list[CBLSourceWithListsResponse],
     summary="List all CBL sources with their active lists",
 )
 async def list_cbl_sources(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> List[CBLSourceWithListsResponse]:
+) -> list[CBLSourceWithListsResponse]:
     """Return all CBL sources and their active lists for browsing.
 
     Args:
@@ -158,7 +159,7 @@ async def list_cbl_sources(
     sources_result = await db.execute(select(CBLSource).order_by(CBLSource.repository))
     sources = sources_result.scalars().all()
 
-    response: List[CBLSourceWithListsResponse] = []
+    response: list[CBLSourceWithListsResponse] = []
     for source in sources:
         lists_result = await db.execute(
             select(CBLSourceList)
@@ -176,7 +177,7 @@ async def list_cbl_sources(
                 created_at=source.created_at,
                 updated_at=source.updated_at,
                 lists=[
-                    _to_list_response(cbllist)  # noqa: F821 - replaced below
+                    _to_list_response(cbllist)
                     for cbllist in lists
                 ],
             )
@@ -203,14 +204,14 @@ def _to_list_response(cbllist: CBLSourceList) -> CBLSourceListResponse:
 
 @router.get(
     "/sources/{source_id}/lists",
-    response_model=List[CBLSourceListResponse],
+    response_model=list[CBLSourceListResponse],
     summary="List active CBL lists for a given source",
 )
 async def list_cbl_source_lists(
     source_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> List[CBLSourceListResponse]:
+) -> list[CBLSourceListResponse]:
     """Return all active CBL lists for a specific source.
 
     Args:
@@ -269,12 +270,7 @@ async def _read_and_parse_upload(file: UploadFile) -> tuple[str, object]:
         temp_path.write_bytes(content)
         try:
             parsed = parse_cbl_file(temp_path, mirror_path=Path(temp_dir))
-        except CBLParseFailure as exc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to parse CBL file: {exc}",
-            ) from exc
-        except Exception as exc:
+        except ValueError as exc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Failed to parse CBL file: {exc}",
@@ -308,7 +304,7 @@ async def upload_cbl_file(
     return _to_upload_response(cbl_list)
 
 
-def _to_upload_response(cbl_list: object) -> CBLUploadResponse:
+def _to_upload_response(cbl_list: CBLList) -> CBLUploadResponse:
     """Convert a parsed CBL list into its API response."""
     books = [
         CBLBookResponse(
@@ -350,7 +346,7 @@ async def derive_crossover_template_from_books(
         Derived template including unresolved entries for unmatched books.
     """
     if not books:
-        return DerivedCrossoverTemplate(items=(), conflicts=(), unresolved=tuple())
+        return DerivedCrossoverTemplate(items=(), conflicts=())
 
     series_ids = {book.comicvine_series_id for book in books if book.comicvine_series_id}
     issue_ids = {book.comicvine_issue_id for book in books if book.comicvine_issue_id}
@@ -396,7 +392,7 @@ async def derive_crossover_template_from_books(
     issue_by_identity_id = {mapping.external_identity_id: issue for mapping, issue in mapping_rows}
     arcs_by_issue: dict[int, set[str]] = {}
 
-    placements_by_issue: dict[int, List[CBLPlacement]] = {}
+    placements_by_issue: dict[int, list[CBLPlacement]] = {}
     evidence_issues: dict[int, Issue] = {}
     unresolved: list[tuple[CBLBook, str]] = []
 
@@ -442,7 +438,7 @@ async def derive_crossover_template_from_books(
     )
 
     template = (
-        derive_crossover_template(evidence) if evidence else DerivedCrossoverTemplate(items=())
+        derive_crossover_template(evidence) if evidence else DerivedCrossoverTemplate(items=(), conflicts=())
     )
     return DerivedCrossoverTemplate(
         items=template.items,
@@ -694,4 +690,5 @@ def _validated_skip_ids(raw: object) -> list[int]:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"code": "invalid_skipped_issue_ids"},
         )
-    return raw
+    validated: list[int] = [item for item in raw if isinstance(item, int)]
+    return validated
