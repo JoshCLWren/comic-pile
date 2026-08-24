@@ -37,6 +37,7 @@ jobs:
       - name: Generate factory dashboard
         env:
           GH_TOKEN: ${{ github.token }}
+          PYTHONPATH: .github/scripts
         run: python3 .github/scripts/generate_factory_status_dashboard.py
 
       - name: Configure Pages
