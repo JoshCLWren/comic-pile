@@ -134,7 +134,7 @@ describe('extractComicIdentity', () => {
   })
 
   it('shows neutral label when even provider ID is unavailable', () => {
-    const identity = extractComicIdentity(makeRelatedIssue({ comicvine_issue_id: null }))
+    const identity = extractComicIdentity(makeRelatedIssue({ comicvine_issue_id: '' }))
     expect(identity.primary).toBe('Untitled ComicVine issue')
     expect(identity.secondary).toBeNull()
     expect(identity.primary).not.toMatch(/\d/)
@@ -142,7 +142,7 @@ describe('extractComicIdentity', () => {
 
   it('keeps whitespace-only metadata out of the identity', () => {
     const identity = extractComicIdentity(
-      makeRelatedIssue({ series_name: '   ', issue_number: '  ', name: '\t', comicvine_issue_id: null }),
+      makeRelatedIssue({ series_name: '   ', issue_number: '  ', name: '\t', comicvine_issue_id: '' }),
     )
     expect(identity.primary).toBe('Untitled ComicVine issue')
   })
