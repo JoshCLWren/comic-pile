@@ -169,8 +169,10 @@ it('handles empty ids, non-Error failures, persisted session changes, and restor
   await act(async () => {
     await expect(restore.result.current.mutate(8)).rejects.toBe('restore failed')
   })
-  expect(restore.result.current.isError).toBe(true)
-  expect(restore.result.current.error?.message).toBe('Failed to restore session')
+  await waitFor(() => {
+    expect(restore.result.current.isError).toBe(true)
+    expect(restore.result.current.error?.message).toBe('Failed to restore session')
+  })
 })
 
 it('continues when session storage cannot be read or written', async () => {

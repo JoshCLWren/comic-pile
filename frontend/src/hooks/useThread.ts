@@ -23,7 +23,15 @@ export function useStaleThreads(days?: number) {
     // Note: if 'days' needs to be part of the key, update queryKeys.thread.summaries
   });
 
-  return { data: data ?? null, isPending, isError, refetch };
+  return {
+    data: data ?? null,
+    isPending,
+    isError,
+    // Preserve the historical void-returning refetch contract for callers.
+    refetch: async () => {
+      await refetch();
+    },
+  };
 }
 
 export function useCreateThread() {

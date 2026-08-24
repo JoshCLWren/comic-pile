@@ -14,6 +14,12 @@ import { queryKeys } from "../query/queryKeys";
 const EMPTY_PARAMS = Object.freeze({});
 const STORAGE_KEY_PREFIX = "comic_pile_last_session_id";
 
+function normalizeQueryError(error: unknown, fallbackMessage: string): Error | null {
+  if (error == null) return null;
+  if (error instanceof Error) return error;
+  return new Error(fallbackMessage);
+}
+
 export function useSession() {
   const { showToast } = useToast();
   const lastNotifiedSessionIdRef = useRef<number | null>(null);
@@ -61,7 +67,7 @@ export function useSession() {
       data,
       isPending,
       isError,
-      error: error instanceof Error ? error : null,
+      error: normalizeQueryError(error, "Failed to fetch current session"),
       refetch,
     }),
     [data, isPending, isError, error, refetch],
@@ -71,36 +77,55 @@ export function useSession() {
 export function useSessions(params = EMPTY_PARAMS) {
   const query = useInfiniteQuery({
     queryKey: ['sessions', params],
-    queryFn: ({ pageParam }) => sessionApi.list(params, pageParam as string | null),
+    queryFn: async ({ pageParam }) => {
+      try {
+        return await sessionApi.list(params, pageParam as string | null);
+      } catch (error: unknown) {
+        if (error instanceof Error) throw error;
+        throw new Error(
+          pageParam === null ? 'Failed to fetch sessions' : 'Failed to load more sessions',
+        );
+      }
+    },
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage: SessionListResponse) => lastPage.next_page_token ?? undefined,
   });
 
-  const sessions = query.data?.pages.flatMap((page) => page.sessions) ?? [];
-  const isPending = query.isPending;
-  const isLoadingMore = query.isFetchingNextPage;
-  const isError = query.isError;
-  const error = query.error;
-  const hasMore = !!query.hasNextPage;
-  const loadMore = () => query.fetchNextPage();
-
   return useMemo(
-    () => ({
-      data: sessions,
-      isPending,
-      isLoadingMore,
-      isError,
-      error: error instanceof Error ? error : null,
-      hasMore,
-      loadMore,
-      refetch: query.refetch,
-    }),
-    [sessions, isPending, isLoadingMore, isError, error, hasMore, loadMore, query.refetch],
+    () => {
+      const seenIds = new Set<number>();
+      const sessions =
+        query.data?.pages
+          .flatMap((page) => page.sessions)
+          .filter((session) => {
+            if (seenIds.has(session.id)) return false;
+            seenIds.add(session.id);
+            return true;
+          }) ?? [];
+      const isPending = query.isPending;
+      const isLoadingMore = query.isFetchingNextPage;
+      const isError = query.isError;
+      const error = normalizeQueryError(query.error, 'Failed to fetch sessions');
+      const hasMore = !!query.hasNextPage;
+      const loadMore = () => query.fetchNextPage();
+
+      return {
+        data: sessions,
+        isPending,
+        isLoadingMore,
+        isError,
+        error,
+        hasMore,
+        loadMore,
+        refetch: query.refetch,
+      };
+    },
+    [query],
   );
 }
 
 export function useSessionDetails(id: number | string | null | undefined) {
-  const { data, isPending, isError, error, refetch } = useQuery({
+  const { data, isPending, fetchStatus, isError, error, refetch } = useQuery({
     queryKey: id ? queryKeys.session.detail(Number(id)) : [],
     queryFn: () => sessionApi.getDetails(id!),
     enabled: !!id,
@@ -108,15 +133,15 @@ export function useSessionDetails(id: number | string | null | undefined) {
 
   return {
     data,
-    isPending,
+    isPending: isPending && fetchStatus !== 'idle',
     isError,
-    error: error instanceof Error ? error : null,
+    error: normalizeQueryError(error, 'Failed to fetch session details'),
     refetch,
   };
 }
 
 export function useSessionSnapshots(id: number | string | null | undefined) {
-  const { data, isPending, isError, error, refetch } = useQuery({
+  const { data, isPending, fetchStatus, isError, error, refetch } = useQuery({
     queryKey: id ? ['session', 'snapshots', id] : [],
     queryFn: () => sessionApi.getSnapshots(id!),
     enabled: !!id,
@@ -124,9 +149,9 @@ export function useSessionSnapshots(id: number | string | null | undefined) {
 
   return {
     data,
-    isPending,
+    isPending: isPending && fetchStatus !== 'idle',
     isError,
-    error: error instanceof Error ? error : null,
+    error: normalizeQueryError(error, 'Failed to fetch session snapshots'),
     refetch,
   };
 }
@@ -140,6 +165,6 @@ export function useRestoreSessionStart() {
     mutate: mutation.mutateAsync,
     isPending: mutation.isPending,
     isError: mutation.isError,
-    error: mutation.error instanceof Error ? mutation.error : null,
+    error: normalizeQueryError(mutation.error, 'Failed to restore session'),
   };
 }
