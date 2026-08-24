@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from app.services.comicvine_taste import extract_taste_features
 
 
@@ -237,14 +235,14 @@ def test_extract_taste_features_use_confirmed_mappings_only_by_default() -> None
             "not-a-dict",  # Wrong type
             {},  # Empty dict
         ],
-        "character_credits": [
+        "characters": [
             {"id": 1, "name": "Valid Character"},
             {"id": None, "name": "Invalid Character"},  # Missing ID
             {"id": 2, "name": ""},  # Missing name
             "not-a-dict",
             {},
         ],
-        "team_credits": [
+        "teams": [
             {"id": 1, "name": "Valid Team"},
             {"id": None, "name": "Invalid Team"},  # Missing ID
             {"id": 2, "name": ""},  # Missing name
