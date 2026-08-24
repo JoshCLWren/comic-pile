@@ -38,6 +38,7 @@ from app.schemas.roll import (
 from app.schemas.session import (
     ActiveThreadInfo,
     EventDetail,
+    SessionBandwidthState,
     SessionDetailsResponse,
     SessionHistoryListResponse,
     SessionListItem,
@@ -110,6 +111,7 @@ __all__ = [
     "SessionDetailsResponse",
     "ActiveThreadInfo",
     "EventDetail",
+    "SessionBandwidthState",
     # Snapshot
     "SnapshotResponse",
     "SnapshotsListResponse",

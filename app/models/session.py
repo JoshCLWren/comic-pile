@@ -42,7 +42,13 @@ class Session(Base):
     )
     # Thread IDs temporarily excluded from roll selection during this session
     snoozed_thread_ids: Mapped[list[int] | None] = mapped_column(JSON, nullable=True)
-    # Ephemeral reading-intent session state, independent of bandwidth and of
+    # Ephemeral session bandwidth state (Phase 2). Nullable so legacy sessions stay valid.
+    predicted_bandwidth: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    active_bandwidth: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    bandwidth_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    bandwidth_source: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    bandwidth_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Ephemeral reading-intent session state (Phase 5), independent of bandwidth and of
     # Thread affinity. NULL means unset and behaves as the balanced default.
     reading_intent: Mapped[str | None] = mapped_column(String(20), nullable=True)
     reading_intent_source: Mapped[str | None] = mapped_column(String(20), nullable=True)
