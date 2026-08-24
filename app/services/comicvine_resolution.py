@@ -37,6 +37,29 @@ from comic_pile.comicvine_provider import ComicVineClient
 logger = logging.getLogger(__name__)
 
 
+def _coerce_provider_int(value: object) -> int | None:
+    """Coerce a ComicVine value into an int when it is numeric.
+
+    The provider returns fields such as ``start_year`` as strings, so both
+    native ints and numeric strings must normalize to ints.
+
+    Args:
+        value: Raw provider field value.
+
+    Returns:
+        The parsed integer, or ``None`` when the value is not numeric.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    return None
+
+
 async def search_comicvine_series(
     client: ComicVineClient | None,
     query: str,
@@ -64,7 +87,7 @@ async def search_comicvine_series(
             "query": query,
             "resources": "volume",
             "limit": clamped_limit,
-            "field_list": "id,name,publisher,start_year,site_detail_url,image",
+            "field_list": "id,name,publisher,start_year,count_of_issues,site_detail_url,image",
         },
     )
     results = response.payload.get("results")
@@ -97,7 +120,8 @@ async def search_comicvine_series(
                 comicvine_volume_id=volume_id,
                 name=name,
                 publisher=publisher if isinstance(publisher, str) else None,
-                start_year=row.get("start_year") if isinstance(row.get("start_year"), int) else None,
+                start_year=_coerce_provider_int(row.get("start_year")),
+                issue_count=_coerce_provider_int(row.get("count_of_issues")),
                 site_detail_url=row.get("site_detail_url")
                 if isinstance(row.get("site_detail_url"), str)
                 else None,
