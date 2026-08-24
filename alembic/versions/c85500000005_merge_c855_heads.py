@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "c85500000005"
-down_revision: Sequence[str] | None = ("c85500000001", "c85500000003", "c85500000004")
+down_revision: Sequence[str] | None = ("c85500000003", "c85500000004")
 branch_labels: Sequence[str] | None = None
 depends_on: Sequence[str] | None = None
 
