@@ -23,7 +23,7 @@ from comic_pile.bandwidth import (
     restore_ephemeral_bandwidth,
     validate_bandwidth_state,
 )
-from comic_pile.session import end_session, get_or_create
+from comic_pile.session import end_session, get_or_create, resolve_current_session
 
 
 @pytest.mark.asyncio
@@ -174,8 +174,13 @@ async def test_database_check_constraints_reject_invalid_rows(
     async_db: AsyncSession, default_user
 ) -> None:
     """AC3: Persisted CHECK constraints reject invalid enum and confidence values."""
+    # Capture identifiers before any rollback: Session.rollback() expires
+    # loaded instances, and touching expired attributes afterwards would
+    # trigger synchronous lazy loading (MissingGreenlet) in async context.
+    user_id = default_user.id
+
     bad_bandwidth = SessionModel(
-        start_die=6, user_id=default_user.id, active_bandwidth="overwhelmed"
+        start_die=6, user_id=user_id, active_bandwidth="overwhelmed"
     )
     async_db.add(bad_bandwidth)
     with pytest.raises(IntegrityError):
@@ -184,7 +189,7 @@ async def test_database_check_constraints_reject_invalid_rows(
 
     bad_confidence = SessionModel(
         start_die=6,
-        user_id=default_user.id,
+        user_id=user_id,
         predicted_bandwidth="light",
         bandwidth_source="manual",
         bandwidth_confidence=1.25,
@@ -196,7 +201,7 @@ async def test_database_check_constraints_reject_invalid_rows(
 
     valid_boundary = SessionModel(
         start_die=6,
-        user_id=default_user.id,
+        user_id=user_id,
         predicted_bandwidth="deep",
         bandwidth_source="snooze",
         bandwidth_confidence=0.0,
@@ -239,7 +244,10 @@ async def test_active_session_keeps_its_own_bandwidth_on_reuse(
     async_db: AsyncSession, sample_data: dict
 ) -> None:
     """AC4: Reusing the current session preserves its in-lifetime state."""
-    session = sample_data["sessions"][0]
+    # The fixture seeds multiple unended sessions; resolution (not seed order)
+    # decides which row is authoritative, so target the resolved session.
+    session = await resolve_current_session(async_db, user_id=sample_data["user"].id)
+    assert session is not None
     await apply_bandwidth_state(
         async_db,
         session,
