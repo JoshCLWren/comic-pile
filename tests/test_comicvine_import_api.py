@@ -317,7 +317,7 @@ async def test_import_unknown_reading_order_returns_404(
 ) -> None:
     """A nonexistent reading order fails the import without creating anything."""
     threads_before = (
-        await async_db.execute(select(Thread)).scalars().all()
+        (await async_db.execute(select(Thread))).scalars().all()
     )
 
     response = await auth_client.post(
@@ -331,7 +331,7 @@ async def test_import_unknown_reading_order_returns_404(
 
     assert response.status_code == 404
     threads_after = (
-        await async_db.execute(select(Thread)).scalars().all()
+        (await async_db.execute(select(Thread))).scalars().all()
     )
     assert len(threads_after) == len(threads_before)
 

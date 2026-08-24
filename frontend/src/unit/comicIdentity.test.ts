@@ -127,8 +127,14 @@ describe('extractComicIdentity', () => {
     expect(identity.primary).toBe('The Dark Side')
   })
 
-  it('never exposes the numeric provider ID when no human identity exists', () => {
+  it('falls back to provider issue ID when no human identity exists', () => {
     const identity = extractComicIdentity(makeRelatedIssue())
+    expect(identity.primary).toBe('ComicVine issue 36956')
+    expect(identity.secondary).toBeNull()
+  })
+
+  it('shows neutral label when even provider ID is unavailable', () => {
+    const identity = extractComicIdentity(makeRelatedIssue({ comicvine_issue_id: null }))
     expect(identity.primary).toBe('Untitled ComicVine issue')
     expect(identity.secondary).toBeNull()
     expect(identity.primary).not.toMatch(/\d/)
@@ -136,7 +142,7 @@ describe('extractComicIdentity', () => {
 
   it('keeps whitespace-only metadata out of the identity', () => {
     const identity = extractComicIdentity(
-      makeRelatedIssue({ series_name: '   ', issue_number: '  ', name: '\t' }),
+      makeRelatedIssue({ series_name: '   ', issue_number: '  ', name: '\t', comicvine_issue_id: null }),
     )
     expect(identity.primary).toBe('Untitled ComicVine issue')
   })

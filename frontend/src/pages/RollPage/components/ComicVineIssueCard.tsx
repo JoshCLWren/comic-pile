@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueIntelligence'
 import { type ComicVineRelatedIssue } from '../../../services/api'
-import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass, normalizeArcName, computeArcNeighborAnchors } from '../../../utils/comicIdentity'
+import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass, normalizeArcName } from '../../../utils/comicIdentity'
 import AddToComicPileDialog from '../../../components/AddToComicPileDialog'
 import ImageWithLoading from '../../../components/ImageWithLoading'
 
