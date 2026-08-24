@@ -291,6 +291,59 @@ async def test_get_session_details_endpoint(
 
 
 @pytest.mark.asyncio
+async def test_get_session_details_describes_events_in_reader_language(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """Session timeline events expose reader-language descriptions (issue #1694)."""
+    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Promethea",
+        format="comic",
+        issues_remaining=10,
+        queue_position=1,
+        user_id=default_user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+
+    async_db.add_all(
+        [
+            Event(
+                type="roll",
+                session_id=session.id,
+                selected_thread_id=thread.id,
+                die=6,
+                result=4,
+                selection_method="random",
+            ),
+            Event(
+                type="rate",
+                session_id=session.id,
+                thread_id=thread.id,
+                rating=4.0,
+                issues_read=2,
+            ),
+            Event(type="snooze", session_id=session.id, thread_id=thread.id),
+        ]
+    )
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/sessions/{session.id}/details")
+    assert response.status_code == 200
+    data = response.json()
+
+    descriptions = {event["type"]: event["description"] for event in data["events"]}
+    assert descriptions["roll"] == "Selected Promethea"
+    assert descriptions["rate"] == "Rated · Promethea · 2 issues read · 4.0/5"
+    assert descriptions["snooze"] == "Snoozed Promethea"
+    assert all(value for value in descriptions.values()), descriptions
+
+
+@pytest.mark.asyncio
 async def test_get_session_snapshots_endpoint(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:

@@ -17,6 +17,7 @@ export interface ContinuityPlanNode {
   ref_id: number
   lane_id: string
   position: number
+  label?: string | null
 }
 
 export interface ContinuityPlanWrite {

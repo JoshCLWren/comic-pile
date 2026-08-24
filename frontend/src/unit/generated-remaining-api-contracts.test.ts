@@ -22,4 +22,25 @@ describe('remaining generated API contracts', () => {
       components['schemas']['BugReportResponse']
     >()
   })
+
+  it('exposes canonical session bandwidth state through roll bootstrap', () => {
+    expectTypeOf<
+      components['schemas']['RollBootstrapResponse']['bandwidth']
+    >().toEqualTypeOf<components['schemas']['SessionBandwidthState']>()
+    expectTypeOf<
+      components['schemas']['SessionBandwidthState']['predicted_bandwidth']
+    >().toEqualTypeOf<'light' | 'balanced' | 'deep' | null>()
+    expectTypeOf<
+      components['schemas']['SessionBandwidthState']['active_bandwidth']
+    >().toEqualTypeOf<'light' | 'balanced' | 'deep' | null>()
+    expectTypeOf<
+      components['schemas']['SessionBandwidthState']['confidence']
+    >().toEqualTypeOf<number | null>()
+    expectTypeOf<
+      components['schemas']['SessionBandwidthState']['source']
+    >().toEqualTypeOf<'inferred' | 'manual' | 'snooze' | 'quiz' | null>()
+    expectTypeOf<
+      components['schemas']['SessionBandwidthState']['mode_version']
+    >().toEqualTypeOf<string | null>()
+  })
 })

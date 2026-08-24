@@ -6,6 +6,7 @@ import type { AuthContextValue } from '../App'
 import { AuthProvider, useAuth } from '../App'
 import Navigation from '../components/Navigation'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
+import { ToastProvider } from '../contexts/ToastProvider'
 import {
   DEFAULT_THEME,
   ensureThemeApplied,
@@ -15,6 +16,10 @@ import {
   restoreStoredTheme,
   selectTheme,
 } from '../services/theme'
+import {
+  resetThemePreferenceSyncForTests,
+  setThemePreferenceRetryDelaysForTests,
+} from '../services/themePreferenceSync'
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
   post: vi.fn(),
@@ -67,7 +72,9 @@ function renderNavigation() {
     <MemoryRouter initialEntries={['/']}>
       <AuthProvider>
         <BugReportRestoreProvider>
-          <Navigation onBugReportSubmit={vi.fn()} />
+          <ToastProvider>
+            <Navigation onBugReportSubmit={vi.fn()} />
+          </ToastProvider>
         </BugReportRestoreProvider>
       </AuthProvider>
     </MemoryRouter>,
@@ -96,6 +103,8 @@ describe('semantic theme runtime bootstrap', () => {
     auth = null
     document.documentElement.removeAttribute('data-theme')
     localStorage.clear()
+    resetThemePreferenceSyncForTests()
+    setThemePreferenceRetryDelaysForTests([0, 0])
     resetApiMocks()
     mocks.getAccessToken.mockReturnValue('test-token')
     delete window.__COMIC_PILE_ACCESS_TOKEN
@@ -132,8 +141,6 @@ describe('semantic theme runtime bootstrap', () => {
     renderProvider()
 
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
-    // With no stored or rendered theme the runtime seeds the default so the
-    // semantic tokens are never unset (issue #1611).
     expect(document.documentElement).toHaveAttribute('data-theme', 'classic')
     expect(mocks.get).toHaveBeenNthCalledWith(2, '/v1/users/me/preferences', PREFERENCES_CONFIG)
   })
@@ -146,8 +153,6 @@ describe('semantic theme runtime bootstrap', () => {
     renderProvider()
 
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
-    // Regression for issue #1611: a transient preferences outage must never
-    // reset the user's chosen theme to classic on load.
     expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold')
   })
 
@@ -159,8 +164,6 @@ describe('semantic theme runtime bootstrap', () => {
     renderProvider()
 
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
-    // After an outage the stored local choice must not be silently downgraded
-    // by older server preference data.
     expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold')
   })
 
@@ -188,7 +191,6 @@ describe('semantic theme runtime bootstrap', () => {
     renderProvider()
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
 
-    // The user picks a theme while the bootstrap request is still in flight.
     act(() => {
       selectTheme('ink-gold')
     })
@@ -197,7 +199,6 @@ describe('semantic theme runtime bootstrap', () => {
     await act(async () => {
       resolvePreferences?.({ theme: 'classic', user_id: 1 })
     })
-    // The older server response must not clobber the fresher local choice.
     expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold')
   })
 
@@ -254,6 +255,8 @@ describe('Appearance picker in the More tray', () => {
     auth = null
     document.documentElement.removeAttribute('data-theme')
     localStorage.clear()
+    resetThemePreferenceSyncForTests()
+    setThemePreferenceRetryDelaysForTests([0, 0])
     resetApiMocks()
     mocks.getAccessToken.mockReturnValue('test-token')
     delete window.__COMIC_PILE_ACCESS_TOKEN
@@ -289,14 +292,40 @@ describe('Appearance picker in the More tray', () => {
     )
   })
 
-  it('keeps the rendered theme when persisting the preference fails', async () => {
-    mocks.patch.mockRejectedValueOnce(axiosError(503))
+  it('retries a failed preference save and converges without an error', async () => {
+    mocks.patch.mockRejectedValueOnce(new Error('save failed'))
     const user = await openMoreTray()
 
     await user.click(screen.getByRole('button', { name: 'Ink-gold theme' }))
 
     expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold')
-    await waitFor(() => expect(mocks.patch).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(mocks.patch).toHaveBeenCalledTimes(2))
+    await waitFor(() =>
+      expect(mocks.patch).toHaveBeenLastCalledWith('/v1/users/me/preferences', {
+        theme: 'ink-gold',
+      }),
+    )
+    expect(screen.queryByText(/saving your preference failed/i)).not.toBeInTheDocument()
+  })
+
+  it('indicates the currently active theme in the picker', async () => {
+    const user = await openMoreTray()
+
+    expect(screen.getByRole('button', { name: 'Classic theme' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Command center theme' }))
+
+    expect(screen.getByRole('button', { name: 'Command center theme' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByRole('button', { name: 'Classic theme' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
   })
 
   it('mirrors the selection into localStorage even when the PATCH fails', async () => {
@@ -305,20 +334,17 @@ describe('Appearance picker in the More tray', () => {
 
     await user.click(screen.getByRole('button', { name: 'Command center theme' }))
 
-    await waitFor(() => expect(mocks.patch).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(mocks.patch).toHaveBeenCalled())
     expect(readStoredThemePreference()).toBe('command-center')
     expect(localStorage.getItem('comic-pile-theme')).toBe('command-center')
   })
 
   it('survives a reload during an outage: stored choice renders instead of classic', async () => {
-    // First visit: pick ink-gold while the preferences API is down.
     mocks.patch.mockRejectedValue(axiosError(503))
     const user = await openMoreTray()
     await user.click(screen.getByRole('button', { name: 'Ink-gold theme' }))
     await waitFor(() => expect(readStoredThemePreference()).toBe('ink-gold'))
 
-    // "Reload": the runtime restores the stored theme before any network work
-    // and the bootstrap preference fetch fails again with a 503.
     document.documentElement.removeAttribute('data-theme')
     resetApiMocks()
     mocks.getAccessToken.mockReturnValue('test-token')

@@ -45,6 +45,10 @@ SESSION_HISTORY_FIELDS = {
     "last_rolled_result",
     "has_restore_point",
     "snapshot_count",
+    "reading_bandwidth",
+    "reading_intent",
+    "reading_mode_source",
+    "reading_mode_suggested",
 }
 SESSION_HISTORY_DROPPED_FIELDS = {
     "snoozed_thread_ids",
@@ -152,15 +156,15 @@ def test_queue_item_records_serialized_byte_reduction() -> None:
 
 
 def test_session_history_item_contract_is_exact_and_measurably_narrower() -> None:
-    """History items expose only the documented 12-field screen contract."""
+    """History items expose only the documented 16-field screen contract."""
     full_fields = set(SessionResponse.model_fields)
     history_fields = set(SessionListItem.model_fields)
 
     assert history_fields == SESSION_HISTORY_FIELDS
     assert full_fields - history_fields == SESSION_HISTORY_DROPPED_FIELDS
-    assert len(full_fields) == 15
-    assert len(history_fields) == 12
-    assert (len(full_fields) - len(history_fields)) / len(full_fields) == 0.20
+    assert len(full_fields) == 19
+    assert len(history_fields) == 16
+    assert (len(full_fields) - len(history_fields)) / len(full_fields) == 3 / 19
 
 
 def test_session_history_records_serialized_byte_reduction() -> None:
@@ -179,6 +183,10 @@ def test_session_history_records_serialized_byte_reduction() -> None:
         last_rolled_result=4,
         has_restore_point=True,
         snapshot_count=3,
+        reading_bandwidth="deep",
+        reading_intent="explore",
+        reading_mode_source="quiz",
+        reading_mode_suggested=False,
         snoozed_thread_ids=[11, 12, 13],
         snoozed_threads=[
             {"id": 11, "title": "Thread Eleven"},
@@ -228,9 +236,9 @@ def test_roll_screen_contract_is_exact_and_named() -> None:
 
 
 def test_current_session_contract_is_exact_and_named() -> None:
-    """The current-session screen exposes exactly the named 15-field contract."""
+    """The current-session screen exposes exactly the named 19-field contract."""
     assert set(SessionResponse.model_fields) == CURRENT_SESSION_FIELDS
-    assert len(SessionResponse.model_fields) == 15
+    assert len(SessionResponse.model_fields) == 19
 
 
 def test_routes_publish_the_screen_specific_openapi_contracts() -> None:

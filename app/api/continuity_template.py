@@ -182,6 +182,16 @@ async def adopt_crossover_template(
                 "ref_id": item.issue_id,
                 "lane_id": request.lane_id,
                 "position": position,
+                "source_role": item.role,
+                "source_confidence": item.confidence,
+                "source_explanation": item.explanation,
+                "source_paths": item.source_paths,
+                "source_cbl_placements": [
+                    {"source_path": p.source_path, "position": p.position}
+                    for p in item.cbl_placements
+                ],
+                "source_story_arc_ids": item.story_arc_ids,
+                "source_target_story_arc_id": item.target_story_arc_id,
             }
         )
 

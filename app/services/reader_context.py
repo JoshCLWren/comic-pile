@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from typing import Literal
 from sqlalchemy import and_, or_, select, text
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Dependency, Issue, Thread
@@ -33,6 +34,7 @@ from app.schemas.reader_context import (
     ReaderContextSeries,
 )
 from app.services.ownership import get_owned_issue_or_404
+from comic_pile.dependencies import build_blocking_explanation
 
 COMICVINE_PROVIDER = "comicvine"
 MAX_RECENT_RATINGS = 5
@@ -481,21 +483,63 @@ def _build_local_issues(
     return issues
 
 
+def _build_edge_explanation(
+    kind: Literal["dependency", "continuity"],
+    *,
+    source_label: str,
+    target_label: str,
+    source_issue_number: str | None,
+    source_thread_title: str | None,
+    satisfaction: str | None = None,
+) -> str:
+    """Return a human-readable sentence explaining a persisted reader-context edge.
+
+    Dependency edges reuse ``build_blocking_explanation`` — the same copy
+    generator as the queue's blocked-threads list — so wording stays consistent
+    app-wide. Explanations identify comics with human identity only; raw
+    internal database identifiers must never be rendered. Continuity edges use
+    truthful per-satisfaction templates because their gate can differ from the
+    source endpoint.
+
+    Args:
+        kind: The type of edge.
+        source_label: Human-readable source label (thread title + issue number).
+        target_label: Human-readable target label (thread title + issue number).
+        source_issue_number: Source issue number, when resolvable.
+        source_thread_title: Source thread title, when resolvable.
+        satisfaction: Continuity-rule satisfaction type, for continuity edges.
+
+    Returns:
+        A concise explanation sentence.
+    """
+    if kind == "dependency":
+        if source_issue_number is not None and source_thread_title is not None:
+            return build_blocking_explanation(source_issue_number, source_thread_title)
+        return f"Blocked by {source_label}"
+    if satisfaction in ("item_read", "all_members_read"):
+        return f"{source_label} must be read before {target_label}"
+    return f"{target_label} waits on a continuity checkpoint before it can be read"
+
+
 async def _local_edges(
     db: AsyncSession,
+    user_id: int,
     neighborhood_ids: set[int],
 ) -> list[ReaderContextEdge]:
     """Load bounded one-hop dependency/continuity edges touching the neighborhood.
 
     Each edge carries human-readable source and target labels (issue number
-    plus thread title) so callers never surface raw database identifiers.
+    plus thread title) plus both thread identifiers so callers can link each
+    endpoint to its thread without surfacing raw database identifiers.
 
     Continuity rules mirrored from legacy dependencies are excluded so each
-    persisted edge is represented exactly once. Edges are deterministically
-    ordered and capped.
+    persisted edge is represented exactly once. Only edges whose endpoint
+    threads belong to the caller are considered because issue ids are global
+    across users. Edges are deterministically ordered and capped.
 
     Args:
         db: Async database session.
+        user_id: Authenticated owner of the requested issue.
         neighborhood_ids: Local-chain issue identifiers.
 
     Returns:
@@ -503,83 +547,155 @@ async def _local_edges(
     """
     if not neighborhood_ids:
         return []
-
-    dependency_rows = await db.execute(
-        select(Dependency).where(
+    neighborhood_ids_list = list(neighborhood_ids)
+    source_issue = aliased(Issue)
+    target_issue = aliased(Issue)
+    source_thread = aliased(Thread)
+    target_thread = aliased(Thread)
+    dependency_result = await db.execute(
+        select(Dependency)
+        .join(source_issue, Dependency.source_issue_id == source_issue.id)
+        .join(source_thread, source_issue.thread_id == source_thread.id)
+        .join(target_issue, Dependency.target_issue_id == target_issue.id)
+        .join(target_thread, target_issue.thread_id == target_thread.id)
+        .where(
+            source_thread.user_id == user_id,
+            target_thread.user_id == user_id,
             or_(
-                Dependency.source_issue_id.in_(neighborhood_ids),
-                Dependency.target_issue_id.in_(neighborhood_ids),
-            )
+                Dependency.source_issue_id.in_(neighborhood_ids_list),
+                Dependency.target_issue_id.in_(neighborhood_ids_list),
+            ),
         )
     )
-    rule_rows = await db.execute(
+    rule_result = await db.execute(
         select(ContinuityRule).where(
+            ContinuityRule.user_id == user_id,
             ContinuityRule.legacy_dependency_id.is_(None),
             ContinuityRule.source_type == "issue",
             ContinuityRule.target_type == "issue",
             or_(
-                ContinuityRule.source_id.in_(neighborhood_ids),
-                ContinuityRule.target_id.in_(neighborhood_ids),
+                ContinuityRule.source_id.in_(neighborhood_ids_list),
+                ContinuityRule.target_id.in_(neighborhood_ids_list),
             ),
         )
     )
+    dependencies = list(dependency_result.scalars().all())
+    rules = list(rule_result.scalars().all())
 
-    dependencies = list(dependency_rows.scalars())
-    rules = list(rule_rows.scalars())
-
-    all_edge_ids: set[int] = set()
-    for dep in dependencies:
-        all_edge_ids.add(dep.source_issue_id)
-        all_edge_ids.add(dep.target_issue_id)
+    issue_ids: set[int] = set()
+    for dependency in dependencies:
+        issue_ids.add(dependency.source_issue_id)
+        issue_ids.add(dependency.target_issue_id)
     for rule in rules:
-        all_edge_ids.add(rule.source_id)
-        all_edge_ids.add(rule.target_id)
+        issue_ids.add(rule.source_id)
+        issue_ids.add(rule.target_id)
 
-    issue_label_map: dict[int, tuple[str, str]] = {}
-    if all_edge_ids:
-        lookup = await db.execute(
-            select(Issue, Thread.title.label("thread_title"))
-            .join(Thread, Thread.id == Issue.thread_id)
-            .where(Issue.id.in_(all_edge_ids))
+    issue_map: dict[int, Issue] = {}
+    thread_map: dict[int, Thread] = {}
+    if issue_ids:
+        issue_rows = await db.execute(select(Issue).where(Issue.id.in_(issue_ids)))
+        thread_ids: set[int] = set()
+        for issue_row in issue_rows.scalars():
+            issue_map[issue_row.id] = issue_row
+            thread_ids.add(issue_row.thread_id)
+        if thread_ids:
+            thread_rows = await db.execute(
+                select(Thread).where(Thread.id.in_(thread_ids))
+            )
+            for thread_row in thread_rows.scalars():
+                thread_map[thread_row.id] = thread_row
+
+    def _label_parts(
+        raw_issue_id: int,
+    ) -> tuple[str | None, str | None, str | None, int | None]:
+        """Return the display label, issue number, thread title, and thread id."""
+        issue = issue_map.get(raw_issue_id)
+        if issue is None:
+            return None, None, None, None
+        thread = thread_map.get(issue.thread_id)
+        if thread is None:
+            return f"Issue #{issue.issue_number}", issue.issue_number, None, None
+        return (
+            f"{thread.title} #{issue.issue_number}",
+            issue.issue_number,
+            thread.title,
+            thread.id,
         )
-        for row in lookup.mappings():
-            issue: Issue = row[Issue]
-            issue_label_map[issue.id] = (issue.issue_number, row["thread_title"])
-
-    def _edge_label(issue_id: int) -> tuple[str, str]:
-        return issue_label_map.get(issue_id, ("?", "?"))
 
     edges: list[ReaderContextEdge] = []
-    for dep in dependencies:
-        src_number, src_title = _edge_label(dep.source_issue_id)
-        tgt_number, tgt_title = _edge_label(dep.target_issue_id)
+
+    def _human_label(raw_label: str | None) -> str:
+        """Return a reader-facing label that is never a bare internal identifier.
+
+        Args:
+            raw_label: Resolved human-readable label, when available.
+
+        Returns:
+            The resolved label, or human fallback copy when unresolved.
+        """
+        return raw_label if raw_label is not None else "a missing issue"
+
+    for dependency in dependencies:
+        source_label, source_number, source_title, source_thread_id = _label_parts(
+            dependency.source_issue_id
+        )
+        target_label, target_number, target_title, target_thread_id = _label_parts(
+            dependency.target_issue_id
+        )
         edges.append(
             ReaderContextEdge(
-                id=dep.id,
+                id=dependency.id,
                 kind="dependency",
-                source_issue_id=dep.source_issue_id,
-                target_issue_id=dep.target_issue_id,
-                source_issue_number=src_number,
-                target_issue_number=tgt_number,
-                source_thread_title=src_title,
-                target_thread_title=tgt_title,
-                note=dep.note,
+                source_issue_id=dependency.source_issue_id,
+                target_issue_id=dependency.target_issue_id,
+                source_thread_id=source_thread_id,
+                target_thread_id=target_thread_id,
+                source_label=source_label,
+                target_label=target_label,
+                source_issue_number=source_number,
+                target_issue_number=target_number,
+                source_thread_title=source_title,
+                target_thread_title=target_title,
+                note=dependency.note,
+                explanation=_build_edge_explanation(
+                    "dependency",
+                    source_label=_human_label(source_label),
+                    target_label=_human_label(target_label),
+                    source_issue_number=source_number,
+                    source_thread_title=source_title,
+                ),
             )
         )
     for rule in rules:
-        src_number, src_title = _edge_label(rule.source_id)
-        tgt_number, tgt_title = _edge_label(rule.target_id)
+        source_label, source_number, source_title, source_thread_id = _label_parts(
+            rule.source_id
+        )
+        target_label, target_number, target_title, target_thread_id = _label_parts(
+            rule.target_id
+        )
         edges.append(
             ReaderContextEdge(
                 id=rule.id,
                 kind="continuity",
                 source_issue_id=rule.source_id,
                 target_issue_id=rule.target_id,
-                source_issue_number=src_number,
-                target_issue_number=tgt_number,
-                source_thread_title=src_title,
-                target_thread_title=tgt_title,
+                source_thread_id=source_thread_id,
+                target_thread_id=target_thread_id,
+                source_label=source_label,
+                target_label=target_label,
+                source_issue_number=source_number,
+                target_issue_number=target_number,
+                source_thread_title=source_title,
+                target_thread_title=target_title,
                 note=rule.note,
+                explanation=_build_edge_explanation(
+                    "continuity",
+                    source_label=_human_label(source_label),
+                    target_label=_human_label(target_label),
+                    source_issue_number=source_number,
+                    source_thread_title=source_title,
+                    satisfaction=rule.satisfaction_type,
+                ),
             )
         )
     edges.sort(key=lambda edge: (edge.kind, edge.id))
@@ -678,7 +794,9 @@ async def get_reader_context(
         members_by_group=members_by_group,
         effective=effective,
     )
-    edges = await _local_edges(db, {candidate.id for candidate in neighborhood})
+    edges = await _local_edges(
+        db, user_id, {candidate.id for candidate in neighborhood}
+    )
 
     return ReaderContextResponse(
         issue_id=issue_id,

@@ -50,6 +50,11 @@ class Event(Base):
         - `thread_id`: A proper foreign key to the threads table. Used by "rate"
           and "rolled_but_skipped" events where we need referential integrity
           and the relationship to the Thread model.
+
+    Source Roll Linkage:
+        - `source_roll_event_id`: Self-referential FK linking rate/snooze events
+          back to the originating roll event. NULL for historical events and roll
+          events themselves. Enables decision-latency and outcome analysis.
     """
 
     __tablename__ = "events"
