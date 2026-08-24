@@ -1,19 +1,4 @@
-import { useCallback, useMemo, useRef } from "react";
-import { useQuery, useInfiniteQuery, useMutation } from "@tanstack/react-query";
-import { sessionApi } from "../services/api";
-import type {
-  SessionCurrent,
-  SessionDetails,
-  SessionListResponse,
-  SessionSnapshotsResponse,
-  SessionSummary,
-} from "../types";
-import { useToast } from "../contexts/useToast";
-import { queryClient } from "../query/queryKeys"; // Wait, this is not right. I should use queryKeys.
-
-// Correcting the import and usage below.
-
-import { useCallback, useMemo, useRef } from "react";
+import { useMemo, useRef } from "react";
 import { useQuery, useInfiniteQuery, useMutation } from "@tanstack/react-query";
 import { sessionApi } from "../services/api";
 import type {
@@ -25,7 +10,6 @@ import type {
 } from "../types";
 import { useToast } from "../contexts/useToast";
 import { queryKeys } from "../query/queryKeys";
-import { queryClient } from "../query/queryClient";
 
 const EMPTY_PARAMS = Object.freeze({});
 const STORAGE_KEY_PREFIX = "comic_pile_last_session_id";
@@ -97,7 +81,6 @@ export function useSessions(params = EMPTY_PARAMS) {
   const isLoadingMore = query.isFetchingNextPage;
   const isError = query.isError;
   const error = query.error;
-  const lastPage = query.data?.pages.at(-1);
   const hasMore = !!query.hasNextPage;
   const loadMore = () => query.fetchNextPage();
 

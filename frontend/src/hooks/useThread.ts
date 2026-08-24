@@ -1,4 +1,3 @@
-import { useCallback } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { threadsApi } from '../services/api';
 import type { ReactivateThreadPayload, Thread, ThreadCreatePayload, ThreadUpdatePayload } from '../types';
