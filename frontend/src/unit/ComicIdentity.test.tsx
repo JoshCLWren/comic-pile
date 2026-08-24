@@ -490,11 +490,15 @@ describe('ComicIdentity', () => {
     expect(screen.getByText('Coming soon')).toBeInTheDocument()
     expect(screen.getByText('Artist Only')).toBeInTheDocument()
     expect(screen.getByText('Named Special')).toBeInTheDocument()
-    expect(screen.getByText('ComicVine issue 702')).toBeInTheDocument()
+    expect(screen.getByText('Untitled ComicVine issue')).toBeInTheDocument()
+    expect(screen.queryByText(/ComicVine issue \d+/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/ComicVine #\d+/)).not.toBeInTheDocument()
     expect(screen.getByText('Read')).toBeInTheDocument()
     expect(screen.getByText('Not in ComicPile')).toBeInTheDocument()
     expect(screen.queryByText('View source on ComicVine')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Add ComicVine issue 702 to ComicPile/i })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /Add Untitled ComicVine issue to ComicPile/i }),
+    ).toBeInTheDocument()
   })
 
   it('description is in a collapsible details element', async () => {
