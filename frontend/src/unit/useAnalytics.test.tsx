@@ -1,7 +1,8 @@
-import { renderHook, waitFor } from '@testing-library/react'
+import { waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { tasksApi } from '../services/api'
+import { renderHookWithClient as renderHook } from './queryTestWrapper'
 
 vi.mock('../services/api', () => ({
   tasksApi: {

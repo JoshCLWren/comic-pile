@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import {
@@ -11,6 +11,7 @@ import {
 import { sessionApi } from '../services/api'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { CacheProvider } from '../contexts/CacheContext'
+import { renderHookWithClient as renderHook } from './queryTestWrapper'
 
 vi.mock('../services/api', () => ({
   sessionApi: {
@@ -24,7 +25,7 @@ vi.mock('../services/api', () => ({
 
 const mockedSessionApi = vi.mocked(sessionApi)
 
-function renderWithProvider<T>(hook: () => T): { result: { current: T } } {
+function renderWithProvider<T>(hook: () => T) {
   return renderHook(hook, {
     wrapper: ({ children }: { children: ReactNode }) => (
       <CacheProvider>

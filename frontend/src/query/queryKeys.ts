@@ -54,6 +54,7 @@ export const queryKeys = {
     page: ({ pageToken, pageSize }: SessionPageKeyOptions) =>
       ['session', 'pages', { pageToken: pageToken ?? null, pageSize }] as const,
     detail: (sessionId: number) => ['session', 'detail', sessionId] as const,
+    snapshots: (sessionId: number | string) => ['session', 'snapshots', sessionId] as const,
   },
   roll: {
     all: ['roll'] as const,
@@ -105,5 +106,14 @@ export const queryKeys = {
   dependencyGroups: {
     all: ['dependencyGroups'] as const,
     forThread: (threadId: number) => ['dependencyGroups', 'thread', threadId] as const,
+    forThreads: (threadIds: number[]) => ['dependencyGroups', 'threads', threadIds] as const,
+  },
+  comicVine: {
+    all: ['comicVine'] as const,
+    issueIntelligence: (issueId: number) => ['comicVine', 'issueIntelligence', issueId] as const,
+  },
+  continuityPlans: {
+    all: ['continuityPlans'] as const,
+    readiness: (planId: number) => ['continuityPlans', 'readiness', planId] as const,
   },
 } as const

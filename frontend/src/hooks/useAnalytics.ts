@@ -1,28 +1,18 @@
-import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { tasksApi } from '../services/api'
-import type { AnalyticsMetrics } from '../types'
+import { queryKeys } from '../query/queryKeys'
 
 export function useAnalytics() {
-  const [data, setData] = useState<AnalyticsMetrics | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
+  const query = useQuery({
+    queryKey: queryKeys.analytics.overview(),
+    queryFn: () => tasksApi.getMetrics(),
+    staleTime: 30_000,
+    retry: false,
+  })
 
-  useEffect(() => {
-    async function fetchMetrics() {
-      try {
-        setIsLoading(true)
-        setError(null)
-        const metrics = await tasksApi.getMetrics()
-        setData(metrics)
-      } catch (err) {
-        setError(err instanceof Error ? err : new Error(String(err)))
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchMetrics()
-  }, [])
-
-  return { data, isLoading, error }
+  return {
+    data: query.data ?? null,
+    isLoading: query.isLoading,
+    error: query.error ?? null,
+  }
 }
