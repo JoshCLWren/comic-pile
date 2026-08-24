@@ -22,6 +22,7 @@ from app.models.user import User
 from app.services.reading_quiz import (
     QuizResolutionError,
     ReadingModeSource,
+    is_valid_reading_mode,
     resolve_quiz_answers,
 )
 
@@ -141,6 +142,12 @@ async def set_reading_mode(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
         ) from exc
+
+    if not is_valid_reading_mode(bandwidth, intent):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid reading-mode values: {bandwidth!r}/{intent!r}",
+        )
 
     session = await _get_active_session(db, current_user)
     session.reading_bandwidth = bandwidth
