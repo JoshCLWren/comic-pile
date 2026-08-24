@@ -17,6 +17,7 @@ export interface RollPageState {
   blockedExpanded: boolean
   isDieModalOpen: boolean
   isSetCurrentIssueOpen: boolean
+  isReadingQuizOpen: boolean
   selectedThread: RollBootstrapThread | null
   isActionSheetOpen: boolean
   activeRatingThread: RatingThread | null
@@ -48,6 +49,7 @@ export interface RollPageStateSetters {
   setBlockedExpanded: (value: boolean) => void
   setIsDieModalOpen: (value: boolean) => void
   setIsSetCurrentIssueOpen: (value: boolean) => void
+  setIsReadingQuizOpen: (value: boolean) => void
   setSelectedThread: (value: RollBootstrapThread | null) => void
   setIsActionSheetOpen: (value: boolean) => void
   setActiveRatingThread: (value: RatingThread | null) => void
@@ -76,6 +78,7 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const [blockedExpanded, setBlockedExpanded] = useState(false)
   const [isDieModalOpen, setIsDieModalOpen] = useState(false)
   const [isSetCurrentIssueOpen, setIsSetCurrentIssueOpen] = useState(false)
+  const [isReadingQuizOpen, setIsReadingQuizOpen] = useState(false)
   const [selectedThread, setSelectedThread] = useState<RollBootstrapThread | null>(null)
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
   const [activeRatingThread, setActiveRatingThread] = useState<RatingThread | null>(null)
@@ -121,6 +124,8 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
     setIsDieModalOpen,
     isSetCurrentIssueOpen,
     setIsSetCurrentIssueOpen,
+    isReadingQuizOpen,
+    setIsReadingQuizOpen,
     selectedThread,
     setSelectedThread,
     isActionSheetOpen,

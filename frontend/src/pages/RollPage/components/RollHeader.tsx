@@ -14,11 +14,14 @@ interface RollHeaderProps {
   isRatingView: boolean
   setDiePending: boolean
   clearManualDiePending: boolean
-  onSetDie: (die: number) => Promise<boolean> | boolean
-  onClearManualDie: () => void
-  onOpenOverride: () => void
-  onOpenDieModal: () => void
-}
+   onSetDie: (die: number) => Promise<boolean> | boolean
+   onClearManualDie: () => void
+   onOpenOverride: () => void
+   onOpenDieModal: () => void
+   /** Human-readable current reading mode, or null when unset. */
+   readingModeLabel: string | null
+   onOpenReadingQuiz: () => void
+ }
 
 /**
  * Active-session header: die ladder controls, the automatic/manual die label,
@@ -39,6 +42,8 @@ export function RollHeader({
   onClearManualDie,
   onOpenOverride,
   onOpenDieModal,
+  readingModeLabel,
+  onOpenReadingQuiz,
 }: RollHeaderProps) {
   return (
     <header className="flex justify-between items-center px-2 md:px-3 py-2 shrink-0 z-10">
@@ -145,6 +150,21 @@ export function RollHeader({
             className="min-h-11 px-2 md:px-3 py-1.5 md:py-2 bg-white/5 border border-white/10 text-stone-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
           >
             Pick manually
+          </button>
+        </Tooltip>
+        <Tooltip content="Two quick questions set this session's reading mode. Never required for rolling.">
+          <button
+            type="button"
+            data-testid="reading-quiz-button"
+            onClick={onOpenReadingQuiz}
+            aria-label={`Reading mode${readingModeLabel ? `: ${readingModeLabel}` : ' not set'}. Open the two-question quiz.`}
+            className={`min-h-11 px-2 md:px-3 py-1.5 md:py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
+              readingModeLabel
+                ? 'bg-amber-600/20 border-amber-600 text-amber-500'
+                : 'bg-white/5 border-white/10 text-stone-300 hover:bg-white/10'
+            }`}
+          >
+            {readingModeLabel ?? 'Reading mode'}
           </button>
         </Tooltip>
       </div>

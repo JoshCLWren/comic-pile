@@ -5,8 +5,10 @@ import MigrationDialog from '../../../components/MigrationDialog'
 import SimpleMigrationDialog from '../../../components/SimpleMigrationDialog'
 import { DICE_LADDER } from '../../../components/diceLadder'
 import type { Thread } from '../../../types'
+import type { ReadingMode } from '../../../types/readingMode'
 import type { RollBootstrapThread } from '../../../types/rollBootstrap'
 import type { RatingThread } from '../types'
+import ReadingQuizModal from './ReadingQuizModal'
 
 interface SetCurrentIssueModalProps {
   onSubmit: (issueNumber: string) => Promise<void>
@@ -111,6 +113,12 @@ interface RollModalsProps {
   isSetCurrentIssueOpen: boolean
   onCloseSetCurrentIssue: () => void
   onSetCurrentIssue: (issueNumber: string) => Promise<void>
+  isReadingQuizOpen: boolean
+  onCloseReadingQuiz: () => void
+  readingQuizSessionId: number | null
+  readingQuizInitialBandwidthAnswerId: string | null
+  readingQuizInitialIntentAnswerId: string | null
+  onReadingQuizSubmit: (mode: ReadingMode) => Promise<void>
 }
 
 /**
@@ -152,6 +160,12 @@ export function RollModals({
   isSetCurrentIssueOpen,
   onCloseSetCurrentIssue,
   onSetCurrentIssue,
+  isReadingQuizOpen,
+  onCloseReadingQuiz,
+  readingQuizSessionId,
+  readingQuizInitialBandwidthAnswerId,
+  readingQuizInitialIntentAnswerId,
+  onReadingQuizSubmit,
 }: RollModalsProps) {
   return (
     <>
@@ -335,6 +349,16 @@ export function RollModals({
             onClose={onCloseSetCurrentIssue}
           />
         </Modal>
+      )}
+
+      {isReadingQuizOpen && readingQuizSessionId !== null && (
+        <ReadingQuizModal
+          isOpen={isReadingQuizOpen}
+          onClose={onCloseReadingQuiz}
+          initialBandwidthAnswerId={readingQuizInitialBandwidthAnswerId}
+          initialIntentAnswerId={readingQuizInitialIntentAnswerId}
+          onSubmit={onReadingQuizSubmit}
+        />
       )}
     </>
   )

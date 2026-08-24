@@ -246,7 +246,6 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(reading_orders.router, tags=["reading-orders"])
     app.include_router(session.router, prefix="/api/sessions", tags=["session"])
     app.include_router(session.router, prefix="/api/v1/sessions", tags=["session"])
-    app.include_router(session_mode.router, prefix="/api/sessions", tags=["session-mode"])
     app.include_router(session_mode.router, prefix="/api/v1/sessions", tags=["session-mode"])
     app.include_router(snooze.router, prefix="/api/snooze", tags=["snooze"])
     app.include_router(snooze.router, prefix="/api/v1/snooze", tags=["snooze"])

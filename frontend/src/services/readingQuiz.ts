@@ -64,7 +64,13 @@ const BANDWIDTH_ANSWER_ID_BY_VALUE: Record<ReadingBandwidth, string> = {
   deep: 'substantial',
 }
 
-const INTENT_ANSWER_ID_BY_VALUE: Record<ReadingIntent, string> = {
+/**
+ * Intent value selected by each stable intent-question answer ID.
+ *
+ * The quiz never produces the `balanced` intent; it can only arrive through
+ * partial manual/correction updates, so no answer ID maps to it.
+ */
+export const INTENT_ANSWER_ID_BY_VALUE: Partial<Record<ReadingIntent, string>> = {
   momentum: 'momentum',
   familiar: 'familiar',
   explore: 'explore',
@@ -117,6 +123,22 @@ export function answerIdForBandwidth(bandwidth: ReadingBandwidth): string | null
 /** Return the stable answer ID that produced a persisted intent value. */
 export function answerIdForIntent(intent: ReadingIntent): string | null {
   return INTENT_ANSWER_ID_BY_VALUE[intent] ?? null
+}
+
+/** Return true when the value is a known reading-mode bandwidth. */
+export function isReadingBandwidth(value: unknown): value is ReadingBandwidth {
+  return value === 'light' || value === 'balanced' || value === 'deep'
+}
+
+/** Return true when the value is a known reading-mode intent. */
+export function isReadingIntent(value: unknown): value is ReadingIntent {
+  return (
+    value === 'balanced'
+    || value === 'momentum'
+    || value === 'familiar'
+    || value === 'explore'
+    || value === 'random'
+  )
 }
 
 /** Human-readable label for a single mode value, e.g. `Light`. */

@@ -15,6 +15,16 @@ import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../../hooks/useQ
 import { useRate } from '../../hooks'
 import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 import { isDiceSide } from '../../components/diceTypes'
+import { readingModeApi } from '../../services/readingModeApi'
+import {
+  answerIdForBandwidth,
+  answerIdForIntent,
+  formatReadingModeLabel,
+  isReadingBandwidth,
+  isReadingIntent,
+  readingModeValueLabel,
+} from '../../services/readingQuiz'
+import type { ReadingMode } from '../../types/readingMode'
 import { threadsApi } from '../../services/api'
 import type { ThreadMetadata } from './types'
 import { useRollPageState } from './useRollPageState'
@@ -165,6 +175,24 @@ export default function RollPage() {
 
   const snoozedThreads = bootstrap?.snoozed_threads ?? []
   const blockedThreads = bootstrap?.blocked_threads ?? []
+
+  const currentBandwidth = bootstrap && isReadingBandwidth(bootstrap.bandwidth) ? bootstrap.bandwidth : null
+  const currentIntent = bootstrap && isReadingIntent(bootstrap.intent) ? bootstrap.intent : null
+  const readingModeLabel = currentBandwidth
+    ? currentIntent
+      ? formatReadingModeLabel(currentBandwidth, currentIntent)
+      : readingModeValueLabel(currentBandwidth)
+    : currentIntent
+      ? readingModeValueLabel(currentIntent)
+      : null
+
+  // The quiz never blocks rolling: it only opens through this explicit entry point.
+  const handleReadingQuizSubmit = async (mode: ReadingMode) => {
+    if (!bootstrap) return
+    await readingModeApi.set(bootstrap.session_id, { ...mode, source: 'quiz' })
+    await refetchBootstrap()
+  }
+
   const dieSize = state.currentDie || 6
   const filteredThreads = rollPool.filter(
     (thread) =>
@@ -231,6 +259,8 @@ export default function RollPage() {
         onClearManualDie={actions.handleClearManualDie}
         onOpenOverride={modals.openOverrideModal}
         onOpenDieModal={() => state.setIsDieModalOpen(true)}
+        readingModeLabel={readingModeLabel}
+        onOpenReadingQuiz={() => state.setIsReadingQuizOpen(true)}
       />
 
       <div className="flex-1 flex flex-col min-h-0">
@@ -346,6 +376,14 @@ export default function RollPage() {
           isSetCurrentIssueOpen={state.isSetCurrentIssueOpen}
           onCloseSetCurrentIssue={() => state.setIsSetCurrentIssueOpen(false)}
           onSetCurrentIssue={handleSetCurrentIssue}
+          isReadingQuizOpen={state.isReadingQuizOpen}
+          onCloseReadingQuiz={() => state.setIsReadingQuizOpen(false)}
+          readingQuizSessionId={bootstrap?.session_id ?? null}
+          readingQuizInitialBandwidthAnswerId={
+            currentBandwidth ? answerIdForBandwidth(currentBandwidth) : null
+          }
+          readingQuizInitialIntentAnswerId={currentIntent ? answerIdForIntent(currentIntent) : null}
+          onReadingQuizSubmit={handleReadingQuizSubmit}
         />
       </div>
     </div>

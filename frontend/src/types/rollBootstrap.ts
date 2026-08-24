@@ -87,6 +87,10 @@ export interface RollBootstrapResponse {
   blocked_threads: RollBootstrapThread[]
   stale_thread_count: number
   stale_thread: RollBootstrapThread | null
+  /** Ephemeral reading-mode bandwidth for this session, when set. */
+  bandwidth?: string | null
+  /** Ephemeral reading-mode intent for this session, when set. */
+  intent?: string | null
 }
 
 declare module './index' {

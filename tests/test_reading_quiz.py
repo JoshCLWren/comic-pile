@@ -36,8 +36,19 @@ def test_each_answer_maps_deterministically(
     expected_bandwidth: str | None,
     expected_intent: str | None,
 ) -> None:
-    """Every stable answer ID resolves its axis deterministically."""
-    mode = resolve_quiz_answers({question_id: answer_id})
+    """Every stable answer ID resolves its axis deterministically.
+
+    ``resolve_quiz_answers`` requires both axes, so each single answer is
+    paired with a fixed counterpart from the other question; the asserted
+    axis must still come only from the answer under test.
+    """
+    answers = {question_id: answer_id}
+    if expected_bandwidth is None:
+        answers[BANDWIDTH_QUESTION_ID] = "normal"
+    if expected_intent is None:
+        answers[INTENT_QUESTION_ID] = "momentum"
+
+    mode = resolve_quiz_answers(answers)
     if expected_bandwidth is not None:
         assert mode.bandwidth == expected_bandwidth
     if expected_intent is not None:
@@ -115,7 +126,9 @@ def test_mode_update_request_requires_one_axis() -> None:
     assert request.source == "quiz"
 
     with pytest.raises(ValidationError):
-        SessionModeUpdateRequest(bandwidth="light", intent="momentum", source="quiz", vibe="extra")
+        SessionModeUpdateRequest.model_validate(
+            {"bandwidth": "light", "intent": "momentum", "source": "quiz", "vibe": "extra"}
+        )
 
     with pytest.raises(ValidationError):
         SessionModeUpdateRequest(bandwidth="spicy", intent="momentum")
