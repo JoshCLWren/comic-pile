@@ -68,8 +68,8 @@ async def list_taste_signals(
     summary="Record an explicit verdict for one Taste Bank signal.",
     description=(
         "Confirm, qualify, or reject a single Taste Bank discovery for the "
-        "authenticated user. Only the targeted user's matching "
-        ``(signal_type, external_key)`` row is written. Inferred evidence "
+        "authenticated user. Only the targeted user 's matching "
+        "(signal_type, external_key) row is written. Inferred evidence "
         "columns are preserved untouched and the response time is recorded. "
         "Repeated responses are idempotent; a missing row is created so "
         "direct user assertions work without prior inference."
