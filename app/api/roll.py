@@ -1,7 +1,6 @@
 """Roll API routes."""
 
 import logging
-import random
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
@@ -93,7 +92,6 @@ async def roll_dice(
 
     # Bound the selection to the current die size, matching original semantics.
     bounded_rows = rows[:current_die]
-    pool_size = len(bounded_rows)
 
     # Apply momentum weighting; weights fall back to uniform (pure-random)
     # when no positive momentum applies, preserving the pure-random bypass.
@@ -143,7 +141,7 @@ async def roll_dice(
         selected_thread_id=selected_thread_id,
         die=current_die,
         result=selected_index + 1,
-        selection_method="random",
+        selection_method="momentum" if max_bonus > 0 else "random",
         issue_id=selected_thread_issue_id,
         issue_number=selected_thread_issue_number,
     )

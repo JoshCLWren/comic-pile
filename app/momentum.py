@@ -10,9 +10,9 @@ remains untouched when no momentum-weighted selection is requested.
 from __future__ import annotations
 
 import math
-from datetime import UTC, datetime, timedelta
+import random
+from datetime import UTC, datetime
 
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Thread
@@ -46,48 +46,21 @@ def _streak_depth_for_thread(thread: Thread, session_events: list[Event]) -> int
     return min(depth, _MAX_STREAK_DEPTH)
 
 
-def _recent_rate_events(
-    db: AsyncSession,
-    user_id: int,
-    thread_id: int,
-    hours_back: int = 168,
-) -> list[Event]:
-    """Fetch recent rate events for a thread (synchronous helper for weight calc)."""
-    # This is a lightweight synchronous query wrapper; callers in async
-    # contexts should await the async variant below.
-    raise NotImplementedError("Use async variant in roll context.")
-
-
-async def _fetch_recent_rate_events(
-    db: AsyncSession,
-    user_id: int,
-    thread_id: int,
-    hours_back: int = 168,
-) -> list[Event]:
-    cutoff = datetime.now(UTC) - timedelta(hours=hours_back)
-    result = await db.execute(
-        select(Event)
-        .where(Event.type == "rate")
-        .where(Event.thread_id == thread_id)
-        .where(Event.timestamp >= cutoff)
-        .order_by(Event.timestamp.desc())
-    )
-    return list(result.scalars().all())
-
-
 def _calculate_staleness_decay_hours(
-    last_activity_at: datetime | None,
-    last_rating_at: datetime | None,
-    now: datetime = None,
+    reference_at: datetime | None,
+    now: datetime | None = None,
 ) -> float:
     if now is None:
         now = datetime.now(UTC)
-    reference = last_activity_at or last_rating_at
-    if reference is None:
+    if reference_at is None:
         # No recent activity means full decay; return large value.
         return float("inf")
-    # Ensure reference has timezone info for subtraction
-    reference = reference.replace(tzinfo=UTC) if reference.tzinfo is None else reference
+    # Ensure reference has timezone info for subtraction.
+    reference = (
+        reference_at.replace(tzinfo=UTC)
+        if reference_at.tzinfo is None
+        else reference_at
+    )
     delta_hours = (now - reference).total_seconds() / 3600.0
     return max(0.0, delta_hours)
 
@@ -133,10 +106,10 @@ def compute_momentum_bonus(
     if effective_rating < _HIGH_RATING_THRESHOLD:
         return 0.0
 
-    # Compute staleness from the most recent activity timestamp.
+    # Compute staleness from the most recent activity timestamp. Threads
+    # without a known activity time have fully decayed momentum.
     staleness_hours = _calculate_staleness_decay_hours(
         thread.last_activity_at,
-        thread.last_rating,
         now=now,
     )
 
@@ -184,12 +157,8 @@ async def weighted_momentum_selection(
     # Compute bonuses for each thread in the bounded pool.
     bonuses = []
     for row in bounded_rows:
-        thread = row[0] if isinstance(row, tuple) else row
         # Handle both tuple rows (Thread, unread, issue_number) and plain threads.
-        if isinstance(row, tuple):
-            thread_obj = row[0]
-        else:
-            thread_obj = row
+        thread_obj = row[0] if isinstance(row, tuple) else row
         bonus = compute_momentum_bonus(
             thread=thread_obj,
             session_events=session_events,
@@ -207,10 +176,8 @@ async def weighted_momentum_selection(
     total_weight = sum(weights)
     if total_weight <= 0:
         # Fallback to uniform random if weights collapse (should not happen).
-        import random
         selected_index = random.randint(0, len(bounded_rows) - 1)
     else:
-        import random
         pick = random.uniform(0, total_weight)
         cumulative = 0.0
         selected_index = 0

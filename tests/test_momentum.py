@@ -160,10 +160,21 @@ async def test_decay_factor_decreases_monotonically() -> None:
 def test_staleness_calculation_with_none_activity() -> None:
     """No recent activity yields infinite staleness -> zero decay factor."""
     now = datetime.now(UTC)
-    hours = _calculate_staleness_decay_hours(
-        last_activity_at=None,
-        last_rating_at=None,
-        now=now,
-    )
+    hours = _calculate_staleness_decay_hours(reference_at=None, now=now)
     assert hours == float("inf")
     assert _decay_factor(hours) == 0.0
+
+
+@pytest.mark.asyncio
+async def test_high_rating_without_activity_timestamp_does_not_crash() -> None:
+    """A highly rated thread lacking last_activity_at must not raise.
+
+    Regresses a defect where last_rating (a float) was passed to the
+    staleness helper in place of a datetime, causing an AttributeError.
+    """
+    now = datetime.now(UTC)
+    thread = FakeThread(id=1, last_rating=5.0, last_activity_at=None)
+    bonus = compute_momentum_bonus(thread, session_events=[], now=now)
+    # No activity timestamp => fully decayed; no positive boost is awarded.
+    assert bonus == 0.0
+
