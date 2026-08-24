@@ -63,6 +63,10 @@ import urllib.parse
 import urllib.request
 
 
+DEFAULT_ITERATIONS = 30
+DEFAULT_WARMUPS = 3
+
+
 @dataclasses.dataclass(frozen=True)
 class Run:
     """Single recorded observation."""
@@ -277,7 +281,7 @@ async def run_benchmark(args: argparse.Namespace) -> dict[str, str | int | float
     # ── Phase 2: Neon point SELECT ─────────────────────────────────────────────
     if database_url:
         try:
-            import asyncpg  # noqa: F811 – re-import to confirm availability
+            import asyncpg
         except ImportError:
             neon_error = "asyncpg_not_installed"
             for i in range(iterations):
@@ -437,6 +441,12 @@ def run_sync(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line argument parser for the benchmark.
+
+    Returns:
+        The configured ``argparse.ArgumentParser`` covering cache credentials,
+        database URL, queue-read vantage, sample counts, timeouts, and output.
+    """
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -515,6 +525,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    """Parse arguments, validate sample counts, and run the benchmark.
+
+    Returns:
+        The process exit code (``0`` on success).
+    """
     args = build_parser().parse_args()
     if args.iterations < 1:
         raise SystemExit("--iterations must be >= 1")

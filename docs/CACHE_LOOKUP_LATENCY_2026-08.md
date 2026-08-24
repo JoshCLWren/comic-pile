@@ -34,7 +34,7 @@ compared directly.
 
 | Path | Samples | Min (ms) | Median (ms) | P95 (ms) | Max (ms) | Mean (ms) | Status |
 |---|---|---|---|---|---|---|---|
-| Upstash REST GET | 0 | — | — | — | — | — | `quota_blocked` (HTTP 429 quotaหมด) |
+| Upstash REST GET | 0 | — | — | — | — | — | `quota_blocked` (HTTP 429 quota exhausted) |
 | Neon point SELECT (KV table) | 0 | — | — | — | — | — | *Awaiting run* |
 | Uncached queue read (`/api/v1/sessions/current/`) | 0 | — | — | — | — | — | *Awaiting run* |
 
