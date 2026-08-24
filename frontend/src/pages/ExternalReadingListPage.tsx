@@ -153,8 +153,7 @@ export default function ExternalReadingListPage() {
           reconciliations,
           skippedIssueIds,
         )
-        const response = (raw as { data: { id: number } }).data ?? (raw as { id: number })
-        planId = response.id
+        planId = raw.id
       } else {
         if (!uploadedFile) {
           throw new Error('Please upload a file')
@@ -169,8 +168,7 @@ export default function ExternalReadingListPage() {
           reconciliations,
           skippedIssueIds,
         )
-        const response = (raw as { data: { id: number } }).data ?? (raw as { id: number })
-        planId = response.id
+        planId = raw.id
       }
       setAdoptedPlanId(planId)
       navigate(`/continuity-plans/${planId}`)
