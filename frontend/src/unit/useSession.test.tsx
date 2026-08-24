@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import {
@@ -25,11 +26,16 @@ vi.mock('../services/api', () => ({
 const mockedSessionApi = vi.mocked(sessionApi)
 
 function renderWithProvider<T>(hook: () => T): { result: { current: T } } {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
   return renderHook(hook, {
     wrapper: ({ children }: { children: ReactNode }) => (
-      <CacheProvider>
-        <ToastProvider>{children}</ToastProvider>
-      </CacheProvider>
+      <QueryClientProvider client={queryClient}>
+        <CacheProvider>
+          <ToastProvider>{children}</ToastProvider>
+        </CacheProvider>
+      </QueryClientProvider>
     ),
   })
 }
