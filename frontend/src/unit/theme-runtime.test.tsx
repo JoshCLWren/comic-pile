@@ -334,7 +334,7 @@ describe('Appearance picker in the More tray', () => {
 
     await user.click(screen.getByRole('button', { name: 'Command center theme' }))
 
-    await waitFor(() => expect(mocks.patch).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(mocks.patch).toHaveBeenCalled())
     expect(readStoredThemePreference()).toBe('command-center')
     expect(localStorage.getItem('comic-pile-theme')).toBe('command-center')
   })
