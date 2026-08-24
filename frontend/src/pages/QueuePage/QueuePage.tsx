@@ -232,7 +232,7 @@ export default function QueuePage() {
               </button>
             )}
           </div>
-        )>
+        )}
 
         {nextPageToken && (
           <div
@@ -241,13 +241,13 @@ export default function QueuePage() {
             data-testid="queue-infinite-scroll-sentinel"
             aria-hidden="true"
           />
-        )>
+        )}
 
         {isPending && threads !== null && threads.length > 0 && (
           <div className="px-2 flex justify-center py-4" data-testid="queue-loading-more">
             <LoadingSpinner />
           </div>
-        )>
+        )}
 
         <QueueModals
           openModal={modals.openModal}

@@ -819,8 +819,13 @@ async def test_blocking_explanations_identify_comics_without_raw_thread_ids(asyn
     batched = await get_blocking_explanations_batch([target.id], user.id, async_db)
 
     expected = "Blocked by issue #1 in Ultimate Universe: One Year In"
-    assert reasons == [expected]
-    assert batched == {target.id: [expected]}
-    for reason in [*reasons, *batched[target.id]]:
+    assert [format_blocking_reason(dep) for dep in reasons] == [expected]
+    assert {tid: [format_blocking_reason(dep) for dep in deps] for tid, deps in batched.items()} == {
+        target.id: [expected]
+    }
+    for dep in [*reasons, *batched[target.id]]:
+        reason = format_blocking_reason(dep)
         for pattern in RAW_ID_PATTERNS:
             assert not pattern.search(reason)
+        assert dep.thread_id == source.id
+        assert dep.thread_title == source.title

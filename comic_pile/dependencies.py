@@ -56,27 +56,27 @@ class BlockingDependency:
         self.label = f"Needs {thread_title}: #{issue_number}"
 
 
-def build_blocking_explanation(issue_number: str, thread_title: str, thread_id: int) -> str:
+def build_blocking_explanation(issue_number: str, thread_title: str) -> str:
     """Return the shared human-readable blocked-by sentence for one dependency edge.
 
     This is the single copy generator for dependency blocking sentences so the
     queue's blocked list and reader-context edge rows stay word-for-word
-    consistent app-wide.
+    consistent app-wide. Reader-facing explanations identify comics with human
+    identity only; raw internal database identifiers must never be rendered.
 
     Args:
         issue_number: Issue number of the blocking source issue.
         thread_title: Title of the thread owning the source issue.
-        thread_id: Identifier of the thread owning the source issue.
 
     Returns:
         A concise blocked-by sentence.
     """
-    return f"Blocked by issue #{issue_number} in {thread_title} (thread #{thread_id})"
+    return f"Blocked by issue #{issue_number} in {thread_title}"
 
 
 def format_blocking_reason(dependency: BlockingDependency) -> str:
     """Legacy plain-text reason retained for backward-compatible consumers."""
-    return build_blocking_explanation(dependency.issue_number, dependency.thread_title, dependency.thread_id)
+    return build_blocking_explanation(dependency.issue_number, dependency.thread_title)
 
 
 async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSession) -> list[BlockingDependency]:
