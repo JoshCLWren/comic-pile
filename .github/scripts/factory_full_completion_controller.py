@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""Run the completion drain at full healthy-fleet capacity under severe backlog."""
+"""Run the completion drain at full fleet capacity whenever backlog is saturated."""
 from __future__ import annotations
 
 import dataclasses
 import importlib.util
 import json
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 TELEMETRY_MARKER = "<!-- factory-completion-funnel:v1 -->"
 TELEMETRY_ISSUE = "1093"
+FULL_FLEET_BATCH = 10_000
 
 
 def load_controller():
@@ -22,6 +24,63 @@ def load_controller():
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def configure_work_conserving_selection(controller) -> None:
+    """Use every idle configured worker before leaving completion work waiting."""
+    # The previous wrapper only lifted HIGH_DRAIN_BATCH, so a backlog that fell
+    # from 50 to 49 silently dropped back to an eight-worker ceiling. Saturated
+    # completion work should instead consume all available fleet capacity.
+    controller.NORMAL_DRAIN_BATCH = FULL_FLEET_BATCH
+    controller.HIGH_DRAIN_BATCH = FULL_FLEET_BATCH
+
+    def select_all_idle_workers(
+        workers,
+        *,
+        review_backlog,
+        owned_workers=None,
+        health=None,
+        now_epoch=None,
+    ):
+        owned_workers = owned_workers or set()
+        health = health or {}
+        now_epoch = int(time.time()) if now_epoch is None else now_epoch
+
+        healthy = []
+        transiently_cooling = []
+        for worker in workers:
+            if worker in owned_workers:
+                continue
+            status = health.get(worker)
+            if status is not None:
+                outcome, updated = status
+                normalized = (outcome or "").strip().casefold()
+                cooldown = controller.cooldown_seconds(outcome)
+                still_cooling = cooldown > 0 and now_epoch < updated + cooldown
+                # A configured model that does not exist cannot make progress.
+                if still_cooling and "model missing" in normalized:
+                    continue
+                if still_cooling:
+                    transiently_cooling.append(worker)
+                    continue
+            healthy.append(worker)
+
+        def priority(worker):
+            return (
+                not controller.review_capacity_worker(
+                    worker, review_backlog=review_backlog
+                ),
+                int(worker),
+            )
+
+        healthy.sort(key=priority)
+        transiently_cooling.sort(key=priority)
+        limit = controller.completion_batch_size(review_backlog)
+        if limit == 0:
+            return []
+        return (healthy + transiently_cooling)[:limit]
+
+    controller.select_completion_workers = select_all_idle_workers
 
 
 def persist_funnel_telemetry(controller, result: dict[str, object]) -> None:
@@ -98,11 +157,7 @@ def persist_funnel_telemetry(controller, result: dict[str, object]) -> None:
 
 def main() -> int:
     controller = load_controller()
-
-    # Severe backlog means the completion lane is the fleet's primary job.
-    # Remove the artificial 12-worker ceiling and let the existing health,
-    # ownership, and review-capacity filters determine safe concurrency.
-    controller.HIGH_DRAIN_BATCH = 10_000
+    configure_work_conserving_selection(controller)
 
     # A semantic reviewer needs a lease on the PR, not on the implementation
     # issue that originally produced it. Reusing the implementation claim shape
