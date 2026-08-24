@@ -94,7 +94,8 @@ export default function ExternalReadingListPage() {
       setPreview(data)
     } catch (err) {
       console.error('Failed to preview template:', err)
-      setPreviewError('Failed to generate preview')
+      const message = err instanceof Error ? err.message : 'Failed to generate preview'
+      setPreviewError(message || 'Failed to generate preview')
     } finally {
       setIsPreviewLoading(false)
     }
