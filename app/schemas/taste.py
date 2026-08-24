@@ -9,13 +9,12 @@ without direct database coupling.
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
-from typing import Literal
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class SignalType(str, Enum):
+class SignalType(StrEnum):
     """Category of taste signal derived from reading history."""
 
     CREATOR = "creator"
@@ -25,7 +24,7 @@ class SignalType(str, Enum):
     ERA = "era"
 
 
-class Verdict(str, Enum):
+class Verdict(StrEnum):
     """User verdict on a previously prompted or inferred signal."""
 
     CONFIRMED = "confirmed"

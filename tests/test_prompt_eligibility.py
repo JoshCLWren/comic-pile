@@ -13,11 +13,10 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from pydantic import ValidationError
 
 from app.schemas.taste import (
-    PromptCandidate,
     PromptEligibilityConfig,
-    PromptEligibilityResult,
     SignalType,
     TasteSignal,
     Verdict,
@@ -25,10 +24,6 @@ from app.schemas.taste import (
 from app.services.prompt_eligibility import (
     DEFAULT_CONFIG,
     _compute_score,
-    _is_below_threshold,
-    _is_cooldown_active,
-    _is_rejection_suppressed,
-    _prefer_creator_role_specific,
     evaluate_prompt_eligibility,
 )
 
@@ -592,7 +587,7 @@ class TestSchemaValidation:
 
     def test_taste_signal_rejects_negative_evidence_count(self) -> None:
         """TasteSignal rejects negative evidence_count."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             TasteSignal(
                 user_id=1,
                 signal_type=SignalType.CREATOR,
@@ -606,7 +601,7 @@ class TestSchemaValidation:
 
     def test_taste_signal_rejects_confidence_out_of_range(self) -> None:
         """TasteSignal rejects confidence outside [0, 1]."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             TasteSignal(
                 user_id=1,
                 signal_type=SignalType.CREATOR,
@@ -620,19 +615,19 @@ class TestSchemaValidation:
 
     def test_config_rejects_zero_min_evidence(self) -> None:
         """PromptEligibilityConfig rejects min_evidence_count < 1."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PromptEligibilityConfig(min_evidence_count=0)
 
     def test_config_rejects_negative_cooldown(self) -> None:
         """PromptEligibilityConfig rejects negative cooldown_days."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PromptEligibilityConfig(cooldown_days=-1)
 
     def test_frozen_models(self) -> None:
         """TasteSignal and PromptEligibilityConfig are immutable."""
         signal = _make_signal()
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             signal.affinity = 1.0  # type: ignore[misc]
         config = PromptEligibilityConfig()
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             config.min_evidence_count = 10  # type: ignore[misc]
