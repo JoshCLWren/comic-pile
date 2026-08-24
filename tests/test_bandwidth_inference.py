@@ -48,14 +48,14 @@ def _obs(
     )
 
 
-def _light_obs(*, n: int = 5, **kwargs: object) -> list[HistoricalObservation]:
+def _light_obs(*, n: int = 5) -> list[HistoricalObservation]:
     """Return n predominantly light-effort observations."""
-    return [_obs(5.0 + i * 0.5, **kwargs) for i in range(n)]  # type: ignore[arg-type]
+    return [_obs(5.0 + i * 0.5) for i in range(n)]
 
 
-def _deep_obs(*, n: int = 5, **kwargs: object) -> list[HistoricalObservation]:
+def _deep_obs(*, n: int = 5) -> list[HistoricalObservation]:
     """Return n predominantly deep-effort observations."""
-    return [_obs(22.0 + i * 1.0, **kwargs) for i in range(n)]  # type: ignore[arg-type]
+    return [_obs(22.0 + i * 1.0) for i in range(n)]
 
 
 def _balanced_obs(*, n: int = 6) -> list[HistoricalObservation]:
@@ -252,10 +252,11 @@ class TestSnoozeInfluence:
         result_snoozed = infer_bandwidth(obs_snoozed)
         result_not_snoozed = infer_bandwidth(obs_not_snoozed)
 
-        # Both predict DEEP (all deep effort), but snoozed should have lower confidence
+        # Both predict DEEP (all deep effort), but the snooze evidence must
+        # strictly reduce confidence rather than being ignored.
         assert result_snoozed.level == BandwidthLevel.DEEP
         assert result_not_snoozed.level == BandwidthLevel.DEEP
-        assert result_snoozed.confidence <= result_not_snoozed.confidence
+        assert result_snoozed.confidence < result_not_snoozed.confidence
 
     def test_snooze_heavy_rate_tracked(self) -> None:
         """Snooze heavy rate is correctly computed."""
@@ -293,10 +294,13 @@ class TestTimeOfDayPrior:
         result_morning = infer_bandwidth(obs, session_hour=8)
         result_evening = infer_bandwidth(obs, session_hour=20)
 
-        # With balanced observations, morning and evening should produce
-        # the same level (BALANCED) but different confidence or evidence.
+        # With evenly split evidence the weak prior tilts the prediction:
+        # morning nudges toward light, evening toward deep, while both
+        # record their daypart evidence.
         assert result_morning.evidence.daypart == "morning"
         assert result_evening.evidence.daypart == "evening"
+        assert result_morning.level == BandwidthLevel.LIGHT
+        assert result_evening.level == BandwidthLevel.DEEP
 
     def test_night_prior_favors_deep(self) -> None:
         """Night session slightly favors deeper predictions."""
@@ -304,16 +308,23 @@ class TestTimeOfDayPrior:
             _obs(14.0),
             _obs(16.0),
             _obs(18.0),  # balanced
-            _obs(12.0),
-            _obs(15.0),
-            _obs(17.0),
+            _obs(20.0),
+            _obs(22.0),
+            _obs(24.0),  # deep
         ]
+        result_neutral = infer_bandwidth(obs)
         result_night = infer_bandwidth(obs, session_hour=0)
         result_morning = infer_bandwidth(obs, session_hour=8)
 
-        # Night should have a higher deep alignment score
-        assert result_night.evidence.daypart == "night"
+        # The prior is not a hard rule: an even balanced/deep split remains
+        # BALANCED by default and in the morning, while night tips the
+        # borderline evidence toward DEEP.
+        assert result_neutral.evidence.daypart is None
         assert result_morning.evidence.daypart == "morning"
+        assert result_night.evidence.daypart == "night"
+        assert result_neutral.level == BandwidthLevel.BALANCED
+        assert result_morning.level == BandwidthLevel.BALANCED
+        assert result_night.level == BandwidthLevel.DEEP
 
     def test_no_hour_omits_prior(self) -> None:
         """No session_hour means no daypart prior is applied."""
@@ -446,19 +457,23 @@ class TestContradictoryEvidence:
         obs = [
             _obs(5.0),
             _obs(15.0),
-            _obs(25.0),  # one of each
+            _obs(25.0),
             _obs(6.0),
             _obs(14.0),
-            _obs(22.0),  # one of each
+            _obs(22.0),
         ]
         result = infer_bandwidth(obs)
 
-        # All three bands have 33% → max fraction < 40% → confidence reduced
-        assert result.evidence.light_fraction == pytest.approx(0.5, abs=0.01)
-        # Wait, 3 light + 2 balanced + 1 deep → let me recalculate
-        # Actually: 5.0, 6.0 are light; 14.0, 15.0 are balanced; 22.0, 25.0 are deep
-        # That's 2 light, 2 balanced, 2 deep → max fraction = 33%
-        assert result.confidence < 0.5  # reduced due to contradictions
+        # 5.0/6.0 are light, 14.0/15.0 are balanced, 22.0/25.0 are deep:
+        # two observations per band, so every band fraction is 2/6 ≈ 33%,
+        # below the 40% dominance threshold → contradictory evidence.
+        assert result.evidence.light_fraction == pytest.approx(1 / 3, abs=0.01)
+        assert result.evidence.deep_fraction == pytest.approx(1 / 3, abs=0.01)
+        assert result.confidence < 0.5
+
+        # Evenly split (contradictory) history resolves to the safe
+        # neutral level with low confidence.
+        assert result.level == BandwidthLevel.BALANCED
 
 
 # ---------------------------------------------------------------------------
@@ -530,16 +545,16 @@ class TestImmutability:
         """HistoricalObservation is immutable."""
         obs = _obs(5.0)
         with pytest.raises(AttributeError):
-            obs.effort_minutes = 10.0  # type: ignore[misc]
+            setattr(obs, "effort_minutes", 10.0)
 
     def test_bandwidth_prediction_frozen(self) -> None:
         """BandwidthPrediction is immutable."""
         result = infer_bandwidth(_light_obs(n=6))
         with pytest.raises(AttributeError):
-            result.level = BandwidthLevel.DEEP  # type: ignore[misc]
+            setattr(result, "level", BandwidthLevel.DEEP)
 
     def test_bandwidth_evidence_frozen(self) -> None:
         """BandwidthEvidence is immutable."""
         result = infer_bandwidth(_light_obs(n=6))
         with pytest.raises(AttributeError):
-            result.evidence.mean_effort = 99.0  # type: ignore[misc]
+            setattr(result.evidence, "mean_effort", 99.0)

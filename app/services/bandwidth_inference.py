@@ -301,14 +301,29 @@ def infer_bandwidth(
         raw_scores[BandwidthLevel.DEEP] = max(0.0, raw_scores[BandwidthLevel.DEEP] - deep_penalty)
         reasons.append(f"Deep snooze penalty: -{deep_penalty:.3f}")
 
-    # Time-of-day prior: shift scores by a small amount.
+    # Time-of-day prior: a weak signed shift along the light/deep axis.
+    # Positive priors (evening, night) nudge toward deep; negative priors
+    # (morning) nudge toward light.  BALANCED itself is never shifted, so
+    # the prior tilts borderline evidence without overriding it.
     if daypart_prior != 0.0:
-        raw_scores[BandwidthLevel.LIGHT] += -abs(daypart_prior)
-        raw_scores[BandwidthLevel.DEEP] += abs(daypart_prior)
+        shift = abs(daypart_prior)
+        favored, disfavored = (
+            (BandwidthLevel.DEEP, BandwidthLevel.LIGHT)
+            if daypart_prior > 0
+            else (BandwidthLevel.LIGHT, BandwidthLevel.DEEP)
+        )
+        raw_scores[favored] += shift
+        raw_scores[disfavored] = max(0.0, raw_scores[disfavored] - shift)
         reasons.append(f"Daypart prior applied: {daypart_prior:+.2f}")
 
     # --- pick the winning band ---
-    predicted_level = max(raw_scores, key=lambda lvl: raw_scores[lvl])
+    # Exact score ties resolve to BALANCED, the safe neutral default
+    # required for contradictory or evenly split history.  This keeps
+    # predictions deterministic without relying on enum declaration order.
+    predicted_level = max(
+        raw_scores,
+        key=lambda lvl: (raw_scores[lvl], lvl is BandwidthLevel.BALANCED),
+    )
 
     # --- alignment score ---
     alignment_score = {
@@ -323,14 +338,17 @@ def infer_bandwidth(
     evidence_sufficiency = min(1.0, len(effort_obs) / (MIN_EFFORT_OBSERVATIONS * 2))
 
     # --- confidence ---
-    # Base confidence is alignment_score scaled by evidence sufficiency.
-    # Contradictory evidence (low alignment) reduces confidence further.
-    base_confidence = alignment_score * evidence_sufficiency
-
-    # Apply time-of-day prior as a small boost or reduction
-    prior_boost = abs(daypart_prior) * 0.2 if daypart_prior != 0.0 else 0.0
-
-    confidence = min(MAX_CONFIDENCE, base_confidence + prior_boost)
+    # Base confidence is alignment_score scaled by evidence sufficiency,
+    # then attenuated by any score adjustments that opposed the winning
+    # band (snooze penalties, daypart priors), so opposing signals reduce
+    # confidence instead of being silently ignored.
+    winning_adjustment = (
+        min(max(raw_scores[predicted_level], 0.0) / alignment_score, 1.0)
+        if alignment_score > 0
+        else 1.0
+    )
+    base_confidence = alignment_score * evidence_sufficiency * winning_adjustment
+    confidence = min(MAX_CONFIDENCE, base_confidence)
 
     # --- contradictions reduce confidence ---
     # If no single band has > 40% of observations, evidence is contradictory.
