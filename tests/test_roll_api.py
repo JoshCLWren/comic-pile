@@ -450,7 +450,17 @@ async def test_roll_persists_null_issue_for_non_issue_tracked_thread(
     auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
 ) -> None:
     """Roll for a non-issue-tracked thread has NULL issue_id and issue_number in the Event and response."""
-    from app.models import Event
+    from sqlalchemy import update
+
+    from app.models import Event, Thread
+
+    # Complete the only issue-tracked thread so every possible random
+    # selection comes from the non-issue-tracked pool. This keeps the
+    # assertion deterministic without constraining the random roll path.
+    await async_db.execute(
+        update(Thread).where(Thread.id == 2).values(status="completed")
+    )
+    await async_db.commit()
 
     response = await auth_client.post("/api/roll/")
     assert response.status_code == 200
