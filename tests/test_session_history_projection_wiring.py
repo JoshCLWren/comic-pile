@@ -315,7 +315,7 @@ async def test_history_rate_metadata_surfaces_with_single_events_read(
 
     sa_event.listen(db_engine.sync_engine, "before_cursor_execute", record_statement)
     try:
-        response = await auth_client.get("/api/sessions/")
+        response = await auth_client.get("/api/v1/sessions/")
     finally:
         sa_event.remove(db_engine.sync_engine, "before_cursor_execute", record_statement)
 
