@@ -1,4 +1,5 @@
 # worker	source	model	minute	scheduler	display_name
+# control-plane probe: completion funnel telemetry v1
 6	nvidia	z-ai/glm-5.2	0	dispatcher	GLM 5.2
 9	nvidia	stepfun-ai/step-3.7-flash	5	dispatcher	Step 3.7 Flash
 10	nvidia	nvidia/nemotron-3-ultra-550b-a55b	10	dispatcher	Nemotron 3 Ultra

@@ -2,7 +2,8 @@ import LazyDice3D from '../../../components/LazyDice3D'
 import Tooltip from '../../../components/Tooltip'
 import { DICE_LADDER } from '../../../components/diceLadder'
 import type { DiceSide } from '../../../components/diceTypes'
-import type { RollBootstrapResponse, RollBootstrapThread } from '../../../types/rollBootstrap'
+import type { RollBootstrapResponse, RollBootstrapThread, SessionModeState } from '../../../types/rollBootstrap'
+import { ReadingModeControl } from './ReadingModeControl'
 
 interface RollHeaderProps {
   bootstrap: RollBootstrapResponse
@@ -18,6 +19,7 @@ interface RollHeaderProps {
   onClearManualDie: () => void
   onOpenOverride: () => void
   onOpenDieModal: () => void
+  onOpenModeSelector?: () => void
 }
 
 /**
@@ -39,7 +41,9 @@ export function RollHeader({
   onClearManualDie,
   onOpenOverride,
   onOpenDieModal,
+  onOpenModeSelector,
 }: RollHeaderProps) {
+  const sessionMode: SessionModeState | null | undefined = bootstrap.session_mode
   return (
     <header className="flex justify-between items-center px-2 md:px-3 py-2 shrink-0 z-10">
       <div className="min-w-0">
@@ -138,6 +142,7 @@ export function RollHeader({
             </span>
           </div>
         </div>
+        <ReadingModeControl mode={sessionMode} onOpenSelector={onOpenModeSelector} />
         <Tooltip content="Pick a specific eligible thread for the next result.">
           <button
             type="button"

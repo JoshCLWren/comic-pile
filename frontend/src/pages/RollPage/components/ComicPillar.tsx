@@ -159,9 +159,7 @@ export function ComicPillar({
             backgroundColor: 'rgba(255,255,255,0.03)',
           }}
         >
-          <p className="text-[10px] text-stone-500 font-bold">
-            ComicVine #{identityState.confirmed_mappings[0]?.comicvine_id}
-          </p>
+          <p className="text-[10px] text-stone-500 font-bold">ComicVine linked</p>
           <button
             type="button"
             onClick={() => { setSearchMode('replace'); setIsSearchDialogOpen(true) }}

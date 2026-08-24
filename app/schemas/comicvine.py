@@ -39,6 +39,7 @@ class ComicVineStoryArc(BaseModel):
     name: str
     comicvine_url: str | None = None
     related_issues: list[ComicVineRelatedIssue] = Field(default_factory=list)
+    total_related_count: int | None = None
 
 
 class ComicVineIssueIntelligence(BaseModel):
