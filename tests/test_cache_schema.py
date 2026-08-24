@@ -10,6 +10,7 @@ Verifies:
 
 from datetime import UTC, datetime, timedelta
 import ast
+import json
 from pathlib import Path
 
 import pytest
@@ -214,12 +215,12 @@ async def test_cache_entries_jsonb_value_roundtrip(async_db: AsyncSession) -> No
     await async_db.execute(
         text(
             "INSERT INTO cache_entries (namespace, cache_key, value, expires_at, created_at) "
-            "VALUES (:ns, :k, :v::jsonb, :exp, :now)"
+            "VALUES (:ns, :k, :v, :exp, :now)"
         ),
         {
             "ns": "app",
             "k": "config",
-            "v": str(complex_value).replace("'", '"'),
+            "v": json.dumps(complex_value),
             "exp": now + timedelta(hours=1),
             "now": now,
         },
