@@ -38,6 +38,9 @@ class _Result:
 def _mode_session(**kwargs):
     """Build a session double carrying every bootstrap-exposed mode attribute."""
     mode_fields = {
+        "manual_die": None,
+        "pending_thread_id": None,
+        "snoozed_thread_ids": [],
         "active_bandwidth": None,
         "predicted_bandwidth": None,
         "bandwidth_confidence": None,
@@ -50,13 +53,7 @@ def _mode_session(**kwargs):
         "intent_version": None,
         "session_mode_correction_guidance": None,
     }
-    return SimpleNamespace(
-        manual_die=None,
-        pending_thread_id=None,
-        snoozed_thread_ids=[],
-        **mode_fields,
-        **kwargs,
-    )
+    return SimpleNamespace(**{**mode_fields, **kwargs})
 
 
 @pytest.mark.asyncio

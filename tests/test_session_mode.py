@@ -15,7 +15,7 @@ async def test_update_session_mode_bandwidth_only(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
     """PATCH bandwidth only; intent stays at its current value."""
-    user = await get_or_create_user_async(async_db, username="mode_bandwidth_only")
+    user = await get_or_create_user_async(async_db)
     thread = Thread(
         user_id=user.id,
         title="Mode Thread",
@@ -67,7 +67,7 @@ async def test_update_session_mode_intent_only(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
     """PATCH intent only; bandwidth stays at its current value."""
-    user = await get_or_create_user_async(async_db, username="mode_intent_only")
+    user = await get_or_create_user_async(async_db)
     thread = Thread(
         user_id=user.id,
         title="Mode Thread 2",
@@ -115,7 +115,7 @@ async def test_update_session_mode_both_dimensions(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
     """PATCH both bandwidth and intent updates the session correctly."""
-    user = await get_or_create_user_async(async_db, username="mode_both")
+    user = await get_or_create_user_async(async_db)
     thread = Thread(
         user_id=user.id,
         title="Mode Thread 3",
