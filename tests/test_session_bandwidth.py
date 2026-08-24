@@ -63,6 +63,7 @@ async def test_predicted_and_active_bandwidth_stored_independently(
     assert session.bandwidth_source == "manual"
 
     persisted = await async_db.get(SessionModel, session.id)
+    assert persisted is not None
     assert persisted.predicted_bandwidth == "balanced"
     assert persisted.active_bandwidth == "light"
 
@@ -94,7 +95,7 @@ async def test_existing_sessions_without_bandwidth_remain_valid(
 async def test_new_sessions_start_without_inherited_bandwidth(
     async_db: AsyncSession, default_user
 ) -> None:
-    """AC2/AC4: Freshly started sessions begin with NULL ephemeral bandwidth."""
+    """AC2: Fresh sessions never inherit a stale session's bandwidth values."""
     stale = SessionModel(
         start_die=6,
         user_id=default_user.id,
@@ -109,9 +110,13 @@ async def test_new_sessions_start_without_inherited_bandwidth(
 
     created = await get_or_create(async_db, user_id=default_user.id)
     assert created.id != stale.id
-    assert created.predicted_bandwidth is None
-    assert created.active_bandwidth is None
-    assert created.bandwidth_source is None
+    # The stale row keeps its own legacy state; nothing leaks across sessions.
+    assert stale.predicted_bandwidth == "deep"
+    assert stale.bandwidth_source == "quiz"
+    # The fresh session receives its own one-time inferred initialization.
+    assert created.predicted_bandwidth == "balanced"
+    assert created.active_bandwidth == "balanced"
+    assert created.bandwidth_source == "inferred"
 
 
 @pytest.mark.parametrize(
@@ -252,6 +257,106 @@ async def test_active_session_keeps_its_own_bandwidth_on_reuse(
 
 
 @pytest.mark.asyncio
+async def test_get_or_create_initializes_inferred_bandwidth_exactly_once(
+    async_db: AsyncSession, default_user
+) -> None:
+    """AC: New sessions receive inferred neutral state once, never recomputed."""
+    created = await get_or_create(async_db, user_id=default_user.id)
+    assert created.predicted_bandwidth == "balanced"
+    assert created.active_bandwidth == "balanced"
+    assert created.bandwidth_source == "inferred"
+    assert created.bandwidth_confidence == 0.1
+    assert created.bandwidth_mode_version == CURRENT_BANDWIDTH_MODE_VERSION
+    assert created.bandwidth_updated_at is not None
+
+    initialized_updated_at = created.bandwidth_updated_at
+
+    resolved = await get_or_create(async_db, user_id=default_user.id)
+    assert resolved.id == created.id
+    # Bootstrap refreshes must not rewrite the initialized prediction.
+    assert resolved.bandwidth_updated_at == initialized_updated_at
+    assert resolved.bandwidth_confidence == 0.1
+
+    persisted = await async_db.get(SessionModel, created.id)
+    assert persisted is not None
+    assert persisted.predicted_bandwidth == "balanced"
+    assert persisted.bandwidth_source == "inferred"
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_preserves_manual_override(
+    async_db: AsyncSession, default_user
+) -> None:
+    """AC: Explicit overrides survive subsequent bootstrap requests untouched."""
+    override = SessionModel(
+        start_die=6,
+        user_id=default_user.id,
+        started_at=datetime.now(UTC),
+        predicted_bandwidth="deep",
+        active_bandwidth="light",
+        bandwidth_source="manual",
+        bandwidth_confidence=0.9,
+    )
+    async_db.add(override)
+    await async_db.commit()
+
+    overridden_at = override.bandwidth_updated_at
+
+    resolved = await get_or_create(async_db, user_id=default_user.id)
+    assert resolved.id == override.id
+    assert resolved.predicted_bandwidth == "deep"
+    assert resolved.active_bandwidth == "light"
+    assert resolved.bandwidth_source == "manual"
+    assert resolved.bandwidth_confidence == 0.9
+    assert resolved.bandwidth_updated_at == overridden_at
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_initializes_legacy_unended_session(
+    async_db: AsyncSession, default_user
+) -> None:
+    """AC: Uninitialized legacy sessions get mode state on first bootstrap."""
+    legacy = SessionModel(
+        start_die=6,
+        user_id=default_user.id,
+        started_at=datetime.now(UTC),
+    )
+    async_db.add(legacy)
+    await async_db.commit()
+    assert legacy.bandwidth_source is None
+
+    resolved = await get_or_create(async_db, user_id=default_user.id)
+    assert resolved.id == legacy.id
+    assert resolved.predicted_bandwidth == "balanced"
+    assert resolved.active_bandwidth == "balanced"
+    assert resolved.bandwidth_source == "inferred"
+    assert resolved.bandwidth_mode_version == CURRENT_BANDWIDTH_MODE_VERSION
+
+
+@pytest.mark.asyncio
+async def test_bandwidth_initialization_fails_closed_to_balanced(
+    async_db: AsyncSession, default_user, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AC: Inference failure leaves Roll usable with balanced behavior."""
+    import comic_pile.bandwidth as bandwidth_module
+
+    def _explode(
+        observations: object,
+        *,
+        session_hour: int | None = None,
+    ) -> object:
+        raise RuntimeError("simulated inference outage")
+
+    monkeypatch.setattr(bandwidth_module, "infer_bandwidth", _explode)
+
+    created = await get_or_create(async_db, user_id=default_user.id)
+    assert created.predicted_bandwidth == "balanced"
+    assert created.active_bandwidth == "balanced"
+    assert created.bandwidth_source == "inferred"
+    assert created.bandwidth_confidence == 0.1
+
+
+@pytest.mark.asyncio
 async def test_clear_ephemeral_bandwidth_resets_all_fields(default_user) -> None:
     """clear_ephemeral_bandwidth wipes every bandwidth field in memory."""
     session = SessionModel(
@@ -279,7 +384,12 @@ def test_capture_and_restore_round_trip() -> None:
     """AC4: Undo-style capture/restore returns bandwidth to pre-correction state."""
 
     class _StubSession:
-        pass
+        predicted_bandwidth: str | None
+        active_bandwidth: str | None
+        bandwidth_confidence: float | None
+        bandwidth_source: str | None
+        bandwidth_mode_version: int | None
+        bandwidth_updated_at: datetime | None
 
     source = _StubSession()
     source.predicted_bandwidth = "balanced"
@@ -314,7 +424,8 @@ def test_restore_ignores_snapshots_without_bandwidth_keys() -> None:
     """Older snapshots predating bandwidth tracking leave live values untouched."""
 
     class _StubSession:
-        pass
+        predicted_bandwidth: str | None
+        active_bandwidth: str | None
 
     session = _StubSession()
     session.predicted_bandwidth = "deep"
@@ -463,6 +574,7 @@ async def test_undo_delta_restore_recovers_pre_rating_bandwidth(
     assert latest is not None and latest.id == snapshot.id
 
     refreshed = await async_db.get(SessionModel, session.id)
+    assert refreshed is not None
     await _restore_from_delta_snapshot(async_db, refreshed, latest)
 
     assert refreshed.predicted_bandwidth == "balanced"

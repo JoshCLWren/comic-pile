@@ -7,6 +7,7 @@ from comic_pile.bandwidth import (
     apply_bandwidth_state,
     capture_ephemeral_bandwidth,
     clear_ephemeral_bandwidth,
+    initialize_session_bandwidth,
     restore_ephemeral_bandwidth,
     validate_bandwidth_state,
 )
@@ -37,6 +38,7 @@ __all__ = [
     "apply_bandwidth_state",
     "capture_ephemeral_bandwidth",
     "clear_ephemeral_bandwidth",
+    "initialize_session_bandwidth",
     "restore_ephemeral_bandwidth",
     "validate_bandwidth_state",
     "step_down",

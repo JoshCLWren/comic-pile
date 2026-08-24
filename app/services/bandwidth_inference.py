@@ -309,6 +309,12 @@ def infer_bandwidth(
 
     # --- pick the winning band ---
     predicted_level = max(raw_scores, key=lambda lvl: raw_scores[lvl])
+    top_score = raw_scores[predicted_level]
+    tied_levels = {lvl for lvl, score in raw_scores.items() if abs(score - top_score) < 1e-9}
+    if {BandwidthLevel.LIGHT, BandwidthLevel.DEEP} <= tied_levels:
+        # When light and deep evidence tie, neither extreme has support over
+        # the other; the safe midpoint is the balanced prediction.
+        predicted_level = BandwidthLevel.BALANCED
 
     # --- alignment score ---
     alignment_score = {

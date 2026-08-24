@@ -9,15 +9,28 @@ persist invalid values.
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import Bandwidth, BandwidthSource
 from app.models import Session
+from app.services.bandwidth_inference import (
+    BandwidthPrediction,
+    HistoricalObservation,
+    infer_bandwidth,
+)
+
+logger = logging.getLogger(__name__)
 
 BANDWIDTH_CHOICES: frozenset[str] = frozenset(bandwidth.value for bandwidth in Bandwidth)
 BANDWIDTH_SOURCE_CHOICES: frozenset[str] = frozenset(source.value for source in BandwidthSource)
+
+# Confidence recorded when inference cannot run or has no comparable history.
+# Mirrors the pure service's insufficient-history default so fail-closed state
+# is indistinguishable from a genuinely neutral inference.
+NEUTRAL_BANDWIDTH_CONFIDENCE: float = 0.1
 
 # Current inference/mode contract version. Later phases that change how
 # predicted bandwidth is produced should bump this so stale session state can
@@ -231,3 +244,71 @@ def restore_ephemeral_bandwidth(session: Session, state: dict[str, object]) -> N
             if restored.tzinfo is None:
                 restored = restored.replace(tzinfo=UTC)
             session.bandwidth_updated_at = restored
+
+
+async def _historical_observations(
+    db: AsyncSession,
+    user_id: int,
+) -> list[HistoricalObservation]:
+    """Collect comparable historical reading decisions for bandwidth inference.
+
+    Args:
+        db: Async database session used for history reads.
+        user_id: Reader whose accepted reading history should be collected.
+
+    Returns:
+        Observations capturing accepted effort and snooze behavior. The
+        Phase 1 effort model (#1700-#1705) will supply real roll-to-rating
+        effort observations once merged; until then no comparable
+        observations exist, so inference safely yields its neutral balanced
+        prediction instead of guessing from weaker signals.
+    """
+    return []
+
+
+async def initialize_session_bandwidth(db: AsyncSession, session: Session) -> Session:
+    """Initialize inferred bandwidth state once per session lifetime.
+
+    Applies the Phase 2 inference (issue #1708) when a new/current reading
+    session first needs mode state. Sessions that already record bandwidth
+    state are returned untouched, so manual/future explicit overrides and
+    earlier predictions are never overwritten and repeated bootstrap requests
+    never recompute. Any inference failure fails closed to the neutral
+    balanced prediction so Roll remains usable.
+
+    The write is flushed but not committed; callers own transaction scope.
+
+    Args:
+        db: Async database session used for history reads and the flush.
+        session: The current reading session to initialize.
+
+    Returns:
+        The same session with initialized (or preserved) bandwidth state.
+    """
+    if session.bandwidth_source is not None:
+        return session
+
+    try:
+        observations = await _historical_observations(db, session.user_id)
+        started_at = session.started_at
+        prediction = infer_bandwidth(observations, session_hour=started_at.hour)
+    except Exception:
+        logger.warning(
+            "Bandwidth inference failed for session %s; failing closed to balanced",
+            session.id,
+            exc_info=True,
+        )
+        prediction = BandwidthPrediction(
+            level=Bandwidth.BALANCED,
+            confidence=NEUTRAL_BANDWIDTH_CONFIDENCE,
+        )
+
+    predicted_level = prediction.level.value
+    return await apply_bandwidth_state(
+        db,
+        session,
+        predicted_bandwidth=predicted_level,
+        active_bandwidth=predicted_level,
+        bandwidth_source=prediction.source,
+        bandwidth_confidence=prediction.confidence,
+    )

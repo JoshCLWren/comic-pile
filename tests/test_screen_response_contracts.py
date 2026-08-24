@@ -50,6 +50,14 @@ SESSION_HISTORY_DROPPED_FIELDS = {
     "snoozed_thread_ids",
     "snoozed_threads",
     "pending_thread_id",
+    # Read-only ephemeral bandwidth observation (issue #1706); history items
+    # stay narrow and omit session-lifetime mode state entirely.
+    "predicted_bandwidth",
+    "active_bandwidth",
+    "bandwidth_confidence",
+    "bandwidth_source",
+    "bandwidth_mode_version",
+    "bandwidth_updated_at",
 }
 CURRENT_SESSION_FIELDS = SESSION_HISTORY_FIELDS | SESSION_HISTORY_DROPPED_FIELDS
 ISSUE_FIELDS = {
@@ -158,9 +166,9 @@ def test_session_history_item_contract_is_exact_and_measurably_narrower() -> Non
 
     assert history_fields == SESSION_HISTORY_FIELDS
     assert full_fields - history_fields == SESSION_HISTORY_DROPPED_FIELDS
-    assert len(full_fields) == 15
+    assert len(full_fields) == 21
     assert len(history_fields) == 12
-    assert (len(full_fields) - len(history_fields)) / len(full_fields) == 0.20
+    assert (len(full_fields) - len(history_fields)) / len(full_fields) == 9 / 21
 
 
 def test_session_history_records_serialized_byte_reduction() -> None:
@@ -228,9 +236,9 @@ def test_roll_screen_contract_is_exact_and_named() -> None:
 
 
 def test_current_session_contract_is_exact_and_named() -> None:
-    """The current-session screen exposes exactly the named 15-field contract."""
+    """The current-session screen exposes exactly the named 21-field contract."""
     assert set(SessionResponse.model_fields) == CURRENT_SESSION_FIELDS
-    assert len(SessionResponse.model_fields) == 15
+    assert len(SessionResponse.model_fields) == 21
 
 
 def test_routes_publish_the_screen_specific_openapi_contracts() -> None:

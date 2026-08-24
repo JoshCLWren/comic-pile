@@ -48,14 +48,14 @@ def _obs(
     )
 
 
-def _light_obs(*, n: int = 5, **kwargs: object) -> list[HistoricalObservation]:
+def _light_obs(*, n: int = 5) -> list[HistoricalObservation]:
     """Return n predominantly light-effort observations."""
-    return [_obs(5.0 + i * 0.5, **kwargs) for i in range(n)]  # type: ignore[arg-type]
+    return [_obs(5.0 + i * 0.5) for i in range(n)]
 
 
-def _deep_obs(*, n: int = 5, **kwargs: object) -> list[HistoricalObservation]:
+def _deep_obs(*, n: int = 5) -> list[HistoricalObservation]:
     """Return n predominantly deep-effort observations."""
-    return [_obs(22.0 + i * 1.0, **kwargs) for i in range(n)]  # type: ignore[arg-type]
+    return [_obs(22.0 + i * 1.0) for i in range(n)]
 
 
 def _balanced_obs(*, n: int = 6) -> list[HistoricalObservation]:
@@ -453,12 +453,11 @@ class TestContradictoryEvidence:
         ]
         result = infer_bandwidth(obs)
 
-        # All three bands have 33% → max fraction < 40% → confidence reduced
-        assert result.evidence.light_fraction == pytest.approx(0.5, abs=0.01)
-        # Wait, 3 light + 2 balanced + 1 deep → let me recalculate
-        # Actually: 5.0, 6.0 are light; 14.0, 15.0 are balanced; 22.0, 25.0 are deep
-        # That's 2 light, 2 balanced, 2 deep → max fraction = 33%
-        assert result.confidence < 0.5  # reduced due to contradictions
+        # 2 light + 2 balanced + 2 deep → each band fraction = 1/3
+        assert result.evidence.light_fraction == pytest.approx(1 / 3, abs=0.01)
+        assert result.evidence.deep_fraction == pytest.approx(1 / 3, abs=0.01)
+        # Max band fraction < 40% → contradictory evidence reduces confidence
+        assert result.confidence < 0.5
 
 
 # ---------------------------------------------------------------------------
@@ -530,16 +529,16 @@ class TestImmutability:
         """HistoricalObservation is immutable."""
         obs = _obs(5.0)
         with pytest.raises(AttributeError):
-            obs.effort_minutes = 10.0  # type: ignore[misc]
+            setattr(obs, "effort_minutes", 10.0)
 
     def test_bandwidth_prediction_frozen(self) -> None:
         """BandwidthPrediction is immutable."""
         result = infer_bandwidth(_light_obs(n=6))
         with pytest.raises(AttributeError):
-            result.level = BandwidthLevel.DEEP  # type: ignore[misc]
+            setattr(result, "level", BandwidthLevel.DEEP)
 
     def test_bandwidth_evidence_frozen(self) -> None:
         """BandwidthEvidence is immutable."""
         result = infer_bandwidth(_light_obs(n=6))
         with pytest.raises(AttributeError):
-            result.evidence.mean_effort = 99.0  # type: ignore[misc]
+            setattr(result.evidence, "mean_effort", 99.0)
