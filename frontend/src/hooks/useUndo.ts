@@ -1,44 +1,31 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useCallback, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { undoApi } from '../services/api'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { SessionSnapshotsResponse, UndoPayload } from '../types'
+import { queryKeys } from '../query/queryKeys'
 
 export function useSnapshots(sessionId: number | string | null | undefined) {
-  const [data, setData] = useState<SessionSnapshotsResponse | null>(null)
-  const [isPending, setIsPending] = useState(false)
-  const [isError, setIsError] = useState(false)
+  const enabled = sessionId != null
 
-  useEffect(() => {
-    let isActive = true
+  const query = useQuery({
+    queryKey: queryKeys.undo.snapshots(sessionId ?? ''),
+    queryFn: async () => {
+      if (!enabled) {
+        throw new Error('No session ID')
+      }
+      return undoApi.listSnapshots(sessionId)
+    },
+    enabled,
+    staleTime: 30_000,
+    retry: false,
+  })
 
-    if (!sessionId) {
-      setData(null)
-      setIsError(false)
-      setIsPending(false)
-      return
-    }
-
-    setIsPending(true)
-    setIsError(false)
-
-    undoApi.listSnapshots(sessionId)
-      .then((data) => {
-        if (isActive) setData(data)
-      })
-      .catch((error: unknown) => {
-        if (isActive) setIsError(true)
-        console.error('Failed to load snapshots:', getApiErrorDetail(error))
-      })
-      .finally(() => {
-        if (isActive) setIsPending(false)
-      })
-
-    return () => {
-      isActive = false
-    }
-  }, [sessionId])
-
-  return { data, isPending, isError }
+  return {
+    data: query.data ?? null,
+    isPending: query.isLoading,
+    isError: query.isError,
+  }
 }
 
 export function useUndo() {

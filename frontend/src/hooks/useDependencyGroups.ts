@@ -28,7 +28,7 @@ export function useDependencyGroups(threadId: number | null | undefined): Depend
   const enabled = threadId != null
 
   const query = useQuery({
-    queryKey: enabled ? queryKeys.dependencyGroups.forThread(threadId) : undefined,
+    queryKey: queryKeys.dependencyGroups.forThread(threadId ?? -1),
     queryFn: async () => {
       if (!enabled) {
         throw new Error('No thread ID')

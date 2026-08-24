@@ -9,7 +9,7 @@ import { queryKeys } from '../query/queryKeys';
 
 export function useThread(id?: number | null) {
   const query = useQuery({
-    queryKey: id != null ? queryKeys.thread.detail(id) : undefined,
+    queryKey: queryKeys.thread.detail(id ?? -1),
     queryFn: async () => {
       if (id == null) {
         throw new Error('No thread ID')

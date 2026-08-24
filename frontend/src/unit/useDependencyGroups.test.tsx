@@ -1,7 +1,8 @@
-import { renderHook, waitFor } from '@testing-library/react'
+import { waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useDependencyGroups } from '../hooks/useDependencyGroups'
 import { dependencyGroupsApi } from '../services/api-dependency-groups'
+import { renderHookWithClient as renderHook } from './queryTestWrapper'
 
 vi.mock('../services/api-dependency-groups', () => ({
   dependencyGroupsApi: {

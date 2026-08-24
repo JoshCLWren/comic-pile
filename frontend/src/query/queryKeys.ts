@@ -91,6 +91,10 @@ export const queryKeys = {
     all: ['analytics'] as const,
     overview: () => ['analytics', 'overview'] as const,
   },
+  undo: {
+    all: ['undo'] as const,
+    snapshots: (sessionId: number | string) => ['undo', 'snapshots', sessionId] as const,
+  },
   continuity: {
     all: ['continuity'] as const,
     readiness: (nodeType: string, nodeId: number) =>

@@ -1,7 +1,8 @@
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, waitFor } from '@testing-library/react'
 import axios from 'axios'
 import type { Thread } from '../types'
 import { beforeEach, expect, it, vi } from 'vitest'
+import { renderHookWithClient as renderHook } from './queryTestWrapper'
 import {
   useCreateThread,
   useDeleteThread,
@@ -126,7 +127,9 @@ it('handles non-Error mutation failures and stale refetch failures', async () =>
   mockedThreadsApi.listStale.mockRejectedValueOnce(new Error('refetch failed'))
   const { result } = renderHook(() => useStaleThreads(3))
   await waitFor(() => expect(result.current.isError).toBe(true))
-  await expect(act(async () => result.current.refetch())).resolves.toBeUndefined()
+  await act(async () => {
+    await result.current.refetch()
+  })
 })
 
 it('ignores late detail and stale responses after unmount', async () => {

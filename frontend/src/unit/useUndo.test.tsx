@@ -1,7 +1,8 @@
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { useSnapshots, useUndo } from '../hooks/useUndo'
 import { undoApi } from '../services/api'
+import { renderHookWithClient as renderHook } from './queryTestWrapper'
 
 vi.mock('../services/api', () => ({
   undoApi: {

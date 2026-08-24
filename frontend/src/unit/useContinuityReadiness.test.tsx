@@ -1,6 +1,7 @@
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useContinuityReadiness } from '../hooks/useContinuityReadiness'
+import { renderHookWithClient as renderHook } from './queryTestWrapper'
 
 const mocks = vi.hoisted(() => ({ evaluate: vi.fn() }))
 
@@ -39,7 +40,9 @@ describe('useContinuityReadiness', () => {
     expect(result.current.isLoading).toBe(true)
     await waitFor(() => expect(result.current.readiness).toEqual(readiness))
 
-    act(() => result.current.refetch())
+    await act(async () => {
+      await result.current.refetch()
+    })
     await waitFor(() => expect(mocks.evaluate).toHaveBeenCalledTimes(2))
   })
 
