@@ -36,6 +36,28 @@ from comic_pile.session import get_current_die, get_or_create, is_active
 router = APIRouter(tags=["sessions"])
 
 
+EVENT_TYPE_DESCRIPTIONS: dict[str, str] = {
+    "skip": "Skipped",
+    "complete": "Completed",
+    "completion": "Completed",
+    "reorder": "Reordered",
+    "undo": "Restored",
+    "restore": "Restored",
+}
+
+
+def _event_word(event_type: str) -> str:
+    """Return a reader-friendly verb for a session event type.
+
+    Args:
+        event_type: Raw event type identifier.
+
+    Returns:
+        Human-readable past-tense verb for timeline descriptions.
+    """
+    return EVENT_TYPE_DESCRIPTIONS.get(event_type, event_type.replace("_", " ").capitalize())
+
+
 def _to_session_list_item(sr: SessionResponse) -> SessionListItem:
     """Convert a full SessionResponse to a narrow SessionListItem.
 
@@ -501,12 +523,24 @@ async def list_sessions(
         .where(
             or_(
                 (Event.type == "roll") & (Event.selected_thread_id.is_not(None)),
-                (Event.type.in_(("rate", "snooze", "undo"))) & (Event.die_after.is_not(None)),
+                Event.type == "rate",
+                (Event.type.in_(("snooze", "undo"))) & (Event.die_after.is_not(None)),
             )
         )
         .order_by(Event.session_id, Event.timestamp, Event.id)
     )
     history_events = history_events_result.scalars().all()
+
+    rate_agg: dict[int, dict] = {}
+    for ev in history_events:
+        if ev.type != "rate":
+            continue
+        if ev.session_id not in rate_agg:
+            rate_agg[ev.session_id] = {"issues_read": 0, "last_rating": None}
+        if ev.issues_read is not None:
+            rate_agg[ev.session_id]["issues_read"] += ev.issues_read
+        if ev.rating is not None:
+            rate_agg[ev.session_id]["last_rating"] = ev.rating
 
     projection = project_session_history_events(session_ids, history_events)
 
@@ -564,15 +598,22 @@ async def list_sessions(
                         if resolved_number is not None:
                             issue_id = thread.next_unread_issue_id
                             issue_number = resolved_number
+                    agg = rate_agg.get(sid, {})
+                    issues_read = agg.get("issues_read") or None
+                    last_rating = agg.get("last_rating")
+                    raw_result = roll_event.result
+                    safe_result = raw_result if raw_result and raw_result > 0 else None
                     active_threads_dict[sid] = ActiveThreadInfo(
                         id=thread.id,
                         title=thread.title,
                         format=thread.format,
                         issues_remaining=issues_remaining,
                         queue_position=thread.queue_position,
-                        last_rolled_result=roll_event.result,
+                        last_rolled_result=safe_result,
                         total_issues=thread.total_issues,
                         reading_progress=thread.reading_progress,
+                        issues_read=issues_read,
+                        last_rating=last_rating,
                         issue_id=issue_id,
                         issue_number=issue_number,
                         next_issue_id=issue_id,
@@ -726,11 +767,45 @@ async def get_session_details(
             event_data.die = event.die
             event_data.result = event.result
             event_data.selection_method = event.selection_method
+            event_data.description = f"Selected {thread_title or 'a thread'}"
         elif event.type == "rate":
             event_data.rating = event.rating
             event_data.issues_read = event.issues_read
             event_data.queue_move = event.queue_move
             event_data.die_after = event.die_after
+            parts = ["Rated"]
+            if thread_title:
+                parts.append(thread_title)
+            if event.issues_read:
+                noun = "issue" if event.issues_read == 1 else "issues"
+                parts.append(f"{event.issues_read} {noun} read")
+            if event.rating is not None:
+                parts.append(f"{event.rating:.1f}/5")
+            event_data.description = " · ".join(parts)
+        elif event.type == "snooze":
+            event_data.die = event.die
+            event_data.die_after = event.die_after
+            event_data.description = f"Snoozed {thread_title or 'thread'}"
+        elif event.type == "unsnooze":
+            event_data.die = event.die
+            event_data.die_after = event.die_after
+            event_data.description = f"Unsnoozed {thread_title or 'thread'}"
+        elif event.type in ("skip", "complete", "completion"):
+            event_data.die = event.die
+            event_data.die_after = event.die_after
+            word = _event_word(event.type)
+            event_data.description = f"{word} {thread_title or 'thread'}"
+        elif event.type == "move":
+            event_data.die = event.die
+            event_data.die_after = event.die_after
+            event_data.description = f"Moved {thread_title or 'thread'}"
+        elif event.type == "shuffle":
+            event_data.die = event.die
+            event_data.die_after = event.die_after
+            event_data.description = f"Shuffled {thread_title or 'thread'}"
+        elif event.type in ("reorder", "undo", "restore"):
+            word = _event_word(event.type)
+            event_data.description = f"{word} {thread_title or 'thread'}"
 
         formatted_events.append(event_data)
 
