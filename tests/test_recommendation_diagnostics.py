@@ -6,7 +6,31 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Session as SessionModel
+from app.models import Event, Session as SessionModel, Thread
+
+
+async def _ensure_thread(db: AsyncSession, *, user_id: int, thread_id: int) -> None:
+    """Create a stub Thread for ``thread_id`` if it does not yet exist.
+
+    The diagnostics tests only need thread ids to satisfy the FK constraint on
+    ``Event.thread_id`` and to populate ``selected_thread_id``; the thread's
+    content is irrelevant to the recommendation-quality summary.
+    """
+    existing = await db.get(Thread, thread_id)
+    if existing is not None:
+        return
+    db.add(
+        Thread(
+            id=thread_id,
+            user_id=user_id,
+            title=f"diag-thread-{thread_id}",
+            format="Comic",
+            issues_remaining=0,
+            queue_position=thread_id,
+            status="active",
+        )
+    )
+    await db.flush()
 
 
 async def _seed_session(
@@ -16,7 +40,21 @@ async def _seed_session(
     started_at: datetime,
     events: list[dict],
 ) -> int:
-    """Create one session with the given ordered events."""
+    """Create one session with the given ordered events.
+
+    Any ``thread_id`` or ``selected_thread_id`` referenced by an event is
+    materialised as a stub :class:`Thread` for the owning user so the FK
+    constraint is satisfied before the event insert.
+    """
+    referenced_thread_ids: set[int] = set()
+    for spec in events:
+        for field in ("thread_id", "selected_thread_id"):
+            value = spec.get(field)
+            if isinstance(value, int):
+                referenced_thread_ids.add(value)
+    for thread_id in referenced_thread_ids:
+        await _ensure_thread(db, user_id=user_id, thread_id=thread_id)
+
     session = SessionModel(user_id=user_id, started_at=started_at)
     db.add(session)
     await db.flush()
