@@ -243,7 +243,7 @@ class TestAuth:
         tokens = response.json()
 
         headers = {"Authorization": f"Bearer {tokens['access_token']}"}
-        response = await client.get("/api/auth/me", headers=headers)
+        response = await client.get("/api/v1/auth/me", headers=headers)
         assert response.status_code == 200
 
         data = response.json()
@@ -254,7 +254,7 @@ class TestAuth:
     @pytest.mark.asyncio
     async def test_get_current_user_unauthenticated(self, client: AsyncClient) -> None:
         """Test getting current user info without authentication fails."""
-        response = await client.get("/api/auth/me")
+        response = await client.get("/api/v1/auth/me")
         assert response.status_code == 401
         assert "Not authenticated" in response.json()["detail"]
 
