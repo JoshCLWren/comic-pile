@@ -1154,6 +1154,8 @@ async def set_session_mode(
     # Mark changed dimensions with source=manual and confidence semantics.
     source = ModeSource.MANUAL
     confidence = 1.0  # Manual changes have full confidence
+    current_session.source = source
+    current_session.confidence = confidence
 
     # Record a compact mode-change event for later analytics.
     event = Event(
@@ -1164,20 +1166,21 @@ async def set_session_mode(
     )
     db.add(event)
 
-    # Activate Phase 3 contextual-weight bypass when intent is "random".
-    # When intent is "random", the roll will bypass dice-ladder weighting
-    # and use unweighted control behavior.
-    if request.intent == ModeIntent.RANDOM:
-        current_session.intent = ModeIntent.RANDOM
+    # Extract all needed session attributes BEFORE commit to avoid MissingGreenlet.
+    updated_bandwidth = current_session.bandwidth
+    updated_intent = current_session.intent
+    updated_source = source
+    updated_confidence = confidence
 
     await db.commit()
+
     await _invalidate_session_caches(user_id)
 
     return ModeChangeResponse(
-        bandwidth=current_session.bandwidth,
-        intent=current_session.intent,
-        source=source,
-        confidence=confidence,
+        bandwidth=updated_bandwidth,
+        intent=updated_intent,
+        source=updated_source,
+        confidence=updated_confidence,
         session_id=current_session_id,
         updated_at=datetime.now(UTC).isoformat(),
     )

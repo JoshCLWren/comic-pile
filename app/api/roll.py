@@ -96,7 +96,8 @@ async def roll_dice(
 
     # If intent is "random", bypass dice-ladder weighting for unweighted control.
     if current_session.intent == ModeIntent.RANDOM:
-        selected_thread, unread_count, issue_number = random.choice(rows)
+        selected_index = random.randint(0, len(rows) - 1)
+        selected_thread, unread_count, issue_number = rows[selected_index]
         selected_thread_id = selected_thread.id
         selected_thread_title = selected_thread.title
         selected_thread_format = selected_thread.format
