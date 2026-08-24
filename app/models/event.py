@@ -82,8 +82,17 @@ class Event(Base):
     )
     # Denormalized issue_number preserved for historical display even if Issue is deleted
     issue_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    # Recommendation reason codes explaining why this thread was selected
-    recommendation_reason_codes: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True)
+    # Links rate/snooze events back to the originating roll event in the same session.
+    # NULL for historical events and roll events themselves.
+    source_roll_event_id: Mapped[int | None] = mapped_column(
+        ForeignKey("events.id", ondelete="SET NULL"), nullable=True
+    )
+    # Recommendation reason codes explaining why this thread was selected at roll
+    # time. Persisted so the explanation matches the decision-time context rather
+    # than the current (possibly mutated) thread state.
+    recommendation_reason_codes: Mapped[list[str] | None] = mapped_column(
+        ARRAY(Text), nullable=True
+    )
 
     __table_args__ = (
         Index("ix_event_session_id", "session_id"),
@@ -97,6 +106,7 @@ class Event(Base):
         ),
         Index("ix_event_session_type_die_after", "session_id", "type", "die_after"),
         Index("ix_event_type_issue_id", "type", "issue_id"),
+        Index("ix_event_source_roll_event_id", "source_roll_event_id"),
     )
 
     session: Mapped[Session | None] = relationship(

@@ -467,6 +467,8 @@ export interface RollResponse {
   total_issues: number | null;
   /** Reading progress percentage */
   reading_progress: string | null;
+  /** Concise, reader-facing reason for this roll selection (null when none) */
+  explanation?: string | null;
   /** Last rolled result for active thread context (when present) */
   last_rolled_result?: number | null;
 }

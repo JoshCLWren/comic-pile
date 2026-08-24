@@ -1,7 +1,6 @@
 """Roll API routes."""
 
 import logging
-import random
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
@@ -22,6 +21,7 @@ from app.middleware import limiter
 from app.models import DependencyGroup, DependencyGroupMembership, Event, Issue, Thread
 from app.models.user import User
 from app.roll_recovery import build_roll_recovery
+from app.services.explanation_projection import get_primary_explanation
 from app.schemas import (
     OverrideRequest,
     RollBootstrapResponse,
@@ -29,10 +29,10 @@ from app.schemas import (
     RollRequest,
     RollResponse,
 )
+from app.schemas.session import build_session_bandwidth_state
 from comic_pile.queue import get_roll_pool_rows
-from app.services.recommendation import get_recommended_thread
-from app.services.explanation_projection import get_primary_explanation
 from comic_pile.session import get_current_die_for_session, get_or_create
+from app.momentum import weighted_momentum_selection
 
 router = APIRouter(tags=["roll"])
 
@@ -92,26 +92,30 @@ async def roll_dice(
             detail="No active threads available to roll",
         )
 
-    # Get recommended thread with explanation codes
-    selected_thread, selected_index, recommendation_reason_codes = await get_recommended_thread(
-        user_id=user_id,
-        db=db,
-        snoozed_ids=snoozed_ids,
-        die_size=current_die,
-    )
+    # Bound the selection to the current die size, matching original semantics.
     bounded_rows = rows[:current_die]
-    pool_size = len(bounded_rows)
-    # Verify the selected thread is in our bounded pool (should be, but double-check)
-    if selected_thread not in [row[0] for row in bounded_rows]:
-        # Fallback to random selection if something went wrong
-        selected_index = random.randint(0, pool_size - 1)
-        selected_thread, unread_count, issue_number = bounded_rows[selected_index]
-        recommendation_reason_codes = ["fallback_random"]
-    else:
-        # Find the index of the selected thread in the bounded rows
-        selected_index = [row[0] for row in bounded_rows].index(selected_thread)
-        unread_count = bounded_rows[selected_index][1]
-        issue_number = bounded_rows[selected_index][2]
+
+    # Apply momentum weighting; weights fall back to uniform (pure-random)
+    # when no positive momentum applies, preserving the pure-random bypass.
+    session_events_result = await db.execute(
+        select(Event).where(Event.session_id == current_session_id)
+    )
+    session_events = list(session_events_result.scalars().all())
+
+    selected_index, max_bonus = await weighted_momentum_selection(
+        db=db,
+        bounded_rows=bounded_rows,
+        user_id=user_id,
+        session_events=session_events,
+        now=datetime.now(UTC),
+    )
+    # Derive concise, user-facing reason codes from the actual decision-time
+    # selection context. Momentum weighting is applied only when a positive
+    # bonus exists; otherwise the selection is genuinely unweighted/pure-random.
+    recommendation_reason_codes = (
+        ["momentum_weighted"] if max_bonus > 0 else ["pure_random"]
+    )
+    selected_thread, unread_count, issue_number = bounded_rows[selected_index]
 
     selected_thread_id = selected_thread.id
     selected_thread_title = selected_thread.title
@@ -139,17 +143,16 @@ async def roll_dice(
                 selected_thread_issue_id = next_issue.id
                 selected_thread_issue_number = next_issue.issue_number
 
-    snoozed_count = len(snoozed_ids)
-    offset = snoozed_count
-
     event = Event(
         type="roll",
         session_id=current_session_id,
         selected_thread_id=selected_thread_id,
         die=current_die,
         result=selected_index + 1,
-        selection_method="recommended" if "pure_random" not in recommendation_reason_codes else "random",
+        selection_method="momentum" if max_bonus > 0 else "random",
         recommendation_reason_codes=recommendation_reason_codes,
+        issue_id=selected_thread_issue_id,
+        issue_number=selected_thread_issue_number,
     )
     db.add(event)
 
@@ -159,6 +162,9 @@ async def roll_dice(
 
     await db.commit()
     await _invalidate_session_caches(current_user.id)
+
+    snoozed_count = len(snoozed_ids)
+    offset = snoozed_count
 
     return RollResponse(
         thread_id=selected_thread_id,
@@ -287,7 +293,9 @@ async def override_roll(
         die=current_die,
         result=0,
         selection_method="override",
-        recommendation_reason_codes=[],  # No algorithmic reasoning for explicit override
+        recommendation_reason_codes=[],
+        issue_id=override_thread_issue_id,
+        issue_number=override_thread_issue_number,
     )
     db.add(event)
 
@@ -316,7 +324,7 @@ async def override_roll(
         next_issue_number=override_thread_issue_number,
         total_issues=override_thread_total_issues,
         reading_progress=override_thread_reading_progress,
-        explanation=get_primary_explanation([]),  # Empty list for override
+        explanation=get_primary_explanation([]),
     )
 
 
@@ -402,6 +410,16 @@ async def roll_bootstrap(
     await db.refresh(current_session)
 
     current_session_id = current_session.id
+
+    # Extract bandwidth state before any further awaits; nullable columns on
+    # legacy sessions serialize to a safe all-null canonical shape.
+    bandwidth_state = build_session_bandwidth_state(
+        predicted_bandwidth=current_session.predicted_bandwidth,
+        active_bandwidth=current_session.active_bandwidth,
+        confidence=current_session.bandwidth_confidence,
+        source=current_session.bandwidth_source,
+        mode_version=current_session.bandwidth_version,
+    )
 
     _, active_thread = await get_session_with_thread_safe(current_session_id, db)
 
@@ -509,6 +527,9 @@ async def roll_bootstrap(
         RollBootstrapThread(id=row.id, title=row.title, format=row.format)
         for row in blocked_result.all()
     ]
+    snoozed_count = len(snoozed_threads)
+    snoozed_threads = snoozed_threads[:RollBootstrapResponse.summary_limit]
+    blocked_threads = blocked_threads[:RollBootstrapResponse.summary_limit]
 
     stale_cutoff = datetime.now(UTC) - timedelta(days=7)
     effective_activity = func.coalesce(Thread.last_activity_at, Thread.created_at)
@@ -551,10 +572,11 @@ async def roll_bootstrap(
         pending_thread_id=pending_thread_id,
         last_rolled_result=last_rolled_result,
         active_thread=active_thread,
-        roll_pool=roll_pool,
         roll_recovery=roll_recovery,
+        bandwidth=bandwidth_state,
+        roll_pool=roll_pool,
         snoozed_threads=snoozed_threads,
-        snoozed_count=len(snoozed_threads),
+        snoozed_count=snoozed_count,
         blocked_count=blocked_count,
         blocked_threads=blocked_threads,
         stale_thread_count=stale_thread_count,

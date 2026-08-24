@@ -5,6 +5,7 @@ import { ComicPillar } from './ComicPillar'
 import { ReadingContextPillar } from './ReadingContextPillar'
 import { YourContextPillar } from './YourContextPillar'
 import { RatingActionPanel } from './RatingActionPanel'
+import { WhyThisRoll } from './WhyThisRoll'
 
 interface RatingViewProps {
   activeRatingThread: RatingThread | null
@@ -53,6 +54,7 @@ export function RatingView({
 
   return (
     <div className="relative z-10 space-y-4 p-3 md:p-4">
+      <WhyThisRoll explanation={activeRatingThread?.explanation} />
       <div className={`grid gap-4 md:grid-cols-2 md:gap-6 ${gridCols}`} data-testid="rating-pillars-grid">
         <div className="md:row-span-2 xl:row-span-1">
           <ComicPillar

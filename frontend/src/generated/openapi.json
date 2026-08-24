@@ -4755,6 +4755,17 @@
             "title": "Die Size",
             "type": "integer"
           },
+          "explanation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explanation"
+          },
           "format": {
             "title": "Format",
             "type": "string"
