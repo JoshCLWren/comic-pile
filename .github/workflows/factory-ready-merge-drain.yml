@@ -213,6 +213,7 @@ jobs:
                 ;;
               deny)
                 echo "PR #${pr} mechanical gates deny merge: ${gate_reason}"
+                python3 "$review_controller" demote-ready --pr "$pr" || echo "Unable to demote ready PR #${pr}; retrying next tick" >&2
                 continue
                 ;;
               *)
