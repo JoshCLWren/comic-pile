@@ -1,6 +1,7 @@
-import { renderHook, waitFor, act } from '@testing-library/react'
+import { waitFor, act } from '@testing-library/react'
 import axios from 'axios'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { renderHookWithClient as renderHook } from './queryTestWrapper'
 
 const api = vi.hoisted(() => ({
   queueApi: { moveToPosition: vi.fn(), moveToFront: vi.fn(), moveToBack: vi.fn(), shuffle: vi.fn() },

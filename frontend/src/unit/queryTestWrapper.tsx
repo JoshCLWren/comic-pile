@@ -1,5 +1,12 @@
-import { renderHook as rtlRenderHook, type RenderHookOptions, type RenderHookResult } from '@testing-library/react'
-import type { PropsWithChildren } from 'react'
+import {
+  render as rtlRender,
+  renderHook as rtlRenderHook,
+  type RenderHookOptions,
+  type RenderHookResult,
+  type RenderOptions,
+  type RenderResult,
+} from '@testing-library/react'
+import type { PropsWithChildren, ReactElement } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 function createQueryWrapper() {
@@ -19,4 +26,11 @@ export function renderHookWithClient<Result, Props>(
   options?: RenderHookOptions<Props>,
 ): RenderHookResult<Result, Props> {
   return rtlRenderHook(render, { wrapper: createQueryWrapper(), ...options })
+}
+
+export function renderWithClient(
+  ui: ReactElement,
+  options?: Omit<RenderOptions, 'wrapper'>,
+): RenderResult {
+  return rtlRender(ui, { wrapper: createQueryWrapper(), ...options })
 }

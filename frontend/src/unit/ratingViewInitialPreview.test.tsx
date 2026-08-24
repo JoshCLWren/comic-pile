@@ -1,9 +1,10 @@
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 import { computePredictedDie } from '../pages/RollPage/utils'
+import { renderWithClient as render } from './queryTestWrapper'
 
 // Mock heavy components
 vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
