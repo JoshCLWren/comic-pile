@@ -74,21 +74,25 @@ def test_copy_is_separate_from_stable_ids() -> None:
 
 
 def test_unknown_question_is_rejected() -> None:
+    """An unknown question ID must raise QuizResolutionError."""
     with pytest.raises(QuizResolutionError):
         resolve_quiz_answers({"not_a_question": "easy", "pick": "random"})
 
 
 def test_unknown_answer_is_rejected() -> None:
+    """An unknown answer ID must raise QuizResolutionError."""
     with pytest.raises(QuizResolutionError):
         resolve_quiz_answers({"brainpower": "nope", "pick": "random"})
 
 
 def test_partial_answers_are_rejected() -> None:
+    """Partial answers missing a question must raise QuizResolutionError."""
     with pytest.raises(QuizResolutionError):
         resolve_quiz_answers({"brainpower": "easy"})
 
 
 def test_source_values_are_stable() -> None:
+    """ReadingModeSource enum values must remain stable."""
     assert ReadingModeSource.values() == {"quiz", "manual"}
     assert ReadingModeSource.QUIZ.value == "quiz"
     assert ReadingModeSource.MANUAL.value == "manual"

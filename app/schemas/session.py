@@ -248,6 +248,10 @@ class SessionListItem(BaseModel):
     last_rolled_result: int | None
     has_restore_point: bool
     snapshot_count: int
+    reading_bandwidth: str | None = None
+    reading_intent: str | None = None
+    reading_mode_source: str | None = None
+    reading_mode_suggested: bool = False
 
     @field_serializer("started_at", "ended_at")
     def serialize_datetime(self, value: datetime | None) -> str | None:

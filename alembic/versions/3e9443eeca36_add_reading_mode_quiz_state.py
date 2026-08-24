@@ -1,8 +1,8 @@
 """Add reading-mode quiz state to sessions.
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: 3e9443eeca36
 Revises: cc1b32cfbcae
-Create Date: 2026-08-22 12:00:00.000000
+Create Date: 2026-08-24 18:00:00.000000
 
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "a1b2c3d4e5f6"
+revision: str = "3e9443eeca36"
 down_revision: str | Sequence[str] | None = "cc1b32cfbcae"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None

@@ -65,6 +65,7 @@ async def test_requires_either_answers_or_resolved_mode(auth_client) -> None:
 
 
 async def test_invalid_source_is_rejected(auth_client) -> None:
+    """An invalid source value must be rejected with 422."""
     response = await auth_client.post(
         "/api/v1/reading-mode",
         json={"bandwidth": "light", "intent": "momentum", "source": "forced-onboarding"},
@@ -73,6 +74,7 @@ async def test_invalid_source_is_rejected(auth_client) -> None:
 
 
 async def test_unknown_quiz_answer_is_rejected(auth_client) -> None:
+    """An unknown quiz answer must be rejected with 422."""
     response = await auth_client.post(
         "/api/v1/reading-mode",
         json={"answers": {"brainpower": "unknown", "pick": "random"}, "source": "quiz"},

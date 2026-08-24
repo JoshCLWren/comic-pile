@@ -12,7 +12,7 @@ without changing the contract that persists on the session.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Literal
 
 ReadingBandwidth = Literal["light", "balanced", "deep"]
@@ -22,7 +22,7 @@ VALID_BANDWIDTHS: frozenset[str] = frozenset({"light", "balanced", "deep"})
 VALID_INTENTS: frozenset[str] = frozenset({"momentum", "familiar", "explore", "random"})
 
 
-class ReadingModeSource(str, Enum):
+class ReadingModeSource(StrEnum):
     """Origin of a session reading-mode setting.
 
     ``quiz`` results are produced by the two-question quiz. ``manual`` results
