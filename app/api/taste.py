@@ -17,6 +17,7 @@ from app.database import get_db
 from app.models.taste_signal import TasteSignal
 from app.models.user import User
 from app.schemas.taste import (
+    TasteDiscovery,
     TasteDiscoveryListResponse,
     TasteSignalResponse,
     TasteVerdictRequest,
