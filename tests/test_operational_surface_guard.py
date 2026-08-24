@@ -133,15 +133,19 @@ def test_no_double_versioned_route_paths(api_routes: set[str]) -> None:
     assert not doubled, f"Double-versioned route paths detected: {doubled}"
 
 
+_HAS_STATIC_DIR = (REPOSITORY_ROOT / "static").is_dir()
+
+
+@pytest.mark.skipif(
+    not _HAS_STATIC_DIR,
+    reason="No static directory present; nothing to pin.",
+)
 def test_static_mounts_registered_when_assets_exist() -> None:
     """Static asset mounts stay unversioned whenever the bundles are present.
 
     Skipped when the repository has no built frontend assets, because
     ``create_app`` only mounts the static directories when they exist.
     """
-    if not (REPOSITORY_ROOT / "static").is_dir():
-        pytest.skip("No static directory present; nothing to pin.")
-
     mount_paths = {
         getattr(route, "path", "") for route in create_app().routes
     }
