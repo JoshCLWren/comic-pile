@@ -1,7 +1,6 @@
 """Tests for Taste Bank verdict API endpoints (issue #1749)."""
 
 from datetime import UTC, datetime
-from typing import Any
 
 import pytest
 from httpx import AsyncClient
@@ -22,7 +21,7 @@ async def _seed_signal(
     user_id: int,
     signal_type: str = "creator",
     external_key: str = "creator:writer:dk",
-    **overrides: Any,
+    **overrides: object,
 ) -> TasteSignal:
     """Insert one taste-signal row directly and return it refreshed.
 
@@ -36,7 +35,7 @@ async def _seed_signal(
     Returns:
         The persisted and refreshed ``TasteSignal`` instance.
     """
-    columns: dict[str, Any] = {
+    columns: dict[str, object] = {
         "user_id": user_id,
         "signal_type": signal_type,
         "external_key": external_key,
