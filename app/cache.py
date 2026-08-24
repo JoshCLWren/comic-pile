@@ -1,10 +1,18 @@
-"""Redis/Upstash caching with circuit breaker and TTL tier support.
+"""Application cache provider: one small interface over Redis transports.
 
-This module provides:
-- TTL enum: SHORT, MEDIUM, LONG (values from config)
-- CircuitBreaker: Simple circuit breaker for Redis resilience
-- UpstashCache: Cache client (supports both Upstash cloud and local Redis)
-- @cached decorator: Easy caching for async functions
+Callers depend only on this interface:
+
+- TTL: SHORT/MEDIUM/LONG tiers whose values resolve from settings at call time
+- cached: decorator that caches async function results
+- invalidate_cache: delete keys matching a pattern
+- cache: process-wide provider instance (get/set/delete/clear_pattern/ping)
+- ttl_seconds / generate_cache_key: tier and logical-key helpers shared with
+  the user-scoped namespace in :mod:`app.cache_generation`
+- CacheClient: structural type describing the caller-facing operations
+
+Transport specifics live below the interface and are implementation details:
+Upstash REST and local redis-py clients, lazy connection lifecycle, the
+circuit breaker, and JSON value codecs.
 
 Usage:
     from app.cache import cached, cache, TTL
@@ -34,7 +42,7 @@ import json
 import logging
 import time
 from collections.abc import Awaitable, Callable
-from typing import Any, ParamSpec, TypeVar, cast
+from typing import Any, ParamSpec, Protocol, TypeVar, cast
 
 import redis.asyncio as aioredis
 from upstash_redis.asyncio import Redis as UpstashRedis
@@ -44,9 +52,17 @@ logger = logging.getLogger(__name__)
 P = ParamSpec("P")
 T = TypeVar("T")
 
-# Types to skip when generating cache keys (request objects, db sessions)
-_SKIP_TYPES = frozenset({"AsyncSession", "Session", "Engine", "Request"})
-_CONNECT_TIMEOUT_SECONDS = 5.0
+__all__ = [
+    "CacheClient",
+    "TTL",
+    "cache",
+    "cached",
+    "generate_cache_key",
+    "invalidate_cache",
+    "ttl_seconds",
+]
+
+# --- Public provider interface ------------------------------------------------
 
 
 class TTL(enum.Enum):
@@ -57,8 +73,15 @@ class TTL(enum.Enum):
     LONG = "long"
 
 
-def _get_ttl_value(tier: TTL) -> int:
-    """Get the actual TTL value in seconds for a tier."""
+def ttl_seconds(tier: TTL) -> int:
+    """Resolve one TTL tier to its configured duration in seconds.
+
+    Args:
+        tier: Named TTL tier.
+
+    Returns:
+        TTL value in seconds from RedisSettings.
+    """
     # Import here to avoid circular imports
     from app.config import get_redis_settings
 
@@ -69,6 +92,186 @@ def _get_ttl_value(tier: TTL) -> int:
         TTL.LONG: settings.cache_ttl_long,
     }
     return tier_map[tier]
+
+
+class CacheClient(Protocol):
+    """Small provider interface that application callers may depend on."""
+
+    @property
+    def is_initialized(self) -> bool:
+        """Return whether a cache transport is configured and ready."""
+        ...
+
+    async def ping(self) -> None:
+        """Verify transport connectivity; raise when unavailable."""
+        ...
+
+    async def get(self, key: str) -> Any | None:
+        """Return the cached value for a key, or None on a miss."""
+        ...
+
+    async def set(self, key: str, value: Any, ttl: int | None = None) -> bool:
+        """Store a value under a key with an optional TTL in seconds."""
+        ...
+
+    async def delete(self, key: str) -> bool:
+        """Delete one key."""
+        ...
+
+    async def clear_pattern(self, pattern: str) -> int:
+        """Delete every key matching a glob pattern; return the count."""
+        ...
+
+    def record_failure(self) -> None:
+        """Record one externally observed cache failure."""
+        ...
+
+
+def generate_cache_key(
+    func_name: str,
+    func: Callable[..., Any],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> str:
+    """Generate a stable logical cache key from function name and arguments.
+
+    Uses inspect.signature to bind arguments in declaration order,
+    producing stable keys regardless of whether callers use positional
+    or keyword arguments.
+
+    Args:
+        func_name: Name of the cached function.
+        func: The cached function whose signature binds the arguments.
+        args: Positional arguments from the call site.
+        kwargs: Keyword arguments from the call site.
+
+    Returns:
+        Logical cache key shared by the legacy and generation namespaces.
+    """
+    key_parts: list[str] = [func_name]
+
+    try:
+        sig = inspect.signature(func)
+        bound = sig.bind_partial(*args, **kwargs)
+        bound.apply_defaults()
+
+        for _, value in bound.arguments.items():
+            s = _arg_to_cache_string(value)
+            if s is not None:
+                key_parts.append(s)
+    except (TypeError, ValueError):
+        # Fallback: process args positionally, then kwargs sorted
+        for arg in args:
+            s = _arg_to_cache_string(arg)
+            if s is not None:
+                key_parts.append(s)
+        for k, v in sorted(kwargs.items()):
+            s = _arg_to_cache_string(v)
+            if s is not None:
+                key_parts.append(f"{k}={v}")
+
+    key_str = ":".join(key_parts) + ":"
+    if len(key_str) > 200:
+        key_hash = hashlib.md5(key_str.encode()).hexdigest()
+        return f"cache:{func_name}:{key_hash}:"
+    return f"cache:{key_str}"
+
+
+def cached(
+    ttl: int | TTL = TTL.MEDIUM,
+    *,
+    falsy_ttl: int | None = None,
+) -> Callable[[Callable[P, Awaitable[T]]], Callable[P, Awaitable[T]]]:
+    """Decorator to cache async function results.
+
+    User-scoped calls are routed through the bounded generation namespace so
+    mutations can invalidate every cached view for one user with one generation
+    bump. Calls without a resolvable user identity retain the legacy key behavior.
+
+    Args:
+        ttl: Time-to-live in seconds or TTL tier enum
+        falsy_ttl: Optional different TTL for falsy results
+
+    Returns:
+        A decorator preserving the wrapped async function's parameter and return types.
+
+    Usage:
+        @cached(ttl=TTL.SHORT)
+        async def get_roll_pool(user_id: int, db: AsyncSession):
+            ...
+    """
+
+    def decorator(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitable[T]]:
+        # Resolve TTL enum to actual value
+        actual_ttl = ttl_seconds(ttl) if isinstance(ttl, TTL) else ttl
+        generation_wrapper: Callable[P, Awaitable[T]] | None = None
+
+        @functools.wraps(func)
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+            nonlocal generation_wrapper
+
+            if _has_user_cache_scope(func, *args, **kwargs):
+                if generation_wrapper is None:
+                    # Lazy import avoids a module cycle: cache_generation imports
+                    # this module's cache primitives to implement the namespace.
+                    from app.cache_generation import generation_cached
+
+                    generation_wrapper = generation_cached(
+                        ttl,
+                        falsy_ttl=falsy_ttl,
+                    )(func)
+                return await generation_wrapper(*args, **kwargs)
+
+            # Skip if cache not initialized
+            if not cache.is_initialized:
+                return await func(*args, **kwargs)
+
+            func_name = getattr(func, "__name__", func.__class__.__name__)
+            cache_key = generate_cache_key(func_name, func, args, kwargs)
+
+            # Try to get from cache
+            cached_value = await cache.get(cache_key)
+            if cached_value is not None:
+                logger.debug("Cache hit: %s", cache_key)
+                return cast(T, cached_value)
+
+            # Execute function and cache result
+            logger.debug("Cache miss: %s", cache_key)
+            result = await func(*args, **kwargs)
+
+            # Determine TTL for this result
+            effective_ttl = falsy_ttl if falsy_ttl is not None and not result else actual_ttl
+
+            if result or falsy_ttl is not None:
+                await cache.set(cache_key, result, ttl=effective_ttl)
+
+            return result
+
+        return wrapper
+
+    return decorator
+
+
+async def invalidate_cache(pattern: str) -> int:
+    """Invalidate cache keys matching a pattern.
+
+    Args:
+        pattern: Pattern to match (e.g., "cache:threads:*")
+
+    Returns:
+        Number of keys deleted
+    """
+    return await cache.clear_pattern(pattern)
+
+
+# --- Transport internals ------------------------------------------------------
+#
+# Everything below is an implementation detail of this module. Application
+# callers must interact with caching only through the interface above.
+
+
+_SKIP_TYPES = frozenset({"AsyncSession", "Session", "Engine", "Request"})
+_CONNECT_TIMEOUT_SECONDS = 5.0
 
 
 class CircuitState(enum.Enum):
@@ -157,16 +360,118 @@ class CircuitBreaker:
                 self._opened_at = time.time()
 
 
-class UpstashCache:
-    """Redis cache client with circuit breaker.
+def _reconstruct_value(value: Any) -> Any:
+    """Reconstruct a value from deserialized JSON, restoring tagged types."""
+    if isinstance(value, dict) and "__type__" in value:
+        type_tag = value["__type__"]
+        if type_tag == "set":
+            return {_reconstruct_value(v) for v in value["values"]}
+    if isinstance(value, dict):
+        return {k: _reconstruct_value(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_reconstruct_value(v) for v in value]
+    return value
 
-    Supports both Upstash cloud (via upstash-redis REST SDK) and local
-    Redis (via redis-py). Provides graceful fallback when Redis is unavailable.
+
+def _prepare_value(value: Any) -> Any:
+    """Prepare a value for JSON serialization.
+
+    Handles Pydantic models, SQLAlchemy models, sets, and other types.
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, (str, int, float, bool)):
+        return value
+
+    if isinstance(value, set):
+        return {"__type__": "set", "values": [_prepare_value(v) for v in value]}
+
+    if isinstance(value, dict):
+        return {k: _prepare_value(v) for k, v in value.items()}
+
+    if isinstance(value, list):
+        return [_prepare_value(v) for v in value]
+
+    if isinstance(value, tuple):
+        return [_prepare_value(v) for v in value]
+
+    # Pydantic v2 models
+    if hasattr(value, "model_dump"):
+        return _prepare_value(value.model_dump())
+
+    # Pydantic v1 models / attrs
+    if hasattr(value, "dict"):
+        return _prepare_value(value.dict())
+
+    # SQLAlchemy models: convert to dict via __dict__ but skip internal attrs
+    if hasattr(value, "_sa_instance_state"):
+        state = {c.key: getattr(value, c.key) for c in value.__table__.columns}
+        return _prepare_value(state)
+
+    # Datetime objects
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+
+    return str(value)
+
+
+def _arg_to_cache_string(value: Any) -> str | None:
+    """Convert an argument value to a stable cache key string.
+
+    Returns None for types that should be skipped (e.g., db sessions, request objects).
+    """
+    if value is None:
+        return "None"
+
+    if isinstance(value, (str, int, float, bool)):
+        return str(value)
+
+    arg_type = value.__class__.__name__
+    if arg_type in _SKIP_TYPES:
+        return None
+
+    # For model objects with an id attribute, use TypeName:id for stability
+    if hasattr(value, "id") and not isinstance(value, type):
+        return f"{arg_type}:{value.id}"
+
+    return str(value)
+
+
+def _has_user_cache_scope(
+    func: Callable[..., object],
+    *args: object,
+    **kwargs: object,
+) -> bool:
+    """Return whether a cached call carries an explicit positive user identity."""
+    try:
+        bound = inspect.signature(func).bind_partial(*args, **kwargs)
+    except (TypeError, ValueError):
+        return False
+
+    explicit_user_id = bound.arguments.get("user_id")
+    if isinstance(explicit_user_id, int) and explicit_user_id > 0:
+        return True
+
+    for name in ("user", "current_user"):
+        user = bound.arguments.get(name)
+        candidate = getattr(user, "id", None)
+        if isinstance(candidate, int) and candidate > 0:
+            return True
+    return False
+
+
+class RedisCache:
+    """Internal transport implementing CacheClient over Upstash REST or local Redis.
+
+    Adds lazy connection lifecycle, a circuit breaker, and JSON value codecs on
+    top of the provider operations. Application code must use the module-level
+    ``cache`` instance instead of constructing this class directly.
     """
 
-    _instance: UpstashCache | None = None
+    _instance: RedisCache | None = None
 
-    def __new__(cls) -> UpstashCache:
+    def __new__(cls) -> RedisCache:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False
@@ -237,18 +542,73 @@ class UpstashCache:
                 await client.aclose()
             logger.info("Redis cache closed")
 
-    @staticmethod
-    def _reconstruct_value(value: Any) -> Any:
-        """Reconstruct a value from deserialized JSON, restoring tagged types."""
-        if isinstance(value, dict) and "__type__" in value:
-            type_tag = value["__type__"]
-            if type_tag == "set":
-                return {UpstashCache._reconstruct_value(v) for v in value["values"]}
-        if isinstance(value, dict):
-            return {k: UpstashCache._reconstruct_value(v) for k, v in value.items()}
-        if isinstance(value, list):
-            return [UpstashCache._reconstruct_value(v) for v in value]
-        return value
+    async def ping(self) -> None:
+        """Ping the active transport to verify connectivity.
+
+        Raises:
+            RuntimeError: If the cache has not been initialized.
+        """
+        client = self._client
+        if not self.is_initialized or client is None:
+            raise RuntimeError("Cache is not initialized")
+        await client.ping()
+
+    def record_failure(self) -> None:
+        """Record one externally observed failure, such as a wrapper timeout."""
+        self._circuit_breaker.record_failure()
+
+    async def incr(self, key: str) -> int:
+        """Increment one integer counter key.
+
+        Deliberately bypasses the circuit breaker so user-cache invalidation
+        keeps its existing fail-open semantics.
+
+        Args:
+            key: Counter key.
+
+        Returns:
+            Newly incremented counter value.
+        """
+        client = self._client
+        if client is None:
+            raise RuntimeError("Cache client is unavailable")
+        return await client.incr(key)
+
+    async def eval_script(self, script: str, keys: list[str], args: list[str]) -> Any:
+        """Run one Lua script atomically using each transport's convention.
+
+        Args:
+            script: Lua script source.
+            keys: Script keys.
+            args: Script arguments.
+
+        Returns:
+            Raw transport response.
+        """
+        client = self._client
+        if client is None:
+            raise RuntimeError("Cache client is unavailable")
+        if self._is_upstash:
+            return await client.eval(script, keys=keys, args=args)
+        return await client.eval(script, len(keys), *keys, *args)
+
+    def decode_value(self, raw: object) -> Any:
+        """Decode a stored cache payload back into Python objects.
+
+        Args:
+            raw: Stored payload as text or bytes.
+
+        Returns:
+            Reconstructed value with tagged containers restored.
+
+        Raises:
+            ValueError: If the payload is not JSON text.
+        """
+        if isinstance(raw, bytes):
+            raw = raw.decode()
+        elif not isinstance(raw, str):
+            raise ValueError("Cached value must be JSON text")
+        return _reconstruct_value(json.loads(raw))
 
     async def get(self, key: str) -> Any | None:
         """Get a value from cache."""
@@ -263,54 +623,11 @@ class UpstashCache:
             self._circuit_breaker.record_success()
             if result is None:
                 return None
-            return UpstashCache._reconstruct_value(json.loads(result))
+            return _reconstruct_value(json.loads(result))
         except Exception as e:
             self._circuit_breaker.record_failure()
             logger.warning("Cache get failed: %s", e)
             return None
-
-    @staticmethod
-    def _prepare_value(value: Any) -> Any:
-        """Prepare a value for JSON serialization.
-
-        Handles Pydantic models, SQLAlchemy models, sets, and other types.
-        """
-        if value is None:
-            return None
-
-        if isinstance(value, (str, int, float, bool)):
-            return value
-
-        if isinstance(value, set):
-            return {"__type__": "set", "values": [UpstashCache._prepare_value(v) for v in value]}
-
-        if isinstance(value, dict):
-            return {k: UpstashCache._prepare_value(v) for k, v in value.items()}
-
-        if isinstance(value, list):
-            return [UpstashCache._prepare_value(v) for v in value]
-
-        if isinstance(value, tuple):
-            return [UpstashCache._prepare_value(v) for v in value]
-
-        # Pydantic v2 models
-        if hasattr(value, "model_dump"):
-            return UpstashCache._prepare_value(value.model_dump())
-
-        # Pydantic v1 models / attrs
-        if hasattr(value, "dict"):
-            return UpstashCache._prepare_value(value.dict())
-
-        # SQLAlchemy models: convert to dict via __dict__ but skip internal attrs
-        if hasattr(value, "_sa_instance_state"):
-            state = {c.key: getattr(value, c.key) for c in value.__table__.columns}
-            return UpstashCache._prepare_value(state)
-
-        # Datetime objects
-        if hasattr(value, "isoformat"):
-            return value.isoformat()
-
-        return str(value)
 
     async def set(self, key: str, value: Any, ttl: int | None = None) -> bool:
         """Set a value in cache."""
@@ -321,7 +638,7 @@ class UpstashCache:
             return False
 
         try:
-            prepared = UpstashCache._prepare_value(value)
+            prepared = _prepare_value(value)
             data = json.dumps(
                 prepared,
                 default=str,
@@ -387,178 +704,6 @@ class UpstashCache:
             return 0
 
 
-# Global cache instance
-cache = UpstashCache()
-
-
-def _arg_to_cache_string(value: Any) -> str | None:
-    """Convert an argument value to a stable cache key string.
-
-    Returns None for types that should be skipped (e.g., db sessions, request objects).
-    """
-    if value is None:
-        return "None"
-
-    if isinstance(value, (str, int, float, bool)):
-        return str(value)
-
-    arg_type = value.__class__.__name__
-    if arg_type in _SKIP_TYPES:
-        return None
-
-    # For model objects with an id attribute, use TypeName:id for stability
-    if hasattr(value, "id") and not isinstance(value, type):
-        return f"{arg_type}:{value.id}"
-
-    return str(value)
-
-
-def _generate_cache_key(
-    func_name: str,
-    func: Callable[..., Any],
-    args: tuple[Any, ...],
-    kwargs: dict[str, Any],
-) -> str:
-    """Generate a cache key from function name and arguments.
-
-    Uses inspect.signature to bind arguments in declaration order,
-    producing stable keys regardless of whether callers use positional
-    or keyword arguments.
-    """
-    key_parts: list[str] = [func_name]
-
-    try:
-        sig = inspect.signature(func)
-        bound = sig.bind_partial(*args, **kwargs)
-        bound.apply_defaults()
-
-        for _, value in bound.arguments.items():
-            s = _arg_to_cache_string(value)
-            if s is not None:
-                key_parts.append(s)
-    except (TypeError, ValueError):
-        # Fallback: process args positionally, then kwargs sorted
-        for arg in args:
-            s = _arg_to_cache_string(arg)
-            if s is not None:
-                key_parts.append(s)
-        for k, v in sorted(kwargs.items()):
-            s = _arg_to_cache_string(v)
-            if s is not None:
-                key_parts.append(f"{k}={v}")
-
-    key_str = ":".join(key_parts) + ":"
-    if len(key_str) > 200:
-        key_hash = hashlib.md5(key_str.encode()).hexdigest()
-        return f"cache:{func_name}:{key_hash}:"
-    return f"cache:{key_str}"
-
-
-def _has_user_cache_scope(
-    func: Callable[..., object],
-    *args: object,
-    **kwargs: object,
-) -> bool:
-    """Return whether a cached call carries an explicit positive user identity."""
-    try:
-        bound = inspect.signature(func).bind_partial(*args, **kwargs)
-    except (TypeError, ValueError):
-        return False
-
-    explicit_user_id = bound.arguments.get("user_id")
-    if isinstance(explicit_user_id, int) and explicit_user_id > 0:
-        return True
-
-    for name in ("user", "current_user"):
-        user = bound.arguments.get(name)
-        candidate = getattr(user, "id", None)
-        if isinstance(candidate, int) and candidate > 0:
-            return True
-    return False
-
-
-def cached(
-    ttl: int | TTL = TTL.MEDIUM,
-    *,
-    falsy_ttl: int | None = None,
-) -> Callable[[Callable[P, Awaitable[T]]], Callable[P, Awaitable[T]]]:
-    """Decorator to cache async function results.
-
-    User-scoped calls are routed through the bounded generation namespace so
-    mutations can invalidate every cached view for one user with one generation
-    bump. Calls without a resolvable user identity retain the legacy key behavior.
-
-    Args:
-        ttl: Time-to-live in seconds or TTL tier enum
-        falsy_ttl: Optional different TTL for falsy results
-
-    Returns:
-        A decorator preserving the wrapped async function's parameter and return types.
-
-    Usage:
-        @cached(ttl=TTL.SHORT)
-        async def get_roll_pool(user_id: int, db: AsyncSession):
-            ...
-    """
-
-    def decorator(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitable[T]]:
-        # Resolve TTL enum to actual value
-        actual_ttl = _get_ttl_value(ttl) if isinstance(ttl, TTL) else ttl
-        generation_wrapper: Callable[P, Awaitable[T]] | None = None
-
-        @functools.wraps(func)
-        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
-            nonlocal generation_wrapper
-
-            if _has_user_cache_scope(func, *args, **kwargs):
-                if generation_wrapper is None:
-                    # Lazy import avoids a module cycle: cache_generation imports
-                    # this module's cache primitives to implement the namespace.
-                    from app.cache_generation import generation_cached
-
-                    generation_wrapper = generation_cached(
-                        ttl,
-                        falsy_ttl=falsy_ttl,
-                    )(func)
-                return await generation_wrapper(*args, **kwargs)
-
-            # Skip if cache not initialized
-            if not cache.is_initialized:
-                return await func(*args, **kwargs)
-
-            func_name = getattr(func, "__name__", func.__class__.__name__)
-            cache_key = _generate_cache_key(func_name, func, args, kwargs)
-
-            # Try to get from cache
-            cached_value = await cache.get(cache_key)
-            if cached_value is not None:
-                logger.debug("Cache hit: %s", cache_key)
-                return cast(T, cached_value)
-
-            # Execute function and cache result
-            logger.debug("Cache miss: %s", cache_key)
-            result = await func(*args, **kwargs)
-
-            # Determine TTL for this result
-            effective_ttl = falsy_ttl if falsy_ttl is not None and not result else actual_ttl
-
-            if result or falsy_ttl is not None:
-                await cache.set(cache_key, result, ttl=effective_ttl)
-
-            return result
-
-        return wrapper
-
-    return decorator
-
-
-async def invalidate_cache(pattern: str) -> int:
-    """Invalidate cache keys matching a pattern.
-
-    Args:
-        pattern: Pattern to match (e.g., "cache:threads:*")
-
-    Returns:
-        Number of keys deleted
-    """
-    return await cache.clear_pattern(pattern)
+# Process-wide provider instance; created after its concrete transport above so
+# callers binding to ``cache`` never need to name the implementing class.
+cache = RedisCache()

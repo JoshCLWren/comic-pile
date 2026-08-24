@@ -209,6 +209,18 @@ describe('QueueThreadCard', () => {
     expect(screen.getByText('7 issues remaining')).toBeInTheDocument()
   })
 
+  it('hides "Up next" for blocked threads even when a next unread issue exists', () => {
+    const thread = createMockThread({
+      total_issues: 10,
+      issues_remaining: 3,
+      next_unread_issue_number: '5',
+      is_blocked: true,
+    })
+    renderCard(thread, { isBlocked: true, blockingReasons: ['Blocked by dependency'] })
+    expect(screen.queryByText(/Up next/)).not.toBeInTheDocument()
+    expect(screen.getByText('3 issues remaining')).toBeInTheDocument()
+  })
+
   it('renders next unread issue number when migrated and available', () => {
     const thread = createMockThread({
       issues_remaining: 3,
@@ -223,6 +235,27 @@ describe('QueueThreadCard', () => {
     const thread = createMockThread({ notes: 'This is a note' })
     renderCard(thread)
     expect(screen.getByText('This is a note')).toBeInTheDocument()
+  })
+
+  it('wrap-breaks long imported URLs in notes so they cannot bleed across cards', () => {
+    const thread = createMockThread({
+      notes:
+        'Imported: https://www.leagueofcomicgeeks.com/issue/14276/annihilation-protocol-the-gathering-storm-annual-special-edition-collectors-variant',
+    })
+    renderCard(thread)
+
+    const notes = screen.getByText(/Imported: https:\/\/www\.leagueofcomicgeeks\.com/)
+    expect(notes).toHaveClass('[overflow-wrap:anywhere]', 'break-words')
+  })
+
+  it('exposes the full thread title via native tooltip on the title button', () => {
+    const thread = createMockThread({ title: 'Free Comic Book Day 2025: Amazing Spider-Man' })
+    renderCard(thread)
+
+    expect(screen.getByRole('button', { name: `Open ${thread.title}` })).toHaveAttribute(
+      'title',
+      thread.title,
+    )
   })
 
   it('renders multiple crossover memberships supplied by the Queue batch loader', () => {
@@ -501,5 +534,55 @@ describe('QueueThreadCard', () => {
       await user.click(blockedButton)
       expect(onDependencies).toHaveBeenCalledTimes(1)
       expect(onCardClick).not.toHaveBeenCalled()
+    })
+
+    it('renders snooze button with aria-disabled when not the pending thread', () => {
+      renderCard(createMockThread(), {
+        snoozeDisabled: true,
+        snoozeLabel: 'Snooze',
+        snoozeIcon: '😴',
+      })
+
+      const snoozeButton = screen.getByRole('button', { name: 'Snooze' })
+      expect(snoozeButton).toHaveAttribute('aria-disabled', 'true')
+      expect(snoozeButton).toHaveAttribute('tabindex', '0')
+    })
+
+    it('renders hidden snooze description when snooze is disabled', () => {
+      renderCard(createMockThread({ title: 'The Maxx' }), {
+        snoozeDisabled: true,
+        snoozeLabel: 'Snooze',
+        snoozeIcon: '😴',
+      })
+
+      const description = screen.getByText(
+        'Only the comic currently waiting to be read can be snoozed.',
+      )
+      expect(description).toHaveClass('sr-only')
+      expect(description).toHaveAttribute('id', 'snooze-description-the-maxx')
+    })
+
+    it('does not render hidden snooze description when snooze is enabled', () => {
+      renderCard(createMockThread(), {
+        snoozeDisabled: false,
+        snoozeLabel: 'Snooze',
+        snoozeIcon: '😴',
+      })
+
+      expect(
+        screen.queryByText('Only the comic currently waiting to be read can be snoozed.'),
+      ).not.toBeInTheDocument()
+    })
+
+    it('renders snooze button without aria-disabled when enabled', () => {
+      renderCard(createMockThread(), {
+        snoozeDisabled: false,
+        snoozeLabel: 'Snooze',
+        snoozeIcon: '😴',
+      })
+
+      const snoozeButton = screen.getByRole('button', { name: 'Snooze' })
+      expect(snoozeButton).not.toHaveAttribute('aria-disabled')
+      expect(snoozeButton).not.toHaveAttribute('tabindex')
     })
   })

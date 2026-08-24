@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 import { RATING_THRESHOLD } from '../pages/RollPage/utils'
@@ -64,7 +65,7 @@ function ratingView(overrides: Record<string, unknown> = {}) {
     onRefreshThread: vi.fn(),
     ...overrides,
   }
-  return <RatingView {...defaults} />
+  return <MemoryRouter><RatingView {...defaults} /></MemoryRouter>
 }
 
 describe('RatingView action panel (issue #1406)', () => {
@@ -241,12 +242,50 @@ describe('RatingView responsive pillar contract', () => {
     expect(comicWrapper!.className).toContain('xl:row-span-1')
   })
 
+  it('places action panel beside Your Context on xl when Reading Context has no content (issue #1676)', () => {
+    const { container } = render(ratingView())
+    const gridCell = container.querySelector('[data-testid="rating-actions-grid-cell"]')
+    expect(gridCell).not.toBeNull()
+    expect(gridCell!.className).toContain('xl:col-start-2')
+    expect(gridCell!.className).toContain('xl:row-start-2')
+    expect(gridCell!.className).not.toContain('xl:col-span-2')
+  })
+
+  it('spans action panel under Reading and Your Context on xl when Reading Context has content (issue #1676)', () => {
+    const { container } = render(
+      ratingView({
+        readingOrders: [
+          {
+            id: 7,
+            name: 'Main route',
+            description: null,
+            total_items: 2,
+            completed_items: 1,
+            items: [],
+          },
+        ],
+      }),
+    )
+    const gridCell = container.querySelector('[data-testid="rating-actions-grid-cell"]')
+    expect(gridCell).not.toBeNull()
+    expect(gridCell!.className).toContain('xl:col-start-2')
+    expect(gridCell!.className).toContain('xl:col-span-2')
+    expect(gridCell!.className).toContain('xl:row-start-2')
+  })
+
   it('keeps the pillars in DOM order without decorative numeric prefixes', () => {
     const { container } = render(ratingView())
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
     const text = grid!.textContent ?? ''
-    expect(text.indexOf('The Comic')).toBeLessThan(text.indexOf('Reading Context'))
-    expect(text.indexOf('Reading Context')).toBeLessThan(text.indexOf('Your Context'))
+    // Hierarchy now uses reader questions instead of pillar names, but order is preserved
+    const hasNewHierarchy = text.includes('What am I reading?')
+    if (hasNewHierarchy) {
+      expect(text.indexOf('What am I reading?')).toBeLessThan(text.indexOf('Why this one / can I read it?'))
+      expect(text.indexOf('Why this one / can I read it?')).toBeLessThan(text.indexOf("What's connected?"))
+    } else {
+      expect(text.indexOf('The Comic')).toBeLessThan(text.indexOf('Reading Context'))
+      expect(text.indexOf('Reading Context')).toBeLessThan(text.indexOf('Your Context'))
+    }
     expect(text).not.toMatch(/\b0[123]\b/)
   })
 })

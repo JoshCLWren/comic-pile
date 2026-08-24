@@ -8,6 +8,14 @@ vi.mock('../services/api', async () => {
   return { ...actual, comicVineApi: { getIssueIntelligence: vi.fn() } }
 })
 
+vi.mock('../services/api-reading-orders', () => ({
+  readingOrdersApi: {
+    list: vi.fn().mockResolvedValue({ reading_orders: [] }),
+    getForThread: vi.fn().mockResolvedValue({ reading_orders: [] }),
+    insertItem: vi.fn().mockResolvedValue({}),
+  },
+}))
+
 vi.mock('../contexts/useToast', () => ({
   useToast: () => ({
     showToast: vi.fn(),
@@ -38,6 +46,7 @@ describe('ComicVineIssueCard', () => {
       creators: [{ name: 'Writer One', roles: ['writer'] }],
       story_arcs: [{
         comicvine_arc_id: 42,
+        total_related_count: null,
         name: 'The Big Arc',
         comicvine_url: null,
         related_issues: [
@@ -85,6 +94,7 @@ describe('ComicVineIssueCard', () => {
       creators: [],
       story_arcs: [{
         comicvine_arc_id: 70,
+        total_related_count: null,
         name: 'Three',
         comicvine_url: null,
         related_issues: [
@@ -144,6 +154,7 @@ describe('ComicVineIssueCard', () => {
       story_arcs: [
         {
           comicvine_arc_id: 50,
+          total_related_count: null,
           name: 'First Arc',
           comicvine_url: null,
           related_issues: [{
@@ -164,6 +175,7 @@ describe('ComicVineIssueCard', () => {
         },
         {
           comicvine_arc_id: 51,
+          total_related_count: null,
           name: 'Second Arc',
           comicvine_url: null,
           related_issues: [{
@@ -186,10 +198,14 @@ describe('ComicVineIssueCard', () => {
     expect(screen.getByText('Artist Only')).toBeInTheDocument()
     expect(screen.getByText('Named Special')).toBeInTheDocument()
     expect(screen.getByText('ComicVine issue 202')).toBeInTheDocument()
+    expect(screen.queryByText('Untitled ComicVine issue')).not.toBeInTheDocument()
+    expect(screen.queryByText(/ComicVine #\d+/)).not.toBeInTheDocument()
     expect(screen.getByText('Read')).toBeInTheDocument()
     expect(screen.getByText('Not in ComicPile')).toBeInTheDocument()
     expect(screen.queryByText('View source on ComicVine')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Add ComicVine issue 202 to ComicPile/i })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /Add ComicVine issue 202 to ComicPile/i }),
+    ).toBeInTheDocument()
 
     const cover = container.querySelector('img')
     expect(cover).not.toBeNull()
@@ -223,5 +239,42 @@ describe('ComicVineIssueCard', () => {
     resolveRequest?.(null)
     await Promise.resolve()
     await Promise.resolve()
+  })
+
+  it('opens Add to ComicPile dialog when clicking add button for a missing issue', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '300',
+      comicvine_url: null,
+      series_name: 'Batman',
+      series_id: 1,
+      issue_number: '125',
+      name: 'The Dark Knight',
+      description: null,
+      image_url: 'https://images.example/300.jpg',
+      cover_date: '2025-06-01',
+      store_date: null,
+      creators: [],
+      story_arcs: [{
+        comicvine_arc_id: 100,
+        name: 'Knightfall (Storyline)',
+        comicvine_url: null,
+        total_related_count: 1,
+        related_issues: [
+          {
+            comicvine_issue_id: '301', series_name: 'Batman', issue_number: '126',
+            name: null, cover_date: null, comicvine_url: null, comicpile_matches: [],
+          },
+        ],
+      }],
+    })
+
+    render(<ComicVineIssueCard issueId={5} />)
+    expect(await screen.findByText('Batman #125')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Comic details'))
+    const addButton = screen.getByRole('button', { name: /Add Batman #126 to ComicPile/i })
+    fireEvent.click(addButton)
+    expect(await screen.findByTestId('add-to-comicpile-dialog')).toBeInTheDocument()
+    expect(screen.getByText('ComicVine Issue')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Batman #126')).toBeInTheDocument()
   })
 })

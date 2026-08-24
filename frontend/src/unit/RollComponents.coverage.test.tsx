@@ -126,7 +126,7 @@ describe('RatingView', () => {
   it('renders rating states and invokes controls', async () => {
     const onUpdateRating = vi.fn(); const onSubmitRating = vi.fn(); const onSnooze = vi.fn(); const onCancel = vi.fn(); const onRefreshThread = vi.fn()
     const user = userEvent.setup()
-    render(<RatingView activeRatingThread={{ ...thread, id: 1, issue_number: '2', next_issue_number: '3', reading_progress: 'in_progress' } as never} currentDie={20} rolledResult={19} rating={5} predictedDie={6} errorMessage="Problem" rateIsPending={false} snoozeIsPending={false} dismissIsPending={false} readingOrders={[]} connectedThreads={[{ thread_id: 2, title: 'Other', connection_type: 'blocks', dependency_id: 1 }]} onUpdateRating={onUpdateRating} onSubmitRating={onSubmitRating} onSnooze={onSnooze} onCancel={onCancel} onRefreshThread={onRefreshThread} />)
+    render(<MemoryRouter><RatingView activeRatingThread={{ ...thread, id: 1, issue_number: '2', next_issue_number: '3', reading_progress: 'in_progress' } as never} currentDie={20} rolledResult={19} rating={5} predictedDie={6} errorMessage="Problem" rateIsPending={false} snoozeIsPending={false} dismissIsPending={false} readingOrders={[]} connectedThreads={[{ thread_id: 2, title: 'Other', connection_type: 'blocks', dependency_id: 1 }]} onUpdateRating={onUpdateRating} onSubmitRating={onSubmitRating} onSnooze={onSnooze} onCancel={onCancel} onRefreshThread={onRefreshThread} /></MemoryRouter>)
     expect(screen.getByText(/Rolled 19 on d20/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /correct issue number/i }))
     await user.click(screen.getByRole('button', { name: /close correction/i }))
@@ -142,7 +142,7 @@ describe('RatingView', () => {
   it('renders empty, low-rating, progress, reading-order, and correction states', async () => {
     const callbacks = { onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onSnooze: vi.fn(), onCancel: vi.fn(), onRefreshThread: vi.fn() }
     const user = userEvent.setup()
-    render(<RatingView activeRatingThread={{ ...thread, issue_number: '2', next_issue_number: null, reading_progress: 'completed', issues_remaining: 1 } as never} currentDie={4} rolledResult={null} rating={1} predictedDie={6} errorMessage="Oops" rateIsPending snoozeIsPending dismissIsPending readingOrders={[{ id: 1, name: 'Order', description: '', completed_items: 0, total_items: 0 } as never]} connectedThreads={[{ thread_id: 2, title: 'Other', connection_type: 'blocks', dependency_id: 1 }]} {...callbacks} />)
+    render(<MemoryRouter><RatingView activeRatingThread={{ ...thread, issue_number: '2', next_issue_number: null, reading_progress: 'completed', issues_remaining: 1 } as never} currentDie={4} rolledResult={null} rating={1} predictedDie={6} errorMessage="Oops" rateIsPending snoozeIsPending dismissIsPending readingOrders={[{ id: 1, name: 'Order', description: '', completed_items: 0, total_items: 0 } as never]} connectedThreads={[{ thread_id: 2, title: 'Other', connection_type: 'blocks', dependency_id: 1 }]} {...callbacks} /></MemoryRouter>)
     expect(screen.getByText(/This is the last issue/)).toBeInTheDocument()
     expect(screen.getByText('Oops')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /correct issue number/i }))
@@ -154,7 +154,7 @@ describe('RatingView', () => {
   })
 
   it('renders safe fallbacks for missing thread metadata and populated reading-order details', () => {
-    render(<RatingView
+    render(<MemoryRouter><RatingView
       activeRatingThread={null}
       currentDie={7 as never}
       rolledResult={7}
@@ -171,7 +171,7 @@ describe('RatingView', () => {
       onSnooze={vi.fn()}
       onCancel={vi.fn()}
       onRefreshThread={vi.fn()}
-    />)
+    /></MemoryRouter>)
     expect(screen.getByText('Loading…')).toBeInTheDocument()
     expect(screen.getByText('Main order')).toBeInTheDocument()
     expect(screen.getByText('0 left')).toBeInTheDocument()
@@ -180,7 +180,7 @@ describe('RatingView', () => {
   it('renders alternate rating, progress, and order boundaries', async () => {
     const callbacks = { onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onSnooze: vi.fn(), onCancel: vi.fn(), onRefreshThread: vi.fn() }
     const user = userEvent.setup()
-    render(<RatingView
+    render(<MemoryRouter><RatingView
       activeRatingThread={{ ...thread, issue_number: null, next_issue_number: null, total_issues: 0, issues_remaining: 2, reading_progress: null } as never}
       currentDie={6}
       rolledResult={2}
@@ -193,7 +193,7 @@ describe('RatingView', () => {
       readingOrders={[{ id: 3, name: 'Empty order', description: '', completed_items: 0, total_items: 0 } as never]}
       connectedThreads={[{ thread_id: 2, title: 'Only connection', connection_type: 'blocks', dependency_id: 2 }]}
       {...callbacks}
-    />)
+    /></MemoryRouter>)
     expect(screen.getByText('Saga')).toBeInTheDocument()
     expect(screen.getByText('Die stays the same')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Mark read & save' }))
@@ -202,7 +202,7 @@ describe('RatingView', () => {
 
   it('renders continuity correction button when connected threads exist', () => {
     // connectedThreads are no longer displayed as a list; they are used for the correction workflow
-    render(<RatingView
+    render(<MemoryRouter><RatingView
       activeRatingThread={{ ...thread, issue_number: '2', issues_remaining: 1 } as never}
       currentDie={6}
       rolledResult={3}
@@ -222,7 +222,7 @@ describe('RatingView', () => {
       onSnooze={vi.fn()}
       onCancel={vi.fn()}
       onRefreshThread={vi.fn()}
-    />)
+    /></MemoryRouter>)
     expect(screen.getByRole('button', { name: /correct continuity/i })).toBeInTheDocument()
   })
 })
