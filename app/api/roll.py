@@ -31,6 +31,7 @@ from app.schemas import (
 )
 from app.schemas.recommendation_context import RecommendationContextCreate
 from app.schemas.session import build_session_bandwidth_state
+from app.momentum import weighted_momentum_selection
 from comic_pile.queue import get_roll_pool_rows
 from comic_pile.session import get_current_die_for_session, get_or_create
 
