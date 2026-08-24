@@ -1,4 +1,4 @@
-import { render, screen, waitFor, act } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -329,7 +329,8 @@ describe('ExternalReadingListPage', () => {
     await user.selectOptions(screen.getByLabelText('List'), '10')
     await user.click(screen.getByRole('button', { name: 'Generate Preview' }))
 
-    expect(await screen.findByText('Failed to generate preview')).toBeInTheDocument()
+    // The page surfaces the underlying error message, matching the adoption-failure behavior.
+    expect(await screen.findByText('API error')).toBeInTheDocument()
   })
 
   it('shows error when adoption fails', async () => {
