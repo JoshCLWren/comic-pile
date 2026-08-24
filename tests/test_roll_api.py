@@ -544,13 +544,27 @@ async def test_roll_issue_fields_preserved_after_issue_deletion(
     # Clear any pending thread from previous tests
     await auth_client.post("/api/roll/dismiss-pending")
 
-    # Roll an issue-tracked thread
-    response = await auth_client.post("/api/roll/")
+    # Roll an issue-tracked thread via override so the selection is deterministic
+    response = await auth_client.post("/api/roll/override", json={"thread_id": 2})
     assert response.status_code == 200
     data = response.json()
 
     rolled_issue_id = data["issue_id"]
     rolled_issue_number = data["issue_number"]
+    assert rolled_issue_id is not None
+    assert rolled_issue_number is not None
+
+    # Verify the roll event snapshotted the concrete issue before deletion
+    event = await async_db.execute(
+        select(Event)
+        .where(Event.type == "roll")
+        .order_by(Event.id.desc())
+        .limit(1)
+    )
+    snapshot_event = event.scalar_one()
+    assert snapshot_event.issue_id == rolled_issue_id
+    assert snapshot_event.issue_number == rolled_issue_number
+    snapshot_event_id = snapshot_event.id
 
     # Dismiss the pending thread so we can roll again
     await auth_client.post("/api/roll/dismiss-pending")
@@ -562,20 +576,13 @@ async def test_roll_issue_fields_preserved_after_issue_deletion(
     # Roll again - the Event should still be valid
     response2 = await auth_client.post("/api/roll/")
     assert response2.status_code == 200
-    data2 = response2.json()
 
-    # The Event model uses ondelete="SET NULL" for issue_id, so deleted issues become NULL
-    event = await async_db.execute(
-        select(Event)
-        .where(Event.type == "roll")
-        .order_by(Event.id.desc())
-        .limit(1)
+    # Re-read the pre-deletion roll event columns directly to bypass the session
+    # identity map: issue_id was SET NULL by the FK, while the denormalized
+    # issue_number survives for historical display.
+    refreshed = await async_db.execute(
+        select(Event.issue_id, Event.issue_number).where(Event.id == snapshot_event_id)
     )
-    persisted_event = event.scalar_one()
-
-    # issue_id should be NULL after issue deletion (SET NULL foreign key)
+    persisted_event = refreshed.one()
     assert persisted_event.issue_id is None
-
-    # issue_number may still be preserved denormalized, or NULL - both are valid
-    # The key point is no crash/error occurs
-    assert True  # Either value is acceptable; the test verifies no error occurs
+    assert persisted_event.issue_number == rolled_issue_number
