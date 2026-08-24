@@ -9,6 +9,7 @@ status mapping lives in routers.
 import asyncio
 import logging
 import os
+from typing import cast
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.exc import IntegrityError, OperationalError
@@ -229,7 +230,7 @@ async def list_queue_threads(
     Raises:
         InvalidRequest: When the page token is stale or malformed.
     """
-    validated_sort: QueueSort = sort
+    validated_sort: QueueSort = cast(QueueSort, sort)
     normalized_search = normalize_queue_search(search)
 
     cursor = None

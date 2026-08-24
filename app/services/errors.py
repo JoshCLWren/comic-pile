@@ -29,3 +29,7 @@ class InvalidRequest(ServiceError):
 
 class Conflict(ServiceError):
     """The request collides with existing state (duplicate key, stale order)."""
+
+
+class Forbidden(ServiceError):
+    """The caller is not authorized to perform this action."""

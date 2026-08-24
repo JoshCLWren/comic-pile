@@ -180,6 +180,11 @@ Comic Pile is a dice-driven comic reading tracker built with:
 - Secure defaults for headers and cookies
 - Regular dependency updates
 
+### Repository Layer (`app/repositories/`)
+- New package for SQLAlchemy query construction and persistence by model family (`thread_repository`, `session_repository`, `issue_repository`).
+- Returns ORM models or plain tuples; never HTTP types or response schemas.
+- Services (`app/services/`) own business logic and transaction boundaries.
+
 ## Related Documentation
 
 - [AGENTS.md](../AGENTS.md): Project guidelines and conventions for coding agents
