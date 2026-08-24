@@ -85,9 +85,6 @@ function CandidateCard({
       : meta.volume_name
   const issueName = meta.name || meta.issue_name
 
-  const safeVolumeName = typeof volumeName === 'string' ? volumeName : undefined
-  const safeIssueName = typeof issueName === 'string' ? issueName : undefined
-
   return (
     <div className="border border-stone-200 rounded-lg p-3 bg-white hover:border-stone-300 transition-colors">
       <div className="flex items-start justify-between gap-2">
