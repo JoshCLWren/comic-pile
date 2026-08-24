@@ -644,7 +644,6 @@ async def list_sessions(
             has_restore_point=snapshot_count_num > 0,
             snapshot_count=snapshot_count_num,
             pending_thread_id=session.pending_thread_id,
-            timezone=session.timezone,
         )
         responses.append(_to_session_list_item(sr))
 

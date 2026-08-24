@@ -170,8 +170,8 @@ class SessionListItem(BaseModel):
     """Schema for a single session in the history list view.
 
     A deliberate subset of SessionResponse. The list view does not need
-    snoozed_thread_ids, snoozed_threads, or pending_thread_id, which
-    reduces payload size for session history lists.
+    snoozed_thread_ids, snoozed_threads, pending_thread_id, or timezone,
+    which reduces payload size for session history lists.
     """
 
     id: int
@@ -186,7 +186,6 @@ class SessionListItem(BaseModel):
     last_rolled_result: int | None
     has_restore_point: bool
     snapshot_count: int
-    timezone: str | None = None
 
     @field_serializer("started_at", "ended_at")
     def serialize_datetime(self, value: datetime | None) -> str | None:

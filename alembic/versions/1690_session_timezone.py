@@ -1,7 +1,7 @@
 """add_session_timezone
 
 Revision ID: 1690_session_timezone
-Revises: 1ede41fd37e4
+Revises: d4e5f6a7b8c9
 Create Date: 2026-08-23
 
 """
@@ -11,7 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision: str = "1690_session_timezone"
-down_revision: str | Sequence[str] | None = "1ede41fd37e4"
+down_revision: str | Sequence[str] | None = "d4e5f6a7b8c9"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

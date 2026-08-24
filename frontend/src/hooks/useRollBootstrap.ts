@@ -6,6 +6,15 @@ import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from './rollMutationReconciliation';
 
 const STORAGE_KEY_PREFIX = 'comic_pile_last_session_id';
 
+/** Best-effort browser IANA timezone used to timestamp the reading session. */
+export function resolveBrowserTimezone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function useRollBootstrap() {
   const [data, setData] = useState<RollBootstrapResponse | null>(null);
   const [isPending, setIsPending] = useState(true);
@@ -23,7 +32,7 @@ export function useRollBootstrap() {
     setIsError(false);
     setError(null);
     try {
-      const result = await rollBootstrapApi.get();
+      const result = await rollBootstrapApi.get(resolveBrowserTimezone());
       if (requestGeneration !== requestGenerationRef.current) return result;
 
       const currentSessionId = result.session_id;

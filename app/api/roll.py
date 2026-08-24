@@ -3,6 +3,7 @@
 import logging
 import random
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
@@ -377,6 +378,9 @@ async def roll_bootstrap(
     Args:
         current_user: The authenticated user.
         db: Async database session.
+        timezone: Optional browser-resolved IANA timezone identifier captured once
+            per active reading session. Invalid or unusable values leave the field
+            unset and never break the bootstrap response.
 
     Returns:
         RollBootstrapResponse with session state, bounded pool, snoozed/blocked/stale summaries.
@@ -389,15 +393,14 @@ async def roll_bootstrap(
     # Invalid values fail safely: the field remains unset and roll continues.
     if timezone is not None and current_session.timezone is None:
         try:
-            safe_tz = str(timezone).strip()
-            if safe_tz and len(safe_tz) <= 100:
-                # Basic IANA identifier check: should contain only allowed characters.
-                # Fail safely for obviously invalid inputs rather than persisting garbage.
-                import re
-                if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_/+\-]*", safe_tz) is not None:
-                    current_session.timezone = safe_tz
-                    await db.commit()
-                    await db.refresh(current_session)
+            candidate_timezone = timezone.strip()
+            if candidate_timezone and len(candidate_timezone) <= 100:
+                # Resolving through ZoneInfo rejects malformed identifiers such as
+                # "Not/AZone" while accepting real IANA names like "America/Chicago".
+                ZoneInfo(candidate_timezone)
+                current_session.timezone = candidate_timezone
+                await db.commit()
+                await db.refresh(current_session)
         except Exception:
             # Any failure during timezone persistence must not break roll.
             pass
