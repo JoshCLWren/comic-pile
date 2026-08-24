@@ -3,21 +3,26 @@
 from __future__ import annotations
 
 import random
-from datetime import UTC, datetime, timedelta
-from typing import List, Tuple
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.thread import Thread
 from app.models.user_preferences import UserPreferences
-from app.models.user import User
 
 
 class ThreadScore:
     """Represents a scored thread with explanation codes."""
 
-    def __init__(self, thread: Thread, score: float, reason_codes: List[str]):
+    def __init__(self, thread: Thread, score: float, reason_codes: list[str]) -> None:
+        """Initialize a ThreadScore.
+
+        Args:
+            thread: The thread being scored.
+            score: The computed score.
+            reason_codes: List of reason codes explaining the score.
+        """
         self.thread = thread
         self.score = score
         self.reason_codes = reason_codes
@@ -26,9 +31,9 @@ class ThreadScore:
 async def get_recommended_thread(
     user_id: int,
     db: AsyncSession,
-    snoozed_ids: List[int] | None = None,
+    snoozed_ids: list[int] | None = None,
     die_size: int = 6,
-) -> Tuple[Thread, int, List[str]]:
+) -> tuple[Thread, int, list[str]]:
     """Select a thread using recommendation algorithms and return the thread, index, and reason codes.
     
     Args:
@@ -55,18 +60,18 @@ async def get_recommended_thread(
         raise ValueError("No threads in roll pool after bounding")
     
     # Score each thread in the bounded pool
-    scored_threads: List[ThreadScore] = []
+    scored_threads: list[ThreadScore] = []
     
     # Get user preferences for theme matching
     user_prefs_result = await db.execute(
         select(UserPreferences.theme).where(UserPreferences.user_id == user_id)
     )
     user_prefs = user_prefs_result.scalar_one_or_none()
-    user_theme = user_prefs if user_prefs else "classic"  # default theme
+    _ = user_prefs if user_prefs else "classic"  # default theme (unused for now)
     
-    for thread, unread_count, issue_number in bounded_rows:
+    for thread, unread_count, _issue_number in bounded_rows:
         score = 0.0
-        reason_codes: List[str] = []
+        reason_codes: list[str] = []
         
         # Factor 1: Affinity based on last rating (0-0.4 points)
         if thread.last_rating is not None:
