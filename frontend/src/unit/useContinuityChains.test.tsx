@@ -1,6 +1,7 @@
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useContinuityChains } from '../hooks/useContinuityChains'
+import { renderHookWithClient as renderHook } from './queryTestWrapper'
 
 const mocks = vi.hoisted(() => ({ resolveChains: vi.fn() }))
 
@@ -41,7 +42,9 @@ describe('useContinuityChains', () => {
     expect(result.current.isLoading).toBe(true)
     await waitFor(() => expect(result.current.chains).toEqual(chains))
 
-    act(() => result.current.refetch())
+    await act(async () => {
+      await result.current.refetch()
+    })
     await waitFor(() => expect(mocks.resolveChains).toHaveBeenCalledTimes(2))
   })
 

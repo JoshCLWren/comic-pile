@@ -1,4 +1,4 @@
-import { renderHook as rtlRenderHook } from '@testing-library/react'
+import { renderHook as rtlRenderHook, type RenderHookOptions, type RenderHookResult } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
@@ -16,7 +16,7 @@ function createQueryWrapper() {
 
 export function renderHookWithClient<Result, Props>(
   render: (props: Props) => Result,
-  options?: Parameters<typeof rtlRenderHook>[1],
-) {
+  options?: RenderHookOptions<Props>,
+): RenderHookResult<Result, Props> {
   return rtlRenderHook(render, { wrapper: createQueryWrapper(), ...options })
 }
