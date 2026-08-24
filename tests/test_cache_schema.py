@@ -9,12 +9,60 @@ Verifies:
 """
 
 from datetime import UTC, datetime, timedelta
+import ast
+from pathlib import Path
 
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import Base
+
+VERSIONS_DIR = Path(__file__).parents[1] / "alembic" / "versions"
+
+
+def _iter_revisions() -> list[tuple[str, list[str]]]:
+    """Return (revision, down_revision_list) parsed from migration modules.
+
+    Merge migrations use a tuple down_revision, so each parent is expanded into the
+    down-revision list. The real Alembic head set is derived from these lists.
+    """
+    found: list[tuple[str, list[str]]] = []
+    for path in sorted(VERSIONS_DIR.glob("*.py")):
+        if path.name == "__init__.py":
+            continue
+        file_text = path.read_text(encoding="utf-8")
+        rev = None
+        down: list[str] = []
+        for line in file_text.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("revision:") and rev is None:
+                rev = stripped.split("=", 1)[1].strip().strip('"').strip("'")
+            if stripped.startswith("down_revision:") and not down:
+                rhs = stripped.split("=", 1)[1].strip()
+                if rhs == "None":
+                    down = []
+                else:
+                    value = ast.literal_eval(rhs)
+                    down = list(value) if isinstance(value, tuple) else [value]
+                break
+        if rev is not None:
+            found.append((rev, down))
+    return found
+
+
+def _real_heads() -> list[str]:
+    """Revisions that no other migration depends on (expanding merge parents)."""
+    revisions = _iter_revisions()
+    all_down = {d for _, downs in revisions for d in downs}
+    return [rev for rev, _ in revisions if rev not in all_down]
+
+
+def test_cache_migration_is_the_single_head() -> None:
+    """The cache migration must be the only Alembic head; duplicate down_revisions branch history."""
+    assert _real_heads() == ["c85500000001"], (
+        f"Expected a single head c85500000001, got {_real_heads()}"
+    )
 
 
 def test_cache_entries_table_exists_in_metadata() -> None:
