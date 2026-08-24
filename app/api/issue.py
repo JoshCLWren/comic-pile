@@ -764,6 +764,60 @@ async def delete_issue(
         )
     )
 
+    # Prune continuity plans that reference the deleted issue.
+    from app.models.continuity_plan import ContinuityPlan
+    from app.models.continuity_rule import ContinuityRule
+    from sqlalchemy import delete as sa_delete
+
+    plans_result = await db.execute(
+        select(ContinuityPlan).where(ContinuityPlan.user_id == current_user.id)
+    )
+    for plan in plans_result.scalars().all():
+        original = list(plan.nodes_json or [])
+        pruned = [n for n in original if not (str(n.get("node_type", "")) == "issue" and int(n.get("ref_id", 0) or 0) == issue_id)]
+        if len(pruned) != len(original):
+            by_lane: dict[str, list[dict[str, object]]] = {}
+            for n in pruned:
+                by_lane.setdefault(str(n.get("lane_id", "")), []).append(n)
+            normalized: list[dict[str, object]] = []
+            for lane_nodes in by_lane.values():
+                lane_nodes.sort(key=lambda x: int(x.get("position", 0)))  # type: ignore[arg-type]
+                for idx, n in enumerate(lane_nodes):
+                    n["position"] = idx
+                    normalized.append(n)
+            plan.nodes_json = normalized
+            marker = f"continuity-plan:{plan.id}"
+            await db.execute(
+                sa_delete(ContinuityRule).where(
+                    ContinuityRule.user_id == current_user.id,
+                    ContinuityRule.note == marker,
+                    (
+                        (ContinuityRule.source_type == "issue") & (ContinuityRule.source_id == issue_id)
+                    )
+                    | (
+                        (ContinuityRule.target_type == "issue") & (ContinuityRule.target_id == issue_id)
+                    ),
+                )
+            )
+            if len(pruned) < 2:
+                await db.execute(
+                    sa_delete(ContinuityRule).where(
+                        ContinuityRule.user_id == current_user.id,
+                        ContinuityRule.note == marker,
+                    )
+                )
+    await db.execute(
+        sa_delete(ContinuityRule).where(
+            ContinuityRule.user_id == current_user.id,
+            (
+                (ContinuityRule.source_type == "issue") & (ContinuityRule.source_id == issue_id)
+            )
+            | (
+                (ContinuityRule.target_type == "issue") & (ContinuityRule.target_id == issue_id)
+            ),
+        )
+    )
+
     await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
     await _invalidate_issue_caches(current_user.id)

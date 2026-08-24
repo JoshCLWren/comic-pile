@@ -25,7 +25,7 @@ it('renders empty history state', () => {
 
 it('renders session cards with optional metadata and duration formats', () => {
   mockedUseSessions.mockReturnValue({ data: [
-    { id: 1, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T10:05:00Z', ladder_path: '6 → 8', active_thread: { title: 'Saga', format: 'Comic' }, last_rolled_result: 4, current_die: 6, snapshot_count: 2 },
+    { id: 1, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T10:05:00Z', ladder_path: '6 → 8', active_thread: { title: 'Saga', format: 'Comic', next_issue_number: '13', issues_read: 3, last_rating: 4.5 }, last_rolled_result: 4, current_die: 6, snapshot_count: 2 },
     { id: 2, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T11:00:00Z', ladder_path: null, active_thread: null, snapshot_count: 0 },
     { id: 3, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T12:30:00Z', ladder_path: '20', active_thread: { title: 'Other', format: 'Manga' }, last_rolled_result: null, current_die: 20, snapshot_count: 1 },
     { id: 4, started_at: 'bad', ended_at: null, ladder_path: null, active_thread: null },
@@ -36,11 +36,20 @@ it('renders session cards with optional metadata and duration formats', () => {
   ], isPending: false })
   render(<MemoryRouter><HistoryPage /></MemoryRouter>)
   expect(screen.getByRole('list')).toBeInTheDocument()
-  expect(screen.getByText('Dice progression: d6 → d8')).toBeInTheDocument()
+  expect(screen.getAllByText('Die size')).toHaveLength(3)
+  expect(screen.getByText('d6 → d8')).toBeInTheDocument()
+  expect(screen.getByText('Rolled 4')).toBeInTheDocument()
+  expect(screen.queryByText(/Rolled 0/)).not.toBeInTheDocument()
+  expect(screen.queryByText(/Dice progression:/)).not.toBeInTheDocument()
+  expect(screen.getByText('· #13')).toBeInTheDocument()
+  expect(screen.getByText('3 read')).toBeInTheDocument()
+  expect(screen.getByText('Rated 4.5')).toBeInTheDocument()
   expect(screen.getByText('Duration: 5m')).toBeInTheDocument()
   expect(screen.getByText('Duration: 1h')).toBeInTheDocument()
   expect(screen.getByText('Duration: 2h 30m')).toBeInTheDocument()
-  expect(screen.getByText('Comics read: 2')).toBeInTheDocument()
+  const snapshotsLink = screen.getByText('Snapshots (2)')
+  expect(snapshotsLink).toBeInTheDocument()
+  expect(snapshotsLink.closest('a')).toHaveAttribute('href', '/sessions/1')
 })
 
 it('renders loading and error states', () => {

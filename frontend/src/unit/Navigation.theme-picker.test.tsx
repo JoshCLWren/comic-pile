@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import { AuthProvider } from '../App'
 import Navigation from '../components/Navigation'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
+import { ToastProvider } from '../contexts/ToastProvider'
 import { readStoredThemePreference } from '../services/theme'
 
 const mocks = vi.hoisted(() => ({
@@ -46,7 +47,9 @@ function renderNavigation() {
     <MemoryRouter initialEntries={['/']}>
       <AuthProvider>
         <BugReportRestoreProvider>
-          <Navigation onBugReportSubmit={vi.fn()} />
+          <ToastProvider>
+            <Navigation onBugReportSubmit={vi.fn()} />
+          </ToastProvider>
         </BugReportRestoreProvider>
       </AuthProvider>
     </MemoryRouter>,
@@ -124,6 +127,7 @@ describe('desktop appearance picker (issue #1792)', () => {
     expect(screen.getByRole('button', { name: 'Command Center' })).toHaveAttribute('aria-pressed', 'true')
     await waitFor(() => expect(mocks.patch).toHaveBeenCalledTimes(1))
     expect(readStoredThemePreference()).toBe('command-center')
+    expect(await screen.findByRole('alert')).toHaveTextContent(/saving your preference failed/i)
   })
 
   it('syncs the picker to a server-resolved theme applied after mount', async () => {
