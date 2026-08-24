@@ -9,7 +9,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import Insert, insert as pg_insert
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -57,7 +57,7 @@ async def get_user_preferences(
     return UserPreferencesResponse(theme=theme, user_id=current_user.id)
 
 
-def _upsert_theme_statement(user_id: int, theme: str) -> Insert:
+def _upsert_theme_statement(user_id: int, theme: str):
     """Build an atomic insert-or-update statement for one user's theme.
 
     Args:
