@@ -1,7 +1,6 @@
 """Roll API routes."""
 
 import logging
-import random
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
@@ -32,6 +31,7 @@ from app.schemas import (
 from app.schemas.session import build_session_bandwidth_state
 from comic_pile.queue import get_roll_pool_rows
 from comic_pile.session import get_current_die_for_session, get_or_create
+from app.momentum import weighted_momentum_selection
 
 router = APIRouter(tags=["roll"])
 
@@ -93,8 +93,21 @@ async def roll_dice(
 
     # Bound the selection to the current die size, matching original semantics.
     bounded_rows = rows[:current_die]
-    pool_size = len(bounded_rows)
-    selected_index = random.randint(0, pool_size - 1)
+
+    # Apply momentum weighting; weights fall back to uniform (pure-random)
+    # when no positive momentum applies, preserving the pure-random bypass.
+    session_events_result = await db.execute(
+        select(Event).where(Event.session_id == current_session_id)
+    )
+    session_events = list(session_events_result.scalars().all())
+
+    selected_index, max_bonus = await weighted_momentum_selection(
+        db=db,
+        bounded_rows=bounded_rows,
+        user_id=user_id,
+        session_events=session_events,
+        now=datetime.now(UTC),
+    )
     selected_thread, unread_count, issue_number = bounded_rows[selected_index]
 
     selected_thread_id = selected_thread.id
@@ -129,7 +142,7 @@ async def roll_dice(
         selected_thread_id=selected_thread_id,
         die=current_die,
         result=selected_index + 1,
-        selection_method="random",
+        selection_method="momentum" if max_bonus > 0 else "random",
         issue_id=selected_thread_issue_id,
         issue_number=selected_thread_issue_number,
     )
