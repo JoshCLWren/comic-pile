@@ -21,10 +21,10 @@ Contract rules
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 
-class ReadingBandwidth(str, Enum):
+class ReadingBandwidth(StrEnum):
     """Mental demand the reader has capacity for right now."""
 
     LIGHT = "light"
@@ -32,7 +32,7 @@ class ReadingBandwidth(str, Enum):
     DEEP = "deep"
 
 
-class ReadingIntent(str, Enum):
+class ReadingIntent(StrEnum):
     """What kind of pick the reader wants right now."""
 
     BALANCED = "balanced"
@@ -42,7 +42,7 @@ class ReadingIntent(str, Enum):
     RANDOM = "random"
 
 
-class ReadingModeSource(str, Enum):
+class ReadingModeSource(StrEnum):
     """How a session reading mode was chosen."""
 
     DEFAULT = "default"

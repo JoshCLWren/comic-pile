@@ -8,6 +8,7 @@ from app.services.reading_mode_quiz import (
     BANDWIDTH_QUESTION_ID,
     INTENT_QUESTION_ID,
     QuizAnswerOption,
+    QuizQuestion,
     ReadingBandwidth,
     ReadingIntent,
     ReadingModeQuiz,
@@ -25,6 +26,7 @@ def _answer_ids_for(question_id: str) -> list[str]:
 
 
 def test_quiz_has_two_questions_with_stable_ids():
+    """The quiz exposes exactly the bandwidth and intent questions in order."""
     quiz = get_reading_mode_quiz()
 
     assert [q.id for q in quiz.questions] == [
@@ -34,6 +36,7 @@ def test_quiz_has_two_questions_with_stable_ids():
 
 
 def test_bandwidth_answer_ids_map_deterministically():
+    """Each stable bandwidth answer id resolves to its exact enum member."""
     expected = {
         "light": ReadingBandwidth.LIGHT,
         "balanced": ReadingBandwidth.BALANCED,
@@ -47,6 +50,7 @@ def test_bandwidth_answer_ids_map_deterministically():
 
 
 def test_intent_answer_ids_map_deterministically():
+    """Each stable intent answer id resolves to its exact enum member."""
     expected = {
         "momentum": ReadingIntent.MOMENTUM,
         "familiar": ReadingIntent.FAMILIAR,
@@ -61,6 +65,7 @@ def test_intent_answer_ids_map_deterministically():
 
 
 def test_every_answer_mapping_is_covered_by_a_test():
+    """Guard against silently dropping a new option from the mapping tests above."""
     # Guard against silently dropping a new option from the mapping tests above.
     bandwidth_ids = _answer_ids_for(BANDWIDTH_QUESTION_ID)
     intent_ids = _answer_ids_for(INTENT_QUESTION_ID)
@@ -74,6 +79,7 @@ def test_every_answer_mapping_is_covered_by_a_test():
 
 
 def test_all_combinations_produce_valid_session_mode():
+    """Every bandwidth/intent pair yields a quiz-sourced valid session mode."""
     bandwidth_ids = _answer_ids_for(BANDWIDTH_QUESTION_ID)
     intent_ids = _answer_ids_for(INTENT_QUESTION_ID)
 
@@ -88,6 +94,7 @@ def test_all_combinations_produce_valid_session_mode():
 
 
 def test_copy_is_separate_from_stable_answer_ids():
+    """Option wording differs from the stable key and maps one dimension only."""
     quiz = get_reading_mode_quiz()
     for question in quiz.questions:
         for option in question.options:
@@ -98,6 +105,7 @@ def test_copy_is_separate_from_stable_answer_ids():
 
 
 def test_copy_changes_do_not_alter_the_mapping():
+    """Rewording option copy keeps the same bandwidth/intent resolution."""
     # The resolver keys only on stable ids, so rewording an option keeps the
     # same bandwidth/intent outcome.
     quiz = get_reading_mode_quiz()
@@ -143,6 +151,7 @@ def test_copy_changes_do_not_alter_the_mapping():
 
 
 def test_unknown_answer_id_raises():
+    """An answer id outside the stable contract is rejected."""
     with pytest.raises(ValueError):
         resolve_quiz_answers(
             {BANDWIDTH_QUESTION_ID: "nope", INTENT_QUESTION_ID: "momentum"}
@@ -150,11 +159,13 @@ def test_unknown_answer_id_raises():
 
 
 def test_missing_dimension_raises():
+    """Resolution fails unless both bandwidth and intent answers are present."""
     with pytest.raises(ValueError):
         resolve_quiz_answers({BANDWIDTH_QUESTION_ID: "light"})
 
 
 def test_unknown_question_id_is_ignored():
+    """Answers keyed by unknown question ids do not affect resolution."""
     mode = resolve_quiz_answers(
         {
             BANDWIDTH_QUESTION_ID: "light",
@@ -168,4 +179,5 @@ def test_unknown_question_id_is_ignored():
 
 
 def test_quiz_definition_is_immutable_and_shared():
+    """The canonical quiz is a shared singleton definition."""
     assert get_reading_mode_quiz() is get_reading_mode_quiz()
