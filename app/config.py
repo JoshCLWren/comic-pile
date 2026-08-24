@@ -354,7 +354,7 @@ class Settings(BaseSettings):
 
     @property
     def redis(self) -> RedisSettings:
-        """Get redis settings."""
+        """Get Redis settings."""
         return get_redis_settings()
 
     @property
@@ -401,7 +401,7 @@ def get_github_settings() -> GitHubSettings:
 
 @lru_cache
 def get_redis_settings() -> RedisSettings:
-    """Get cached redis settings instance."""
+    """Get cached Redis settings instance."""
     return RedisSettings()
 
 
