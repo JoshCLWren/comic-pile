@@ -20,15 +20,20 @@ from app.momentum import (
     compute_momentum_bonus,
     weighted_momentum_selection,
     _MAX_MOMENTUM_BONUS,
-    _HIGH_RATING_THRESHOLD,
 )
-from app.models import Thread
 
 
 class FakeEvent:
     """Lightweight stand-in for Event records in pure-unit tests."""
 
-    def __init__(self, type: str, thread_id: int | None = None, selected_thread_id: int | None = None):
+    def __init__(self, type: str, thread_id: int | None = None, selected_thread_id: int | None = None) -> None:
+        """Initialize a fake event.
+
+        Args:
+            type: The event type (e.g., "rate", "roll").
+            thread_id: Optional thread ID for rate events.
+            selected_thread_id: Optional thread ID for roll events.
+        """
         self.type = type
         self.thread_id = thread_id
         self.selected_thread_id = selected_thread_id
@@ -43,7 +48,15 @@ class FakeThread:
         last_rating: float | None = None,
         last_activity_at: datetime | None = None,
         status: str = "active",
-    ):
+    ) -> None:
+        """Initialize a fake thread.
+
+        Args:
+            id: Thread identifier.
+            last_rating: Optional last rating value.
+            last_activity_at: Optional last activity timestamp.
+            status: Thread status (default "active").
+        """
         self.id = id
         self.title = f"Thread {id}"
         self.format = "Comic"
@@ -149,7 +162,6 @@ async def test_no_positive_boost_for_low_rating_with_recency() -> None:
 @pytest.mark.asyncio
 async def test_decay_factor_decreases_monotonically() -> None:
     """Decay factor must drop as staleness increases."""
-    now = datetime.now(UTC)
     factor_fresh = _decay_factor(0.0)
     factor_stale = _decay_factor(100.0)
     assert factor_fresh > factor_stale
