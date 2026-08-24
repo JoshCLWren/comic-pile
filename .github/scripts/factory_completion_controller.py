@@ -296,6 +296,11 @@ def assign_completion_batch(*, now_epoch: int | None = None) -> dict[str, object
 
     assignments: list[dict[str, object]] = []
     for worker in selected:
+        # Recheck the worker lease at the mutation boundary. The regular
+        # dispatcher and the completion drain have independent workflow
+        # concurrency groups, so a worker can become busy after our snapshot.
+        if controller.worker_has_active_lease(worker):
+            continue
         ordered = policy.order_candidates_for_worker(remaining, worker)
         for candidate in ordered:
             if not controller.candidate_is_live_executable(candidate):
