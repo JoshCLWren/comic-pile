@@ -254,7 +254,7 @@ describe('data hooks', () => {
     api.sessionApi.restoreSessionStart.mockRejectedValueOnce(axiosError)
     const restore = renderHook(() => useRestoreSessionStart(), { wrapper: createWrapper() })
     await act(async () => expect(restore.result.current.mutate(8)).rejects.toBe(axiosError))
-    expect(restore.result.current.error).toBe(axiosError)
+    await waitFor(() => expect(restore.result.current.error).toBe(axiosError))
     Object.defineProperty(window, 'localStorage', { configurable: true, value: originalStorage })
   })
 
