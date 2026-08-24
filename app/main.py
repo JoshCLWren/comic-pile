@@ -27,8 +27,7 @@ from app.api import (
     catalog,
     comicvine_resolution,
     debug,
-    continuity_plan,
-    continuity_rule,
+
     dependency,
     issue,
     metrics,
@@ -265,10 +264,6 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(preferences.router, prefix="/api/v1", tags=["users"])
     app.include_router(traffic_metrics.router, prefix="/api", tags=["traffic"])
     app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
-    app.include_router(analytics.router, prefix="/api/v1", tags=["analytics"])
-    app.include_router(issue.router, prefix="/api/v1", tags=["issues"])
-    app.include_router(continuity_rule.router, prefix="/api/v1/continuity")
-    app.include_router(continuity_plan.router, prefix="/api/v1", tags=["continuity-plans"])
     app.include_router(catalog.router, tags=["catalog"])
     if os.getenv("TEST_ENVIRONMENT") == "true":
         app.include_router(test_helpers.router, prefix="/api", tags=["test"])
