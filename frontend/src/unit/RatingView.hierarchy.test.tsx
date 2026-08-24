@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { RatingThread } from '../pages/RollPage/types'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 
 const mockNavigate = vi.fn()
@@ -38,7 +39,7 @@ vi.mock('../hooks/useReaderContext', () => ({
   useReaderContext: (...args: unknown[]) => mockUseReaderContext(...args),
 }))
 
-const baseThread = {
+const baseThread: RatingThread = {
   id: 1,
   title: 'Saga',
   format: 'Comic',
@@ -51,7 +52,7 @@ const baseThread = {
   issue_id: 100,
   next_issue_id: 101,
   last_rolled_result: 3,
-} as never
+}
 
 const callbacks = {
   onUpdateRating: vi.fn(),
@@ -261,7 +262,7 @@ type EdgeLike = {
   explanation: string | null
 }
 
-function makeIssue(overrides: Partial<LocalIssueLike>): LocalIssueLike {
+function makeIssue(overrides: Partial<LocalIssueLike> = {}): LocalIssueLike {
   return {
     issue_id: 100,
     issue_number: '4',
@@ -380,7 +381,7 @@ describe('RatingView reader-first chain and connection rendering #1875', () => {
 
   it('does not navigate from a series row when no thread is active', () => {
     setContext([makeIssue()])
-    renderView({ activeRatingThread: null as never })
+    renderView({ activeRatingThread: null })
 
     fireEvent.click(screen.getByLabelText('Open Loading… issue 4'))
     expect(mockNavigate).not.toHaveBeenCalledWith(expect.stringMatching(/^\/thread\//))
@@ -551,7 +552,7 @@ describe('RatingView reader-first chain and connection rendering #1875', () => {
 
   it('shows a placeholder roll result inside engine details when nothing was rolled', () => {
     setContext([makeIssue()])
-    renderView({ rolledResult: null as never })
+    renderView({ rolledResult: null })
 
     const details = screen.getByTestId('tier-engine-details')
     expect(within(details).getAllByText('Roll Result').length).toBeGreaterThan(0)
@@ -560,7 +561,7 @@ describe('RatingView reader-first chain and connection rendering #1875', () => {
 
   it('marks the last issue of a thread in the save action', () => {
     setContext([makeIssue()])
-    renderView({ activeRatingThread: { ...baseThread, issues_remaining: 1 } as never })
+    renderView({ activeRatingThread: { ...baseThread, issues_remaining: 1 } })
 
     expect(screen.getByText('This is the last issue in the thread')).toBeInTheDocument()
     expect(screen.getByTestId('save-and-continue')).toHaveTextContent('Mark read & complete')
