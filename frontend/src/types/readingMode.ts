@@ -1,31 +1,39 @@
-/** Bandwidth describes how mentally demanding a comic is for the current moment. */
-export type Bandwidth = 'light' | 'balanced' | 'deep'
+/** Stable reading-mode contract shared by the quiz UI and the session-mode API. */
 
-/** Intent describes what kind of pick the reader wants right now. */
-export type Intent = 'balanced' | 'momentum' | 'familiar' | 'explore' | 'random'
+export type ReadingBandwidth = 'light' | 'balanced' | 'deep'
+export type ReadingIntent = 'balanced' | 'momentum' | 'familiar' | 'explore' | 'random'
+export type SessionModeSource = 'quiz' | 'manual' | 'correction'
 
-/** Combined reading mode for a session. */
+/** One stable quiz answer option; IDs never change even when copy evolves. */
+export interface QuizAnswerOption {
+  id: string
+  label: string
+}
+
+/** One quiz question with its stable answer options. */
+export interface QuizQuestion {
+  id: string
+  prompt: string
+  answers: QuizAnswerOption[]
+}
+
+/** Resolved reading mode submitted through the canonical session-mode API. */
 export interface ReadingMode {
-  bandwidth: Bandwidth
-  intent: Intent
+  bandwidth: ReadingBandwidth
+  intent: ReadingIntent
 }
 
-/** Source that produced the current mode values. */
-export type ReadingModeSource = 'inferred' | 'manual' | 'snooze' | 'quiz'
-
-export const BANDWIDTH_VALUES: Bandwidth[] = ['light', 'balanced', 'deep']
-export const INTENT_VALUES: Intent[] = ['balanced', 'momentum', 'familiar', 'explore', 'random']
-
-export function isBandwidth(value: string): value is Bandwidth {
-  return (BANDWIDTH_VALUES as string[]).includes(value)
+/** Request payload for setting one session's reading mode. */
+export interface SessionModeUpdateRequest {
+  bandwidth?: ReadingBandwidth | null
+  intent?: ReadingIntent | null
+  source: SessionModeSource
 }
 
-export function isIntent(value: string): value is Intent {
-  return (INTENT_VALUES as string[]).includes(value)
-}
-
-export function formatReadingMode(mode: ReadingMode | null | undefined): string {
-  if (!mode) return 'Balanced \u00B7 Balanced'
-  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
-  return `${cap(mode.bandwidth)} \u00B7 ${cap(mode.intent)}`
+/** Response describing one session's current reading mode. */
+export interface SessionModeResponse {
+  session_id: number
+  bandwidth: string | null
+  intent: string | null
+  source: string | null
 }
