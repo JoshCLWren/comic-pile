@@ -4,16 +4,24 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = '20260822231735'
-down_revision = 'caf0b46811eb'
+down_revision = 'd4e5f6a7b8c9'
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column('sessions', sa.Column('bandwidth', sa.String(length=32), nullable=True))
-    op.add_column('sessions', sa.Column('intent', sa.String(length=32), nullable=True))
-    op.add_column('sessions', sa.Column('mode_source', sa.String(length=32), nullable=True, server_default='manual'))
-    op.create_index(op.f('ix_session_reading_mode'), 'sessions', ['bandwidth', 'intent', 'mode_source'], unique=False)
+    op.add_column("sessions", sa.Column("bandwidth", sa.String(length=32), nullable=True))
+    op.add_column("sessions", sa.Column("intent", sa.String(length=32), nullable=True))
+    op.add_column(
+        "sessions",
+        sa.Column("mode_source", sa.String(length=32), nullable=True, server_default="manual"),
+    )
+    op.create_index(
+        op.f("ix_session_reading_mode"),
+        "sessions",
+        ["bandwidth", "intent", "mode_source"],
+        unique=False,
+    )
 
 
 def downgrade() -> None:

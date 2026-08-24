@@ -350,6 +350,17 @@ export default function RollPage() {
           onCloseSetCurrentIssue={() => state.setIsSetCurrentIssueOpen(false)}
           onSetCurrentIssue={handleSetCurrentIssue}
         />
+
+        <ReadingModeSheet
+          isOpen={state.isReadingModeSheetOpen}
+          activeMode={{
+            bandwidth: bootstrap.bandwidth ?? null,
+            intent: bootstrap.intent ?? null,
+            source: bootstrap.mode_source ?? null,
+          }}
+          onClose={() => state.setIsReadingModeSheetOpen(false)}
+          onUpdated={refetchBootstrap}
+        />
       </div>
     </div>
   )

@@ -87,6 +87,9 @@ export interface RollBootstrapResponse {
   blocked_threads: RollBootstrapThread[]
   stale_thread_count: number
   stale_thread: RollBootstrapThread | null
+  bandwidth?: string | null
+  intent?: string | null
+  mode_source?: string | null
 }
 
 declare module './index' {

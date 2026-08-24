@@ -63,10 +63,10 @@ export function ReadingModeSheet({ isOpen, activeMode, onClose, onUpdated }: Rea
     setIsSubmitting(true)
     setError(null)
     try {
-      await api.post('/session/current/mode/', { bandwidth, intent })
+      await api.post('/v1/sessions/current/mode/', { bandwidth, intent })
       onUpdated()
       onClose()
-    } catch (err) {
+    } catch {
       setError('Failed to update reading mode. Please try again.')
     } finally {
       setIsSubmitting(false)

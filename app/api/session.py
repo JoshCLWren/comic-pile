@@ -1109,6 +1109,8 @@ async def restore_session_start(
 
 
 class ModeUpdateRequest(BaseModel):
+    """Request body for updating the active session's reading-mode state."""
+
     bandwidth: str | None = None
     intent: str | None = None
 
@@ -1125,16 +1127,36 @@ async def update_session_mode(
     db: AsyncSession = Depends(get_db),
     payload: ModeUpdateRequest = Body(default_factory=ModeUpdateRequest),
 ) -> SessionModeResponse:
-    """Update the active session's reading-mode state (bandwidth/intent)."""
-    session = await get_owned_session_or_404(db, current_user.id, (await get_or_create(db, user_id=current_user.id, existing_user=current_user)).id)
+    """Update the active session's reading-mode state (bandwidth/intent).
+
+    Args:
+        request: Incoming request used for rate limiting.
+        current_user: Authenticated user owning the active session.
+        db: Async database session.
+        payload: Optional partial mode update; omitted fields are preserved.
+
+    Returns:
+        The session's resulting reading-mode state.
+
+    Raises:
+        HTTPException: 422 when a provided bandwidth or intent is invalid.
+    """
+    active_session = await get_or_create(db, user_id=current_user.id, existing_user=current_user)
+    session = await get_owned_session_or_404(db, current_user.id, active_session.id)
 
     if payload.bandwidth is not None:
         if payload.bandwidth not in BANDWIDTH_OPTIONS:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Invalid bandwidth: {payload.bandwidth}")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid bandwidth: {payload.bandwidth}",
+            )
         session.bandwidth = payload.bandwidth
     if payload.intent is not None:
         if payload.intent not in INTENT_OPTIONS:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Invalid intent: {payload.intent}")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid intent: {payload.intent}",
+            )
         session.intent = payload.intent
     if payload.bandwidth is not None or payload.intent is not None:
         session.mode_source = "manual"

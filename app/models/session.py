@@ -51,6 +51,7 @@ class Session(Base):
         Index("ix_session_started_at", "started_at"),
         Index("ix_session_ended_at", "ended_at"),
         Index("ix_session_user_ended_started", "user_id", "ended_at", "started_at"),
+        Index("ix_session_reading_mode", "bandwidth", "intent", "mode_source"),
     )
 
     user: Mapped[User] = relationship("User", back_populates="sessions", lazy="raise")
