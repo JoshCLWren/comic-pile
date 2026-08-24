@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from app.api import roll as roll_api
 from app.models import DependencyGroup, DependencyGroupMembership, Issue, Thread
 from app.schemas import RollBootstrapResponse, RollBootstrapThread
-from app.schemas.session import SessionBandwidthState
+from app.schemas.session import SessionBandwidthState, build_session_bandwidth_state
 from tests.conftest import get_or_create_user_async
 
 
@@ -34,6 +34,36 @@ class _Result:
 
     def scalars(self):
         return self
+
+
+def test_build_session_bandwidth_state_normalizes_legacy_garbage():
+    """Stored junk must never break bootstrap; valid values pass through."""
+    assert build_session_bandwidth_state(
+        predicted_bandwidth="light",
+        active_bandwidth="deep",
+        confidence=0.75,
+        source="quiz",
+        mode_version="v2",
+    ) == SessionBandwidthState(
+        predicted_bandwidth="light",
+        active_bandwidth="deep",
+        confidence=0.75,
+        source="quiz",
+        mode_version="v2",
+    )
+    assert build_session_bandwidth_state(
+        predicted_bandwidth="ultra",
+        active_bandwidth="bogus",
+        confidence=1.5,
+        source="hacked",
+        mode_version=None,
+    ) == SessionBandwidthState(
+        predicted_bandwidth=None,
+        active_bandwidth=None,
+        confidence=None,
+        source=None,
+        mode_version=None,
+    )
 
 
 @pytest.mark.asyncio
@@ -97,6 +127,13 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
             "last_activity_at": None,
         }
     ]
+    assert response.bandwidth == SessionBandwidthState(
+        predicted_bandwidth=None,
+        active_bandwidth=None,
+        confidence=None,
+        source=None,
+        mode_version=None,
+    )
 
 
 @pytest.mark.asyncio

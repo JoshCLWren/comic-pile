@@ -111,6 +111,7 @@ __all__ = [
     "SessionDetailsResponse",
     "ActiveThreadInfo",
     "EventDetail",
+    "SessionBandwidthState",
     # Snapshot
     "SnapshotResponse",
     "SnapshotsListResponse",

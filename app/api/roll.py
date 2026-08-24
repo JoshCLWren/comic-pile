@@ -547,6 +547,7 @@ async def roll_bootstrap(
         active_thread=active_thread,
         roll_recovery=roll_recovery,
         bandwidth=bandwidth_state,
+        roll_pool=roll_pool,
         snoozed_threads=snoozed_threads,
         snoozed_count=len(snoozed_threads),
         blocked_count=blocked_count,
