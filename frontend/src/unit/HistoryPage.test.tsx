@@ -36,7 +36,7 @@ it('renders session cards with optional metadata and duration formats', () => {
   ], isPending: false })
   render(<MemoryRouter><HistoryPage /></MemoryRouter>)
   expect(screen.getByRole('list')).toBeInTheDocument()
-  expect(screen.getByText('Die size')).toBeInTheDocument()
+  expect(screen.getAllByText('Die size')).toHaveLength(3)
   expect(screen.getByText('d6 → d8')).toBeInTheDocument()
   expect(screen.getByText('Rolled 4')).toBeInTheDocument()
   expect(screen.queryByText(/Rolled 0/)).not.toBeInTheDocument()
