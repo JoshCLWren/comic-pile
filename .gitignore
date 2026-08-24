@@ -151,6 +151,7 @@ logs/
 
 # Temporary files
 *.tmp
+*.pid
 
 # Editor/LLM backup artifacts - never commit these
 *.bak
