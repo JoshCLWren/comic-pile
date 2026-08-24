@@ -21,7 +21,6 @@ from app.models.session import Session
 from app.models.snapshot import Snapshot
 from app.models.thread import Thread
 from app.models.user import User
-from app.models.taste_signal import TasteSignal
 from app.models.user_preferences import UserPreferences
 
 __all__ = [
@@ -47,7 +46,6 @@ __all__ = [
     "Session",
     "Snapshot",
     "Thread",
-    "TasteSignal",
     "ThreadExternalSeriesMapping",
     "User",
     "UserPreferences",

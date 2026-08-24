@@ -19,7 +19,7 @@ export function useTasteDiscovery(options: UseTasteDiscoveryOptions = {}) {
     setError(null)
     try {
       const res = await api.get<TasteDiscovery[]>('/v1/taste/discoveries')
-      setDiscoveries(res.data)
+      setDiscoveries(res)
     } catch (err) {
       setError(err)
     } finally {

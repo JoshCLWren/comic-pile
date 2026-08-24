@@ -3,14 +3,13 @@ import { useState } from 'react'
 export interface TasteDiscovery {
   signal: {
     id: number
-    feature_type: string
-    feature_key: string
+    signal_type: string
+    external_key: string
     display_name: string
-    role?: string | null
     evidence_count: number
-    distinct_issue_count: number
+    distinct_thread_count: number
     confidence: number
-    verdict: string
+    user_verdict: string | null
   }
   evidence_summary: string
 }
@@ -38,11 +37,10 @@ export function TasteDiscoveryCard({ discovery, onVerdict, onDismiss }: TasteDis
     }
   }
 
-  const creatorLabel = signal.role ? `${signal.display_name} (${signal.role})` : signal.display_name
   const title =
-    signal.feature_type === 'creator'
-      ? `You've rated ${creatorLabel}-credited comics well above your usual baseline`
-      : signal.feature_type === 'era'
+    signal.signal_type === 'creator'
+      ? `You've rated ${signal.display_name}-credited comics well above your usual baseline`
+      : signal.signal_type === 'era'
         ? `You've rated ${signal.display_name} comics well above your baseline`
         : `You've rated comics with ${signal.display_name} well above baseline`
 
