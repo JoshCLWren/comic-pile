@@ -41,9 +41,14 @@ describe('useContinuityReadiness', () => {
     const { result, rerender } = renderHook(({ issueId }) => useContinuityReadiness(issueId), {
       initialProps: { issueId: 7 as number | null },
     })
+    
+    // Initial query is pending (slow), rerender to issueId 8
     rerender({ issueId: 8 })
+    // Wait for the new query (issueId 8) to complete
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
     await waitFor(() => expect(result.current.readiness?.node_id).toBe(8))
 
+    // Now resolve the first (stale) query - it should be ignored
     act(() => resolveFirst({
       node_type: 'issue', node_id: 7, is_readable: false, evaluated_issue_id: 7, blockers: [],
     }))
