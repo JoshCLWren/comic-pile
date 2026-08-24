@@ -13,10 +13,23 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Literal
+from typing import Literal, TypedDict
 
 ReadingBandwidth = Literal["light", "balanced", "deep"]
 ReadingIntent = Literal["momentum", "familiar", "explore", "random"]
+
+
+class QuizAnswerDict(TypedDict):
+    id: str
+    label: str
+    bandwidth: ReadingBandwidth | None
+    intent: ReadingIntent | None
+
+
+class QuizQuestionDict(TypedDict):
+    id: str
+    prompt: str
+    answers: list[QuizAnswerDict]
 
 VALID_BANDWIDTHS: frozenset[str] = frozenset({"light", "balanced", "deep"})
 VALID_INTENTS: frozenset[str] = frozenset({"momentum", "familiar", "explore", "random"})
@@ -48,7 +61,7 @@ class QuizAnswer:
     bandwidth: ReadingBandwidth | None = None
     intent: ReadingIntent | None = None
 
-    def to_dict(self) -> dict[str, str | None]:
+    def to_dict(self) -> QuizAnswerDict:
         """Serialize the answer to a JSON-safe dictionary."""
         return {
             "id": self.id,
@@ -66,7 +79,7 @@ class QuizQuestion:
     prompt: str
     answers: list[QuizAnswer]
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> QuizQuestionDict:
         """Serialize the question to a JSON-safe dictionary."""
         return {
             "id": self.id,
@@ -128,7 +141,7 @@ class QuizResolutionError(ValueError):
     """Raised when quiz answers cannot be resolved to a valid reading mode."""
 
 
-def list_quiz_questions() -> list[dict[str, object]]:
+def list_quiz_questions() -> list[QuizQuestionDict]:
     """Return the quiz questions with stable IDs and copy.
 
     Returns:

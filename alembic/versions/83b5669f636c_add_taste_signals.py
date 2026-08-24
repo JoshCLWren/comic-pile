@@ -1,6 +1,6 @@
 """Add the Taste Bank taste signals table.
 
-Revision ID: c85500000001
+Revision ID: 83b5669f636c
 Revises: d4e5f6a7b8c9
 Create Date: 2026-08-22 00:00:00.000000
 """
