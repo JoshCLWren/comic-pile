@@ -439,17 +439,18 @@ def order_candidates_for_worker(candidates: list[Candidate], worker: str) -> lis
         if candidate.lane == 0:
             return 0
         if candidate.kind == 'pr':
-            # A clean review-stage PR is one independent approval from merge;
-            # finishing it unclogs the drain faster than rebasing a conflict.
+            # A clean review-stage PR is one independent approval from merge.
+            # Review-first workers finish it ahead of everything but lane 0;
+            # non-review workers preserve product capacity (issue first).
             if candidate.stage == 'factory:review' and not candidate.conflicted:
-                return 1
+                return 1 if review_first else 6
             if candidate.conflicted:
-                return 2
+                return 2 if review_first else 8
             if candidate.stage == 'factory:ci':
                 return 3
             if candidate.stage == 'factory:changes-requested':
                 return 4
-            return 5 if review_first else 8
+            return 5 if review_first else 9
         if candidate.lane == 1:
             return 6 if review_first else 4
         return 7 if review_first else 5
