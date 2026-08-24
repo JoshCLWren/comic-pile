@@ -265,6 +265,51 @@ async def create_session_start_snapshot(db: AsyncSession, session: Session) -> N
     await db.refresh(session)
 
 
+async def _ensure_session_bandwidth(
+    db: AsyncSession,
+    session: Session,
+    user_id: int,
+) -> bool:
+    """Populate Phase 2 bandwidth fields when a session lacks them.
+
+    Sessions created before this feature (or outside ``get_or_create``) carry
+    NULL bandwidth columns. Backfill them once so bootstrap and roll responses
+    always expose the same canonical state without rewriting valid values.
+
+    Args:
+        db: Async database session used for inference queries.
+        session: Candidate session that may lack bandwidth state.
+        user_id: Owning user whose reading history drives inference.
+
+    Returns:
+        True when bandwidth fields were newly written, False when already set.
+    """
+    if session.predicted_bandwidth is not None and session.bandwidth_version is not None:
+        return False
+
+    try:
+        inference = await infer_bandwidth(db, user_id)
+        predicted = inference.predicted
+        confidence = inference.confidence
+        source = inference.source
+    except Exception:
+        logger.warning(
+            "Bandwidth inference failed for user %d, defaulting to balanced",
+            user_id,
+        )
+        predicted = "balanced"
+        confidence = 0.0
+        source = "inferred"
+
+    session.predicted_bandwidth = predicted
+    session.active_bandwidth = predicted
+    session.bandwidth_confidence = confidence
+    session.bandwidth_source = source
+    session.bandwidth_version = BANDWIDTH_VERSION
+    session.bandwidth_updated_at = datetime.now(UTC)
+    return True
+
+
 async def get_or_create(
     db: AsyncSession,
     user_id: int,
@@ -304,6 +349,9 @@ async def get_or_create(
                 user_id,
             )
             if active_session:
+                if await _ensure_session_bandwidth(db, active_session, user_id):
+                    await db.commit()
+                    await db.refresh(active_session)
                 _log_session_resolution(
                     user_id=user_id,
                     session=active_session,
@@ -329,6 +377,9 @@ async def get_or_create(
                     await _resolve_current_session_with_candidate_count(db, user_id)
                 )
                 if active_session:
+                    if await _ensure_session_bandwidth(db, active_session, user_id):
+                        await db.commit()
+                        await db.refresh(active_session)
                     _log_session_resolution(
                         user_id=user_id,
                         session=active_session,
@@ -342,27 +393,7 @@ async def get_or_create(
                 await create_session_start_snapshot(db, new_session)
 
                 # Phase 2: initialize ephemeral bandwidth state
-                try:
-                    inference = await infer_bandwidth(db, user_id)
-                    now = datetime.now(UTC)
-                    new_session.predicted_bandwidth = inference.predicted
-                    new_session.active_bandwidth = inference.predicted
-                    new_session.bandwidth_confidence = inference.confidence
-                    new_session.bandwidth_source = inference.source
-                    new_session.bandwidth_version = BANDWIDTH_VERSION
-                    new_session.bandwidth_updated_at = now
-                except Exception:
-                    logger.warning(
-                        "Bandwidth inference failed for user %d, defaulting to balanced",
-                        user_id,
-                    )
-                    now = datetime.now(UTC)
-                    new_session.predicted_bandwidth = "balanced"
-                    new_session.active_bandwidth = "balanced"
-                    new_session.bandwidth_confidence = 0.0
-                    new_session.bandwidth_source = "inferred"
-                    new_session.bandwidth_version = BANDWIDTH_VERSION
-                    new_session.bandwidth_updated_at = now
+                await _ensure_session_bandwidth(db, new_session, user_id)
 
                 await db.commit()
                 await db.refresh(new_session)

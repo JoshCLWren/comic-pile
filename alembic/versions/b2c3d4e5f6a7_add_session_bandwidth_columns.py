@@ -1,7 +1,7 @@
 """add session bandwidth columns
 
 Revision ID: b2c3d4e5f6a7
-Revises: f1a2b3c4d5e6
+Revises: d4e5f6a7b8c9
 Create Date: 2026-08-23 00:00:00.000000+00:00
 """
 
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "b2c3d4e5f6a7"
-down_revision = "f1a2b3c4d5e6"
+down_revision = "d4e5f6a7b8c9"
 branch_labels = None
 depends_on = None
 

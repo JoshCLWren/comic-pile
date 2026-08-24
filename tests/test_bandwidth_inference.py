@@ -13,11 +13,9 @@ Acceptance criteria:
 """
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Session, Thread, User
@@ -116,15 +114,18 @@ class TestEffortBandClassification:
     """Test effort band classification helper."""
 
     def test_light_effort(self) -> None:
+        """Durations under 12 minutes classify as light effort."""
         assert _classify_effort_band(5.0) == "light"
         assert _classify_effort_band(11.9) == "light"
 
     def test_medium_effort(self) -> None:
+        """Durations from 12 to under 18 minutes classify as medium effort."""
         assert _classify_effort_band(12.0) == "medium"
         assert _classify_effort_band(15.0) == "medium"
         assert _classify_effort_band(17.9) == "medium"
 
     def test_deep_effort(self) -> None:
+        """Durations of 18 minutes or more classify as deep effort."""
         assert _classify_effort_band(18.0) == "deep"
         assert _classify_effort_band(25.0) == "deep"
         assert _classify_effort_band(60.0) == "deep"
@@ -364,7 +365,7 @@ class TestBandwidthInferenceResult:
             snooze_rate_by_band={"light": 0.0, "medium": 0.0, "deep": 0.0},
         )
         with pytest.raises(AttributeError):
-            result.predicted = "light"  # type: ignore[misc]
+            setattr(result, "predicted", "light")
 
 
 # ---------------------------------------------------------------------------

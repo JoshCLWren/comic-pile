@@ -43,6 +43,11 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
         manual_die=None,
         pending_thread_id=None,
         snoozed_thread_ids=[101, 202],
+        predicted_bandwidth="balanced",
+        active_bandwidth="balanced",
+        bandwidth_confidence=0.0,
+        bandwidth_source="inferred",
+        bandwidth_version=1,
     )
     current_user = SimpleNamespace(id=7)
     owned_snoozed = SimpleNamespace(id=101, title="Owned", format="ongoing")
@@ -101,6 +106,11 @@ async def test_bootstrap_roll_pool_is_never_paginated_below_current_die(monkeypa
         manual_die=100,
         pending_thread_id=None,
         snoozed_thread_ids=[],
+        predicted_bandwidth="balanced",
+        active_bandwidth="balanced",
+        bandwidth_confidence=0.0,
+        bandwidth_source="inferred",
+        bandwidth_version=1,
     )
     current_user = SimpleNamespace(id=7)
     pool_rows = [

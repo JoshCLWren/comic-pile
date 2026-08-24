@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC
 from typing import Literal
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event
@@ -35,7 +35,10 @@ _DEEP_EFFORT_MIN = 18.0
 
 # Snooze rate thresholds by effort band for bandwidth classification
 _LIGHT_SNOOZE_MAX_RATE = 0.15
-_DEEP_SNOOZE_MIN_RATE = 0.30
+_DEEP_SNOOZE_MAX_RATE = 0.15
+
+# Minimum share of comparable decisions in a band to classify that bandwidth
+_BAND_RATIO_THRESHOLD = 0.6
 
 # Bandwidth version - increment when inference logic changes
 BANDWIDTH_VERSION = 1
@@ -159,17 +162,24 @@ async def infer_bandwidth(
         return _neutral_result(evidence_count=len(comparable_decisions))
 
     # Count snooze events for effort-band analysis
-    snooze_counts = await _count_snoozes_by_effort_band(db, user_id, comparable_decisions)
+    snooze_counts = await _count_snoozes_by_effort_band(db, comparable_decisions)
 
     return _classify_bandwidth(comparable_decisions, snooze_counts)
 
 
 async def _count_snoozes_by_effort_band(
     db: AsyncSession,
-    user_id: int,
     decisions: list[dict[str, float | str | int | None]],
 ) -> dict[str, int]:
-    """Count snooze events that follow rolls by effort band."""
+    """Count snooze events that follow rolls by effort band.
+
+    Args:
+        db: Async database session for querying snooze events.
+        decisions: Comparable roll→rate decisions whose sessions scope the query.
+
+    Returns:
+        Snooze counts keyed by effort band.
+    """
     snooze_counts: dict[str, int] = {"light": 0, "medium": 0, "deep": 0}
 
     # Build decision pairs for matching snoozes
@@ -275,12 +285,15 @@ def _classify_bandwidth(
             snooze_rates[band] = 0.0
 
     # Classification logic:
-    # - Light: predominantly light effort AND low snooze rate in light band
-    # - Deep: predominantly deep effort AND high snooze rate in deep band
+    # - Light: predominantly light effort AND low snooze rate in the light band
+    # - Deep: predominantly deep effort AND low snooze rate in the deep band
     # - Balanced: everything else
+    #
+    # A high deep-band snooze rate means the user keeps deferring heavy
+    # threads, which is evidence against a deep bandwidth classification.
 
     if (
-        light_ratio >= 0.6
+        light_ratio >= _BAND_RATIO_THRESHOLD
         and snooze_rates.get("light", 0.0) <= _LIGHT_SNOOZE_MAX_RATE
     ):
         confidence = min(1.0, light_ratio * (1.0 - snooze_rates.get("light", 0.0)))
@@ -294,10 +307,10 @@ def _classify_bandwidth(
         )
 
     if (
-        deep_ratio >= 0.5
-        and snooze_rates.get("deep", 0.0) >= _DEEP_SNOOZE_MIN_RATE
+        deep_ratio >= _BAND_RATIO_THRESHOLD
+        and snooze_rates.get("deep", 0.0) <= _DEEP_SNOOZE_MAX_RATE
     ):
-        confidence = min(1.0, deep_ratio * snooze_rates.get("deep", 1.0))
+        confidence = min(1.0, deep_ratio * (1.0 - snooze_rates.get("deep", 0.0)))
         return BandwidthInference(
             predicted="deep",
             confidence=round(confidence, 3),
