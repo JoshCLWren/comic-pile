@@ -304,6 +304,7 @@ export default function CrossoverDetailPage() {
                 return (
                   <div
                     key={member.membership.id}
+                    data-testid="crossover-member-row"
                     className={'flex items-center gap-3 rounded-lg p-3 transition-colors ' + (
                       blockedInfo
                         ? 'bg-red-950/20 border border-red-800/50'
