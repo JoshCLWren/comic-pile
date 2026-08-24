@@ -59,10 +59,10 @@ def _real_heads() -> list[str]:
     return [rev for rev, _ in revisions if rev not in all_down]
 
 
-def test_cache_migration_is_the_single_head() -> None:
-    """The cache migration must be the only Alembic head; duplicate down_revisions branch history."""
-    assert _real_heads() == ["c85500000001"], (
-        f"Expected a single head c85500000001, got {_real_heads()}"
+def test_migration_graph_has_single_head() -> None:
+    """The migration graph must have exactly one head; duplicate down_revisions branch history."""
+    assert _real_heads() == ["c85500000002"], (
+        f"Expected a single head c85500000002, got {_real_heads()}"
     )
 
 

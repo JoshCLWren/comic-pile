@@ -1,6 +1,6 @@
 """Add the Taste Bank taste signals table.
 
-Revision ID: c85500000001
+Revision ID: c85500000004
 Revises: d4e5f6a7b8c9
 Create Date: 2026-08-22 00:00:00.000000
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "c85500000001"
+revision: str = "c85500000004"
 down_revision: str | Sequence[str] | None = "d4e5f6a7b8c9"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
