@@ -429,11 +429,15 @@ async def test_roll_die_boundary_caps_result(
     user = await get_or_create_user_async(async_db)
     now = datetime.now(UTC)
 
-    session_result = await async_db.execute(
-        select(SessionModel).where(SessionModel.user_id == user.id).where(SessionModel.ended_at.is_(None))
+    # auth_client does not create a session; the roll endpoint resolves one lazily,
+    # so create the authoritative open session up front.
+    session = SessionModel(
+        user_id=user.id,
+        start_die=8,
+        started_at=now,
+        manual_die=4,
     )
-    session = session_result.scalar_one()
-    session.manual_die = 4
+    async_db.add(session)
     await async_db.commit()
 
     threads = [
@@ -476,11 +480,15 @@ async def test_roll_d20_includes_all_available_threads(
     user = await get_or_create_user_async(async_db)
     now = datetime.now(UTC)
 
-    session_result = await async_db.execute(
-        select(SessionModel).where(SessionModel.user_id == user.id).where(SessionModel.ended_at.is_(None))
+    # auth_client does not create a session; the roll endpoint resolves one lazily,
+    # so create the authoritative open session up front.
+    session = SessionModel(
+        user_id=user.id,
+        start_die=8,
+        started_at=now,
+        manual_die=20,
     )
-    session = session_result.scalar_one()
-    session.manual_die = 20
+    async_db.add(session)
     await async_db.commit()
 
     threads = [
@@ -523,11 +531,15 @@ async def test_roll_snoozed_thread_excluded_from_pool(
     user = await get_or_create_user_async(async_db)
     now = datetime.now(UTC)
 
-    session_result = await async_db.execute(
-        select(SessionModel).where(SessionModel.user_id == user.id).where(SessionModel.ended_at.is_(None))
+    # auth_client does not create a session; the roll endpoint resolves one lazily,
+    # so create the authoritative open session up front.
+    session = SessionModel(
+        user_id=user.id,
+        start_die=8,
+        started_at=now,
+        manual_die=4,
     )
-    session = session_result.scalar_one()
-    session.manual_die = 4
+    async_db.add(session)
     await async_db.commit()
 
     snoozed_thread = Thread(
