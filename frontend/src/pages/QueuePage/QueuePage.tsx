@@ -203,7 +203,7 @@ export default function QueuePage() {
           >
             +
           </button>
-        )>
+        )}
 
         <QueueList
           activeThreads={activeThreads}
