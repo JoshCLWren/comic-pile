@@ -1,5 +1,5 @@
 """API route handlers."""
- 
+
 from app.api import analytics as analytics
 from app.api import continuity_plan as continuity_plan
 from app.api import continuity_readiness as continuity_readiness
@@ -13,8 +13,8 @@ from app.api import issue_dependency_batch as issue_dependency_batch
 from app.api import reading_order_projection as reading_order_projection
 from app.api import releases as releases
 from app.api import roll_recovery_switch as roll_recovery_switch
-from app.api import taste_bank as taste_bank
- 
+from app.api import taste_signal as taste_signal
+
 analytics.router.include_router(health.router)
 dependency.router.include_router(issue_dependency_batch.router)
 dependency.router.include_router(dependency_group.router)
@@ -26,8 +26,7 @@ dependency.router.include_router(continuity_readiness.router)
 dependency.router.include_router(reading_order_projection.router)
 dependency.router.include_router(roll_recovery_switch.router, prefix="/roll")
 dependency.router.include_router(releases.router, prefix="/releases")
-taste_bank.router.include_router(health.router)
- 
+
 __all__ = [
     "analytics",
     "continuity_plan",
@@ -42,5 +41,5 @@ __all__ = [
     "reading_order_projection",
     "releases",
     "roll_recovery_switch",
-    "taste_bank",
+    "taste_signal",
 ]
