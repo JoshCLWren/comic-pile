@@ -7,7 +7,7 @@ or any Taste Bank metadata. Until real intent inference ships, the inferred
 placeholder stays ``balanced``.
 """
 
-from typing import Final
+from typing import Final, TypeGuard
 
 INTENT_VALUES: Final[tuple[str, ...]] = ("balanced", "momentum", "familiar", "explore", "random")
 DEFAULT_INTENT: Final[str] = "balanced"
@@ -17,7 +17,7 @@ PLACEHOLDER_INTENT_CONFIDENCE: Final[float] = 0.5
 INTENT_STATE_VERSION: Final[str] = "v1"
 
 
-def is_valid_intent(value: str | None) -> bool:
+def is_valid_intent(value: str | None) -> TypeGuard[str]:
     """Check whether a value is a first-class intent value.
 
     Args:
