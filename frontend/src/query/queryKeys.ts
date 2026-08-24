@@ -114,6 +114,6 @@ export const queryKeys = {
   },
   continuityPlans: {
     all: ['continuityPlans'] as const,
-    readiness: (planId: number) => ['continuityPlans', 'readiness', planId] as const,
+    readiness: (planId: number, refreshKey: number = 0) => ['continuityPlans', 'readiness', planId, refreshKey] as const,
   },
 } as const

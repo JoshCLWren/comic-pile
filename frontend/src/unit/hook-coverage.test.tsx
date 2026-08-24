@@ -204,7 +204,7 @@ describe('data hooks', () => {
     expect(current.result.current.error?.message).toBe('Failed to fetch current session')
 
     api.sessionApi.list.mockRejectedValueOnce(new Error('list failed'))
-    const sessions = renderHook(() => useSessions(null as never))
+    const sessions = renderHook(() => useSessions())
     await waitFor(() => expect(sessions.result.current.isError).toBe(true))
     api.sessionApi.list.mockRejectedValueOnce('string list failed')
     const sessionsStr = renderHook(() => useSessions())

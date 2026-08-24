@@ -6,6 +6,7 @@ import { ToastProvider } from '../contexts/ToastProvider'
 import { useUpdateThread } from '../hooks/useThread'
 import { threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
+import { renderWithClient } from './queryTestWrapper'
 
 const navigateSpy = vi.fn()
 const routeParams = { id: '1' }
@@ -36,7 +37,10 @@ beforeEach(() => {
 })
 
 function renderPage() {
-  return render(<ToastProvider><ThreadDetailView /></ToastProvider>)
+  return renderWithClient(
+    <ToastProvider><ThreadDetailView /></ToastProvider>,
+    { innerWrapper: ({ children }) => children }
+  )
 }
 
 it('renders a thread without legacy rating content', async () => {

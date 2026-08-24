@@ -5,6 +5,7 @@ import { rollBootstrapApi } from '../services/rollBootstrapApi'
 import { useToast } from '../contexts/useToast'
 import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from './rollMutationReconciliation'
 import { queryKeys } from '../query/queryKeys'
+import { queryClient } from '../query/queryClient'
 
 const STORAGE_KEY_PREFIX = 'comic_pile_last_session_id'
 
@@ -55,7 +56,7 @@ export function useRollBootstrap() {
     retry: false,
   })
 
-  const refetchBootstrap = useCallback(async () => {
+  const refetchBootstrap = useCallback(async (): Promise<RollBootstrapResponse | undefined> => {
     const reconciled = justReconciledRef.current
     if (reconciled) {
       justReconciledRef.current = null
@@ -66,7 +67,8 @@ export function useRollBootstrap() {
       return reconciled
     }
 
-    return query.refetch()
+    const result = await query.refetch()
+    return result.data
   }, [query])
 
   useEffect(() => {
@@ -82,7 +84,7 @@ export function useRollBootstrap() {
       }, 0)
 
       // Update the query cache directly
-      query.client.setQueryData(queryKeys.roll.bootstrap(), reconciled)
+      queryClient.setQueryData(queryKeys.roll.bootstrap(), reconciled)
     }
 
     window.addEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, handleReconciledBootstrap)
@@ -90,7 +92,7 @@ export function useRollBootstrap() {
       window.removeEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, handleReconciledBootstrap)
       if (reconciliationExpiryRef.current) clearTimeout(reconciliationExpiryRef.current)
     }
-  }, [query.client])
+  }, [])
 
   return {
     data: query.data ?? null,

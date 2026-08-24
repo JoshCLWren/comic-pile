@@ -186,6 +186,6 @@ export function useRestoreSessionStart() {
     mutate: mutation.mutateAsync,
     isPending: mutation.isPending,
     isError: mutation.isError,
-    error: mutation.error ?? null,
+    error: mutation.error instanceof Error ? mutation.error : mutation.error ? new Error(String(mutation.error)) : null,
   }
 }

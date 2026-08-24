@@ -28,25 +28,32 @@ export function useCrossoverGroups(threadIds: number[]): CrossoverGroupsState {
   )
 
   const enabled = requestKey.length > 0
+  const uniqueSortedIds = useMemo(
+    () => [...new Set(threadIds)].sort((a, b) => a - b),
+    [threadIds],
+  )
 
   const query = useQuery({
-    queryKey: queryKeys.dependencyGroups.forThreads(
-      requestKey ? requestKey.split(',').map(Number) : [],
-    ),
+    queryKey: queryKeys.dependencyGroups.forThreads(uniqueSortedIds),
     queryFn: async () => {
       if (!enabled) {
         return EMPTY_GROUPS
       }
-      const requestedThreadIds = requestKey.split(',').map(Number)
-      return dependencyGroupsApi.listForThreads(requestedThreadIds)
+      return dependencyGroupsApi.listForThreads(uniqueSortedIds)
     },
     enabled,
     staleTime: 30_000,
     retry: false,
   })
 
+  const result = query.data ?? EMPTY_GROUPS
+  const groupsByThreadId: Record<number, DependencyGroupSummary[]> = {}
+  for (const id of uniqueSortedIds) {
+    groupsByThreadId[id] = result[id] ?? []
+  }
+
   return {
-    groupsByThreadId: query.data ?? EMPTY_GROUPS,
+    groupsByThreadId,
     isPending: query.isLoading,
     error: query.error ? normalizeError(query.error) : null,
   }

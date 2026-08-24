@@ -44,7 +44,7 @@ function deferred<T>() {
 
 function renderBootstrap() {
   return renderHook(() => useRollBootstrap(), {
-    wrapper: ({ children }: { children: React.ReactNode }) => (
+    innerWrapper: ({ children }: { children: React.ReactNode }) => (
       <ToastProvider>{children}</ToastProvider>
     ),
   })

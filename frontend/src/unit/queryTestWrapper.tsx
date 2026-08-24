@@ -6,10 +6,10 @@ import {
   type RenderOptions,
   type RenderResult,
 } from '@testing-library/react'
-import type { PropsWithChildren, ReactElement } from 'react'
+import type { PropsWithChildren, ReactElement, ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
-function createQueryWrapper() {
+function createQueryWrapper(innerWrapper?: (children: ReactNode) => ReactNode) {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -17,20 +17,26 @@ function createQueryWrapper() {
     },
   })
   return function Wrapper({ children }: PropsWithChildren) {
-    return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    return (
+      <QueryClientProvider client={client}>
+        {innerWrapper ? innerWrapper(children) : children}
+      </QueryClientProvider>
+    )
   }
 }
 
 export function renderHookWithClient<Result, Props>(
   render: (props: Props) => Result,
-  options?: RenderHookOptions<Props>,
+  options?: RenderHookOptions<Props> & { innerWrapper?: (children: ReactNode) => ReactNode },
 ): RenderHookResult<Result, Props> {
-  return rtlRenderHook(render, { wrapper: createQueryWrapper(), ...options })
+  const { innerWrapper, ...restOptions } = options ?? {}
+  return rtlRenderHook(render, { wrapper: createQueryWrapper(innerWrapper), ...restOptions })
 }
 
 export function renderWithClient(
   ui: ReactElement,
-  options?: Omit<RenderOptions, 'wrapper'>,
+  options?: Omit<RenderOptions, 'wrapper'> & { innerWrapper?: (children: ReactNode) => ReactNode },
 ): RenderResult {
-  return rtlRender(ui, { wrapper: createQueryWrapper(), ...options })
+  const { innerWrapper, ...restOptions } = options ?? {}
+  return rtlRender(ui, { wrapper: createQueryWrapper(innerWrapper), ...restOptions })
 }

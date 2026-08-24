@@ -21,11 +21,12 @@ function normalizeError(error: unknown): Error {
 
 export function usePlanReadiness(
   planId: number | null | undefined,
+  refreshKey: number = 0,
 ): PlanReadinessState {
   const enabled = planId != null && Number.isInteger(planId) && planId > 0
 
   const query = useQuery({
-    queryKey: queryKeys.continuityPlans.readiness(planId ?? -1),
+    queryKey: queryKeys.continuityPlans.readiness(planId ?? -1, refreshKey),
     queryFn: async () => {
       if (!enabled) {
         throw new Error('No plan ID')

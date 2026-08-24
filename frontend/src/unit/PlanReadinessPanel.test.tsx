@@ -6,6 +6,7 @@ import type {
   ContinuityPlanNodeReadiness,
   ContinuityPlanReadinessResponse,
 } from '../services/api-continuity-plans'
+import { renderWithClient } from './queryTestWrapper'
 
 const mocks = vi.hoisted(() => ({
   readiness: vi.fn(),
@@ -74,14 +75,14 @@ beforeEach(() => {
 
 describe('PlanReadinessPanel', () => {
   it('renders nothing without a saved plan', () => {
-    render(<PlanReadinessPanel planId={null} />)
+    renderWithClient(<PlanReadinessPanel planId={null} />)
     expect(screen.queryByTestId('plan-readiness-loading')).not.toBeInTheDocument()
     expect(mocks.readiness).not.toHaveBeenCalled()
   })
 
   it('shows a loading state while the first evaluation is in flight', () => {
     mocks.readiness.mockReturnValue(new Promise(() => undefined))
-    render(<PlanReadinessPanel planId={12} />)
+    renderWithClient(<PlanReadinessPanel planId={12} />)
     expect(screen.getByTestId('plan-readiness-loading')).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent('Checking plan readiness…')
   })
@@ -90,7 +91,7 @@ describe('PlanReadinessPanel', () => {
     const user = userEvent.setup()
     mocks.readiness.mockRejectedValueOnce(new Error('network down'))
     mocks.readiness.mockResolvedValueOnce(readinessResponse())
-    render(<PlanReadinessPanel planId={12} />)
+    renderWithClient(<PlanReadinessPanel planId={12} />)
 
     await waitFor(() => expect(screen.getByTestId('plan-readiness-error')).toBeInTheDocument())
     await user.click(screen.getByTestId('plan-readiness-retry'))
@@ -103,7 +104,7 @@ describe('PlanReadinessPanel', () => {
 
   it('prompts to save when the plan has no steps yet', async () => {
     mocks.readiness.mockResolvedValueOnce(readinessResponse())
-    render(<PlanReadinessPanel planId={12} />)
+    renderWithClient(<PlanReadinessPanel planId={12} />)
 
     await waitFor(() => expect(screen.getByTestId('plan-readiness-empty')).toBeInTheDocument())
     expect(screen.getByText(/add reading steps and save/i)).toBeInTheDocument()
@@ -132,7 +133,7 @@ describe('PlanReadinessPanel', () => {
         summary: { total: 3, readable: 1, blocked: 1, complete: 1, unavailable: 0 },
       }),
     )
-    render(<PlanReadinessPanel planId={12} />)
+    renderWithClient(<PlanReadinessPanel planId={12} />)
 
     const summary = await screen.findByTestId('plan-readiness-summary')
     expect(summary).toHaveTextContent('1 readable · 1 blocked · 1 complete')
@@ -176,7 +177,7 @@ describe('PlanReadinessPanel', () => {
         summary: { total: 1, readable: 0, blocked: 1, complete: 0, unavailable: 0 },
       }),
     )
-    render(<PlanReadinessPanel planId={12} />)
+    renderWithClient(<PlanReadinessPanel planId={12} />)
 
     await screen.findByTestId('plan-node-readiness-crossover-8')
     expect(screen.getByText('Waiting on Fourth World.')).toBeInTheDocument()
@@ -216,7 +217,7 @@ describe('PlanReadinessPanel', () => {
         summary: { total: 2, readable: 0, blocked: 0, complete: 0, unavailable: 2 },
       }),
     )
-    render(<PlanReadinessPanel planId={12} />)
+    renderWithClient(<PlanReadinessPanel planId={12} />)
 
     await screen.findByTestId('plan-node-readiness-issue-99')
     expect(screen.getByTestId('plan-node-readiness-issue-99')).toHaveAttribute(
@@ -246,7 +247,7 @@ describe('PlanReadinessPanel', () => {
 
   it('refetches when the refresh key changes after a save', async () => {
     mocks.readiness.mockResolvedValue(readinessResponse())
-    const { rerender } = render(<PlanReadinessPanel planId={12} />)
+    const { rerender } = renderWithClient(<PlanReadinessPanel planId={12} />)
 
     await waitFor(() => expect(mocks.readiness).toHaveBeenCalledTimes(1))
 

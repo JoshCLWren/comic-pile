@@ -27,7 +27,7 @@ const mockedSessionApi = vi.mocked(sessionApi)
 
 function renderWithProvider<T>(hook: () => T) {
   return renderHook(hook, {
-    wrapper: ({ children }: { children: ReactNode }) => (
+    innerWrapper: (children: ReactNode) => (
       <CacheProvider>
         <ToastProvider>{children}</ToastProvider>
       </CacheProvider>
@@ -51,10 +51,10 @@ it('loads current session', async () => {
 })
 
 it('loads first page of sessions', async () => {
-  const { result } = renderWithProvider(() => useSessions({ status: 'done' }))
+  const { result } = renderWithProvider(() => useSessions())
 
   await waitFor(() => expect(result.current.data).toEqual([{ id: 2 }]))
-  expect(mockedSessionApi.list).toHaveBeenCalledWith({ status: 'done' }, null)
+  expect(mockedSessionApi.list).toHaveBeenCalledWith({}, null)
   expect(result.current.hasMore).toBe(false)
 })
 
