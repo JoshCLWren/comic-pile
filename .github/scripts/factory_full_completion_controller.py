@@ -6,7 +6,11 @@ import dataclasses
 import importlib.util
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
+
+TELEMETRY_MARKER = "<!-- factory-completion-funnel:v1 -->"
+TELEMETRY_ISSUE = "1093"
 
 
 def load_controller():
@@ -18,6 +22,78 @@ def load_controller():
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def persist_funnel_telemetry(controller, result: dict[str, object]) -> None:
+    """Persist one durable snapshot so scheduler and selection failures are visible."""
+    backlog = int(result.get("backlog") or 0)
+    selected = list(result.get("selected_workers") or [])
+    assignments = list(result.get("assignments") or [])
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    body = "\n".join(
+        [
+            TELEMETRY_MARKER,
+            "## Factory completion funnel",
+            f"Backlog: {backlog}",
+            f"Workers selected: {len(selected)}",
+            f"PR claims succeeded: {len(assignments)}",
+            "Selected worker IDs: " + (", ".join(map(str, selected)) if selected else "none"),
+            "Assignments: "
+            + (
+                ", ".join(
+                    f"Factory {item.get('worker')} → PR #{item.get('number')}"
+                    for item in assignments
+                    if isinstance(item, dict)
+                )
+                if assignments
+                else "none"
+            ),
+            f"Updated: {now}",
+        ]
+    )
+    try:
+        comments = controller.flatten_pages(
+            controller.gh_json(
+                [
+                    "api",
+                    "--paginate",
+                    "--slurp",
+                    f"repos/{controller.REPO}/issues/{TELEMETRY_ISSUE}/comments?per_page=100",
+                ]
+            )
+        )
+        existing = next(
+            (
+                str(comment.get("id"))
+                for comment in comments
+                if TELEMETRY_MARKER in str(comment.get("body") or "")
+            ),
+            "",
+        )
+        if existing:
+            controller.run_gh(
+                [
+                    "api",
+                    "--method",
+                    "PATCH",
+                    f"repos/{controller.REPO}/issues/comments/{existing}",
+                    "-f",
+                    f"body={body}",
+                ]
+            )
+        else:
+            controller.run_gh(
+                [
+                    "api",
+                    "--method",
+                    "POST",
+                    f"repos/{controller.REPO}/issues/{TELEMETRY_ISSUE}/comments",
+                    "-f",
+                    f"body={body}",
+                ]
+            )
+    except RuntimeError as exc:
+        print(f"[factory-completion] unable to persist funnel telemetry: {exc}", file=sys.stderr)
 
 
 def main() -> int:
@@ -48,6 +124,7 @@ def main() -> int:
     controller.load_controller = load_pr_only_work_controller
 
     result = controller.assign_completion_batch()
+    persist_funnel_telemetry(controller, result)
     print(json.dumps(result, sort_keys=True))
     return 0
 
