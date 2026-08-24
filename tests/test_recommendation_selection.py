@@ -42,16 +42,19 @@ class DeterministicRandom:
         random_values: list[float] | None = None,
         randint_values: list[int] | None = None,
     ) -> None:
+        """Script both RNG streams; empty scripts raise on unexpected calls."""
         self.random_values = list(random_values or [])
         self.randint_values = list(randint_values or [])
         self.randint_calls: list[tuple[int, int]] = []
 
     def random(self) -> float:
+        """Emit the next scripted uniform float."""
         if not self.random_values:
             raise AssertionError("unexpected random() call")
         return self.random_values.pop(0)
 
     def randint(self, low: int, high: int) -> int:
+        """Record bounds and emit the next scripted integer."""
         self.randint_calls.append((low, high))
         if not self.randint_values:
             raise AssertionError("unexpected randint() call")
@@ -359,7 +362,9 @@ def test_resolve_selection_mode_rejects_unknown_values(
 
 def test_math_import_guard_for_finite_validation() -> None:
     """Normalized weights are finite floats usable by the weighted path."""
-    assert math.isfinite(normalize_weights([1.0, 1.0, 1.0], 3)[0])
+    normalized = normalize_weights([1.0, 1.0, 1.0], 3)
+    assert normalized is not None
+    assert all(math.isfinite(weight) for weight in normalized)
 
 
 @pytest.mark.asyncio
