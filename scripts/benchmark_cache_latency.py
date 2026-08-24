@@ -261,7 +261,7 @@ async def run_benchmark(args: argparse.Namespace) -> dict[str, str | int | float
             path="upstash_rest_get",
             iteration=i,
             elapsed_ms=round(elapsed_ms, 3),
-            status="ok" if error is None else ("quota_blocked" if http_status == UPSTASH_RATE_LIMIT_CODE else "error"),
+            status="ok" if error is None else ("quota_blocked" if http_status == 429 else "error"),
             http_status=http_status,
             upstash_error=error if error else None,
             error_detail=None,
@@ -269,7 +269,7 @@ async def run_benchmark(args: argparse.Namespace) -> dict[str, str | int | float
         if i >= 0:
             upstash_runs.append(run)
         all_runs.append(dataclasses.asdict(run))
-        if http_status == UPSTASH_RATE_LIMIT_CODE:
+        if http_status == 429:
             upstash_quota_blocked = True
 
     upstash_summary = _summarize(upstash_runs)
@@ -393,7 +393,7 @@ async def run_benchmark(args: argparse.Namespace) -> dict[str, str | int | float
     provider_decision = "; ".join(decision_parts) if decision_parts else "Awaiting measurements"
 
     report: dict[str, str | int | bool | list | dict | None] = {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": "1.0",
         "measured_from": args.location or "unknown",
         "iterations": iterations,
         "warmups_per_path": warmups,
@@ -458,8 +458,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--kv-table",
-        default=DEFAULT_KV_TABLE,
-        help=f"Name of the KV-style table for the Neon benchmark (default: {DEFAULT_KV_TABLE})",
+        default="neon_default_table",
+        help=f"Name of the KV-style table for the Neon benchmark (default: {"neon_default_table"})",
     )
     parser.add_argument(
         "--queue-base-url",
