@@ -576,6 +576,94 @@ class ReconciliationDecisionInput:
     issue_id: int | None = None
 
 
+def build_adopted_plan_nodes(
+    template: DerivedCrossoverTemplate,
+    ordered_issue_ids: Sequence[int],
+    decisions: Sequence[ReconciliationDecisionInput],
+    *,
+    lane_id: str,
+    node_id_prefix: str,
+) -> list[dict[str, object]]:
+    """Build provenance-bearing plan nodes for one resolved adoption order.
+
+    Surviving template members keep their derived role, confidence, and
+    placement evidence. Reader-mapped unresolved entries carry the deciding
+    source entry's provenance so the adopted plan preserves external evidence
+    independently of any later CBL refresh.
+
+    Args:
+        template: The derived template that was resolved for adoption.
+        ordered_issue_ids: Final adoption order from ``resolve_adoption_order``.
+        decisions: Reader reconciliation decisions applied to the template.
+        lane_id: Identifier of the single destination lane.
+        node_id_prefix: Prefix used to generate deterministic node identifiers.
+
+    Returns:
+        Ordered node payloads ready for continuity-plan persistence.
+    """
+    items_by_issue = {item.issue_id: item for item in template.items}
+    mapped_by_issue = {
+        decision.issue_id: decision
+        for decision in decisions
+        if decision.action == "map" and decision.issue_id is not None
+    }
+
+    nodes: list[dict[str, object]] = []
+    for position, issue_id in enumerate(ordered_issue_ids):
+        item = items_by_issue.get(issue_id)
+        if item is not None:
+            nodes.append(
+                {
+                    "id": f"{node_id_prefix}{issue_id}",
+                    "node_type": "issue",
+                    "ref_id": issue_id,
+                    "lane_id": lane_id,
+                    "position": position,
+                    "source_role": item.role,
+                    "source_confidence": item.confidence,
+                    "source_explanation": item.explanation,
+                    "source_paths": list(item.source_paths),
+                    "source_cbl_placements": [
+                        {"source_path": placement.source_path, "position": placement.position}
+                        for placement in item.cbl_placements
+                    ],
+                    "source_story_arc_ids": list(item.story_arc_ids),
+                    "source_target_story_arc_id": item.target_story_arc_id,
+                }
+            )
+            continue
+
+        decision = mapped_by_issue.get(issue_id)
+        if decision is not None:
+            explanation = (
+                f"Reader mapped this unresolved entry from {decision.source_path} "
+                f"position {decision.position} during reconciliation."
+            )
+            placements = [{"source_path": decision.source_path, "position": decision.position}]
+            paths: list[str] = [decision.source_path]
+        else:
+            explanation = "Mapped by the reader during reconciliation."
+            placements = []
+            paths = []
+        nodes.append(
+            {
+                "id": f"{node_id_prefix}{issue_id}",
+                "node_type": "issue",
+                "ref_id": issue_id,
+                "lane_id": lane_id,
+                "position": position,
+                "source_role": "unknown",
+                "source_confidence": "low",
+                "source_explanation": explanation,
+                "source_paths": paths,
+                "source_cbl_placements": placements,
+                "source_story_arc_ids": [],
+                "source_target_story_arc_id": None,
+            }
+        )
+    return nodes
+
+
 def resolve_adoption_order(
     template: DerivedCrossoverTemplate,
     decisions: Sequence[ReconciliationDecisionInput],

@@ -344,9 +344,8 @@ export default function ExternalReadingListPage() {
                     ?.lists.map((list) => (
                       <option key={list.id} value={list.id}>
                         {list.name}
-                      >
-                    </option>
-                  ))}
+                      </option>
+                    ))}
                 </select>
               </>
             )}
@@ -364,7 +363,7 @@ export default function ExternalReadingListPage() {
               {uploadedFile && (
                 <p className="mt-2 text-sm text-muted-foreground">
                   Selected file: {uploadedFile.name}
-                )
+                </p>
               )}
             </div>
           </>
@@ -461,7 +460,7 @@ export default function ExternalReadingListPage() {
                     </li>
                   ))}
                 </ul>
-              )
+              </div>
             )}
 
             {preview.conflicts && preview.conflicts.length > 0 && (
@@ -470,7 +469,7 @@ export default function ExternalReadingListPage() {
                 <p className="text-sm text-muted-foreground">
                   These pairs have conflicting order in different sources.
                 </p>
-              )
+              </div>
             )}
 
             {preview.intersections && preview.intersections.length > 0 && (
@@ -479,7 +478,7 @@ export default function ExternalReadingListPage() {
                 <p className="text-sm text-muted-foreground">
                   Consistent cross-thread ordering observations.
                 </p>
-              )
+              </div>
             )}
           </>
         )}

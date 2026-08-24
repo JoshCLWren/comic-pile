@@ -1,4 +1,6 @@
 import api from './api'
+import type { components as OpenAPIComponents } from '../generated/openapi'
+import type { ContinuityPlan } from './api-continuity-plans'
 
 /** CBL Source (repository) */
 export interface CBLSourceResponse {
@@ -49,32 +51,21 @@ export interface CBLBookResponse {
   comicvine_issue_id: string | null
 }
 
-/** Import the preview types from the generated OpenAPI schemas */
-// We'll import the component schemas from the generated openapi.ts
-import type { components } from './generated/openapi'
-// Then we can reference the preview schemas as needed.
-// However, for simplicity, we'll import the DerivedCrossoverTemplatePreview directly
-// if we can, but we need to know the exact export.
-// Let's check the generated file: it exports an object `components` with a `schemas` property.
-// We'll import the whole components and then use the schemas.
-// But to avoid complex types, we'll define the preview types we need if they are not available.
-// Since we saw they are in the generated types, we'll use them.
-
-// Actually, let's import the DerivedCrossoverTemplatePreview from the generated schemas.
-// We can do: import type { DerivedCrossoverTemplatePreview } from './generated/openapi'?
-// But the generated file does not export a named type; it exports an interface `paths` and `components`.
-// We'll do:
-import type { components as OpenAPIComponents } from './generated/openapi'
+/** Derived crossover-template preview returned by the CBL evidence APIs. */
 export type DerivedCrossoverTemplatePreview =
   OpenAPIComponents['schemas']['DerivedCrossoverTemplatePreview']
 
-/** Continuity Plan (from existing api-continuity-plans) */
-import type { ContinuityPlan } from './api-continuity-plans'
+/** One explicit reader decision for an unresolved external-list entry. */
+export interface CBLReconciliationDecision {
+  source_path: string
+  position: number
+  action: 'map' | 'skip'
+  issue_id?: number | null
+}
 
 export const cblApi = {
   /** List all CBL sources with their active lists */
-  listSources: () =>
-    api.get<CBLSourceWithListsResponse[]>('/api/v1/cbl/sources'),
+  listSources: () => api.get<CBLSourceWithListsResponse[]>('/api/v1/cbl/sources'),
 
   /** Upload and parse a CBL file */
   uploadCblFile: (file: File) => {
@@ -99,14 +90,16 @@ export const cblApi = {
     )
   },
 
-  /** Adopt an uploaded CBL file as a continuity plan */
+  /** Adopt an uploaded CBL file as a continuity plan after reconciliation */
   adoptUploadedCblTemplate: (
     file: File,
     planName: string,
     laneId: string,
     laneName: string,
     orderingMode: 'strict_sequential' | 'informational',
-    targetStoryArcId: string | null = null
+    targetStoryArcId: string | null = null,
+    reconciliations: CBLReconciliationDecision[] = [],
+    skippedIssueIds: number[] = []
   ) => {
     const formData = new FormData()
     formData.append('file', file)
@@ -117,10 +110,13 @@ export const cblApi = {
     if (targetStoryArcId !== null) {
       formData.append('target_story_arc_id', targetStoryArcId)
     }
+    formData.append('reconciliations', JSON.stringify(reconciliations))
+    formData.append('skipped_issue_ids', JSON.stringify(skippedIssueIds))
     return api.post<ContinuityPlan>('/api/v1/cbl/adopt/uploaded', formData)
   },
 
-  // The following methods reuse the existing continuity_template API for persisted lists
+  /** The following methods reuse the existing crossover-template API for persisted lists */
+
   /** Preview a crossover template from persisted CBL source lists */
   previewSourceListsTemplate: (
     sourceListIds: number[],
@@ -135,14 +131,16 @@ export const cblApi = {
     )
   },
 
-  /** Adopt persisted CBL source lists as a continuity plan */
+  /** Adopt persisted CBL source lists as a continuity plan after reconciliation */
   adoptSourceListsTemplate: (
     sourceListIds: number[],
     planName: string,
     laneId: string,
     laneName: string,
     orderingMode: 'strict_sequential' | 'informational',
-    targetStoryArcId: string | null = null
+    targetStoryArcId: string | null = null,
+    reconciliations: CBLReconciliationDecision[] = [],
+    skippedIssueIds: number[] = []
   ) => {
     return api.post<ContinuityPlan>('/api/v1/crossover-templates/adopt', {
       source_list_ids: sourceListIds,
@@ -151,6 +149,8 @@ export const cblApi = {
       lane_name: laneName,
       ordering_mode: orderingMode,
       target_story_arc_id: targetStoryArcId,
+      reconciliations,
+      skipped_issue_ids: skippedIssueIds,
     })
   },
 }

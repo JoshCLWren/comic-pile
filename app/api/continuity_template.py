@@ -28,7 +28,11 @@ from app.schemas.continuity_plan import (
 )
 from app.services.crossover_templates import (
     DerivedCrossoverTemplate,
+    ReconciliationDecisionInput,
+    ReconciliationError,
+    build_adopted_plan_nodes,
     derive_crossover_template_from_lists,
+    resolve_adoption_order,
 )
 
 router = APIRouter(tags=["crossover-templates"])
@@ -149,8 +153,14 @@ async def adopt_crossover_template(
 ) -> ContinuityPlanResponse:
     """Create an editable continuity plan from an external template.
 
-    The plan defaults to informational ordering mode, storing the adopted
-    positions without compiling any hard continuity rules.
+    Every unresolved source entry must receive an explicit map or skip
+    decision so nothing is silently dropped. The plan defaults to
+    informational ordering mode, storing the adopted positions without
+    compiling any hard continuity rules.
+
+    Raises:
+        HTTPException: 422 when reconciliation is incomplete, references an
+            unknown entry, adopts no issues, or references unowned issues.
     """
     template = await derive_crossover_template_from_lists(
         db,
@@ -158,42 +168,56 @@ async def adopt_crossover_template(
         target_story_arc_id=request.target_story_arc_id,
     )
 
-    lane = {"id": request.lane_id, "name": request.lane_name, "order": 0}
-    nodes = []
-    for position, item in enumerate(template.items):
+    decisions = [
+        ReconciliationDecisionInput(
+            source_path=decision.source_path,
+            position=decision.position,
+            action=decision.action,
+            issue_id=decision.issue_id,
+        )
+        for decision in request.reconciliations
+    ]
+    try:
+        ordered_issue_ids = resolve_adoption_order(
+            template,
+            decisions,
+            list(request.skipped_issue_ids),
+        )
+    except ReconciliationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.detail
+        ) from exc
+
+    if not ordered_issue_ids:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "empty_adopted_plan"},
+        )
+
+    for position, issue_id in enumerate(ordered_issue_ids):
         result = await db.execute(
             select(Issue.id)
             .join(Thread, Thread.id == Issue.thread_id)
-            .where(Issue.id == item.issue_id, Thread.user_id == current_user.id)
+            .where(Issue.id == issue_id, Thread.user_id == current_user.id)
         )
         if result.scalar_one_or_none() is None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail={
                     "code": "template_item_not_owned",
-                    "issue_id": item.issue_id,
+                    "issue_id": issue_id,
                     "position": position,
                 },
             )
-        nodes.append(
-            {
-                "id": f"{request.issue_node_id_prefix}{item.issue_id}",
-                "node_type": "issue",
-                "ref_id": item.issue_id,
-                "lane_id": request.lane_id,
-                "position": position,
-                "source_role": item.role,
-                "source_confidence": item.confidence,
-                "source_explanation": item.explanation,
-                "source_paths": item.source_paths,
-                "source_cbl_placements": [
-                    {"source_path": p.source_path, "position": p.position}
-                    for p in item.cbl_placements
-                ],
-                "source_story_arc_ids": item.story_arc_ids,
-                "source_target_story_arc_id": item.target_story_arc_id,
-            }
-        )
+
+    lane = {"id": request.lane_id, "name": request.lane_name, "order": 0}
+    nodes = build_adopted_plan_nodes(
+        template,
+        ordered_issue_ids,
+        decisions,
+        lane_id=request.lane_id,
+        node_id_prefix=request.issue_node_id_prefix,
+    )
 
     from app.api.continuity_plan import (
         _replace_compiled_rules,

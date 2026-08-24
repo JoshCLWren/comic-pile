@@ -43,6 +43,7 @@ from app.services.crossover_templates import (
     ReconciliationDecisionInput,
     ReconciliationError,
     TemplateEvidence,
+    build_adopted_plan_nodes,
     derive_crossover_template,
     resolve_adoption_order,
 )
@@ -636,16 +637,13 @@ async def _adopt_template_as_plan(
         )
 
     lane = {"id": lane_id, "name": lane_name, "order": 0}
-    nodes = [
-        {
-            "id": f"{lane_id}-{issue_id}",
-            "node_type": "issue",
-            "ref_id": issue_id,
-            "lane_id": lane_id,
-            "position": position,
-        }
-        for position, issue_id in enumerate(ordered_issue_ids)
-    ]
+    nodes = build_adopted_plan_nodes(
+        template,
+        ordered_issue_ids,
+        decisions,
+        lane_id=lane_id,
+        node_id_prefix=f"{lane_id}-",
+    )
 
     from app.api.continuity_plan import (
         _refresh_blocked_state,
