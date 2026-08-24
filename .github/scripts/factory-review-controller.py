@@ -1054,6 +1054,32 @@ def handle_review(
     }
 
 
+def demote_ready(pr_number: int) -> dict[str, Any]:
+    """Demote a stuck factory:ready PR so its merge slot is released."""
+    pr = pr_json(pr_number)
+    if str(pr.get("state")) != "OPEN":
+        raise RuntimeError(f"PR #{pr_number} is not open")
+    if "factory:ready" not in labels_of(pr):
+        raise RuntimeError(f"PR #{pr_number} is not in factory:ready")
+
+    branch = str(pr.get("headRefName") or "")
+    replace_factory_labels(pr_number, "factory:unowned", "factory:changes-requested")
+    issue = linked_issue_from_branch(branch)
+    if issue is not None:
+        try:
+            issue_target = target_json(issue)
+        except RuntimeError:
+            issue_target = None
+        if (
+            issue_target
+            and issue_target.get("state") == "open"
+            and "factory:ready" in labels_of(issue_target)
+        ):
+            replace_factory_labels(issue, "factory:unowned", "factory:changes-requested")
+
+    return {"status": "demoted", "pr": pr_number}
+
+
 def authorize_ready(pr_number: int) -> dict[str, Any]:
     """Validate that a ready PR still has authorization for its current head."""
     pr = pr_json(pr_number)
@@ -1121,6 +1147,9 @@ def main() -> int:
     authorized = subparsers.add_parser("authorized")
     authorized.add_argument("--pr", type=int, required=True)
 
+    demote = subparsers.add_parser("demote-ready")
+    demote.add_argument("--pr", type=int, required=True)
+
     gates = subparsers.add_parser("gates")
     gates.add_argument("--pr", type=int, required=True)
     gates.add_argument("--expected-head", required=True)
@@ -1138,6 +1167,8 @@ def main() -> int:
         )
     elif args.command == "authorized":
         result = authorize_ready(args.pr)
+    elif args.command == "demote-ready":
+        result = demote_ready(args.pr)
     elif args.command == "reconcile-ci":
         result = {"results": reconcile_ci()}
     else:

@@ -29,10 +29,21 @@ jobs:
           sha="$(git rev-parse HEAD)"
           echo "Checking main health at $sha"
 
-          # Use check-runs API (populated by CI's check jobs) and fallback to status API.
-          total="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '.total_count // 0' 2>/dev/null || echo 0)"
-          failing="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '[.check_runs[] | select(.conclusion=="FAILURE" or .conclusion=="TIMED_OUT" or .conclusion=="CANCELLED" or .conclusion=="STARTUP_FAILURE")] | length' 2>/dev/null || echo 0)"
+          # Use check-runs API (populated by CI's check jobs). Fail-closed:
+          # if the API errors we cannot prove main healthy, so report
+          # failing=UNAVAILABLE which opens/refreshes main-breakage instead
+          # of silently treating an outage as green.
+          total="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '.total_count // 0' 2>/dev/null || echo UNAVAILABLE)"
+          failing="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '[.check_runs[] | select(.conclusion=="FAILURE" or .conclusion=="TIMED_OUT" or .conclusion=="CANCELLED" or .conclusion=="STARTUP_FAILURE")] | length' 2>/dev/null || echo UNAVAILABLE)"
           failing_names="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq -r '[.check_runs[] | select(.conclusion=="FAILURE" or .conclusion=="TIMED_OUT") | .name] | join(", ")' 2>/dev/null || true)"
+          if [[ "$total" == "UNAVAILABLE" ]]; then
+            echo "GitHub API unavailable proving main health at ${sha}; reporting failure so breakage stays visible" >&2
+            echo "failing=1" >> "$GITHUB_OUTPUT"
+            echo "total=0" >> "$GITHUB_OUTPUT"
+            echo "names=api-unavailable" >> "$GITHUB_OUTPUT"
+            echo "sha=$sha" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           # CI has no checks yet (e.g. docs-only push) -> treat as healthy.
           if [[ "${total:-0}" == "0" ]]; then

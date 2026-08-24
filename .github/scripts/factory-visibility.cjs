@@ -1,9 +1,8 @@
-const WORKER_OWNER_LABELS = Array.from({ length: 48 }, (_, index) => `factory:${index + 1}`);
-const VISIBILITY_MANAGED_OWNER_LABELS = WORKER_OWNER_LABELS.slice(0, 16);
+const WORKER_OWNER_LABELS = Array.from({ length: 71 }, (_, index) => `factory:${index + 1}`);
 
 const DEFINITIONS = {
   factory: ['5319E7', 'Work owned or produced by an autonomous ComicPile factory'],
-  ...Object.fromEntries(VISIBILITY_MANAGED_OWNER_LABELS.map((name, index) => [
+  ...Object.fromEntries(WORKER_OWNER_LABELS.map((name, index) => [
     name,
     ['0366D6', `Current next-action owner is ComicPile Factory ${index + 1}`],
   ])),
@@ -59,7 +58,7 @@ function ownerFor(worker) {
   const fixedModel = worker?.match(/^opencode-(?:free-model|nvidia)-factory-(\d+)$/);
   if (fixedModel) {
     const number = Number(fixedModel[1]);
-    if (number >= 6 && number <= 48) return `factory:${number}`;
+    if (number >= 6 && number <= 71) return `factory:${number}`;
   }
 
   if (worker === 'local' || worker === 'local-opencode' || worker?.startsWith('local-opencode-')) {
