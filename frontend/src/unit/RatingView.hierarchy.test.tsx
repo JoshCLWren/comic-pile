@@ -1,8 +1,14 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
+
+const mockNavigate = vi.fn()
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
+  return { ...actual, useNavigate: () => mockNavigate }
+})
 
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 vi.mock('../components/Tooltip', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
@@ -229,5 +235,334 @@ describe('RatingView reader-first hierarchy #1875', () => {
     })
     const details = screen.getByTestId('tier-engine-details')
     expect(within(details).getByText('Correct continuity')).toBeInTheDocument()
+  })
+})
+
+type LocalIssueLike = {
+  issue_id: number
+  issue_number: string
+  position: number
+  status: string
+  relation: 'previous' | 'current' | 'next' | 'future'
+  rating: number | null
+  crossover_memberships: { id: number; name: string }[]
+}
+
+type EdgeLike = {
+  id: number
+  kind: 'dependency' | 'continuity'
+  source_issue_id: number
+  target_issue_id: number
+  source_thread_id: number | null
+  target_thread_id: number | null
+  source_label: string | null
+  target_label: string | null
+  note: string | null
+  explanation: string | null
+}
+
+function makeIssue(overrides: Partial<LocalIssueLike>): LocalIssueLike {
+  return {
+    issue_id: 100,
+    issue_number: '4',
+    position: 4,
+    status: 'unread',
+    relation: 'current',
+    rating: null,
+    crossover_memberships: [],
+    ...overrides,
+  }
+}
+
+function makeEdge(overrides: Partial<EdgeLike>): EdgeLike {
+  return {
+    id: 1,
+    kind: 'dependency',
+    source_issue_id: 99,
+    target_issue_id: 100,
+    source_thread_id: null,
+    target_thread_id: null,
+    source_label: null,
+    target_label: null,
+    note: null,
+    explanation: null,
+    ...overrides,
+  }
+}
+
+function makeCrossover(overrides: Partial<{ id: number; name: string; applies_to_current_issue: boolean; next_member: { issue_id: number; issue_number: string } | null }>) {
+  return {
+    id: 7,
+    name: 'Test Crossover',
+    applies_to_current_issue: false,
+    next_member: null,
+    average_rating: null,
+    ratings_count: 0,
+    read_count: 0,
+    ...overrides,
+  }
+}
+
+const baseSeries = {
+  identity_source: 'comicvine',
+  canonical_series_id: '1',
+  series_name: 'Saga',
+  average_rating: 4.2,
+  ratings_count: 7,
+  previous_issue: null,
+  recent_ratings: [],
+  highest_rating: null,
+  lowest_rating: null,
+}
+
+function setContext(issues: LocalIssueLike[], edges: EdgeLike[] = [], crossovers: ReturnType<typeof makeCrossover>[] = []) {
+  mockUseReaderContext.mockReturnValue({
+    context: { issue_id: 100, series: baseSeries, crossovers, local_chain: { issues, edges } },
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
+  })
+}
+
+describe('RatingView reader-first chain and connection rendering #1875', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('renders previous ratings as stars, marks the current issue, and keeps chain order', () => {
+    setContext([
+      makeIssue({ issue_id: 98, issue_number: '2', position: 2, relation: 'previous', rating: 3 }),
+      makeIssue({ issue_id: 99, issue_number: '3', position: 3, relation: 'previous', rating: 4.5 }),
+      makeIssue({ issue_id: 100, issue_number: '4', position: 4, relation: 'current' }),
+      makeIssue({ issue_id: 101, issue_number: '5', position: 5, relation: 'next' }),
+    ])
+    renderView()
+
+    const connected = screen.getByTestId('tier-whats-connected')
+    expect(within(connected).getByText('★★★★½')).toBeInTheDocument()
+    expect(within(connected).getByText('★★★')).toBeInTheDocument()
+    expect(within(connected).getAllByLabelText(/Your rating: /)).toHaveLength(2)
+    expect(within(connected).getByText('You are here')).toBeInTheDocument()
+
+    const rowLabels = within(connected)
+      .getAllByLabelText(/Open Saga issue /)
+      .map((row) => row.getAttribute('aria-label'))
+    expect(rowLabels).toEqual(['Open Saga issue 2', 'Open Saga issue 3', 'Open Saga issue 4', 'Open Saga issue 5'])
+  })
+
+  it('renders the local chain without a current issue', () => {
+    setContext([
+      makeIssue({ issue_id: 99, issue_number: '3', position: 3, relation: 'previous' }),
+      makeIssue({ issue_id: 101, issue_number: '5', position: 5, relation: 'next' }),
+    ])
+    renderView()
+
+    const connected = screen.getByTestId('tier-whats-connected')
+    expect(within(connected).queryByText('You are here')).not.toBeInTheDocument()
+    expect(within(connected).getByLabelText('Open Saga issue 3')).toBeInTheDocument()
+    expect(within(connected).getByLabelText('Open Saga issue 5')).toBeInTheDocument()
+  })
+
+  it('opens the thread from a series row via click and keyboard activation', async () => {
+    const user = userEvent.setup()
+    setContext([makeIssue()])
+    renderView()
+
+    const row = screen.getByLabelText('Open Saga issue 4')
+    await user.click(row)
+    expect(mockNavigate).toHaveBeenCalledWith('/thread/1')
+
+    mockNavigate.mockClear()
+    fireEvent.keyDown(row, { key: 'Enter' })
+    fireEvent.keyDown(row, { key: ' ' })
+    expect(mockNavigate).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not navigate from a series row when no thread is active', () => {
+    setContext([makeIssue()])
+    renderView({ activeRatingThread: null as never })
+
+    fireEvent.click(screen.getByLabelText('Open Loading… issue 4'))
+    expect(mockNavigate).not.toHaveBeenCalledWith(expect.stringMatching(/^\/thread\//))
+  })
+
+  it('dedupes crossover memberships across the local chain and lists them in diagnostics', () => {
+    setContext([
+      makeIssue({
+        issue_id: 99,
+        issue_number: '3',
+        position: 3,
+        relation: 'previous',
+        crossover_memberships: [
+          { id: 7, name: 'Alpha Cross' },
+          { id: 8, name: 'Beta Cross' },
+        ],
+      }),
+      makeIssue({
+        crossover_memberships: [
+          { id: 7, name: 'Alpha Cross' },
+          { id: 9, name: 'Gamma Cross' },
+        ],
+      }),
+    ])
+    renderView()
+
+    const connected = screen.getByTestId('tier-whats-connected')
+    expect(within(connected).getAllByRole('button', { name: 'Open Alpha Cross crossover' })).toHaveLength(1)
+    expect(within(connected).getByRole('button', { name: 'Open Beta Cross crossover' })).toBeInTheDocument()
+    expect(within(connected).getByRole('button', { name: 'Open Gamma Cross crossover' })).toBeInTheDocument()
+
+    const details = screen.getByTestId('tier-engine-details')
+    expect(within(details).getByText('Memberships: Alpha Cross, Beta Cross, Gamma Cross')).toBeInTheDocument()
+  })
+
+  it('shows current-issue and upcoming crossovers with next member info', async () => {
+    const user = userEvent.setup()
+    setContext(
+      [makeIssue({ crossover_memberships: [{ id: 9, name: 'Current Cross' }] })],
+      [],
+      [
+        makeCrossover({ id: 9, name: 'Current Cross', applies_to_current_issue: true }),
+        makeCrossover({
+          id: 10,
+          name: 'Upcoming Cross',
+          applies_to_current_issue: false,
+          next_member: { issue_id: 200, issue_number: '7' },
+        }),
+      ],
+    )
+    renderView()
+
+    const connected = screen.getByTestId('tier-whats-connected')
+    expect(within(connected).getByText('Crossovers for this issue')).toBeInTheDocument()
+    expect(within(connected).getByText('Current issue crossovers')).toBeInTheDocument()
+    expect(within(connected).getByText('Upcoming crossovers')).toBeInTheDocument()
+    expect(within(connected).getByText('— starts at #7')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Open crossover Upcoming Cross' }))
+    expect(mockNavigate).toHaveBeenCalledWith('/crossovers')
+  })
+
+  it('labels blocked-by dependencies in reader language with fallback labels and notes', () => {
+    setContext(
+      [makeIssue()],
+      [
+        makeEdge({
+          id: 11,
+          kind: 'dependency',
+          source_issue_id: 98,
+          target_issue_id: 100,
+          source_label: null,
+          target_label: null,
+          note: 'Needs the earlier arc first',
+          explanation: null,
+        }),
+      ],
+    )
+    renderView()
+
+    const connected = screen.getByTestId('tier-whats-connected')
+    expect(within(connected).getByText('Blocked by:')).toBeInTheDocument()
+    expect(within(connected).getByText('#98')).toBeInTheDocument()
+    expect(within(connected).getByText('#100')).toBeInTheDocument()
+    expect(within(connected).getByText('Needs the earlier arc first')).toBeInTheDocument()
+  })
+
+  it('labels blocking dependencies when this issue unblocks later issues', () => {
+    setContext(
+      [makeIssue()],
+      [
+        makeEdge({
+          id: 12,
+          kind: 'dependency',
+          source_issue_id: 100,
+          target_issue_id: 102,
+          source_thread_id: 5,
+          source_label: 'Saga #4',
+          target_thread_id: null,
+          target_label: 'Tie-in #1',
+          explanation: 'Read this before the tie-in',
+        }),
+      ],
+    )
+    renderView()
+
+    const connected = screen.getByTestId('tier-whats-connected')
+    expect(within(connected).getByText('Blocks:')).toBeInTheDocument()
+    expect(within(connected).getByRole('button', { name: 'Open thread for Saga #4' })).toBeInTheDocument()
+    expect(within(connected).getByText('Tie-in #1')).toBeInTheDocument()
+    expect(within(connected).getByText('Read this before the tie-in')).toBeInTheDocument()
+  })
+
+  it('labels mixed connections and renders continuity links with diagnostics', () => {
+    setContext(
+      [makeIssue()],
+      [
+        makeEdge({ id: 13, kind: 'dependency', source_issue_id: 98, target_issue_id: 102 }),
+        makeEdge({
+          id: 14,
+          kind: 'continuity',
+          source_issue_id: 100,
+          target_issue_id: 103,
+          source_thread_id: 1,
+          target_thread_id: null,
+          source_label: 'Saga #4',
+          target_label: 'Tie-in #2',
+          note: 'Same event, later scene',
+          explanation: null,
+        }),
+        makeEdge({
+          id: 15,
+          kind: 'continuity',
+          source_issue_id: 104,
+          target_issue_id: 105,
+          source_thread_id: null,
+          target_thread_id: 2,
+          explanation: 'Continues directly',
+        }),
+      ],
+    )
+    renderView()
+
+    const connected = screen.getByTestId('tier-whats-connected')
+    expect(within(connected).getByText('Connections:')).toBeInTheDocument()
+    expect(within(connected).getByText('Continuity:')).toBeInTheDocument()
+    expect(within(connected).getByText('Same event, later scene')).toBeInTheDocument()
+    expect(within(connected).getByText('#104')).toBeInTheDocument()
+    expect(within(connected).getByRole('button', { name: 'Open thread for #105' })).toBeInTheDocument()
+    expect(within(connected).getByText('Continues directly')).toBeInTheDocument()
+
+    const details = screen.getByTestId('tier-engine-details')
+    expect(within(details).getByText('Dependency edges: 13')).toBeInTheDocument()
+    expect(within(details).getByText('Continuity edges: 14, 15')).toBeInTheDocument()
+  })
+
+  it('shows empty-state copy when reader context is missing', () => {
+    mockUseReaderContext.mockReturnValue({ context: undefined, isLoading: false, error: null, refetch: vi.fn() })
+    renderView()
+
+    const connected = screen.getByTestId('tier-whats-connected')
+    expect(within(connected).getByText('No crossover or connection data for this issue yet.')).toBeInTheDocument()
+    // Without reader context the view must not claim readiness.
+    expect(within(screen.getByTestId('tier-why-this-one')).queryByText('No blockers reported for this issue. Ready to read.')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('series-panel')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('crossover-analytics')).not.toBeInTheDocument()
+  })
+
+  it('shows a placeholder roll result inside engine details when nothing was rolled', () => {
+    setContext([makeIssue()])
+    renderView({ rolledResult: null as never })
+
+    const details = screen.getByTestId('tier-engine-details')
+    expect(within(details).getAllByText('Roll Result').length).toBeGreaterThan(0)
+    expect(within(details).getByText('—')).toBeInTheDocument()
+  })
+
+  it('marks the last issue of a thread in the save action', () => {
+    setContext([makeIssue()])
+    renderView({ activeRatingThread: { ...baseThread, issues_remaining: 1 } as never })
+
+    expect(screen.getByText('This is the last issue in the thread')).toBeInTheDocument()
+    expect(screen.getByTestId('save-and-continue')).toHaveTextContent('Mark read & complete')
   })
 })

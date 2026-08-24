@@ -386,7 +386,7 @@ export function RatingView({
               )}
               {continuityEdges.length > 0 && (
                 <div className="space-y-1">
-                  <div className="font-bold text-[9px] text-stone-500 mb-1">{continuityEdges.length === 1 ? 'Continuity:' : 'Continuity:'}</div>
+                  <div className="font-bold text-[9px] text-stone-500 mb-1">Continuity:</div>
                   {continuityEdges.map((edge) => (
                     <div
                       key={`continuity-${edge.id}`}
