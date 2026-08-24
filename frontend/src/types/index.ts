@@ -146,6 +146,34 @@ export interface SessionCurrent {
   ladder_path?: string;
   active_thread?: SessionThread | null;
   snoozed_threads?: SessionThread[];
+  reading_bandwidth?: ReadingBandwidth | null;
+  reading_intent?: ReadingIntent | null;
+  reading_mode_source?: ReadingModeSource | null;
+  reading_mode_suggested?: boolean;
+}
+
+export type ReadingBandwidth = 'light' | 'balanced' | 'deep'
+export type ReadingIntent = 'momentum' | 'familiar' | 'explore' | 'random'
+export type ReadingModeSource = 'quiz' | 'manual'
+
+export interface ReadingModeState {
+  bandwidth: ReadingBandwidth | null
+  intent: ReadingIntent | null
+  source: ReadingModeSource | null
+  suggested: boolean
+}
+
+export interface QuizAnswerOption {
+  id: string
+  label: string
+  bandwidth?: ReadingBandwidth | null
+  intent?: ReadingIntent | null
+}
+
+export interface QuizQuestion {
+  id: string
+  prompt: string
+  answers: QuizAnswerOption[]
 }
 
 export interface SessionSummary {
