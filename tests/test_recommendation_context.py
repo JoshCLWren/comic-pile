@@ -230,7 +230,9 @@ async def test_recommendation_context_with_factors(
         bandwidth=context_data.bandwidth,
         bandwidth_source=context_data.bandwidth_source,
         bandwidth_confidence=context_data.bandwidth_confidence,
-        candidate_factors=[f.model_dump() for f in context_data.candidate_factors],
+        candidate_factors=[f.model_dump() for f in context_data.candidate_factors]
+        if context_data.candidate_factors
+        else None,
         final_weight=context_data.final_weight,
         random_bypass=context_data.random_bypass,
         balanced_neutrality=context_data.balanced_neutrality,

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, JSON, String
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -58,8 +58,8 @@ class RecommendationContext(Base):
     final_weight: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Explicit flags for special cases
-    random_bypass: Mapped[bool] = mapped_column(Integer, nullable=False, default=0)
-    balanced_neutrality: Mapped[bool] = mapped_column(Integer, nullable=False, default=0)
+    random_bypass: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    balanced_neutrality: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     __table_args__ = (
         Index("ix_recommendation_context_event_id", "event_id"),

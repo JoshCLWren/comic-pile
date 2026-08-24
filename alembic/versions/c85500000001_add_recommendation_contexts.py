@@ -1,7 +1,7 @@
 """Add recommendation_contexts table for intent/Taste Bank factor recording.
 
-Revision ID: c85300000001
-Revises: c85200000001
+Revision ID: c85500000001
+Revises: c85400000001
 Create Date: 2026-08-22 00:00:00.000000
 """
 
@@ -11,8 +11,8 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "c85300000001"
-down_revision: str | Sequence[str] | None = "c85200000001"
+revision: str = "c85500000001"
+down_revision: str | Sequence[str] | None = "c85400000001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -39,8 +39,8 @@ def upgrade() -> None:
         sa.Column("bandwidth_confidence", sa.Float(), nullable=True),
         sa.Column("candidate_factors", sa.JSON(), nullable=True),
         sa.Column("final_weight", sa.Float(), nullable=True),
-        sa.Column("random_bypass", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("balanced_neutrality", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("random_bypass", sa.Boolean(), nullable=False, server_default="false"),
+        sa.Column("balanced_neutrality", sa.Boolean(), nullable=False, server_default="false"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_recommendation_contexts_event_id", "recommendation_contexts", ["event_id"])
