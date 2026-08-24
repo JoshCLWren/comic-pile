@@ -9,6 +9,8 @@ export interface ComicIdentity {
  * Extracts the canonical comic identity from a ComicVine related issue.
  * Primary format: "Series Name #125"
  * Secondary: Issue title (if available)
+ * Falls back to a neutral label when no human-readable identity exists;
+ * the raw provider issue ID is never shown to readers.
  */
 export function extractComicIdentity(issue: ComicVineRelatedIssue): ComicIdentity {
   const seriesName = issue.series_name?.trim() || ''
@@ -25,7 +27,7 @@ export function extractComicIdentity(issue: ComicVineRelatedIssue): ComicIdentit
   } else if (title) {
     primary = title
   } else {
-    primary = `ComicVine issue ${issue.comicvine_issue_id}`
+    primary = 'Untitled ComicVine issue'
   }
 
   return {

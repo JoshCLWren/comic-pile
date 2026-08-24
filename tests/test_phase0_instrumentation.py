@@ -145,9 +145,11 @@ async def test_roll_override_populates_issue_id_and_number(
 async def test_roll_nullable_issue_fields_for_non_issue_tracked(
     auth_client: AsyncClient,
     sample_data: dict,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Roll event has NULL issue_id/issue_number for non-issue-tracked threads."""
     _ = sample_data
+    monkeypatch.setattr("app.api.roll.random.randint", lambda _start, _end: 0)
 
     response = await auth_client.post("/api/roll/")
     assert response.status_code == 200

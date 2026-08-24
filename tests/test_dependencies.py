@@ -1,5 +1,6 @@
 """Tests for dependency blocking logic."""
 
+import re
 from datetime import UTC, datetime
 
 import pytest
@@ -7,14 +8,30 @@ import pytest
 from app.models import Dependency, Issue, Thread, User
 from sqlalchemy import text
 from comic_pile.dependencies import (
+    build_blocking_explanation,
     detect_circular_dependency,
     get_blocked_thread_ids,
     get_blocking_explanations,
+    get_blocking_explanations_batch,
     refresh_user_blocked_status,
     update_thread_blocked_status,
     validate_position_dependency_consistency,
 )
 from comic_pile.queue import get_roll_pool
+
+RAW_ID_PATTERNS = (
+    re.compile(r"thread #\d+", re.IGNORECASE),
+    re.compile(r"\bThread \d+", re.IGNORECASE),
+)
+
+
+def test_build_blocking_explanation_uses_human_identity_only() -> None:
+    """Reader-facing blocking copy must never include raw internal identifiers."""
+    explanation = build_blocking_explanation("1", "Ultimate Universe: One Year In")
+
+    assert explanation == "Blocked by issue #1 in Ultimate Universe: One Year In"
+    for pattern in RAW_ID_PATTERNS:
+        assert not pattern.search(explanation)
 
 
 @pytest.mark.asyncio
@@ -742,3 +759,64 @@ async def test_connected_threads_deduplicates_multiple_edges(
     assert len(connected) == 1, f"Expected 1 connected thread, got {len(connected)}"
     assert thread_ids.count(thread_b.id) == 1, "Thread B should appear only once"
     assert connected[0]["title"] == "Thread B"
+
+
+@pytest.mark.asyncio
+async def test_blocking_explanations_identify_comics_without_raw_thread_ids(async_db):
+    """Queue blocked-thread copy uses human identity; raw thread ids never render.
+
+    Regression coverage for issue #1876: the shared dependency copy generator
+    must not leak internal database identifiers into reader-facing explanations.
+    """
+    user = User(username="copy_user", created_at=datetime.now(UTC))
+    async_db.add(user)
+    await async_db.flush()
+    await async_db.execute(
+        text(
+            "SELECT setval(pg_get_serial_sequence('users','id'), "
+            "COALESCE((SELECT MAX(id) FROM users), 1), true)"
+        )
+    )
+
+    source = Thread(
+        title="Ultimate Universe: One Year In",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=1,
+    )
+    target = Thread(
+        title="The Ultimates",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=1,
+    )
+    async_db.add_all([source, target])
+    await async_db.flush()
+
+    source_issue = Issue(thread_id=source.id, issue_number="1", position=1, status="unread")
+    target_issue = Issue(thread_id=target.id, issue_number="1", position=1, status="unread")
+    async_db.add_all([source_issue, target_issue])
+    await async_db.flush()
+
+    source.next_unread_issue_id = source_issue.id
+    target.next_unread_issue_id = target_issue.id
+    async_db.add(Dependency(source_issue_id=source_issue.id, target_issue_id=target_issue.id))
+    await async_db.commit()
+
+    assert source.id > 0
+
+    reasons = await get_blocking_explanations(target.id, user.id, async_db)
+    batched = await get_blocking_explanations_batch([target.id], user.id, async_db)
+
+    expected = "Blocked by issue #1 in Ultimate Universe: One Year In"
+    assert reasons == [expected]
+    assert batched == {target.id: [expected]}
+    for reason in [*reasons, *batched[target.id]]:
+        for pattern in RAW_ID_PATTERNS:
+            assert not pattern.search(reason)

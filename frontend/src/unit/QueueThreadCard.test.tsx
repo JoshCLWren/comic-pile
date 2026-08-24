@@ -535,4 +535,54 @@ describe('QueueThreadCard', () => {
       expect(onDependencies).toHaveBeenCalledTimes(1)
       expect(onCardClick).not.toHaveBeenCalled()
     })
+
+    it('renders snooze button with aria-disabled when not the pending thread', () => {
+      renderCard(createMockThread(), {
+        snoozeDisabled: true,
+        snoozeLabel: 'Snooze',
+        snoozeIcon: '😴',
+      })
+
+      const snoozeButton = screen.getByRole('button', { name: 'Snooze' })
+      expect(snoozeButton).toHaveAttribute('aria-disabled', 'true')
+      expect(snoozeButton).toHaveAttribute('tabindex', '0')
+    })
+
+    it('renders hidden snooze description when snooze is disabled', () => {
+      renderCard(createMockThread({ title: 'The Maxx' }), {
+        snoozeDisabled: true,
+        snoozeLabel: 'Snooze',
+        snoozeIcon: '😴',
+      })
+
+      const description = screen.getByText(
+        'Only the comic currently waiting to be read can be snoozed.',
+      )
+      expect(description).toHaveClass('sr-only')
+      expect(description).toHaveAttribute('id', 'snooze-description-the-maxx')
+    })
+
+    it('does not render hidden snooze description when snooze is enabled', () => {
+      renderCard(createMockThread(), {
+        snoozeDisabled: false,
+        snoozeLabel: 'Snooze',
+        snoozeIcon: '😴',
+      })
+
+      expect(
+        screen.queryByText('Only the comic currently waiting to be read can be snoozed.'),
+      ).not.toBeInTheDocument()
+    })
+
+    it('renders snooze button without aria-disabled when enabled', () => {
+      renderCard(createMockThread(), {
+        snoozeDisabled: false,
+        snoozeLabel: 'Snooze',
+        snoozeIcon: '😴',
+      })
+
+      const snoozeButton = screen.getByRole('button', { name: 'Snooze' })
+      expect(snoozeButton).not.toHaveAttribute('aria-disabled')
+      expect(snoozeButton).not.toHaveAttribute('tabindex')
+    })
   })

@@ -5,6 +5,7 @@ import WhatsNewPage, {
   groupReleasesByDay,
   isDisplayableRelease,
   releaseDisplayText,
+  releaseTimeLabel,
   RELEASE_PAGE_SIZE,
   sortReleasesNewestFirst,
 } from '../pages/WhatsNewPage'
@@ -99,6 +100,33 @@ describe('release ordering helpers', () => {
       expect(isDisplayableRelease(release({ id: 1, title: 'T' }))).toBe(false)
       expect(isDisplayableRelease(release({ id: 2, title: 'S' }))).toBe(false)
       expect(isDisplayableRelease(release({ id: 3, title: 'Add queue search' }))).toBe(true)
+    })
+  })
+
+describe('release time-of-day formatting', () => {
+    it('formats the release time-of-day for the requested timezone', () => {
+      expect(releaseTimeLabel('2026-08-11T20:30:00Z', 'UTC')).toMatch(/^\d{1,2}:\d{2}/)
+      expect(releaseTimeLabel('2026-08-11T20:30:00Z', 'UTC')).not.toBe(
+        releaseTimeLabel('2026-08-11T21:30:00Z', 'UTC'),
+      )
+    })
+
+    it('hides the published-time line when the timestamp is malformed', () => {
+      expect(releaseTimeLabel('not-a-date')).toBe('')
+    })
+
+    it('renders the local published time-of-day on each card', async () => {
+      api.list.mockResolvedValue({
+        releases: [release({ id: 11, title: 'Timed release note' })],
+        total: 1,
+        limit: RELEASE_PAGE_SIZE,
+        offset: 0,
+      })
+
+      render(<WhatsNewPage />)
+
+      expect(await screen.findByText('Timed release note')).toBeInTheDocument()
+      expect(screen.getByText(/Published at \d{1,2}:\d{2}/)).toBeInTheDocument()
     })
   })
 

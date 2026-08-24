@@ -19,6 +19,23 @@ interface ComicVineSearchDialogProps {
 
 type DialogStep = 'search' | 'select-issue' | 'confirm'
 
+function seriesMetaParts(series: ComicVineSeriesResult): string[] {
+  return [
+    series.publisher,
+    series.start_year ? `${series.start_year}` : null,
+    series.issue_count ? `${series.issue_count} issues` : null,
+  ].filter((part): part is string => part !== null)
+}
+
+function seriesMetaText(series: ComicVineSeriesResult): string {
+  return seriesMetaParts(series).join(' · ')
+}
+
+function seriesAccessibleName(series: ComicVineSeriesResult): string {
+  const parts = seriesMetaParts(series)
+  return parts.length > 0 ? `${series.name} — ${parts.join(', ')}` : series.name
+}
+
 export default function ComicVineSearchDialog({
   isOpen,
   issueId,
@@ -166,6 +183,7 @@ export default function ComicVineSearchDialog({
                     key={series.comicvine_volume_id}
                     type="button"
                     onClick={() => handleSelectSeries(series)}
+                    aria-label={seriesAccessibleName(series)}
                     className="w-full text-left p-3 rounded-xl bg-stone-800/50 border border-stone-700/50 hover:border-amber-500/50 hover:bg-stone-800 transition group"
                   >
                     <div className="flex items-start gap-3">
@@ -181,9 +199,7 @@ export default function ComicVineSearchDialog({
                           {series.name}
                         </p>
                         <p className="text-[11px] text-stone-500">
-                          {[series.publisher, series.start_year ? `(${series.start_year})` : null]
-                            .filter(Boolean)
-                            .join(' · ')}
+                          {seriesMetaText(series)}
                         </p>
                       </div>
                     </div>
@@ -214,7 +230,10 @@ export default function ComicVineSearchDialog({
                 ← Back to search
               </button>
               <span className="text-xs text-stone-500">·</span>
-              <span className="text-xs text-stone-400 truncate">{selectedSeries.name}</span>
+              <span className="text-xs text-stone-400 truncate">
+                {selectedSeries.name}
+                {seriesMetaText(selectedSeries) && ` (${seriesMetaText(selectedSeries)})`}
+              </span>
             </div>
             {isSearching ? (
               <div className="flex justify-center py-8">
