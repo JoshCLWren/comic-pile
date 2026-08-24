@@ -5,6 +5,7 @@ from pathlib import Path
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+KNOWN_GOOD_SETUP_UV_REF = "08807647e7069bb48b6ef5acd8ec9567f424441b"
 
 
 def test_vercel_git_deployments_are_disabled() -> None:
@@ -27,6 +28,16 @@ def test_production_workflow_migrates_before_deploying() -> None:
     assert deployment in workflow
     assert workflow.index(migration) < workflow.index(deployment)
     assert "branches:\n      - main" in workflow
+
+
+def test_production_workflow_uses_known_good_setup_uv_pin() -> None:
+    """Do not restore the invalid setup-uv major-version shorthand again."""
+    workflow = (
+        REPOSITORY_ROOT / ".github" / "workflows" / "deploy-production.yml"
+    ).read_text(encoding="utf-8")
+
+    assert f"astral-sh/setup-uv@{KNOWN_GOOD_SETUP_UV_REF}" in workflow
+    assert "astral-sh/setup-uv@v9\n" not in workflow
 
 
 def test_vercel_keeps_production_static_and_api_routes_intact() -> None:

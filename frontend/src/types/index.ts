@@ -80,6 +80,7 @@ export interface ThreadCreatePayload {
   title: string;
   format: string;
   issues_remaining: number;
+  total_issues?: number;
   notes?: string | null;
 }
 
@@ -130,6 +131,8 @@ export interface SessionThread {
   next_issue_id?: number | null;
   next_issue_number?: string | null;
   last_rolled_result?: number | null;
+  issues_read?: number | null;
+  last_rating?: number | null;
 }
 
 export interface SessionCurrent {

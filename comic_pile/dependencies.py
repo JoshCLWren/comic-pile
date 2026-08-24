@@ -45,22 +45,22 @@ async def get_blocked_thread_ids(user_id: int, db: AsyncSession) -> set[int]:
     return await _get_blocked_thread_ids_uncached(user_id, db)
 
 
-def build_blocking_explanation(issue_number: str, thread_title: str, thread_id: int) -> str:
+def build_blocking_explanation(issue_number: str, thread_title: str) -> str:
     """Return the shared human-readable blocked-by sentence for one dependency edge.
 
     This is the single copy generator for dependency blocking sentences so the
     queue's blocked list and reader-context edge rows stay word-for-word
-    consistent app-wide.
+    consistent app-wide. Reader-facing explanations identify comics with human
+    identity only; raw internal database identifiers must never be rendered.
 
     Args:
         issue_number: Issue number of the blocking source issue.
         thread_title: Title of the thread owning the source issue.
-        thread_id: Identifier of the thread owning the source issue.
 
     Returns:
         A concise blocked-by sentence.
     """
-    return f"Blocked by issue #{issue_number} in {thread_title} (thread #{thread_id})"
+    return f"Blocked by issue #{issue_number} in {thread_title}"
 
 
 async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSession) -> list[str]:
@@ -72,7 +72,6 @@ async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSessi
 
     issue_result = await db.execute(
         select(
-            source_thread.c.id,
             source_thread.c.title,
             source_issue.c.id,
             source_issue.c.issue_number,
@@ -93,8 +92,8 @@ async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSessi
         .distinct()
     )
     return [
-        build_blocking_explanation(issue_number, thread_title, thread_id_val)
-        for thread_id_val, thread_title, _issue_id, issue_number in issue_result.all()
+        build_blocking_explanation(issue_number, thread_title)
+        for thread_title, _issue_id, issue_number in issue_result.all()
     ]
 
 
@@ -115,7 +114,6 @@ async def get_blocking_explanations_batch(
     result = await db.execute(
         select(
             target_thread.c.id,
-            source_thread.c.id,
             source_thread.c.title,
             source_issue.c.id,
             source_issue.c.issue_number,
@@ -135,9 +133,9 @@ async def get_blocking_explanations_batch(
     )
 
     reasons_map: dict[int, list[str]] = {}
-    for target_tid, src_tid, src_title, _src_iid, src_issue_num in result.all():
+    for target_tid, src_title, _src_iid, src_issue_num in result.all():
         reasons_map.setdefault(target_tid, []).append(
-            build_blocking_explanation(src_issue_num, src_title, src_tid)
+            build_blocking_explanation(src_issue_num, src_title)
         )
     return reasons_map
 

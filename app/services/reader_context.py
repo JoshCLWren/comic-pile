@@ -647,6 +647,7 @@ async def _local_edges(
         )
 
     edges: list[ReaderContextEdge] = []
+
     for dependency in dependencies:
         source_label, source_number, source_title, source_thread_id = _label_parts(
             dependency.source_issue_id
