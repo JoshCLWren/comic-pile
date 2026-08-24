@@ -1,7 +1,7 @@
 """Add session mode (bandwidth + intent) columns.
 
 Revision ID: h9i0j1k2l3m4
-Revises: d3a1c2b4e5f6
+Revises: d4e5f6a7b8c9
 Create Date: 2026-08-22 00:00:00.000000
 
 """
@@ -9,13 +9,12 @@ Create Date: 2026-08-22 00:00:00.000000
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from sqlalchemy import text
 
 from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "h9i0j1k2l3m4"
-down_revision: str | Sequence[str] | None = "d3a1c2b4e5f6"
+down_revision: str | Sequence[str] | None = "d4e5f6a7b8c9"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

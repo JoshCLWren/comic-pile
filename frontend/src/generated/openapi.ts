@@ -5864,36 +5864,6 @@ export interface components {
             visibility: "public" | "internal";
         };
         /**
-         * SessionModeResponse
-         * @description Canonical session mode returned from manual change and bootstrap endpoints.
-         */
-        SessionModeResponse: {
-            /** Active Bandwidth */
-            active_bandwidth: string | null;
-            /** Active Intent */
-            active_intent: string | null;
-            /** Bandwidth Confidence */
-            bandwidth_confidence?: number | null;
-            /** Bandwidth Source */
-            // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
-            bandwidth_source?: ("manual" | "inferred") | null;
-            /** Bandwidth Version */
-            bandwidth_version?: string | null;
-            /** Intent Confidence */
-            intent_confidence?: number | null;
-            /** Intent Source */
-            // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
-            intent_source?: ("manual" | "inferred") | null;
-            /** Intent Version */
-            intent_version?: string | null;
-            /** Predicted Bandwidth */
-            predicted_bandwidth: string | null;
-            /** Predicted Intent */
-            predicted_intent: string | null;
-            /** Session Mode Correction Guidance */
-            session_mode_correction_guidance?: Record<string, unknown> | null;
-        };
-        /**
          * RollBootstrapResponse
          * @description Bounded bootstrap payload for the Roll initial render.
          *
@@ -6160,6 +6130,53 @@ export interface components {
             started_at: string | null;
             /** User Id */
             user_id: number;
+        };
+        /**
+         * SessionModeResponse
+         * @description Canonical session mode returned from manual change and bootstrap endpoints.
+         */
+        SessionModeResponse: {
+            /** Active Bandwidth */
+            active_bandwidth: string | null;
+            /** Active Intent */
+            active_intent: string | null;
+            /** Bandwidth Confidence */
+            bandwidth_confidence?: number | null;
+            /** Bandwidth Source */
+            bandwidth_source?: ("manual" | "inferred") | null;
+            /** Bandwidth Version */
+            bandwidth_version?: string | null;
+            /** Intent Confidence */
+            intent_confidence?: number | null;
+            /** Intent Source */
+            intent_source?: ("manual" | "inferred") | null;
+            /** Intent Version */
+            intent_version?: string | null;
+            /** Predicted Bandwidth */
+            predicted_bandwidth: string | null;
+            /** Predicted Intent */
+            predicted_intent: string | null;
+            /** Session Mode Correction Guidance */
+            session_mode_correction_guidance?: Record<string, unknown> | null;
+        };
+        /**
+         * SessionModeUpdateRequest
+         * @description Canonical request to update active session bandwidth and/or intent.
+         *
+         *     Only the supplied dimensions are changed; the other dimension is left
+         *     untouched. Omitting both is a no-op and returns the current mode unchanged.
+         */
+        SessionModeUpdateRequest: {
+            /**
+             * Active Bandwidth
+             * @description Active bandwidth to set. Omit to leave unchanged.
+             */
+            bandwidth?: ("light" | "balanced" | "deep") | null;
+            /**
+             * Active Intent
+             * @description Active intent to set. Omit to leave unchanged. Setting to 'random' bypasses contextual weighting.
+             */
+            intent?: ("balanced" | "momentum" | "familiar" | "explore" | "random") | null;
         };
         /**
          * SessionResponse

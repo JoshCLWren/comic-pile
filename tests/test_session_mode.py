@@ -1,38 +1,13 @@
 """Tests for the manual session-mode change endpoint."""
 
 from datetime import UTC, datetime
-from types import SimpleNamespace
-from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api import roll as roll_api
-from app.models import Session as SessionModel, Thread, User
-from app.schemas import SessionMode, SessionModeResponse
+from app.models import Session as SessionModel, Thread
 from tests.conftest import get_or_create_user_async
-
-
-class _Result:
-    """Minimal SQLAlchemy result double."""
-
-    def __init__(self, *, rows=None, scalar_value=None):
-        self._rows = rows or []
-        self._scalar_value = scalar_value
-
-    def all(self):
-        return self._rows
-
-    def scalar(self):
-        return self._scalar_value
-
-    def first(self):
-        return self._rows[0] if self._rows else None
-
-    def scalars(self):
-        return self
 
 
 @pytest.mark.asyncio
@@ -81,6 +56,7 @@ async def test_update_session_mode_bandwidth_only(
     assert data["intent_source"] is None
 
     db_session = await async_db.get(SessionModel, session_id)
+    assert db_session is not None
     assert db_session.active_bandwidth == "light"
     assert db_session.bandwidth_source == "manual"
     assert db_session.active_intent == "explore"

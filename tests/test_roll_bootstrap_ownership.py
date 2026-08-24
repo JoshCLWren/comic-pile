@@ -35,15 +35,34 @@ class _Result:
         return self
 
 
+def _mode_session(**kwargs):
+    """Build a session double carrying every bootstrap-exposed mode attribute."""
+    mode_fields = {
+        "active_bandwidth": None,
+        "predicted_bandwidth": None,
+        "bandwidth_confidence": None,
+        "bandwidth_source": None,
+        "bandwidth_version": None,
+        "active_intent": None,
+        "predicted_intent": None,
+        "intent_confidence": None,
+        "intent_source": None,
+        "intent_version": None,
+        "session_mode_correction_guidance": None,
+    }
+    return SimpleNamespace(
+        manual_die=None,
+        pending_thread_id=None,
+        snoozed_thread_ids=[],
+        **mode_fields,
+        **kwargs,
+    )
+
+
 @pytest.mark.asyncio
 async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
     """Do not expose a foreign snoozed ID or omit fields required by RollPage."""
-    current_session = SimpleNamespace(
-        id=55,
-        manual_die=None,
-        pending_thread_id=None,
-        snoozed_thread_ids=[101, 202],
-    )
+    current_session = _mode_session(id=55, snoozed_thread_ids=[101, 202])
     current_user = SimpleNamespace(id=7)
     owned_snoozed = SimpleNamespace(id=101, title="Owned", format="ongoing")
 
@@ -96,12 +115,7 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
 @pytest.mark.asyncio
 async def test_bootstrap_roll_pool_is_never_paginated_below_current_die(monkeypatch):
     """A d100 bootstrap may return all 100 eligible faces instead of a smaller summary page."""
-    current_session = SimpleNamespace(
-        id=55,
-        manual_die=100,
-        pending_thread_id=None,
-        snoozed_thread_ids=[],
-    )
+    current_session = _mode_session(id=55, manual_die=100)
     current_user = SimpleNamespace(id=7)
     pool_rows = [
         SimpleNamespace(

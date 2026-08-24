@@ -406,6 +406,7 @@ async def update_session_mode(
     intent_source = current_session.intent_source
     intent_version = current_session.intent_version
     guidance = current_session.session_mode_correction_guidance
+    session_id = current_session.id
 
     version_tag = f"manual-{int(datetime.now(UTC).timestamp())}"
 
@@ -415,6 +416,7 @@ async def update_session_mode(
         current_session.bandwidth_source = "manual"
         current_session.bandwidth_version = version_tag
         active_bandwidth = mode_update.bandwidth
+        predicted_bandwidth = mode_update.bandwidth
         bandwidth_source = "manual"
         bandwidth_version = version_tag
 
@@ -424,14 +426,13 @@ async def update_session_mode(
         current_session.intent_source = "manual"
         current_session.intent_version = version_tag
         active_intent = mode_update.intent
+        predicted_intent = mode_update.intent
         intent_source = "manual"
         intent_version = version_tag
 
-    await db.commit()
-
     db.add(
         Event(
-            session_id=current_session.id,
+            session_id=session_id,
             type="session_mode",
             die=None,
             selected_thread_id=None,
