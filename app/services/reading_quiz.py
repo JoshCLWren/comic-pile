@@ -20,6 +20,8 @@ ReadingIntent = Literal["momentum", "familiar", "explore", "random"]
 
 
 class QuizAnswerDict(TypedDict):
+    """JSON-safe serialization of a single quiz answer option."""
+
     id: str
     label: str
     bandwidth: ReadingBandwidth | None
@@ -27,6 +29,8 @@ class QuizAnswerDict(TypedDict):
 
 
 class QuizQuestionDict(TypedDict):
+    """JSON-safe serialization of a single quiz question."""
+
     id: str
     prompt: str
     answers: list[QuizAnswerDict]

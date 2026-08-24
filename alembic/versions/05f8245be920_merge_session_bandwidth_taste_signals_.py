@@ -1,7 +1,7 @@
 """merge session bandwidth, taste signals, and reading mode heads
 
 Revision ID: 05f8245be920
-Revises: 3e9443eeca36, 83b5669f636c, c85500000001
+Revises: 3e9443eeca36, 83b5669f636c, c85500000001, c85600000001
 Create Date: 2026-08-24 18:35:44.265905
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '05f8245be920'
-down_revision: Union[str, Sequence[str], None] = ('3e9443eeca36', '83b5669f636c', 'c85500000001')
+down_revision: Union[str, Sequence[str], None] = ('3e9443eeca36', '83b5669f636c', 'c85500000001', 'c85600000001')
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

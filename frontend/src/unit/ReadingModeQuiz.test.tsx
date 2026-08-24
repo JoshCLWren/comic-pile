@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
-import { expect, it, vi } from 'vitest'
+import { beforeEach, expect, it, vi } from 'vitest'
 import ReadingModeQuiz from '../components/ReadingModeQuiz'
 import type { ReadingModeState } from '../types'
 
@@ -31,6 +31,10 @@ vi.mock('../services/readingMode', () => ({
 }))
 
 import { setReadingModeFromQuiz } from '../services/readingMode'
+
+beforeEach(() => {
+  vi.resetAllMocks()
+})
 
 function Harness({ onComplete }: { onComplete?: (s: ReadingModeState) => void }) {
   const [open, setOpen] = useState(true)

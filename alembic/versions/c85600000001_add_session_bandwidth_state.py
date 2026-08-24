@@ -1,6 +1,6 @@
 """Add ephemeral session bandwidth state columns.
 
-Revision ID: c85500000001
+Revision ID: c85600000001
 Revises: d4e5f6a7b8c9
 Create Date: 2026-08-23 00:00:00.000000
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "c85500000001"
+revision: str = "c85600000001"
 down_revision: str | Sequence[str] | None = "d4e5f6a7b8c9"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
