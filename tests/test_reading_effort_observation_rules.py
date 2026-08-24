@@ -15,7 +15,6 @@ from comic_pile.reading_effort_observation_rules import (
     DEFAULT_MAX_DURATION_SECONDS,
     DEFAULT_MIN_DURATION_SECONDS,
     DurationObservation,
-    ObservationResult,
     ObservationThresholds,
     classify_reading_effort_observation,
     classify_reading_effort_observations,
