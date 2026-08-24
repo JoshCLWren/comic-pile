@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { type ReactNode } from 'react'
 import { beforeEach, expect, it, vi } from 'vitest'
@@ -80,6 +80,6 @@ it('does not touch targeted cache state when the update request fails', async ()
 
   expect(caught).toBe(failure)
   expect(mockedApplyEditedThreadToQueuePages).not.toHaveBeenCalled()
-  expect(result.current.isError).toBe(true)
+  await waitFor(() => expect(result.current.isError).toBe(true))
   expect(result.current.isPending).toBe(false)
 })
