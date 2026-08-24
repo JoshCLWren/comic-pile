@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from app.api import roll as roll_api
 from app.models import DependencyGroup, DependencyGroupMembership, Issue, Thread
 from app.schemas import RollBootstrapResponse, RollBootstrapThread
+from app.schemas.session import SessionBandwidthState, build_session_bandwidth_state
 from tests.conftest import get_or_create_user_async
 
 
@@ -35,6 +36,36 @@ class _Result:
         return self
 
 
+def test_build_session_bandwidth_state_normalizes_legacy_garbage():
+    """Stored junk must never break bootstrap; valid values pass through."""
+    assert build_session_bandwidth_state(
+        predicted_bandwidth="light",
+        active_bandwidth="deep",
+        confidence=0.75,
+        source="quiz",
+        mode_version="v2",
+    ) == SessionBandwidthState(
+        predicted_bandwidth="light",
+        active_bandwidth="deep",
+        confidence=0.75,
+        source="quiz",
+        mode_version="v2",
+    )
+    assert build_session_bandwidth_state(
+        predicted_bandwidth="ultra",
+        active_bandwidth="bogus",
+        confidence=1.5,
+        source="hacked",
+        mode_version=None,
+    ) == SessionBandwidthState(
+        predicted_bandwidth=None,
+        active_bandwidth=None,
+        confidence=None,
+        source=None,
+        mode_version=None,
+    )
+
+
 @pytest.mark.asyncio
 async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
     """Do not expose a foreign snoozed ID or omit fields required by RollPage."""
@@ -43,6 +74,11 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
         manual_die=None,
         pending_thread_id=None,
         snoozed_thread_ids=[101, 202],
+        predicted_bandwidth=None,
+        active_bandwidth=None,
+        bandwidth_confidence=None,
+        bandwidth_source=None,
+        bandwidth_version=None,
     )
     current_user = SimpleNamespace(id=7)
     owned_snoozed = SimpleNamespace(id=101, title="Owned", format="ongoing")
@@ -91,6 +127,13 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
             "last_activity_at": None,
         }
     ]
+    assert response.bandwidth == SessionBandwidthState(
+        predicted_bandwidth=None,
+        active_bandwidth=None,
+        confidence=None,
+        source=None,
+        mode_version=None,
+    )
 
 
 @pytest.mark.asyncio
@@ -101,6 +144,11 @@ async def test_bootstrap_roll_pool_is_never_paginated_below_current_die(monkeypa
         manual_die=100,
         pending_thread_id=None,
         snoozed_thread_ids=[],
+        predicted_bandwidth=None,
+        active_bandwidth=None,
+        bandwidth_confidence=None,
+        bandwidth_source=None,
+        bandwidth_version=None,
     )
     current_user = SimpleNamespace(id=7)
     pool_rows = [
@@ -164,6 +212,13 @@ def test_bootstrap_schema_bounds_summary_lists_without_losing_counts():
         pending_thread_id=None,
         last_rolled_result=None,
         active_thread=None,
+        bandwidth=SessionBandwidthState(
+            predicted_bandwidth=None,
+            active_bandwidth=None,
+            confidence=None,
+            source=None,
+            mode_version=None,
+        ),
         roll_pool=summaries,
         snoozed_threads=summaries,
         snoozed_count=len(summaries),
