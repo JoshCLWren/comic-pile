@@ -23,21 +23,36 @@ class ThreadStatus(StrEnum):
 
 
 class ModeSource(StrEnum):
-    """Source of a mode change."""
+    """Provenance of the active session-mode state (#1685, #1706, #1728)."""
 
-    MANUAL = "manual"
-    SYSTEM = "system"
     INFERRED = "inferred"
+    MANUAL = "manual"
+    SNOOZE = "snooze"
+    QUIZ = "quiz"
 
 
 class ModeIntent(StrEnum):
-    """Intent of a mode change."""
+    """Reading-intent values for the active session (#1685, #1728).
 
-    MANUAL = "manual"
+    ``random`` is a first-class escape hatch that must keep producing the
+    legacy unweighted selection inside the bounded die pool.
+    """
+
+    BALANCED = "balanced"
+    MOMENTUM = "momentum"
+    FAMILIAR = "familiar"
+    EXPLORE = "explore"
     RANDOM = "random"
-    SNOOZE = "snooze"
-    RATING = "rating"
-    OVERRIDE = "override"
+
+
+# Canonical bandwidth axis values (#1685, #1706). Stored on sessions as
+# ephemeral state; contextual weighting consumes them only inside the
+# existing die pool.
+MODE_BANDWIDTHS: tuple[str, ...] = ("light", "balanced", "deep")
+MODE_INTENTS: tuple[str, ...] = tuple(value.value for value in ModeIntent)
+
+# Confidence recorded when the reader explicitly sets a mode dimension.
+MANUAL_MODE_CONFIDENCE = 1.0
 
 
 # Dice ladder - standard RPG dice progression

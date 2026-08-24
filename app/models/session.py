@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -42,9 +42,12 @@ class Session(Base):
     )
     # Thread IDs temporarily excluded from roll selection during this session
     snoozed_thread_ids: Mapped[list[int] | None] = mapped_column(JSON, nullable=True)
-    bandwidth: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    intent: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    source: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Ephemeral session-mode state (#1685). Bandwidth is light|balanced|deep;
+    # intent is balanced|momentum|familiar|explore|random. Neither resizes the
+    # die: the die remains the hard candidate-pool boundary.
+    bandwidth: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    intent: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    source: Mapped[str | None] = mapped_column(String(20), nullable=True)
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     __table_args__ = (

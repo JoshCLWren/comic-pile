@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -91,6 +91,11 @@ class Event(Base):
     source_roll_event_id: Mapped[int | None] = mapped_column(
         ForeignKey("events.id", ondelete="SET NULL"), nullable=True
     )
+    # Compact mode-state context for "mode_change" events. Stores the applied
+    # bandwidth/intent/source/confidence snapshot so manual changes stay
+    # distinguishable from inferred/snooze corrections in history. NULL for all
+    # other event types.
+    mode_context: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
 
     __table_args__ = (
         Index("ix_event_session_id", "session_id"),

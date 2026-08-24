@@ -19,15 +19,14 @@ from app.models import Event, Issue, Session as SessionModel, Snapshot, Thread, 
 from app.schemas import (
     ActiveThreadInfo,
     EventDetail,
+    ModeChangeRequest,
+    ModeChangeResponse,
     SessionDetailsResponse,
     SessionHistoryListResponse,
     SessionListItem,
     SessionResponse,
     SnapshotResponse,
     SnapshotsListResponse,
-    ModeChangeRequest,
-    ModeChangeResponse,
-    ModeChangeHistoryEvent,
 )
 from app.schemas.session import SnoozedThreadInfo
 from app.services.ownership import get_owned_session_or_404
@@ -35,7 +34,7 @@ from app.services.session_history_projection import project_session_history_even
 from app.services.thread_issue_stats import load_next_issue_numbers, load_unread_counts
 from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.session import get_current_die, get_or_create, is_active
-from app.constants import EventType, ModeIntent, ModeSource
+from app.constants import MANUAL_MODE_CONFIDENCE, EventType, ModeSource
 
 router = APIRouter(tags=["sessions"])
 
@@ -1106,10 +1105,11 @@ async def set_session_mode(
 ) -> ModeChangeResponse:
     """Set bandwidth and/or intent for the active session.
 
-    Accepts optional bandwidth (die size) and/or intent changes against the
-    active session. Unspecified dimensions are preserved (not reset). Changed
-    dimensions are marked with source `manual` and appropriate confidence
-    semantics. Invalid values fail safely with 422 validation.
+    Accepts optional bandwidth and/or intent changes against the active
+    session. Unspecified dimensions are preserved (not reset). Changed
+    dimensions are marked with source ``manual`` and full confidence, and a
+    compact ``mode_change`` event records the applied state for analytics.
+    Invalid enum values fail safely with 422 validation.
 
     Args:
         request: The mode change request containing optional bandwidth and intent.
@@ -1126,51 +1126,51 @@ async def set_session_mode(
     current_session = await get_or_create(db, user_id=user_id, existing_user=current_user)
     current_session_id = current_session.id
 
-    # Determine which dimensions are being changed.
-    changed_bandwidth = request.bandwidth is not None
-    changed_intent = request.intent is not None
-
-    # If neither dimension is provided, return current state without changes.
-    if not changed_bandwidth and not changed_intent:
+    # Unspecified dimensions preserve existing session state; an empty body is a read.
+    if request.bandwidth is None and request.intent is None:
+        unchanged_bandwidth = current_session.bandwidth
+        unchanged_intent = current_session.intent
         return ModeChangeResponse(
-            bandwidth=current_session.bandwidth,
-            intent=current_session.intent,
-            source=current_session.source or ModeSource.MANUAL,
-            confidence=current_session.confidence or 1.0,
+            bandwidth=unchanged_bandwidth,
+            intent=unchanged_intent,
+            source=current_session.source,
+            confidence=current_session.confidence,
             session_id=current_session_id,
             updated_at=datetime.now(UTC).isoformat(),
         )
 
-    # Track old values for reference.
-    old_bandwidth = current_session.bandwidth
-    old_intent = current_session.intent
+    changed_bandwidth = request.bandwidth is not None
+    changed_intent = request.intent is not None
 
-    if changed_bandwidth:
-        current_session.bandwidth = request.bandwidth
+    # Preserve untouched dimensions; overwrite only what the reader set.
+    new_bandwidth = request.bandwidth if changed_bandwidth else current_session.bandwidth
+    new_intent = request.intent if changed_intent else current_session.intent
 
-    if changed_intent:
-        current_session.intent = request.intent
-
-    # Mark changed dimensions with source=manual and confidence semantics.
     source = ModeSource.MANUAL
-    confidence = 1.0  # Manual changes have full confidence
+    confidence = MANUAL_MODE_CONFIDENCE
+    current_session.bandwidth = new_bandwidth
+    current_session.intent = new_intent
     current_session.source = source
     current_session.confidence = confidence
 
-    # Record a compact mode-change event for later analytics.
+    # Compact mode-change event keeps manual changes distinguishable from
+    # inferred/snooze corrections in history.
     event = Event(
         type=EventType.MODE_CHANGE,
         session_id=current_session_id,
-        die=request.bandwidth if changed_bandwidth else None,
-        selection_method=request.intent if changed_intent else None,
+        selection_method=new_intent,
+        mode_context={
+            "bandwidth": new_bandwidth,
+            "intent": new_intent,
+            "source": source.value,
+            "confidence": confidence,
+        },
     )
     db.add(event)
 
     # Extract all needed session attributes BEFORE commit to avoid MissingGreenlet.
     updated_bandwidth = current_session.bandwidth
     updated_intent = current_session.intent
-    updated_source = source
-    updated_confidence = confidence
 
     await db.commit()
 
@@ -1179,8 +1179,8 @@ async def set_session_mode(
     return ModeChangeResponse(
         bandwidth=updated_bandwidth,
         intent=updated_intent,
-        source=updated_source,
-        confidence=updated_confidence,
+        source=source.value,
+        confidence=confidence,
         session_id=current_session_id,
         updated_at=datetime.now(UTC).isoformat(),
     )
