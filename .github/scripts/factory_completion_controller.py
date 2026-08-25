@@ -146,6 +146,47 @@ def latest_worker_health(
     return latest
 
 
+def worker_health_state(
+    worker: str,
+    health: Mapping[str, tuple[str, int]],
+    *,
+    now_epoch: int,
+) -> str:
+    """Return the evidence-derived runtime health state for one worker."""
+    status = health.get(worker)
+    if status is None:
+        return "unknown"
+    outcome, updated = status
+    normalized = (outcome or "").strip().casefold()
+    if normalized in {
+        "success",
+        "healthy / productive",
+        "healthy / idle",
+        "work_failure",
+        "no_change",
+        "policy_blocked",
+    }:
+        return "healthy"
+    if normalized in {"model_unavailable", "model missing"} or "model missing" in normalized:
+        return "unavailable"
+    cooldown = cooldown_seconds(outcome)
+    if cooldown > 0 and now_epoch < updated + cooldown:
+        return "cooling"
+    if cooldown > 0:
+        return "degraded"
+    return "unknown"
+
+
+def worker_is_executable(
+    worker: str,
+    health: Mapping[str, tuple[str, int]],
+    *,
+    now_epoch: int,
+) -> bool:
+    """Return whether runtime evidence permits dispatch to one worker."""
+    return worker_health_state(worker, health, now_epoch=now_epoch) in {"healthy", "degraded"}
+
+
 def worker_is_cooling(
     worker: str,
     health: Mapping[str, tuple[str, int]],
@@ -180,7 +221,7 @@ def select_completion_workers(
         worker
         for worker in workers
         if worker not in owned_workers
-        and not worker_is_cooling(worker, health, now_epoch=now_epoch)
+        and worker_is_executable(worker, health, now_epoch=now_epoch)
     ]
     eligible.sort(
         key=lambda worker: (
@@ -204,17 +245,60 @@ def flatten_pages(value: object | None) -> list[dict[str, Any]]:
     return result
 
 
-def load_manifest_workers(path: Path) -> list[str]:
-    """Read current configured worker IDs from the fixed-model manifest."""
-    workers: list[str] = []
+def load_manifest_candidates(path: Path) -> list[dict[str, str]]:
+    """Read configured worker, provider, and model candidates from the manifest."""
+    candidates: list[dict[str, str]] = []
     for raw_line in path.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
-        worker = line.split("\t", 1)[0].strip()
-        if worker.isdigit():
-            workers.append(worker)
-    return workers
+        fields = line.split("\t")
+        if len(fields) < 3 or not fields[0].strip().isdigit():
+            continue
+        candidates.append(
+            {
+                "worker": fields[0].strip(),
+                "provider": fields[1].strip(),
+                "model": fields[2].strip(),
+            }
+        )
+    return candidates
+
+
+def load_manifest_workers(path: Path) -> list[str]:
+    """Read current configured worker IDs from the fixed-model manifest."""
+    return [candidate["worker"] for candidate in load_manifest_candidates(path)]
+
+
+def capacity_report(
+    candidates: Iterable[Mapping[str, str]],
+    health: Mapping[str, tuple[str, int]],
+    *,
+    now_epoch: int,
+) -> dict[str, object]:
+    """Return evidence-derived fleet capacity and candidate health details."""
+    states = {"unknown": 0, "healthy": 0, "degraded": 0, "cooling": 0, "unavailable": 0}
+    executable: list[dict[str, str]] = []
+    details: list[dict[str, str]] = []
+    for candidate in candidates:
+        worker = str(candidate["worker"])
+        state = worker_health_state(worker, health, now_epoch=now_epoch)
+        states[state] += 1
+        detail = {
+            "worker": worker,
+            "provider": str(candidate["provider"]),
+            "model": str(candidate["model"]),
+            "health": state,
+        }
+        details.append(detail)
+        if state in {"healthy", "degraded"}:
+            executable.append(detail)
+    return {
+        "executable_capacity": len(executable),
+        "health_counts": states,
+        "executable_candidates": executable,
+        "candidates": details,
+    }
 
 
 def load_controller() -> Any:
