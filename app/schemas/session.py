@@ -135,8 +135,6 @@ class SnoozeCorrectionInfo(BaseModel):
         default=False,
         description="True when repeated contradictory snoozes make the mode uncertain",
     )
-
-
 class ActiveThreadInfo(BaseModel):
     """Schema for active thread information in session response."""
 

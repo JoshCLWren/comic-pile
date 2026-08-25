@@ -98,7 +98,7 @@ async def test_multiple_snooze_then_rate(auth_client: AsyncClient, async_db: Asy
     expected_dies = [6]
 
     for i, _thread in enumerate(threads[:6]):
-        roll_response = await auth_client.post("/api/roll/")
+        roll_response = await auth_client.post("/api/v1/roll/")
         assert roll_response.status_code == 200
 
         if i == 0:
@@ -110,7 +110,7 @@ async def test_multiple_snooze_then_rate(auth_client: AsyncClient, async_db: Asy
             assert session.start_die == 6
 
         if i < 5:
-            snooze_response = await auth_client.post("/api/snooze/")
+            snooze_response = await auth_client.post("/api/v1/snooze/")
             assert snooze_response.status_code == 200
             snooze_data = snooze_response.json()
 
@@ -123,12 +123,12 @@ async def test_multiple_snooze_then_rate(auth_client: AsyncClient, async_db: Asy
             )
 
     rate_response = await auth_client.post(
-        "/api/rate/",
+        "/api/v1/rate/",
         json={"rating": 4.0, "issues_read": 1, "finish_session": False},
     )
     assert rate_response.status_code == 200
 
-    session_after_rate = await auth_client.get("/api/sessions/current/")
+    session_after_rate = await auth_client.get("/api/v1/sessions/current/")
     assert session_after_rate.status_code == 200
     rated_data = session_after_rate.json()
 

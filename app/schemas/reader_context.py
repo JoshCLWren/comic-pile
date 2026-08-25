@@ -50,6 +50,7 @@ class ReaderContextCrossover(BaseModel):
     id: int
     name: str
     applies_to_current_issue: bool
+    membership_kind: Literal["issue", "thread"]
     next_member: ReaderContextCrossoverNextMember | None = None
     average_rating: float | None = None
     ratings_count: int = 0
@@ -82,11 +83,16 @@ class ReaderContextEdge(BaseModel):
     kind: Literal["dependency", "continuity"]
     source_issue_id: int
     target_issue_id: int
-    source_issue_number: str
-    target_issue_number: str
-    source_thread_title: str
-    target_thread_title: str
+    source_thread_id: int | None = None
+    target_thread_id: int | None = None
+    source_label: str | None = None
+    target_label: str | None = None
+    source_issue_number: str | None = None
+    target_issue_number: str | None = None
+    source_thread_title: str | None = None
+    target_thread_title: str | None = None
     note: str | None = None
+    explanation: str | None = None
 
 
 class ReaderContextLocalChain(BaseModel):

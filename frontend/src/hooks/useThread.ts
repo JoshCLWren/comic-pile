@@ -1,223 +1,96 @@
-import { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { threadsApi } from '../services/api';
 import type { ReactivateThreadPayload, Thread, ThreadCreatePayload, ThreadUpdatePayload } from '../types';
 import { applyEditedThreadToQueuePages, invalidateAfterQueueMutation } from '../query/cacheEffects';
 import { queryClient } from '../query/queryClient';
+import { queryKeys } from '../query/queryKeys';
 
 export function useThread(id?: number | null) {
-  const [data, setData] = useState<Thread | null>(null);
-  const [isPending, setIsPending] = useState(true);
-  const [isError, setIsError] = useState(false);
-
-  useEffect(() => {
-    if (!id) {
-      setData(null);
-      setIsError(false);
-      setIsPending(false);
-      return;
-    }
-
-    let isMounted = true;
-
-    const fetchData = async () => {
-      setIsPending(true);
-      setIsError(false);
-
-      try {
-        const result = await threadsApi.get(id);
-        if (isMounted) {
-          setData(result);
-        }
-    } catch {
-      if (isMounted) {
-        setIsError(true);
-      }
-    } finally {
-      if (isMounted) {
-        setIsPending(false);
-      }
-    }
-  };
-
-  fetchData();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [id]);
-
-  return { data, isPending, isError };
-}
-
-export function useStaleThreads(days?: number) {
-  const [data, setData] = useState<Thread[] | null>(null);
-  const [isPending, setIsPending] = useState(true);
-  const [isError, setIsError] = useState(false);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchData = async () => {
-      setIsPending(true);
-      setIsError(false);
-
-      try {
-        const result = await threadsApi.listStale(days);
-        if (isMounted) {
-          setData(result);
-        }
-      } catch {
-        if (isMounted) {
-          setIsError(true);
-        }
-      } finally {
-        if (isMounted) {
-          setIsPending(false);
-        }
-      }
-    };
-
-    fetchData();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [days]);
-
-  const refetch = useCallback(async () => {
-    setIsPending(true);
-    setIsError(false);
-
-    try {
-      const result = await threadsApi.listStale(days);
-      setData(result);
-    } catch {
-      setIsError(true);
-    } finally {
-      setIsPending(false);
-    }
-  }, [days]);
+  const { data, isPending, isError, refetch } = useQuery({
+    queryKey: id ? queryKeys.thread.detail(id) : [],
+    queryFn: () => threadsApi.get(id!),
+    enabled: !!id,
+    initialData: null as Thread | null,
+  });
 
   return { data, isPending, isError, refetch };
 }
 
-export function useCreateThread() {
-  const [isPending, setIsPending] = useState(false);
-  const [isError, setIsError] = useState(false);
+export function useStaleThreads(days?: number) {
+  const { data, isPending, isError, refetch } = useQuery({
+    queryKey: queryKeys.thread.summaries(),
+    queryFn: () => threadsApi.listStale(days),
+    // Note: if 'days' needs to be part of the key, update queryKeys.thread.summaries
+  });
 
-  const mutate = useCallback(
-    async (data: ThreadCreatePayload) => {
-      setIsPending(true);
-      setIsError(false);
-
-      try {
-        const result = await threadsApi.create(data);
-        await invalidateAfterQueueMutation(queryClient);
-        return result;
-      } catch (error: unknown) {
-        const detail = axios.isAxiosError<{ detail?: string }>(error)
-          ? error.response?.data?.detail || error.message
-          : error instanceof Error ? error.message : 'Unknown error';
-        console.error('Failed to create thread:', detail);
-        setIsError(true);
-        throw error;
-      } finally {
-        setIsPending(false);
-      }
+  return {
+    data: data ?? null,
+    isPending,
+    isError,
+    // Preserve the historical void-returning refetch contract for callers.
+    refetch: async () => {
+      await refetch();
     },
-    []
-  );
+  };
+}
 
-  return { mutate, isPending, isError };
+export function useCreateThread() {
+  const mutation = useMutation({
+    mutationFn: (data: ThreadCreatePayload) => threadsApi.create(data),
+    onSuccess: async () => {
+      await invalidateAfterQueueMutation(queryClient);
+    },
+  });
+
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+  };
 }
 
 export function useUpdateThread() {
-  const [isPending, setIsPending] = useState(false);
-  const [isError, setIsError] = useState(false);
-
-  const mutate = useCallback(
-    async ({ id, data }: { id: number; data: ThreadUpdatePayload }) => {
-      setIsPending(true);
-      setIsError(false);
-
-      try {
-        const result = await threadsApi.update(id, data);
-        applyEditedThreadToQueuePages(queryClient, result);
-        return result;
-      } catch (error: unknown) {
-        const detail = axios.isAxiosError<{ detail?: string }>(error)
-          ? error.response?.data?.detail || error.message
-          : error instanceof Error ? error.message : 'Unknown error';
-        console.error('Failed to update thread:', detail);
-        setIsError(true);
-        throw error;
-      } finally {
-        setIsPending(false);
-      }
+  const mutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: ThreadUpdatePayload }) =>
+      threadsApi.update(id, data),
+    onSuccess: (result) => {
+      applyEditedThreadToQueuePages(queryClient, result);
     },
-    []
-  );
+  });
 
-  return { mutate, isPending, isError };
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+  };
 }
 
 export function useDeleteThread() {
-  const [isPending, setIsPending] = useState(false);
-  const [isError, setIsError] = useState(false);
-
-  const mutate = useCallback(
-    async (id: number) => {
-      setIsPending(true);
-      setIsError(false);
-
-      try {
-        const result = await threadsApi.delete(id);
-        await invalidateAfterQueueMutation(queryClient);
-        return result;
-      } catch (error: unknown) {
-        const detail = axios.isAxiosError<{ detail?: string }>(error)
-          ? error.response?.data?.detail || error.message
-          : error instanceof Error ? error.message : 'Unknown error';
-        console.error('Failed to delete thread:', detail);
-        setIsError(true);
-        throw error;
-      } finally {
-        setIsPending(false);
-      }
+  const mutation = useMutation({
+    mutationFn: (id: number) => threadsApi.delete(id),
+    onSuccess: async () => {
+      await invalidateAfterQueueMutation(queryClient);
     },
-    []
-  );
+  });
 
-  return { mutate, isPending, isError };
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+  };
 }
 
 export function useReactivateThread() {
-  const [isPending, setIsPending] = useState(false);
-  const [isError, setIsError] = useState(false);
-
-  const mutate = useCallback(
-    async (data: ReactivateThreadPayload) => {
-      setIsPending(true);
-      setIsError(false);
-
-      try {
-        const result = await threadsApi.reactivate(data);
-        await invalidateAfterQueueMutation(queryClient);
-        return result;
-      } catch (error: unknown) {
-        const detail = axios.isAxiosError<{ detail?: string }>(error)
-          ? error.response?.data?.detail || error.message
-          : error instanceof Error ? error.message : 'Unknown error';
-        console.error('Failed to reactivate thread:', detail);
-        setIsError(true);
-        throw error;
-      } finally {
-        setIsPending(false);
-      }
+  const mutation = useMutation({
+    mutationFn: (data: ReactivateThreadPayload) => threadsApi.reactivate(data),
+    onSuccess: async () => {
+      await invalidateAfterQueueMutation(queryClient);
     },
-    []
-  );
+  });
 
-  return { mutate, isPending, isError };
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+  };
 }

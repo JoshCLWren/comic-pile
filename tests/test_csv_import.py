@@ -294,8 +294,8 @@ Thread 5,Comic,2"""
     assert import_data["imported"] == 5
 
     # Create 2 sessions
-    await auth_client.post("/api/roll/")
-    await auth_client.post("/api/roll/")
+    await auth_client.post("/api/v1/roll/")
+    await auth_client.post("/api/v1/roll/")
 
     response = await auth_client.get("/api/admin/export/json/")
     assert response.status_code == 200

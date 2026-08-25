@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import axios from "axios";
+import { useMemo, useRef } from "react";
+import { useQuery, useInfiniteQuery, useMutation } from "@tanstack/react-query";
 import { sessionApi } from "../services/api";
 import type {
   SessionCurrent,
@@ -9,24 +9,24 @@ import type {
   SessionSummary,
 } from "../types";
 import { useToast } from "../contexts/useToast";
-import { useCache } from "../contexts/useCache";
+import { queryKeys } from "../query/queryKeys";
 
 const EMPTY_PARAMS = Object.freeze({});
 const STORAGE_KEY_PREFIX = "comic_pile_last_session_id";
 
+function normalizeQueryError(error: unknown, fallbackMessage: string): Error | null {
+  if (error == null) return null;
+  if (error instanceof Error) return error;
+  return new Error(fallbackMessage);
+}
+
 export function useSession() {
-  const [data, setData] = useState<SessionCurrent | null>(null);
-  const [isPending, setIsPending] = useState(true);
-  const [isError, setIsError] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
   const { showToast } = useToast();
   const lastNotifiedSessionIdRef = useRef<number | null>(null);
 
-  const fetchSession = useCallback(async () => {
-    setIsPending(true);
-    setIsError(false);
-    setError(null);
-    try {
+  const { data, isPending, isError, error, refetch } = useQuery({
+    queryKey: queryKeys.session.current(),
+    queryFn: async () => {
       const result = await sessionApi.getCurrent();
 
       const currentSessionId = result.id;
@@ -58,241 +58,113 @@ export function useSession() {
       } catch {
         // Persisting the session ID is best effort and must not hide the API result.
       }
-      setData(result);
       return result;
-    } catch (err: unknown) {
-      setIsError(true);
-      setError(
-        err instanceof Error
-          ? err
-          : new Error("Failed to fetch current session"),
-      );
-    } finally {
-      setIsPending(false);
-    }
-  }, [showToast]);
+    },
+  });
 
-  useEffect(() => {
-    fetchSession();
-  }, [fetchSession]);
-
-  const value = useMemo(
+  return useMemo(
     () => ({
       data,
-      setData,
       isPending,
       isError,
-      error,
-      refetch: fetchSession,
+      error: normalizeQueryError(error, "Failed to fetch current session"),
+      refetch,
     }),
-    [data, isPending, isError, error, fetchSession],
+    [data, isPending, isError, error, refetch],
   );
-
-  return value;
 }
 
 export function useSessions(params = EMPTY_PARAMS) {
-  const { invalidateQueries } = useCache();
-  const [sessions, setSessions] = useState<SessionSummary[]>([]);
-  const [isPending, setIsPending] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [isError, setIsError] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
-
-  const isLoadingMoreRef = useRef(false);
-  const paramsRef = useRef(params ?? EMPTY_PARAMS);
-  // Keep the ref current without causing re-renders
-  paramsRef.current = params ?? EMPTY_PARAMS;
-
-  const fetchFirstPage = useCallback(async () => {
-    setIsPending(true);
-    setIsError(false);
-    setError(null);
-    setSessions([]);
-    setNextPageToken(null);
-    setHasMore(false);
-    try {
-      const result: SessionListResponse = await sessionApi.list(
-        paramsRef.current,
-        null,
-      );
-      setSessions(result.sessions);
-      setNextPageToken(result.next_page_token);
-      setHasMore(result.next_page_token !== null && result.sessions.length > 0);
-      invalidateQueries(["sessions"]);
-    } catch (err: unknown) {
-      setIsError(true);
-      setError(
-        err instanceof Error ? err : new Error("Failed to fetch sessions"),
-      );
-    } finally {
-      setIsPending(false);
-    }
-  }, [invalidateQueries]);
-
-  const loadMore = useCallback(async () => {
-    if (!nextPageToken || isLoadingMoreRef.current) return;
-    isLoadingMoreRef.current = true;
-    setIsLoadingMore(true);
-    setError(null);
-    try {
-      const result: SessionListResponse = await sessionApi.list(
-        paramsRef.current,
-        nextPageToken,
-      );
-      setSessions((prev) => {
-        const existingIds = new Set(prev.map((s) => s.id));
-        const newSessions = result.sessions.filter(
-          (s) => !existingIds.has(s.id),
+  const query = useInfiniteQuery({
+    queryKey: ['sessions', params],
+    queryFn: async ({ pageParam }) => {
+      try {
+        return await sessionApi.list(params, pageParam as string | null);
+      } catch (error: unknown) {
+        if (error instanceof Error) throw error;
+        throw new Error(
+          pageParam === null ? 'Failed to fetch sessions' : 'Failed to load more sessions',
         );
-        return [...prev, ...newSessions];
-      });
-      setNextPageToken(result.next_page_token);
-      setHasMore(result.next_page_token !== null && result.sessions.length > 0);
-    } catch (err: unknown) {
-      setIsError(true);
-      setError(
-        err instanceof Error
-          ? err
-          : new Error("Failed to load more sessions"),
-      );
-    } finally {
-      setIsLoadingMore(false);
-      isLoadingMoreRef.current = false;
-    }
-  }, [nextPageToken]);
+      }
+    },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage: SessionListResponse) => lastPage.next_page_token ?? undefined,
+  });
 
-  useEffect(() => {
-    fetchFirstPage();
-  }, [fetchFirstPage]);
+  return useMemo(
+    () => {
+      const seenIds = new Set<number>();
+      const sessions =
+        query.data?.pages
+          .flatMap((page) => page.sessions)
+          .filter((session) => {
+            if (seenIds.has(session.id)) return false;
+            seenIds.add(session.id);
+            return true;
+          }) ?? [];
+      const isPending = query.isPending;
+      const isLoadingMore = query.isFetchingNextPage;
+      const isError = query.isError;
+      const error = normalizeQueryError(query.error, 'Failed to fetch sessions');
+      const hasMore = !!query.hasNextPage;
+      const loadMore = () => query.fetchNextPage();
 
-  const value = useMemo(
-    () => ({
-      data: sessions,
-      isPending,
-      isLoadingMore,
-      isError,
-      error,
-      hasMore,
-      loadMore,
-      refetch: fetchFirstPage,
-    }),
-    [sessions, isPending, isLoadingMore, isError, error, hasMore, loadMore, fetchFirstPage],
+      return {
+        data: sessions,
+        isPending,
+        isLoadingMore,
+        isError,
+        error,
+        hasMore,
+        loadMore,
+        refetch: query.refetch,
+      };
+    },
+    [query],
   );
-
-  return value;
 }
 
 export function useSessionDetails(id: number | string | null | undefined) {
-  const [data, setData] = useState<SessionDetails | null>(null);
-  const [isPending, setIsPending] = useState(true);
-  const [isError, setIsError] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
+  const { data, isPending, fetchStatus, isError, error, refetch } = useQuery({
+    queryKey: id ? queryKeys.session.detail(Number(id)) : [],
+    queryFn: () => sessionApi.getDetails(id!),
+    enabled: !!id,
+  });
 
-  const fetchDetails = useCallback(async () => {
-    if (!id) {
-      setData(null);
-      setIsError(false);
-      setError(null);
-      setIsPending(false);
-      return;
-    }
-    setIsPending(true);
-    setIsError(false);
-    setError(null);
-    try {
-      const result = await sessionApi.getDetails(id);
-      setData(result);
-    } catch (err: unknown) {
-      setIsError(true);
-      setError(
-        err instanceof Error
-          ? err
-          : new Error("Failed to fetch session details"),
-      );
-    } finally {
-      setIsPending(false);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    fetchDetails();
-  }, [fetchDetails]);
-
-  return { data, isPending, isError, error, refetch: fetchDetails };
+  return {
+    data,
+    isPending: isPending && fetchStatus !== 'idle',
+    isError,
+    error: normalizeQueryError(error, 'Failed to fetch session details'),
+    refetch,
+  };
 }
 
 export function useSessionSnapshots(id: number | string | null | undefined) {
-  const [data, setData] = useState<SessionSnapshotsResponse | null>(null);
-  const [isPending, setIsPending] = useState(true);
-  const [isError, setIsError] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
+  const { data, isPending, fetchStatus, isError, error, refetch } = useQuery({
+    queryKey: id ? ['session', 'snapshots', id] : [],
+    queryFn: () => sessionApi.getSnapshots(id!),
+    enabled: !!id,
+  });
 
-  const fetchSnapshots = useCallback(async () => {
-    if (!id) {
-      setData(null);
-      setIsError(false);
-      setError(null);
-      setIsPending(false);
-      return;
-    }
-    setIsPending(true);
-    setIsError(false);
-    setError(null);
-    try {
-      const result = await sessionApi.getSnapshots(id);
-      setData(result);
-    } catch (err: unknown) {
-      setIsError(true);
-      setError(
-        err instanceof Error
-          ? err
-          : new Error("Failed to fetch session snapshots"),
-      );
-    } finally {
-      setIsPending(false);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    fetchSnapshots();
-  }, [fetchSnapshots]);
-
-  return { data, isPending, isError, error, refetch: fetchSnapshots };
+  return {
+    data,
+    isPending: isPending && fetchStatus !== 'idle',
+    isError,
+    error: normalizeQueryError(error, 'Failed to fetch session snapshots'),
+    refetch,
+  };
 }
 
 export function useRestoreSessionStart() {
-  const [isPending, setIsPending] = useState(false);
-  const [isError, setIsError] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
+  const mutation = useMutation({
+    mutationFn: (sessionId: number | string) => sessionApi.restoreSessionStart(sessionId),
+  });
 
-  const mutate = useCallback(async (sessionId: number | string) => {
-    setIsPending(true);
-    setIsError(false);
-    setError(null);
-    try {
-      const result = await sessionApi.restoreSessionStart(sessionId);
-      return result;
-    } catch (err: unknown) {
-      setIsError(true);
-      const normalizedError =
-        err instanceof Error ? err : new Error("Failed to restore session");
-      setError(normalizedError);
-      if (axios.isAxiosError(err)) {
-        console.error(
-          "Failed to restore session:",
-          err.response?.data?.detail || err.message,
-        );
-      } else {
-        console.error("Failed to restore session:", normalizedError.message);
-      }
-      throw err;
-    } finally {
-      setIsPending(false);
-    }
-  }, []);
-
-  return { mutate, isPending, isError, error };
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+    error: normalizeQueryError(mutation.error, 'Failed to restore session'),
+  };
 }

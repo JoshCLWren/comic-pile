@@ -198,7 +198,8 @@ it('keeps snooze disabled before session data has loaded', async () => {
   renderQueue()
 
   const snoozeButton = screen.getAllByLabelText('Snooze')[0]
-  expect(snoozeButton).toBeDisabled()
+  expect(snoozeButton).toHaveAttribute('aria-disabled', 'true')
+  expect(snoozeButton).toHaveAttribute('tabindex', '0')
   await user.click(snoozeButton)
 
   expect(refetchSession).not.toHaveBeenCalled()

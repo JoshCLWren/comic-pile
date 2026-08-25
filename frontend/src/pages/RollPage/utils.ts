@@ -49,6 +49,7 @@ export function buildRatingThread(
       next_issue_number: metadata.next_issue_number ?? null,
       total_issues: metadata.total_issues ?? null,
       reading_progress: metadata.reading_progress ?? null,
+      explanation: metadata.explanation ?? null,
       last_rolled_result: metadata.result ?? metadata.last_rolled_result ?? result ?? null,
     }
   }
