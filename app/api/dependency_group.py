@@ -1,5 +1,7 @@
 """Authenticated API for user-owned named dependency groups."""
 
+import asyncio
+import logging
 from collections.abc import Sequence
 from typing import Annotated
 
@@ -11,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth import get_current_user
+from app.cache import invalidate_cache
 from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
 from app.models import DependencyGroup, DependencyGroupMembership, Issue, Thread
@@ -119,10 +122,20 @@ async def _group_response(
 
 
 async def _refresh_crossover_blocked_state(user_id: int, db: AsyncSession) -> None:
-    """Persist blocked-state changes and invalidate dependent user-scoped reads."""
+    """Persist blocked-state changes and invalidate dependent read caches."""
     await refresh_user_blocked_status(user_id, db)
     await db.commit()
-    await invalidate_user_view(user_id)
+    results = await asyncio.gather(
+        invalidate_cache(f"cache:continuity:*:User:{user_id}:*"),
+        invalidate_cache(f"cache:get_blocked_thread_ids:{user_id}:"),
+        invalidate_cache(f"cache:list_threads:User:{user_id}:*"),
+        invalidate_cache(f"cache:get_thread_blocking_info:*:User:{user_id}:"),
+        invalidate_cache(f"cache:get_threads_blocking_info:*:User:{user_id}:"),
+        return_exceptions=True,
+    )
+    for result in results:
+        if isinstance(result, BaseException):
+            logger.warning("Crossover cache invalidation failed", exc_info=result)
 
 
 async def _owned_group(db: AsyncSession, group_id: int, user_id: int) -> DependencyGroup:
