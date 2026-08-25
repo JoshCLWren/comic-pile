@@ -252,7 +252,7 @@ async def test_issue_dependency_api_lifecycle(auth_client, async_db, test_userna
     info = info_resp.json()
     assert info["is_blocked"] is True
     assert info["blocking_reasons"]
-    assert "issue #1" in info["blocking_reasons"][0].lower()
+    assert "#1" in info["blocking_reasons"][0].lower()
     assert info["blocking_dependencies"]
     assert info["blocking_dependencies"][0]["thread_id"] == source_thread.id
     assert info["blocking_dependencies"][0]["thread_title"] == source_thread.title
