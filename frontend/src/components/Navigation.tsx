@@ -31,17 +31,17 @@ interface NavItem {
 }
 
 const MAIN_NAV_ITEMS: NavItem[] = [
-  { path: '/', label: 'Roll', icon: '🎲', ariaLabel: 'Roll page' },
-  { path: '/queue', label: 'Queue', icon: '📚', ariaLabel: 'Queue page' },
-  { path: '/history', label: 'History', icon: '📜', ariaLabel: 'History page' },
-  { path: '/crossovers', label: 'Crossovers', icon: '🔀', ariaLabel: 'Crossovers page' },
+  { path: '/', label: 'Roll', icon: 'roll', ariaLabel: 'Roll page' },
+  { path: '/queue', label: 'Queue', icon: 'queue', ariaLabel: 'Queue page' },
+  { path: '/history', label: 'History', icon: 'history', ariaLabel: 'History page' },
+  { path: '/crossovers', label: 'Crossovers', icon: 'crossovers', ariaLabel: 'Crossovers page' },
 ]
 
 const SECONDARY_NAV_ITEMS: NavItem[] = [
-  { path: '/continuity-plans', label: 'Planner', icon: '🧭', ariaLabel: 'Continuity Planner page' },
-  { path: '/whats-new', label: 'New', icon: '✨', ariaLabel: "What's New page" },
-  { path: '/help', label: 'Help', icon: '❓', ariaLabel: 'Help page' },
-  { path: '/glossary', label: 'Glossary', icon: '📘', ariaLabel: 'Glossary page' },
+  { path: '/continuity-plans', label: 'Planner', icon: 'planner', ariaLabel: 'Continuity Planner page' },
+  { path: '/whats-new', label: 'New', icon: 'new', ariaLabel: "What's New page" },
+  { path: '/help', label: 'Help', icon: 'help', ariaLabel: 'Help page' },
+  { path: '/glossary', label: 'Glossary', icon: 'glossary', ariaLabel: 'Glossary page' },
 ]
 
 const APPEARANCE_OPTIONS: Array<{ id: ThemeId; label: string; ariaLabel: string; mobileClassName: string }> = [
@@ -49,6 +49,78 @@ const APPEARANCE_OPTIONS: Array<{ id: ThemeId; label: string; ariaLabel: string;
   { id: 'ink-gold', label: 'Ink Gold', ariaLabel: 'Ink-gold theme', mobileClassName: 'classic:text-stone-400 ink-gold:text-stone-100 command-center:text-stone-400' },
   { id: 'command-center', label: 'Command Center', ariaLabel: 'Command center theme', mobileClassName: 'classic:text-stone-400 ink-gold:text-stone-400 command-center:text-stone-100' },
 ]
+
+function NavIcon({ name }: { name: string }) {
+  const icons: Record<string, React.ReactNode> = {
+    roll: (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <path d="M8 8h4v8H8"></path>
+        <path d="M12 8h4v8h-4"></path>
+      </svg>
+    ),
+    queue: (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 4v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4"></path>
+        <path d="M8 4v16"></path>
+        <path d="M12 4v16"></path>
+        <line x1="4" y1="10" x2="20" y2="10"></line>
+      </svg>
+    ),
+    history: (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M13.5 20q-5.775-4.3-7.5-10"></path>
+        <path d="M7 10l4-4 4 4"></path>
+        <path d="M11 14H4"></path>
+      </svg>
+    ),
+    crossovers: (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M10 6V4a2 2 0 0 1 2-2 2 2 0 0 1 2 2v2"></path>
+        <path d="M6 18v2a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-2"></path>
+        <path d="M12 12H4"></path>
+        <path d="M8 6l4-4 4 4"></path>
+        <path d="M4 18h16"></path>
+      </svg>
+    ),
+    planner: (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <path d="M8 12h8"></path>
+        <path d="M12 8v8"></path>
+      </svg>
+    ),
+    new: (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <path d="M16 8v6a2 2 0 0 1-2 2h-4"></path>
+        <cirche d="M12 8v6"></circle>
+        <line x1="8" y1="8" x2="16" y2="16"></line>
+      </svg>
+    ),
+    help: (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+      </svg>
+    ),
+    glossary: (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 4v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4H4z"></path>
+        <path d="M8 8h8"></path>
+        <path d="M8 12h8"></path>
+        <path d="M8 16h8"></path>
+      </svg>
+    ),
+  }
+
+  return (
+    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {icons[name] || icons.roll}
+    </svg>
+  )
+}
 
 export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   const location = useLocation()
@@ -140,9 +212,6 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
     const applied = selectTheme(themeId)
     if (applied === null) return
     setActiveTheme(applied)
-    // The choice is already applied and mirrored locally; server persistence
-    // retries in the background and reports sustained failure once per
-    // outage episode instead of once per click (issue #1872).
     persistThemePreference(applied, () => {
       showToast('Theme applied for this session, but saving your preference failed.', 'error')
     })
@@ -165,20 +234,53 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
       active ? 'active' : 'hover:bg-white/5'
     }`
 
-  const renderNavItem = (item: NavItem, active: boolean) => (
-    <Link
-      key={item.path}
-      to={item.path}
-      className={navItemClass(active)}
-      aria-label={item.ariaLabel}
-    >
-      <span className="text-lg md:text-2xl" aria-hidden="true">{item.icon}</span>
-      <span className="nav-label text-[9px] font-bold uppercase tracking-wide md:text-[10px] md:tracking-widest">{item.label}</span>
-    </Link>
-  )
+  const desktopNavItemClass = (active: boolean) =>
+    `desktop-nav-item flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 ${
+      active ? 'bg-white/10 text-amber-400' : 'text-stone-400 hover:bg-white/5'
+    }`
+
+  const renderNavItem = (item: NavItem, active: boolean, isDesktop = false) => {
+    if (isDesktop) {
+      return (
+        <Link
+          key={item.path}
+          to={item.path}
+          className={desktopNavItemClass(active)}
+          aria-label={item.ariaLabel}
+        >
+          <NavIcon name={item.icon} />
+          <span className="text-sm font-medium">{item.label}</span>
+        </Link>
+      )
+    }
+    return (
+      <Link
+        key={item.path}
+        to={item.path}
+        className={navItemClass(active)}
+        aria-label={item.ariaLabel}
+      >
+        <NavIcon name={item.icon} />
+        <span className="nav-label text-[10px] font-bold uppercase tracking-wide">{item.label}</span>
+      </Link>
+    )
+  }
+
+  const allNavItems = [...MAIN_NAV_ITEMS, ...SECONDARY_NAV_ITEMS]
 
   return (
     <>
+      <nav className="fixed top-0 left-0 right-0 nav-container z-40 hidden md:flex" role="navigation" aria-label="Main navigation">
+        <div className="flex items-center justify-between px-4 h-16 max-w-7xl mx-auto w-full">
+          <div className="flex items-center gap-1">
+            {MAIN_NAV_ITEMS.map((item) => renderNavItem(item, isActive(item.path), true))}
+          </div>
+          <div className="flex items-center gap-1">
+            {SECONDARY_NAV_ITEMS.map((item) => renderNavItem(item, isActive(item.path), true))}
+          </div>
+        </div>
+      </nav>
+
       <nav className="fixed bottom-0 left-0 right-0 nav-container z-40" role="navigation" aria-label="Main navigation">
         <div className="flex h-14 items-center justify-around px-1 md:h-20 md:px-2 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl mx-auto">
           {MAIN_NAV_ITEMS.map((item) => renderNavItem(item, isActive(item.path)))}
@@ -193,7 +295,12 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
               className={navItemClass(isMoreOpen || isMoreRoute)}
               aria-label="More pages"
             >
-              <span className="text-lg md:text-2xl" aria-hidden="true">•••</span>
+              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="6" x2="12" y2="12"></line>
+                <line x1="12" y1="12" x2="12" y2="12"></line>
+                <line x1="6" y1="12" x2="12" y2="12"></line>
+              </svg>
               <span className="nav-label text-[9px] font-bold uppercase tracking-wide md:text-[10px] md:tracking-widest">More</span>
             </button>
           )}
@@ -213,14 +320,18 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
               to={item.path}
               className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-panel)]"
             >
-              <span aria-hidden="true">{item.icon}</span>
+              <NavIcon name={item.icon} />
               <span>{item.label === 'New' ? "What's New" : item.label === 'Planner' ? 'Continuity Planner' : item.label}</span>
             </Link>
           ))}
           <div className="space-y-1 border-t border-[var(--theme-border)] pt-2 md:hidden">
             <BugReportButton onSubmit={onBugReportSubmit} variant="nav" />
             <button type="button" onClick={handleLogout} className="flex min-h-12 w-full items-center gap-3 rounded-xl px-4 py-3 text-left font-bold text-red-300 hover:bg-[var(--theme-bg-panel)]">
-              <span aria-hidden="true">⎋</span><span>Sign out</span>
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 6l-6 6 6 6"></path>
+                <path d="M6 12h12"></path>
+              </svg>
+              <span>Sign out</span>
             </button>
           </div>
           <div className="mt-3 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
