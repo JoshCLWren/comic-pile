@@ -396,12 +396,12 @@ async def get_current_session(
             )
             active_session = active_session_result.scalars().first()
 
-if active_session is None or not await is_active(
-            active_session.started_at, active_session.ended_at, db
-        ):
-            # Extract timezone from request header
-            timezone = request.headers.get("X-Browser-Timezone")
-            active_session = await get_or_create(db, user_id=current_user.id, timezone=timezone)
+            if active_session is None or not await is_active(
+                active_session.started_at, active_session.ended_at, db
+            ):
+                # Extract timezone from request header
+                timezone = request.headers.get("X-Browser-Timezone")
+                active_session = await get_or_create(db, user_id=current_user.id, timezone=timezone)
 
             await db.refresh(active_session)
             active_session_id = active_session.id
