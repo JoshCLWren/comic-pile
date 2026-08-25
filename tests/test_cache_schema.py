@@ -60,11 +60,9 @@ def _real_heads() -> list[str]:
 
 
 def test_cache_migration_is_the_single_head() -> None:
-    """There must be exactly one Alembic head; duplicate down_revisions branch history."""
+    """The migration history must have a single head; duplicate down_revisions branch history."""
     heads = _real_heads()
-    assert len(heads) == 1, (
-        f"Expected exactly one Alembic head, got {heads}"
-    )
+    assert len(heads) == 1, f"Expected exactly one Alembic head, got {heads}"
 
 
 def test_cache_entries_table_exists_in_metadata() -> None:
