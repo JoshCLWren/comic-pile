@@ -13,6 +13,7 @@ from app.config import RedisSettings
 def redis_settings(**values: bool | str | None) -> RedisSettings:
     """Build isolated Redis settings without reading ambient Redis credentials."""
     isolated_values: dict[str, bool | str | None] = {
+        "cache_provider": "redis",
         "cache_enabled": False,
         "upstash_redis_rest_url": None,
         "upstash_redis_rest_token": None,
@@ -20,6 +21,29 @@ def redis_settings(**values: bool | str | None) -> RedisSettings:
     }
     isolated_values.update(values)
     return RedisSettings.model_validate(isolated_values)
+
+
+def test_postgres_provider_is_default_and_configured() -> None:
+    """Postgres provider is the default and is considered configured without extra flags."""
+    settings = RedisSettings.model_validate(
+        {
+            "cache_provider": "postgres",
+            "cache_enabled": False,
+            "upstash_redis_rest_url": None,
+            "upstash_redis_rest_token": None,
+            "redis_url": None,
+        }
+    )
+    assert settings.cache_provider == "postgres"
+    assert settings.effective_provider == "postgres"
+    assert settings.is_configured is True
+
+
+def test_off_provider_is_never_configured() -> None:
+    """CACHE_PROVIDER=off disables caching regardless of credentials."""
+    settings = redis_settings(cache_provider="off", cache_enabled=True, redis_url="redis://localhost:6379/0")
+    assert settings.effective_provider == "off"
+    assert settings.is_configured is False
 
 
 def test_cache_defaults_to_disabled_with_remote_credentials_present() -> None:

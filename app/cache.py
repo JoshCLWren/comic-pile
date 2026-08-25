@@ -814,7 +814,7 @@ class PostgresCache:
             RuntimeError: If the cache has not been initialized.
         """
         engine = self._engine
-        if engine is None or not self.is_initialized:
+        if engine is None:
             raise RuntimeError("Cache is not initialized")
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
@@ -845,7 +845,10 @@ class PostgresCache:
             self._circuit_breaker.record_success()
             if row is None:
                 return None
-            return _reconstruct_value(json.loads(row))
+            if isinstance(row, str):
+                return _reconstruct_value(json.loads(row))
+            # SQLAlchemy+asyncpg may return already-decoded JSONB (dict/list)
+            return _reconstruct_value(row)
         except Exception as e:
             self._circuit_breaker.record_failure()
             self._maybe_demote()
@@ -1003,7 +1006,9 @@ class PostgresCache:
         """Read the active generation and matching value atomically (Postgres).
 
         Mirrors the Redis Lua path: returns ``[generation, raw_value]`` where
-        ``raw_value`` is the stored JSON text (or ``None`` on a miss).
+        ``raw_value`` is the stored JSON payload (or ``None`` on a miss).
+        The payload may be returned as decoded JSONB (dict/list) or as text,
+        depending on the asyncpg/SQLAlchemy decoding.
         """
         engine = self._engine
         if engine is None or not self.is_initialized:
@@ -1025,6 +1030,13 @@ class PostgresCache:
                     {"ns": _CACHE_NAMESPACE, "k": value_key},
                 )
                 raw = val_row.scalar_one_or_none()
+                # Normalize JSONB payload to text for the shared decode path:
+                # Postgres may return already-decoded dict/list; callers expect
+                # a JSON text string akin to the Redis transport.
+                if isinstance(raw, (dict, list)):
+                    raw = json.dumps(raw)
+                elif isinstance(raw, bytes):
+                    raw = raw.decode()
             self._circuit_breaker.record_success()
             return [generation, raw]
         except Exception as e:
@@ -1037,14 +1049,16 @@ class PostgresCache:
         """Decode a stored cache payload back into Python objects.
 
         Args:
-            raw: Stored payload as text or bytes.
+            raw: Stored payload as text, bytes, or already-decoded JSONB.
 
         Returns:
             Reconstructed value with tagged containers restored.
 
         Raises:
-            ValueError: If the payload is not JSON text.
+            ValueError: If the payload is not JSON text or a decoded JSON value.
         """
+        if isinstance(raw, (dict, list)):
+            return _reconstruct_value(raw)
         if isinstance(raw, bytes):
             raw = raw.decode()
         elif not isinstance(raw, str):

@@ -325,19 +325,14 @@ class RedisSettings(BaseSettings):
 
     @property
     def is_configured(self) -> bool:
-        """Return whether caching has usable credentials for the configured provider.
+        """Return whether caching is active for the resolved provider.
 
-        ``cache_provider=redis`` falls back to ``False`` when ``cache_enabled`` is
-        ``False`` or no Redis credentials are configured, preserving the existing
-        implicit-disable behavior that callers previously relied on.
+        Delegates to :attr:`effective_provider` so ``cache_provider=postgres``
+        (the default) is considered configured even though it requires no
+        Redis credentials, while ``cache_provider=redis`` still requires
+        ``cache_enabled`` and Redis credentials, and ``off`` is never configured.
         """
-        if self.cache_provider == "off":
-            return False
-        if not self.cache_enabled:
-            return False
-        return bool(
-            (self.upstash_redis_rest_url and self.upstash_redis_rest_token) or self.redis_url
-        )
+        return self.effective_provider != "off"
 
     @property
     def effective_provider(self) -> Literal["postgres", "redis", "off"]:
