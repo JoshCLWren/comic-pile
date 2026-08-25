@@ -92,6 +92,8 @@ def completion_batch_size(review_backlog: int) -> int:
 def cooldown_seconds(outcome: str | None) -> int:
     """Return how long a recently unhealthy worker should yield to healthy peers."""
     normalized = (outcome or "").strip().casefold()
+    if normalized in {"success", "work_failure", "no_change", "policy_blocked"}:
+        return 0
     if normalized in {"model_unavailable", "model missing"} or "model missing" in normalized:
         return MODEL_MISSING_COOLDOWN_SECONDS
     if normalized in {"provider_unavailable", "rate limited"} or "rate limited" in normalized:
