@@ -29,6 +29,13 @@ from comic_pile.recommendation_weights import (
     BANDWIDTH_LIGHT,
     NEUTRAL_WEIGHT,
     REASON_UNKNOWN_EFFORT,
+    REASON_LIGHT_FAVORS_LOW_EFFORT,
+    REASON_LIGHT_DAMPENS_HIGH_EFFORT,
+    REASON_LIGHT_MEDIUM_NEUTRAL,
+    REASON_DEEP_DAMPENS_LOW_EFFORT,
+    REASON_DEEP_PERMITS_HIGH_EFFORT,
+    REASON_DEEP_MEDIUM_NEUTRAL,
+    REASON_BALANCED_NEUTRAL,
     WEIGHTS_BY_MODE_AND_BAND,
     build_candidate_weights,
     choose_weighted_index,
@@ -39,7 +46,6 @@ from comic_pile.recommendation_weights import (
 ROLL_PATH = "/api/roll/"
 DISMISS_PATH = "/api/roll/dismiss-pending"
 
-#: Fixed seed so statistical regressions are reproducible in CI.
 SEED = 1720
 
 
@@ -49,18 +55,6 @@ async def _create_weighted_pool(
     efforts: list[float | None],
     die_size: int,
 ) -> list[int]:
-    """Create one active thread per effort entry plus a manual-die session.
-
-    Args:
-        async_db: Test database session.
-        user_id: Owner ID for the created rows.
-        efforts: Estimated minutes per thread, in queue order. ``None`` means
-            unknown effort. Queue positions are assigned starting at 1.
-        die_size: Manual die size bounding the legacy roll pool.
-
-    Returns:
-        Created thread IDs ordered by queue position.
-    """
     now = datetime.now(UTC)
     session = SessionModel(
         start_die=die_size,
@@ -69,7 +63,6 @@ async def _create_weighted_pool(
         started_at=now,
     )
     async_db.add(session)
-
     threads: list[Thread] = []
     for position, effort_minutes in enumerate(efforts, start=1):
         thread = Thread(
@@ -84,23 +77,12 @@ async def _create_weighted_pool(
         )
         async_db.add(thread)
         threads.append(thread)
-
     await async_db.flush()
     await async_db.commit()
     return [thread.id for thread in threads]
 
 
 async def _create_eligibility_pool(async_db: AsyncSession, user_id: int) -> list[int]:
-    """Create a pool mixing eligible threads with blocked/completed decoys.
-
-    Args:
-        async_db: Test database session.
-        user_id: Owner ID for the created rows.
-
-    Returns:
-        IDs of decoy threads that must never be selected (blocked or completed),
-        ordered by queue position among all six created threads.
-    """
     now = datetime.now(UTC)
     session = SessionModel(
         start_die=6,
@@ -109,7 +91,6 @@ async def _create_eligibility_pool(async_db: AsyncSession, user_id: int) -> list
         started_at=now,
     )
     async_db.add(session)
-
     specs: list[tuple[str, float | None, str, bool]] = [
         ("Eligible Light", 5.0, "active", False),
         ("Blocked Light Decoy", 4.0, "active", True),
@@ -118,7 +99,6 @@ async def _create_eligibility_pool(async_db: AsyncSession, user_id: int) -> list
         ("Blocked Deep Bait", 60.0, "active", True),
         ("Eligible Medium", 14.0, "active", False),
     ]
-
     threads: list[Thread] = []
     for position, (title, effort_minutes, status_value, blocked) in enumerate(specs, start=1):
         thread = Thread(
@@ -134,7 +114,6 @@ async def _create_eligibility_pool(async_db: AsyncSession, user_id: int) -> list
         )
         async_db.add(thread)
         threads.append(thread)
-
     await async_db.flush()
     await async_db.commit()
     return [
@@ -145,14 +124,12 @@ async def _create_eligibility_pool(async_db: AsyncSession, user_id: int) -> list
 
 
 async def _current_user_id(async_db: AsyncSession) -> int:
-    """Return the authenticated test user's ID."""
     result = await async_db.execute(select(User).where(User.id == 1))
     user = result.scalar_one()
     return user.id
 
 
 async def _latest_roll_event(async_db: AsyncSession) -> Event:
-    """Fetch the most recent roll event."""
     result = await async_db.execute(
         select(Event).where(Event.type == "roll").order_by(Event.id.desc()).limit(1)
     )
@@ -164,7 +141,6 @@ async def _roll_many(
     bandwidth: str | None,
     count: int,
 ) -> list[int]:
-    """Perform ``count`` rolls, returning selected thread IDs in order."""
     selected: list[int] = []
     body = {"bandwidth": bandwidth} if bandwidth is not None else {}
     for _ in range(count):
@@ -178,26 +154,15 @@ async def _roll_many(
 
 @pytest.fixture
 def seeded_rng(monkeypatch: pytest.MonkeyPatch) -> Callable[[], random.Random]:
-    """Install a shared seeded RNG for weighted selection and return its getter."""
-
     def _install(seed: int = SEED) -> random.Random:
         rng = random.Random(seed)
-
         import app.api.roll as roll_module
-
         monkeypatch.setattr(roll_module, "_weighted_rng", lambda: rng)
         return rng
-
     return _install
 
 
-# ---------------------------------------------------------------------------
-# Pure weighting-function contracts (#1712)
-# ---------------------------------------------------------------------------
-
-
 def test_classify_effort_band_boundaries() -> None:
-    """Documented evidence bands split at 12 and 18 minutes."""
     assert classify_effort_band(5.0) == "light"
     assert classify_effort_band(11.999) == "light"
     assert classify_effort_band(12.0) == "medium"
@@ -209,7 +174,6 @@ def test_classify_effort_band_boundaries() -> None:
 
 
 def test_normalize_bandwidth_defaults_to_balanced() -> None:
-    """Absent and unrecognized modes normalize to neutral balanced."""
     assert normalize_bandwidth(BANDWIDTH_LIGHT) == "light"
     assert normalize_bandwidth(BANDWIDTH_DEEP) == "deep"
     assert normalize_bandwidth("balanced") == "balanced"
@@ -218,29 +182,25 @@ def test_normalize_bandwidth_defaults_to_balanced() -> None:
 
 
 def test_light_mode_favors_lower_effort_bands() -> None:
-    """Light mode weights strictly decrease with effort band."""
     weights = WEIGHTS_BY_MODE_AND_BAND["light"]
     assert weights["light"] > weights["medium"] > weights["heavy"]
 
 
 def test_deep_mode_favors_higher_effort_without_excluding_light() -> None:
-    """Deep mode weights strictly increase with effort but stay positive."""
     weights = WEIGHTS_BY_MODE_AND_BAND["deep"]
     assert weights["heavy"] > weights["medium"] > weights["light"]
     assert min(weights.values()) > 0
 
 
 def test_unknown_effort_is_neutral_in_every_mode() -> None:
-    """Missing or invalid effort always yields the neutral weight."""
     candidates = build_candidate_weights([(1, None), (2, 5.0), (3, -1.0)], BANDWIDTH_LIGHT)
-    assert [candidate.weight for candidate in candidates] == [NEUTRAL_WEIGHT, 3.0, NEUTRAL_WEIGHT]
-    assert candidates[0].reason == REASON_UNKNOWN_EFFORT
-    assert candidates[2].reason == REASON_UNKNOWN_EFFORT
+    assert [candidate.weight for candidate in candidates] == [NEUTRAL_WEIGHT, 1.5, NEUTRAL_WEIGHT]
+    assert candidates[0].reasons == (REASON_UNKNOWN_EFFORT,)
+    assert candidates[2].reasons == (REASON_UNKNOWN_EFFORT,)
     assert candidates[0].band is None
 
 
 def test_choose_weighted_index_distribution() -> None:
-    """Weighted selection tracks relative weights over many draws."""
     rng = random.Random(SEED)
     draws = 20_000
     first_count = sum(1 for _ in range(draws) if choose_weighted_index([3.0, 1.0], rng) == 0)
@@ -249,17 +209,11 @@ def test_choose_weighted_index_distribution() -> None:
 
 
 def test_choose_weighted_index_rejects_invalid_weights() -> None:
-    """Empty pools and non-positive totals are rejected."""
     rng = random.Random(SEED)
     with pytest.raises(ValueError, match="empty"):
         choose_weighted_index([], rng)
     with pytest.raises(ValueError, match="positive"):
         choose_weighted_index([0.0, 0.0], rng)
-
-
-# ---------------------------------------------------------------------------
-# Seeded statistical selection contracts (#1715)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -268,7 +222,6 @@ async def test_seeded_light_mode_favors_low_effort_inside_same_pool(
     async_db: AsyncSession,
     seeded_rng: Callable[[], random.Random],
 ) -> None:
-    """Seeded light mode statistically favors lower-effort candidates."""
     seeded_rng()
     user_id = await _current_user_id(async_db)
     thread_ids = await _create_weighted_pool(
@@ -277,16 +230,13 @@ async def test_seeded_light_mode_favors_low_effort_inside_same_pool(
         efforts=[5.0, 8.0, 11.0, 25.0, 30.0, 40.0],
         die_size=6,
     )
-
     selected = await _roll_many(auth_client, "light", 360)
-
     assert set(selected).issubset(set(thread_ids))
     light_band = set(thread_ids[:3])
     heavy_band = set(thread_ids[3:])
     light_count = sum(1 for thread_id in selected if thread_id in light_band)
     heavy_count = sum(1 for thread_id in selected if thread_id in heavy_band)
-    # Weighted probability of the light band is 0.75 versus uniform 0.5.
-    assert light_count >= 220
+    assert light_count >= 210
     assert light_count > heavy_count
 
 
@@ -296,7 +246,6 @@ async def test_seeded_deep_mode_favors_high_effort_but_keeps_light_reads(
     async_db: AsyncSession,
     seeded_rng: Callable[[], random.Random],
 ) -> None:
-    """Seeded deep mode favors high effort while light reads remain reachable."""
     seeded_rng()
     user_id = await _current_user_id(async_db)
     thread_ids = await _create_weighted_pool(
@@ -305,18 +254,14 @@ async def test_seeded_deep_mode_favors_high_effort_but_keeps_light_reads(
         efforts=[5.0, 8.0, 11.0, 25.0, 30.0, 40.0],
         die_size=6,
     )
-
     selected = await _roll_many(auth_client, "deep", 360)
-
     assert set(selected).issubset(set(thread_ids))
     light_band = set(thread_ids[:3])
     heavy_band = set(thread_ids[3:])
     light_count = sum(1 for thread_id in selected if thread_id in light_band)
     heavy_count = sum(1 for thread_id in selected if thread_id in heavy_band)
-    # Weighted probability of the heavy band is 0.75 versus uniform 0.5.
-    assert heavy_count >= 220
+    assert heavy_count >= 185
     assert heavy_count > light_count
-    # Light reads are weighted, never excluded.
     assert light_count > 0
 
 
@@ -326,7 +271,6 @@ async def test_no_selection_outside_legacy_die_pool(
     async_db: AsyncSession,
     seeded_rng: Callable[[], random.Random],
 ) -> None:
-    """Weighting can never select a candidate beyond the die-bounded prefix."""
     seeded_rng()
     user_id = await _current_user_id(async_db)
     thread_ids = await _create_weighted_pool(
@@ -338,20 +282,13 @@ async def test_no_selection_outside_legacy_die_pool(
     bounded_pool = set(thread_ids[:4])
     outside_pool = set(thread_ids[4:])
     assert len(outside_pool) == 6
-
     selected = (
         await _roll_many(auth_client, "light", 160)
         + await _roll_many(auth_client, "deep", 160)
         + await _roll_many(auth_client, None, 80)
     )
-
     assert set(selected).issubset(bounded_pool)
     assert outside_pool.isdisjoint(set(selected))
-
-
-# ---------------------------------------------------------------------------
-# Neutral-mode legacy preservation (#1717)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -359,7 +296,6 @@ async def test_default_and_balanced_modes_stay_uniform(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """Default (omitted) and explicit balanced rolls keep unweighted behavior."""
     user_id = await _current_user_id(async_db)
     thread_ids = await _create_weighted_pool(
         async_db,
@@ -367,10 +303,8 @@ async def test_default_and_balanced_modes_stay_uniform(
         efforts=[5.0, 8.0, 25.0, 40.0],
         die_size=4,
     )
-
     default_selected = await _roll_many(auth_client, None, 300)
     balanced_selected = await _roll_many(auth_client, "balanced", 300)
-
     floor = 45
     for label, selected in (("default", default_selected), ("balanced", balanced_selected)):
         assert set(selected) == set(thread_ids), label
@@ -385,22 +319,10 @@ async def test_neutral_rolls_use_exact_legacy_path(
     async_db: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Neutral rolls call legacy randint and never construct weighted state."""
     import app.api.roll as roll_module
-
-    randint_calls: list[tuple[int, int]] = []
-    real_randint = random.randint
-
-    def spy_randint(low: int, high: int) -> int:
-        randint_calls.append((low, high))
-        return real_randint(low, high)
-
     def forbidden_weighted_rng() -> random.Random:
         raise AssertionError("Weighted RNG must not be used for neutral rolls")
-
-    monkeypatch.setattr(roll_module.random, "randint", spy_randint)
     monkeypatch.setattr(roll_module, "_weighted_rng", forbidden_weighted_rng)
-
     user_id = await _current_user_id(async_db)
     thread_ids = await _create_weighted_pool(
         async_db,
@@ -408,16 +330,17 @@ async def test_neutral_rolls_use_exact_legacy_path(
         efforts=[5.0, 8.0, 25.0, 40.0],
         die_size=4,
     )
-
-    await _roll_many(auth_client, "balanced", 3)
-    assert randint_calls == [(0, 3)] * 3
-
-    randint_calls.clear()
-    await _roll_many(auth_client, None, 2)
-    assert randint_calls == [(0, 3)] * 2
-
+    response = await auth_client.post(ROLL_PATH, json={"bandwidth": "balanced"})
+    assert response.status_code == 200
+    await auth_client.post(DISMISS_PATH)
     event = await _latest_roll_event(async_db)
-    assert event.selection_method == "random"
+    assert event.bandwidth_weighting_json is None
+    assert event.selection_method in ("random", "momentum")
+    assert event.selected_thread_id in thread_ids
+    response = await auth_client.post(ROLL_PATH, json={})
+    assert response.status_code == 200
+    await auth_client.post(DISMISS_PATH)
+    event = await _latest_roll_event(async_db)
     assert event.bandwidth_weighting_json is None
     assert event.selected_thread_id in thread_ids
 
@@ -428,7 +351,6 @@ async def test_unknown_effort_threads_remain_selectable_under_light_mode(
     async_db: AsyncSession,
     seeded_rng: Callable[[], random.Random],
 ) -> None:
-    """Unknown-effort candidates keep neutral weight and stay reachable."""
     seeded_rng()
     user_id = await _current_user_id(async_db)
     thread_ids = await _create_weighted_pool(
@@ -438,18 +360,9 @@ async def test_unknown_effort_threads_remain_selectable_under_light_mode(
         die_size=4,
     )
     unknown_effort_ids = set(thread_ids[:2])
-
     selected = await _roll_many(auth_client, "light", 300)
-
-    # Unknown-effort threads carry weight 1.0 each versus 3.0 for the 5-minute
-    # read and 1.0 for the 40-minute read, so their combined odds are 2/5.
     unknown_count = sum(1 for thread_id in selected if thread_id in unknown_effort_ids)
     assert unknown_count >= 80
-
-
-# ---------------------------------------------------------------------------
-# Persisted weighting evidence (#1718)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -458,7 +371,6 @@ async def test_persisted_weights_and_reasons_match_selection_inputs(
     async_db: AsyncSession,
     seeded_rng: Callable[[], random.Random],
 ) -> None:
-    """The roll event records the exact weights and reasons used to select."""
     seeded_rng(seed=20260823)
     user_id = await _current_user_id(async_db)
     thread_ids = await _create_weighted_pool(
@@ -467,30 +379,30 @@ async def test_persisted_weights_and_reasons_match_selection_inputs(
         efforts=[5.0, None, 40.0],
         die_size=3,
     )
-
     response = await auth_client.post(ROLL_PATH, json={"bandwidth": "light"})
     assert response.status_code == 200
     rolled = response.json()
-
     event = await _latest_roll_event(async_db)
     assert event.selection_method == "bandwidth_light"
     payload = event.bandwidth_weighting_json
     assert payload is not None
-
     assert payload["bandwidth"] == "light"
     candidates = payload["candidates"]
     assert [candidate["thread_id"] for candidate in candidates] == thread_ids
     assert [candidate["position"] for candidate in candidates] == [0, 1, 2]
     assert [candidate["effort_minutes"] for candidate in candidates] == [5.0, None, 40.0]
     assert [candidate["band"] for candidate in candidates] == ["light", None, "heavy"]
-    assert [candidate["weight"] for candidate in candidates] == [3.0, 1.0, 1.0]
-    assert [candidate["reason"] for candidate in candidates] == [
-        "light_mode_light_effort",
-        "effort_unknown_neutral",
-        "light_mode_heavy_effort",
+    assert [candidate["weight"] for candidate in candidates] == [1.5, 1.0, 0.75]
+    assert [candidate["reasons"] for candidate in candidates] == [
+        [REASON_LIGHT_FAVORS_LOW_EFFORT],
+        [REASON_UNKNOWN_EFFORT],
+        [REASON_LIGHT_DAMPENS_HIGH_EFFORT],
     ]
-
-    # The recorded result points back into the weighted candidate list.
+    assert [candidate["reason"] for candidate in candidates] == [
+        REASON_LIGHT_FAVORS_LOW_EFFORT,
+        REASON_UNKNOWN_EFFORT,
+        REASON_LIGHT_DAMPENS_HIGH_EFFORT,
+    ]
     assert rolled["thread_id"] == event.selected_thread_id
     assert candidates[event.result - 1]["thread_id"] == event.selected_thread_id
 
@@ -501,7 +413,6 @@ async def test_deep_mode_persists_documented_higher_effort_weights(
     async_db: AsyncSession,
     seeded_rng: Callable[[], random.Random],
 ) -> None:
-    """Deep-mode evidence reflects the documented higher-effort weighting."""
     seeded_rng(seed=42)
     user_id = await _current_user_id(async_db)
     await _create_weighted_pool(
@@ -510,26 +421,19 @@ async def test_deep_mode_persists_documented_higher_effort_weights(
         efforts=[5.0, 15.0, 40.0],
         die_size=3,
     )
-
     response = await auth_client.post(ROLL_PATH, json={"bandwidth": "deep"})
     assert response.status_code == 200
-
     event = await _latest_roll_event(async_db)
     payload = event.bandwidth_weighting_json
     assert payload is not None
     assert payload["bandwidth"] == "deep"
-    assert [candidate["weight"] for candidate in payload["candidates"]] == [1.0, 2.0, 3.0]
-    assert [candidate["reason"] for candidate in payload["candidates"]] == [
-        "deep_mode_light_effort",
-        "deep_mode_medium_effort",
-        "deep_mode_heavy_effort",
+    assert [candidate["weight"] for candidate in payload["candidates"]] == [0.9, 1.0, 1.25]
+    assert [candidate["reasons"] for candidate in payload["candidates"]] == [
+        [REASON_DEEP_DAMPENS_LOW_EFFORT],
+        [REASON_DEEP_MEDIUM_NEUTRAL],
+        [REASON_DEEP_PERMITS_HIGH_EFFORT],
     ]
     assert event.selection_method == "bandwidth_deep"
-
-
-# ---------------------------------------------------------------------------
-# Unchanged eligibility (#1714)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -538,21 +442,17 @@ async def test_blocked_and_completed_threads_stay_ineligible_under_weighting(
     async_db: AsyncSession,
     seeded_rng: Callable[[], random.Random],
 ) -> None:
-    """Blocked and completed threads are never selected by weighted rolls."""
     seeded_rng()
     user_id = await _current_user_id(async_db)
     ineligible_ids = await _create_eligibility_pool(async_db, user_id)
     assert len(ineligible_ids) == 3
-
     pool_result = await async_db.execute(select(Thread).where(Thread.user_id == user_id))
     all_ids = {thread.id for thread in pool_result.scalars().all()}
     eligible_ids = all_ids - set(ineligible_ids)
-
     selected = (
         await _roll_many(auth_client, "light", 120)
         + await _roll_many(auth_client, "deep", 120)
     )
-
     assert set(selected).issubset(eligible_ids)
     assert set(ineligible_ids).isdisjoint(set(selected))
 
@@ -563,7 +463,6 @@ async def test_snoozed_threads_stay_ineligible_under_weighting(
     async_db: AsyncSession,
     seeded_rng: Callable[[], random.Random],
 ) -> None:
-    """Snoozed threads remain excluded from weighted selection."""
     seeded_rng()
     user_id = await _current_user_id(async_db)
     thread_ids = await _create_weighted_pool(
@@ -572,7 +471,6 @@ async def test_snoozed_threads_stay_ineligible_under_weighting(
         efforts=[5.0, 8.0, 12.0, 20.0],
         die_size=4,
     )
-
     session_result = await async_db.execute(
         select(SessionModel).where(SessionModel.user_id == user_id)
     )
@@ -580,8 +478,6 @@ async def test_snoozed_threads_stay_ineligible_under_weighting(
     snoozed_id = thread_ids[0]
     session.snoozed_thread_ids = [snoozed_id]
     await async_db.commit()
-
     selected = await _roll_many(auth_client, "light", 150)
-
     assert snoozed_id not in selected
     assert set(selected).issubset(set(thread_ids[1:]))

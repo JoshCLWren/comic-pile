@@ -1,8 +1,8 @@
 """Add Roll bandwidth weighting columns.
 
-Revision ID: c85500000001
+Revision ID: c85900000001
 Revises: c85400000001
-Create Date: 2026-08-23 00:00:00.000000
+Create Date: 2026-08-25 00:00:00.000000
 """
 
 from collections.abc import Sequence
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "c85500000001"
+revision: str = "c85900000001"
 down_revision: str | Sequence[str] | None = "c85400000001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None

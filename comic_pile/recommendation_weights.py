@@ -1,26 +1,36 @@
-"""Pure contextual bandwidth weighting for Roll selection.
+"""Pure bandwidth recommendation weighting for Roll candidates.
 
-Phase 3 of the personalized-Roll architecture (issue #1685). These helpers
-compute recommendation weights for candidates that are already inside the
-die-bounded pool. They never change pool membership: eligibility is decided
-upstream, and weighting only redistributes selection probability inside the
-existing pool boundary.
+Phase 3 of the personalized-Roll architecture (issue #1685, ticket #1712).
+This module converts the active session bandwidth plus per-candidate
+reading-effort estimates into transparent, bounded recommendation weights.
 
-Modes:
+Contract:
 
-- ``light``: favor lower-effort candidates for low-bandwidth moments.
-- ``deep``: favor higher-effort candidates while never excluding light reads.
-- ``balanced`` (and any unknown/absent mode): neutral; callers should keep the
-  exact legacy uniform selection path.
+- Pure and deterministic: no database, clock, randomness, or I/O. The same
+  inputs always produce identical outputs.
+- Inputs are only candidate facts (``thread_id`` plus an optional effort
+  estimate in minutes) and the session bandwidth label.
+- ``balanced`` (and any absent/unrecognized bandwidth) returns neutral,
+  equal weighting so the legacy unweighted selection path is preserved.
+- Unknown or invalid effort estimates stay exactly neutral so missing data
+  can never distort selection.
+- ``light`` favors lower-effort candidates monotonically; ``deep`` mildly
+  favors higher-effort candidates while never excluding light reads.
+- Weight ranges/caps live in one centralized table and are strictly
+  positive, so contextual weighting redistributes probability only inside
+  the existing die-bounded pool and can never erase the affinity/die model.
 
-Effort bands follow the documented evidence bands from issue #1685:
-light reads take under 12 minutes, medium reads 12-18 minutes, and heavy
-reads 18 minutes or more. Candidates without a usable effort estimate are
-neutral (weight 1.0) so unknown data can never distort selection.
+Effort bands follow the documented evidence bands from issue #1685: light
+reads take under 12 minutes, medium reads 12-18 minutes, and heavy reads
+18 minutes or more.
+
+No endpoint consumes these weights yet; selection integration arrives with
+the later Phase 3 tickets (#1714, #1715, #1717, #1718).
 """
 
 from __future__ import annotations
 
+import math
 import random
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -29,64 +39,75 @@ BANDWIDTH_LIGHT = "light"
 BANDWIDTH_BALANCED = "balanced"
 BANDWIDTH_DEEP = "deep"
 
+ALL_BANDWIDTHS: tuple[str, ...] = (BANDWIDTH_LIGHT, BANDWIDTH_BALANCED, BANDWIDTH_DEEP)
+
 EFFORT_BAND_LIGHT = "light"
 EFFORT_BAND_MEDIUM = "medium"
 EFFORT_BAND_HEAVY = "heavy"
 
-#: Upper bound (minutes, inclusive) of the light effort band.
 LIGHT_EFFORT_MAX_MINUTES = 12.0
-#: Lower bound (minutes) of the heavy effort band.
 HEAVY_EFFORT_MIN_MINUTES = 18.0
 
 NEUTRAL_WEIGHT = 1.0
 
 REASON_UNKNOWN_EFFORT = "effort_unknown_neutral"
-REASON_WEIGHTED_TEMPLATE = "{mode}_mode_{band}_effort"
+REASON_BALANCED_NEUTRAL = "bandwidth_balanced_neutral"
+REASON_LIGHT_FAVORS_LOW_EFFORT = "bandwidth_light_favors_low_effort"
+REASON_LIGHT_MEDIUM_NEUTRAL = "bandwidth_light_medium_effort_neutral"
+REASON_LIGHT_DAMPENS_HIGH_EFFORT = "bandwidth_light_dampens_high_effort"
+REASON_DEEP_DAMPENS_LOW_EFFORT = "bandwidth_deep_dampens_low_effort"
+REASON_DEEP_MEDIUM_NEUTRAL = "bandwidth_deep_medium_effort_neutral"
+REASON_DEEP_PERMITS_HIGH_EFFORT = "bandwidth_deep_permits_high_effort"
 
-#: Documented weight table per bandwidth mode and effort band. Every cell is
-#: strictly positive so no candidate inside the pool can ever be excluded.
 WEIGHTS_BY_MODE_AND_BAND: dict[str, dict[str, float]] = {
     BANDWIDTH_LIGHT: {
-        EFFORT_BAND_LIGHT: 3.0,
-        EFFORT_BAND_MEDIUM: 2.0,
-        EFFORT_BAND_HEAVY: 1.0,
+        EFFORT_BAND_LIGHT: 1.5,
+        EFFORT_BAND_MEDIUM: NEUTRAL_WEIGHT,
+        EFFORT_BAND_HEAVY: 0.75,
     },
     BANDWIDTH_BALANCED: {
-        EFFORT_BAND_LIGHT: 1.0,
-        EFFORT_BAND_MEDIUM: 1.0,
-        EFFORT_BAND_HEAVY: 1.0,
+        EFFORT_BAND_LIGHT: NEUTRAL_WEIGHT,
+        EFFORT_BAND_MEDIUM: NEUTRAL_WEIGHT,
+        EFFORT_BAND_HEAVY: NEUTRAL_WEIGHT,
     },
     BANDWIDTH_DEEP: {
-        EFFORT_BAND_LIGHT: 1.0,
-        EFFORT_BAND_MEDIUM: 2.0,
-        EFFORT_BAND_HEAVY: 3.0,
+        EFFORT_BAND_LIGHT: 0.9,
+        EFFORT_BAND_MEDIUM: NEUTRAL_WEIGHT,
+        EFFORT_BAND_HEAVY: 1.25,
+    },
+}
+
+REASONS_BY_MODE_AND_BAND: dict[str, dict[str, str]] = {
+    BANDWIDTH_LIGHT: {
+        EFFORT_BAND_LIGHT: REASON_LIGHT_FAVORS_LOW_EFFORT,
+        EFFORT_BAND_MEDIUM: REASON_LIGHT_MEDIUM_NEUTRAL,
+        EFFORT_BAND_HEAVY: REASON_LIGHT_DAMPENS_HIGH_EFFORT,
+    },
+    BANDWIDTH_BALANCED: {
+        EFFORT_BAND_LIGHT: REASON_BALANCED_NEUTRAL,
+        EFFORT_BAND_MEDIUM: REASON_BALANCED_NEUTRAL,
+        EFFORT_BAND_HEAVY: REASON_BALANCED_NEUTRAL,
+    },
+    BANDWIDTH_DEEP: {
+        EFFORT_BAND_LIGHT: REASON_DEEP_DAMPENS_LOW_EFFORT,
+        EFFORT_BAND_MEDIUM: REASON_DEEP_MEDIUM_NEUTRAL,
+        EFFORT_BAND_HEAVY: REASON_DEEP_PERMITS_HIGH_EFFORT,
     },
 }
 
 
 @dataclass(frozen=True)
 class WeightedCandidate:
-    """One bounded-pool candidate's weight and reason code."""
-
     position: int
     thread_id: int
     effort_minutes: float | None
     band: str | None
     weight: float
-    reason: str
+    reasons: tuple[str, ...]
 
 
 def classify_effort_band(effort_minutes: float | None) -> str | None:
-    """Classify an effort estimate into its documented band.
-
-    Args:
-        effort_minutes: Estimated reading effort in minutes, or None when unknown.
-
-    Returns:
-        One of ``light``, ``medium``, or ``heavy``; None when the estimate is
-        missing or invalid so the candidate stays neutral.
-    """
-    if effort_minutes is None or effort_minutes < 0:
+    if effort_minutes is None or not math.isfinite(effort_minutes) or effort_minutes < 0:
         return None
     if effort_minutes < LIGHT_EFFORT_MAX_MINUTES:
         return EFFORT_BAND_LIGHT
@@ -96,16 +117,7 @@ def classify_effort_band(effort_minutes: float | None) -> str | None:
 
 
 def normalize_bandwidth(bandwidth: str | None) -> str:
-    """Normalize a raw bandwidth input to a supported mode.
-
-    Args:
-        bandwidth: Raw bandwidth value from session state or API input.
-
-    Returns:
-        The unchanged supported value, or ``balanced`` for anything absent or
-        unrecognized so unknown modes stay neutral by default.
-    """
-    if bandwidth in (BANDWIDTH_LIGHT, BANDWIDTH_DEEP):
+    if bandwidth in (BANDWIDTH_LIGHT, BANDWIDTH_DEEP, BANDWIDTH_BALANCED):
         return bandwidth
     return BANDWIDTH_BALANCED
 
@@ -114,19 +126,9 @@ def build_candidate_weights(
     efforts: Sequence[tuple[int, float | None]],
     bandwidth: str | None,
 ) -> list[WeightedCandidate]:
-    """Build one weight and reason per bounded-pool candidate.
-
-    Args:
-        efforts: Ordered ``(thread_id, effort_minutes)`` pairs for every
-            candidate inside the die-bounded pool, in pool order.
-        bandwidth: Requested bandwidth mode. ``light`` and ``deep`` weight by
-            effort band; anything else yields neutral weights.
-
-    Returns:
-        A :class:`WeightedCandidate` per input entry, preserving order.
-    """
     mode = normalize_bandwidth(bandwidth)
-    table = WEIGHTS_BY_MODE_AND_BAND[mode]
+    weights = WEIGHTS_BY_MODE_AND_BAND[mode]
+    reasons = REASONS_BY_MODE_AND_BAND[mode]
 
     candidates: list[WeightedCandidate] = []
     for position, (thread_id, effort_minutes) in enumerate(efforts):
@@ -139,7 +141,7 @@ def build_candidate_weights(
                     effort_minutes=effort_minutes,
                     band=None,
                     weight=NEUTRAL_WEIGHT,
-                    reason=REASON_UNKNOWN_EFFORT,
+                    reasons=(REASON_UNKNOWN_EFFORT,),
                 )
             )
             continue
@@ -150,26 +152,14 @@ def build_candidate_weights(
                 thread_id=thread_id,
                 effort_minutes=effort_minutes,
                 band=band,
-                weight=table[band],
-                reason=REASON_WEIGHTED_TEMPLATE.format(mode=mode, band=band),
+                weight=weights[band],
+                reasons=(reasons[band],),
             )
         )
     return candidates
 
 
 def choose_weighted_index(weights: Sequence[float], rng: random.Random) -> int:
-    """Select one index with probability proportional to its weight.
-
-    Args:
-        weights: Positive weights, one per bounded-pool candidate.
-        rng: Seeded random source used for reproducible regression tests.
-
-    Returns:
-        The selected candidate index inside ``range(len(weights))``.
-
-    Raises:
-        ValueError: If weights are empty or their sum is not positive.
-    """
     if not weights:
         raise ValueError("Cannot select from an empty candidate list")
 
