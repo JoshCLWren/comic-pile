@@ -38,6 +38,15 @@ from app.schemas import (
 )
 from app.schemas.session import build_session_bandwidth_state
 from comic_pile.queue import get_bounded_roll_pool_rows
+from comic_pile.recommendation_selection import (
+    DEFAULT_BANDWIDTH,
+    DEFAULT_INTENT,
+    SelectionMode,
+    normalize_bandwidth,
+    normalize_intent,
+    resolve_selection_mode,
+    select_from_pool,
+)
 from comic_pile.session import get_current_die_for_session, get_or_create
 from app.momentum import weighted_momentum_selection
 
@@ -99,23 +108,47 @@ async def roll_dice(
             detail="No active threads available to roll",
         )
 
-    # get_bounded_roll_pool_rows already applied the die cap, so the contextual
-    # weighting below cannot draw from outside the active die pool.
+    bounded_rows = await get_bounded_roll_pool_rows(user_id, db, current_die, snoozed_ids)
+    if not bounded_rows:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active threads available to roll",
+        )
 
-    # Apply momentum weighting; weights fall back to uniform (pure-random)
-    # when no positive momentum applies, preserving the pure-random bypass.
-    session_events_result = await db.execute(
-        select(Event).where(Event.session_id == current_session_id)
+    pool_size = len(bounded_rows)
+    selection_bandwidth = (
+        roll_request.bandwidth if roll_request.bandwidth is not None else DEFAULT_BANDWIDTH
     )
-    session_events = list(session_events_result.scalars().all())
+    selection_intent = roll_request.intent if roll_request.intent is not None else DEFAULT_INTENT
 
-    selected_index, max_bonus = await weighted_momentum_selection(
-        db=db,
-        bounded_rows=bounded_rows,
-        user_id=user_id,
-        session_events=session_events,
-        now=datetime.now(UTC),
-    )
+    resolved_mode = resolve_selection_mode(selection_bandwidth, selection_intent)
+
+    max_bonus = 0.0
+    if resolved_mode is SelectionMode.PURE_RANDOM_BYPASS:
+        selection = select_from_pool(
+            pool_size,
+            bandwidth=selection_bandwidth,
+            intent=selection_intent,
+        )
+        selected_index = selection.index
+    else:
+        # get_bounded_roll_pool_rows already applied the die cap, so the contextual
+        # weighting below cannot draw from outside the active die pool.
+
+        # Apply momentum weighting; weights fall back to uniform (pure-random)
+        # when no positive momentum applies, preserving the pure-random bypass.
+        session_events_result = await db.execute(
+            select(Event).where(Event.session_id == current_session_id)
+        )
+        session_events = list(session_events_result.scalars().all())
+
+        selected_index, max_bonus = await weighted_momentum_selection(
+            db=db,
+            bounded_rows=bounded_rows,
+            user_id=user_id,
+            session_events=session_events,
+            now=datetime.now(UTC),
+        )
     # Derive concise, user-facing reason codes from the actual decision-time
     # selection context. Momentum weighting is applied only when a positive
     # bonus exists; otherwise the selection is genuinely unweighted/pure-random.
@@ -162,6 +195,15 @@ async def roll_dice(
         issue_number=selected_thread_issue_number,
     )
     db.add(event)
+
+    logger.info(
+        "roll selection mode=%s bandwidth=%s intent=%s max_bonus=%.3f pool_size=%s",
+        resolved_mode.value,
+        normalize_bandwidth(selection_bandwidth).value,
+        normalize_intent(selection_intent).value,
+        max_bonus,
+        pool_size,
+    )
 
     if current_session:
         current_session.pending_thread_id = selected_thread_id
