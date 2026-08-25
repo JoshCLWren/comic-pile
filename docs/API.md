@@ -323,7 +323,8 @@ Manually select a thread instead of rolling.
 
 Every new `roll` event (both `POST /roll/` and `POST /roll/override`) persists a
 versioned JSON snapshot of the decision-time recommendation context in the
-event's `recommendation_context` field (`JSONB` on PostgreSQL). The snapshot is
+event's `recommendation_context` field (JSON column created by migration
+`c85800000001`). The snapshot is
 written once at roll time and is never rewritten by later queue movement.
 Historical events without a snapshot remain valid, and the field is never
 returned by any API response; it exists for later analysis only.

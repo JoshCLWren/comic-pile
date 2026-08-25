@@ -15,7 +15,7 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -86,9 +86,10 @@ class Event(Base):
     selected_thread_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     selection_method: Mapped[str | None] = mapped_column(String(50), nullable=True)
     # Versioned recommendation-context snapshot captured at roll time.
-    # JSONB on PostgreSQL, generic JSON on other dialects (test fallbacks).
+    # Column type matches the events.recommendation_context column created by
+    # migration c85800000001 (generic JSON on all dialects).
     recommendation_context: Mapped[dict[str, object] | None] = mapped_column(
-        JSON().with_variant(JSONB(), "postgresql"),
+        JSON(),
         nullable=True,
     )
     rating: Mapped[float | None] = mapped_column(Float, nullable=True)

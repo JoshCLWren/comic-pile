@@ -78,7 +78,10 @@ async def test_random_roll_persists_versioned_context(
     await async_db.commit()
 
     # Force the die draw to pick the first bounded candidate deterministically.
-    monkeypatch.setattr("app.api.roll.random.randint", lambda low, high: low)
+    # The selector draws via app.momentum.random (uniform path when all
+    # momentum weights are equal, randint fallback otherwise).
+    monkeypatch.setattr("app.momentum.random.randint", lambda _start, _end: 0)
+    monkeypatch.setattr("app.momentum.random.uniform", lambda _a, _b: 0.0)
 
     response = await auth_client.post("/api/roll/")
     assert response.status_code == 200
@@ -136,8 +139,10 @@ async def test_context_candidates_match_bounded_pool_for_large_library(
     await async_db.commit()
     extra_ids = [thread.id for thread in extra_threads]
 
-    # Draw the last bounded candidate (die size 8) deterministically.
-    monkeypatch.setattr("app.api.roll.random.randint", lambda low, high: high)
+    # Draw the last bounded candidate (die size 8) deterministically: a pick
+    # equal to the total weight always resolves to the final candidate.
+    monkeypatch.setattr("app.momentum.random.randint", lambda _start, _end: 0)
+    monkeypatch.setattr("app.momentum.random.uniform", lambda _a, _b: _b)
 
     response = await auth_client.post("/api/roll/")
     assert response.status_code == 200
@@ -169,7 +174,8 @@ async def test_queue_movement_after_roll_cannot_change_snapshot(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Later queue movement never rewrites the stored position or candidate order."""
-    monkeypatch.setattr("app.api.roll.random.randint", lambda low, high: low)
+    monkeypatch.setattr("app.momentum.random.randint", lambda _start, _end: 0)
+    monkeypatch.setattr("app.momentum.random.uniform", lambda _a, _b: 0.0)
 
     roll_response = await auth_client.post("/api/roll/")
     assert roll_response.status_code == 200
@@ -202,7 +208,8 @@ async def test_override_context_distinguishes_manual_selection_from_random(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Override rolls record method "override" with no draw index, unlike random."""
-    monkeypatch.setattr("app.api.roll.random.randint", lambda low, high: low)
+    monkeypatch.setattr("app.momentum.random.randint", lambda _start, _end: 0)
+    monkeypatch.setattr("app.momentum.random.uniform", lambda _a, _b: 0.0)
 
     random_response = await auth_client.post("/api/roll/")
     assert random_response.status_code == 200
