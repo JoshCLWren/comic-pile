@@ -308,7 +308,7 @@ async def get_thread_blocking_info(
 
     blocked_ids = await get_blocked_thread_ids(current_user.id, db)
     if thread_id not in blocked_ids:
-        return BlockingExplanation(is_blocked=False, blocking_reasons=[])
+        return BlockingExplanation(is_blocked=False, blocking_reasons=[], blocking_dependencies=[])
 
     dependencies = await get_blocking_explanations(thread_id, current_user.id, db)
     return BlockingExplanation(
@@ -353,10 +353,11 @@ async def get_threads_blocking_info(
                 blocking_dependencies=[_to_blocking_dependency_schema(dep) for dep in dependencies],
             )
         else:
-            result[tid] = BlockingExplanation(
-                is_blocked=False,
-                blocking_reasons=[],
-            )
+result[tid] = BlockingExplanation(
+                    is_blocked=False,
+                    blocking_reasons=[],
+                    blocking_dependencies=[],
+                )
 
     return BatchBlockingExplanationResponse(threads=result)
 
