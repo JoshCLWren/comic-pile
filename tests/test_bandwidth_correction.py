@@ -137,7 +137,7 @@ class TestComputeSnoozeCorrection:
         assert result.bandwidth_changed is False
         assert result.active_bandwidth == "light"
         assert result.active_confidence < 0.7
-        assert result.reason_code == CorrectionReason.LIGHT_SNOOZE_DEFLATE
+        assert result.reason_code == CorrectionReason.CONFIDENCE_DEGRADE
 
     def test_already_light_cannot_go_lighter(self) -> None:
         """Snoozing a deep candidate while already light degrades confidence."""

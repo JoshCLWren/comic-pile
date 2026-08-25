@@ -366,7 +366,6 @@ async def snooze_thread(
     )
 
     # Apply correction to session state (#1724)
-    pre_correction_bandwidth = current_session.active_bandwidth
     current_session.active_bandwidth = correction_result.active_bandwidth
     current_session.bandwidth_confidence = correction_result.active_confidence
     current_session.bandwidth_source = "snooze"
