@@ -17,6 +17,16 @@ def test_terminal_step_publishes_normalized_attempt_evidence():
     assert "attempt_outcome='unknown_failure'" in workflow
 
 
+def test_worker_status_is_captured_after_attempt_code_exits():
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    worker = WORKER.read_text(encoding="utf-8")
+
+    assert 'printf \'%s\\n\' "$worker_status" > "$RUNNER_TEMP/factory-worker-status"' in workflow
+    assert 'worker_status="$(cat "$WORKER_STATUS_FILE" 2>/dev/null || true)"' in workflow
+    assert 'worker_status" == 2 || "$worker_status" == 3' in workflow
+    assert "Exit 2 and 3 are reserved for controller invariant/read failures" in worker
+
+
 def test_terminal_step_preserves_newer_attempt_evidence():
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
