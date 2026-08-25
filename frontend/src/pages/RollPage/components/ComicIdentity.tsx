@@ -163,7 +163,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
               <button
                 type="button"
                 onClick={() => setShowAllCreators(!showAllCreators)}
-                className="ml-6 text-[10px] font-bold text-amber-500 hover:text-amber-400 py-1"
+                className="ml-6 inline-flex min-h-6 items-center text-[10px] font-bold text-amber-500 hover:text-amber-400 focus:ring-2 focus:ring-amber-500 rounded"
                 aria-expanded={showAllCreators}
                 aria-controls="creators-list"
               >
@@ -226,7 +226,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                                     <button
                                       type="button"
                                       onClick={() => handleAddToComicPile(identity, issue, arc.related_issues, null)}
-                                      className="text-[9px] font-bold text-amber-500 hover:text-amber-400 shrink-0 px-2 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 transition-colors"
+                                      className="inline-flex min-h-6 items-center text-[9px] font-bold text-amber-500 hover:text-amber-400 shrink-0 px-2 rounded border border-amber-500/30 bg-amber-500/10 transition-colors focus:ring-2 focus:ring-amber-500"
                                       aria-label={`Add ${identity.primary} to ComicPile`}
                                     >
                                       Add to ComicPile
@@ -246,7 +246,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                           <button
                             type="button"
                             onClick={() => setShowAllRelatedIssues((prev) => ({ ...prev, [arc.comicvine_arc_id]: !prev[arc.comicvine_arc_id] }))}
-                            className="w-full text-left text-[10px] font-bold text-amber-500 hover:text-amber-400 py-1"
+                            className="w-full inline-flex min-h-6 items-center text-left text-[10px] font-bold text-amber-500 hover:text-amber-400 focus:ring-2 focus:ring-amber-500 rounded"
                             aria-expanded={isExpanded}
                           >
                             {isExpanded ? 'Show fewer' : `Show all ${arc.related_issues.length} issues`}
@@ -270,7 +270,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                 <button
                   type="button"
                   onClick={() => setShowAllStoryArcs(!showAllStoryArcs)}
-                  className="w-full text-left text-[10px] font-bold text-amber-500 hover:text-amber-400 py-1"
+                  className="w-full inline-flex min-h-6 items-center text-left text-[10px] font-bold text-amber-500 hover:text-amber-400 focus:ring-2 focus:ring-amber-500 rounded"
                   aria-expanded={showAllStoryArcs}
                 >
                   {showAllStoryArcs ? 'Show fewer arcs' : `Show all ${metadata.story_arcs.length} story arcs`}
