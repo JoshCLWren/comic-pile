@@ -144,7 +144,7 @@ class TestCalculateWeights:
         """Balanced mode ignores effort spread entirely."""
         rows = _rows(0, 1, 2, 5, 10, 50, 100)
         weights = calculate_weights(rows, "balanced")
-        assert len(set(round(w, 9) for w in weights)) == 1
+        assert len({round(w, 9) for w in weights}) == 1
 
 
 class TestSelectWeighted:
