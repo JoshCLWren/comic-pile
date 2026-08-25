@@ -514,7 +514,15 @@ jobs:
           FACTORY_RUNTIME_MODEL: ${{ steps.lane.outputs.runtime_model }}
           FACTORY_DISPLAY: ${{ steps.lane.outputs.display }}
           FACTORY_BRANCH_SUFFIX: ${{ steps.lane.outputs.branch_suffix }}
-        run: bash .github/scripts/free-model-factory-worker.sh
+        run: |
+          set +e
+          bash .github/scripts/free-model-factory-worker.sh
+          worker_status=$?
+          set -e
+          # Write after the worker (and model) exits, so attempt code cannot
+          # forge the trusted wrapper's source classification.
+          printf '%s\n' "$worker_status" > "$RUNNER_TEMP/factory-worker-status"
+          exit "$worker_status"
 
       - name: Report terminal heartbeat
         if: always()
