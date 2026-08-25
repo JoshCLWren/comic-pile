@@ -1,5 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import axios from 'axios'
+import type { ReactNode } from 'react'
 import type { Thread } from '../types'
 import { beforeEach, expect, it, vi } from 'vitest'
 import {
@@ -26,6 +28,13 @@ vi.mock('../services/api', () => ({
 
 const mockedThreadsApi = vi.mocked(threadsApi)
 
+function createWrapper() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+  return function Wrapper({ children }: { children: ReactNode }) {
+    return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  }
+}
+
 beforeEach(() => {
   mockedThreadsApi.list.mockResolvedValue({ threads: [{ id: 1 }], next_page_token: null } as never)
   mockedThreadsApi.get.mockResolvedValue({ id: 2 } as never)
@@ -37,8 +46,9 @@ beforeEach(() => {
 })
 
 it('loads thread details and stale list', async () => {
-  const { result: threadResult } = renderHook(() => useThread(2))
-  const { result: staleResult } = renderHook(() => useStaleThreads(7))
+  const wrapper = createWrapper()
+  const { result: threadResult } = renderHook(() => useThread(2), { wrapper })
+  const { result: staleResult } = renderHook(() => useStaleThreads(7), { wrapper })
 
   await waitFor(() => expect(threadResult.current.data).toEqual({ id: 2 }))
   await waitFor(() => expect(staleResult.current.data).toEqual([{ id: 3 }]))
@@ -47,22 +57,23 @@ it('loads thread details and stale list', async () => {
 })
 
 it('creates, updates, deletes, and reactivates threads', async () => {
-  const { result: createResult } = renderHook(() => useCreateThread())
+  const wrapper = createWrapper()
+  const { result: createResult } = renderHook(() => useCreateThread(), { wrapper })
   await act(async () => {
     await createResult.current.mutate({ title: 'New', format: 'Comics', issues_remaining: 5 })
   })
 
-  const { result: updateResult } = renderHook(() => useUpdateThread())
+  const { result: updateResult } = renderHook(() => useUpdateThread(), { wrapper })
   await act(async () => {
     await updateResult.current.mutate({ id: 7, data: { title: 'Updated' } })
   })
 
-  const { result: deleteResult } = renderHook(() => useDeleteThread())
+  const { result: deleteResult } = renderHook(() => useDeleteThread(), { wrapper })
   await act(async () => {
     await deleteResult.current.mutate(7)
   })
 
-  const { result: reactivateResult } = renderHook(() => useReactivateThread())
+  const { result: reactivateResult } = renderHook(() => useReactivateThread(), { wrapper })
   await act(async () => {
     await reactivateResult.current.mutate({ thread_id: 7, issues_to_add: 3 })
   })
@@ -78,19 +89,21 @@ it('creates, updates, deletes, and reactivates threads', async () => {
 })
 
 it('handles empty ids, detail failures, and stale failures', async () => {
-  const empty = renderHook(() => useThread(null))
+  const wrapper = createWrapper()
+  const empty = renderHook(() => useThread(null), { wrapper })
   expect(empty.result.current.isPending).toBe(false)
   mockedThreadsApi.get.mockRejectedValueOnce(new Error('missing'))
-  const failed = renderHook(() => useThread(9))
+  const failed = renderHook(() => useThread(9), { wrapper })
   await waitFor(() => expect(failed.result.current.isError).toBe(true))
   mockedThreadsApi.listStale.mockRejectedValueOnce(new Error('stale failed'))
-  const stale = renderHook(() => useStaleThreads())
+  const stale = renderHook(() => useStaleThreads(), { wrapper })
   await waitFor(() => expect(stale.result.current.isError).toBe(true))
   mockedThreadsApi.listStale.mockResolvedValueOnce([] as never)
   await act(async () => stale.result.current.refetch())
 })
 
 it('marks all thread mutations as errors and resets pending state', async () => {
+  const wrapper = createWrapper()
   mockedThreadsApi.create.mockRejectedValueOnce(new Error('create failed'))
   mockedThreadsApi.update.mockRejectedValueOnce(new Error('update failed'))
   mockedThreadsApi.delete.mockRejectedValueOnce(new Error('delete failed'))
@@ -102,13 +115,14 @@ it('marks all thread mutations as errors and resets pending state', async () => 
     [useReactivateThread, { thread_id: 1, issues_to_add: 1 }],
   ] as const
   for (const [hook, payload] of cases) {
-    const { result } = renderHook(() => hook())
+    const { result } = renderHook(() => hook(), { wrapper })
     await expect(act(async () => result.current.mutate(payload as never))).rejects.toThrow()
     expect(result.current.isPending).toBe(false)
   }
 })
 
 it('handles non-Error mutation failures and stale refetch failures', async () => {
+  const wrapper = createWrapper()
   mockedThreadsApi.create.mockRejectedValueOnce('create string failure')
   mockedThreadsApi.update.mockRejectedValueOnce('update string failure')
   mockedThreadsApi.delete.mockRejectedValueOnce('delete string failure')
@@ -120,22 +134,23 @@ it('handles non-Error mutation failures and stale refetch failures', async () =>
     [useReactivateThread, { thread_id: 1, issues_to_add: 1 }],
   ] as const
   for (const [hook, payload] of cases) {
-    const { result } = renderHook(() => hook())
+    const { result } = renderHook(() => hook(), { wrapper })
     await expect(act(async () => result.current.mutate(payload as never))).rejects.toBeDefined()
   }
   mockedThreadsApi.listStale.mockRejectedValueOnce(new Error('refetch failed'))
-  const { result } = renderHook(() => useStaleThreads(3))
+  const { result } = renderHook(() => useStaleThreads(3), { wrapper })
   await waitFor(() => expect(result.current.isError).toBe(true))
   await expect(act(async () => result.current.refetch())).resolves.toBeUndefined()
 })
 
 it('ignores late detail and stale responses after unmount', async () => {
+  const wrapper = createWrapper()
   let resolveDetail!: (value: Thread) => void
   let resolveStale!: (value: never[]) => void
   mockedThreadsApi.get.mockReturnValueOnce(new Promise((resolve) => { resolveDetail = resolve }))
   mockedThreadsApi.listStale.mockReturnValueOnce(new Promise((resolve) => { resolveStale = resolve }))
-  const detail = renderHook(() => useThread(10))
-  const stale = renderHook(() => useStaleThreads(10))
+  const detail = renderHook(() => useThread(10), { wrapper })
+  const stale = renderHook(() => useStaleThreads(10), { wrapper })
   detail.unmount()
   stale.unmount()
   await act(async () => {
@@ -146,12 +161,13 @@ it('ignores late detail and stale responses after unmount', async () => {
 })
 
 it('ignores late detail and stale failures after unmount', async () => {
+  const wrapper = createWrapper()
   let rejectDetail!: (reason?: unknown) => void
   let rejectStale!: (reason?: unknown) => void
   mockedThreadsApi.get.mockReturnValueOnce(new Promise((_resolve, reject) => { rejectDetail = reject }))
   mockedThreadsApi.listStale.mockReturnValueOnce(new Promise((_resolve, reject) => { rejectStale = reject }))
-  const detail = renderHook(() => useThread(11))
-  const stale = renderHook(() => useStaleThreads(11))
+  const detail = renderHook(() => useThread(11), { wrapper })
+  const stale = renderHook(() => useStaleThreads(11), { wrapper })
   detail.unmount()
   stale.unmount()
   await act(async () => {
@@ -162,6 +178,7 @@ it('ignores late detail and stale failures after unmount', async () => {
 })
 
 it('normalizes Axios mutation failures while preserving their details', async () => {
+  const wrapper = createWrapper()
   const axiosError = new axios.AxiosError('request failed', 'ERR_BAD_REQUEST')
   axiosError.isAxiosError = true
   mockedThreadsApi.create.mockRejectedValueOnce(axiosError)
@@ -175,30 +192,32 @@ it('normalizes Axios mutation failures while preserving their details', async ()
     [useReactivateThread, { thread_id: 1, issues_to_add: 1 }],
   ] as const
   for (const [hook, payload] of cases) {
-    const { result } = renderHook(() => hook())
+    const { result } = renderHook(() => hook(), { wrapper })
     await expect(act(async () => result.current.mutate(payload as never))).rejects.toBe(axiosError)
   }
 })
 
 it('uses response details and ignores late hook results after unmount', async () => {
+  const wrapper = createWrapper()
   const axiosError = new axios.AxiosError('fallback message', 'ERR_BAD_REQUEST')
   axiosError.isAxiosError = true
   axiosError.response = { status: 422, data: { detail: 'server detail' }, headers: {}, config: { headers: {} }, statusText: 'Unprocessable Entity' } as never
   mockedThreadsApi.create.mockRejectedValueOnce(axiosError)
-  const { result } = renderHook(() => useCreateThread())
+  const { result } = renderHook(() => useCreateThread(), { wrapper })
   await expect(act(async () => result.current.mutate({ title: 'x', format: 'Comic', issues_remaining: 1 }))).rejects.toBe(axiosError)
 
   let resolveThread!: (value: never) => void
   mockedThreadsApi.get.mockImplementationOnce(() => new Promise((resolve) => { resolveThread = resolve }))
-  const pending = renderHook(() => useThread(44))
+  const pending = renderHook(() => useThread(44), { wrapper })
   pending.unmount()
   await act(async () => resolveThread({ id: 44 } as never))
 })
 
 it('ignores late stale-thread results after unmount', async () => {
+  const wrapper = createWrapper()
   let resolveStale!: (value: never) => void
   mockedThreadsApi.listStale.mockImplementationOnce(() => new Promise((resolve) => { resolveStale = resolve }))
-  const pending = renderHook(() => useStaleThreads(14))
+  const pending = renderHook(() => useStaleThreads(14), { wrapper })
   pending.unmount()
   await act(async () => resolveStale([{ id: 14 }] as never))
 })

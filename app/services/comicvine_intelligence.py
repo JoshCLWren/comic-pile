@@ -282,16 +282,19 @@ async def get_issue_intelligence(
         name = _string(arc.get("name"))
         if arc_id is None or name is None:
             continue
-        related_issues = sorted(
+        all_related = sorted(
             related_by_arc.get(arc_id, []),
             key=lambda item: (item.cover_date or "", item.series_name or "", item.issue_number or ""),
-        )[:MAX_RELATED_ISSUES_PER_ARC]
+        )
+        total_count = len(all_related)
+        related_issues = all_related[:MAX_RELATED_ISSUES_PER_ARC]
         story_arcs.append(
             ComicVineStoryArc(
                 comicvine_arc_id=arc_id,
                 name=name,
                 comicvine_url=_string(arc.get("site_detail_url")),
                 related_issues=related_issues,
+                total_related_count=total_count if total_count > len(related_issues) else None,
             )
         )
 

@@ -311,10 +311,36 @@ jobs:
 
           request="$(jq -nc --arg model "$MODEL" '{model:$model,messages:[{role:"user",content:"Reply with exactly FIXED_MODEL_OK"}],max_tokens:64}')"
           response="$RUNNER_TEMP/omniroute-probe.json"
-          code="$(curl --silent --show-error --output "$response" --write-out '%{http_code}' \
-            --connect-timeout 5 --max-time 120 --header "Authorization: Bearer $key" \
-            --header 'Content-Type: application/json' --data "$request" \
-            http://127.0.0.1:20128/v1/chat/completions || true)"
+          headers="$RUNNER_TEMP/omniroute-probe-headers.txt"
+          attempt=0
+          max_attempts=3
+          code=""
+          while (( attempt < max_attempts )); do
+            attempt=$((attempt + 1))
+            code="$(curl --silent --show-error --dump-header "$headers" --output "$response" --write-out '%{http_code}' \
+              --connect-timeout 5 --max-time 120 --header "Authorization: Bearer $key" \
+              --header 'Content-Type: application/json' --data "$request" \
+              http://127.0.0.1:20128/v1/chat/completions || true)"
+            [[ "$code" =~ ^2 ]] && break
+            if grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$response" 2>/dev/null || [[ "$code" == "429" ]]; then
+              if (( attempt < max_attempts )); then
+                retry_after="$(grep -i '^retry-after:' "$headers" 2>/dev/null | tail -n1 | sed -E 's/^[^:]+:[[:space:]]*//I' | tr -d '\r' | grep -E '^[0-9]+' || true)"
+                if [[ "$retry_after" =~ ^[0-9]+$ ]]; then
+                  delay=$(( retry_after > 60 ? 60 : retry_after ))
+                else
+                  delay=$(( 5 * attempt ))
+                fi
+                echo "OmniRoute probe transient HTTP ${code} (attempt ${attempt}/${max_attempts}); retrying after ${delay}s" >&2
+                cat "$response" >&2 || true
+                sleep "$delay"
+                continue
+              fi
+              echo "Transient OmniRoute probe failure HTTP ${code} after ${attempt} attempts; allowing worker to proceed with built-in retry handling" >&2
+              cat "$response" >&2 || true
+              exit 0
+            fi
+            break
+          done
           [[ "$code" =~ ^2 ]] || { echo "Pinned OmniRoute model probe failed HTTP ${code}" >&2; cat "$response" >&2 || true; exit 1; }
 
           mkdir -p "$HOME/.config/opencode"
@@ -340,18 +366,44 @@ jobs:
           [[ -n "${NVIDIA_API_KEY:-}" ]] || { echo 'NVIDIA_API_KEY missing after lane configured=true' >&2; exit 1; }
           request="$(jq -nc --arg model "$MODEL" '{model:$model,messages:[{role:"user",content:"Reply with exactly FIXED_MODEL_OK"}],max_tokens:16}')"
           response="$RUNNER_TEMP/nvidia-probe.json"
-          code="$(curl --silent --show-error --output "$response" --write-out '%{http_code}' \
-            --connect-timeout 5 --max-time 120 \
-            --header "Authorization: Bearer ${NVIDIA_API_KEY}" \
-            --header 'Content-Type: application/json' \
-            --data "$request" \
-            https://integrate.api.nvidia.com/v1/chat/completions || true)"
-          if [[ "$code" == "404" ]]; then
-            echo "Pinned NVIDIA model is not currently invokable for this account: ${MODEL}" >&2
-            echo 'No fallback is allowed for a fixed-model lane.' >&2
-            cat "$response" >&2 || true
-            exit 1
-          fi
+          headers="$RUNNER_TEMP/nvidia-probe-headers.txt"
+          attempt=0
+          max_attempts=3
+          code=""
+          while (( attempt < max_attempts )); do
+            attempt=$((attempt + 1))
+            code="$(curl --silent --show-error --dump-header "$headers" --output "$response" --write-out '%{http_code}' \
+              --connect-timeout 5 --max-time 120 \
+              --header "Authorization: Bearer ${NVIDIA_API_KEY}" \
+              --header 'Content-Type: application/json' \
+              --data "$request" \
+              https://integrate.api.nvidia.com/v1/chat/completions || true)"
+            if [[ "$code" == "404" ]]; then
+              echo "Pinned NVIDIA model is not currently invokable for this account: ${MODEL}" >&2
+              echo 'No fallback is allowed for a fixed-model lane.' >&2
+              cat "$response" >&2 || true
+              exit 1
+            fi
+            [[ "$code" =~ ^2 ]] && break
+            if grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$response" 2>/dev/null || [[ "$code" == "429" ]]; then
+              if (( attempt < max_attempts )); then
+                retry_after="$(grep -i '^retry-after:' "$headers" 2>/dev/null | tail -n1 | sed -E 's/^[^:]+:[[:space:]]*//I' | tr -d '\r' | grep -E '^[0-9]+' || true)"
+                if [[ "$retry_after" =~ ^[0-9]+$ ]]; then
+                  delay=$(( retry_after > 60 ? 60 : retry_after ))
+                else
+                  delay=$(( 5 * attempt ))
+                fi
+                echo "NVIDIA probe transient HTTP ${code} (attempt ${attempt}/${max_attempts}); retrying after ${delay}s" >&2
+                cat "$response" >&2 || true
+                sleep "$delay"
+                continue
+              fi
+              echo "Transient NVIDIA probe failure HTTP ${code} after ${attempt} attempts; allowing worker to proceed with built-in retry handling" >&2
+              cat "$response" >&2 || true
+              exit 0
+            fi
+            break
+          done
           [[ "$code" =~ ^2 ]] || {
             echo "Pinned NVIDIA model probe failed HTTP ${code}" >&2
             cat "$response" >&2 || true
@@ -376,8 +428,24 @@ jobs:
             2>&1 | tee "$RUNNER_TEMP/fixed-model-smoke.log"
           status=${PIPESTATUS[0]}
           set -e
-          (( status == 0 )) || exit "$status"
-          grep -q 'FIXED_MODEL_OPENCODE_OK' "$RUNNER_TEMP/fixed-model-smoke.log"
+          if (( status != 0 )); then
+            if grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$RUNNER_TEMP/fixed-model-smoke.log"; then
+              echo "Transient smoke failure detected for ${RUNTIME_MODEL}; allowing worker to proceed with built-in retry handling" >&2
+              cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
+              exit 0
+            fi
+            exit "$status"
+          fi
+          if ! grep -q 'FIXED_MODEL_OPENCODE_OK' "$RUNNER_TEMP/fixed-model-smoke.log"; then
+            if grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$RUNNER_TEMP/fixed-model-smoke.log"; then
+              echo "Transient smoke failure detected for ${RUNTIME_MODEL}; allowing worker to proceed with built-in retry handling" >&2
+              cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
+              exit 0
+            fi
+            echo "Smoke did not return FIXED_MODEL_OPENCODE_OK" >&2
+            cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
+            exit 1
+          fi
           [[ -z "$(git status --porcelain)" ]] || { echo 'Model smoke modified the worktree' >&2; exit 1; }
 
       - name: Smoke Kilo Auto Free through Kilo CLI
@@ -389,12 +457,52 @@ jobs:
           set -Eeuo pipefail
           before="$(git status --porcelain)"
           [[ -z "$before" ]] || { echo 'Smoke requires clean worktree' >&2; exit 1; }
-          bash .github/scripts/kilo-auto-factory-run.sh \
-            180 \
-            'ComicPile Kilo Auto Free smoke' \
-            'Reply with exactly KILO_AUTO_FREE_OK. Do not edit files, run commands, or use tools.' \
-            "$RUNNER_TEMP/kilo-auto-smoke.log"
-          grep -q 'KILO_AUTO_FREE_OK' "$RUNNER_TEMP/kilo-auto-smoke.log"
+          attempt=0
+          max_attempts=3
+          while (( attempt < max_attempts )); do
+            attempt=$((attempt + 1))
+            set +e
+            bash .github/scripts/kilo-auto-factory-run.sh \
+              180 \
+              'ComicPile Kilo Auto Free smoke' \
+              'Reply with exactly KILO_AUTO_FREE_OK. Do not edit files, run commands, or use tools.' \
+              "$RUNNER_TEMP/kilo-auto-smoke.log"
+            status=$?
+            set -e
+            if grep -q 'KILO_AUTO_FREE_OK' "$RUNNER_TEMP/kilo-auto-smoke.log" 2>/dev/null; then
+              break
+            fi
+            if grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$RUNNER_TEMP/kilo-auto-smoke.log" 2>/dev/null; then
+              if (( attempt < max_attempts )); then
+                retry_after="$(grep -Ei 'retry-after:[[:space:]]*[0-9]+' "$RUNNER_TEMP/kilo-auto-smoke.log" 2>/dev/null | tail -n1 | grep -Eo '[0-9]+' | tail -n1 || true)"
+                if [[ "$retry_after" =~ ^[0-9]+$ ]]; then
+                  delay=$(( retry_after > 60 ? 60 : retry_after ))
+                else
+                  delay=$(( 5 * attempt ))
+                fi
+                echo "Kilo smoke transient failure (attempt ${attempt}/${max_attempts}); retrying after ${delay}s" >&2
+                cat "$RUNNER_TEMP/kilo-auto-smoke.log" >&2 || true
+                sleep "$delay"
+                continue
+              fi
+              echo "Transient Kilo smoke failure after ${attempt} attempts; allowing worker to proceed with built-in retry handling" >&2
+              cat "$RUNNER_TEMP/kilo-auto-smoke.log" >&2 || true
+              exit 0
+            fi
+            # Non-transient failure without sentinel - break to final error handling
+            break
+          done
+          if grep -q 'KILO_AUTO_FREE_OK' "$RUNNER_TEMP/kilo-auto-smoke.log" 2>/dev/null; then
+            echo "Kilo smoke succeeded"
+          elif grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$RUNNER_TEMP/kilo-auto-smoke.log" 2>/dev/null; then
+            echo "Transient Kilo smoke failure detected; allowing worker to proceed with built-in retry handling" >&2
+            cat "$RUNNER_TEMP/kilo-auto-smoke.log" >&2 || true
+            exit 0
+          else
+            echo "Kilo smoke did not return KILO_AUTO_FREE_OK" >&2
+            cat "$RUNNER_TEMP/kilo-auto-smoke.log" >&2 || true
+            exit 1
+          fi
           [[ -z "$(git status --porcelain)" ]] || { echo 'Kilo smoke modified the worktree' >&2; exit 1; }
 
       - name: Run continuous fixed-model factory session

@@ -208,6 +208,7 @@ describe('YourContextPillar reader-context integration', () => {
             id: 3,
             name: 'Annihilation',
             applies_to_current_issue: true,
+            membership_kind: 'issue',
             next_member: null,
             average_rating: 4.0,
             ratings_count: 3,

@@ -38,7 +38,7 @@ async def test_security_headers_present(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_security_headers_on_api_endpoint(auth_client: AsyncClient) -> None:
     """Test that security headers are present on API endpoints."""
-    response = await auth_client.get("/api/threads/")
+    response = await auth_client.get("/api/v1/threads/")
     assert response.status_code == 200
 
     expected_headers = [

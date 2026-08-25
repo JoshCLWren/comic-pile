@@ -24,7 +24,7 @@ def test_resolve_safe_profile_requires_no_token() -> None:
     """The default profile contains only unauthenticated routes."""
     routes, token = resolve_routes("control-safe", "MISSING_BENCHMARK_TOKEN")
 
-    assert [route.path for route in routes] == ["/health", "/api/auth/csrf"]
+    assert [route.path for route in routes] == ["/health", "/api/v1/auth/csrf"]
     assert token is None
 
 
@@ -33,8 +33,8 @@ def test_summarize_reports_percentiles_statuses_and_bytes() -> None:
     samples = [
         RequestSample("/health", 10.0, 200, 10, None),
         RequestSample("/health", 20.0, 200, 20, None),
-        RequestSample("/api/auth/csrf", 30.0, 503, 30, None),
-        RequestSample("/api/auth/csrf", 40.0, None, 0, "ReadTimeout"),
+        RequestSample("/api/v1/auth/csrf", 30.0, 503, 30, None),
+        RequestSample("/api/v1/auth/csrf", 40.0, None, 0, "ReadTimeout"),
     ]
 
     result = summarize(samples, 2.0)
@@ -65,13 +65,13 @@ def test_summarize_by_route_keeps_route_results_separate() -> None:
     """Combined scenarios expose independent statistics for every route."""
     samples = [
         RequestSample("/health", 10.0, 200, 10, None),
-        RequestSample("/api/auth/csrf", 20.0, 200, 20, None),
+        RequestSample("/api/v1/auth/csrf", 20.0, 200, 20, None),
     ]
 
     result = summarize_by_route(samples, 2.0)
 
-    assert list(result) == ["/api/auth/csrf", "/health"]
-    assert result["/api/auth/csrf"]["requests"] == 1
+    assert list(result) == ["/api/v1/auth/csrf", "/health"]
+    assert result["/api/v1/auth/csrf"]["requests"] == 1
     assert result["/health"]["requests_per_second"] == 0.5
 
 
@@ -124,7 +124,7 @@ async def test_transport_exception_records_correlation_fields() -> None:
         sample = await request_once(
             client,
             ROUTES["csrf"],
-            "https://example.test/api/auth/csrf",
+            "https://example.test/api/v1/auth/csrf",
             {},
             32,
             2,

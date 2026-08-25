@@ -41,12 +41,12 @@ async def test_rate_endpoint_query_count(
     await async_db.refresh(thread)
 
     # Establish a session and pending thread via a roll.
-    roll_resp = await auth_client.post("/api/roll/")
+    roll_resp = await auth_client.post("/api/v1/roll/")
     assert roll_resp.status_code == 200
 
     # Rate the thread.
     rate_resp = await auth_client.post(
-        "/api/rate/",
+        "/api/v1/rate/",
         json={"rating": 4.0},
     )
     assert rate_resp.status_code == 200

@@ -56,13 +56,13 @@ async def test_unsnooze_success(
     await async_db.commit()
 
     # First, snooze the thread
-    snooze_response = await auth_client.post("/api/snooze/")
+    snooze_response = await auth_client.post("/api/v1/snooze/")
     assert snooze_response.status_code == 200
     snooze_data = snooze_response.json()
     assert thread.id in snooze_data["snoozed_thread_ids"]
 
     # Now unsnooze it
-    unsnooze_response = await auth_client.post(f"/api/snooze/{thread.id}/unsnooze")
+    unsnooze_response = await auth_client.post(f"/api/v1/snooze/{thread.id}/unsnooze")
     assert unsnooze_response.status_code == 200
 
     data = unsnooze_response.json()
@@ -117,7 +117,7 @@ async def test_unsnooze_non_snoozed_thread_is_idempotent(
     await async_db.refresh(thread)
 
     # Attempt to unsnooze a thread that was never snoozed
-    response = await auth_client.post(f"/api/snooze/{thread.id}/unsnooze")
+    response = await auth_client.post(f"/api/v1/snooze/{thread.id}/unsnooze")
 
     # Should return 200 (idempotent), not 404
     assert response.status_code == 200
@@ -132,7 +132,7 @@ async def test_unsnooze_no_session(auth_client: AsyncClient) -> None:
     Args:
         auth_client: Authenticated HTTP client for API requests.
     """
-    response = await auth_client.post("/api/snooze/999/unsnooze")
+    response = await auth_client.post("/api/v1/snooze/999/unsnooze")
     assert response.status_code == 400
     assert "No active session" in response.json()["detail"]
 
@@ -204,16 +204,16 @@ async def test_unsnooze_multiple_snoozed_threads(
         session.pending_thread_id = thread.id
         await async_db.commit()
 
-        response = await auth_client.post("/api/snooze/")
+        response = await auth_client.post("/api/v1/snooze/")
         assert response.status_code == 200
 
     # Verify all three are snoozed
-    check_response = await auth_client.get("/api/sessions/current/")
+    check_response = await auth_client.get("/api/v1/sessions/current/")
     check_data = check_response.json()
     assert len(check_data["snoozed_thread_ids"]) == 3
 
     # Unsnooze thread2 only
-    unsnooze_response = await auth_client.post(f"/api/snooze/{thread2.id}/unsnooze")
+    unsnooze_response = await auth_client.post(f"/api/v1/snooze/{thread2.id}/unsnooze")
     assert unsnooze_response.status_code == 200
 
     data = unsnooze_response.json()

@@ -236,7 +236,8 @@ describe('useQueueThreads (bounded incremental loader)', () => {
 })
 
 it('moves queue position and reconciles only queue-owned read models', async () => {
-  const { result } = renderHook(() => useMoveToPosition())
+  const wrapper = createWrapper()
+  const { result } = renderHook(() => useMoveToPosition(), { wrapper })
 
   await act(async () => {
     await result.current.mutate({ id: 4, position: 2 })
@@ -247,12 +248,13 @@ it('moves queue position and reconciles only queue-owned read models', async () 
 })
 
 it('moves thread to front and back and reconciles after each mutation', async () => {
-  const { result: frontResult } = renderHook(() => useMoveToFront())
+  const wrapper = createWrapper()
+  const { result: frontResult } = renderHook(() => useMoveToFront(), { wrapper })
   await act(async () => {
     await frontResult.current.mutate(8)
   })
 
-  const { result: backResult } = renderHook(() => useMoveToBack())
+  const { result: backResult } = renderHook(() => useMoveToBack(), { wrapper })
   await act(async () => {
     await backResult.current.mutate(9)
   })
@@ -265,7 +267,8 @@ it('moves thread to front and back and reconciles after each mutation', async ()
 })
 
 it('shuffles the queue and reconciles queue-owned read models', async () => {
-  const { result } = renderHook(() => useShuffleQueue())
+  const wrapper = createWrapper()
+  const { result } = renderHook(() => useShuffleQueue(), { wrapper })
 
   await act(async () => {
     await result.current.mutate()
@@ -277,7 +280,8 @@ it('shuffles the queue and reconciles queue-owned read models', async () => {
 
 it('does not invalidate cache when a queue mutation fails', async () => {
   mockedQueueApi.moveToFront.mockRejectedValueOnce(new Error('move failed'))
-  const { result } = renderHook(() => useMoveToFront())
+  const wrapper = createWrapper()
+  const { result } = renderHook(() => useMoveToFront(), { wrapper })
 
   await expect(
     act(async () => {
