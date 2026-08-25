@@ -98,9 +98,13 @@ class Event(Base):
     recommendation_reason_codes: Mapped[list[str] | None] = mapped_column(
         ARRAY(Text), nullable=True
     )
-    # Versioned decision-time context snapshot recorded on roll events
-    # (see app/services/reading_effort.py for the schema contract).
-    recommendation_context: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Full recommendation context captured at decision time, including bandwidth,
+    # intent, taste bank factors, primary score, and affinity notes. Used by the
+    # explanation endpoint to reconstruct human-readable reasons without recomputing
+    # from potentially mutated current state.
+    recommendation_context: Mapped[dict[str, object] | None] = mapped_column(
+        JSON, nullable=True
+    )
 
     __table_args__ = (
         Index("ix_event_session_id", "session_id"),

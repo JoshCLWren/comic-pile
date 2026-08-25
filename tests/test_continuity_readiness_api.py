@@ -6,8 +6,8 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import app.continuity_readiness as readiness
 from app.models.continuity_rule import ContinuityRule, ContinuityRuleSelectedMember
+from app.services import continuity_graph
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
 from app.models.issue import Issue
 from app.models.thread import Thread
@@ -351,7 +351,7 @@ async def test_membership_collection_is_bounded(
         issue_ids=[issue.id for issue in issues],
     )
     await async_db.commit()
-    monkeypatch.setattr(readiness, "MAX_GRAPH_MEMBERSHIPS", 1)
+    monkeypatch.setattr(continuity_graph, "MAX_GRAPH_MEMBERSHIPS", 1)
 
     response = await auth_client.post(
         "/api/v1/continuity/readiness",
@@ -659,7 +659,7 @@ async def test_continuity_chains_membership_collection_is_bounded(
         issue_ids=[issue.id for issue in issues],
     )
     await async_db.commit()
-    monkeypatch.setattr(readiness, "MAX_GRAPH_MEMBERSHIPS", 1)
+    monkeypatch.setattr(continuity_graph, "MAX_GRAPH_MEMBERSHIPS", 1)
 
     response = await auth_client.post(
         "/api/v1/continuity/chains",
@@ -715,7 +715,7 @@ async def test_selected_member_collection_is_bounded(
     ]
     async_db.add(rule)
     await async_db.commit()
-    monkeypatch.setattr(readiness, "MAX_GRAPH_SELECTED_MEMBERS", 1)
+    monkeypatch.setattr(continuity_graph, "MAX_GRAPH_SELECTED_MEMBERS", 1)
 
     response = await auth_client.post(
         "/api/v1/continuity/readiness",

@@ -7,7 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Issue, Thread, User
 from httpx import AsyncClient
-from comic_pile.queue import get_roll_pool_rows, move_to_back, move_to_front, move_to_position
+from comic_pile.queue import (
+    get_bounded_roll_pool_rows,
+    get_roll_pool_rows,
+    move_to_back,
+    move_to_front,
+    move_to_position,
+)
 
 
 @pytest.mark.asyncio
@@ -1095,3 +1101,114 @@ async def test_get_roll_pool_rows_stale_next_unread_issue_id_returns_null_number
     assert result_thread.id == thread.id
     assert unread_count == 1
     assert issue_number is None
+
+
+@pytest.mark.asyncio
+async def test_get_roll_pool_rows_blocked_excluded(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """Blocked threads are excluded from the roll pool."""
+    now = datetime.now(UTC)
+    blocked_thread = Thread(
+        title="Blocked Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        is_blocked=True,
+        user_id=default_user.id,
+        created_at=now,
+    )
+    active_thread = Thread(
+        title="Active Thread",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=2,
+        status="active",
+        user_id=default_user.id,
+        created_at=now,
+    )
+    async_db.add_all([blocked_thread, active_thread])
+    await async_db.commit()
+
+    rows = await get_roll_pool_rows(default_user.id, async_db)
+
+    assert len(rows) == 1
+    assert rows[0][0].id == active_thread.id
+
+
+@pytest.mark.asyncio
+async def test_get_roll_pool_rows_snoozed_excluded_and_not_counted(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """Snoozed threads are fully excluded and do not count toward pool size."""
+    now = datetime.now(UTC)
+    active_threads = [
+        Thread(
+            title=f"Active Thread {i}",
+            format="Comic",
+            issues_remaining=2,
+            queue_position=i + 2,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        )
+        for i in range(4)
+    ]
+    async_db.add_all(active_threads)
+    await async_db.commit()
+
+    rows = await get_roll_pool_rows(default_user.id, async_db, snoozed_ids=[99])
+    assert len(rows) == 4
+
+
+@pytest.mark.asyncio
+async def test_get_bounded_roll_pool_rows_applies_die_cap(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """get_bounded_roll_pool_rows caps the candidate pool to current_die."""
+    now = datetime.now(UTC)
+    threads = [
+        Thread(
+            title=f"Thread {i}",
+            format="Comic",
+            issues_remaining=1,
+            queue_position=i + 1,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        )
+        for i in range(10)
+    ]
+    async_db.add_all(threads)
+    await async_db.commit()
+
+    bounded = await get_bounded_roll_pool_rows(default_user.id, async_db, current_die=4)
+    assert len(bounded) == 4
+    assert [row[0].id for row in bounded] == [threads[i].id for i in range(4)]
+
+
+@pytest.mark.asyncio
+async def test_get_bounded_roll_pool_rows_d20_includes_all_smaller_pool(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """A d20 die returns the full eligible pool when pool < die size."""
+    now = datetime.now(UTC)
+    threads = [
+        Thread(
+            title=f"Thread {i}",
+            format="Comic",
+            issues_remaining=1,
+            queue_position=i + 1,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        )
+        for i in range(6)
+    ]
+    async_db.add_all(threads)
+    await async_db.commit()
+
+    bounded = await get_bounded_roll_pool_rows(default_user.id, async_db, current_die=20)
+    assert len(bounded) == 6
+    assert [row[0].id for row in bounded] == [threads[i].id for i in range(6)]
