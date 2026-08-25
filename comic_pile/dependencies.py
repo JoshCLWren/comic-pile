@@ -53,7 +53,7 @@ class BlockingDependency:
         self.thread_id = thread_id
         self.thread_title = thread_title
         self.issue_number = str(issue_number)
-        self.label = f"Needs {thread_title}: #{issue_number}"
+        self.blocked_dependency: {queue_card_id: ${queue_card_id}, thread_page_id: ${thread_page_id}, issue_number: ${issue_number}}
 
 
 def build_blocking_explanation(issue_number: str, thread_title: str) -> str:
@@ -71,7 +71,7 @@ def build_blocking_explanation(issue_number: str, thread_title: str) -> str:
     Returns:
         A concise blocked-by sentence.
     """
-    return f"Blocked by issue #{issue_number} in {thread_title}"
+    return f"Blocked by {thread_title} (Queue card ${queue_card_id}, Thread page ${thread_page_id}): #{issue_number}"
 
 
 def format_blocking_reason(dependency: BlockingDependency) -> str:
