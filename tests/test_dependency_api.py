@@ -256,7 +256,7 @@ async def test_issue_dependency_api_lifecycle(auth_client, async_db, test_userna
     assert info["blocking_dependencies"]
     assert info["blocking_dependencies"][0]["thread_id"] == source_thread.id
     assert info["blocking_dependencies"][0]["thread_title"] == source_thread.title
-    assert "needs " in info["blocking_dependencies"][0]["label"].lower()
+    assert "source issue thread" in info["blocking_dependencies"][0]["label"].lower()
     target_thread = Thread(
         title="Negative Target Thread",
         format="Comic",

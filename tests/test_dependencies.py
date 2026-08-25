@@ -8,6 +8,7 @@ import pytest
 from app.models import Dependency, Issue, Thread, User
 from sqlalchemy import text
 from comic_pile.dependencies import (
+    _get_blocked_thread_ids_uncached,
     build_blocking_explanation,
     detect_circular_dependency,
     format_blocking_reason,
@@ -30,7 +31,7 @@ def test_build_blocking_explanation_uses_human_identity_only() -> None:
     """Reader-facing blocking copy must never include raw internal identifiers."""
     explanation = build_blocking_explanation("1", "Ultimate Universe: One Year In")
 
-    assert explanation == "Blocked by issue #1 in Ultimate Universe: One Year In"
+    assert explanation == "Blocked by Ultimate Universe: One Year In: #1"
     for pattern in RAW_ID_PATTERNS:
         assert not pattern.search(explanation)
 
@@ -87,7 +88,7 @@ async def test_get_blocked_thread_ids_and_explanations(async_db):
     assert isinstance(reasons[0], object)
     assert reasons[0].thread_id == a.id
     assert reasons[0].thread_title == "A"
-    assert "issue #1" in format_blocking_reason(reasons[0]).lower()
+    assert "#1" in format_blocking_reason(reasons[0]).lower()
 
 
 @pytest.mark.asyncio
@@ -405,17 +406,16 @@ async def test_issue_dependency_blocks_by_next_unread_issue(async_db):
     assert target_thread.id in blocked
 
     reasons = await get_blocking_explanations(target_thread.id, user.id, async_db)
-    assert any("issue #1" in format_blocking_reason(reason).lower() for reason in reasons)
+    assert any("#1" in format_blocking_reason(reason).lower() for reason in reasons)
 
     source_issue_1.status = "read"
     source_issue_1.read_at = datetime.now(UTC)
     await async_db.commit()
 
-    blocked_after = await get_blocked_thread_ids(user.id, async_db)
+    blocked_after = await _get_blocked_thread_ids_uncached(user.id, async_db)
     assert target_thread.id not in blocked_after
 
 
-@pytest.mark.asyncio
 async def test_dep_on_future_issue_does_not_block_before_reaching_it(async_db):
     """Dependency on a future issue should not block before next-unread reaches it."""
     user = User(username="future_dep_user", created_at=datetime.now(UTC))
@@ -818,7 +818,7 @@ async def test_blocking_explanations_identify_comics_without_raw_thread_ids(asyn
     reasons = await get_blocking_explanations(target.id, user.id, async_db)
     batched = await get_blocking_explanations_batch([target.id], user.id, async_db)
 
-    expected = "Blocked by issue #1 in Ultimate Universe: One Year In"
+    expected = "Blocked by Ultimate Universe: One Year In: #1"
     assert [format_blocking_reason(dep) for dep in reasons] == [expected]
     assert {tid: [format_blocking_reason(dep) for dep in deps] for tid, deps in batched.items()} == {
         target.id: [expected]

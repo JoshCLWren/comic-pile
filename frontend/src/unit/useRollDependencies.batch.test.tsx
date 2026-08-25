@@ -18,7 +18,7 @@ vi.mock('axios', () => ({
 
 import { useRollDependencies } from '../pages/RollPage/useRollDependencies'
 import { useRollPageState } from '../pages/RollPage/useRollPageState'
-import type { RollBootstrapResponse } from '../types/rollBootstrap'
+import type { RollBootstrapResponse, SessionModeState } from '../types/rollBootstrap'
 
 function bootstrapWith(
   blockedThreads: RollBootstrapResponse['blocked_threads'],
@@ -38,7 +38,7 @@ function bootstrapWith(
     blocked_threads: blockedThreads,
     stale_thread_count: 0,
     stale_thread: null,
-    session_mode: null,
+    session_mode: null as SessionModeState | null,
   } as RollBootstrapResponse
 }
 
