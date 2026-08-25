@@ -403,6 +403,7 @@ async def test_legacy_random_roll_selection_behavior_unchanged(auth_client, asyn
         "result",
         "offset",
         "snoozed_count",
+        "explanation",
         "issue_id",
         "issue_number",
         "next_issue_id",
