@@ -23,9 +23,11 @@ def test_selector_uses_calculated_target_without_backlog_thresholds():
     full.configure_demand_selection(controller, target=7)
 
     workers = [str(worker) for worker in range(6, 26)]
+    health = {worker: ("success", 0) for worker in workers}
     selected = controller.select_completion_workers(
         workers,
         review_backlog=3,
+        health=health,
         now_epoch=1,
     )
 
@@ -62,7 +64,7 @@ def test_raw_demand_is_not_erased_by_legacy_review_backpressure_threshold():
     )
 
 
-def test_transient_cooldowns_are_fallback_capacity_but_model_missing_is_not():
+def test_only_healthy_or_degraded_workers_count_as_executable_capacity():
     controller = full.load_controller()
     full.configure_demand_selection(controller, target=4)
     now = controller.parse_time("2026-08-24T17:00:00Z")
@@ -72,7 +74,9 @@ def test_transient_cooldowns_are_fallback_capacity_but_model_missing_is_not():
     health = {
         "6": ("failure", now - 60),
         "8": ("RATE LIMITED", now - 60),
+        "9": ("success", now - 60),
         "10": ("MODEL MISSING", now - 60),
+        "11": ("provider_unavailable", now - 3600),
     }
 
     selected = controller.select_completion_workers(
@@ -85,4 +89,6 @@ def test_transient_cooldowns_are_fallback_capacity_but_model_missing_is_not():
 
     assert "7" not in selected
     assert "10" not in selected
-    assert selected == ["9", "11", "6", "8"]
+    assert "6" not in selected
+    assert "8" not in selected
+    assert selected == ["9", "11"]
