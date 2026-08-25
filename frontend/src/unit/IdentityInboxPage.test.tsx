@@ -327,8 +327,32 @@ describe('IdentityInboxPage', () => {
   })
 
   it('keeps only one item expanded at a time', async () => {
-    const itemA = inboxItem({ mapping_id: 1, thread_title: 'Mister Miracle' })
-    const itemB = inboxItem({ mapping_id: 2, thread_title: 'New Gods' })
+    const candidate = (
+      identityId: number,
+      comicvineId: string,
+      evidence: string[],
+    ) => ({
+      external_identity_id: identityId,
+      provider: 'comicvine',
+      comicvine_id: comicvineId,
+      external_url: null,
+      metadata_json: {},
+      status: 'candidate',
+      confidence: 0.8,
+      evidence_source: 'title_match',
+      evidence_json: { evidence },
+      rejection_reason: null,
+    })
+    const itemA = inboxItem({
+      mapping_id: 1,
+      thread_title: 'Mister Miracle',
+      candidates: [candidate(501, '4001', ['mister miracle title match'])],
+    })
+    const itemB = inboxItem({
+      mapping_id: 2,
+      thread_title: 'New Gods',
+      candidates: [candidate(601, '4002', ['new gods volume match'])],
+    })
     mockGet.mockResolvedValueOnce({ items: [itemA, itemB], total: 2, offset: 0, limit: 20 })
 
     render(
@@ -340,13 +364,23 @@ describe('IdentityInboxPage', () => {
     )
 
     await waitFor(() => expect(screen.getByText('Mister Miracle')).toBeInTheDocument())
+    expect(
+      screen
+        .getAllByRole('button')
+        .filter((button) => button.textContent?.includes('Mister Miracle')),
+    ).toHaveLength(1)
     await userEvent.click(screen.getByText('Mister Miracle'))
-    await waitFor(() => expect(screen.getByText('Confirm')).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByText('mister miracle title match')).toBeInTheDocument(),
+    )
+    expect(screen.queryByText('new gods volume match')).not.toBeInTheDocument()
 
-    const newGodsButton = screen.getByText('New Gods')
-    await userEvent.click(newGodsButton)
+    await userEvent.click(screen.getByText('New Gods'))
 
-    expect(screen.queryByText('No validated local candidate')).not.toBeInTheDocument()
-    await waitFor(() => expect(screen.getByText('No validated local candidate')).toBeInTheDocument())
+    expect(screen.queryByText('mister miracle title match')).not.toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByText('new gods volume match')).toBeInTheDocument(),
+    )
+    expect(screen.getAllByText('Confirm')).toHaveLength(1)
   })
 })

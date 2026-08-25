@@ -1,6 +1,6 @@
 """Add deferred status to external identity check constraints.
 
-Revision ID: c85500000001
+Revision ID: c85700000001
 Revises: c85400000001
 Create Date: 2026-08-17 12:00:00.000000
 """
@@ -9,7 +9,7 @@ from collections.abc import Sequence
 
 from alembic import op
 
-revision: str = "c85500000001"
+revision: str = "c85700000001"
 down_revision: str | Sequence[str] | None = "c85400000001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None

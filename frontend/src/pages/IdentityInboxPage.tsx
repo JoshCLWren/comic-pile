@@ -78,12 +78,15 @@ function CandidateCard({
   isRejecting: boolean
 }) {
   const meta = candidate.metadata_json
+  const toText = (value: unknown): string | null =>
+    typeof value === 'string' && value.length > 0 ? value : null
+
   const volumeObj = meta.volume
   const volumeName =
     typeof volumeObj === 'object' && volumeObj !== null
-      ? (volumeObj as Record<string, unknown>).name
-      : meta.volume_name
-  const issueName = meta.name || meta.issue_name
+      ? toText((volumeObj as Record<string, unknown>).name)
+      : toText(meta.volume_name)
+  const issueName = toText(meta.name) ?? toText(meta.issue_name)
 
   return (
     <div className="border border-stone-200 rounded-lg p-3 bg-white hover:border-stone-300 transition-colors">
@@ -92,11 +95,11 @@ function CandidateCard({
           <div className="font-semibold text-sm text-stone-800 truncate">
             {candidate.comicvine_id ? `#${candidate.comicvine_id}` : 'Unknown'}
             {volumeName && (
-              <span className="text-stone-500 font-normal ml-1">({String(volumeName)})</span>
+              <span className="text-stone-500 font-normal ml-1">({volumeName})</span>
             )}
           </div>
           {issueName && (
-            <div className="text-xs text-stone-600 mt-0.5">{String(issueName)}</div>
+            <div className="text-xs text-stone-600 mt-0.5">{issueName}</div>
           )}
           <div className="flex items-center gap-3 mt-1.5">
             <ConfidenceBar confidence={candidate.confidence} />
@@ -194,33 +197,35 @@ function InboxItemCard({
 
   return (
     <div className="border border-stone-200 rounded-xl bg-white shadow-sm overflow-hidden">
-      <button
-        type="button"
-        onClick={() => toggleExpand(item.mapping_id)}
-        className="w-full text-left px-4 py-3 hover:bg-stone-50 transition-colors"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <Link
-                to={`/thread/${item.thread_id}`}
-                onClick={(e) => e.stopPropagation()}
-                className="font-semibold text-sm text-stone-800 hover:text-blue-600 hover:underline truncate"
-              >
-                {item.thread_title}
-              </Link>
-              <span className="text-xs text-stone-400">#{item.issue_number}</span>
-            </div>
-            <div className="text-xs text-stone-500 mt-0.5">{item.why_stopped}</div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColor(item.status)}`}>
-              {item.status}
+      <div className="w-full px-4 py-3 hover:bg-stone-50 transition-colors flex items-start justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => toggleExpand(item.mapping_id)}
+          aria-expanded={isExpanded}
+          className="flex-1 min-w-0 text-left cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-500 rounded"
+        >
+          <span className="flex items-center gap-2">
+            <span className="font-semibold text-sm text-stone-800 hover:text-blue-600 hover:underline truncate">
+              {item.thread_title}
             </span>
-            <span className="text-stone-400 text-xs">{isExpanded ? '\u25B2' : '\u25BC'}</span>
-          </div>
+            <span className="text-xs text-stone-400">#{item.issue_number}</span>
+          </span>
+          <span className="block text-xs text-stone-500 mt-0.5">{item.why_stopped}</span>
+        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <Link
+            to={`/thread/${item.thread_id}`}
+            className="text-xs text-blue-500 hover:underline shrink-0"
+            aria-label={`Open thread ${item.thread_id}`}
+          >
+            Open
+          </Link>
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColor(item.status)}`}>
+            {item.status}
+          </span>
+          <span className="text-stone-400 text-xs">{isExpanded ? '\u25B2' : '\u25BC'}</span>
         </div>
-      </button>
+      </div>
 
       {isExpanded && (
         <div className="px-4 pb-4 border-t border-stone-100">
@@ -389,7 +394,7 @@ export default function IdentityInboxPage() {
         <div className="text-center py-12 text-stone-400">Loading...</div>
       ) : items.length === 0 ? (
         <div className="text-center py-12">
-          <div className="text-4xl mb-3">\u2714\uFE0F</div>
+          <div className="text-4xl mb-3">{'\u2714\uFE0F'}</div>
           <div className="text-sm text-stone-500 font-medium">All clear!</div>
           <div className="text-xs text-stone-400 mt-1">No unresolved identities in your inbox.</div>
         </div>
