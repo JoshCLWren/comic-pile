@@ -25,6 +25,7 @@ vi.mock('../services/api-issues', () => ({
 }))
 
 const api = vi.mocked(dependencyGroupsApi)
+const issueApi = vi.mocked(issuesApi)
 
 function renderPage() {
   return render(
@@ -47,10 +48,10 @@ const annihilation = {
 beforeEach(() => {
   vi.clearAllMocks()
   api.list.mockResolvedValue([])
-  api.get.mockResolvedValue({ id: 7, name: 'Annihilation', memberships: [] })
-  api.addMember.mockResolvedValue({ id: 99, group_id: 7, thread_id: null, issue_id: null })
-  api.addIssueRange.mockResolvedValue({ added_issue_ids: [], already_present_issue_ids: [] })
-  issuesApi.list.mockResolvedValue([])
+  api.get.mockResolvedValue({ id: 7, name: 'Annihilation', created_at: '2026-08-06T00:00:00Z', memberships: [] })
+  api.addMember.mockResolvedValue({ id: 99, thread_id: null, issue_id: null })
+  api.addIssueRange.mockResolvedValue({ thread_id: 1, start_position: 1, end_position: 5, added_issue_ids: [], already_present_issue_ids: [] })
+  issueApi.list.mockResolvedValue({ issues: [], total_count: 0, page_size: 20, next_page_token: null })
   vi.spyOn(window, 'confirm').mockReturnValue(true)
 })
 

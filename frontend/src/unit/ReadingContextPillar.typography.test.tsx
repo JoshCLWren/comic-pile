@@ -188,16 +188,16 @@ describe('ReadingContextPillar rendered typography (#1873)', () => {
     })
     expectComputedFontSize(membershipChip, 'chipLabel')
 
-    const upcomingCrossoverName = screen.getByRole('button', {
-      name: 'Open crossover Ultimate Universe Reading Order',
+    const upcomingCrossoverButton = screen.getByRole('button', {
+      name: 'Open crossover Ultimate Universe Reading Order, starts at issue 14',
     })
     expectReadable(
-      within(upcomingCrossoverName).getByText('Ultimate Universe Reading Order'),
+      within(upcomingCrossoverButton).getByText('Ultimate Universe Reading Order'),
       READING_CONTEXT_TYPE_FLOORS.primaryValue,
       'upcoming crossover name',
     )
     expectComputedFontSize(
-      within(upcomingCrossoverName).getByText('— starts at #14'),
+      within(upcomingCrossoverButton).getByText('— starts at #14'),
       'metaLabel',
     )
 
