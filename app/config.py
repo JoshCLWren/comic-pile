@@ -325,6 +325,47 @@ class RedisSettings(BaseSettings):
         )
 
 
+class ImageDeliverySettings(BaseSettings):
+    """Remote comic cover image optimization settings."""
+
+    model_config = SettingsConfigDict(env_file=[".env.test", ".env", ".envrc"], extra="ignore")
+
+    image_optimizer_allowed_hosts: str = Field(
+        default="comicvine.gamespot.com,www.comicvine.com,comicvine.com",
+        description=(
+            "Comma-separated upstream image hosts the optimizer may fetch. "
+            "Any host outside this list is rejected so the endpoint cannot become "
+            "an open proxy."
+        ),
+        json_schema_extra={"env": "IMAGE_OPTIMIZER_ALLOWED_HOSTS"},
+    )
+    image_optimizer_max_upstream_bytes: int = Field(
+        default=4_000_000,
+        ge=50_000,
+        le=50_000_000,
+        description=(
+            "Maximum accepted upstream image payload size in bytes. Kept below "
+            "Vercel's ~4.5 MB serverless response limit so even an untransformed "
+            "passthrough fits a single function response."
+        ),
+        json_schema_extra={"env": "IMAGE_OPTIMIZER_MAX_UPSTREAM_BYTES"},
+    )
+    image_optimizer_upstream_timeout_seconds: float = Field(
+        default=10.0,
+        ge=1.0,
+        le=60.0,
+        description="Total timeout for fetching an upstream cover image.",
+        json_schema_extra={"env": "IMAGE_OPTIMIZER_UPSTREAM_TIMEOUT_SECONDS"},
+    )
+    image_optimizer_webp_quality: int = Field(
+        default=80,
+        ge=1,
+        le=100,
+        description="WebP encoder quality used for resized variants.",
+        json_schema_extra={"env": "IMAGE_OPTIMIZER_WEBP_QUALITY"},
+    )
+
+
 class Settings(BaseSettings):
     """Main settings class that aggregates all configuration groups."""
 
@@ -364,6 +405,11 @@ class Settings(BaseSettings):
     def recommendation(self) -> RecommendationSettings:
         """Get recommendation settings."""
         return get_recommendation_settings()
+
+    @property
+    def image_delivery(self) -> ImageDeliverySettings:
+        """Get remote image delivery settings."""
+        return get_image_delivery_settings()
 
 
 @lru_cache
@@ -415,6 +461,12 @@ def get_recommendation_settings() -> RecommendationSettings:
 
 
 @lru_cache
+def get_image_delivery_settings() -> ImageDeliverySettings:
+    """Get cached remote image delivery settings instance."""
+    return ImageDeliverySettings()
+
+
+@lru_cache
 def get_settings() -> Settings:
     """Get cached main settings instance."""
     return Settings()
@@ -430,4 +482,5 @@ def clear_settings_cache() -> None:
     get_github_settings.cache_clear()
     get_redis_settings.cache_clear()
     get_recommendation_settings.cache_clear()
+    get_image_delivery_settings.cache_clear()
     get_settings.cache_clear()

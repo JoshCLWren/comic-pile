@@ -29,6 +29,7 @@ from app.api import (
     debug,
     dependency,
     identity_inbox,
+    images,
     issue,
     metrics,
     ping,
@@ -212,6 +213,10 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     # Lightweight ping endpoint for cold-start mitigation (issue #1389).
     # Zero database/ORM overhead; keeps Vercel serverless functions warm.
     app.include_router(ping.router, prefix="/api", tags=["ping"])
+
+    # Edge-cacheable remote cover image optimizer. Unauthenticated by design
+    # (<img> tags cannot send auth); strictly allowlisted upstreams only.
+    app.include_router(images.router, tags=["images"])
 
     # Error-only request logging (body redaction + environment-aware sanitization).
     add_request_logging_middleware(app, app_settings.environment)
