@@ -15,14 +15,11 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BACKUP_EXTENSIONS = ["*.bak", "*.backup", "*.orig", "*~"]
 
-
-def _require_git() -> str:
-    """Return the git executable path or skip when git is unavailable."""
-    git_path = shutil.which("git")
-    if git_path is None:
-        pytest.skip("git is not available")
-    assert git_path is not None
-    return git_path
+# Skip only the tests that shell out to git when git is unavailable.
+requires_git = pytest.mark.skipif(
+    shutil.which("git") is None,
+    reason="git is not available",
+)
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -53,7 +50,6 @@ def _write_file(repo: Path, relative_path: str, content: str = "data\n") -> Path
 @pytest.fixture()
 def hook_repo(tmp_path: Path) -> Path:
     """Create a throwaway git repo with the repository's real pre-commit hook."""
-    _require_git()
     repo = tmp_path / "hook-repo"
     repo.mkdir()
 
@@ -88,9 +84,9 @@ def hook_repo(tmp_path: Path) -> Path:
     return repo
 
 
+@requires_git
 def test_repo_tracks_no_backup_files() -> None:
     """No tracked file may match common backup patterns."""
-    _require_git()
     result = subprocess.run(
         ["git", "-c", "safe.directory=*", "-C", str(REPO_ROOT), "ls-files"],
         capture_output=True,
@@ -115,6 +111,7 @@ def test_gitignore_covers_common_backup_extensions() -> None:
         assert extension in patterns, f".gitignore is missing {extension}"
 
 
+@requires_git
 @pytest.mark.parametrize(
     ("backup_name",),
     [
@@ -142,6 +139,7 @@ def test_pre_commit_hook_blocks_staged_backup_files(
     assert "are banned from this repository" in combined_output
 
 
+@requires_git
 def test_pre_commit_hook_allows_normal_files(hook_repo: Path) -> None:
     """Ordinary files still commit cleanly through the full hook."""
     _write_file(hook_repo, "feature.txt", "legitimate change\n")
@@ -152,6 +150,7 @@ def test_pre_commit_hook_allows_normal_files(hook_repo: Path) -> None:
     assert commit.returncode == 0, f"expected clean commit: {commit.stdout} {commit.stderr}"
 
 
+@requires_git
 def test_pre_commit_hook_permits_untracking_existing_backup(hook_repo: Path) -> None:
     """Staged deletions of tracked backups pass so they can be untracked."""
     backup_name = "legacy.bak"
