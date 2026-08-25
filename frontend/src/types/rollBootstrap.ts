@@ -146,9 +146,3 @@ export interface RollBootstrapResponse {
   stale_thread_count: number
   stale_thread: RollBootstrapThread | null
 }
-
-declare module './index' {
-  interface RollBootstrapResponse {
-    session_mode: SessionMode
-  }
-}

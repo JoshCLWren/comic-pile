@@ -4,8 +4,39 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { RollHeader } from '../pages/RollPage/components/RollHeader'
 import { ReadingModeControl } from '../pages/RollPage/components/ReadingModeControl'
-import type { RollBootstrapResponse, SessionModeState } from '../types/rollBootstrap'
+import type { RollBootstrapResponse, SessionMode, SessionModeState } from '../types/rollBootstrap'
 import { formatSessionMode, readingModeLabel } from '../types/rollBootstrap'
+
+function toSessionMode(state: SessionModeState | null | undefined): SessionMode {
+  if (!state) {
+    return {
+      active_bandwidth: null,
+      predicted_bandwidth: null,
+      bandwidth_confidence: null,
+      bandwidth_source: null,
+      bandwidth_version: null,
+      active_intent: null,
+      predicted_intent: null,
+      intent_confidence: null,
+      intent_source: null,
+      intent_version: null,
+      session_mode_correction_guidance: null,
+    }
+  }
+  return {
+    active_bandwidth: state.bandwidth ?? null,
+    predicted_bandwidth: null,
+    bandwidth_confidence: state.confidence ?? null,
+    bandwidth_source: (state.source as 'manual' | 'inferred' | null) ?? null,
+    bandwidth_version: state.version != null ? String(state.version) : null,
+    active_intent: state.intent ?? null,
+    predicted_intent: null,
+    intent_confidence: null,
+    intent_source: null,
+    intent_version: null,
+    session_mode_correction_guidance: null,
+  }
+}
 
 function bootstrapWithMode(mode: SessionModeState | null | undefined): RollBootstrapResponse {
   return {
@@ -23,7 +54,7 @@ function bootstrapWithMode(mode: SessionModeState | null | undefined): RollBoots
     blocked_threads: [],
     stale_thread_count: 0,
     stale_thread: null,
-    session_mode: mode,
+    session_mode: toSessionMode(mode),
   }
 }
 
