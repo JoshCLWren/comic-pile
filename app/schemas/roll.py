@@ -32,6 +32,7 @@ class RollResponse(BaseModel):
     next_issue_number: str | None = None
     total_issues: int | None = None
     reading_progress: str | None = None
+    explanation: str | None = None
 
 
 class SetCurrentIssueRequest(BaseModel):

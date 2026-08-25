@@ -21,6 +21,7 @@ from app.middleware import limiter
 from app.models import DependencyGroup, DependencyGroupMembership, Event, Issue, Thread
 from app.models.user import User
 from app.roll_recovery import build_roll_recovery
+from app.services.explanation_projection import get_primary_explanation
 from app.schemas import (
     OverrideRequest,
     RollBootstrapResponse,
@@ -108,6 +109,12 @@ async def roll_dice(
         session_events=session_events,
         now=datetime.now(UTC),
     )
+    # Derive concise, user-facing reason codes from the actual decision-time
+    # selection context. Momentum weighting is applied only when a positive
+    # bonus exists; otherwise the selection is genuinely unweighted/pure-random.
+    recommendation_reason_codes = (
+        ["momentum_weighted"] if max_bonus > 0 else ["pure_random"]
+    )
     selected_thread, unread_count, issue_number = bounded_rows[selected_index]
 
     selected_thread_id = selected_thread.id
@@ -143,6 +150,7 @@ async def roll_dice(
         die=current_die,
         result=selected_index + 1,
         selection_method="momentum" if max_bonus > 0 else "random",
+        recommendation_reason_codes=recommendation_reason_codes,
         issue_id=selected_thread_issue_id,
         issue_number=selected_thread_issue_number,
     )
@@ -174,6 +182,7 @@ async def roll_dice(
         next_issue_number=selected_thread_issue_number,
         total_issues=selected_thread_total_issues,
         reading_progress=selected_thread_reading_progress,
+        explanation=get_primary_explanation(recommendation_reason_codes),
     )
 
 
@@ -284,6 +293,7 @@ async def override_roll(
         die=current_die,
         result=0,
         selection_method="override",
+        recommendation_reason_codes=[],
         issue_id=override_thread_issue_id,
         issue_number=override_thread_issue_number,
     )
@@ -314,6 +324,7 @@ async def override_roll(
         next_issue_number=override_thread_issue_number,
         total_issues=override_thread_total_issues,
         reading_progress=override_thread_reading_progress,
+        explanation=get_primary_explanation([]),
     )
 
 

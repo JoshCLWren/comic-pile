@@ -5979,6 +5979,8 @@ export interface components {
         RollResponse: {
             /** Die Size */
             die_size: number;
+            /** Explanation */
+            explanation?: string | null;
             /** Format */
             format: string;
             /** Issue Id */
