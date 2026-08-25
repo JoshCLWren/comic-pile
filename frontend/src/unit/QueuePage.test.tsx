@@ -48,6 +48,10 @@ vi.mock('../hooks/useSnooze', () => ({
   useUnsnooze: vi.fn(),
 }))
 
+vi.mock('../hooks/useQueueBlockingInfo', () => ({
+  useQueueBlockingInfo: vi.fn(() => ({})),
+}))
+
 vi.mock('../services/api', () => ({
   threadsApi: {
     setPending: vi.fn(),

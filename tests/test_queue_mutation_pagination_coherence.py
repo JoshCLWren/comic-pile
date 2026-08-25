@@ -46,7 +46,7 @@ async def test_mutation_reset_keeps_first_page_bounded(
         {
             "type": "http",
             "method": "GET",
-            "path": "/api/threads/",
+            "path": "/api/v1/threads/",
             "headers": [],
             "query_string": b"",
         }
@@ -119,7 +119,7 @@ async def test_pagination_no_gaps_or_duplicates_after_mutation(
         {
             "type": "http",
             "method": "GET",
-            "path": "/api/threads/",
+            "path": "/api/v1/threads/",
             "headers": [],
             "query_string": b"",
         }
@@ -206,7 +206,7 @@ async def test_large_library_remains_bounded(
         {
             "type": "http",
             "method": "GET",
-            "path": "/api/threads/",
+            "path": "/api/v1/threads/",
             "headers": [],
             "query_string": b"",
         }

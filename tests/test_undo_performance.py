@@ -103,7 +103,7 @@ async def test_undo_endpoint_query_count(
 
     # Undo the snapshot.
     undo_resp = await auth_client.post(
-        f"/api/undo/{session.id}/undo/{snapshot.id}",
+        f"/api/v1/undo/{session.id}/undo/{snapshot.id}",
     )
     assert undo_resp.status_code == 200
 

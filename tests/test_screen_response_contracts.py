@@ -70,6 +70,7 @@ ISSUE_FIELDS = {
 BLOCKING_EXPLANATION_FIELDS = {
     "is_blocked",
     "blocking_reasons",
+    "blocking_dependencies",
 }
 THREAD_DEPENDENCIES_FIELDS = {
     "blocking",
