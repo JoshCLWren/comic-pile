@@ -46,7 +46,7 @@ fi
 # never belong in version control. Deletions are allowed so existing backups
 # can be untracked.
 BACKUP_PATTERN='\.(bak|backup|orig)$|~$'
-BACKUP_STAGED=$(git diff --cached --name-only --diff-filter=d | grep -Ei "$BACKUP_PATTERN" || true)
+BACKUP_STAGED=$(git diff --cached --name-only --diff-filter=ACM | grep -Ei "$BACKUP_PATTERN" || true)
 if [ -n "$BACKUP_STAGED" ]; then
     echo ""
     echo "${RED}ERROR: Backup files staged for commit:${NC}"
