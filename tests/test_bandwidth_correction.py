@@ -76,6 +76,7 @@ class TestComputeSnoozeCorrection:
             "candidate_effort_level": None,
             "consecutive_snoozes": 1,
             "last_snooze_direction": None,
+            "predicted_bandwidth": "balanced",
         }
         base.update(overrides)
         return base
@@ -88,6 +89,7 @@ class TestComputeSnoozeCorrection:
         assert not result.bandwidth_changed
         assert not result.suggest_clarification
         assert result.applies  # confidence changed
+        assert result.predicted_bandwidth == "balanced"
 
     def test_equal_effort_degrades_confidence(self) -> None:
         result = compute_snooze_correction(**self._base_args(
@@ -97,6 +99,7 @@ class TestComputeSnoozeCorrection:
         assert result.reason_code == CorrectionReason.CONFIDENCE_DEGRADE.value
         assert result.active_bandwidth == "balanced"
         assert not result.bandwidth_changed
+        assert result.predicted_bandwidth == "balanced"
 
     def test_deep_candidate_from_balanced_shifts_lighter(self) -> None:
         result = compute_snooze_correction(**self._base_args(
@@ -108,6 +111,7 @@ class TestComputeSnoozeCorrection:
         assert result.bandwidth_changed
         assert result.active_confidence > 0.5
         assert result.direction == "heavier"
+        assert result.predicted_bandwidth == "balanced"
 
     def test_deep_candidate_from_deep_shifts_to_balanced(self) -> None:
         result = compute_snooze_correction(**self._base_args(
@@ -118,6 +122,7 @@ class TestComputeSnoozeCorrection:
         assert result.active_bandwidth == "balanced"
         assert result.bandwidth_changed
         assert result.direction == "heavier"
+        assert result.predicted_bandwidth == "balanced"
 
     def test_deep_candidate_from_light_no_shift(self) -> None:
         result = compute_snooze_correction(**self._base_args(
@@ -128,6 +133,7 @@ class TestComputeSnoozeCorrection:
         assert result.active_bandwidth == "light"
         assert not result.bandwidth_changed
         assert result.active_confidence > 0.5
+        assert result.predicted_bandwidth == "balanced"
 
     def test_light_candidate_deflates_confidence(self) -> None:
         result = compute_snooze_correction(**self._base_args(
@@ -139,6 +145,7 @@ class TestComputeSnoozeCorrection:
         assert not result.bandwidth_changed
         assert result.active_confidence < 0.5
         assert result.direction == "lighter"
+        assert result.predicted_bandwidth == "balanced"
 
     def test_heavier_not_deep_deflates_confidence(self) -> None:
         result = compute_snooze_correction(**self._base_args(
@@ -150,6 +157,7 @@ class TestComputeSnoozeCorrection:
         assert not result.bandwidth_changed
         assert result.active_confidence < 0.5
         assert result.direction == "heavier"
+        assert result.predicted_bandwidth == "balanced"
 
     def test_contradiction_after_min_snoozes_requests_clarification(self) -> None:
         result = compute_snooze_correction(**self._base_args(
@@ -162,6 +170,7 @@ class TestComputeSnoozeCorrection:
         assert result.suggest_clarification
         assert not result.bandwidth_changed
         assert result.active_confidence < 0.5
+        assert result.predicted_bandwidth == "balanced"
 
     def test_contradiction_before_min_snoozes_no_clarification(self) -> None:
         result = compute_snooze_correction(**self._base_args(
@@ -172,6 +181,7 @@ class TestComputeSnoozeCorrection:
         ))
         assert result.reason_code == CorrectionReason.HEAVY_SNOOZE_SHIFT.value
         assert not result.suggest_clarification
+        assert result.predicted_bandwidth == "balanced"
 
     def test_same_direction_no_contradiction(self) -> None:
         result = compute_snooze_correction(**self._base_args(
@@ -182,6 +192,7 @@ class TestComputeSnoozeCorrection:
         ))
         assert result.reason_code == CorrectionReason.HEAVY_SNOOZE_SHIFT.value
         assert not result.suggest_clarification
+        assert result.predicted_bandwidth == "balanced"
 
     def test_none_last_direction_no_contradiction(self) -> None:
         result = compute_snooze_correction(**self._base_args(
@@ -192,6 +203,7 @@ class TestComputeSnoozeCorrection:
         ))
         assert result.reason_code == CorrectionReason.HEAVY_SNOOZE_SHIFT.value
         assert not result.suggest_clarification
+        assert result.predicted_bandwidth == "balanced"
 
     def test_confidence_clamped_to_valid_range(self) -> None:
         result = compute_snooze_correction(**self._base_args(
@@ -200,24 +212,28 @@ class TestComputeSnoozeCorrection:
             candidate_effort_level="light",
         ))
         assert 0.0 <= result.active_confidence <= 1.0
+        assert result.predicted_bandwidth == "balanced"
 
     def test_confidence_clamped_from_nan(self) -> None:
         result = compute_snooze_correction(**self._base_args(
             current_confidence=float("nan"),
         ))
         assert result.active_confidence == 0.5
+        assert result.predicted_bandwidth == "balanced"
 
     def test_none_confidence_defaults_to_0_5(self) -> None:
         result = compute_snooze_correction(**self._base_args(
             current_confidence=None,
         ))
         assert result.active_confidence == 0.5
+        assert result.predicted_bandwidth == "balanced"
 
     def test_none_bandwidth_defaults_to_balanced(self) -> None:
         result = compute_snooze_correction(**self._base_args(
             current_bandwidth=None,
         ))
         assert result.active_bandwidth == "balanced"
+        assert result.predicted_bandwidth == "balanced"
 
     def test_applies_false_when_no_change(self) -> None:
         result = compute_snooze_correction(**self._base_args(
@@ -229,6 +245,7 @@ class TestComputeSnoozeCorrection:
         assert not result.bandwidth_changed
         assert math.isclose(result.active_confidence, 0.65, rel_tol=1e-9)
         assert result.applies
+        assert result.predicted_bandwidth == "balanced"
 
     def test_applies_false_when_exact_noop(self) -> None:
         result = compute_snooze_correction(**self._base_args(
@@ -239,6 +256,7 @@ class TestComputeSnoozeCorrection:
         assert result.reason_code == CorrectionReason.CONFIDENCE_DEGRADE.value
         assert result.active_confidence == 0.45
         assert result.applies
+        assert result.predicted_bandwidth == "balanced"
 
     def test_result_structure_complete(self) -> None:
         result = compute_snooze_correction(**self._base_args())
@@ -250,3 +268,4 @@ class TestComputeSnoozeCorrection:
         assert hasattr(result, "suggest_clarification")
         assert hasattr(result, "applies")
         assert hasattr(result, "direction")
+        assert hasattr(result, "predicted_bandwidth")

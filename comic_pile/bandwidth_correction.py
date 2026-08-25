@@ -68,6 +68,7 @@ class SnoozeCorrectionResult:
             session untouched.
         direction: Evidence direction of this snooze relative to the active
             bandwidth ("heavier", "lighter", or None when equal or unknown).
+        predicted_bandwidth: The original launch prediction (unchanged).
     """
 
     active_bandwidth: str
@@ -77,6 +78,7 @@ class SnoozeCorrectionResult:
     suggest_clarification: bool
     applies: bool
     direction: str | None
+    predicted_bandwidth: str
 
 
 def normalize_bandwidth(level: str | None) -> str:
@@ -136,6 +138,7 @@ def compute_snooze_correction(
     candidate_effort_level: str | None,
     consecutive_snoozes: int,
     last_snooze_direction: str | None,
+    predicted_bandwidth: str | None,
 ) -> SnoozeCorrectionResult:
     """Compute the proposed bandwidth correction for one Snooze event.
 
@@ -159,12 +162,14 @@ def compute_snooze_correction(
         consecutive_snoozes: Snoozes in this run including the current one.
         last_snooze_direction: Direction of the previous snooze in this run
             ("heavier"/"lighter"), or None when this is the first.
+        predicted_bandwidth: The original launch prediction (preserved unchanged).
 
     Returns:
         A deterministic SnoozeCorrectionResult proposal.
     """
     active = normalize_bandwidth(current_bandwidth)
     confidence = _clamp_confidence(current_confidence if current_confidence is not None else 0.5)
+    predicted = normalize_bandwidth(predicted_bandwidth)
     active_idx = _BANDWIDTH_ORDER[active]
     candidate_idx = _BANDWIDTH_ORDER.get(candidate_effort_level or "", active_idx)
 
@@ -192,6 +197,7 @@ def compute_snooze_correction(
             suggest_clarification=clarification,
             applies=applies,
             direction=direction,
+            predicted_bandwidth=predicted,
         )
 
     contradicts_last = (
