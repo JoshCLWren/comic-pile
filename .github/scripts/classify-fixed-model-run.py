@@ -47,6 +47,7 @@ MODEL_INTERRUPTION_RE = re.compile(
 )
 CONTROL_PLANE_RE = re.compile(
     r"factory[-_ ](?:work|review|completion)[-_ ]controller|"
+    r"controller-assignment-read-failed|"
     r"(?:lease|state[- ]machine|lifecycle|dispatch(?:er)?) (?:error|failed|failure|exception)",
     re.I,
 )
