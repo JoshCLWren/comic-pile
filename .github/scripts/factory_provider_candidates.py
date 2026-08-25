@@ -232,7 +232,9 @@ def _openrouter_model_is_free(item: dict[str, Any]) -> bool:
 
 
 ADAPTERS: dict[str, ProviderAdapter] = {
-    "nvidia": OpenAICompatibleAdapter("nvidia", "nvidia"),
+    # NVIDIA documents model invocation but not a reliable account-scoped
+    # enumeration contract. Actual probes remain the authoritative evidence.
+    "nvidia": RuntimeOnlyAdapter("nvidia"),
     "opencode-free": OpenCodeFreeAdapter(),
     "openrouter-free": OpenAICompatibleAdapter(
         "openrouter-free",
