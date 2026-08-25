@@ -22,6 +22,10 @@ from app.models import DependencyGroup, DependencyGroupMembership, Event, Issue,
 from app.models.user import User
 from app.roll_recovery import build_roll_recovery
 from app.services.explanation_projection import get_primary_explanation
+from app.services.reading_effort import (
+    build_recommendation_context,
+    compute_effort_estimate,
+)
 from app.schemas import (
     OverrideRequest,
     RollBootstrapResponse,
@@ -146,6 +150,21 @@ async def roll_dice(
                 selected_thread_issue_id = next_issue.id
                 selected_thread_issue_number = next_issue.issue_number
 
+    # Decision-time context is purely observational: it records the estimate
+    # that existed when this roll happened and never changes the selection.
+    effort_estimate = await compute_effort_estimate(
+        db,
+        user_id=user_id,
+        thread_id=selected_thread_id,
+        issue_id=selected_thread_issue_id,
+    )
+    recommendation_context = build_recommendation_context(
+        effort_estimate,
+        thread_id=selected_thread_id,
+        issue_id=selected_thread_issue_id,
+        issue_number=selected_thread_issue_number,
+    )
+
     event = Event(
         type="roll",
         session_id=current_session_id,
@@ -154,6 +173,7 @@ async def roll_dice(
         result=selected_index + 1,
         selection_method="momentum" if max_bonus > 0 else "random",
         recommendation_reason_codes=recommendation_reason_codes,
+        recommendation_context=recommendation_context,
         issue_id=selected_thread_issue_id,
         issue_number=selected_thread_issue_number,
     )
@@ -289,6 +309,21 @@ async def override_roll(
             detail=f"Thread {override_thread_id} is snoozed. Please unsnooze it first before overriding.",
         )
 
+    # Decision-time context is purely observational: it records the estimate
+    # that existed when this roll happened and never changes the selection.
+    effort_estimate = await compute_effort_estimate(
+        db,
+        user_id=current_user.id,
+        thread_id=override_thread_id,
+        issue_id=override_thread_issue_id,
+    )
+    recommendation_context = build_recommendation_context(
+        effort_estimate,
+        thread_id=override_thread_id,
+        issue_id=override_thread_issue_id,
+        issue_number=override_thread_issue_number,
+    )
+
     event = Event(
         type="roll",
         session_id=current_session_id,
@@ -297,6 +332,7 @@ async def override_roll(
         result=0,
         selection_method="override",
         recommendation_reason_codes=[],
+        recommendation_context=recommendation_context,
         issue_id=override_thread_issue_id,
         issue_number=override_thread_issue_number,
     )
@@ -340,7 +376,7 @@ async def set_manual_die(
     """Set manual die size for current session.
 
     Args:
-        die: The die size to set (must be 4, 6, 8, 10, 12, 20, 30, 50, or 100).
+        die: The die size to set (must be one of: 4, 6, 8, 10, 12, 20, 30, 50, or 100).
         current_user: The authenticated user making the request.
         db: SQLAlchemy session for database operations.
 
@@ -414,9 +450,6 @@ async def update_session_mode(
 
     Returns:
         SessionModeResponse with the updated canonical mode state.
-
-    Raises:
-        HTTPException: If an invalid enum value is supplied.
     """
     current_session = await get_or_create(db, user_id=current_user.id, existing_user=current_user)
 
@@ -495,7 +528,7 @@ async def roll_bootstrap(
 
     Args:
         current_user: The authenticated user.
-        db: Async database session.
+        db: SQLAlchemy session for database operations.
 
     Returns:
         RollBootstrapResponse with session state, bounded pool, snoozed/blocked/stale summaries.

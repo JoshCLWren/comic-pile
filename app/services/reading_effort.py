@@ -34,10 +34,11 @@ missing payload and unknown versions, treating them as neutral.
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
-from typing import Final, Sequence
+from enum import StrEnum
+from typing import Final
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -100,7 +101,7 @@ RECOMMENDATION_CONTEXT_VERSION_KEY: Final[str] = "context_version"
 RECOMMENDATION_CONTEXT_CANDIDATE_KEY: Final[str] = "selected_candidate"
 
 
-class EstimateSource(str, Enum):
+class EstimateSource(StrEnum):
     """Where a reading-effort estimate came from, ordered by precedence."""
 
     OBSERVED_ISSUE = "observed_issue"
@@ -109,7 +110,7 @@ class EstimateSource(str, Enum):
     UNKNOWN = "unknown"
 
 
-class ExclusionReason(str, Enum):
+class ExclusionReason(StrEnum):
     """Documented reason codes for excluded duration observations."""
 
     MISSING_LINK = "unlinked"
