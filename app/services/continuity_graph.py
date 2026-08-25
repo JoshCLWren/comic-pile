@@ -437,12 +437,3 @@ def crossover_readiness(group_id: int, snapshot: GraphSnapshot) -> list[Continui
                 seen_rule_ids.add(blocker.rule_id)
     blockers.sort(key=lambda blocker: blocker.rule_id)
     return blockers
-
-
-# Backwards-compatible private aliases for legacy imports.
-_GraphSnapshot = GraphSnapshot
-_load_snapshot = load_snapshot
-_group_issue_ids = group_issue_ids
-_is_read = is_read
-_issue_readiness = issue_readiness
-_crossover_readiness = crossover_readiness
