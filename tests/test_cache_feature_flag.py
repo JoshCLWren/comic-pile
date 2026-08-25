@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from app.cache import UpstashCache, cached
+from app.cache import RedisCache, cached
 from app.config import RedisSettings
 
 
@@ -85,7 +85,7 @@ async def test_disabled_cache_reads_fall_through_without_remote_commands(monkeyp
 @pytest.mark.asyncio
 async def test_uninitialized_cache_invalidation_makes_no_remote_calls() -> None:
     """Disabled invalidation remains a safe no-op."""
-    cache_client = UpstashCache()
+    cache_client = RedisCache()
     remote_client = AsyncMock()
     cache_client._initialized = False
     cache_client._client = remote_client

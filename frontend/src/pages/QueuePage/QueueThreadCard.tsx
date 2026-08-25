@@ -127,6 +127,7 @@ export default function QueueThreadCard({
               className="min-w-0 flex-1 text-left"
               onClick={onCardClick}
               aria-label={`Open ${thread.title}`}
+              title={thread.title}
             >
               <MarqueeTitle title={thread.title} />
             </button>
@@ -152,10 +153,10 @@ export default function QueueThreadCard({
 
       <div className="pl-8 md:pl-[2.75rem]">
         <p className="text-xs text-stone-500 uppercase tracking-widest font-bold">{thread.format}</p>
-        {thread.notes && <p className="text-xs text-stone-400 mt-2">{thread.notes}</p>}
+        {thread.notes && <p className="text-xs text-stone-400 mt-2 [overflow-wrap:anywhere] break-words">{thread.notes}</p>}
         {thread.issues_remaining !== null && (
           <p className="text-sm text-stone-300 mt-2 font-medium">
-            {isMigrated && thread.next_unread_issue_number
+            {isMigrated && !isBlocked && thread.next_unread_issue_number
               ? `Up next: #${thread.next_unread_issue_number} · ${thread.issues_remaining} remaining`
               : `${thread.issues_remaining} issues remaining`}
           </p>

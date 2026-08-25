@@ -18,12 +18,38 @@ from app.models.user import User
 from app.schemas import ActiveThreadInfo, SessionResponse
 from app.schemas.session import SnoozedThreadInfo
 from comic_pile.dice_ladder import step_up
-from comic_pile.queue import move_to_safe_position
 from comic_pile.session import get_current_die_for_session
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+async def _find_source_roll_event(
+    db: AsyncSession,
+    session_id: int,
+    thread_id: int,
+) -> int | None:
+    """Find the originating roll event for a given thread in this session.
+
+    Args:
+        db: Database session.
+        session_id: Current reading session ID.
+        thread_id: Thread that was rolled/snoozed.
+
+    Returns:
+        The ID of the most recent roll event selecting this thread, or None.
+    """
+    result = await db.execute(
+        select(Event.id)
+        .where(Event.session_id == session_id)
+        .where(Event.type == "roll")
+        .where(Event.selected_thread_id == thread_id)
+        .order_by(Event.timestamp.desc(), Event.id.desc())
+        .limit(1)
+    )
+    row = result.scalar_one_or_none()
+    return row
 
 
 async def get_active_thread_info(
@@ -159,16 +185,20 @@ async def snooze_thread(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> SessionResponse:
-    """Snooze the pending thread, demote it in the queue, and step the die up.
+    """Snooze the pending thread for this session and step the die up.
+
+    Snooze is a temporary session correction, not a durable dislike: the
+    thread's queue position is left untouched so long-term ordering stays
+    governed by ratings and explicit queue actions.
 
     This endpoint:
     1. Gets the current session (must exist with a pending_thread_id)
-    2. Moves the pending thread beyond the widened roll range
-    3. Adds the pending_thread_id to snoozed_thread_ids
-    4. Steps the die UP (wider pool) using dice ladder logic
-    5. Records a "snooze" event
-    6. Clears pending_thread_id
-    7. Returns the updated session
+    2. Adds the pending_thread_id to snoozed_thread_ids (excluded from rolls
+       for the active session only)
+    3. Steps the die UP (wider pool) using dice ladder logic
+    4. Records a "snooze" event
+    5. Clears pending_thread_id
+    6. Returns the updated session
 
     Args:
         request: FastAPI request object for rate limiting.
@@ -260,13 +290,8 @@ async def snooze_thread(
                 last_rolled_result=roll_result,
             )
 
-    await move_to_safe_position(
-        pending_thread_id,
-        current_user.id,
-        new_die,
-        db,
-        excluded_thread_ids=current_session.snoozed_thread_ids,
-    )
+    # Snooze must not mutate durable queue state: the thread keeps its exact
+    # queue position and returns to the pool when session snooze state expires.
 
     snoozed_ids = (
         list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
@@ -285,6 +310,7 @@ async def snooze_thread(
         thread_id=pending_thread_id,
         die=current_die,
         die_after=new_die,
+        source_roll_event_id=await _find_source_roll_event(db, current_session_id, pending_thread_id),
     )
     db.add(event)
 

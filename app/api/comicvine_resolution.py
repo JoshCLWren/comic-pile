@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
+from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
 from app.external_identities import ExternalIdentityMappingError
 from app.models.user import User
@@ -19,6 +20,8 @@ from app.schemas.comicvine_resolution import (
     ComicVineSeriesIssuesResponse,
     ComicVineSeriesSearchResponse,
     ConfirmIdentityRequest,
+    ImportIssueRequest,
+    ImportIssueResponse,
     IssueIdentityResponse,
     MetadataCorrectionRevertRequest,
     MetadataCorrectionRequest,
@@ -27,10 +30,12 @@ from app.schemas.comicvine_resolution import (
     ReplaceIdentityRequest,
 )
 from app.services.comicvine_resolution import (
+    ImportTargetNotFoundError,
     apply_metadata_correction,
     confirm_comicvine_identity,
     get_comicvine_series_issues,
     get_issue_identity_state,
+    import_comicvine_issue,
     list_metadata_corrections,
     request_provider_refresh,
     replace_comicvine_identity,
@@ -172,6 +177,43 @@ async def api_confirm_identity(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
+
+
+@router.post(
+    "/issues:import",
+    response_model=ImportIssueResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def api_import_issue(
+    request: ImportIssueRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ImportIssueResponse:
+    """Import a ComicVine issue as a new thread with its exact identity preserved.
+
+    Creates the thread, a single issue row, and a confirmed external-identity
+    mapping atomically; optionally inserts the thread into a reading order
+    between the surrounding story-arc members.
+
+    Args:
+        request: Import payload with optional anchored reading-order placement.
+        current_user: Authenticated owner.
+        db: Async database session.
+
+    Returns:
+        Created identifiers and final reading-order placement.
+    """
+    try:
+        result = await import_comicvine_issue(db, user_id=current_user.id, request=request)
+    except ImportTargetNotFoundError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    await db.commit()
+    await invalidate_user_view(current_user.id)
+    return result
 
 
 @router.post(

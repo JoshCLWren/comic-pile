@@ -44,8 +44,8 @@ PROTECTED_ISSUES = frozenset({679, 1093, 1109})
 FACTORY_LABEL = "factory"
 DONE_STATUS_LABEL = "ralph-status:done"
 
-OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-5][0-9])$")
-ACTIVE_OWNER_RE = re.compile(r"^factory:(?:local|[1-9]|[1-3][0-9]|[4-5][0-9])$")
+OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-7][0-9])$")
+ACTIVE_OWNER_RE = re.compile(r"^factory:(?:local|[1-9]|[1-3][0-9]|[4-7][0-9])$")
 STAGE_LABELS = frozenset(
     {
         "factory:building",

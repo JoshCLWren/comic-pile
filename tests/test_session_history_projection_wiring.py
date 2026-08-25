@@ -269,6 +269,71 @@ async def test_history_event_reads_do_not_grow_per_session(
 
 
 @pytest.mark.asyncio
+async def test_history_rate_metadata_surfaces_with_single_events_read(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    db_engine: AsyncEngine,
+    default_user: User,
+) -> None:
+    """Rating metadata comes from the single events read, including rate events without die_after."""
+    thread = Thread(
+        title="Rated Comic",
+        format="Comic",
+        issues_remaining=10,
+        queue_position=1,
+        user_id=default_user.id,
+    )
+    async_db.add(thread)
+    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    async_db.add(session)
+    await async_db.flush()
+    async_db.add(_roll_event(session, thread, timestamp=1))
+    async_db.add(_die_event(session, thread, timestamp=2, die_after=8))
+    async_db.add(
+        Event(
+            type="rate",
+            session_id=session.id,
+            thread_id=thread.id,
+            rating=4.5,
+            issues_read=2,
+            timestamp=datetime(2026, 8, 2, 12, 0, 3, tzinfo=UTC),
+        )
+    )
+    await _commit_all(async_db)
+
+    statements: list[str] = []
+
+    def record_statement(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        _parameters: object,
+        _context: object,
+        _executemany: bool,
+    ) -> None:
+        statements.append(statement)
+
+    sa_event.listen(db_engine.sync_engine, "before_cursor_execute", record_statement)
+    try:
+        response = await auth_client.get("/api/sessions/")
+    finally:
+        sa_event.remove(db_engine.sync_engine, "before_cursor_execute", record_statement)
+
+    assert response.status_code == 200
+    item = next(s for s in response.json()["sessions"] if s["id"] == session.id)
+
+    assert item["active_thread"] is not None
+    assert item["active_thread"]["issues_read"] == 2
+    assert item["active_thread"]["last_rating"] == 4.5
+    assert item["ladder_path"] == "6 → 8"
+
+    event_reads = [s for s in statements if "from events" in s.lower()]
+    assert len(event_reads) == 1, (
+        f"Expected a single events read, got {len(event_reads)}: {event_reads}"
+    )
+
+
+@pytest.mark.asyncio
 async def test_history_pagination_preserves_ordering_and_tokens(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:

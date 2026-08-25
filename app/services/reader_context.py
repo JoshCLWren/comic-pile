@@ -34,6 +34,7 @@ from app.schemas.reader_context import (
     ReaderContextSeries,
 )
 from app.services.ownership import get_owned_issue_or_404
+from comic_pile.dependencies import build_blocking_explanation
 
 COMICVINE_PROVIDER = "comicvine"
 MAX_RECENT_RATINGS = 5
@@ -555,7 +556,9 @@ def _build_edge_explanation(
 ) -> str:
     """Return a human-readable sentence explaining a persisted reader-context edge.
 
-    Explanations identify comics with human identity only; raw
+    Dependency edges reuse ``build_blocking_explanation`` — the same copy
+    generator as the queue's blocked-threads list — so wording stays consistent
+    app-wide. Explanations identify comics with human identity only; raw
     internal database identifiers must never be rendered. Continuity edges use
     truthful per-satisfaction templates because their gate can differ from the
     source endpoint.
@@ -573,7 +576,7 @@ def _build_edge_explanation(
     """
     if kind == "dependency":
         if source_issue_number is not None and source_thread_title is not None:
-            return f"Blocked by issue #{source_issue_number} in {source_thread_title}"
+            return build_blocking_explanation(source_issue_number, source_thread_title)
         return f"Blocked by {source_label}"
     if satisfaction in ("item_read", "all_members_read"):
         return f"{source_label} must be read before {target_label}"
