@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import Text, func, or_, select
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Annotated
+from typing import Annotated, Any
 
 from app.api.session import (
     _invalidate_session_caches,
