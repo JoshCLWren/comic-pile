@@ -38,6 +38,7 @@ function bootstrapWith(
     blocked_threads: blockedThreads,
     stale_thread_count: 0,
     stale_thread: null,
+    session_mode: null,
   }
 }
 

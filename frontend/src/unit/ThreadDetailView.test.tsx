@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
 import ThreadDetailView from '../pages/ThreadDetailView'
 import { ToastProvider } from '../contexts/ToastProvider'
@@ -40,7 +41,13 @@ beforeEach(() => {
 })
 
 function renderPage() {
-  return render(<ToastProvider><ThreadDetailView /></ToastProvider>)
+  return render(
+    <MemoryRouter>
+      <ToastProvider>
+        <ThreadDetailView />
+      </ToastProvider>
+    </MemoryRouter>,
+  )
 }
 
 it('renders a thread without legacy rating content', async () => {
