@@ -11,13 +11,13 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import TasteSignal
+from app.models.taste_signal import TasteSignal
 from app.models.user import User
+from app.repositories.taste_signal import get_signal, get_user_signals, upsert_signal
 from app.schemas.taste_verdict import (
     TasteSignalListResponse,
     TasteSignalResponse,
@@ -51,12 +51,7 @@ async def list_taste_signals(
     Returns:
         All canonical signals for the caller, sorted deterministically.
     """
-    result = await db.execute(
-        select(TasteSignal)
-        .where(TasteSignal.user_id == current_user.id)
-        .order_by(TasteSignal.signal_type, TasteSignal.external_key)
-    )
-    signals = result.scalars().all()
+    signals = await get_user_signals(db, current_user.id)
     return TasteSignalListResponse(
         signals=[TasteSignalResponse.model_validate(signal) for signal in signals]
     )
@@ -95,31 +90,17 @@ async def set_taste_signal_verdict(
         The canonical updated signal after the verdict is persisted.
     """
     now = datetime.now(UTC)
-    result = await db.execute(
-        select(TasteSignal).where(
-            TasteSignal.user_id == current_user.id,
-            TasteSignal.signal_type == signal_type,
-            TasteSignal.external_key == external_key,
-        )
-    )
-    signal = result.scalar_one_or_none()
+    display_name = external_key.rsplit(":", 1)[-1] or external_key
 
-    if signal is None:
-        display_name = external_key.rsplit(":", 1)[-1] or external_key
-        signal = TasteSignal(
-            user_id=current_user.id,
-            signal_type=signal_type,
-            external_key=external_key,
-            display_name=display_name[:200],
-            user_verdict=payload.verdict,
-            verdict_at=now,
-            first_observed_at=now,
-            last_observed_at=now,
-        )
-        db.add(signal)
-    else:
-        signal.user_verdict = payload.verdict
-        signal.verdict_at = now
+    signal = await upsert_signal(
+        db,
+        current_user.id,
+        signal_type,
+        external_key,
+        display_name[:200],
+        payload.verdict,
+        now,
+    )
 
     # Snapshot before commit: ORM attribute access after commit would expire
     # the instance (MissingGreenlet) and the snapshot is the canonical return.
