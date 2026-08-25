@@ -288,6 +288,9 @@ async def get_or_create(
         user_id: User whose authoritative reading session should be resolved.
         existing_user: Already-loaded User owned by the same transaction. When
             provided, the redundant user lookup is skipped.
+        timezone: Optional browser-resolved IANA timezone identifier to set on
+            the new session when one is created. Ignored when reusing an existing
+            session.
 
     Returns:
         The authoritative current Session, creating one when none exists.

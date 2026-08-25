@@ -40,6 +40,17 @@ def _session(timezone=None):
         pending_thread_id=None,
         snoozed_thread_ids=[],
         timezone=timezone,
+        active_bandwidth=None,
+        predicted_bandwidth=None,
+        bandwidth_confidence=None,
+        bandwidth_source=None,
+        bandwidth_version=None,
+        active_intent=None,
+        predicted_intent=None,
+        intent_confidence=None,
+        intent_source=None,
+        intent_version=None,
+        session_mode_correction_guidance=None,
     )
 
 
