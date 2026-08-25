@@ -207,6 +207,7 @@ async def insert_reading_order_item(
     return InsertReadingOrderItemResponse(
         reading_order_id=reading_order_id,
         thread_id=payload.thread_id,
-        position=payload.position,
+        position=target_pos,
         total_items=total,
     )
+

@@ -91,7 +91,7 @@ async def test_issue_level_multi_series_plan_round_trips_and_is_readiness_execut
     assert len(nodes_by_id) == 4
     assert all(n["node_type"] == "issue" for n in nodes_by_id.values())
     # lanes preserved, not flattened to thread positions
-    assert {l["id"] for l in reopened.json()["lanes"]} == {"main", "parallel"}
+    assert {lane["id"] for lane in reopened.json()["lanes"]} == {"main", "parallel"}
     # readiness executes without flattening to thread queue_position
     readiness = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/readiness")
     assert readiness.status_code == 200, readiness.text
