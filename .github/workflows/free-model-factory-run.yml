@@ -542,3 +542,36 @@ jobs:
           else
             gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" -f body="$body" >/dev/null
           fi
+
+          # Publish a conservative attempt result synchronously. The asynchronous
+          # log classifier may later replace unknown_failure with a more specific
+          # outcome, but capacity never waits on a chained workflow-run event.
+          attempt_marker="<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-${WORKER} -->"
+          if [[ "$CONFIGURED" == true && "$JOB_STATUS" == success ]]; then
+            attempt_outcome='success'
+            attempt_detail='factory job completed successfully'
+          elif [[ "$CONFIGURED" != true ]]; then
+            attempt_outcome='unknown_failure'
+            attempt_detail="factory lane was not executable: ${REASON}"
+          else
+            attempt_outcome='unknown_failure'
+            attempt_detail='factory job failed before a more specific log classification was available'
+          fi
+          attempt_body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nModel: %s\nSource: %s\nOutcome: %s\nAttempt outcome: %s\nDetail: %s\nUpdated: %s\nRun: %s' \
+            "$attempt_marker" "$WORKER" "$MODEL" "$SOURCE" "$outcome" "$attempt_outcome" "$attempt_detail" "$now" "$GITHUB_RUN_ID")"
+          attempt_comment_id="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
+            | jq -r --arg marker "$attempt_marker" '[.[] | select(.body | contains($marker)) | .id] | last // empty')"
+          existing_run=''
+          if [[ -n "$attempt_comment_id" ]]; then
+            existing_run="$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${attempt_comment_id}" --jq '.body' \
+              | sed -n 's/^Run: //p' | tail -1)"
+          fi
+          if [[ "$existing_run" =~ ^[0-9]+$ ]] && (( existing_run > GITHUB_RUN_ID )); then
+            echo "Newer attempt evidence from run ${existing_run} already exists; preserving it"
+          elif [[ -n "$attempt_comment_id" ]]; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${attempt_comment_id}" \
+              -f body="$attempt_body" >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" \
+              -f body="$attempt_body" >/dev/null
+          fi
