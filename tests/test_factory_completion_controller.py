@@ -26,6 +26,13 @@ def test_health_cooldowns_distinguish_capacity_failures():
     assert controller.cooldown_seconds("failure") == 15 * 60
     assert controller.cooldown_seconds("RATE LIMITED") == 30 * 60
     assert controller.cooldown_seconds("MODEL MISSING") == 6 * 60 * 60
+    assert controller.cooldown_seconds("model_unavailable") == 6 * 60 * 60
+    assert controller.cooldown_seconds("provider_unavailable") == 30 * 60
+    assert controller.cooldown_seconds("model_interruption") == 15 * 60
+    assert controller.cooldown_seconds("worker_environment_failure") == 15 * 60
+    assert controller.cooldown_seconds("no_change") == 0
+    assert controller.cooldown_seconds("work_failure") == 0
+    assert controller.cooldown_seconds("policy_blocked") == 0
 
 
 def test_latest_worker_health_uses_newest_heartbeat():
@@ -35,6 +42,49 @@ def test_latest_worker_health_uses_newest_heartbeat():
         },
         {
             "body": "Worker: opencode-free-model-factory-41\nOutcome: success\nUpdated: 2026-08-24T11:20:00Z"
+        },
+    ]
+    health = controller.latest_worker_health(comments)
+    assert health["41"][0] == "success"
+
+
+def test_classified_attempt_outcome_survives_newer_liveness_heartbeat():
+    comments = [
+        {
+            "body": (
+                "Worker: opencode-free-model-factory-41\n"
+                "Outcome: MODEL MISSING\n"
+                "Attempt outcome: model_unavailable\n"
+                "Updated: 2026-08-24T11:00:00Z"
+            )
+        },
+        {
+            "body": (
+                "Worker: opencode-free-model-factory-41\n"
+                "Outcome: running\n"
+                "Updated: 2026-08-24T11:20:00Z"
+            )
+        },
+    ]
+    health = controller.latest_worker_health(comments)
+    assert health["41"][0] == "model_unavailable"
+
+
+def test_newest_classified_attempt_replaces_older_attempt():
+    comments = [
+        {
+            "body": (
+                "Worker: opencode-free-model-factory-41\n"
+                "Attempt outcome: provider_unavailable\n"
+                "Updated: 2026-08-24T11:00:00Z"
+            )
+        },
+        {
+            "body": (
+                "Worker: opencode-free-model-factory-41\n"
+                "Attempt outcome: success\n"
+                "Updated: 2026-08-24T11:20:00Z"
+            )
         },
     ]
     health = controller.latest_worker_health(comments)
