@@ -2,7 +2,6 @@
 
 import json
 import logging
-import random
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
@@ -23,6 +22,8 @@ from app.middleware import limiter
 from app.models import DependencyGroup, DependencyGroupMembership, Event, Issue, Session, Thread
 from app.models.user import User
 from app.roll_recovery import build_roll_recovery
+from app.services.explanation_projection import get_primary_explanation
+from app.services.recommendation_explanation import RecommendationExplanationProjection
 from app.schemas import (
     ExplainableFactorResponse,
     OverrideRequest,
@@ -31,11 +32,14 @@ from app.schemas import (
     RollBootstrapThread,
     RollRequest,
     RollResponse,
+    SessionMode,
+    SessionModeResponse,
+    SessionModeUpdateRequest,
 )
 from app.schemas.session import build_session_bandwidth_state
-from app.services.recommendation_explanation import RecommendationExplanationProjection
 from comic_pile.queue import get_roll_pool_rows
 from comic_pile.session import get_current_die_for_session, get_or_create
+from app.momentum import weighted_momentum_selection
 
 router = APIRouter(tags=["roll"])
 
@@ -97,8 +101,27 @@ async def roll_dice(
 
     # Bound the selection to the current die size, matching original semantics.
     bounded_rows = rows[:current_die]
-    pool_size = len(bounded_rows)
-    selected_index = random.randint(0, pool_size - 1)
+
+    # Apply momentum weighting; weights fall back to uniform (pure-random)
+    # when no positive momentum applies, preserving the pure-random bypass.
+    session_events_result = await db.execute(
+        select(Event).where(Event.session_id == current_session_id)
+    )
+    session_events = list(session_events_result.scalars().all())
+
+    selected_index, max_bonus = await weighted_momentum_selection(
+        db=db,
+        bounded_rows=bounded_rows,
+        user_id=user_id,
+        session_events=session_events,
+        now=datetime.now(UTC),
+    )
+    # Derive concise, user-facing reason codes from the actual decision-time
+    # selection context. Momentum weighting is applied only when a positive
+    # bonus exists; otherwise the selection is genuinely unweighted/pure-random.
+    recommendation_reason_codes = (
+        ["momentum_weighted"] if max_bonus > 0 else ["pure_random"]
+    )
     selected_thread, unread_count, issue_number = bounded_rows[selected_index]
 
     selected_thread_id = selected_thread.id
@@ -133,7 +156,8 @@ async def roll_dice(
         selected_thread_id=selected_thread_id,
         die=current_die,
         result=selected_index + 1,
-        selection_method="random",
+        selection_method="momentum" if max_bonus > 0 else "random",
+        recommendation_reason_codes=recommendation_reason_codes,
         issue_id=selected_thread_issue_id,
         issue_number=selected_thread_issue_number,
     )
@@ -165,6 +189,7 @@ async def roll_dice(
         next_issue_number=selected_thread_issue_number,
         total_issues=selected_thread_total_issues,
         reading_progress=selected_thread_reading_progress,
+        explanation=get_primary_explanation(recommendation_reason_codes),
     )
 
 
@@ -275,6 +300,7 @@ async def override_roll(
         die=current_die,
         result=0,
         selection_method="override",
+        recommendation_reason_codes=[],
         issue_id=override_thread_issue_id,
         issue_number=override_thread_issue_number,
     )
@@ -305,6 +331,7 @@ async def override_roll(
         next_issue_number=override_thread_issue_number,
         total_issues=override_thread_total_issues,
         reading_progress=override_thread_reading_progress,
+        explanation=get_primary_explanation([]),
     )
 
 
@@ -368,6 +395,98 @@ async def clear_manual_die(
     return f"d{current_die}"
 
 
+@router.patch("/session-mode", response_model=SessionModeResponse)
+@limiter.limit("60/minute")
+async def update_session_mode(
+    request: Request,
+    mode_update: SessionModeUpdateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> SessionModeResponse:
+    """Update the active session's bandwidth and/or intent.
+
+    Only the supplied dimensions are changed. Omitting both is a no-op and
+    returns the current mode state. Changed dimensions are marked with source
+    ``manual`` and a call-level version tag so the frontend can distinguish
+    user overrides from algorithm predictions.
+
+    Args:
+        mode_update: The mode values to apply. Omitted dimensions are not reset.
+        request: FastAPI request object for rate limiting.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        SessionModeResponse with the updated canonical mode state.
+
+    Raises:
+        HTTPException: If an invalid enum value is supplied.
+    """
+    current_session = await get_or_create(db, user_id=current_user.id, existing_user=current_user)
+
+    active_bandwidth = current_session.active_bandwidth
+    predicted_bandwidth = current_session.predicted_bandwidth
+    bandwidth_confidence = current_session.bandwidth_confidence
+    bandwidth_source = current_session.bandwidth_source
+    bandwidth_version = current_session.bandwidth_version
+    active_intent = current_session.active_intent
+    predicted_intent = current_session.predicted_intent
+    intent_confidence = current_session.intent_confidence
+    intent_source = current_session.intent_source
+    intent_version = current_session.intent_version
+    guidance = current_session.session_mode_correction_guidance
+    session_id = current_session.id
+
+    version_tag = f"manual-{int(datetime.now(UTC).timestamp())}"
+
+    if mode_update.bandwidth is not None:
+        current_session.active_bandwidth = mode_update.bandwidth
+        current_session.predicted_bandwidth = mode_update.bandwidth
+        current_session.bandwidth_source = "manual"
+        current_session.bandwidth_version = version_tag
+        active_bandwidth = mode_update.bandwidth
+        predicted_bandwidth = mode_update.bandwidth
+        bandwidth_source = "manual"
+        bandwidth_version = version_tag
+
+    if mode_update.intent is not None:
+        current_session.active_intent = mode_update.intent
+        current_session.predicted_intent = mode_update.intent
+        current_session.intent_source = "manual"
+        current_session.intent_version = version_tag
+        active_intent = mode_update.intent
+        predicted_intent = mode_update.intent
+        intent_source = "manual"
+        intent_version = version_tag
+
+    db.add(
+        Event(
+            session_id=session_id,
+            type="session_mode",
+            die=None,
+            selected_thread_id=None,
+            thread_id=None,
+            issue_id=None,
+        )
+    )
+    await db.commit()
+    await _invalidate_session_caches(current_user.id)
+
+    return SessionModeResponse(
+        active_bandwidth=active_bandwidth,
+        predicted_bandwidth=predicted_bandwidth,
+        bandwidth_confidence=bandwidth_confidence,
+        bandwidth_source=bandwidth_source,
+        bandwidth_version=bandwidth_version,
+        active_intent=active_intent,
+        predicted_intent=predicted_intent,
+        intent_confidence=intent_confidence,
+        intent_source=intent_source,
+        intent_version=intent_version,
+        session_mode_correction_guidance=guidance,
+    )
+
+
 @router.get("/bootstrap", response_model=RollBootstrapResponse)
 async def roll_bootstrap(
     current_user: Annotated[User, Depends(get_current_user)],
@@ -406,6 +525,19 @@ async def roll_bootstrap(
     die_size = await get_current_die_for_session(current_session, db)
     manual_die = current_session.manual_die
     pending_thread_id = current_session.pending_thread_id
+    session_mode = SessionMode(
+        active_bandwidth=current_session.active_bandwidth,
+        predicted_bandwidth=current_session.predicted_bandwidth,
+        bandwidth_confidence=current_session.bandwidth_confidence,
+        bandwidth_source=current_session.bandwidth_source,
+        bandwidth_version=current_session.bandwidth_version,
+        active_intent=current_session.active_intent,
+        predicted_intent=current_session.predicted_intent,
+        intent_confidence=current_session.intent_confidence,
+        intent_source=current_session.intent_source,
+        intent_version=current_session.intent_version,
+        session_mode_correction_guidance=current_session.session_mode_correction_guidance,
+    )
     last_rolled_result = active_thread.last_rolled_result if active_thread else None
     pending_thread_title = (
         active_thread.title
@@ -551,6 +683,7 @@ async def roll_bootstrap(
         manual_die=manual_die,
         pending_thread_id=pending_thread_id,
         last_rolled_result=last_rolled_result,
+        session_mode=session_mode,
         active_thread=active_thread,
         roll_recovery=roll_recovery,
         bandwidth=bandwidth_state,

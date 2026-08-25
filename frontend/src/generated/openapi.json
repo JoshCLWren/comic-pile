@@ -218,6 +218,20 @@
         "title": "Body_import_csv_api_admin_import_csv__post",
         "type": "object"
       },
+      "Body_import_csv_api_v1_admin_import_csv__post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_csv_api_v1_admin_import_csv__post",
+        "type": "object"
+      },
       "BugReportCreate": {
         "description": "Request schema for creating a bug report or feature request.",
         "properties": {
@@ -322,6 +336,210 @@
         "title": "BugReportResponse",
         "type": "object"
       },
+      "CBLPlacement": {
+        "description": "One ordered CBL observation with inseparable provenance.",
+        "properties": {
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "source_path": {
+            "title": "Source Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_path",
+          "position"
+        ],
+        "title": "CBLPlacement",
+        "type": "object"
+      },
+      "CanonicalCorrection": {
+        "description": "A user-contributed canonical metadata override.",
+        "properties": {
+          "canonical_value": {
+            "title": "Canonical Value",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "integer"
+          },
+          "field_name": {
+            "title": "Field Name",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "provenance": {
+            "title": "Provenance",
+            "type": "string"
+          },
+          "provider_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Value"
+          }
+        },
+        "required": [
+          "id",
+          "field_name",
+          "canonical_value",
+          "provenance",
+          "created_by",
+          "created_at"
+        ],
+        "title": "CanonicalCorrection",
+        "type": "object"
+      },
+      "CatalogIssueSearchResponse": {
+        "description": "Schema for issue search results.",
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "number"
+          },
+          "entity_type": {
+            "title": "Entity Type",
+            "type": "string"
+          },
+          "external_id": {
+            "title": "External Id",
+            "type": "string"
+          },
+          "external_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Url"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "metadata_json": {
+            "additionalProperties": true,
+            "title": "Metadata Json",
+            "type": "object"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_updated_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Updated At"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "entity_type",
+          "external_id",
+          "metadata_json",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "CatalogIssueSearchResponse",
+        "type": "object"
+      },
+      "CatalogSeriesSearchResponse": {
+        "description": "Schema for series search results.",
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "number"
+          },
+          "entity_type": {
+            "title": "Entity Type",
+            "type": "string"
+          },
+          "external_id": {
+            "title": "External Id",
+            "type": "string"
+          },
+          "external_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Url"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "metadata_json": {
+            "additionalProperties": true,
+            "title": "Metadata Json",
+            "type": "object"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_updated_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Updated At"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "entity_type",
+          "external_id",
+          "metadata_json",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "CatalogSeriesSearchResponse",
+        "type": "object"
+      },
       "ComicVineComicPileMatch": {
         "description": "One user-owned ComicPile representation of an external issue.",
         "properties": {
@@ -375,6 +593,86 @@
           "name"
         ],
         "title": "ComicVineCreator",
+        "type": "object"
+      },
+      "ComicVineIssueCandidate": {
+        "description": "One issue candidate from a series for identity mapping.",
+        "properties": {
+          "comicvine_issue_id": {
+            "title": "Comicvine Issue Id",
+            "type": "integer"
+          },
+          "cover_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Date"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "issue_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Number"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "site_detail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site Detail Url"
+          },
+          "store_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Store Date"
+          }
+        },
+        "required": [
+          "comicvine_issue_id"
+        ],
+        "title": "ComicVineIssueCandidate",
         "type": "object"
       },
       "ComicVineIssueIntelligence": {
@@ -580,6 +878,140 @@
         "title": "ComicVineRelatedIssue",
         "type": "object"
       },
+      "ComicVineSeriesIssuesResponse": {
+        "description": "Issues within a ComicVine series.",
+        "properties": {
+          "comicvine_volume_id": {
+            "title": "Comicvine Volume Id",
+            "type": "integer"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/ComicVineIssueCandidate"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "series_name": {
+            "title": "Series Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "comicvine_volume_id",
+          "series_name",
+          "issues"
+        ],
+        "title": "ComicVineSeriesIssuesResponse",
+        "type": "object"
+      },
+      "ComicVineSeriesResult": {
+        "description": "One ComicVine series/volume from a search.",
+        "properties": {
+          "comicvine_volume_id": {
+            "title": "Comicvine Volume Id",
+            "type": "integer"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "issue_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Count"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "publisher": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publisher"
+          },
+          "site_detail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site Detail Url"
+          },
+          "start_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Year"
+          }
+        },
+        "required": [
+          "comicvine_volume_id",
+          "name"
+        ],
+        "title": "ComicVineSeriesResult",
+        "type": "object"
+      },
+      "ComicVineSeriesSearchResponse": {
+        "description": "Paginated series search results.",
+        "properties": {
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/ComicVineSeriesResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "total_available": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Available"
+          }
+        },
+        "required": [
+          "query",
+          "results"
+        ],
+        "title": "ComicVineSeriesSearchResponse",
+        "type": "object"
+      },
       "ComicVineStoryArc": {
         "description": "An explicit ComicVine story arc and its unordered issue membership.",
         "properties": {
@@ -608,6 +1040,17 @@
             },
             "title": "Related Issues",
             "type": "array"
+          },
+          "total_related_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Related Count"
           }
         },
         "required": [
@@ -615,6 +1058,21 @@
           "name"
         ],
         "title": "ComicVineStoryArc",
+        "type": "object"
+      },
+      "ConfirmIdentityRequest": {
+        "description": "Request to confirm a specific ComicVine identity for an issue.",
+        "properties": {
+          "comicvine_issue_id": {
+            "description": "ComicVine issue ID to confirm",
+            "title": "Comicvine Issue Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "comicvine_issue_id"
+        ],
+        "title": "ConfirmIdentityRequest",
         "type": "object"
       },
       "ConnectedThreadInfo": {
@@ -953,6 +1411,18 @@
             "title": "Id",
             "type": "string"
           },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
           "lane_id": {
             "maxLength": 80,
             "minLength": 1,
@@ -973,10 +1443,137 @@
             "title": "Position",
             "type": "integer"
           },
+          "reader_optional": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reader Optional"
+          },
+          "reader_role": {
+            "anyOf": [
+              {
+                "enum": [
+                  "required/core",
+                  "recommended",
+                  "optional",
+                  "context/prelude",
+                  "aftermath/epilogue",
+                  "skipped/excluded"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reader Role"
+          },
           "ref_id": {
             "exclusiveMinimum": 0.0,
             "title": "Ref Id",
             "type": "integer"
+          },
+          "source_cbl_placements": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CBLPlacement"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Cbl Placements"
+          },
+          "source_confidence": {
+            "anyOf": [
+              {
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Confidence"
+          },
+          "source_explanation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Explanation"
+          },
+          "source_paths": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Paths"
+          },
+          "source_role": {
+            "anyOf": [
+              {
+                "enum": [
+                  "core",
+                  "context/prelude",
+                  "epilogue",
+                  "unknown"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Role"
+          },
+          "source_story_arc_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Story Arc Ids"
+          },
+          "source_target_story_arc_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Target Story Arc Id"
           }
         },
         "required": [
@@ -1604,6 +2201,60 @@
         "title": "ContinuityRuleResponse",
         "type": "object"
       },
+      "ControlModeGroup": {
+        "additionalProperties": false,
+        "description": "One recommendation-quality grouping by control mode and algorithm version.",
+        "properties": {
+          "acceptance_rate": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Acceptance Rate",
+            "type": "number"
+          },
+          "accepted_rolls": {
+            "minimum": 0.0,
+            "title": "Accepted Rolls",
+            "type": "integer"
+          },
+          "algorithm_version": {
+            "description": "Canonical algorithm version attributed to this group",
+            "title": "Algorithm Version",
+            "type": "string"
+          },
+          "control_mode": {
+            "description": "Distinguishable control/intent class: contextual_auto, explicit_correction, blocked_recovery, or legacy",
+            "title": "Control Mode",
+            "type": "string"
+          },
+          "rolls": {
+            "minimum": 0.0,
+            "title": "Rolls",
+            "type": "integer"
+          },
+          "snooze_rate": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Snooze Rate",
+            "type": "number"
+          },
+          "snoozed_rolls": {
+            "minimum": 0.0,
+            "title": "Snoozed Rolls",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "algorithm_version",
+          "control_mode",
+          "rolls",
+          "accepted_rolls",
+          "snoozed_rolls",
+          "acceptance_rate",
+          "snooze_rate"
+        ],
+        "title": "ControlModeGroup",
+        "type": "object"
+      },
       "ConvergenceTarget": {
         "description": "A single node a converged continuity rule waits for.",
         "properties": {
@@ -1626,6 +2277,42 @@
           "id"
         ],
         "title": "ConvergenceTarget",
+        "type": "object"
+      },
+      "CoverageInfo": {
+        "additionalProperties": false,
+        "description": "Honest labeling of data completeness for the requested range.",
+        "properties": {
+          "instrumented_event_count": {
+            "description": "Events carrying a selection_method (full context)",
+            "minimum": 0.0,
+            "title": "Instrumented Event Count",
+            "type": "integer"
+          },
+          "legacy_event_count": {
+            "description": "Events without selection_method (pre-instrumentation)",
+            "minimum": 0.0,
+            "title": "Legacy Event Count",
+            "type": "integer"
+          },
+          "note": {
+            "description": "Human-readable explanation of coverage limitations",
+            "title": "Note",
+            "type": "string"
+          },
+          "partial_coverage": {
+            "description": "True when legacy events are mixed into the range",
+            "title": "Partial Coverage",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "instrumented_event_count",
+          "legacy_event_count",
+          "partial_coverage",
+          "note"
+        ],
+        "title": "CoverageInfo",
         "type": "object"
       },
       "CrossoverTemplateAdoptRequest": {
@@ -2596,6 +3283,70 @@
         "title": "DiagnosticViewport",
         "type": "object"
       },
+      "EffortBandOutcome": {
+        "additionalProperties": false,
+        "description": "Recommendation outcomes bucketed by effort band (die size).",
+        "properties": {
+          "acceptance_rate": {
+            "description": "accepted / rolls (0.0 when no rolls)",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Acceptance Rate",
+            "type": "number"
+          },
+          "accepted": {
+            "description": "Rolls whose thread was later rated in range",
+            "minimum": 0.0,
+            "title": "Accepted",
+            "type": "integer"
+          },
+          "band": {
+            "description": "Coarse effort band derived from the die size",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Band",
+            "type": "string"
+          },
+          "die": {
+            "description": "Die size that represents the effort band",
+            "title": "Die",
+            "type": "integer"
+          },
+          "rolls": {
+            "description": "Number of roll events in this band",
+            "minimum": 0.0,
+            "title": "Rolls",
+            "type": "integer"
+          },
+          "snooze_rate": {
+            "description": "snoozed / rolls (0.0 when no rolls)",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Snooze Rate",
+            "type": "number"
+          },
+          "snoozed": {
+            "description": "Rolls whose thread was later snoozed in range",
+            "minimum": 0.0,
+            "title": "Snoozed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "die",
+          "band",
+          "rolls",
+          "accepted",
+          "snoozed",
+          "acceptance_rate",
+          "snooze_rate"
+        ],
+        "title": "EffortBandOutcome",
+        "type": "object"
+      },
       "EventDetail": {
         "description": "Schema for event detail in session details.",
         "properties": {
@@ -2720,6 +3471,132 @@
         "title": "EventDetail",
         "type": "object"
       },
+      "ExternalIdentityResponse": {
+        "description": "Schema for responding with external identity information.",
+        "properties": {
+          "created_at": {
+            "description": "Creation timestamp (Unix epoch)",
+            "title": "Created At",
+            "type": "number"
+          },
+          "entity_type": {
+            "description": "Entity type: 'issue' or 'series'",
+            "minLength": 1,
+            "title": "Entity Type",
+            "type": "string"
+          },
+          "external_id": {
+            "description": "Provider-specific identifier",
+            "minLength": 1,
+            "title": "External Id",
+            "type": "string"
+          },
+          "external_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional URL to the external resource",
+            "title": "External Url"
+          },
+          "id": {
+            "description": "Database ID of the external identity",
+            "title": "Id",
+            "type": "integer"
+          },
+          "metadata_json": {
+            "additionalProperties": true,
+            "description": "Arbitrary metadata from the provider",
+            "title": "Metadata Json",
+            "type": "object"
+          },
+          "provider": {
+            "description": "External provider name",
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_updated_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Timestamp of last provider update",
+            "title": "Provider Updated At"
+          },
+          "updated_at": {
+            "description": "Last update timestamp (Unix epoch)",
+            "title": "Updated At",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "entity_type",
+          "external_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ExternalIdentityResponse",
+        "type": "object"
+      },
+      "ExternalIdentityUpsert": {
+        "description": "Schema for upserting an external identity (series or issue).",
+        "properties": {
+          "entity_type": {
+            "description": "Entity type: 'series' or 'issue'",
+            "minLength": 1,
+            "title": "Entity Type",
+            "type": "string"
+          },
+          "external_id": {
+            "description": "Provider-specific identifier",
+            "minLength": 1,
+            "title": "External Id",
+            "type": "string"
+          },
+          "external_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional URL to the external resource",
+            "title": "External Url"
+          },
+          "metadata_json": {
+            "additionalProperties": true,
+            "description": "Optional arbitrary metadata from the provider",
+            "title": "Metadata Json",
+            "type": "object"
+          },
+          "provider": {
+            "description": "External provider name (e.g., comicvine, cbl)",
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "entity_type",
+          "external_id"
+        ],
+        "title": "ExternalIdentityUpsert",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -2731,6 +3608,355 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "ImportIssueRequest": {
+        "description": "Request to import a ComicVine issue as a new identity-preserving thread.\n\nThe optional reading-order placement is neighbor-anchored: the anchors are\nthe thread IDs of the arc members immediately surrounding the imported\nissue in story-arc order. Anchors absent from the target order fall back\nper ``resolve_anchored_position`` rules.",
+        "properties": {
+          "anchor_after_thread_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor After Thread Id"
+          },
+          "anchor_before_thread_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Before Thread Id"
+          },
+          "comicvine_issue_id": {
+            "description": "ComicVine issue ID to preserve",
+            "exclusiveMinimum": 0.0,
+            "title": "Comicvine Issue Id",
+            "type": "integer"
+          },
+          "issue_number": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Number"
+          },
+          "reading_order_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reading Order Id"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "comicvine_issue_id"
+        ],
+        "title": "ImportIssueRequest",
+        "type": "object"
+      },
+      "ImportIssueResponse": {
+        "description": "Result of an identity-preserving ComicVine issue import.",
+        "properties": {
+          "external_identity_id": {
+            "title": "External Identity Id",
+            "type": "integer"
+          },
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "reading_order_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reading Order Id"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "total_items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Items"
+          }
+        },
+        "required": [
+          "thread_id",
+          "issue_id",
+          "external_identity_id"
+        ],
+        "title": "ImportIssueResponse",
+        "type": "object"
+      },
+      "InsertReadingOrderItemRequest": {
+        "description": "Request schema for inserting an item into a reading order.",
+        "properties": {
+          "position": {
+            "minimum": 1.0,
+            "title": "Position",
+            "type": "integer"
+          },
+          "thread_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Thread Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "thread_id",
+          "position"
+        ],
+        "title": "InsertReadingOrderItemRequest",
+        "type": "object"
+      },
+      "InsertReadingOrderItemResponse": {
+        "description": "Response schema for inserting an item into a reading order.",
+        "properties": {
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "reading_order_id": {
+            "title": "Reading Order Id",
+            "type": "integer"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "total_items": {
+            "title": "Total Items",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "reading_order_id",
+          "thread_id",
+          "position",
+          "total_items"
+        ],
+        "title": "InsertReadingOrderItemResponse",
+        "type": "object"
+      },
+      "IssueAttachRequest": {
+        "description": "Schema for attaching an issue to a thread.",
+        "properties": {
+          "confidence": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional confidence score (0-1)",
+            "title": "Confidence"
+          },
+          "entity_type": {
+            "description": "Entity type: 'series' or 'issue'",
+            "minLength": 1,
+            "title": "Entity Type",
+            "type": "string"
+          },
+          "evidence_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional source of the evidence",
+            "title": "Evidence Source"
+          },
+          "external_id": {
+            "description": "Provider-specific identifier",
+            "minLength": 1,
+            "title": "External Id",
+            "type": "string"
+          },
+          "external_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional URL to the external resource",
+            "title": "External Url"
+          },
+          "issue_id": {
+            "description": "Internal ComicPile issue ID to attach the external identity to",
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "metadata_json": {
+            "additionalProperties": true,
+            "description": "Optional arbitrary metadata from the provider",
+            "title": "Metadata Json",
+            "type": "object"
+          },
+          "provider": {
+            "description": "External provider name (e.g., comicvine, cbl)",
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "status": {
+            "description": "Mapping status: unresolved, candidate, confirmed, rejected",
+            "minLength": 1,
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "provider",
+          "entity_type",
+          "external_id",
+          "status"
+        ],
+        "title": "IssueAttachRequest",
+        "type": "object"
+      },
+      "IssueAttachResponse": {
+        "description": "Schema for the issue-attach response.",
+        "properties": {
+          "confidence": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Confidence score",
+            "title": "Confidence"
+          },
+          "created_at": {
+            "description": "Creation timestamp (Unix epoch)",
+            "title": "Created At",
+            "type": "number"
+          },
+          "evidence_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Evidence source",
+            "title": "Evidence Source"
+          },
+          "external_identity_id": {
+            "description": "External identity ID",
+            "title": "External Identity Id",
+            "type": "integer"
+          },
+          "id": {
+            "description": "Mapping database ID",
+            "title": "Id",
+            "type": "integer"
+          },
+          "issue_id": {
+            "description": "Issue database ID",
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "rejection_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional rejection reason",
+            "title": "Rejection Reason"
+          },
+          "status": {
+            "description": "Mapping status",
+            "minLength": 1,
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "description": "Last update timestamp (Unix epoch)",
+            "title": "Updated At",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "issue_id",
+          "external_identity_id",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "IssueAttachResponse",
         "type": "object"
       },
       "IssueCreateRange": {
@@ -2824,6 +4050,191 @@
           "source_thread_title"
         ],
         "title": "IssueDependencyEdge",
+        "type": "object"
+      },
+      "IssueExternalIdentityMappingResponse": {
+        "description": "Schema for issue-external identity mapping responses.",
+        "properties": {
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "number"
+          },
+          "evidence_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Source"
+          },
+          "external_identity_id": {
+            "title": "External Identity Id",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "rejection_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejection Reason"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "issue_id",
+          "external_identity_id",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "IssueExternalIdentityMappingResponse",
+        "type": "object"
+      },
+      "IssueIdentityMapping": {
+        "description": "One external identity mapping for a ComicPile issue.",
+        "properties": {
+          "comicvine_id": {
+            "title": "Comicvine Id",
+            "type": "string"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "evidence_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Source"
+          },
+          "external_identity_id": {
+            "title": "External Identity Id",
+            "type": "integer"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "external_identity_id",
+          "provider",
+          "comicvine_id",
+          "status"
+        ],
+        "title": "IssueIdentityMapping",
+        "type": "object"
+      },
+      "IssueIdentityResponse": {
+        "description": "Current identity state for one ComicPile issue.",
+        "properties": {
+          "candidate_mappings": {
+            "items": {
+              "$ref": "#/components/schemas/IssueIdentityMapping"
+            },
+            "title": "Candidate Mappings",
+            "type": "array"
+          },
+          "confirmed_mappings": {
+            "items": {
+              "$ref": "#/components/schemas/IssueIdentityMapping"
+            },
+            "title": "Confirmed Mappings",
+            "type": "array"
+          },
+          "has_confirmed_identity": {
+            "title": "Has Confirmed Identity",
+            "type": "boolean"
+          },
+          "has_unresolved": {
+            "title": "Has Unresolved",
+            "type": "boolean"
+          },
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "thread_title": {
+            "title": "Thread Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "has_confirmed_identity",
+          "confirmed_mappings",
+          "candidate_mappings",
+          "has_unresolved"
+        ],
+        "title": "IssueIdentityResponse",
         "type": "object"
       },
       "IssueListResponse": {
@@ -2974,6 +4385,107 @@
           "created_at"
         ],
         "title": "IssueResponse",
+        "type": "object"
+      },
+      "MetadataCorrectionRequest": {
+        "description": "Request to apply a canonical metadata correction.",
+        "properties": {
+          "canonical_value": {
+            "description": "Corrected canonical value",
+            "title": "Canonical Value",
+            "type": "string"
+          },
+          "field_name": {
+            "description": "Metadata field to correct",
+            "title": "Field Name",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Reason for correction",
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "field_name",
+          "canonical_value"
+        ],
+        "title": "MetadataCorrectionRequest",
+        "type": "object"
+      },
+      "MetadataCorrectionRevertRequest": {
+        "description": "Request to revert a canonical correction.",
+        "properties": {
+          "correction_id": {
+            "description": "ID of the correction to revert",
+            "title": "Correction Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "correction_id"
+        ],
+        "title": "MetadataCorrectionRevertRequest",
+        "type": "object"
+      },
+      "MetadataCorrectionsResponse": {
+        "description": "List of corrections for a ComicPile issue.",
+        "properties": {
+          "corrections": {
+            "items": {
+              "$ref": "#/components/schemas/CanonicalCorrection"
+            },
+            "title": "Corrections",
+            "type": "array"
+          },
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "issue_id",
+          "corrections"
+        ],
+        "title": "MetadataCorrectionsResponse",
+        "type": "object"
+      },
+      "MetadataRefreshResponse": {
+        "description": "Result of a provider metadata refresh request.",
+        "properties": {
+          "comicvine_issue_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comicvine Issue Id"
+          },
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "refreshed": {
+            "title": "Refreshed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "issue_id",
+          "refreshed"
+        ],
+        "title": "MetadataRefreshResponse",
         "type": "object"
       },
       "MigrateToIssuesRequest": {
@@ -3317,6 +4829,14 @@
             "title": "Id",
             "type": "integer"
           },
+          "membership_kind": {
+            "enum": [
+              "issue",
+              "thread"
+            ],
+            "title": "Membership Kind",
+            "type": "string"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -3345,7 +4865,8 @@
         "required": [
           "id",
           "name",
-          "applies_to_current_issue"
+          "applies_to_current_issue",
+          "membership_kind"
         ],
         "title": "ReaderContextCrossover",
         "type": "object"
@@ -3391,6 +4912,17 @@
       "ReaderContextEdge": {
         "description": "One persisted one-hop dependency or continuity edge.",
         "properties": {
+          "explanation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explanation"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -3418,9 +4950,97 @@
             "title": "Source Issue Id",
             "type": "integer"
           },
+          "source_issue_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Issue Number"
+          },
+          "source_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Label"
+          },
+          "source_thread_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Thread Id"
+          },
+          "source_thread_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Thread Title"
+          },
           "target_issue_id": {
             "title": "Target Issue Id",
             "type": "integer"
+          },
+          "target_issue_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Issue Number"
+          },
+          "target_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Label"
+          },
+          "target_thread_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Thread Id"
+          },
+          "target_thread_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Thread Title"
           }
         },
         "required": [
@@ -3687,6 +5307,110 @@
           "identity_source"
         ],
         "title": "ReaderContextSeries",
+        "type": "object"
+      },
+      "ReadingModeResponse": {
+        "description": "Current reading-mode state for the active session.",
+        "properties": {
+          "bandwidth": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bandwidth"
+          },
+          "intent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intent"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "suggested": {
+            "title": "Suggested",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "bandwidth",
+          "intent",
+          "source",
+          "suggested"
+        ],
+        "title": "ReadingModeResponse",
+        "type": "object"
+      },
+      "ReadingModeSetRequest": {
+        "description": "Request to set the active session reading mode.\n\nCallers may submit resolved ``bandwidth``/``intent`` directly (manual\nselector), or submit raw quiz ``answers`` with ``source=\"quiz\"`` and let the\nserver resolve them through the canonical contract.",
+        "properties": {
+          "answers": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Raw quiz answers keyed by question ID",
+            "title": "Answers"
+          },
+          "bandwidth": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Resolved bandwidth value",
+            "title": "Bandwidth"
+          },
+          "intent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Resolved intent value",
+            "title": "Intent"
+          },
+          "source": {
+            "description": "Origin of the setting: 'quiz' or 'manual'",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "title": "ReadingModeSetRequest",
         "type": "object"
       },
       "ReadingOrderItemResponse": {
@@ -4044,6 +5768,161 @@
         "title": "ReadingOrderSummary",
         "type": "object"
       },
+      "RecommendationDiagnosticsResponse": {
+        "additionalProperties": false,
+        "description": "Bounded, read-only recommendation-quality summary for one user.",
+        "properties": {
+          "active_algorithm_version": {
+            "description": "Algorithm version currently active for this user",
+            "title": "Active Algorithm Version",
+            "type": "string"
+          },
+          "active_control_mode": {
+            "description": "Control mode currently active for this user",
+            "title": "Active Control Mode",
+            "type": "string"
+          },
+          "avg_consecutive_snoozes_before_acceptance": {
+            "description": "Mean snooze run before acceptance (0.0 when none)",
+            "minimum": 0.0,
+            "title": "Avg Consecutive Snoozes Before Acceptance",
+            "type": "number"
+          },
+          "avg_time_to_acceptance_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Mean session-start to first acceptance (None when none)",
+            "title": "Avg Time To Acceptance Seconds"
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/CoverageInfo",
+            "description": "Coverage/legacy labeling for the range"
+          },
+          "effort_band_outcomes": {
+            "items": {
+              "$ref": "#/components/schemas/EffortBandOutcome"
+            },
+            "title": "Effort Band Outcomes",
+            "type": "array"
+          },
+          "first_roll_adoption_rate": {
+            "description": "Sessions where the first roll was accepted",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "First Roll Adoption Rate",
+            "type": "number"
+          },
+          "groups_by_control_mode": {
+            "items": {
+              "$ref": "#/components/schemas/ControlModeGroup"
+            },
+            "title": "Groups By Control Mode",
+            "type": "array"
+          },
+          "max_consecutive_snoozes_before_acceptance": {
+            "description": "Longest snooze run before any acceptance in a session",
+            "minimum": 0.0,
+            "title": "Max Consecutive Snoozes Before Acceptance",
+            "type": "integer"
+          },
+          "mode_corrections": {
+            "description": "Explicit manual/override launch-mode corrections",
+            "minimum": 0.0,
+            "title": "Mode Corrections",
+            "type": "integer"
+          },
+          "range_end": {
+            "description": "Exclusive upper bound of the range",
+            "format": "date-time",
+            "title": "Range End",
+            "type": "string"
+          },
+          "range_start": {
+            "description": "Inclusive lower bound of the range",
+            "format": "date-time",
+            "title": "Range Start",
+            "type": "string"
+          },
+          "rating_average": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Mean rating across rated sessions (None when none)",
+            "title": "Rating Average"
+          },
+          "rating_distribution": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Rating histogram by integer bucket",
+            "title": "Rating Distribution",
+            "type": "object"
+          },
+          "snoozes_per_completed_read": {
+            "description": "total_snoozes / total_rates (0.0 when no reads)",
+            "minimum": 0.0,
+            "title": "Snoozes Per Completed Read",
+            "type": "number"
+          },
+          "total_rates": {
+            "minimum": 0.0,
+            "title": "Total Rates",
+            "type": "integer"
+          },
+          "total_rolls": {
+            "minimum": 0.0,
+            "title": "Total Rolls",
+            "type": "integer"
+          },
+          "total_sessions": {
+            "minimum": 0.0,
+            "title": "Total Sessions",
+            "type": "integer"
+          },
+          "total_snoozes": {
+            "minimum": 0.0,
+            "title": "Total Snoozes",
+            "type": "integer"
+          },
+          "user_id": {
+            "description": "Owner of the summarized data",
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "range_start",
+          "range_end",
+          "active_algorithm_version",
+          "active_control_mode",
+          "total_sessions",
+          "total_rolls",
+          "total_rates",
+          "total_snoozes",
+          "first_roll_adoption_rate",
+          "snoozes_per_completed_read",
+          "max_consecutive_snoozes_before_acceptance",
+          "avg_consecutive_snoozes_before_acceptance",
+          "avg_time_to_acceptance_seconds",
+          "mode_corrections",
+          "rating_average",
+          "coverage"
+        ],
+        "title": "RecommendationDiagnosticsResponse",
+        "type": "object"
+      },
       "RefreshTokenRequest": {
         "description": "Request schema for token refresh.",
         "properties": {
@@ -4364,6 +6243,34 @@
         "title": "ReleaseUpsertRequest",
         "type": "object"
       },
+      "ReplaceIdentityRequest": {
+        "description": "Request to replace the current confirmed identity with a new one.",
+        "properties": {
+          "comicvine_issue_id": {
+            "description": "New ComicVine issue ID to confirm",
+            "title": "Comicvine Issue Id",
+            "type": "integer"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional reason for replacement",
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "comicvine_issue_id"
+        ],
+        "title": "ReplaceIdentityRequest",
+        "type": "object"
+      },
       "RollBootstrapResponse": {
         "description": "Bounded bootstrap payload for the Roll initial render.\n\nReturns only the retained data required for the first interactive screen.\nDoes not include the full queue, collection data, or secondary detail panels.",
         "properties": {
@@ -4376,6 +6283,9 @@
                 "type": "null"
               }
             ]
+          },
+          "bandwidth": {
+            "$ref": "#/components/schemas/SessionBandwidthState"
           },
           "blocked_count": {
             "title": "Blocked Count",
@@ -4484,6 +6394,7 @@
           "pending_thread_id",
           "last_rolled_result",
           "active_thread",
+          "bandwidth",
           "roll_pool",
           "snoozed_threads",
           "snoozed_count",
@@ -4788,6 +6699,17 @@
             "title": "Die Size",
             "type": "integer"
           },
+          "explanation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explanation"
+          },
           "format": {
             "title": "Format",
             "type": "string"
@@ -4899,6 +6821,127 @@
           "snoozed_count"
         ],
         "title": "RollResponse",
+        "type": "object"
+      },
+      "RouteTrafficCounter": {
+        "description": "One aggregated (method, route template, status class) tally.",
+        "properties": {
+          "count": {
+            "description": "Requests observed since process start.",
+            "minimum": 1.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "method": {
+            "description": "HTTP method, e.g. GET.",
+            "title": "Method",
+            "type": "string"
+          },
+          "route": {
+            "description": "Routed path template, e.g. /api/v1/threads/{thread_id}.",
+            "title": "Route",
+            "type": "string"
+          },
+          "status_class": {
+            "description": "Response status class, e.g. 2xx or 4xx.",
+            "title": "Status Class",
+            "type": "string"
+          }
+        },
+        "required": [
+          "method",
+          "route",
+          "status_class",
+          "count"
+        ],
+        "title": "RouteTrafficCounter",
+        "type": "object"
+      },
+      "SessionBandwidthState": {
+        "description": "Canonical ephemeral bandwidth state for the active reading session.\n\nEvery field is always present but nullable so legacy sessions that predate\nbandwidth tracking serialize to a stable, safe shape instead of a missing\nor partially shaped object. This is the single canonical source consumed by\nlater weighting and UI work.",
+        "properties": {
+          "active_bandwidth": {
+            "anyOf": [
+              {
+                "enum": [
+                  "light",
+                  "balanced",
+                  "deep"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Bandwidth"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "mode_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode Version"
+          },
+          "predicted_bandwidth": {
+            "anyOf": [
+              {
+                "enum": [
+                  "light",
+                  "balanced",
+                  "deep"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted Bandwidth"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "inferred",
+                  "manual",
+                  "snooze",
+                  "quiz"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "predicted_bandwidth",
+          "active_bandwidth",
+          "confidence",
+          "source",
+          "mode_version"
+        ],
+        "title": "SessionBandwidthState",
         "type": "object"
       },
       "SessionDetailsResponse": {
@@ -5063,6 +7106,44 @@
             ],
             "title": "Manual Die"
           },
+          "reading_bandwidth": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reading Bandwidth"
+          },
+          "reading_intent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reading Intent"
+          },
+          "reading_mode_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reading Mode Source"
+          },
+          "reading_mode_suggested": {
+            "default": false,
+            "title": "Reading Mode Suggested",
+            "type": "boolean"
+          },
           "snapshot_count": {
             "title": "Snapshot Count",
             "type": "integer"
@@ -5176,6 +7257,44 @@
               }
             ],
             "title": "Pending Thread Id"
+          },
+          "reading_bandwidth": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reading Bandwidth"
+          },
+          "reading_intent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reading Intent"
+          },
+          "reading_mode_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reading Mode Source"
+          },
+          "reading_mode_suggested": {
+            "default": false,
+            "title": "Reading Mode Suggested",
+            "type": "boolean"
           },
           "snapshot_count": {
             "title": "Snapshot Count",
@@ -5697,6 +7816,67 @@
         "title": "ThreadDetail",
         "type": "object"
       },
+      "ThreadExternalSeriesMappingResponse": {
+        "description": "Schema for thread-series mapping responses.",
+        "properties": {
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "number"
+          },
+          "evidence_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Source"
+          },
+          "external_identity_id": {
+            "title": "External Identity Id",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "thread_id",
+          "external_identity_id",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ThreadExternalSeriesMappingResponse",
+        "type": "object"
+      },
       "ThreadIssueDependenciesResponse": {
         "description": "Issue dependency payloads for every issue in one owned thread.",
         "properties": {
@@ -5880,6 +8060,120 @@
         "title": "ThreadResponse",
         "type": "object"
       },
+      "ThreadSeriesAttachRequest": {
+        "description": "Schema for attaching a series to a thread.",
+        "properties": {
+          "confidence": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional confidence score (0-1)",
+            "title": "Confidence"
+          },
+          "evidence_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional source of the evidence",
+            "title": "Evidence Source"
+          },
+          "status": {
+            "description": "Mapping status: unresolved, candidate, confirmed, rejected",
+            "minLength": 1,
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ThreadSeriesAttachRequest",
+        "type": "object"
+      },
+      "ThreadSeriesAttachResponse": {
+        "description": "Schema for the series-attach response.",
+        "properties": {
+          "confidence": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Confidence score",
+            "title": "Confidence"
+          },
+          "created_at": {
+            "description": "Creation timestamp (Unix epoch)",
+            "title": "Created At",
+            "type": "number"
+          },
+          "evidence_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Evidence source",
+            "title": "Evidence Source"
+          },
+          "external_identity_id": {
+            "description": "External identity ID",
+            "title": "External Identity Id",
+            "type": "integer"
+          },
+          "id": {
+            "description": "Mapping database ID",
+            "title": "Id",
+            "type": "integer"
+          },
+          "status": {
+            "description": "Mapping status",
+            "minLength": 1,
+            "title": "Status",
+            "type": "string"
+          },
+          "thread_id": {
+            "description": "Thread ID",
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "updated_at": {
+            "description": "Last update timestamp (Unix epoch)",
+            "title": "Updated At",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "thread_id",
+          "external_identity_id",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ThreadSeriesAttachResponse",
+        "type": "object"
+      },
       "ThreadUpdate": {
         "description": "Schema for updating a thread.",
         "properties": {
@@ -5968,6 +8262,29 @@
           "refresh_token"
         ],
         "title": "TokenResponse",
+        "type": "object"
+      },
+      "TrafficMetricsSnapshot": {
+        "description": "Process-local traffic counters for one serverless instance.\n\nCounters are monotonic within a process lifetime, so a collector can\nreconstruct fleet-wide totals by keeping the maximum count per key across\npolls of the same ``instance_id``.",
+        "properties": {
+          "counters": {
+            "description": "Aggregated request tallies sorted deterministically.",
+            "items": {
+              "$ref": "#/components/schemas/RouteTrafficCounter"
+            },
+            "title": "Counters",
+            "type": "array"
+          },
+          "instance_id": {
+            "description": "Stable identifier for this process instance.",
+            "title": "Instance Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instance_id"
+        ],
+        "title": "TrafficMetricsSnapshot",
         "type": "object"
       },
       "UnreadIssueDetail": {
@@ -7429,7 +9746,7 @@
     },
     "/api/snooze/": {
       "post": {
-        "description": "Snooze the pending thread, demote it in the queue, and step the die up.\n\nThis endpoint:\n1. Gets the current session (must exist with a pending_thread_id)\n2. Moves the pending thread beyond the widened roll range\n3. Adds the pending_thread_id to snoozed_thread_ids\n4. Steps the die UP (wider pool) using dice ladder logic\n5. Records a \"snooze\" event\n6. Clears pending_thread_id\n7. Returns the updated session\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    SessionResponse containing the updated session with snoozed_thread_ids,\n    cleared pending_thread_id, and current die state.\n\nRaises:\n    HTTPException: If no active session exists or no pending thread to snooze.",
+        "description": "Snooze the pending thread for this session and step the die up.\n\nSnooze is a temporary session correction, not a durable dislike: the\nthread's queue position is left untouched so long-term ordering stays\ngoverned by ratings and explicit queue actions.\n\nThis endpoint:\n1. Gets the current session (must exist with a pending_thread_id)\n2. Adds the pending_thread_id to snoozed_thread_ids (excluded from rolls\n   for the active session only)\n3. Steps the die UP (wider pool) using dice ladder logic\n4. Records a \"snooze\" event\n5. Clears pending_thread_id\n6. Returns the updated session\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    SessionResponse containing the updated session with snoozed_thread_ids,\n    cleared pending_thread_id, and current die state.\n\nRaises:\n    HTTPException: If no active session exists or no pending thread to snooze.",
         "operationId": "snooze_thread_api_snooze__post",
         "responses": {
           "200": {
@@ -8353,6 +10670,153 @@
         ]
       }
     },
+    "/api/v1/admin/delete-test-data/": {
+      "post": {
+        "description": "Delete all test data (threads, sessions, events marked as test).\n\nArgs:\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    Dictionary with counts of deleted threads, sessions, and events.",
+        "operationId": "delete_test_data_api_v1_admin_delete_test_data__post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "integer"
+                  },
+                  "title": "Response Delete Test Data Api V1 Admin Delete Test Data  Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Delete Test Data",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/export/csv/": {
+      "get": {
+        "description": "Export active threads as CSV file.\n\nFormat matches Google Sheets: title, format, issues_remaining\n\nArgs:\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    StreamingResponse with CSV file attachment.",
+        "operationId": "export_csv_api_v1_admin_export_csv__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Export Csv",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/export/json/": {
+      "get": {
+        "description": "Export full database as JSON for backups.\n\nIncludes all data: users, threads, sessions, events (excludes test data)\n\nArgs:\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    StreamingResponse with JSON file attachment.",
+        "operationId": "export_json_api_v1_admin_export_json__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Export Json",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/export/summary/": {
+      "get": {
+        "description": "Export narrative session summaries as markdown file.\n\nFormats all sessions with read, skipped, and completed lists per PRD Section 11.\nExcludes sessions that only involve test threads.\n\nArgs:\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    StreamingResponse with markdown file attachment.",
+        "operationId": "export_summary_api_v1_admin_export_summary__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Export Summary",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/import/csv/": {
+      "post": {
+        "description": "Import threads from CSV file.\n\nCSV format: title, format, issues_remaining\n- title: Thread title (required)\n- format: Thread format (required)\n- issues_remaining: Number of issues remaining (required, integer)\n\nThreads are inserted at position 1 (front of queue).\n\nArgs:\n    file: CSV file to import.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    Dictionary with \"imported\" count and \"errors\" list.\n\nRaises:\n    HTTPException: If file is not a CSV.",
+        "operationId": "import_csv_api_v1_admin_import_csv__post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_csv_api_v1_admin_import_csv__post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    ]
+                  },
+                  "title": "Response Import Csv Api V1 Admin Import Csv  Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Csv",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
     "/api/v1/analytics/metrics": {
       "get": {
         "description": "Get reading metrics and analytics for the current user.\n\nArgs:\n    current_user: The authenticated user making the request.\n    db: The database session for querying data.\n\nReturns:\n    Dictionary containing various reading metrics and statistics including\n    total_threads, active_threads, completed_threads, completion_rate,\n    average_session_hours, recent_sessions, event_stats, and top_rated_threads.",
@@ -8633,6 +11097,1022 @@
         "tags": [
           "auth",
           "auth"
+        ]
+      }
+    },
+    "/api/v1/bug-reports/": {
+      "post": {
+        "description": "Create a bug report or feature request issue on GitHub.\n\nArgs:\n    body: Report type, title, description, and optional diagnostics.\n    current_user: The authenticated user.\n\nReturns:\n    Created GitHub issue URL.\n\nRaises:\n    HTTPException: If validation fails or GitHub integration is unavailable.",
+        "operationId": "create_bug_report_api_v1_bug_reports__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BugReportCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BugReportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Bug Report",
+        "tags": [
+          "bug-reports",
+          "bug-reports"
+        ]
+      }
+    },
+    "/api/v1/catalog/issues": {
+      "get": {
+        "description": "Search for canonical issues in the shared catalog.\n\nArgs:\n    search: Optional search term to match against issue external_id.\n    provider: Filter by provider name (default: comicvine).\n    series_external_id: Filter by series external_id to scope the search.\n    db: Database session.\n\nReturns:\n    List of matching external identities for issues.",
+        "operationId": "search_catalog_issues_api_v1_catalog_issues_get",
+        "parameters": [
+          {
+            "description": "Search by issue external_id",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Search by issue external_id",
+              "title": "Search"
+            }
+          },
+          {
+            "description": "Filter by provider",
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "comicvine",
+              "description": "Filter by provider",
+              "title": "Provider"
+            }
+          },
+          {
+            "description": "Filter by series external_id (e.g., 4050-justice-league)",
+            "in": "query",
+            "name": "series_external_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by series external_id (e.g., 4050-justice-league)",
+              "title": "Series External Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CatalogIssueSearchResponse"
+                  },
+                  "title": "Response Search Catalog Issues Api V1 Catalog Issues Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Catalog Issues",
+        "tags": [
+          "catalog",
+          "catalog"
+        ]
+      },
+      "post": {
+        "description": "Upsert a canonical issue into the shared catalog (idempotent).\n\nCreation is idempotent: if a canonical existing issue can be identified,\nit is surfaced rather than silently duplicating a run.\n\nArgs:\n    request: Upsert request with provider, entity_type, external_id, and optional metadata.\n    db: Database session.\n\nReturns:\n    The created or existing external identity.",
+        "operationId": "upsert_catalog_issue_api_v1_catalog_issues_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExternalIdentityUpsert"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalIdentityResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upsert Catalog Issue",
+        "tags": [
+          "catalog",
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/catalog/mappings/issues": {
+      "get": {
+        "description": "List issue-external identity mappings (inspection endpoint).\n\nRead-only inspection may be public where safe.\n\nArgs:\n    issue_id: Optional filter by issue ID.\n    status: Optional filter by mapping status.\n    db: Database session.\n\nReturns:\n    List of issue-external identity mappings.",
+        "operationId": "list_issue_mappings_api_v1_catalog_mappings_issues_get",
+        "parameters": [
+          {
+            "description": "Filter by issue_id",
+            "in": "query",
+            "name": "issue_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by issue_id",
+              "title": "Issue Id"
+            }
+          },
+          {
+            "description": "Filter by mapping status",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by mapping status",
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/IssueExternalIdentityMappingResponse"
+                  },
+                  "title": "Response List Issue Mappings Api V1 Catalog Mappings Issues Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Issue Mappings",
+        "tags": [
+          "catalog",
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/catalog/mappings/series": {
+      "get": {
+        "description": "List thread-series mappings (inspection endpoint).\n\nRead-only inspection may be public where safe.\n\nArgs:\n    thread_id: Optional filter by thread ID.\n    status: Optional filter by mapping status.\n    db: Database session.\n\nReturns:\n    List of thread-series mappings.",
+        "operationId": "list_series_mappings_api_v1_catalog_mappings_series_get",
+        "parameters": [
+          {
+            "description": "Filter by thread_id",
+            "in": "query",
+            "name": "thread_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by thread_id",
+              "title": "Thread Id"
+            }
+          },
+          {
+            "description": "Filter by mapping status",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by mapping status",
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ThreadExternalSeriesMappingResponse"
+                  },
+                  "title": "Response List Series Mappings Api V1 Catalog Mappings Series Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Series Mappings",
+        "tags": [
+          "catalog",
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/catalog/series": {
+      "get": {
+        "description": "Search for canonical series in the shared catalog.\n\nArgs:\n    search: Optional search term to match against series external_id.\n    provider: Filter by provider name (default: comicvine).\n    db: Database session.\n\nReturns:\n    List of matching external identities for series.",
+        "operationId": "search_catalog_series_api_v1_catalog_series_get",
+        "parameters": [
+          {
+            "description": "Search by series external_id",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Search by series external_id",
+              "title": "Search"
+            }
+          },
+          {
+            "description": "Filter by provider",
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "comicvine",
+              "description": "Filter by provider",
+              "title": "Provider"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CatalogSeriesSearchResponse"
+                  },
+                  "title": "Response Search Catalog Series Api V1 Catalog Series Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Catalog Series",
+        "tags": [
+          "catalog",
+          "catalog"
+        ]
+      },
+      "post": {
+        "description": "Upsert a canonical series into the shared catalog (idempotent).\n\nCreation is idempotent: if a canonical existing series can be identified,\nit is surfaced rather than silently duplicating a run.\n\nArgs:\n    request: Upsert request with provider, entity_type, external_id, and optional metadata.\n    current_user: Authenticated user for authorization.\n    db: Database session.\n\nReturns:\n    The created or existing external identity.",
+        "operationId": "upsert_catalog_series_api_v1_catalog_series_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExternalIdentityUpsert"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalIdentityResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upsert Catalog Series",
+        "tags": [
+          "catalog",
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/comicvine/issues/{issue_id}/identity": {
+      "get": {
+        "description": "Return the current ComicVine identity state for a ComicPile issue.\n\nShows confirmed, candidate, and unresolved mappings.\n\nArgs:\n    issue_id: ComicPile issue ID.\n    current_user: Authenticated owner.\n    db: Async database session.",
+        "operationId": "api_get_issue_identity_api_v1_comicvine_issues__issue_id__identity_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "title": "Issue Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueIdentityResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Api Get Issue Identity",
+        "tags": [
+          "comicvine-resolution",
+          "comicvine-resolution"
+        ]
+      }
+    },
+    "/api/v1/comicvine/issues/{issue_id}/identity:confirm": {
+      "post": {
+        "description": "Confirm a ComicVine identity for an issue.\n\nCreates the mapping if it doesn't exist, or confirms an existing candidate.\n\nArgs:\n    issue_id: ComicPile issue ID.\n    request: Confirmation request with comicvine_issue_id.\n    current_user: Authenticated owner.\n    db: Async database session.",
+        "operationId": "api_confirm_identity_api_v1_comicvine_issues__issue_id__identity_confirm_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "title": "Issue Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmIdentityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueIdentityResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Api Confirm Identity",
+        "tags": [
+          "comicvine-resolution",
+          "comicvine-resolution"
+        ]
+      }
+    },
+    "/api/v1/comicvine/issues/{issue_id}/identity:replace": {
+      "post": {
+        "description": "Replace the current confirmed ComicVine identity with a new one.\n\nDemotes the old mapping and confirms the new one atomically.\n\nArgs:\n    issue_id: ComicPile issue ID.\n    request: Replace request with new comicvine_issue_id and optional reason.\n    current_user: Authenticated owner.\n    db: Async database session.",
+        "operationId": "api_replace_identity_api_v1_comicvine_issues__issue_id__identity_replace_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "title": "Issue Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceIdentityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueIdentityResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Api Replace Identity",
+        "tags": [
+          "comicvine-resolution",
+          "comicvine-resolution"
+        ]
+      }
+    },
+    "/api/v1/comicvine/issues/{issue_id}/metadata:correct": {
+      "post": {
+        "description": "Apply a canonical metadata correction to an issue.\n\nThe correction preserves the provider's raw value alongside the canonical override.\n\nArgs:\n    issue_id: ComicPile issue ID.\n    request: Correction request with field_name and canonical_value.\n    current_user: Authenticated owner.\n    db: Async database session.",
+        "operationId": "api_apply_correction_api_v1_comicvine_issues__issue_id__metadata_correct_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "title": "Issue Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetadataCorrectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetadataCorrectionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Api Apply Correction",
+        "tags": [
+          "comicvine-resolution",
+          "comicvine-resolution"
+        ]
+      }
+    },
+    "/api/v1/comicvine/issues/{issue_id}/metadata:corrections": {
+      "get": {
+        "description": "List all active corrections for an issue.\n\nArgs:\n    issue_id: ComicPile issue ID.\n    current_user: Authenticated owner.\n    db: Async database session.",
+        "operationId": "api_list_corrections_api_v1_comicvine_issues__issue_id__metadata_corrections_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "title": "Issue Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetadataCorrectionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Api List Corrections",
+        "tags": [
+          "comicvine-resolution",
+          "comicvine-resolution"
+        ]
+      }
+    },
+    "/api/v1/comicvine/issues/{issue_id}/metadata:refresh": {
+      "post": {
+        "description": "Request a ComicVine metadata refresh for an issue with a confirmed identity.\n\nReturns the confirmed ComicVine issue ID for the caller to trigger hydration.\n\nArgs:\n    issue_id: ComicPile issue ID.\n    current_user: Authenticated owner.\n    db: Async database session.",
+        "operationId": "api_refresh_metadata_api_v1_comicvine_issues__issue_id__metadata_refresh_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "title": "Issue Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetadataRefreshResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Api Refresh Metadata",
+        "tags": [
+          "comicvine-resolution",
+          "comicvine-resolution"
+        ]
+      }
+    },
+    "/api/v1/comicvine/issues/{issue_id}/metadata:revert": {
+      "post": {
+        "description": "Revert a metadata correction (soft-delete with audit trail).\n\nArgs:\n    issue_id: ComicPile issue ID.\n    request: Revert request with correction_id.\n    current_user: Authenticated owner.\n    db: Async database session.",
+        "operationId": "api_revert_correction_api_v1_comicvine_issues__issue_id__metadata_revert_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "title": "Issue Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetadataCorrectionRevertRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetadataCorrectionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Api Revert Correction",
+        "tags": [
+          "comicvine-resolution",
+          "comicvine-resolution"
+        ]
+      }
+    },
+    "/api/v1/comicvine/issues:import": {
+      "post": {
+        "description": "Import a ComicVine issue as a new thread with its exact identity preserved.\n\nCreates the thread, a single issue row, and a confirmed external-identity\nmapping atomically; optionally inserts the thread into a reading order\nbetween the surrounding story-arc members.\n\nArgs:\n    request: Import payload with optional anchored reading-order placement.\n    current_user: Authenticated owner.\n    db: Async database session.\n\nReturns:\n    Created identifiers and final reading-order placement.",
+        "operationId": "api_import_issue_api_v1_comicvine_issues_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportIssueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportIssueResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Api Import Issue",
+        "tags": [
+          "comicvine-resolution",
+          "comicvine-resolution"
+        ]
+      }
+    },
+    "/api/v1/comicvine/search/series": {
+      "get": {
+        "description": "Search ComicVine for series/volumes by title.\n\nArgs:\n    q: Search query string.\n    limit: Maximum results to return.\n    current_user: Authenticated user.",
+        "operationId": "api_search_comicvine_series_api_v1_comicvine_search_series_get",
+        "parameters": [
+          {
+            "description": "Series search query",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "description": "Series search query",
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maximum results",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "description": "Maximum results",
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComicVineSeriesSearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Api Search Comicvine Series",
+        "tags": [
+          "comicvine-resolution",
+          "comicvine-resolution"
+        ]
+      }
+    },
+    "/api/v1/comicvine/series/{comicvine_volume_id}/issues": {
+      "get": {
+        "description": "Fetch all issues within a ComicVine series/volume.\n\nArgs:\n    comicvine_volume_id: ComicVine volume ID.\n    series_name: Optional series name to avoid extra API call.\n    current_user: Authenticated user.",
+        "operationId": "api_get_series_issues_api_v1_comicvine_series__comicvine_volume_id__issues_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "comicvine_volume_id",
+            "required": true,
+            "schema": {
+              "title": "Comicvine Volume Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Optional pre-fetched series name",
+            "in": "query",
+            "name": "series_name",
+            "required": false,
+            "schema": {
+              "default": "",
+              "description": "Optional pre-fetched series name",
+              "title": "Series Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComicVineSeriesIssuesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Api Get Series Issues",
+        "tags": [
+          "comicvine-resolution",
+          "comicvine-resolution"
         ]
       }
     },
@@ -9439,6 +12919,37 @@
         ]
       }
     },
+    "/api/v1/debug/log": {
+      "post": {
+        "description": "Receive client-side log messages and output to server terminal.\n\nGated by the ``enable_debug_routes`` flag via ``require_debug_routes`` —\nreturns 404 when the flag is off (default), regardless of environment.",
+        "operationId": "log_message_api_v1_debug_log_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Log Message Api V1 Debug Log Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Log Message",
+        "tags": [
+          "debug"
+        ]
+      }
+    },
     "/api/v1/dependencies/": {
       "post": {
         "description": "Create a hard-block dependency between owned threads or owned issues.",
@@ -10056,6 +13567,39 @@
         ]
       }
     },
+    "/api/v1/metrics": {
+      "get": {
+        "description": "Return simple performance metrics.",
+        "operationId": "metrics_api_v1_metrics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "title": "Response Metrics Api V1 Metrics Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Metrics",
+        "tags": [
+          "metrics"
+        ]
+      }
+    },
     "/api/v1/queue/shuffle/": {
       "post": {
         "description": "Randomize all active queue positions for the authenticated user.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    Empty response with HTTP 204 status.",
@@ -10274,6 +13818,136 @@
         "summary": "Rate Thread",
         "tags": [
           "rate"
+        ]
+      }
+    },
+    "/api/v1/reading-mode": {
+      "get": {
+        "description": "Return the active session's current reading mode.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    The current reading-mode state.",
+        "operationId": "get_reading_mode_api_v1_reading_mode_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingModeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Reading Mode",
+        "tags": [
+          "reading-mode",
+          "reading-mode"
+        ]
+      },
+      "post": {
+        "description": "Set the active session reading mode.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    payload: The reading-mode set request.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    The newly stored reading-mode state.\n\nRaises:\n    HTTPException: If the source is invalid or resolution fails.",
+        "operationId": "set_reading_mode_api_v1_reading_mode_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingModeSetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingModeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Reading Mode",
+        "tags": [
+          "reading-mode",
+          "reading-mode"
+        ]
+      }
+    },
+    "/api/v1/reading-mode/dismiss-suggestion": {
+      "post": {
+        "description": "Dismiss the reading-mode suggestion without changing the current mode.\n\nThe dismissal is remembered only for the active session so the suggestion\ndoes not immediately reappear in the same session, but it never prevents\nfuture manual access.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    The unchanged reading-mode state with the suggestion cleared.",
+        "operationId": "dismiss_reading_mode_suggestion_api_v1_reading_mode_dismiss_suggestion_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingModeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Dismiss Reading Mode Suggestion",
+        "tags": [
+          "reading-mode",
+          "reading-mode"
+        ]
+      }
+    },
+    "/api/v1/reading-mode/suggest": {
+      "post": {
+        "description": "Mark the active session as a candidate for the reading-mode quiz.\n\nUsed by flows that detect low confidence or repeated mismatch (for example\nthe Snooze correction flow) to offer the quiz without forcing it.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    The reading-mode state with the suggestion enabled.",
+        "operationId": "suggest_reading_mode_api_v1_reading_mode_suggest_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingModeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Suggest Reading Mode",
+        "tags": [
+          "reading-mode",
+          "reading-mode"
         ]
       }
     },
@@ -10757,6 +14431,143 @@
         "tags": [
           "reading-orders",
           "reading-orders"
+        ]
+      }
+    },
+    "/api/v1/reading-orders/{reading_order_id}/items": {
+      "post": {
+        "description": "Insert a thread into a reading order at a specified position.\n\nShifts existing items at or after the target position to make room. If the\nthread already belongs to the reading order, it is moved to the target\nposition instead of being duplicated.",
+        "operationId": "insert_reading_order_item_api_v1_reading_orders__reading_order_id__items_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reading_order_id",
+            "required": true,
+            "schema": {
+              "title": "Reading Order Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InsertReadingOrderItemRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsertReadingOrderItemResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Insert Reading Order Item",
+        "tags": [
+          "reading-orders",
+          "reading-orders"
+        ]
+      }
+    },
+    "/api/v1/recommendations/diagnostics": {
+      "get": {
+        "description": "Bounded, read-only recommendation-quality summary for the current user. This is a diagnostics endpoint and never runs during the normal Roll bootstrap path.",
+        "operationId": "get_recommendation_diagnostics_api_v1_recommendations_diagnostics_get",
+        "parameters": [
+          {
+            "description": "Inclusive lower bound (ISO 8601). Defaults to 30 days ago.",
+            "in": "query",
+            "name": "range_start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive lower bound (ISO 8601). Defaults to 30 days ago.",
+              "title": "Range Start"
+            }
+          },
+          {
+            "description": "Exclusive upper bound (ISO 8601). Defaults to now.",
+            "in": "query",
+            "name": "range_end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exclusive upper bound (ISO 8601). Defaults to now.",
+              "title": "Range End"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationDiagnosticsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Recommendation-quality diagnostics summary",
+        "tags": [
+          "recommendations",
+          "recommendations"
         ]
       }
     },
@@ -11651,7 +15462,7 @@
     },
     "/api/v1/snooze/": {
       "post": {
-        "description": "Snooze the pending thread, demote it in the queue, and step the die up.\n\nThis endpoint:\n1. Gets the current session (must exist with a pending_thread_id)\n2. Moves the pending thread beyond the widened roll range\n3. Adds the pending_thread_id to snoozed_thread_ids\n4. Steps the die UP (wider pool) using dice ladder logic\n5. Records a \"snooze\" event\n6. Clears pending_thread_id\n7. Returns the updated session\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    SessionResponse containing the updated session with snoozed_thread_ids,\n    cleared pending_thread_id, and current die state.\n\nRaises:\n    HTTPException: If no active session exists or no pending thread to snooze.",
+        "description": "Snooze the pending thread for this session and step the die up.\n\nSnooze is a temporary session correction, not a durable dislike: the\nthread's queue position is left untouched so long-term ordering stays\ngoverned by ratings and explicit queue actions.\n\nThis endpoint:\n1. Gets the current session (must exist with a pending_thread_id)\n2. Adds the pending_thread_id to snoozed_thread_ids (excluded from rolls\n   for the active session only)\n3. Steps the die UP (wider pool) using dice ladder logic\n4. Records a \"snooze\" event\n5. Clears pending_thread_id\n6. Returns the updated session\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    SessionResponse containing the updated session with snoozed_thread_ids,\n    cleared pending_thread_id, and current die state.\n\nRaises:\n    HTTPException: If no active session exists or no pending thread to snooze.",
         "operationId": "snooze_thread_api_v1_snooze__post",
         "responses": {
           "200": {
@@ -12578,6 +16389,74 @@
         ]
       }
     },
+    "/api/v1/threads/{thread_id}/issues/{issue_id}/attach-external": {
+      "post": {
+        "description": "Attach a confirmed issue identity to a user's reading thread.\n\nArgs:\n    thread_id: The thread to associate with the issue.\n    issue_id: The internal ComicPile issue ID to attach the external identity to.\n    request: Attachment request with external identity details and mapping status.\n    current_user: Authenticated user for authorization.\n    db: Database session.\n\nReturns:\n    The created or updated issue-external identity mapping.",
+        "operationId": "attach_issue_to_thread_api_v1_threads__thread_id__issues__issue_id__attach_external_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "title": "Issue Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueAttachRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueAttachResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Attach Issue To Thread",
+        "tags": [
+          "catalog",
+          "catalog"
+        ]
+      }
+    },
     "/api/v1/threads/{thread_id}/issues:reorder": {
       "post": {
         "description": "Rewrite all issue positions in a thread from an explicit ordered ID list.\n\nArgs:\n    thread_id: The thread whose issue order should be rewritten.\n    request: Ordered issue IDs representing the desired canonical order.\n    current_user: The authenticated user making the reorder request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    None. The response is HTTP 204 on success.\n\nRaises:\n    HTTPException: If the thread is not found or the issue IDs are invalid.",
@@ -12725,6 +16604,74 @@
         "tags": [
           "reading-orders",
           "reading-orders"
+        ]
+      }
+    },
+    "/api/v1/threads/{thread_id}/series/{series_external_id}/attach": {
+      "post": {
+        "description": "Attach a confirmed series identity to a user's reading thread.\n\nArgs:\n    thread_id: The thread to associate with the series.\n    series_external_id: The external series identity external_id (e.g., ComicVine volume ID).\n    request: Attachment request with status and optional evidence/confidence.\n    current_user: Authenticated user for authorization.\n    db: Database session.\n\nReturns:\n    The created or updated thread-series mapping.",
+        "operationId": "attach_series_to_thread_api_v1_threads__thread_id__series__series_external_id__attach_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "series_external_id",
+            "required": true,
+            "schema": {
+              "title": "Series External Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThreadSeriesAttachRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadSeriesAttachResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Attach Series To Thread",
+        "tags": [
+          "catalog",
+          "catalog"
         ]
       }
     },
@@ -13110,6 +17057,34 @@
         "tags": [
           "dependencies",
           "dependencies"
+        ]
+      }
+    },
+    "/api/v1/traffic-metrics": {
+      "get": {
+        "description": "Return this instance's per-route traffic counters.\n\nArgs:\n    current_user: Authenticated user requesting the snapshot.\n\nReturns:\n    Process-local aggregated counters sorted deterministically.",
+        "operationId": "get_traffic_metrics_api_v1_traffic_metrics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrafficMetricsSnapshot"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Traffic Metrics",
+        "tags": [
+          "traffic",
+          "traffic"
         ]
       }
     },
