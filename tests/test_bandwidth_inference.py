@@ -529,16 +529,16 @@ class TestImmutability:
         """HistoricalObservation is immutable."""
         obs = _obs(5.0)
         with pytest.raises(AttributeError):
-            obs.effort_minutes = 10.0
+            setattr(obs, "effort_minutes", 10.0)
 
     def test_bandwidth_prediction_frozen(self) -> None:
         """BandwidthPrediction is immutable."""
         result = infer_bandwidth(_light_obs(n=6))
         with pytest.raises(AttributeError):
-            result.level = BandwidthLevel.DEEP
+            setattr(result, "level", BandwidthLevel.DEEP)
 
     def test_bandwidth_evidence_frozen(self) -> None:
         """BandwidthEvidence is immutable."""
         result = infer_bandwidth(_light_obs(n=6))
         with pytest.raises(AttributeError):
-            result.evidence.mean_effort = 99.0
+            setattr(result.evidence, "mean_effort", 99.0)
