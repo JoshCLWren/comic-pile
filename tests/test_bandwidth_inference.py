@@ -365,8 +365,7 @@ class TestBandwidthInferenceResult:
             snooze_rate_by_band={"light": 0.0, "medium": 0.0, "deep": 0.0},
         )
         with pytest.raises(AttributeError):
-            setattr(result, "predicted", "light")
-
+            object.__setattr__(result, "predicted", "light")
 
 # ---------------------------------------------------------------------------
 # Integration tests: session initialization

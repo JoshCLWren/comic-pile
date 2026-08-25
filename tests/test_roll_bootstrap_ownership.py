@@ -167,6 +167,8 @@ def test_bootstrap_schema_bounds_summary_lists_without_losing_counts():
         for index in range(1, 26)
     ]
 
+    from app.schemas.session import SessionMode, SessionBandwidthState
+
     response = RollBootstrapResponse(
         session_id=1,
         user_id=1,
@@ -175,6 +177,14 @@ def test_bootstrap_schema_bounds_summary_lists_without_losing_counts():
         pending_thread_id=None,
         last_rolled_result=None,
         active_thread=None,
+        session_mode=SessionMode(),
+        bandwidth=SessionBandwidthState(
+            predicted_bandwidth=None,
+            active_bandwidth=None,
+            confidence=None,
+            source=None,
+            mode_version=None,
+        ),
         roll_pool=summaries,
         snoozed_threads=summaries,
         snoozed_count=len(summaries),

@@ -315,7 +315,7 @@ async def _ensure_session_bandwidth(
     session.active_bandwidth = predicted
     session.bandwidth_confidence = confidence
     session.bandwidth_source = source
-    session.bandwidth_version = BANDWIDTH_VERSION
+    session.bandwidth_version = str(BANDWIDTH_VERSION)
     session.bandwidth_updated_at = datetime.now(UTC)
     return True
 
