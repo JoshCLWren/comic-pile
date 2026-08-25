@@ -34,7 +34,7 @@ def _make_roll_event_row(
     """
     event.selection_method = selection_method
     if recommendation_context is not None:
-        setattr(event, "recommendation_context", recommendation_context)
+        event.recommendation_context = recommendation_context
     return event
 
 
