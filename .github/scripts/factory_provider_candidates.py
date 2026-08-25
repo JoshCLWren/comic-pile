@@ -79,11 +79,14 @@ def _json_catalog(raw_catalog: str) -> list[dict[str, Any]] | None:
         payload = json.loads(raw_catalog)
     except (json.JSONDecodeError, TypeError):
         return None
-    if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+    if not isinstance(payload, dict):
         return None
-    if not all(isinstance(item, dict) for item in payload["data"]):
+    items = payload.get("data")
+    if not isinstance(items, list) or not all(
+        isinstance(item, dict) for item in items
+    ):
         return None
-    return payload["data"]
+    return [item for item in items if isinstance(item, dict)]
 
 
 class OpenAICompatibleAdapter:
