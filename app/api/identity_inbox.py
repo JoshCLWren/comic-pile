@@ -13,6 +13,7 @@ from app.schemas.identity_inbox import (
     IdentityInboxActionRequest,
     IdentityInboxActionResponse,
     IdentityInboxResponse,
+    IdentityInboxSearchResponse,
 )
 from app.services.identity_inbox import (
     confirm_inbox_candidate,
@@ -20,6 +21,7 @@ from app.services.identity_inbox import (
     get_inbox_item,
     list_inbox_items,
     reject_inbox_candidate,
+    search_comicvine_issues,
     skip_inbox_item,
 )
 
@@ -53,6 +55,44 @@ async def api_list_inbox(
     return IdentityInboxResponse(
         items=items, total=total, offset=offset, limit=limit
     )
+
+
+@router.get(
+    "/search/issues",
+    response_model=IdentityInboxSearchResponse,
+)
+async def api_search_comicvine_issues(
+    current_user: Annotated[User, Depends(get_current_user)],
+    q: str = Query(..., min_length=1, max_length=200, description="Issue search query"),
+    limit: int = Query(10, ge=1, le=50, description="Maximum results"),
+    issue_id: int | None = Query(None, description="Optional ComicPile issue ID for context"),
+) -> IdentityInboxSearchResponse:
+    """Search ComicVine for issues by query string.
+
+    Args:
+        current_user: Authenticated owner.
+        q: Search query string.
+        limit: Maximum results to return.
+        issue_id: Optional ComicPile issue ID for context.
+
+    Returns:
+        Issue search results with metadata.
+    """
+    import os
+    from pathlib import Path
+
+    from comic_pile.comicvine_provider import ComicVineClient
+
+    api_key = os.environ.get("COMICVINE_API_KEY", "").strip()
+    client = None
+    if api_key:
+        cache_dir = Path(os.environ.get("COMICVINE_CACHE_DIR", "/tmp/comicpile-comicvine"))
+        client = ComicVineClient(api_key=api_key, cache_dir=cache_dir)
+
+    result = await search_comicvine_issues(client, query=q, limit=limit)
+    if issue_id is not None:
+        result.issue_id = issue_id
+    return result
 
 
 @router.get(

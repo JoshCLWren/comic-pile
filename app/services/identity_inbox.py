@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
+from typing import Any
 
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.external_identities import (
     ExternalIdentityMappingError,
@@ -20,17 +23,22 @@ from app.schemas.identity_inbox import (
     IdentityInboxActionResponse,
     IdentityInboxCandidate,
     IdentityInboxItem,
+    IdentityInboxSearchResponse,
+    IdentityInboxSearchResult,
 )
+from comic_pile.comicvine_provider import ComicVineClient
 
 logger = logging.getLogger(__name__)
 
 
-def _dt_to_ts(dt):  # noqa: ANN001
+def _dt_to_ts(dt: datetime | None) -> float | None:
     """Convert datetime to Unix timestamp."""
     return dt.timestamp() if dt is not None else None
 
 
-def _source_entry_summary(thread_title, issue_number, metadata):  # noqa: ANN001
+def _source_entry_summary(
+    thread_title: str, issue_number: str, metadata: dict[str, Any]
+) -> str:
     """Build a human-readable summary of the source entry."""
     parts = [f"{thread_title} #{issue_number}"]
     volume = metadata.get("volume")
@@ -44,7 +52,7 @@ def _source_entry_summary(thread_title, issue_number, metadata):  # noqa: ANN001
     return " ".join(parts)
 
 
-def _why_stopped(mapping):  # noqa: ANN001
+def _why_stopped(mapping: IssueExternalIdentityMapping) -> str:
     """Explain why the matcher stopped for this mapping."""
     evidence = mapping.evidence_json
     if not evidence:
@@ -63,13 +71,13 @@ def _why_stopped(mapping):  # noqa: ANN001
     return f"Status: {mapping.status}"
 
 
-async def list_inbox_items(  # noqa: ANN201
-    db,
+async def list_inbox_items(
+    db: AsyncSession,
     *,
-    user_id,
-    offset=0,
-    limit=50,
-):
+    user_id: int,
+    offset: int = 0,
+    limit: int = 50,
+) -> tuple[list[IdentityInboxItem], int]:
     """List unresolved or ambiguous external identity mappings for a user."""
     base_query = (
         select(IssueExternalIdentityMapping)
@@ -128,12 +136,12 @@ async def list_inbox_items(  # noqa: ANN201
     return items, total
 
 
-async def get_inbox_item(  # noqa: ANN201
-    db,
+async def get_inbox_item(
+    db: AsyncSession,
     *,
-    user_id,
-    mapping_id,
-):
+    user_id: int,
+    mapping_id: int,
+) -> IdentityInboxItem | None:
     """Get a single inbox item with all its candidates."""
     mapping = await db.get(IssueExternalIdentityMapping, mapping_id)
     if mapping is None:
@@ -207,13 +215,13 @@ async def get_inbox_item(  # noqa: ANN201
     )
 
 
-async def confirm_inbox_candidate(  # noqa: ANN201
-    db,
+async def confirm_inbox_candidate(
+    db: AsyncSession,
     *,
-    user_id,
-    mapping_id,
-    external_identity_id,
-):
+    user_id: int,
+    mapping_id: int,
+    external_identity_id: int,
+) -> IdentityInboxActionResponse:
     """Confirm a candidate for an unresolved identity mapping."""
     mapping = await db.get(IssueExternalIdentityMapping, mapping_id)
     if mapping is None:
@@ -267,14 +275,14 @@ async def confirm_inbox_candidate(  # noqa: ANN201
     )
 
 
-async def reject_inbox_candidate(  # noqa: ANN201
-    db,
+async def reject_inbox_candidate(
+    db: AsyncSession,
     *,
-    user_id,
-    mapping_id,
-    external_identity_id,
-    rejection_reason,
-):
+    user_id: int,
+    mapping_id: int,
+    external_identity_id: int,
+    rejection_reason: str,
+) -> IdentityInboxActionResponse:
     """Reject a candidate for an identity mapping."""
     mapping = await db.get(IssueExternalIdentityMapping, mapping_id)
     if mapping is None:
@@ -304,12 +312,12 @@ async def reject_inbox_candidate(  # noqa: ANN201
     )
 
 
-async def defer_inbox_item(  # noqa: ANN201
-    db,
+async def defer_inbox_item(
+    db: AsyncSession,
     *,
-    user_id,
-    mapping_id,
-):
+    user_id: int,
+    mapping_id: int,
+) -> IdentityInboxActionResponse:
     """Defer a mapping for later review."""
     mapping = await db.get(IssueExternalIdentityMapping, mapping_id)
     if mapping is None:
@@ -332,12 +340,12 @@ async def defer_inbox_item(  # noqa: ANN201
     )
 
 
-async def skip_inbox_item(  # noqa: ANN201
-    db,
+async def skip_inbox_item(
+    db: AsyncSession,
     *,
-    user_id,
-    mapping_id,
-):
+    user_id: int,
+    mapping_id: int,
+) -> IdentityInboxActionResponse:
     """Skip an inbox item for the current adoption workflow.
 
     This marks the mapping as rejected without a specific reason,
@@ -362,4 +370,122 @@ async def skip_inbox_item(  # noqa: ANN201
         success=True,
         message="Item skipped",
         updated_item=updated_item,
+    )
+
+
+def _coerce_provider_int(value: object) -> int | None:
+    """Coerce a ComicVine value into an int when it is numeric."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    return None
+
+
+async def search_comicvine_issues(
+    client: ComicVineClient | None,
+    *,
+    query: str,
+    limit: int = 10,
+) -> IdentityInboxSearchResponse:
+    """Search ComicVine for issues by query string.
+
+    Args:
+        client: Optional live ComicVine client. When ``None``, returns empty results.
+        query: Search query string.
+        limit: Maximum results to return (1-50).
+
+    Returns:
+        Issue search results with metadata.
+    """
+    if client is None or not query.strip():
+        return IdentityInboxSearchResponse(
+            issue_id=0, query=query, results=[], total_available=0
+        )
+
+    clamped_limit = max(1, min(limit, 50))
+    response = await client.request(
+        "search",
+        "search",
+        {
+            "query": query,
+            "resources": "issue",
+            "limit": clamped_limit,
+            "field_list": "id,name,issue_number,cover_date,volume,publisher,site_detail_url,image",
+        },
+    )
+    results = response.payload.get("results")
+    total = response.payload.get("number_of_total_results")
+    if not isinstance(results, list):
+        return IdentityInboxSearchResponse(
+            issue_id=0, query=query, results=[], total_available=0
+        )
+
+    search_results: list[IdentityInboxSearchResult] = []
+    for row in results:
+        if not isinstance(row, dict):
+            continue
+        issue_id = row.get("id")
+        if not isinstance(issue_id, int):
+            continue
+
+        volume = row.get("volume")
+        volume_id = None
+        volume_name = None
+        if isinstance(volume, dict):
+            volume_id = volume.get("id") if isinstance(volume.get("id"), int) else None
+            volume_name = volume.get("name") if isinstance(volume.get("name"), str) else None
+
+        publisher_raw = row.get("publisher")
+        publisher = None
+        if isinstance(publisher_raw, dict):
+            publisher = publisher_raw.get("name") if isinstance(publisher_raw.get("name"), str) else None
+        elif isinstance(publisher_raw, str):
+            publisher = publisher_raw
+
+        image_raw = row.get("image")
+        image_url = None
+        if isinstance(image_raw, dict):
+            image_url = image_raw.get("medium_url") or image_raw.get("small_url")
+
+        cover_date = row.get("cover_date")
+        start_year = None
+        if isinstance(cover_date, str) and cover_date:
+            # Extract year from cover_date (e.g., "2020-01-15")
+            try:
+                start_year = int(cover_date[:4])
+            except (ValueError, IndexError):
+                pass
+
+        evidence: list[str] = []
+        if volume_name:
+            evidence.append(f"Volume: {volume_name}")
+        if publisher:
+            evidence.append(f"Publisher: {publisher}")
+
+        search_results.append(
+            IdentityInboxSearchResult(
+                comicvine_issue_id=issue_id,
+                comicvine_volume_id=volume_id,
+                volume_name=volume_name,
+                issue_number=str(row.get("issue_number")) if row.get("issue_number") is not None else None,
+                issue_name=row.get("name") if isinstance(row.get("name"), str) else None,
+                publisher=publisher,
+                start_year=start_year,
+                site_detail_url=row.get("site_detail_url") if isinstance(row.get("site_detail_url"), str) else None,
+                image_url=image_url,
+                score=None,  # ComicVine search doesn't return scores
+                evidence=evidence,
+            )
+        )
+
+    return IdentityInboxSearchResponse(
+        issue_id=0,  # Will be set by caller
+        query=query,
+        results=search_results,
+        total_available=total if isinstance(total, int) else len(search_results),
     )
