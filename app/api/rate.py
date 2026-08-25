@@ -31,6 +31,33 @@ from comic_pile.session import get_current_die_for_session
 router = APIRouter()
 
 
+async def _find_source_roll_event(
+    db: AsyncSession,
+    session_id: int,
+    thread_id: int,
+) -> int | None:
+    """Find the originating roll event for a given thread in this session.
+
+    Args:
+        db: Database session.
+        session_id: Current reading session ID.
+        thread_id: Thread that was rolled/snoozed.
+
+    Returns:
+        The ID of the most recent roll event selecting this thread, or None.
+    """
+    result = await db.execute(
+        select(Event.id)
+        .where(Event.session_id == session_id)
+        .where(Event.type == "roll")
+        .where(Event.selected_thread_id == thread_id)
+        .order_by(Event.timestamp.desc(), Event.id.desc())
+        .limit(1)
+    )
+    row = result.scalar_one_or_none()
+    return row
+
+
 async def _capture_thread_pre_state(thread: Thread, db: AsyncSession) -> dict:
     """Extract a thread's full pre-rating state as a plain dictionary.
 
@@ -237,16 +264,6 @@ async def rate_thread(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Thread {target_thread_id} not found",
             )
-
-        origin_result = await db.execute(
-            select(Event)
-            .where(Event.session_id == current_session_id)
-            .where(Event.type == "roll")
-            .where(Event.selected_thread_id == target_thread_id)
-            .order_by(Event.timestamp.desc(), Event.id.desc())
-        )
-        originating_roll = origin_result.scalars().first()
-        source_roll_event_id = originating_roll.id if originating_roll else None
     else:
         result = await db.execute(
             select(Event)
@@ -264,7 +281,6 @@ async def rate_thread(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No active thread. Please roll the dice first.",
             )
-        source_roll_event_id = latest_action_event.id
 
         result = await db.execute(
             select(Thread)
@@ -458,6 +474,8 @@ async def rate_thread(
         if rate_data.rating >= rating_threshold
         else step_up(current_die)
     )
+
+    source_roll_event_id = await _find_source_roll_event(db, current_session_id, thread_id)
 
     event = Event(
         type="rate",

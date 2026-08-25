@@ -5,7 +5,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -31,8 +32,6 @@ class Event(Base):
         - "rate": User rated a reading session. Uses `thread_id` to link to the
           rated thread, `rating` for the score, `issues_read` for progress,
           `die` for current die, and `die_after` for the new die size.
-          Also uses `source_roll_event_id` to reference the exact "roll" event
-          that produced the pending recommendation being rated.
         - "rolled_but_skipped": User rolled but skipped reading. Uses `thread_id`
           to record which pending thread was abandoned.
         - "snooze": User snoozed a thread. Uses `thread_id` to record which
@@ -52,13 +51,10 @@ class Event(Base):
           and "rolled_but_skipped" events where we need referential integrity
           and the relationship to the Thread model.
 
-    Source-Roll Linkage:
-        `source_roll_event_id` is a nullable self-reference to the "roll" event
-        that produced the pending recommendation an outcome event acted on.
-        It is populated on new outcome events (currently "rate") so decision
-        latency and prediction/outcome comparisons have a durable analytics
-        contract. Historical events keep NULL linkage, and deleting the
-        referenced roll event nulls the reference instead of cascading further.
+    Source Roll Linkage:
+        - `source_roll_event_id`: Self-referential FK linking rate/snooze events
+          back to the originating roll event. NULL for historical events and roll
+          events themselves. Enables decision-latency and outcome analysis.
     """
 
     __tablename__ = "events"
@@ -91,11 +87,27 @@ class Event(Base):
     )
     # Denormalized issue_number preserved for historical display even if Issue is deleted
     issue_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    # Exact originating "roll" event for outcome events (e.g. "rate"). Nullable
-    # self-reference; SET NULL so removing the roll never cascades further.
+    # Links rate/snooze events back to the originating roll event in the same session.
+    # NULL for historical events and roll events themselves.
     source_roll_event_id: Mapped[int | None] = mapped_column(
         ForeignKey("events.id", ondelete="SET NULL"), nullable=True
     )
+    # Recommendation reason codes explaining why this thread was selected at roll
+    # time. Persisted so the explanation matches the decision-time context rather
+    # than the current (possibly mutated) thread state.
+    recommendation_reason_codes: Mapped[list[str] | None] = mapped_column(
+        ARRAY(Text), nullable=True
+    )
+    # Full recommendation context captured at decision time, including bandwidth,
+    # intent, taste bank factors, primary score, and affinity notes. Used by the
+    # explanation endpoint to reconstruct human-readable reasons without recomputing
+    # from potentially mutated current state.
+    recommendation_context: Mapped[dict[str, object] | None] = mapped_column(
+        JSON, nullable=True
+    )
+    # Optional JSON metadata capturing decision context at event time (e.g.
+    # Snooze correction before/after bandwidth and reason codes).
+    context: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
 
     __table_args__ = (
         Index("ix_event_session_id", "session_id"),
