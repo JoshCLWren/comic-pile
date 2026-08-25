@@ -1,5 +1,6 @@
 """Roll API routes."""
 
+import json
 import logging
 import random
 from datetime import UTC, datetime, timedelta
@@ -9,7 +10,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import Text, func, or_, select
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Annotated
+from typing import Annotated, Any
 
 from app.api.session import (
     _invalidate_session_caches,
@@ -19,12 +20,15 @@ from app.auth import get_current_user
 
 from app.database import get_db
 from app.middleware import limiter
-from app.models import DependencyGroup, DependencyGroupMembership, Event, Issue, Thread
+from app.models import DependencyGroup, DependencyGroupMembership, Event, Issue, Session, Thread
 from app.models.user import User
 from app.roll_recovery import build_roll_recovery
 from app.services.explanation_projection import get_primary_explanation
+from app.services.recommendation_explanation import RecommendationExplanationProjection
 from app.schemas import (
+    ExplainableFactorResponse,
     OverrideRequest,
+    RecommendationExplanationResponse,
     RollBootstrapResponse,
     RollBootstrapThread,
     RollRequest,
@@ -35,6 +39,15 @@ from app.schemas import (
 )
 from app.schemas.session import build_session_bandwidth_state
 from comic_pile.queue import get_bounded_roll_pool_rows
+from comic_pile.recommendation_selection import (
+    DEFAULT_BANDWIDTH,
+    DEFAULT_INTENT,
+    SelectionMode,
+    normalize_bandwidth,
+    normalize_intent,
+    resolve_selection_mode,
+    select_from_pool,
+)
 from comic_pile.session import get_current_die_for_session, get_or_create
 from app.momentum import weighted_momentum_selection
 from app.recommendation_version import (
@@ -101,32 +114,36 @@ async def roll_dice(
             detail="No active threads available to roll",
         )
 
-    # get_bounded_roll_pool_rows already applied the die cap, so the contextual
-    # weighting below cannot draw from outside the active die pool.
+    pool_size = len(bounded_rows)
+    selection_bandwidth = (
+        roll_request.bandwidth if roll_request.bandwidth is not None else DEFAULT_BANDWIDTH
+    )
+    selection_intent = roll_request.intent if roll_request.intent is not None else DEFAULT_INTENT
+
+    resolved_mode = resolve_selection_mode(selection_bandwidth, selection_intent)
 
     # Determine algorithm version and control state for this roll.
     algorithm_version = get_current_algorithm_version()
     algorithm_control_state = get_current_control_state()
 
-    # Random intent is an independent user-level bypass that forces pure-random
-    # selection without engaging the legacy kill switch. It records contextual
-    # version/state but with pure_random reason code.
-    random_intent_bypass = current_session.active_intent == "random"
-
-    # Apply momentum weighting; weights fall back to uniform (pure-random)
-    # when no positive momentum applies, preserving the pure-random bypass.
-    # Legacy mode forces pure-random selection regardless of momentum.
-    # Random intent also forces pure-random selection as a user-level bypass.
-    if is_legacy_mode_enabled() or random_intent_bypass:
-        selected_index = random.randint(0, len(bounded_rows) - 1)
-        max_bonus = 0.0
-        session_events = []
+    max_bonus = 0.0
+    if resolved_mode is SelectionMode.PURE_RANDOM_BYPASS:
+        selection = select_from_pool(
+            pool_size,
+            bandwidth=selection_bandwidth,
+            intent=selection_intent,
+        )
+        selected_index = selection.index
     else:
+        # get_bounded_roll_pool_rows already applied the die cap, so the contextual
+        # weighting below cannot draw from outside the active die pool.
+
+        # Apply momentum weighting; weights fall back to uniform (pure-random)
+        # when no positive momentum applies, preserving the pure-random bypass.
         session_events_result = await db.execute(
             select(Event).where(Event.session_id == current_session_id)
         )
         session_events = list(session_events_result.scalars().all())
-
         selected_index, max_bonus = await weighted_momentum_selection(
             db=db,
             bounded_rows=bounded_rows,
@@ -185,6 +202,15 @@ async def roll_dice(
         issue_number=selected_thread_issue_number,
     )
     db.add(event)
+
+    logger.info(
+        "roll selection mode=%s bandwidth=%s intent=%s max_bonus=%.3f pool_size=%s",
+        resolved_mode.value,
+        normalize_bandwidth(selection_bandwidth).value,
+        normalize_intent(selection_intent).value,
+        max_bonus,
+        pool_size,
+    )
 
     if current_session:
         current_session.pending_thread_id = selected_thread_id
@@ -724,4 +750,85 @@ async def roll_bootstrap(
         stale_thread=stale_thread,
         session_id=current_session_id,
         user_id=user_id,
+    )
+
+
+@router.get(
+    "/events/{event_id}/recommendation-explanation",
+    response_model=RecommendationExplanationResponse,
+)
+async def get_roll_recommendation_explanation(
+    event_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> RecommendationExplanationResponse:
+    """Return human-readable explanations for a historical roll event.
+
+    Derives explanations solely from the recommendation context persisted at
+    roll decision time, never recomputing scores from current mutable state.
+    Unknown or absent context degrades gracefully to an empty explanation list.
+
+    Args:
+        event_id: Identifier of the roll event to explain.
+        current_user: Authenticated owner of the session that generated the event.
+        db: Async database session.
+
+    Returns:
+        RecommendationExplanationResponse carrying the event identifier and
+        ordered list of human-readable explanation factors.
+
+    Raises:
+        HTTPException 404: When the event does not exist or does not belong
+            to the current user's session.
+        HTTPException 422: When the event type is not ``"roll"``.
+    """
+    result = await db.execute(
+        select(Event, Session.user_id)
+        .join(Session, Event.session_id == Session.id)
+        .where(Event.id == event_id)
+    )
+    row = result.one_or_none()
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Event {event_id} not found",
+        )
+    event, session_user_id = row
+    if session_user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Event {event_id} not found",
+        )
+    if event.type != "roll":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Event {event_id} is not a roll event",
+        )
+
+    context: dict[str, Any] | None = None
+    if hasattr(event, "recommendation_context") and event.recommendation_context is not None:
+        raw = event.recommendation_context
+        if isinstance(raw, dict):
+            context = raw
+        elif isinstance(raw, str):
+            try:
+                context = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                context = None
+
+    factors = RecommendationExplanationProjection.project_recommendation_context(
+        context=context,
+        selection_method=event.selection_method,
+    )
+
+    return RecommendationExplanationResponse(
+        event_id=event_id,
+        factors=[
+            ExplainableFactorResponse(
+                code=f.code,
+                label=f.label,
+                detail=f.detail,
+            )
+            for f in factors
+        ],
     )

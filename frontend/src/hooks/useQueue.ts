@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react'
-import { useInfiniteQuery } from '@tanstack/react-query'
+import { useCallback } from 'react'
+import { useInfiniteQuery, useMutation } from '@tanstack/react-query'
 import { invalidateAfterQueueMovement } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
@@ -94,91 +94,75 @@ export function useQueueThreads(searchTerm?: string, sort: QueueSortBy = 'positi
 }
 
 export function useMoveToPosition() {
-  const [isPending, setIsPending] = useState(false)
-  const [isError, setIsError] = useState(false)
-
-  const mutate = useCallback(async ({ id, position }: MoveToPositionPayload) => {
-    try {
-      setIsPending(true)
-      setIsError(false)
+  const mutation = useMutation({
+    mutationFn: async ({ id, position }: MoveToPositionPayload) => {
       await queueApi.moveToPosition(id, position)
       await invalidateAfterQueueMovement(queryClient)
-    } catch (error: unknown) {
-      setIsError(true)
+    },
+    onError: (error) => {
       console.error('Failed to move thread to position:', getApiErrorDetail(error))
-      throw error
-    } finally {
-      setIsPending(false)
-    }
-  }, [])
+    },
+  })
 
-  return { mutate, isPending, isError }
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+  }
 }
 
 export function useMoveToFront() {
-  const [isPending, setIsPending] = useState(false)
-  const [isError, setIsError] = useState(false)
-
-  const mutate = useCallback(async (id: number) => {
-    try {
-      setIsPending(true)
-      setIsError(false)
+  const mutation = useMutation({
+    mutationFn: async (id: number) => {
       await queueApi.moveToFront(id)
       await invalidateAfterQueueMovement(queryClient)
-    } catch (error: unknown) {
-      setIsError(true)
+    },
+    onError: (error) => {
       console.error('Failed to move thread to front:', getApiErrorDetail(error))
-      throw error
-    } finally {
-      setIsPending(false)
-    }
-  }, [])
+    },
+  })
 
-  return { mutate, isPending, isError }
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+  }
 }
 
 export function useMoveToBack() {
-  const [isPending, setIsPending] = useState(false)
-  const [isError, setIsError] = useState(false)
-
-  const mutate = useCallback(async (id: number) => {
-    try {
-      setIsPending(true)
-      setIsError(false)
+  const mutation = useMutation({
+    mutationFn: async (id: number) => {
       await queueApi.moveToBack(id)
       await invalidateAfterQueueMovement(queryClient)
-    } catch (error: unknown) {
-      setIsError(true)
+    },
+    onError: (error) => {
       console.error('Failed to move thread to back:', getApiErrorDetail(error))
-      throw error
-    } finally {
-      setIsPending(false)
-    }
-  }, [])
+    },
+  })
 
-  return { mutate, isPending, isError }
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+  }
 }
 
 export function useShuffleQueue() {
-  const [isPending, setIsPending] = useState(false)
-  const [isError, setIsError] = useState(false)
-
-  const mutate = useCallback(async () => {
-    try {
-      setIsPending(true)
-      setIsError(false)
+  const mutation = useMutation({
+    mutationFn: async () => {
       await queueApi.shuffle()
       await invalidateAfterQueueMovement(queryClient)
-    } catch (error: unknown) {
-      setIsError(true)
+    },
+    onError: (error) => {
       console.error('Failed to shuffle queue:', getApiErrorDetail(error))
-      throw error
-    } finally {
-      setIsPending(false)
-    }
-  }, [])
+    },
+  })
 
-  return { mutate, isPending, isError }
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+  }
 }
 
 // Re-export delete thread hook for backward compatibility

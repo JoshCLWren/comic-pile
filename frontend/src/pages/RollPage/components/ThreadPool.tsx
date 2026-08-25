@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import type { BlockingDependency } from '../../../types'
 import type { RollBootstrapThread } from '../../../types/rollBootstrap'
 
 interface ThreadPoolProps {
   pool: RollBootstrapThread[]
   blockedThreads: RollBootstrapThread[]
-  blockingReasonMap: Record<number, string[]>
+  blockingDependencyMap: Record<number, BlockingDependency[]>
   dieSize?: number
   isRatingView: boolean
   isRolling: boolean
@@ -29,7 +30,7 @@ interface ThreadPoolProps {
 export function ThreadPool({
   pool,
   blockedThreads,
-  blockingReasonMap,
+  blockingDependencyMap,
   dieSize,
   isRatingView,
   isRolling,
@@ -197,8 +198,18 @@ export function ThreadPool({
                   <span className="text-sm">🔒</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-stone-400 truncate">{thread.title}</p>
-                    {blockingReasonMap[thread.id]?.length > 0 && (
-                      <p className="text-[10px] text-stone-500 truncate">{blockingReasonMap[thread.id][0]}</p>
+                    {blockingDependencyMap[thread.id]?.length > 0 && (
+                      <p className="text-[10px] text-stone-500 truncate">
+                        <Link
+                          to={`/thread/${blockingDependencyMap[thread.id][0].thread_id}`}
+                          className="hover:text-stone-300 underline decoration-stone-600"
+                          aria-label={`Open ${blockingDependencyMap[thread.id][0].thread_title}`}
+                        >
+                          {blockingDependencyMap[thread.id][0].label}
+                        </Link>
+                        {blockingDependencyMap[thread.id].length > 1 &&
+                          ` +${blockingDependencyMap[thread.id].length - 1} more`}
+                      </p>
                     )}
                   </div>
                 </div>

@@ -53,6 +53,13 @@ class Session(Base):
     reading_intent: Mapped[str | None] = mapped_column(String(16), nullable=True)
     reading_mode_source: Mapped[str | None] = mapped_column(String(16), nullable=True)
     reading_mode_suggested: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Session mode (bandwidth + intent) state for Roll bootstrap
+    active_intent: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    predicted_intent: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    intent_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    intent_source: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    intent_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    session_mode_correction_guidance: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     __table_args__ = (
         Index("ix_session_started_at", "started_at"),

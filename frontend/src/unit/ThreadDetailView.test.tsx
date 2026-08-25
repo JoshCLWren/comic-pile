@@ -1,10 +1,11 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
 import ThreadDetailView from '../pages/ThreadDetailView'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { useUpdateThread } from '../hooks/useThread'
-import { threadsApi } from '../services/api'
+import { dependenciesApi, threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 
 const navigateSpy = vi.fn()
@@ -16,13 +17,17 @@ vi.mock('react-router-dom', async () => {
 vi.mock('../hooks/useThread', () => ({ useUpdateThread: vi.fn() }))
 vi.mock('../services/api', () => ({
   threadsApi: { get: vi.fn() },
-  dependenciesApi: { getIssueDependencies: vi.fn().mockResolvedValue({ incoming: [], outgoing: [] }) },
+  dependenciesApi: {
+    getIssueDependencies: vi.fn().mockResolvedValue({ incoming: [], outgoing: [] }),
+    getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),
+  },
 }))
 vi.mock('../services/api-issues', () => ({ issuesApi: { list: vi.fn() } }))
 
 const mockedUseUpdateThread = vi.mocked(useUpdateThread)
 const mockedThreadsApiGet = vi.mocked(threadsApi.get)
 const mockedIssuesApiList = vi.mocked(issuesApi.list)
+const mockedConnectedThreads = vi.mocked(dependenciesApi.getConnectedThreads)
 
 beforeEach(() => {
   routeParams.id = '1'
@@ -36,7 +41,13 @@ beforeEach(() => {
 })
 
 function renderPage() {
-  return render(<ToastProvider><ThreadDetailView /></ToastProvider>)
+  return render(
+    <MemoryRouter>
+      <ToastProvider>
+        <ThreadDetailView />
+      </ToastProvider>
+    </MemoryRouter>,
+  )
 }
 
 it('renders a thread without legacy rating content', async () => {
@@ -230,4 +241,41 @@ it('edits migrated threads and displays the all-read boundary', async () => {
 
   await waitFor(() => expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ id: 1 })))
   expect(screen.getByText('Updated Saga')).toBeInTheDocument()
+})
+
+it('renders named blocked-by dependencies and an empty blocking list as links', async () => {
+  mockedConnectedThreads.mockResolvedValueOnce({
+    thread_id: 1,
+    connected_threads: [
+      { thread_id: 9, title: 'Prequel', connection_type: 'blocked_by', dependency_id: 11 },
+    ],
+  })
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+  expect(screen.getByText('Dependencies')).toBeInTheDocument()
+  await waitFor(() =>
+    expect(screen.getByRole('link', { name: 'Open Prequel' })).toHaveAttribute('href', '/thread/9'),
+  )
+  expect(screen.getByText('This thread blocks nothing')).toBeInTheDocument()
+})
+
+it('renders named blocking dependencies when nothing blocks this thread', async () => {
+  mockedConnectedThreads.mockResolvedValueOnce({
+    thread_id: 1,
+    connected_threads: [
+      { thread_id: 4, title: 'Sequel', connection_type: 'blocks', dependency_id: 12 },
+    ],
+  })
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+  await waitFor(() => expect(screen.getByText('Nothing blocks this thread')).toBeInTheDocument())
+  expect(screen.getByRole('link', { name: 'Open Sequel' })).toHaveAttribute('href', '/thread/4')
+})
+
+it('reports dependency load failures without hiding the section', async () => {
+  mockedConnectedThreads.mockRejectedValueOnce(new Error('dependencies unavailable'))
+  renderPage()
+  await waitFor(() =>
+    expect(screen.getByRole('alert')).toHaveTextContent('Unable to load dependencies.'),
+  )
 })

@@ -1,5 +1,10 @@
-"""API endpoints for reading orders."""
+"""API endpoints for reading orders.
 
+Reading orders are a legacy compatibility surface. The canonical reader
+order is the continuity plan (``ContinuityPlan``); see
+``docs/READING_PLAN_CANONICAL_MODEL.md``. These endpoints remain readable
+and adoptable but are not the source of truth for new ordering intent.
+"""
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -205,3 +210,4 @@ async def insert_reading_order_item(
         position=target_pos,
         total_items=total,
     )
+

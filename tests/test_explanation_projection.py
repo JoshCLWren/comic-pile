@@ -102,4 +102,3 @@ class TestGetPrimaryExplanation:
     def test_override_roll_returns_none(self) -> None:
         """Override rolls have empty reason codes, so explanation is None."""
         assert get_primary_explanation([]) is None
-"""

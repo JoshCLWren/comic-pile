@@ -361,9 +361,9 @@ class Settings(BaseSettings):
         return get_github_settings()
 
     @property
-    def redis(self) -> RedisSettings:
-        """Get Redis settings."""
-        return get_redis_settings()
+    def recommendation(self) -> RecommendationSettings:
+        """Get recommendation settings."""
+        return get_recommendation_settings()
 
     @property
     def recommendation(self) -> RecommendationSettings:

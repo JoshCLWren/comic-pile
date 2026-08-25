@@ -336,14 +336,87 @@ async def test_reader_context_crossover_current_and_future_membership(
     ]
     by_name = {item["name"]: item for item in crossovers}
     assert by_name["Annihilation"]["applies_to_current_issue"] is False
+    assert by_name["Annihilation"]["membership_kind"] == "issue"
     assert by_name["Annihilation"]["next_member"] == {
         "issue_id": issues[3].id,
         "issue_number": "4",
     }
     assert by_name["Onslaught"]["applies_to_current_issue"] is True
+    assert by_name["Onslaught"]["membership_kind"] == "issue"
     assert by_name["Onslaught"]["next_member"] is None
-    assert by_name["ThreadWide"]["applies_to_current_issue"] is False
+    assert by_name["ThreadWide"]["applies_to_current_issue"] is True
+    assert by_name["ThreadWide"]["membership_kind"] == "thread"
     assert by_name["ThreadWide"]["next_member"] is None
+
+
+@pytest.mark.asyncio
+async def test_reader_context_thread_level_membership_resolves_next_unread(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A thread-level membership current-issues the thread and resolves to #N."""
+    thread, issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Animal Man",
+        issue_count=4,
+        queue_position=1,
+        read_through=1,
+    )
+    await _make_group(async_db, default_user, "Swamp Thing AUDIT-TEST", thread_id=thread.id)
+
+    response = await auth_client.get(
+        f"/api/v1/issues/{issues[1].id}/reader-context"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    crossover = body["crossovers"][0]
+    assert crossover["name"] == "Swamp Thing AUDIT-TEST"
+    assert crossover["membership_kind"] == "thread"
+    assert crossover["applies_to_current_issue"] is True
+    assert crossover["next_member"] == {
+        "issue_id": issues[2].id,
+        "issue_number": "3",
+    }
+    current_memberships = [
+        item["crossover_memberships"]
+        for item in body["local_chain"]["issues"]
+        if item["relation"] == "current"
+    ][0]
+    assert current_memberships == [
+        {"id": crossover["id"], "name": "Swamp Thing AUDIT-TEST"}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_reader_context_thread_level_membership_no_unread_resolves_unknown(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A thread-level membership with no unread issue exposes thread kind only."""
+    thread, issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Fully Read",
+        issue_count=2,
+        queue_position=1,
+        read_through=2,
+    )
+    await _make_group(async_db, default_user, "ThreadWide", thread_id=thread.id)
+
+    response = await auth_client.get(
+        f"/api/v1/issues/{issues[1].id}/reader-context"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    crossover = body["crossovers"][0]
+    assert crossover["membership_kind"] == "thread"
+    assert crossover["applies_to_current_issue"] is True
+    assert crossover["next_member"] is None
 
 
 @pytest.mark.asyncio
@@ -575,7 +648,7 @@ async def test_reader_context_cross_thread_edge_without_expansion(
             "note": "cross-thread",
             "source_label": "Neighborhood #3",
             "target_label": "Distant #1",
-            "explanation": f"Blocked by issue #{issues[2].issue_number} in Neighborhood",
+            "explanation": f"Blocked by Neighborhood: #{issues[2].issue_number}",
         }
     ]
 
@@ -632,8 +705,8 @@ async def test_reader_context_dependency_explanations_hide_raw_thread_ids(
     edge = dependency_edges[0]
 
     expected = (
-        f"Blocked by issue #{source_issues[1].issue_number} "
-        "in Ultimate Universe: One Year In"
+        f"Blocked by Ultimate Universe: One Year In: "
+        f"#{source_issues[1].issue_number}"
     )
     assert edge["explanation"] == expected
     assert edge["source_thread_id"] == source_thread.id

@@ -461,6 +461,11 @@ async def get_roll_pool_rows(
     next-unread-issue number. Folding the unread count and issue metadata into
     the pool query removes per-thread round trips from the roll selection path.
 
+    The returned list is in queue-position order with blocked and snoozed
+    threads excluded, but is **not** bounded to any die size.  Callers that
+    need a bounded candidate set should use :func:`get_bounded_roll_pool_rows`
+    so that contextual weighting logic cannot draw from outside the die pool.
+
     Args:
         user_id: The user ID to filter threads by.
         db: The database session.
