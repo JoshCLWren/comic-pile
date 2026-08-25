@@ -154,7 +154,7 @@ async def build_session_response(
         snapshot_count=snapshot_count,
         snoozed_thread_ids=resolved_ids,
         snoozed_threads=snoozed_threads,
-        inferred_bandwidth=session.inferred_bandwidth,
+        active_bandwidth=session.active_bandwidth,
         bandwidth_confidence=session.bandwidth_confidence,
         bandwidth_source=session.bandwidth_source,
         predicted_bandwidth=session.predicted_bandwidth,
@@ -288,7 +288,7 @@ async def snooze_thread(
 
     # Determine last snooze direction relative to current bandwidth
     last_snooze_direction: str | None = None
-    current_bw = current_session.inferred_bandwidth or "balanced"
+    current_bw = current_session.active_bandwidth or "balanced"
     if recent_snoozes:
         # Use the most recent previous snooze's die step as a proxy for direction
         prev_die = recent_snoozes[0].die or 6
@@ -314,19 +314,16 @@ async def snooze_thread(
     )
 
     # Apply correction to session state (#1724)
-    pre_correction_bandwidth = current_session.inferred_bandwidth
-    current_session.inferred_bandwidth = correction_result.active_bandwidth
+    pre_correction_bandwidth = current_session.active_bandwidth
+    current_session.active_bandwidth = correction_result.active_bandwidth
     current_session.bandwidth_confidence = correction_result.active_confidence
     current_session.bandwidth_source = "snooze"
     if current_session.predicted_bandwidth is None:
         current_session.predicted_bandwidth = current_bw
 
-    # Extract correction values for response (before commit)
+    # Extract correction values for response (before correction is applied to session state)
     pre_correction = SnoozeCorrectionInfo(
         bandwidth_changed=correction_result.bandwidth_changed,
-        active_bandwidth=correction_result.active_bandwidth,
-        active_confidence=correction_result.active_confidence,
-        predicted_bandwidth=current_session.predicted_bandwidth,
         reason_code=correction_result.reason_code,
         suggest_clarification=correction_result.suggest_clarification,
     )
