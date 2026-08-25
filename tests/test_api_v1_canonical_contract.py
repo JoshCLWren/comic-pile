@@ -41,23 +41,20 @@ def _schema_candidates() -> list[Path]:
 # non-client tooling or administrative surfaces, never versioned client
 # resources. Every other bare ``/api`` path must be a compatibility alias for a
 # family that also has a canonical ``/api/v1`` route.
-LEGACY_ONLY_TOOLING = frozenset({"ping"})
+LEGACY_ONLY_TOOLING = frozenset({"admin", "debug", "metrics", "ping"})
 
 # Retained first-party client families that must expose a canonical
 # ``/api/v1`` route. These are the durable product APIs, not tooling.
 REQUIRED_V1_FAMILIES = frozenset(
     {
-        "admin",
         "analytics",
         "auth",
         "bug-reports",
         "continuity",
         "continuity-plans",
         "continuity-rules",
-        "debug",
         "dependencies",
         "issues",
-        "metrics",
         "queue",
         "rate",
         "reading-order-groups",
