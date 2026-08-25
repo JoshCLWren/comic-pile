@@ -333,6 +333,15 @@ class ClassifierTests(unittest.TestCase):
         result = classify(self.BASE + "FIXED_MODEL_OPENCODE_OK\\nlifecycle exception\\n")
         self.assertEqual(result.outcome_class, "control_plane_failure")
 
+    def test_assignment_read_failure_is_control_plane(self) -> None:
+        """Explicit controller assignment failures do not poison model health."""
+        result = classify(
+            self.BASE
+            + "FIXED_MODEL_OPENCODE_OK\\n"
+            + "released pr #1897 (controller-assignment-read-failed)\\n"
+        )
+        self.assertEqual(result.outcome_class, "control_plane_failure")
+
     def test_work_failure_is_distinct(self) -> None:
         """Genuine failing tests remain repair work."""
         result = classify(self.BASE + "FIXED_MODEL_OPENCODE_OK\\ntests failed\\n")
