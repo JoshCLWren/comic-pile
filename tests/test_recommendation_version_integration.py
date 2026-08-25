@@ -1,4 +1,4 @@
-"""Integration tests for recommendation algorithm versioning and legacy rollback (#1767).
+"""Integration tests for recommendation algorithm versioning and safe legacy rollback (#1767).
 
 Tests cover the full roll API flow with contextual weighting enabled, legacy mode
 disabled, and random intent bypass active.
@@ -187,8 +187,7 @@ async def test_roll_contextual_mode_with_momentum_records_weighted_reason(
     with patch.dict(os.environ, {"RECOMMENDATION_CONTROL_MODE": "contextual"}, clear=True):
         clear_settings_cache()
 
-        # Roll multiple times to increase chance of momentum selection
-        # (momentum is not guaranteed, but we can verify the reason code logic)
+        # Roll once
         response = await auth_client.post("/api/roll/")
         assert response.status_code == 200
 
@@ -277,3 +276,4 @@ async def test_transition_legacy_to_contextual_resumes_safely(
     for thread in threads:
         assert thread.queue_position >= 1
         assert thread.issues_remaining >= 0
+"""

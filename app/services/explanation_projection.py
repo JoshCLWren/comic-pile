@@ -53,3 +53,4 @@ def get_primary_explanation(reason_codes: list[str] | None) -> str | None:
     """
     explanations = project_explanations(reason_codes)
     return explanations[0] if explanations else None
+

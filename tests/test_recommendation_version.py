@@ -1,4 +1,4 @@
-"""Tests for recommendation algorithm versioning and legacy rollback (#1767).
+"""Tests for recommendation algorithm versioning and safe legacy rollback (#1767).
 
 These tests verify the canonical algorithm version identifier, the operator
 kill switch for legacy unweighted selection, and that version/control state
@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from unittest.mock import patch
 
-from app.config import clear_settings_cache
+from app.config import clear_settings_cache, get_recommendation_settings
 from app.recommendation_version import (
     ALGORITHM_CONTROL_STATE_LEGACY_UNWEIGHTED,
     ALGORITHM_CONTROL_STATE_WEIGHTED,
@@ -216,3 +216,4 @@ class TestRecommendationSettingsIntegration:
             clear_settings_cache()
             settings = get_recommendation_settings()
             assert settings.control_mode == "legacy"
+"""
