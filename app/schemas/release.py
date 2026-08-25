@@ -14,6 +14,83 @@ ReleaseStatus = Literal["draft", "published", "retracted"]
 _MARKDOWN_LINK_PATTERN = re.compile(r"\[([^\]]+)\]\((https?:\/\/[^)]+)\)")
 _BACKTICK_PATTERN = re.compile(r"`([^`]+)`")
 _MIN_PUBLIC_CONTENT = {"category": 2, "title": 4, "summary": 12}
+_READER_FACING_FIELDS = ("category", "title", "summary")
+
+_TICKET_REFERENCE_PATTERN = re.compile(r"(?<![\w&])#\d{1,7}\b")
+_SCHEMA_IDENTIFIER_PATTERN = re.compile(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b")
+_PHASE_TERMINOLOGY_PATTERN = re.compile(
+    r"\bphases?\s+(?:\d+(?:\.\d+)*|one|two|three|four|five|six|seven|eight|nine|ten)\b",
+    re.IGNORECASE,
+)
+_UNFINISHED_WORK_PATTERN = re.compile(
+    r"\b(?:incomplete|unfinished|todo|wip|not yet implemented)\b",
+    re.IGNORECASE,
+)
+
+_KNOWN_TYPOS: dict[str, str] = {
+    "appearnence": "appearance",
+    "appearence": "appearance",
+    "recieve": "receive",
+    "recieved": "received",
+    "seperate": "separate",
+    "seperated": "separated",
+    "occured": "occurred",
+    "untill": "until",
+    "definately": "definitely",
+    "accross": "across",
+    "existance": "existence",
+    "persistant": "persistent",
+    "successfull": "successful",
+    "compatability": "compatibility",
+}
+
+
+def visible_release_text(value: object) -> str:
+    """Return release copy as readers see it after stripping Markdown formatting.
+
+    Args:
+        value: Raw release copy that may contain Markdown links or backticks.
+
+    Returns:
+        The visible text with link syntax resolved and backticks unwrapped.
+    """
+    text = _MARKDOWN_LINK_PATTERN.sub(r"\1", str(value))
+    return _BACKTICK_PATTERN.sub(r"\1", text)
+
+
+def find_internal_artifact(field_name: str, value: object) -> str | None:
+    """Describe the first internal engineering artifact in reader-facing copy.
+
+    Args:
+        field_name: Name of the release field being inspected.
+        value: Raw release copy that may hide internal artifacts behind Markdown.
+
+    Returns:
+        A human-readable description of the offending fragment, or None when the
+        copy reads as ordinary reader-facing product language.
+    """
+    text = visible_release_text(value)
+
+    def _reason(kind: str, match: re.Match[str]) -> str:
+        return f"{field_name} must use reader-facing product language: {kind} '{match.group(0).strip()}'"
+
+    for pattern, kind in (
+        (_TICKET_REFERENCE_PATTERN, "internal ticket reference"),
+        (_SCHEMA_IDENTIFIER_PATTERN, "database/schema identifier"),
+        (_PHASE_TERMINOLOGY_PATTERN, "implementation phase terminology"),
+        (_UNFINISHED_WORK_PATTERN, "unfinished-work commentary"),
+    ):
+        if match := pattern.search(text):
+            return _reason(kind, match)
+
+    lowered = text.lower()
+    for wrong, right in _KNOWN_TYPOS.items():
+        if re.search(rf"\b{wrong}\b", lowered):
+            return (
+                f"{field_name} must be spell-checked before publication: "
+                f"'{wrong}' (did you mean '{right}'?)"
+            )
+    return None
 
 
 def _display_length(value: object) -> int:
@@ -25,9 +102,7 @@ def _display_length(value: object) -> int:
     Returns:
         The number of visible characters in the stripped text.
     """
-    text = _MARKDOWN_LINK_PATTERN.sub(r"\1", str(value))
-    text = _BACKTICK_PATTERN.sub(r"\1", text)
-    return len(text.strip())
+    return len(visible_release_text(value).strip())
 
 
 class ReleaseUpsertRequest(BaseModel):
@@ -62,6 +137,29 @@ class ReleaseUpsertRequest(BaseModel):
         """
         if self.source_pr_number is None and self.source_merge_sha is None:
             raise ValueError("source_pr_number or source_merge_sha is required")
+        return self
+
+    @model_validator(mode="after")
+    def enforce_reader_facing_copy(self) -> Self:
+        """Reject public published copy that exposes internal engineering artifacts.
+
+        Args:
+            self: Validated release publication request.
+
+        Returns:
+            The validated request when reader-facing fields carry product language.
+
+        Raises:
+            ValueError: If category, title, or summary contains internal ticket
+                references, schema identifiers, phase terminology, unfinished-work
+                commentary, or a known misspelling.
+        """
+        if self.status != "published" or self.visibility != "public":
+            return self
+        for field_name in _READER_FACING_FIELDS:
+            artifact = find_internal_artifact(field_name, getattr(self, field_name))
+            if artifact is not None:
+                raise ValueError(artifact)
         return self
 
     @model_validator(mode="after")

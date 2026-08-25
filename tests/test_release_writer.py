@@ -689,10 +689,10 @@ class TestReleaseWriterMeaningfulContent:
             None.
         """
         payload = _valid_payload()
-        payload["title"] = "[#123](https://github.com/JoshCLWren/comic-pile/pull/123)"
+        payload["title"] = "[Queue search](https://github.com/JoshCLWren/comic-pile/pull/123)"
         result = release_writer._validate_release(json.dumps(payload))
         assert result["title"] == (
-            "[#123](https://github.com/JoshCLWren/comic-pile/pull/123)"
+            "[Queue search](https://github.com/JoshCLWren/comic-pile/pull/123)"
         )
 
     def test_publish_allows_short_internal_records(self) -> None:
@@ -711,6 +711,165 @@ class TestReleaseWriterMeaningfulContent:
         result = release_writer._validate_release(json.dumps(payload))
         assert result["title"] == "T"
         assert result["summary"] == "S"
+
+
+class TestReleaseWriterReaderFacingCopy:
+    """Test public release copy cannot carry internal engineering artifacts."""
+
+    def test_publish_rejects_internal_ticket_references(self) -> None:
+        """GitHub ticket numbers must never ship to the reader-facing feed.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["title"] = "incomplete #1551 fix"
+        stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
+        assert "title must use reader-facing product language" in stderr
+        assert "#1551" in stderr
+
+    def test_publish_rejects_schema_identifiers(self) -> None:
+        """Database and schema identifiers must never ship to the reader-facing feed.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["summary"] = "Added source_roll_event_id instrumentation detail."
+        stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
+        assert "summary must use reader-facing product language" in stderr
+        assert "source_roll_event_id" in stderr
+
+    def test_publish_rejects_phase_terminology(self) -> None:
+        """Implementation phase terminology must never ship to readers.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["title"] = "Roll history loads instantly (Phase 2 and 3)"
+        stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
+        assert "title must use reader-facing product language" in stderr
+        assert "Phase 2" in stderr
+
+    def test_publish_rejects_unfinished_work_commentary(self) -> None:
+        """Unfinished-work commentary must never ship to readers.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["summary"] = "This update is still incomplete but shipped anyway."
+        stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
+        assert "summary must use reader-facing product language" in stderr
+        assert "incomplete" in stderr
+
+    def test_publish_rejects_known_misspellings(self) -> None:
+        """Known misspellings are rejected so entries are spell-checked before publication.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["title"] = "Smoother appearnence for saved piles"
+        stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
+        assert "title must be spell-checked before publication" in stderr
+        assert "appearnence" in stderr
+        assert "appearance" in stderr
+
+    def test_publish_ignores_artifacts_hidden_behind_markdown_links(self) -> None:
+        """Visible text is inspected after Markdown link resolution.
+
+        A link whose visible text is a bare ticket reference must be rejected even
+        though the raw string hides it behind URL syntax.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["title"] = (
+            "[#1551](https://github.com/JoshCLWren/comic-pile/pull/1551) roll fix"
+        )
+        stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
+        assert "title must use reader-facing product language" in stderr
+
+    def test_publish_allows_engineering_detail_in_body_and_internal_records(self) -> None:
+        """The reader-facing gate governs public published copy only.
+
+        Engineering detail stays allowed in the non-rendered body and in internal
+        visibility records used for durable skip bookkeeping.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["body"] = "Engineering follow-up tracked in issue #1551 (source_roll_event_id)."
+        result = release_writer._validate_release(json.dumps(payload))
+        assert "issue #1551" in result["body"]
+
+        internal = _valid_payload()
+        internal["visibility"] = "internal"
+        internal["title"] = "Internal change (PR #1240)"
+        internal["summary"] = "Tracks source_roll_event_id backfill for Phase 2."
+        internal_result = release_writer._validate_release(json.dumps(internal))
+        assert internal_result["visibility"] == "internal"
+
+    def test_skip_helper_keeps_internal_record_exemption(self) -> None:
+        """Internal skip records with engineering language still validate.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = {
+            "source_repository": "JoshCLWren/comic-pile",
+            "source_pr_number": 1241,
+            "source_merge_sha": "abcdef1234567890",
+            "merged_at": "2024-01-01T00:00:00Z",
+            "reason": "Test-only refactor tracked by wip cleanup work.",
+        }
+        result = release_writer._validate_release(
+            json.dumps(
+                {
+                    "source_repository": payload["source_repository"],
+                    "source_pr_number": payload["source_pr_number"],
+                    "source_merge_sha": payload["source_merge_sha"],
+                    "merged_at": payload["merged_at"],
+                    "released_at": payload["merged_at"],
+                    "category": "Internal",
+                    "title": f"Internal change (PR #{payload['source_pr_number']})",
+                    "summary": payload["reason"],
+                    "visibility": "internal",
+                    "status": "published",
+                    "sort_order": 0,
+                    "provenance_json": {"classification": "internal"},
+                }
+            )
+        )
+        assert result["visibility"] == "internal"
 
 
 class TestReleaseWriterRetract:

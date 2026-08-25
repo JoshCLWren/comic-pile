@@ -3,6 +3,16 @@ import { releasesApi, type Release } from '../services/api-releases'
 
 export const RELEASE_PAGE_SIZE = 20
 
+const TICKET_REFERENCE_PATTERN = /(?<![\w&])#\d{1,7}\b/g
+const SCHEMA_IDENTIFIER_PATTERN = /\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/g
+const PHASE_TERMINOLOGY_PATTERN =
+  /\bphases?\s+(?:\d+(?:\.\d+)*|one|two|three|four|five|six|seven|eight|nine|ten)\b/gi
+
+export const UNFINISHED_WORK_PATTERN =
+  /\b(?:incomplete|unfinished|todo|wip|not yet implemented)\b/i
+
+const MIN_DISPLAY_WORDS = 3
+
 type ReleaseDay = {
   key: string
   label: string
@@ -23,13 +33,31 @@ export function releaseDisplayText(text: string) {
   return text
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '$1')
     .replace(/https?:\/\/github\.com\/[^\s)}\u2019"]+/g, '')
-    .replace(/\s{2,}/g, ' ')
     .replace(/`([^`]+)`/g, '$1')
+    .replace(SCHEMA_IDENTIFIER_PATTERN, '')
+    .replace(TICKET_REFERENCE_PATTERN, '')
+    .replace(PHASE_TERMINOLOGY_PATTERN, '')
+    .replace(/\s{2,}/g, ' ')
     .trim()
 }
 
+export function hasUnfinishedWorkMarkers(release: Release): boolean {
+  return UNFINISHED_WORK_PATTERN.test(
+    `${release.category} ${release.title} ${release.summary}`,
+  )
+}
+
+function displayWordCount(release: Release): number {
+  const title = releaseDisplayText(release.title)
+  const summary = releaseDisplayText(release.summary)
+  const extraSummary = summary === title ? '' : summary
+  return `${title} ${extraSummary}`.trim().split(/\s+/).filter(Boolean).length
+}
+
 export function isDisplayableRelease(release: Release): boolean {
-  return releaseDisplayText(release.title).length > 1
+  if (hasUnfinishedWorkMarkers(release)) return false
+  if (releaseDisplayText(release.title).length <= 1) return false
+  return displayWordCount(release) >= MIN_DISPLAY_WORDS
 }
 
 export function sortReleasesNewestFirst(releases: Release[]): Release[] {
