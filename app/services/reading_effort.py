@@ -72,6 +72,7 @@ class EffortEstimate:
     confidence: float | None
 
     def __post_init__(self) -> None:
+        """Validate effort source, band, and confidence values."""
         if self.source not in KNOWN_EFFORT_SOURCES:
             raise ValueError(f"Unknown effort source: {self.source!r}")
         if self.band is not None and self.band not in KNOWN_EFFORT_BANDS:

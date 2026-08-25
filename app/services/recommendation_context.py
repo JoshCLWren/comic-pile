@@ -264,9 +264,10 @@ def candidate_efforts_from_context(
             if isinstance(raw_thread_id, int) and not isinstance(raw_thread_id, bool)
             else None
         )
-        effort_values: dict[str, float | str | None] = {
-            key: None for key in _CANDIDATE_EFFORT_KEYS
-        }
+        effort_values: dict[str, float | str | None] = dict.fromkeys(
+            _CANDIDATE_EFFORT_KEYS,  # type: ignore[arg-type]
+            None,  # type: ignore[arg-type]
+        )
         for key in _CANDIDATE_EFFORT_KEYS:
             value = raw.get(key)
             if isinstance(value, bool):
