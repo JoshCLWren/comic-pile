@@ -16,7 +16,11 @@ from app.models import Event, Snapshot, Thread
 from app.models import Session as SessionModel
 from app.models.user import User
 from app.schemas import ActiveThreadInfo, SessionResponse
-from app.schemas.session import SnoozeCorrectionInfo, SnoozedThreadInfo, build_session_bandwidth_state
+from app.schemas.session import (
+    SnoozeCorrectionInfo,
+    SnoozedThreadInfo,
+    build_session_bandwidth_state,
+)
 from comic_pile.bandwidth_correction import (
     classify_candidate_effort,
     compute_snooze_correction,
@@ -385,7 +389,9 @@ async def snooze_thread(
         thread_id=pending_thread_id,
         die=current_die,
         die_after=new_die,
-        source_roll_event_id=await _find_source_roll_event(db, current_session_id, pending_thread_id),
+        source_roll_event_id=await _find_source_roll_event(
+            db, current_session_id, pending_thread_id
+        ),
     )
     db.add(event)
 

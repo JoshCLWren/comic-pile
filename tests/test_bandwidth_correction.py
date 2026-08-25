@@ -95,19 +95,20 @@ class TestComputeSnoozeCorrection:
         assert result.reason_code == CorrectionReason.HEAVY_SNOOZE_SHIFT
         assert result.suggest_clarification is False
 
-    def test_heavy_snooze_shifts_deep_to_balanced(self) -> None:
-        """Snoozing a deep candidate while in deep mode shifts to balanced."""
+    def test_deep_mode_boundary_keeps_bandwidth_same(self) -> None:
+        """Deep-mode boundary with deep candidate keeps bandwidth, degrades confidence."""
         result = compute_snooze_correction(
             current_bandwidth="deep",
-            current_confidence=0.5,
+            current_confidence=0.7,
             predicted_bandwidth="balanced",
             candidate_effort_level="deep",
             consecutive_snoozes=1,
             last_snooze_direction=None,
         )
-        assert result.bandwidth_changed is True
-        assert result.active_bandwidth == "balanced"
-        assert result.reason_code == CorrectionReason.HEAVY_SNOOZE_SHIFT
+        assert result.bandwidth_changed is False
+        assert result.active_bandwidth == "deep"
+        assert result.active_confidence < 0.7
+        assert result.reason_code == CorrectionReason.CONFIDENCE_DEGRADE
 
     def test_light_snooze_shifts_balanced_to_deep(self) -> None:
         """Snoozing a light candidate while balanced shifts to deep."""
@@ -123,18 +124,19 @@ class TestComputeSnoozeCorrection:
         assert result.active_bandwidth == "deep"
         assert result.reason_code == CorrectionReason.LIGHT_SNOOZE_DEFLATE
 
-    def test_light_snooze_shifts_light_to_balanced(self) -> None:
-        """Snoozing a light candidate while in light mode shifts to balanced."""
+    def test_light_mode_boundary_keeps_bandwidth_same(self) -> None:
+        """Light-mode boundary with light candidate keeps bandwidth, degrades confidence."""
         result = compute_snooze_correction(
             current_bandwidth="light",
-            current_confidence=0.5,
+            current_confidence=0.7,
             predicted_bandwidth="balanced",
             candidate_effort_level="light",
             consecutive_snoozes=1,
             last_snooze_direction=None,
         )
-        assert result.bandwidth_changed is True
-        assert result.active_bandwidth == "balanced"
+        assert result.bandwidth_changed is False
+        assert result.active_bandwidth == "light"
+        assert result.active_confidence < 0.7
         assert result.reason_code == CorrectionReason.LIGHT_SNOOZE_DEFLATE
 
     def test_already_light_cannot_go_lighter(self) -> None:
