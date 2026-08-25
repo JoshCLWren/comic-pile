@@ -56,19 +56,42 @@ def raw_work_demand(policy, issues, prs) -> tuple[int, int]:
     return completion, production
 
 
-def current_demand(controller) -> FleetDemand:
-    """Measure independent work demand against idle configured capacity."""
+def current_demand(controller, *, now_epoch: int | None = None) -> tuple[FleetDemand, dict[str, object]]:
+    """Measure work demand against idle, evidence-backed executable capacity."""
     work_controller = controller.load_controller()
     policy = controller.load_policy()
     issues = work_controller.list_issues()
     prs = work_controller.list_prs()
     completion, production = raw_work_demand(policy, issues, prs)
 
+    now_epoch = int(time.time()) if now_epoch is None else now_epoch
     manifest = Path(__file__).resolve().parents[1] / "free-model-factories.tsv"
-    workers = controller.load_manifest_workers(manifest)
+    candidates = controller.load_manifest_candidates(manifest)
     owned = controller.owned_worker_ids([*issues, *prs])
-    idle = sum(worker not in owned for worker in workers)
-    return FleetDemand(completion=completion, production=production, idle_workers=idle)
+    try:
+        comments = controller.registry_comments()
+        health = controller.latest_worker_health(
+            comments,
+            trusted=policy.comment_is_trusted,
+        )
+    except RuntimeError as exc:
+        print(
+            f"[factory-completion] capacity evidence unavailable; failing closed: {exc}",
+            file=sys.stderr,
+        )
+        health = {}
+    capacity = controller.capacity_report(candidates, health, now_epoch=now_epoch)
+    idle = sum(
+        candidate["worker"] not in owned
+        and controller.worker_is_executable(
+            candidate["worker"],
+            health,
+            now_epoch=now_epoch,
+        )
+        for candidate in candidates
+    )
+    demand = FleetDemand(completion=completion, production=production, idle_workers=idle)
+    return demand, capacity
 
 
 def configure_demand_selection(controller, *, target: int) -> None:
@@ -84,31 +107,25 @@ def configure_demand_selection(controller, *, target: int) -> None:
         health=None,
         now_epoch=None,
     ):
+        del review_backlog
         owned_workers = owned_workers or set()
         health = health or {}
         now_epoch = int(time.time()) if now_epoch is None else now_epoch
 
         healthy: list[str] = []
-        transiently_cooling: list[str] = []
+        degraded: list[str] = []
         for worker in workers:
             if worker in owned_workers:
                 continue
-            status = health.get(worker)
-            if status is not None:
-                outcome, updated = status
-                normalized = (outcome or "").strip().casefold()
-                cooldown = controller.cooldown_seconds(outcome)
-                still_cooling = cooldown > 0 and now_epoch < updated + cooldown
-                if still_cooling and "model missing" in normalized:
-                    continue
-                if still_cooling:
-                    transiently_cooling.append(worker)
-                    continue
-            healthy.append(worker)
+            state = controller.worker_health_state(worker, health, now_epoch=now_epoch)
+            if state == "healthy":
+                healthy.append(worker)
+            elif state == "degraded":
+                degraded.append(worker)
 
         healthy.sort(key=int)
-        transiently_cooling.sort(key=int)
-        return (healthy + transiently_cooling)[:target]
+        degraded.sort(key=int)
+        return (healthy + degraded)[:target]
 
     controller.select_completion_workers = select_workers
 
@@ -124,7 +141,19 @@ def persist_funnel_telemetry(controller, result: dict[str, object]) -> None:
             "## Factory completion funnel",
             f"Completion demand: {result.get('completion_demand', 0)}",
             f"Production demand: {result.get('production_demand', 0)}",
-            f"Idle configured workers: {result.get('idle_workers', 0)}",
+            f"Idle executable workers: {result.get('idle_workers', 0)}",
+            f"Executable capacity: {result.get('executable_capacity', 0)}",
+            "Candidate health: "
+            + json.dumps(result.get("health_counts", {}), sort_keys=True),
+            "Executable models: "
+            + (
+                ", ".join(
+                    f"{item.get('provider')}/{item.get('model')} (Factory {item.get('worker')})"
+                    for item in result.get("executable_candidates", [])
+                    if isinstance(item, dict)
+                )
+                or "none"
+            ),
             f"Completion share: {float(result.get('completion_share', 0.0)):.3f}",
             f"Completion target: {result.get('completion_target', 0)}",
             f"Workers selected: {len(selected)}",
@@ -175,7 +204,7 @@ def persist_funnel_telemetry(controller, result: dict[str, object]) -> None:
 
 def main() -> int:
     controller = load_controller()
-    demand = current_demand(controller)
+    demand, capacity = current_demand(controller)
     target = completion_worker_target(demand)
     configure_demand_selection(controller, target=target)
 
@@ -203,6 +232,7 @@ def main() -> int:
             "idle_workers": demand.idle_workers,
             "completion_share": demand.completion_share,
             "completion_target": target,
+            **capacity,
         }
     )
     persist_funnel_telemetry(controller, result)
