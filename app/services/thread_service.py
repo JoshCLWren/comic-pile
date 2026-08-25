@@ -667,6 +667,7 @@ async def backdate_thread_for_testing(
 
     thread.last_activity_at = datetime.now(UTC) - timedelta(days=days_ago)
     await db.commit()
+    await db.refresh(thread)
     await invalidate_user_view(user_id)
 
     return await thread_to_response(thread, db)
