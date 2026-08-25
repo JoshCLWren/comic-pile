@@ -1,10 +1,24 @@
 """Tests for user preferences API endpoints (issue #1398)."""
 
-import pytest
-from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
+import asyncio
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 
+import pytest
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+)
+
+from app.auth import create_access_token
 from app.constants import DEFAULT_THEME, SUPPORTED_THEMES
+from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, generate_csrf_token
+from app.database import get_db
+from app.main import app
+from app.models import User, UserPreferences
 
 
 @pytest.mark.asyncio
@@ -255,3 +269,72 @@ async def test_patch_empty_body_returns_default(
     assert response.status_code == 200
     data = response.json()
     assert data["theme"] == DEFAULT_THEME
+
+
+@pytest.mark.asyncio
+async def test_concurrent_first_theme_writes_all_succeed(
+    db_engine: AsyncEngine,
+    async_db_committed: AsyncSession,
+) -> None:
+    """Overlapping first-time theme writes must all succeed (issue #1872).
+
+    Rapid theme changes used to race on select-then-insert: two overlapping
+    PATCHes both observed no preference row and one INSERT hit the unique
+    constraint, which the database dependency surfaces to users as a 503
+    while changing themes. The atomic upsert must tolerate interleaved
+    first writes and leave one consistent persisted value behind.
+
+    Args:
+        db_engine: Shared test database engine for per-request sessions.
+        async_db_committed: Session with real commits so per-request sessions
+            can observe the fixture user.
+    """
+    user = User(username="pref_race_user", created_at=datetime.now(UTC))
+    async_db_committed.add(user)
+    await async_db_committed.commit()
+    await async_db_committed.refresh(user)
+
+    token = create_access_token(data={"sub": user.username, "jti": "pref-race"})
+    csrf_token = generate_csrf_token()
+
+    session_maker = async_sessionmaker(bind=db_engine, expire_on_commit=False)
+
+    async def override_get_db() -> AsyncIterator[AsyncSession]:
+        # A fresh session per request so the gathered requests genuinely
+        # interleave against separate connections instead of sharing one
+        # identity map through the standard auth_client override.
+        async with session_maker() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+    themes = ["ink-gold", "command-center", "classic", "command-center"]
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            ac.cookies.set(CSRF_COOKIE_NAME, csrf_token)
+            responses = await asyncio.gather(
+                *[
+                    ac.patch(
+                        "/api/v1/users/me/preferences",
+                        json={"theme": theme},
+                        headers={
+                            "Authorization": f"Bearer {token}",
+                            CSRF_HEADER_NAME: csrf_token,
+                        },
+                    )
+                    for theme in themes
+                ]
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    statuses = [response.status_code for response in responses]
+    assert statuses == [200] * len(themes), (
+        f"Concurrent first-time theme writes failed: {statuses}"
+    )
+    assert [response.json()["theme"] for response in responses] == themes
+
+    result = await async_db_committed.execute(
+        select(UserPreferences.theme).where(UserPreferences.user_id == user.id)
+    )
+    assert result.scalar_one() in themes

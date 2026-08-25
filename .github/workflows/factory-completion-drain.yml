@@ -1,13 +1,14 @@
 name: Factory Completion Drain
 
 on:
-  # Follow every dispatcher tick so completion uses the same reliable heartbeat
-  # that already feeds implementation work.
+  # Recalculate immediately whenever either the dispatcher or an individual
+  # worker finishes. Worker completion is a capacity-change event: a lease may
+  # have been released and the queue may have changed, so reallocate on demand.
   workflow_run:
-    workflows: ["Fixed Model Factory Dispatcher"]
+    workflows: ["Fixed Model Factory Dispatcher", "Fixed Model Factory Entry"]
     types: [completed]
-  # Independent five-minute recovery path. Severe review backlog must not wait
-  # fifteen minutes for another chance if a dispatcher completion event is lost.
+  # Recovery heartbeat only. Normal allocation should be driven by state-change
+  # events above rather than by this clock.
   schedule:
     - cron: '*/5 * * * *'
   workflow_dispatch:
@@ -31,7 +32,7 @@ jobs:
         with:
           ref: main
 
-      - name: Assign full healthy completion fleet
+      - name: Allocate completion capacity from current demand
         id: batch
         shell: bash
         env:
@@ -42,7 +43,9 @@ jobs:
           echo "$result" | jq .
           workers="$(jq -c '[.assignments[].worker]' <<< "$result")"
           echo "workers=$workers" >> "$GITHUB_OUTPUT"
-          echo "backlog=$(jq -r '.backlog' <<< "$result")" >> "$GITHUB_OUTPUT"
+          echo "completion_demand=$(jq -r '.completion_demand' <<< "$result")" >> "$GITHUB_OUTPUT"
+          echo "production_demand=$(jq -r '.production_demand' <<< "$result")" >> "$GITHUB_OUTPUT"
+          echo "completion_target=$(jq -r '.completion_target' <<< "$result")" >> "$GITHUB_OUTPUT"
           echo "assigned=$(jq -r '.assignments | length' <<< "$result")" >> "$GITHUB_OUTPUT"
 
       - name: Dispatch assigned completion workers
@@ -82,14 +85,16 @@ jobs:
           done < <(jq -r '.[]' <<< "$WORKERS")
 
           if (( dispatch_failures > 0 )); then
-            echo "${dispatch_failures} completion worker dispatch(es) failed; healthy workers were still attempted" >&2
+            echo "${dispatch_failures} completion worker dispatch(es) failed; remaining capacity will be recalculated on the next event" >&2
             exit 1
           fi
 
-      - name: Report completion drain result
+      - name: Report demand-driven allocation
         shell: bash
         env:
-          BACKLOG: ${{ steps.batch.outputs.backlog }}
+          COMPLETION: ${{ steps.batch.outputs.completion_demand }}
+          PRODUCTION: ${{ steps.batch.outputs.production_demand }}
+          TARGET: ${{ steps.batch.outputs.completion_target }}
           ASSIGNED: ${{ steps.batch.outputs.assigned }}
         run: |
-          echo "Completion backlog ${BACKLOG:-0}; dispatched ${ASSIGNED:-0} healthy completion workers"
+          echo "Demand completion=${COMPLETION:-0} production=${PRODUCTION:-0}; target=${TARGET:-0}; dispatched=${ASSIGNED:-0}"
