@@ -137,7 +137,7 @@ it('calls every remaining API resource endpoint', async () => {
   await snoozeApi.unsnooze(2)
   await migrationApi.migrateThread(1, { last_issue_read: 2, total_issues: 3 })
   await bugReportsApi.create({ title: 'Bug', description: 'Description', diagnostics: {} })
-  expect(post).toHaveBeenCalledWith('/bug-reports/', { title: 'Bug', description: 'Description', diagnostics: {} })
+  expect(post).toHaveBeenCalledWith('/v1/bug-reports/', { title: 'Bug', description: 'Description', diagnostics: {} })
 })
 
 
