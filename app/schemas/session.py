@@ -113,6 +113,18 @@ class SnoozeCorrectionInfo(BaseModel):
     bandwidth_changed: bool = Field(
         description="Whether the active bandwidth level changed after this snooze",
     )
+    active_bandwidth: str | None = Field(
+        default=None,
+        description="Active bandwidth level after correction: light, balanced, or deep",
+    )
+    active_confidence: float | None = Field(
+        default=None,
+        description="Confidence in the proposed active bandwidth (0.0-1.0)",
+    )
+    predicted_bandwidth: str | None = Field(
+        default=None,
+        description="Original launch prediction bandwidth (unchanged)",
+    )
     reason_code: SnoozeCorrectionReason = Field(
         description=(
             "Compact reason code: heavy_snooze_shift, light_snooze_deflate, "

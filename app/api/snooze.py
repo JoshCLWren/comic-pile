@@ -324,6 +324,9 @@ async def snooze_thread(
     # Extract correction values for response (before correction is applied to session state)
     pre_correction = SnoozeCorrectionInfo(
         bandwidth_changed=correction_result.bandwidth_changed,
+        active_bandwidth=correction_result.active_bandwidth,
+        active_confidence=correction_result.active_confidence,
+        predicted_bandwidth=correction_result.predicted_bandwidth,
         reason_code=correction_result.reason_code,
         suggest_clarification=correction_result.suggest_clarification,
     )
