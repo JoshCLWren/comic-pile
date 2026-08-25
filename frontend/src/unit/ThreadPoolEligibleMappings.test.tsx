@@ -5,7 +5,7 @@ import { ThreadPool } from '../pages/RollPage/components/ThreadPool'
 
 const baseProps = {
   blockedThreads: [],
-  blockingReasonMap: {},
+  blockingDependencyMap: {},
   isRatingView: false,
   isRolling: false,
   rolledResult: null,
@@ -44,9 +44,9 @@ describe('ThreadPool eligible mappings', () => {
     )
 
     expect(screen.getByText('Eligible now · 1')).toBeVisible()
-    expect(screen.getByText('Issue 12')).toBeVisible()
+    expect(screen.getByText('#12')).toBeVisible()
     expect(screen.getByRole('button', {
-      name: /Die face 1: Amazing Adventures, issue 12, routes Secret War/i,
+      name: /Die face 1: Amazing Adventures, issue 12, connected to Secret War\. Open thread actions\./i,
     })).toBeVisible()
     expect(screen.getByRole('button', { name: 'Shuffle queue' })).toHaveAccessibleDescription(
       /complete active queue/i,
@@ -56,7 +56,7 @@ describe('ThreadPool eligible mappings', () => {
     const titleText = dieFace.querySelector('p:nth-of-type(1)')
     const issueText = dieFace.querySelector('p:nth-of-type(2)')
     expect(titleText?.textContent).toBe('Amazing Adventures')
-    expect(issueText?.textContent).toBe('Issue 12')
+    expect(issueText?.textContent).toBe('#12')
     expect(titleText).toHaveClass('font-bold', 'text-sm', 'text-stone-200')
     expect(issueText).toHaveClass('text-xs', 'text-stone-400')
     expect(issueText).not.toHaveClass('font-bold', 'text-sm')
@@ -125,13 +125,13 @@ describe('ThreadPool eligible mappings', () => {
     )
 
     const row = screen.getByRole('button', { name: /Die face 1: Amazing Adventures/i })
-    expect(row).toHaveAccessibleName(/routes Secret War, Civil War/i)
+    expect(row).toHaveAccessibleName(/connected to Secret War, Civil War/i)
 
-    const routeCue = screen.getByText(/Routes: Secret War · Civil War/i)
+    const routeCue = screen.getByText(/Connected to: Secret War · Civil War/i)
     expect(routeCue).toBeVisible()
     const cueText = routeCue.textContent ?? ''
     expect(cueText.toLowerCase()).not.toMatch(/blocked|prerequisite|read .* first|required/i)
-    expect(routeCue.textContent).toContain('Routes:')
+    expect(routeCue.textContent).toContain('Connected to:')
   })
 
   it('keeps thread actions available via a clear row affordance', () => {
@@ -148,7 +148,9 @@ describe('ThreadPool eligible mappings', () => {
 
     const row = screen.getByRole('button', { name: /Die face 1: Amazing Adventures/i })
     expect(row).toHaveAccessibleName(/Open thread actions/i)
-    expect(row.querySelector('[aria-hidden="true"]')).toBeTruthy()
+    // The implementation shows all information visually and uses aria-label for screen
+    // readers; no elements are hidden with aria-hidden="true" as all content is visible.
+    expect(row.querySelector('[aria-hidden="true"]')).toBeNull()
 
     row.click()
     expect(onThreadClick).toHaveBeenCalledWith({ id: 7, title: 'Amazing Adventures', format: 'ongoing', issue_number: '12' })

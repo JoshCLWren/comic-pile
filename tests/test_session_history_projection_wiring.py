@@ -83,7 +83,7 @@ async def test_history_ladder_is_chronological_and_current_die_uses_latest(
     )
     await _commit_all(async_db)
 
-    response = await auth_client.get("/api/sessions/")
+    response = await auth_client.get("/api/v1/sessions/")
     assert response.status_code == 200
     item = next(s for s in response.json()["sessions"] if s["id"] == session.id)
 
@@ -116,7 +116,7 @@ async def test_history_manual_die_overrides_event_derived_die(
     async_db.add(_die_event(session, thread, timestamp=1, die_after=8))
     await _commit_all(async_db)
 
-    response = await auth_client.get("/api/sessions/")
+    response = await auth_client.get("/api/v1/sessions/")
     assert response.status_code == 200
     item = next(s for s in response.json()["sessions"] if s["id"] == session.id)
 
@@ -134,7 +134,7 @@ async def test_history_no_die_events_falls_back_to_start_die(
     async_db.add(session)
     await _commit_all(async_db)
 
-    response = await auth_client.get("/api/sessions/")
+    response = await auth_client.get("/api/v1/sessions/")
     assert response.status_code == 200
     item = next(s for s in response.json()["sessions"] if s["id"] == session.id)
 
@@ -173,7 +173,7 @@ async def test_history_latest_roll_wins_when_multiple_rolls_exist(
     )
     await _commit_all(async_db)
 
-    response = await auth_client.get("/api/sessions/")
+    response = await auth_client.get("/api/v1/sessions/")
     assert response.status_code == 200
     item = next(s for s in response.json()["sessions"] if s["id"] == session.id)
 
@@ -205,7 +205,7 @@ async def test_history_deleted_thread_yields_null_active_thread(
 
     await async_db.delete(thread)
     await _commit_all(async_db)
-    response = await auth_client.get("/api/sessions/")
+    response = await auth_client.get("/api/v1/sessions/")
     assert response.status_code == 200
     item = next(s for s in response.json()["sessions"] if s["id"] == session.id)
 
@@ -255,12 +255,77 @@ async def test_history_event_reads_do_not_grow_per_session(
 
     sa_event.listen(db_engine.sync_engine, "before_cursor_execute", record_statement)
     try:
-        response = await auth_client.get("/api/sessions/?page_size=50")
+        response = await auth_client.get("/api/v1/sessions/?page_size=50")
     finally:
         sa_event.remove(db_engine.sync_engine, "before_cursor_execute", record_statement)
 
     assert response.status_code == 200
     assert len(response.json()["sessions"]) == 5
+
+    event_reads = [s for s in statements if "from events" in s.lower()]
+    assert len(event_reads) == 1, (
+        f"Expected a single events read, got {len(event_reads)}: {event_reads}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_history_rate_metadata_surfaces_with_single_events_read(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    db_engine: AsyncEngine,
+    default_user: User,
+) -> None:
+    """Rating metadata comes from the single events read, including rate events without die_after."""
+    thread = Thread(
+        title="Rated Comic",
+        format="Comic",
+        issues_remaining=10,
+        queue_position=1,
+        user_id=default_user.id,
+    )
+    async_db.add(thread)
+    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    async_db.add(session)
+    await async_db.flush()
+    async_db.add(_roll_event(session, thread, timestamp=1))
+    async_db.add(_die_event(session, thread, timestamp=2, die_after=8))
+    async_db.add(
+        Event(
+            type="rate",
+            session_id=session.id,
+            thread_id=thread.id,
+            rating=4.5,
+            issues_read=2,
+            timestamp=datetime(2026, 8, 2, 12, 0, 3, tzinfo=UTC),
+        )
+    )
+    await _commit_all(async_db)
+
+    statements: list[str] = []
+
+    def record_statement(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        _parameters: object,
+        _context: object,
+        _executemany: bool,
+    ) -> None:
+        statements.append(statement)
+
+    sa_event.listen(db_engine.sync_engine, "before_cursor_execute", record_statement)
+    try:
+        response = await auth_client.get("/api/v1/sessions/")
+    finally:
+        sa_event.remove(db_engine.sync_engine, "before_cursor_execute", record_statement)
+
+    assert response.status_code == 200
+    item = next(s for s in response.json()["sessions"] if s["id"] == session.id)
+
+    assert item["active_thread"] is not None
+    assert item["active_thread"]["issues_read"] == 2
+    assert item["active_thread"]["last_rating"] == 4.5
+    assert item["ladder_path"] == "6 → 8"
 
     event_reads = [s for s in statements if "from events" in s.lower()]
     assert len(event_reads) == 1, (
@@ -283,7 +348,7 @@ async def test_history_pagination_preserves_ordering_and_tokens(
         await async_db.flush()
     await _commit_all(async_db)
 
-    first_page = await auth_client.get("/api/sessions/?page_size=2")
+    first_page = await auth_client.get("/api/v1/sessions/?page_size=2")
     assert first_page.status_code == 200
     first_data = first_page.json()
     first_sessions = first_data["sessions"]
@@ -296,7 +361,7 @@ async def test_history_pagination_preserves_ordering_and_tokens(
     assert next_token is not None
 
     second_page = await auth_client.get(
-        "/api/sessions/", params={"page_size": 2, "page_token": next_token}
+        "/api/v1/sessions/", params={"page_size": 2, "page_token": next_token}
     )
     assert second_page.status_code == 200
     second_data = second_page.json()
@@ -312,7 +377,7 @@ async def test_history_pagination_preserves_ordering_and_tokens(
     )
 
     third_page = await auth_client.get(
-        "/api/sessions/", params={"page_size": 2, "page_token": second_data["next_page_token"]}
+        "/api/v1/sessions/", params={"page_size": 2, "page_token": second_data["next_page_token"]}
     )
     assert third_page.status_code == 200
     third_data = third_page.json()
@@ -345,7 +410,7 @@ async def test_history_duplicate_timestamps_break_ties_by_event_id(
     first.id, second.id = 100, 101
     await _commit_all(async_db)
 
-    response = await auth_client.get("/api/sessions/")
+    response = await auth_client.get("/api/v1/sessions/")
     assert response.status_code == 200
     item = next(s for s in response.json()["sessions"] if s["id"] == session.id)
 
@@ -418,7 +483,7 @@ async def test_history_active_thread_metadata_loads_in_bulk(
 
     sa_event.listen(db_engine.sync_engine, "before_cursor_execute", record_statement)
     try:
-        response = await auth_client.get("/api/sessions/")
+        response = await auth_client.get("/api/v1/sessions/")
     finally:
         sa_event.remove(db_engine.sync_engine, "before_cursor_execute", record_statement)
 
@@ -483,7 +548,7 @@ async def test_history_missing_next_issue_yields_null_issue_metadata(
     async_db.add(_roll_event(session, migrated, timestamp=1))
     await _commit_all(async_db)
 
-    response = await auth_client.get("/api/sessions/")
+    response = await auth_client.get("/api/v1/sessions/")
     assert response.status_code == 200
     item = next(s for s in response.json()["sessions"] if s["id"] == session.id)
 
@@ -550,7 +615,7 @@ async def test_history_issue_reads_stay_bounded_across_page_sizes(
 
     sa_event.listen(db_engine.sync_engine, "before_cursor_execute", record_statement)
     try:
-        response = await auth_client.get("/api/sessions/?page_size=200")
+        response = await auth_client.get("/api/v1/sessions/?page_size=200")
     finally:
         sa_event.remove(db_engine.sync_engine, "before_cursor_execute", record_statement)
 
@@ -601,7 +666,7 @@ async def test_history_migrated_zero_unread_returns_zero_not_stored_counter(
     async_db.add(_roll_event(session, migrated, timestamp=1))
     await _commit_all(async_db)
 
-    response = await auth_client.get("/api/sessions/")
+    response = await auth_client.get("/api/v1/sessions/")
     assert response.status_code == 200
     item = next(s for s in response.json()["sessions"] if s["id"] == session.id)
 
@@ -628,7 +693,7 @@ async def test_current_session_selects_newest_active_candidate(
     async_db.add_all(open_sessions)
     await _commit_all(async_db)
 
-    response = await auth_client.get("/api/sessions/current/")
+    response = await auth_client.get("/api/v1/sessions/current/")
     assert response.status_code == 200
     data = response.json()
     assert data["start_die"] in {6, 8}, "Must select one of the active open sessions"
@@ -667,7 +732,7 @@ async def test_current_session_candidate_read_is_bounded(
 
     sa_event.listen(db_engine.sync_engine, "before_cursor_execute", record_statement)
     try:
-        response = await auth_client.get("/api/sessions/current/")
+        response = await auth_client.get("/api/v1/sessions/current/")
     finally:
         sa_event.remove(db_engine.sync_engine, "before_cursor_execute", record_statement)
 

@@ -75,6 +75,34 @@ class ConfirmIdentityRequest(BaseModel):
     comicvine_issue_id: int = Field(..., description="ComicVine issue ID to confirm")
 
 
+class ImportIssueRequest(BaseModel):
+    """Request to import a ComicVine issue as a new identity-preserving thread.
+
+    The optional reading-order placement is neighbor-anchored: the anchors are
+    the thread IDs of the arc members immediately surrounding the imported
+    issue in story-arc order. Anchors absent from the target order fall back
+    per ``resolve_anchored_position`` rules.
+    """
+
+    title: str = Field(..., min_length=1, max_length=200)
+    comicvine_issue_id: int = Field(..., gt=0, description="ComicVine issue ID to preserve")
+    issue_number: str | None = Field(default=None, max_length=50)
+    reading_order_id: int | None = Field(default=None, gt=0)
+    anchor_before_thread_id: int | None = Field(default=None, gt=0)
+    anchor_after_thread_id: int | None = Field(default=None, gt=0)
+
+
+class ImportIssueResponse(BaseModel):
+    """Result of an identity-preserving ComicVine issue import."""
+
+    thread_id: int
+    issue_id: int
+    external_identity_id: int
+    reading_order_id: int | None = None
+    position: int | None = None
+    total_items: int | None = None
+
+
 class ReplaceIdentityRequest(BaseModel):
     """Request to replace the current confirmed identity with a new one."""
 

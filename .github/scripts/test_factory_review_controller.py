@@ -81,43 +81,57 @@ def test_required_checks_all_passing_passes():
 
 def test_ci_reconciliation_classifies_pending_as_retry():
     controller = load_controller()
-    assert controller.classify_ci_reconciliation(
-        checks_decision="retry", authorized=False
-    ) == "retry-ci"
+    assert (
+        controller.classify_ci_reconciliation(checks_decision="retry", authorized=False)
+        == "retry-ci"
+    )
 
 
 def test_ci_reconciliation_classifies_failed_checks_as_repair():
     controller = load_controller()
-    assert controller.classify_ci_reconciliation(
-        checks_decision="deny", authorized=False
-    ) == "repair-ci"
+    assert (
+        controller.classify_ci_reconciliation(checks_decision="deny", authorized=False)
+        == "repair-ci"
+    )
 
 
 def test_ci_reconciliation_promotes_only_authorized_green_exact_head():
     controller = load_controller()
-    assert controller.classify_ci_reconciliation(
-        checks_decision="pass", authorized=True, mechanical_decision="pass"
-    ) == "ready"
-    assert controller.classify_ci_reconciliation(
-        checks_decision="pass", authorized=False, mechanical_decision="pass"
-    ) == "review"
+    assert (
+        controller.classify_ci_reconciliation(
+            checks_decision="pass", authorized=True, mechanical_decision="pass"
+        )
+        == "ready"
+    )
+    assert (
+        controller.classify_ci_reconciliation(
+            checks_decision="pass", authorized=False, mechanical_decision="pass"
+        )
+        == "review"
+    )
 
 
 def test_ci_reconciliation_rejects_stale_or_missing_authorization():
     controller = load_controller()
-    assert controller.classify_ci_reconciliation(
-        checks_decision="pass", authorized=False
-    ) == "review"
+    assert (
+        controller.classify_ci_reconciliation(checks_decision="pass", authorized=False) == "review"
+    )
 
 
 def test_ci_reconciliation_keeps_repairable_mechanical_failures_executable():
     controller = load_controller()
-    assert controller.classify_ci_reconciliation(
-        checks_decision="pass", authorized=True, mechanical_decision="deny"
-    ) == "changes-requested"
-    assert controller.classify_ci_reconciliation(
-        checks_decision="pass", authorized=True, mechanical_decision="retry"
-    ) == "retry-ci"
+    assert (
+        controller.classify_ci_reconciliation(
+            checks_decision="pass", authorized=True, mechanical_decision="deny"
+        )
+        == "changes-requested"
+    )
+    assert (
+        controller.classify_ci_reconciliation(
+            checks_decision="pass", authorized=True, mechanical_decision="retry"
+        )
+        == "retry-ci"
+    )
 
 
 def test_reconcile_ci_promotes_green_authorized_pr_without_worker(monkeypatch):
@@ -138,13 +152,23 @@ def test_reconcile_ci_promotes_green_authorized_pr_without_worker(monkeypatch):
             ],
         },
     )
-    monkeypatch.setattr(controller, "required_checks_gate", lambda _pr: {"decision": "pass", "reason": "green"})
-    monkeypatch.setattr(controller, "review_comment_bodies", lambda _pr: [
-        controller.review_marker(
-            pr=123, head=head, reviewer="11", producer="10", verdict="approve"
-        )
-    ])
-    monkeypatch.setattr(controller, "mechanical_merge_gate", lambda _pr, _head: {"decision": "pass", "reason": "green"})
+    monkeypatch.setattr(
+        controller, "required_checks_gate", lambda _pr: {"decision": "pass", "reason": "green"}
+    )
+    monkeypatch.setattr(
+        controller,
+        "review_comment_bodies",
+        lambda _pr: [
+            controller.review_marker(
+                pr=123, head=head, reviewer="11", producer="10", verdict="approve"
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        controller,
+        "mechanical_merge_gate",
+        lambda _pr, _head: {"decision": "pass", "reason": "green"},
+    )
     writes = []
     monkeypatch.setattr(controller, "replace_factory_labels", lambda *args: writes.append(args))
 
@@ -168,20 +192,251 @@ def test_reconcile_ci_routes_conflicted_green_pr_to_repair(monkeypatch):
             "labels": [{"name": "factory:ci"}, {"name": "factory:unowned"}],
         },
     )
-    monkeypatch.setattr(controller, "required_checks_gate", lambda _pr: {"decision": "pass", "reason": "green"})
-    monkeypatch.setattr(controller, "review_comment_bodies", lambda _pr: [
-        controller.review_marker(
-            pr=123, head=head, reviewer="11", producer="10", verdict="approve"
-        )
-    ])
-    monkeypatch.setattr(controller, "mechanical_merge_gate", lambda _pr, _head: {"decision": "deny", "reason": "pull request has merge conflicts"})
+    monkeypatch.setattr(
+        controller, "required_checks_gate", lambda _pr: {"decision": "pass", "reason": "green"}
+    )
+    monkeypatch.setattr(
+        controller,
+        "review_comment_bodies",
+        lambda _pr: [
+            controller.review_marker(
+                pr=123, head=head, reviewer="11", producer="10", verdict="approve"
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        controller,
+        "mechanical_merge_gate",
+        lambda _pr, _head: {"decision": "deny", "reason": "pull request has merge conflicts"},
+    )
     writes = []
-    monkeypatch.setattr(controller, "replace_factory_labels", lambda *args: writes.append(args))
+    posted = []
+    events = []
+    monkeypatch.setattr(
+        controller,
+        "post_review_comment",
+        lambda **kwargs: (events.append("comment"), posted.append(kwargs)),
+    )
+    monkeypatch.setattr(
+        controller,
+        "replace_factory_labels",
+        lambda *args: (events.append("transition"), writes.append(args)),
+    )
 
     result = controller.reconcile_ci_pr(123)
 
     assert result["status"] == "changes-requested"
+    assert events == ["comment", "transition"]
+    assert posted[0]["excerpt"] == "pull request has merge conflicts"
+    assert head in posted[0]["note"]
     assert writes == [(123, "factory:unowned", "factory:changes-requested")]
+
+
+def test_reconcile_ci_does_not_transition_when_findings_persistence_fails(monkeypatch):
+    controller = load_controller()
+    head = "d" * 40
+    monkeypatch.setattr(
+        controller,
+        "pr_json",
+        lambda _pr: {
+            "state": "OPEN",
+            "headRefOid": head,
+            "headRefName": "factory/10-123-fix",
+            "body": "Worker: opencode-free-model-factory-10",
+            "labels": [{"name": "factory:ci"}, {"name": "factory:unowned"}],
+        },
+    )
+    monkeypatch.setattr(
+        controller,
+        "required_checks_gate",
+        lambda _pr: {"decision": "pass", "reason": "green"},
+    )
+    monkeypatch.setattr(
+        controller,
+        "review_comment_bodies",
+        lambda _pr: [
+            controller.review_marker(
+                pr=123, head=head, reviewer="11", producer="10", verdict="approve"
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        controller,
+        "mechanical_merge_gate",
+        lambda _pr, _head: {"decision": "deny", "reason": "pull request has merge conflicts"},
+    )
+    writes = []
+    monkeypatch.setattr(controller, "replace_factory_labels", lambda *args: writes.append(args))
+
+    def fail_comment(**_kwargs):
+        raise RuntimeError("GitHub comment write failed")
+
+    monkeypatch.setattr(controller, "post_review_comment", fail_comment)
+
+    with pytest.raises(RuntimeError, match="GitHub comment write failed"):
+        controller.reconcile_ci_pr(123)
+
+    assert writes == []
+
+
+def configure_review_handoff(
+    monkeypatch, controller, *, verdict="approve", reason="pull request has merge conflicts"
+):
+    """Configure an independently leased exact-head review with a mechanical denial."""
+    monkeypatch.setattr(
+        controller,
+        "pr_json",
+        lambda _pr: {
+            "state": "OPEN",
+            "headRefOid": HEAD,
+            "headRefName": "factory/10-123-fix",
+            "body": "Worker: opencode-free-model-factory-10",
+            "labels": [{"name": "factory:review"}, {"name": "factory:11"}],
+        },
+    )
+    monkeypatch.setattr(controller, "target_owned_by_worker", lambda _number, _worker: True)
+    monkeypatch.setattr(
+        controller,
+        "review_excerpt",
+        lambda _path, worker: (
+            "Fix the broken authorization boundary" if verdict == "repair" else ""
+        ),
+    )
+    monkeypatch.setattr(controller, "review_comment_bodies", lambda _pr: [])
+    monkeypatch.setattr(
+        controller,
+        "mechanical_merge_gate",
+        lambda _pr, _head: {"decision": "deny", "reason": reason},
+    )
+    return {
+        "worker": "11",
+        "pr_number": 123,
+        "verdict": verdict,
+        "reviewed_head": HEAD,
+        "review_log": None,
+    }
+
+
+def test_approved_mechanical_failure_persists_findings_before_repair(monkeypatch):
+    controller = load_controller()
+    arguments = configure_review_handoff(monkeypatch, controller)
+    events = []
+    comments = []
+    transitions = []
+    monkeypatch.setattr(
+        controller,
+        "post_review_comment",
+        lambda **kwargs: (events.append(("comment", kwargs["verdict"])), comments.append(kwargs)),
+    )
+    monkeypatch.setattr(
+        controller,
+        "transition_pr_and_linked_issue",
+        lambda **kwargs: (
+            events.append(("transition", kwargs["pr_stage"])),
+            transitions.append(kwargs),
+        ),
+    )
+
+    result = controller.handle_review(**arguments)
+
+    assert result["status"] == "approved-mechanical-failure"
+    assert events == [
+        ("comment", "approve"),
+        ("comment", "repair"),
+        ("transition", "factory:changes-requested"),
+    ]
+    assert comments[1]["excerpt"] == "pull request has merge conflicts"
+    assert transitions[0]["pr_stage"] == "factory:changes-requested"
+
+
+@pytest.mark.parametrize("reason", ["", "   ", "repair required", "FACTORY_GATE_BLOCKED"])
+def test_approved_mechanical_failure_rejects_non_actionable_findings(monkeypatch, reason):
+    controller = load_controller()
+    arguments = configure_review_handoff(monkeypatch, controller, reason=reason)
+    comments = []
+    transitions = []
+    monkeypatch.setattr(controller, "post_review_comment", lambda **kwargs: comments.append(kwargs))
+    monkeypatch.setattr(
+        controller,
+        "transition_pr_and_linked_issue",
+        lambda **kwargs: transitions.append(kwargs),
+    )
+
+    with pytest.raises(
+        RuntimeError, match="repair handoff requires durable actionable review findings"
+    ):
+        controller.handle_review(**arguments)
+
+    assert [comment["verdict"] for comment in comments] == ["approve"]
+    assert transitions == []
+
+
+def test_approved_mechanical_failure_does_not_transition_when_persistence_fails(monkeypatch):
+    controller = load_controller()
+    arguments = configure_review_handoff(monkeypatch, controller)
+    transitions = []
+
+    def persist_approval_only(**kwargs):
+        if kwargs["verdict"] == "repair":
+            raise RuntimeError("GitHub comment write failed")
+
+    monkeypatch.setattr(controller, "post_review_comment", persist_approval_only)
+    monkeypatch.setattr(
+        controller,
+        "transition_pr_and_linked_issue",
+        lambda **kwargs: transitions.append(kwargs),
+    )
+
+    with pytest.raises(RuntimeError, match="GitHub comment write failed"):
+        controller.handle_review(**arguments)
+
+    assert transitions == []
+
+
+def test_semantic_repair_persists_findings_before_repair(monkeypatch):
+    controller = load_controller()
+    arguments = configure_review_handoff(monkeypatch, controller, verdict="repair")
+    events = []
+    monkeypatch.setattr(
+        controller,
+        "post_review_comment",
+        lambda **kwargs: events.append(("comment", kwargs["excerpt"])),
+    )
+    monkeypatch.setattr(
+        controller,
+        "transition_pr_and_linked_issue",
+        lambda **kwargs: events.append(("transition", kwargs["pr_stage"])),
+    )
+
+    result = controller.handle_review(**arguments)
+
+    assert result["status"] == "repair"
+    assert events == [
+        ("comment", "Fix the broken authorization boundary"),
+        ("transition", "factory:changes-requested"),
+    ]
+
+
+def test_semantic_repair_rejects_non_actionable_findings(monkeypatch):
+    controller = load_controller()
+    arguments = configure_review_handoff(monkeypatch, controller, verdict="repair")
+    monkeypatch.setattr(controller, "review_excerpt", lambda _path, worker: "FACTORY_GATE_BLOCKED")
+    comments = []
+    transitions = []
+    monkeypatch.setattr(controller, "post_review_comment", lambda **kwargs: comments.append(kwargs))
+    monkeypatch.setattr(
+        controller,
+        "transition_pr_and_linked_issue",
+        lambda **kwargs: transitions.append(kwargs),
+    )
+
+    with pytest.raises(
+        RuntimeError, match="repair handoff requires durable actionable review findings"
+    ):
+        controller.handle_review(**arguments)
+
+    assert comments == []
+    assert transitions == []
 
 
 def test_reconcile_ci_returns_changed_head_to_review(monkeypatch):
@@ -345,23 +600,23 @@ def test_workflows_delegate_mechanical_gates_to_controller():
     root = SCRIPT_DIR.parent / "workflows"
     for name in ("factory-ready-merge-drain.yml", "fixed-model-factory-dispatch.yml"):
         text = (root / name).read_text()
-        assert 'factory-review-controller.py' in text
-        assert ' gates --pr ' in text
+        assert "factory-review-controller.py" in text
+        assert " gates --pr " in text
         for line_number, line in enumerate(text.splitlines(), 1):
-            if 'gh pr checks' in line and '--help' not in line:
+            if "gh pr checks" in line and "--help" not in line:
                 raise AssertionError(
-                    f'{name} evaluates PR checks inline at line {line_number}; '
-                    'gate evaluation must stay in factory-review-controller.py'
+                    f"{name} evaluates PR checks inline at line {line_number}; "
+                    "gate evaluation must stay in factory-review-controller.py"
                 )
-        assert 'reviewThreads(first:100)' not in text
-        assert '--json state,isDraft,mergeable,headRefOid' not in text
+        assert "reviewThreads(first:100)" not in text
+        assert "--json state,isDraft,mergeable,headRefOid" not in text
 
 
 def test_fixed_model_factory_schedules_are_active():
     root = SCRIPT_DIR.parent / "workflows"
     drain = (root / "factory-ready-merge-drain.yml").read_text()
     dispatcher = (root / "fixed-model-factory-dispatch.yml").read_text()
-    assert "  schedule:\n    - cron: '2-57/5 * * * *'" in drain
-    assert dispatcher.count("    - cron: '") == 12
-    for minute in range(0, 60, 5):
-        assert f"    - cron: '{minute} 0-23 * * *'" in dispatcher
+    assert "    - cron: '2-57/15 * * * *'" in drain
+    assert dispatcher.count("    - cron: '") == 1
+    assert "    - cron: '*/5 * * * *'" in dispatcher
+    assert "gh workflow run factory-ready-merge-drain.yml" in dispatcher

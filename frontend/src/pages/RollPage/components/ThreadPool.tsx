@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import type { BlockingDependency } from '../../../types'
 import type { RollBootstrapThread } from '../../../types/rollBootstrap'
 
 interface ThreadPoolProps {
   pool: RollBootstrapThread[]
   blockedThreads: RollBootstrapThread[]
-  blockingReasonMap: Record<number, string[]>
+  blockingDependencyMap: Record<number, BlockingDependency[]>
   dieSize?: number
   isRatingView: boolean
   isRolling: boolean
@@ -29,7 +30,7 @@ interface ThreadPoolProps {
 export function ThreadPool({
   pool,
   blockedThreads,
-  blockingReasonMap,
+  blockingDependencyMap,
   dieSize,
   isRatingView,
   isRolling,
@@ -146,7 +147,7 @@ export function ThreadPool({
                 }}
                 role="button"
                 tabIndex={0}
-                aria-label={`Die face ${index + 1}: ${thread.title}${thread.issue_number ? `, issue ${thread.issue_number}` : ''}${thread.route_labels?.length ? `, routes ${thread.route_labels.join(', ')}` : ''}. Open thread actions.`}
+                aria-label={`Die face ${index + 1}: ${thread.title}${thread.issue_number ? `, issue ${thread.issue_number}` : ''}${thread.route_labels?.length ? `, connected to ${thread.route_labels.join(', ')}` : ''}. Open thread actions.`}
                 className={`flex items-center gap-3 px-4 py-3 bg-white/5 border border-white/5 rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-amber-500/30' : ''
                   }`}
               >
@@ -156,21 +157,15 @@ export function ThreadPool({
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-stone-200 truncate text-sm">{thread.title}</p>
                   <p className="truncate text-xs text-stone-400">
-                    {thread.issue_number ? `Issue ${thread.issue_number}` : 'Next unread issue'}
+                    {thread.issue_number ? `#${thread.issue_number}` : 'Next unread issue'}
                   </p>
                   <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mt-0.5">{thread.format}</p>
                   {thread.route_labels?.length ? (
                     <p className="mt-1 truncate text-[10px] text-sky-300">
-                      Routes: {thread.route_labels.join(' · ')}
+                      Connected to: {thread.route_labels.join(' · ')}
                     </p>
                   ) : null}
-                  <span aria-hidden="true" className="text-stone-600 group-hover:text-stone-400 transition-colors text-lg leading-none shrink-0">
-                    ⋯
-                  </span>
                 </div>
-                <span aria-hidden="true" className="text-stone-600 group-hover:text-stone-400 transition-colors text-lg leading-none shrink-0">
-                  ⋯
-                </span>
               </div>
             )
           })
@@ -203,8 +198,18 @@ export function ThreadPool({
                   <span className="text-sm">🔒</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-stone-400 truncate">{thread.title}</p>
-                    {blockingReasonMap[thread.id]?.length > 0 && (
-                      <p className="text-[10px] text-stone-500 truncate">{blockingReasonMap[thread.id][0]}</p>
+                    {blockingDependencyMap[thread.id]?.length > 0 && (
+                        <p className="text-[10px] text-stone-500 truncate">
+                          <Link
+                            to={`/thread/${blockingDependencyMap[thread.id][0].thread_id}`}
+                            className="inline-flex min-h-6 items-center hover:text-stone-300 underline decoration-stone-600"
+                            aria-label={`Open ${blockingDependencyMap[thread.id][0].thread_title}`}
+                          >
+                            {blockingDependencyMap[thread.id][0].label}
+                          </Link>
+                          {blockingDependencyMap[thread.id].length > 1 &&
+                            ` +${blockingDependencyMap[thread.id].length - 1} more`}
+                        </p>
                     )}
                   </div>
                 </div>
@@ -256,9 +261,9 @@ export function ThreadPool({
             >
               ▶
             </span>
-<span className="text-[10px] font-black text-stone-400 uppercase tracking-widest cursor-help border-b border-dashed border-stone-600">
-                Snoozed ({snoozedThreads.length})
-              </span>
+            <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest cursor-help border-b border-dashed border-stone-600">
+              Snoozed ({snoozedThreads.length})
+            </span>
           </button>
           {snoozedExpanded && (
             <div className="mt-2 space-y-1">
@@ -272,7 +277,7 @@ export function ThreadPool({
                     type="button"
                     onClick={() => onUnsnooze(thread.id)}
                     disabled={unsnoozeIsPending}
-                    className="px-2 py-1 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-50"
+                    className="inline-flex min-h-7 min-w-7 items-center justify-center px-2 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-50 focus:ring-2 focus:ring-rose-500"
                     title="Unsnooze this comic"
                     aria-label="Unsnooze this comic"
                   >

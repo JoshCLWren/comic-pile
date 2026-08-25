@@ -101,7 +101,7 @@ async def test_delta_undo_preserves_issue_associations_and_die(
     await async_db.refresh(roll_event)
 
     rate_response = await auth_client.post(
-        "/api/rate/",
+        "/api/v1/rate/",
         json={"rating": 5.0, "issues_read": 1},
     )
     assert rate_response.status_code == 200
@@ -113,7 +113,7 @@ async def test_delta_undo_preserves_issue_associations_and_die(
     assert issue_one.status == "read"
 
     undo_response = await auth_client.post(
-        f"/api/undo/{session.id}/undo/{snapshot.id}",
+        f"/api/v1/undo/{session.id}/undo/{snapshot.id}",
     )
     assert undo_response.status_code == 200
     assert undo_response.json()["current_die"] == 6
@@ -183,7 +183,7 @@ async def test_delta_undo_reverses_implicit_issue_migration(
     await async_db.commit()
 
     rate_response = await auth_client.post(
-        "/api/rate/",
+        "/api/v1/rate/",
         json={"rating": 5.0, "issues_read": 1, "issue_number": "1"},
     )
     assert rate_response.status_code == 200
@@ -199,7 +199,7 @@ async def test_delta_undo_reverses_implicit_issue_migration(
     assert issue_count == 3
 
     undo_response = await auth_client.post(
-        f"/api/undo/{session.id}/undo/{snapshot.id}",
+        f"/api/v1/undo/{session.id}/undo/{snapshot.id}",
     )
     assert undo_response.status_code == 200
     assert undo_response.json()["current_die"] == 6
@@ -278,7 +278,7 @@ async def test_delta_snapshot_uses_queue_helper_change_set(
     await async_db.commit()
 
     rate_response = await auth_client.post(
-        "/api/rate/",
+        "/api/v1/rate/",
         json={"rating": 5.0, "issues_read": 1},
     )
     assert rate_response.status_code == 200
@@ -297,7 +297,7 @@ async def test_delta_snapshot_uses_queue_helper_change_set(
     assert [thread.queue_position for thread in threads] == [2, 3, 1]
 
     undo_response = await auth_client.post(
-        f"/api/undo/{session.id}/undo/{snapshot.id}",
+        f"/api/v1/undo/{session.id}/undo/{snapshot.id}",
     )
     assert undo_response.status_code == 200
 
@@ -352,7 +352,7 @@ async def test_delta_undo_restores_finished_session_state(
     await async_db.commit()
 
     rate_response = await auth_client.post(
-        "/api/rate/",
+        "/api/v1/rate/",
         json={"rating": 5.0, "issues_read": 1, "finish_session": True},
     )
     assert rate_response.status_code == 200
@@ -363,7 +363,7 @@ async def test_delta_undo_restores_finished_session_state(
     assert session.ended_at is not None
 
     undo_response = await auth_client.post(
-        f"/api/undo/{session.id}/undo/{snapshot.id}",
+        f"/api/v1/undo/{session.id}/undo/{snapshot.id}",
     )
     assert undo_response.status_code == 200
     await async_db.refresh(session)
@@ -455,7 +455,7 @@ async def test_delta_undo_restores_deterministic_blocked_transition(
     await async_db.commit()
 
     rate_response = await auth_client.post(
-        "/api/rate/",
+        "/api/v1/rate/",
         json={"rating": 5.0, "issues_read": 1},
     )
     assert rate_response.status_code == 200
@@ -469,7 +469,7 @@ async def test_delta_undo_restores_deterministic_blocked_transition(
     assert target_thread.is_blocked is False
 
     undo_response = await auth_client.post(
-        f"/api/undo/{session.id}/undo/{snapshot.id}",
+        f"/api/v1/undo/{session.id}/undo/{snapshot.id}",
     )
     assert undo_response.status_code == 200
     await async_db.refresh(target_thread)

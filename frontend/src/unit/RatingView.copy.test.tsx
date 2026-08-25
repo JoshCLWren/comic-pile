@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
@@ -40,28 +41,30 @@ const callbacks = {
 
 function renderRatingView() {
   render(
-    <RatingView
-      activeRatingThread={{
-        id: 1,
-        title: 'Ultimate X-Men',
-        format: 'Comic',
-        issues_remaining: 4,
-        total_issues: 12,
-        issue_number: '11',
-        next_issue_number: '12',
-      } as never}
-      currentDie={6}
-      rolledResult={2}
-      rating={4}
-      predictedDie={4}
-      errorMessage=""
-      rateIsPending={false}
-      snoozeIsPending={false}
-      dismissIsPending={false}
-      readingOrders={[]}
-      connectedThreads={[]}
-      {...callbacks}
-    />,
+    <MemoryRouter>
+      <RatingView
+        activeRatingThread={{
+          id: 1,
+          title: 'Ultimate X-Men',
+          format: 'Comic',
+          issues_remaining: 4,
+          total_issues: 12,
+          issue_number: '11',
+          next_issue_number: '12',
+        } as never}
+        currentDie={6}
+        rolledResult={2}
+        rating={4}
+        predictedDie={4}
+        errorMessage=""
+        rateIsPending={false}
+        snoozeIsPending={false}
+        dismissIsPending={false}
+        readingOrders={[]}
+        connectedThreads={[]}
+        {...callbacks}
+      />
+    </MemoryRouter>,
   )
 }
 

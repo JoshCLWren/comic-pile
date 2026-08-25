@@ -64,7 +64,7 @@ jobs:
           echo 'publish=true' >> "$GITHUB_OUTPUT"
           cat "$RUNNER_TEMP/runtime-outcome.json"
 
-      - name: Update durable heartbeat marker
+      - name: Update durable attempt-outcome marker
         if: steps.runtime.outputs.publish == 'true'
         shell: bash
         env:
@@ -72,11 +72,14 @@ jobs:
         run: |
           set -Eeuo pipefail
           data="$RUNNER_TEMP/runtime-outcome.json"
-          marker="<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-${WORKER} -->"
+          # Attempt evidence has its own durable record. Runner liveness updates use
+          # factory-heartbeat:v1 and must never overwrite this classified result.
+          marker="<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-${WORKER} -->"
           model="$(jq -r .model "$data")"
           source="$(jq -r .source "$data")"
           minute="$(jq -r .minute "$data")"
           outcome="$(jq -r .outcome "$data")"
+          outcome_class="$(jq -r .outcome_class "$data")"
           detail="$(jq -r .detail "$data")"
           proven="$(jq -r 'if .exact_model_proven then "yes" else "no" end' "$data")"
           persisted="$(jq -r 'if .persisted_work then "yes" else "no" end' "$data")"
@@ -87,8 +90,8 @@ jobs:
             selected="${selected_kind} #${selected_number}"
           fi
           now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nModel: %s\nSource: %s\nSlot: :%02d hourly\nOutcome: %s\nExact OpenCode model proven: %s\nSelected: %s\nPersisted useful work: %s\nDetail: %s\nUpdated: %s\nRun: %s' \
-            "$marker" "$WORKER" "$model" "$source" "$minute" "$outcome" "$proven" "$selected" "$persisted" "$detail" "$now" "$RUN_URL")"
+          body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nModel: %s\nSource: %s\nSlot: :%02d hourly\nOutcome: %s\nAttempt outcome: %s\nExact OpenCode model proven: %s\nSelected: %s\nPersisted useful work: %s\nDetail: %s\nUpdated: %s\nRun: %s' \
+            "$marker" "$WORKER" "$model" "$source" "$minute" "$outcome" "$outcome_class" "$proven" "$selected" "$persisted" "$detail" "$now" "$RUN_URL")"
           comment_id="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
             | jq -r --arg marker "$marker" '[.[] | select(.body | contains($marker)) | .id] | last // empty')"
           if [[ -n "$comment_id" ]]; then

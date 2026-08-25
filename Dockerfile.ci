@@ -24,6 +24,7 @@ RUN apt-get update -qq && \
         jq \
         postgresql-client \
         tar \
+        tzdata \
         ripgrep \
         && \
     apt-get clean && \
