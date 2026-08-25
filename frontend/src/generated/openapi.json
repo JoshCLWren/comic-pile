@@ -3317,6 +3317,14 @@
             "title": "Id",
             "type": "integer"
           },
+          "membership_kind": {
+            "enum": [
+              "issue",
+              "thread"
+            ],
+            "title": "Membership Kind",
+            "type": "string"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -3345,7 +3353,8 @@
         "required": [
           "id",
           "name",
-          "applies_to_current_issue"
+          "applies_to_current_issue",
+          "membership_kind"
         ],
         "title": "ReaderContextCrossover",
         "type": "object"
