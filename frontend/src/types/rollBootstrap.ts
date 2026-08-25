@@ -81,14 +81,17 @@ export type ReadingIntent = 'balanced' | 'momentum' | 'familiar' | 'explore' | '
 
 /**
  * Canonical session reading-mode snapshot returned by Roll bootstrap.
+ * Each dimension (bandwidth/intent) carries its own source and confidence.
  * Raw confidence is metadata for other surfaces and must not render in compact controls.
  */
 export interface SessionModeState {
-  bandwidth: ReadingBandwidth | string | null
-  intent: ReadingIntent | string | null
-  source?: string | null
-  confidence?: number | null
-  version?: string | number | null
+  bandwidth: ReadingBandwidth | string
+  bandwidth_source: 'inferred' | 'manual' | 'snooze' | string
+  bandwidth_confidence: number | null
+  intent: ReadingIntent | string
+  intent_source: 'inferred' | 'manual' | 'snooze' | string
+  intent_confidence: number | null
+  mode_version: number
 }
 
 /** Human-readable label for a bandwidth or intent value; falls back to the raw value. */

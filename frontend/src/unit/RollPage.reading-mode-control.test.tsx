@@ -66,10 +66,10 @@ describe('reading mode label helpers', () => {
 
 describe('ReadingModeControl', () => {
   it.each([
-    [{ bandwidth: 'light', intent: 'momentum' }, 'Light · Momentum'],
-    [{ bandwidth: 'deep', intent: 'explore' }, 'Deep · Explore'],
-    [{ bandwidth: 'balanced', intent: 'balanced' }, 'Balanced · Balanced'],
-    [{ bandwidth: 'light', intent: 'random', source: 'manual', confidence: 0.92 }, 'Light · Random'],
+    [{ bandwidth: 'light', bandwidth_source: 'inferred', bandwidth_confidence: null, intent: 'momentum', intent_source: 'inferred', intent_confidence: null, mode_version: 1 }, 'Light · Momentum'],
+    [{ bandwidth: 'deep', bandwidth_source: 'inferred', bandwidth_confidence: null, intent: 'explore', intent_source: 'inferred', intent_confidence: null, mode_version: 1 }, 'Deep · Explore'],
+    [{ bandwidth: 'balanced', bandwidth_source: 'inferred', bandwidth_confidence: null, intent: 'balanced', intent_source: 'inferred', intent_confidence: null, mode_version: 1 }, 'Balanced · Balanced'],
+    [{ bandwidth: 'light', bandwidth_source: 'manual', bandwidth_confidence: 0.92, intent: 'random', intent_source: 'manual', intent_confidence: 0.92, mode_version: 2 }, 'Light · Random'],
   ] as [SessionModeState, string][])(
     'renders representative mode %j compactly as %s',
     (mode, expected) => {
@@ -86,7 +86,7 @@ describe('ReadingModeControl', () => {
   it('renders nothing for legacy bootstrap responses without session mode state', () => {
     const { container } = render(<ReadingModeControl mode={null} />)
     const empty = render(<ReadingModeControl mode={undefined} />)
-    const noLabels = render(<ReadingModeControl mode={{ bandwidth: null, intent: null }} />)
+    const noLabels = render(<ReadingModeControl mode={{ bandwidth: 'balanced', bandwidth_source: 'inferred', bandwidth_confidence: null, intent: 'balanced', intent_source: 'inferred', intent_confidence: null, mode_version: 1 }} />)
 
     expect(container).toBeEmptyDOMElement()
     expect(empty.container).toBeEmptyDOMElement()
@@ -98,7 +98,7 @@ describe('ReadingModeControl', () => {
     const onOpenSelector = vi.fn()
     render(
       <ReadingModeControl
-        mode={{ bandwidth: 'light', intent: 'momentum', source: 'inferred', confidence: 0.4 }}
+        mode={{ bandwidth: 'light', bandwidth_source: 'inferred', bandwidth_confidence: 0.4, intent: 'momentum', intent_source: 'inferred', intent_confidence: 0.4, mode_version: 1 }}
         onOpenSelector={onOpenSelector}
       />,
     )
@@ -118,7 +118,7 @@ describe('ReadingModeControl', () => {
   })
 
   it('degrades to a static status chip when no selector surface is wired yet', () => {
-    render(<ReadingModeControl mode={{ bandwidth: 'deep', intent: 'familiar' }} />)
+    render(<ReadingModeControl mode={{ bandwidth: 'deep', bandwidth_source: 'inferred', bandwidth_confidence: null, intent: 'familiar', intent_source: 'inferred', intent_confidence: null, mode_version: 1 }} />)
 
     expect(screen.getByTestId('reading-mode-control')).toHaveTextContent('Deep · Familiar')
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
@@ -129,7 +129,12 @@ describe('ReadingModeControl', () => {
       <ReadingModeControl
         mode={{
           bandwidth: 'extraordinarily-specific-inferred-light-bandwidth',
+          bandwidth_source: 'inferred',
+          bandwidth_confidence: null,
           intent: 'exploratory-momentum-adjacent',
+          intent_source: 'inferred',
+          intent_confidence: null,
+          mode_version: 1,
         }}
         onOpenSelector={() => undefined}
       />,
@@ -148,7 +153,7 @@ describe('RollHeader reading-mode control integration', () => {
   it('shows the bootstrap session mode without dominating the header', () => {
     render(
       <RollHeader
-        bootstrap={bootstrapWithMode({ bandwidth: 'light', intent: 'momentum', source: 'manual' })}
+        bootstrap={bootstrapWithMode({ bandwidth: 'light', bandwidth_source: 'manual', bandwidth_confidence: 1.0, intent: 'momentum', intent_source: 'manual', intent_confidence: 1.0, mode_version: 2 })}
         {...headerBaseProps}
       />,
     )
@@ -160,13 +165,13 @@ describe('RollHeader reading-mode control integration', () => {
 
   it('stays synchronized when the bootstrap payload reports a manual mode change', () => {
     const { rerender } = render(
-      <RollHeader bootstrap={bootstrapWithMode({ bandwidth: 'light', intent: 'momentum' })} {...headerBaseProps} />,
+      <RollHeader bootstrap={bootstrapWithMode({ bandwidth: 'light', bandwidth_source: 'inferred', bandwidth_confidence: null, intent: 'momentum', intent_source: 'inferred', intent_confidence: null, mode_version: 1 })} {...headerBaseProps} />,
     )
     expect(screen.getByTestId('reading-mode-control')).toHaveTextContent('Light · Momentum')
 
     rerender(
       <RollHeader
-        bootstrap={bootstrapWithMode({ bandwidth: 'deep', intent: 'random', source: 'manual' })}
+        bootstrap={bootstrapWithMode({ bandwidth: 'deep', bandwidth_source: 'manual', bandwidth_confidence: 1.0, intent: 'random', intent_source: 'manual', intent_confidence: 1.0, mode_version: 2 })}
         {...headerBaseProps}
       />,
     )
@@ -174,7 +179,7 @@ describe('RollHeader reading-mode control integration', () => {
   })
 
   it('omits the control entirely for legacy bootstrap payloads without mode state', () => {
-    render(<RollHeader bootstrap={bootstrapWithMode(undefined)} {...headerBaseProps} />)
+    render(<RollHeader bootstrap={bootstrapWithMode(null)} {...headerBaseProps} />)
 
     expect(screen.queryByTestId('reading-mode-control')).not.toBeInTheDocument()
   })
