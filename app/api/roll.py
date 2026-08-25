@@ -2,6 +2,7 @@
 
 import json
 import logging
+import random
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
@@ -52,6 +53,7 @@ from app.momentum import weighted_momentum_selection
 from app.recommendation_version import (
     get_current_algorithm_version,
     get_current_control_state,
+    is_legacy_mode_enabled,
 )
 
 router = APIRouter(tags=["roll"])
@@ -132,6 +134,13 @@ async def roll_dice(
             intent=selection_intent,
         )
         selected_index = selection.index
+    elif is_legacy_mode_enabled():
+        # Safe legacy rollback: recover unweighted Roll behavior by skipping
+        # contextual momentum weighting entirely. This is a pure uniform draw,
+        # identical to the pre-contextual Roll, and leaves all learned data
+        # untouched. Metrics still distinguish it via algorithm_version /
+        # algorithm_control_state recorded on the event.
+        selected_index = random.randint(0, pool_size - 1)
     else:
         # get_bounded_roll_pool_rows already applied the die cap, so the contextual
         # weighting below cannot draw from outside the active die pool.
