@@ -104,6 +104,7 @@ function buildPayload(name: string, lanes: PlannerLane[], nodeList: PlannerNode[
       ref_id: node.ref_id,
       lane_id: node.lane_id,
       position: node.position,
+      label: node.label ?? null,
     })),
   }
 }
@@ -148,20 +149,22 @@ export default function ContinuityPlannerPage() {
     JSON.stringify(lanes) !== JSON.stringify(savedLanes) ||
     JSON.stringify(nodes) !== JSON.stringify(savedNodes)
 
-  const hydrateLabels = useCallback(async (rawNodes: ContinuityPlanNode[], loadedGroups: DependencyGroup[]) => {
+  const hydrateLabels = useCallback((rawNodes: ContinuityPlanNode[], loadedGroups: DependencyGroup[]): PlannerNode[] => {
     const groupNames = new Map(loadedGroups.map((group) => [group.id, group.name]))
-    return Promise.all(rawNodes.map(async (node): Promise<PlannerNode> => {
+    return rawNodes.map((node): PlannerNode => {
+      const stored = typeof (node as PlannerNode).label === 'string' ? (node as PlannerNode).label.trim() : ''
       if (node.node_type === 'crossover') {
-        return { ...node, label: groupNames.get(node.ref_id) ?? 'Unavailable crossover' }
+        if (stored) return { ...(node as PlannerNode), label: stored }
+        return { ...(node as PlannerNode), label: groupNames.get(node.ref_id) ?? '[deleted crossover]' }
       }
-      try {
-        const issue = await issuesApi.get(node.ref_id)
-        const thread = await threadsApi.get(issue.thread_id)
-        return { ...node, label: `${thread.title} #${issue.issue_number}` }
-      } catch {
-        return { ...node, label: 'Unavailable issue' }
+      if (node.node_type === 'thread') {
+        if (stored) return { ...(node as PlannerNode), label: stored }
+        return { ...(node as PlannerNode), label: '[deleted series]' }
       }
-    }))
+      // issue nodes: prefer persisted denormalized title, no per-issue GETs that 404
+      if (stored) return { ...(node as PlannerNode), label: stored }
+      return { ...(node as PlannerNode), label: '[deleted series]' }
+    })
   }, [])
 
   const orderedLanes = [...lanes].sort((a, b) => a.order - b.order)
@@ -194,10 +197,26 @@ export default function ContinuityPlannerPage() {
           : [{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }]
         ).map((lane) => ({ id: lane.id, name: lane.name, order: lane.order }))
           .sort((a, b) => a.order - b.order)
-        const hydrated = await hydrateLabels(
+        let hydrated = hydrateLabels(
           [...plan.nodes].sort((a, b) => a.position - b.position),
           loadedGroups,
         )
+        // For legacy plans without denormalized titles, batch-hydrate via readiness (one request, no per-issue 404s).
+        const needsBatch = hydrated.some(
+          (node) => node.label === '[deleted series]' || node.label === '[deleted crossover]',
+        )
+        if (needsBatch) {
+          try {
+            const readiness = await continuityPlansApi.readiness(plan.id)
+            const labelMap = new Map(readiness.nodes.map((item) => [item.node_id, item.label] as const))
+            hydrated = hydrated.map((node) => {
+              const batchLabel = labelMap.get(node.id)
+              return batchLabel ? { ...node, label: batchLabel } : node
+            })
+          } catch {
+            // Keep placeholder labels; never issue per-missing-issue GETs.
+          }
+        }
         if (!active) return
         setName(plan.name)
         setLanes(loadedLanes)

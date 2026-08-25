@@ -27,11 +27,23 @@ vi.mock('../routes/routeModules', () => ({
   lazyRoute: vi.fn(),
 }))
 
+const mockPrefetchInfiniteQuery = vi.hoisted(() => {
+  return vi.fn(() => Promise.resolve(undefined))
+})
+
+vi.mock('../query/queryClient', () => ({
+  queryClient: {
+    prefetchInfiniteQuery: mockPrefetchInfiniteQuery,
+  },
+}))
+
 import {
+  prefetchQueueFirstPage,
   prefetchRouteChunk,
   scheduleRoutePrefetch,
   resetRoutePrefetchState,
 } from '../query/routePrefetch'
+import { queueThreadsQueryOptions } from '../hooks/useQueue'
 import { routeModules } from '../routes/routeModules'
 
 const FALLBACK_DELAY_MS = 800
@@ -46,6 +58,7 @@ beforeEach(() => {
   vi.stubGlobal('cancelIdleCallback', undefined)
   resetRoutePrefetchState()
   for (const key of routeLoaderKeys) routeLoaders[key].mockClear()
+  mockPrefetchInfiniteQuery.mockClear()
 })
 
 afterEach(() => {
@@ -132,6 +145,88 @@ describe('scheduleRoutePrefetch scoping', () => {
   })
 })
 
+describe('bounded data prefetching', () => {
+  it('warms the queue first page through the canonical screen contract', () => {
+    scheduleRoutePrefetch('/')
+    flushIdleWork()
+
+    expect(mockPrefetchInfiniteQuery).toHaveBeenCalledTimes(1)
+    expect(mockPrefetchInfiniteQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: queueThreadsQueryOptions().queryKey,
+        queryFn: expect.any(Function),
+        initialPageParam: null,
+        getNextPageParam: expect.any(Function),
+      }),
+    )
+  })
+
+  it('warms the queue first page from a thread detail back-navigation path', () => {
+    scheduleRoutePrefetch('/thread/42')
+    flushIdleWork()
+
+    expect(mockPrefetchInfiniteQuery).toHaveBeenCalledTimes(1)
+    expect(mockPrefetchInfiniteQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: queueThreadsQueryOptions().queryKey,
+        queryFn: expect.any(Function),
+        initialPageParam: null,
+        getNextPageParam: expect.any(Function),
+      }),
+    )
+  })
+
+  it('does not warm data from screens without a cache-backed consumer', () => {
+    for (const path of ['/queue', '/history', '/sessions/9']) {
+      scheduleRoutePrefetch(path)
+      flushIdleWork()
+    }
+
+    expect(mockPrefetchInfiniteQuery).not.toHaveBeenCalled()
+  })
+
+  it('does not warm data from non-retained routes', () => {
+    scheduleRoutePrefetch('/crossovers')
+    flushIdleWork()
+
+    expect(mockPrefetchInfiniteQuery).not.toHaveBeenCalled()
+  })
+
+  it('cancels pending data warm-ups before they flush', () => {
+    const cancel = scheduleRoutePrefetch('/')
+    cancel()
+    flushIdleWork()
+
+    expect(mockPrefetchInfiniteQuery).not.toHaveBeenCalled()
+  })
+
+  it('warms each bounded key at most once per client lifetime', () => {
+    prefetchQueueFirstPage()
+    prefetchQueueFirstPage()
+    scheduleRoutePrefetch('/')
+    flushIdleWork()
+    scheduleRoutePrefetch('/thread/42')
+    flushIdleWork()
+
+    expect(mockPrefetchInfiniteQuery).toHaveBeenCalledTimes(1)
+  })
+
+  it('swallows warm-up failures without surfacing errors and without retrying', async () => {
+    mockPrefetchInfiniteQuery.mockRejectedValueOnce(new Error('warm-up failed'))
+    expect(() => prefetchQueueFirstPage()).not.toThrow()
+    await Promise.resolve()
+    expect(mockPrefetchInfiniteQuery).toHaveBeenCalledTimes(1)
+
+    prefetchQueueFirstPage()
+    expect(mockPrefetchInfiniteQuery).toHaveBeenCalledTimes(1)
+  })
+
+  it('never fetches data before idle work flushes', () => {
+    scheduleRoutePrefetch('/')
+    expect(mockPrefetchInfiniteQuery).not.toHaveBeenCalled()
+  })
+})
+
 describe('scheduleRoutePrefetch cancellation and stale behavior', () => {
   it('cancels pending prefetch work before it flushes', () => {
     const cancel = scheduleRoutePrefetch('/')
@@ -139,6 +234,7 @@ describe('scheduleRoutePrefetch cancellation and stale behavior', () => {
     flushIdleWork()
 
     expect(routeLoaders.queue).not.toHaveBeenCalled()
+    expect(mockPrefetchInfiniteQuery).not.toHaveBeenCalled()
   })
 
   it('does not re-prefetch chunks already warmed by an earlier schedule', () => {

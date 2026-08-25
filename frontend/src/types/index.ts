@@ -80,6 +80,7 @@ export interface ThreadCreatePayload {
   title: string;
   format: string;
   issues_remaining: number;
+  total_issues?: number;
   notes?: string | null;
 }
 
@@ -130,6 +131,8 @@ export interface SessionThread {
   next_issue_id?: number | null;
   next_issue_number?: string | null;
   last_rolled_result?: number | null;
+  issues_read?: number | null;
+  last_rating?: number | null;
 }
 
 export interface SessionCurrent {
@@ -143,6 +146,34 @@ export interface SessionCurrent {
   ladder_path?: string;
   active_thread?: SessionThread | null;
   snoozed_threads?: SessionThread[];
+  reading_bandwidth?: ReadingBandwidth | null;
+  reading_intent?: ReadingIntent | null;
+  reading_mode_source?: ReadingModeSource | null;
+  reading_mode_suggested?: boolean;
+}
+
+export type ReadingBandwidth = 'light' | 'balanced' | 'deep'
+export type ReadingIntent = 'momentum' | 'familiar' | 'explore' | 'random'
+export type ReadingModeSource = 'quiz' | 'manual'
+
+export interface ReadingModeState {
+  bandwidth: ReadingBandwidth | null
+  intent: ReadingIntent | null
+  source: ReadingModeSource | null
+  suggested: boolean
+}
+
+export interface QuizAnswerOption {
+  id: string
+  label: string
+  bandwidth?: ReadingBandwidth | null
+  intent?: ReadingIntent | null
+}
+
+export interface QuizQuestion {
+  id: string
+  prompt: string
+  answers: QuizAnswerOption[]
 }
 
 export interface SessionSummary {
@@ -467,6 +498,8 @@ export interface RollResponse {
   total_issues: number | null;
   /** Reading progress percentage */
   reading_progress: string | null;
+  /** Concise, reader-facing reason for this roll selection (null when none) */
+  explanation?: string | null;
   /** Last rolled result for active thread context (when present) */
   last_rolled_result?: number | null;
 }
@@ -513,7 +546,7 @@ export interface ReaderContextSeries {
   average_rating: number | null
   ratings_count: number
   previous_issue: ReaderContextPreviousIssue | null
-  recent_ratings: ReaderContextRating[]  // max 5
+  recent_ratings: ReaderContextRecentRating[]  // max 5
   highest_rating: number | null
   lowest_rating: number | null
 }
@@ -528,34 +561,31 @@ export interface ReaderContextPreviousIssue {
 }
 
 /**
- * Rating information in series
+ * Recent rating information in series
  */
-export interface ReaderContextRating {
+export interface ReaderContextRecentRating {
   issue_id: number
   issue_number: string
-  rating: number | null
-  timestamp: string  // ISO 8601 timestamp
+  rating: number
 }
 
 /**
  * Crossover information in reader-context response
  */
+export interface ReaderContextNextMember {
+  issue_id: number
+  issue_number: string
+}
+
 export interface ReaderContextCrossover {
   id: number
   name: string
   applies_to_current_issue: boolean
+  membership_kind: 'issue' | 'thread'
   next_member: ReaderContextNextMember | null
   average_rating: number | null
   ratings_count: number
   read_count: number
-}
-
-/**
- * Next member information in crossover
- */
-export interface ReaderContextNextMember {
-  issue_id: number
-  issue_number: string
 }
 
 /**
@@ -573,7 +603,7 @@ export interface ReaderContextLocalIssue {
   issue_id: number
   issue_number: string
   position: number
-  status: 'unread' | 'read'
+  status: string
   relation: 'previous' | 'current' | 'next' | 'future'
   rating: number | null
   crossover_memberships: ReaderContextCrossoverMembership[]  // exact crossover memberships for this issue
@@ -595,9 +625,10 @@ export interface ReaderContextEdge {
   kind: 'dependency' | 'continuity'
   source_issue_id: number
   target_issue_id: number
-  source_issue_number: string
-  target_issue_number: string
-  source_thread_title: string
-  target_thread_title: string
+  source_thread_id: number | null
+  target_thread_id: number | null
+  source_label: string | null
+  target_label: string | null
   note: string | null
+  explanation: string | null
 }

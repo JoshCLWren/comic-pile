@@ -424,6 +424,25 @@ export interface ComicVineStoryArc {
   name: string
   comicvine_url: string | null
   related_issues: ComicVineRelatedIssue[]
+  total_related_count: number | null
+}
+
+export interface ComicVineImportIssuePayload {
+  title: string
+  comicvine_issue_id: number
+  issue_number?: string | null
+  reading_order_id?: number | null
+  anchor_before_thread_id?: number | null
+  anchor_after_thread_id?: number | null
+}
+
+export interface ComicVineImportIssueResult {
+  thread_id: number
+  issue_id: number
+  external_identity_id: number
+  reading_order_id: number | null
+  position: number | null
+  total_items: number | null
 }
 
 export interface ComicVineIssueIntelligence {
@@ -517,6 +536,8 @@ export interface MetadataCorrectionsResponse {
 export const comicVineApi = {
   getIssueIntelligence: (issueId: number) =>
     api.get<ComicVineIssueIntelligence | null>(`/v1/issues/${issueId}/comicvine`),
+  importIssue: (payload: ComicVineImportIssuePayload) =>
+    api.post<ComicVineImportIssueResult, ComicVineImportIssuePayload>('/v1/comicvine/issues:import', payload),
   searchSeries: (query: string, limit = 10) =>
     api.get<ComicVineSeriesSearchResponse>(`/v1/comicvine/search/series`, { params: { q: query, limit } }),
   getSeriesIssues: (volumeId: number, seriesName = '') =>

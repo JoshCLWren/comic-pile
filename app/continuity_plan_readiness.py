@@ -41,6 +41,7 @@ class _PlanNodeRow:
     ref_id: int
     lane_id: str
     position: int
+    fallback_label: str | None = None
 
 
 def plan_rule_marker(plan_id: int) -> str:
@@ -52,19 +53,28 @@ def _node_label(
     node_type: PlanNodeType,
     ref_id: int,
     snapshot: _GraphSnapshot,
+    fallback_label: str | None = None,
 ) -> str:
     """Return a stable human label for a visible plan node."""
     if node_type == "crossover":
         group = snapshot.groups.get(ref_id)
-        return group.name if group is not None else f"Crossover {ref_id}"
+        if group is not None:
+            return group.name
+        if fallback_label:
+            return f"[deleted crossover] {fallback_label}"
+        return "[deleted crossover]"
     if node_type == "thread":
         thread = snapshot.threads.get(ref_id)
         if thread is not None:
             return thread.title
-        return f"Thread {ref_id}"
+        if fallback_label:
+            return f"[deleted series] {fallback_label}"
+        return "[deleted series]"
     issue = snapshot.issues.get(ref_id)
     if issue is None:
-        return f"Issue {ref_id}"
+        if fallback_label:
+            return f"[deleted series] {fallback_label}"
+        return f"[deleted series] #{ref_id}"
     thread = snapshot.threads.get(issue.thread_id)
     if thread is None:
         return f"Issue {issue.issue_number}"
@@ -322,6 +332,8 @@ async def evaluate_plan_readiness(
             ref_id = int(node["ref_id"])
         except (KeyError, TypeError, ValueError):
             ref_id = 0
+        raw_label = node.get("label")
+        fallback = str(raw_label).strip() if isinstance(raw_label, str) and raw_label.strip() else None
         node_rows.append(
             _PlanNodeRow(
                 id=str(node.get("id", "")),
@@ -330,6 +342,7 @@ async def evaluate_plan_readiness(
                 ref_id=ref_id,
                 lane_id=str(node.get("lane_id", "")),
                 position=int(node.get("position", 0)),
+                fallback_label=fallback,
             )
         )
     node_keys = [
@@ -367,7 +380,7 @@ async def evaluate_plan_readiness(
                     ref_id=ref_id,
                     lane_id=row.lane_id,
                     position=row.position,
-                    label=_node_label(node_type, ref_id, snapshot),
+                    label=_node_label(node_type, ref_id, snapshot, row.fallback_label),
                     is_readable=False,
                     is_complete=False,
                     blockers=[],
@@ -410,7 +423,7 @@ async def evaluate_plan_readiness(
                 ref_id=ref_id,
                 lane_id=row.lane_id,
                 position=row.position,
-                label=_node_label(node_type, ref_id, snapshot),
+                label=_node_label(node_type, ref_id, snapshot, row.fallback_label),
                 is_readable=is_readable,
                 is_complete=is_complete,
                 evaluated_issue_id=evaluated_issue_id,

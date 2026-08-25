@@ -10,13 +10,13 @@ from app.models import Session as SessionModel, Thread
 
 @pytest.mark.asyncio
 async def test_create_thread(auth_client: AsyncClient, async_db: AsyncSession) -> None:
-    """Test POST /api/threads/ creates new thread."""
+    """Test POST /api/v1/threads/ creates new thread."""
     thread_data = {
         "title": "Spider-Man",
         "format": "Comic",
         "issues_remaining": 12,
     }
-    response = await auth_client.post("/api/threads/", json=thread_data)
+    response = await auth_client.post("/api/v1/threads/", json=thread_data)
     assert response.status_code == 201
 
     data = response.json()
@@ -38,21 +38,21 @@ async def test_create_thread(auth_client: AsyncClient, async_db: AsyncSession) -
 
 @pytest.mark.asyncio
 async def test_create_thread_validation(auth_client: AsyncClient) -> None:
-    """Test POST /api/threads/ validates input."""
+    """Test POST /api/v1/threads/ validates input."""
     invalid_data = {
         "title": "",
         "format": "Comic",
         "issues_remaining": 12,
     }
-    response = await auth_client.post("/api/threads/", json=invalid_data)
+    response = await auth_client.post("/api/v1/threads/", json=invalid_data)
     assert response.status_code == 422
 
 
 @pytest.mark.asyncio
 async def test_list_threads(auth_client: AsyncClient, sample_data: dict) -> None:
-    """Test GET /api/threads/ returns all threads."""
+    """Test GET /api/v1/threads/ returns all threads."""
     _ = sample_data
-    response = await auth_client.get("/api/threads/")
+    response = await auth_client.get("/api/v1/threads/")
     assert response.status_code == 200
 
     data = response.json()
@@ -68,10 +68,10 @@ async def test_list_threads(auth_client: AsyncClient, sample_data: dict) -> None
 
 @pytest.mark.asyncio
 async def test_list_threads_search(auth_client: AsyncClient, sample_data: dict) -> None:
-    """Test GET /api/threads/?search= filters threads by title."""
+    """Test GET /api/v1/threads/?search= filters threads by title."""
     _ = sample_data
 
-    response = await auth_client.get("/api/threads/", params={"search": "man"})
+    response = await auth_client.get("/api/v1/threads/", params={"search": "man"})
     assert response.status_code == 200
 
     data = response.json()
@@ -83,8 +83,8 @@ async def test_list_threads_search(auth_client: AsyncClient, sample_data: dict) 
 
 @pytest.mark.asyncio
 async def test_list_threads_empty(auth_client: AsyncClient) -> None:
-    """Test GET /api/threads/ with no threads returns empty list."""
-    response = await auth_client.get("/api/threads/")
+    """Test GET /api/v1/threads/ with no threads returns empty list."""
+    response = await auth_client.get("/api/v1/threads/")
     assert response.status_code == 200
     data = response.json()
     assert data == {"threads": [], "next_page_token": None}
@@ -92,9 +92,9 @@ async def test_list_threads_empty(auth_client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_get_thread(auth_client: AsyncClient, sample_data: dict) -> None:
-    """Test GET /api/threads/{id} returns single thread."""
+    """Test GET /api/v1/threads/{id} returns single thread."""
     _ = sample_data
-    response = await auth_client.get("/api/threads/1")
+    response = await auth_client.get("/api/v1/threads/1")
     assert response.status_code == 200
 
     thread = response.json()
@@ -110,8 +110,8 @@ async def test_get_thread(auth_client: AsyncClient, sample_data: dict) -> None:
 
 @pytest.mark.asyncio
 async def test_get_thread_not_found(auth_client: AsyncClient) -> None:
-    """Test GET /api/threads/{id} returns 404 for non-existent thread."""
-    response = await auth_client.get("/api/threads/999")
+    """Test GET /api/v1/threads/{id} returns 404 for non-existent thread."""
+    response = await auth_client.get("/api/v1/threads/999")
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
 
@@ -120,14 +120,14 @@ async def test_get_thread_not_found(auth_client: AsyncClient) -> None:
 async def test_update_thread(
     auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession
 ) -> None:
-    """Test PUT /api/threads/{id} updates thread."""
+    """Test PUT /api/v1/threads/{id} updates thread."""
     _ = sample_data
     update_data = {
         "title": "Superman Updated",
         "format": "Trade Paperback",
         "issues_remaining": 8,
     }
-    response = await auth_client.put("/api/threads/1", json=update_data)
+    response = await auth_client.put("/api/v1/threads/1", json=update_data)
     assert response.status_code == 200
 
     thread = response.json()
@@ -147,12 +147,12 @@ async def test_update_thread(
 
 @pytest.mark.asyncio
 async def test_update_thread_partial(auth_client: AsyncClient, sample_data: dict) -> None:
-    """Test PUT /api/threads/{id} with partial data."""
+    """Test PUT /api/v1/threads/{id} with partial data."""
     _ = sample_data
     update_data = {
         "title": "Batman Updated",
     }
-    response = await auth_client.put("/api/threads/2", json=update_data)
+    response = await auth_client.put("/api/v1/threads/2", json=update_data)
     assert response.status_code == 200
 
     thread = response.json()
@@ -163,11 +163,11 @@ async def test_update_thread_partial(auth_client: AsyncClient, sample_data: dict
 
 @pytest.mark.asyncio
 async def test_update_thread_not_found(auth_client: AsyncClient) -> None:
-    """Test PUT /api/threads/{id} returns 404 for non-existent thread."""
+    """Test PUT /api/v1/threads/{id} returns 404 for non-existent thread."""
     update_data = {
         "title": "Non-existent",
     }
-    response = await auth_client.put("/api/threads/999", json=update_data)
+    response = await auth_client.put("/api/v1/threads/999", json=update_data)
     assert response.status_code == 404
 
 
@@ -175,12 +175,12 @@ async def test_update_thread_not_found(auth_client: AsyncClient) -> None:
 async def test_update_thread_complete_status(
     auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession
 ) -> None:
-    """Test PUT /api/threads/{id} sets completed status when issues_remaining is 0."""
+    """Test PUT /api/v1/threads/{id} sets completed status when issues_remaining is 0."""
     _ = sample_data
     update_data = {
         "issues_remaining": 0,
     }
-    response = await auth_client.put("/api/threads/1", json=update_data)
+    response = await auth_client.put("/api/v1/threads/1", json=update_data)
     assert response.status_code == 200
 
     thread = response.json()
@@ -198,12 +198,12 @@ async def test_update_thread_complete_status(
 async def test_update_thread_active_status(
     auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession
 ) -> None:
-    """Test PUT /api/threads/{id} sets active status when issues_remaining > 0."""
+    """Test PUT /api/v1/threads/{id} sets active status when issues_remaining > 0."""
     _ = sample_data
     update_data = {
         "issues_remaining": 5,
     }
-    response = await auth_client.put("/api/threads/3", json=update_data)
+    response = await auth_client.put("/api/v1/threads/3", json=update_data)
     assert response.status_code == 200
 
     thread = response.json()
@@ -221,9 +221,9 @@ async def test_update_thread_active_status(
 async def test_delete_thread(
     auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession
 ) -> None:
-    """Test DELETE /api/threads/{id} removes thread."""
+    """Test DELETE /api/v1/threads/{id} removes thread."""
     _ = sample_data
-    response = await auth_client.delete("/api/threads/1")
+    response = await auth_client.delete("/api/v1/threads/1")
     assert response.status_code == 204
 
     from app.models import Thread
@@ -231,14 +231,14 @@ async def test_delete_thread(
     db_thread = await async_db.get(Thread, 1)
     assert db_thread is None
 
-    response = await auth_client.get("/api/threads/1")
+    response = await auth_client.get("/api/v1/threads/1")
     assert response.status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_delete_thread_not_found(auth_client: AsyncClient) -> None:
-    """Test DELETE /api/threads/{id} returns 404 for non-existent thread."""
-    response = await auth_client.delete("/api/threads/999")
+    """Test DELETE /api/v1/threads/{id} returns 404 for non-existent thread."""
+    response = await auth_client.delete("/api/v1/threads/999")
     assert response.status_code == 404
 
 
@@ -298,7 +298,7 @@ async def test_delete_thread_cascades_to_events_and_snapshots(
     async_db.add(snapshot)
     await async_db.commit()
 
-    response = await auth_client.delete(f"/api/threads/{thread_id}")
+    response = await auth_client.delete(f"/api/v1/threads/{thread_id}")
     assert response.status_code == 204
 
     db_thread = await async_db.get(Thread, thread_id)
@@ -330,7 +330,7 @@ async def test_get_session_current(
     await async_db.commit()
     await async_db.refresh(session)
 
-    response = await auth_client.get("/api/sessions/current/")
+    response = await auth_client.get("/api/v1/sessions/current/")
     assert response.status_code == 200
 
     session_data = response.json()
@@ -344,13 +344,13 @@ async def test_get_session_current(
 async def test_get_session_current_creates_session(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    """Test GET /api/sessions/current/ creates new session when none exists."""
+    """Test GET /api/v1/sessions/current/ creates new session when none exists."""
     from app.models import Session as SessionModel
 
     initial_count_result = await async_db.execute(select(func.count()).select_from(SessionModel))
     initial_count = initial_count_result.scalar()
 
-    response = await auth_client.get("/api/sessions/current/")
+    response = await auth_client.get("/api/v1/sessions/current/")
     assert response.status_code == 200
 
     session_data = response.json()
@@ -411,7 +411,7 @@ async def test_get_session_current_uses_selected_thread_id(
     async_db.add(event)
     await async_db.commit()
 
-    response = await auth_client.get("/api/sessions/current/")
+    response = await auth_client.get("/api/v1/sessions/current/")
     assert response.status_code == 200
 
     data = response.json()
@@ -483,7 +483,7 @@ async def test_get_session_current_prefers_pending_thread_over_last_roll(
     async_db.add(roll_event)
     await async_db.commit()
 
-    response = await auth_client.get("/api/sessions/current/")
+    response = await auth_client.get("/api/v1/sessions/current/")
     assert response.status_code == 200
 
     data = response.json()
@@ -565,7 +565,7 @@ async def test_get_session_current_returns_no_active_thread_when_pending_is_stal
     async_db.add(roll_event)
     await async_db.commit()
 
-    response = await auth_client.get("/api/sessions/current/")
+    response = await auth_client.get("/api/v1/sessions/current/")
     assert response.status_code == 200
 
     data = response.json()
@@ -578,7 +578,7 @@ async def test_get_session_current_returns_no_active_thread_when_pending_is_stal
 async def test_get_sessions(auth_client: AsyncClient, sample_data: dict) -> None:
     """Test GET /sessions/ lists all sessions."""
     _ = sample_data
-    response = await auth_client.get("/api/sessions/")
+    response = await auth_client.get("/api/v1/sessions/")
     assert response.status_code == 200
 
     data = response.json()
@@ -592,7 +592,7 @@ async def test_get_sessions(auth_client: AsyncClient, sample_data: dict) -> None
 async def test_get_sessions_pagination(auth_client: AsyncClient, sample_data: dict) -> None:
     """Test GET /sessions/ with pagination."""
     _ = sample_data
-    response = await auth_client.get("/api/sessions/?page_size=1")
+    response = await auth_client.get("/api/v1/sessions/?page_size=1")
     assert response.status_code == 200
 
     data = response.json()
@@ -605,7 +605,7 @@ async def test_get_sessions_pagination(auth_client: AsyncClient, sample_data: di
 async def test_get_session(auth_client: AsyncClient, sample_data: dict) -> None:
     """Test GET /sessions/{id} returns single session."""
     _ = sample_data
-    response = await auth_client.get("/api/sessions/1")
+    response = await auth_client.get("/api/v1/sessions/1")
     assert response.status_code == 200
 
     session = response.json()
@@ -618,7 +618,7 @@ async def test_get_session(auth_client: AsyncClient, sample_data: dict) -> None:
 @pytest.mark.asyncio
 async def test_get_session_not_found(auth_client: AsyncClient) -> None:
     """Test GET /sessions/{id} returns 404 for non-existent session."""
-    response = await auth_client.get("/api/sessions/999")
+    response = await auth_client.get("/api/v1/sessions/999")
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
 
@@ -627,7 +627,7 @@ async def test_get_session_not_found(auth_client: AsyncClient) -> None:
 async def test_get_session_details(auth_client: AsyncClient, sample_data: dict) -> None:
     """Test GET /sessions/{id}/details returns events as JSON."""
     _ = sample_data
-    response = await auth_client.get("/api/sessions/1/details")
+    response = await auth_client.get("/api/v1/sessions/1/details")
     assert response.status_code == 200
 
     data = response.json()
@@ -670,11 +670,11 @@ async def test_session_timestamp_consistency(
     await async_db.commit()
     await async_db.refresh(snapshot)
 
-    details_response = await auth_client.get("/api/sessions/1/details")
+    details_response = await auth_client.get("/api/v1/sessions/1/details")
     assert details_response.status_code == 200
     details_data = details_response.json()
 
-    snapshots_response = await auth_client.get("/api/sessions/1/snapshots")
+    snapshots_response = await auth_client.get("/api/v1/sessions/1/snapshots")
     assert snapshots_response.status_code == 200
     snapshots_data = snapshots_response.json()
 
@@ -732,7 +732,7 @@ async def test_session_timestamp_consistency(
 async def test_get_thread_with_notes(
     auth_client: AsyncClient, async_db: AsyncSession, test_username: str
 ) -> None:
-    """Test GET /api/threads/{id} returns thread with notes field."""
+    """Test GET /api/v1/threads/{id} returns thread with notes field."""
     from datetime import UTC, datetime
 
     from app.models import Thread, User
@@ -759,7 +759,7 @@ async def test_get_thread_with_notes(
     await async_db.commit()
     await async_db.refresh(thread)
 
-    response = await auth_client.get(f"/api/threads/{thread.id}")
+    response = await auth_client.get(f"/api/v1/threads/{thread.id}")
     assert response.status_code == 200
 
     thread_data = response.json()
@@ -772,7 +772,7 @@ async def test_get_thread_with_notes(
 async def test_list_threads_includes_notes(
     auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession, test_username: str
 ) -> None:
-    """Test GET /api/threads/ includes notes field in all threads."""
+    """Test GET /api/v1/threads/ includes notes field in all threads."""
     _ = sample_data
     from datetime import UTC, datetime
 
@@ -803,7 +803,7 @@ async def test_list_threads_includes_notes(
     async_db.add_all([thread_with_notes, thread_without_notes])
     await async_db.commit()
 
-    response = await auth_client.get("/api/threads/")
+    response = await auth_client.get("/api/v1/threads/")
     assert response.status_code == 200
 
     data = response.json()
@@ -854,7 +854,7 @@ async def test_delete_thread_clears_pending_thread_id(
 
     assert session.pending_thread_id == thread.id
 
-    response = await auth_client.delete(f"/api/threads/{thread.id}")
+    response = await auth_client.delete(f"/api/v1/threads/{thread.id}")
 
     assert response.status_code == 204
 
@@ -905,7 +905,7 @@ async def test_delete_thread_with_pending_thread_id_does_not_crash(
 
     assert session.pending_thread_id == thread.id
 
-    response = await auth_client.delete(f"/api/threads/{thread.id}")
+    response = await auth_client.delete(f"/api/v1/threads/{thread.id}")
 
     assert response.status_code == 204, (
         f"Expected 204, got {response.status_code}: {response.text if hasattr(response, 'text') else ''}"
@@ -955,7 +955,7 @@ async def test_set_pending_thread_updates_timestamp_and_clears_cache(
 
     old_pending_updated_at = session.pending_thread_updated_at
 
-    response = await auth_client.post(f"/api/threads/{thread.id}/set-pending")
+    response = await auth_client.post(f"/api/v1/threads/{thread.id}/set-pending")
 
     assert response.status_code == 200
     data = response.json()
@@ -995,7 +995,7 @@ async def test_set_pending_thread_rejects_completed_thread(
     await async_db.commit()
     await async_db.refresh(thread)
 
-    response = await auth_client.post(f"/api/threads/{thread.id}/set-pending")
+    response = await auth_client.post(f"/api/v1/threads/{thread.id}/set-pending")
 
     assert response.status_code == 400
     assert "not active" in response.json()["detail"].lower()
@@ -1022,7 +1022,7 @@ async def test_set_pending_thread_rejects_thread_with_no_issues(
     await async_db.commit()
     await async_db.refresh(thread)
 
-    response = await auth_client.post(f"/api/threads/{thread.id}/set-pending")
+    response = await auth_client.post(f"/api/v1/threads/{thread.id}/set-pending")
 
     assert response.status_code == 400
     assert "no issues" in response.json()["detail"].lower()

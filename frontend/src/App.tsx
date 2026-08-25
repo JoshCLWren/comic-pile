@@ -18,6 +18,7 @@ import {
   readStoredThemePreference,
 } from './services/theme'
 import { isDefinitiveAuthenticationFailure } from './services/authFailure'
+import { reconcileStoredThemeWithServer } from './services/themePreferenceSync'
 import type { AuthTokens, AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
 import { usePingHeartbeat } from './hooks/usePingHeartbeat'
@@ -62,7 +63,11 @@ async function fetchAndApplyPersistedTheme(timeout?: number): Promise<void> {
       if (storedTheme === null || theme === storedTheme) {
         applyTheme(theme)
       } else {
+        // The locally stored choice is newer than the server value (a prior
+        // persistence attempt likely failed during an outage, issue #1872).
+        // Keep it rendered and quietly converge the server to it.
         ensureThemeApplied()
+        reconcileStoredThemeWithServer(storedTheme)
       }
     } else {
       // Unknown/stale ids must not strand the tokens; keep any rendered theme

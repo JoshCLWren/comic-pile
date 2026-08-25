@@ -185,7 +185,7 @@ async def test_list_threads_empty_result(
         {
             "type": "http",
             "method": "GET",
-            "path": "/api/threads/",
+            "path": "/api/v1/threads/",
             "headers": [],
             "query_string": b"",
         }
@@ -234,7 +234,7 @@ async def test_list_threads_position_sort(
         {
             "type": "http",
             "method": "GET",
-            "path": "/api/threads/",
+            "path": "/api/v1/threads/",
             "headers": [],
             "query_string": b"",
         }
@@ -279,7 +279,7 @@ async def test_list_threads_title_sort(
         {
             "type": "http",
             "method": "GET",
-            "path": "/api/threads/",
+            "path": "/api/v1/threads/",
             "headers": [],
             "query_string": b"",
         }
@@ -333,7 +333,7 @@ async def test_list_threads_created_sort(
         {
             "type": "http",
             "method": "GET",
-            "path": "/api/threads/",
+            "path": "/api/v1/threads/",
             "headers": [],
             "query_string": b"",
         }
@@ -378,7 +378,7 @@ async def test_list_threads_multi_page_position(
         {
             "type": "http",
             "method": "GET",
-            "path": "/api/threads/",
+            "path": "/api/v1/threads/",
             "headers": [],
             "query_string": b"",
         }
@@ -432,7 +432,7 @@ async def test_list_threads_multi_page_title(
         {
             "type": "http",
             "method": "GET",
-            "path": "/api/threads/",
+            "path": "/api/v1/threads/",
             "headers": [],
             "query_string": b"",
         }
@@ -493,7 +493,7 @@ async def test_list_threads_multi_page_created(
         {
             "type": "http",
             "method": "GET",
-            "path": "/api/threads/",
+            "path": "/api/v1/threads/",
             "headers": [],
             "query_string": b"",
         }
@@ -547,7 +547,7 @@ async def test_list_threads_stale_cursor_rejected_on_sort_change(
         {
             "type": "http",
             "method": "GET",
-            "path": "/api/threads/",
+            "path": "/api/v1/threads/",
             "headers": [],
             "query_string": b"",
         }
@@ -605,7 +605,7 @@ async def test_list_threads_stale_cursor_rejected_on_search_change(
         {
             "type": "http",
             "method": "GET",
-            "path": "/api/threads/",
+            "path": "/api/v1/threads/",
             "headers": [],
             "query_string": b"",
         }
@@ -674,7 +674,7 @@ async def test_list_threads_ownership_isolation(
         {
             "type": "http",
             "method": "GET",
-            "path": "/api/threads/",
+            "path": "/api/v1/threads/",
             "headers": [],
             "query_string": b"",
         }
@@ -733,7 +733,7 @@ async def test_list_threads_duplicate_positions_no_gaps(
         {
             "type": "http",
             "method": "GET",
-            "path": "/api/threads/",
+            "path": "/api/v1/threads/",
             "headers": [],
             "query_string": b"",
         }
@@ -787,7 +787,7 @@ async def test_list_threads_search_filter(
         {
             "type": "http",
             "method": "GET",
-            "path": "/api/threads/",
+            "path": "/api/v1/threads/",
             "headers": [],
             "query_string": b"",
         }
@@ -821,7 +821,7 @@ async def test_list_threads_invalid_sort_param(
         {
             "type": "http",
             "method": "GET",
-            "path": "/api/threads/",
+            "path": "/api/v1/threads/",
             "headers": [],
             "query_string": b"",
         }
@@ -852,7 +852,7 @@ async def test_list_threads_invalid_page_token(
         {
             "type": "http",
             "method": "GET",
-            "path": "/api/threads/",
+            "path": "/api/v1/threads/",
             "headers": [],
             "query_string": b"",
         }
@@ -896,7 +896,7 @@ async def test_list_threads_last_page_has_no_token(
         {
             "type": "http",
             "method": "GET",
-            "path": "/api/threads/",
+            "path": "/api/v1/threads/",
             "headers": [],
             "query_string": b"",
         }
@@ -943,7 +943,7 @@ async def test_list_threads_cursor_values_match_last_row(
         {
             "type": "http",
             "method": "GET",
-            "path": "/api/threads/",
+            "path": "/api/v1/threads/",
             "headers": [],
             "query_string": b"",
         }

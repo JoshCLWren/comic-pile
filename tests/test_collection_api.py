@@ -44,7 +44,7 @@ async def test_thread_list_rejects_retired_collection_id_query(
     auth_client: AsyncClient,
 ) -> None:
     """A retired collection_id query parameter fails closed with 422."""
-    response = await auth_client.get("/api/threads/", params={"collection_id": 4})
+    response = await auth_client.get("/api/v1/threads/", params={"collection_id": 4})
 
     assert response.status_code == 422
     assert response.json() == {"detail": "collection_id is retired"}
@@ -55,6 +55,6 @@ async def test_roll_request_rejects_retired_collection_id_body(
     auth_client: AsyncClient,
 ) -> None:
     """A roll body carrying a retired collection_id fails closed with 422."""
-    response = await auth_client.post("/api/roll/", json={"collection_id": 4})
+    response = await auth_client.post("/api/v1/roll/", json={"collection_id": 4})
 
     assert response.status_code == 422

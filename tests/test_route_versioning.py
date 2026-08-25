@@ -109,6 +109,50 @@ def test_v1_queue_aliases_match_legacy_route_methods() -> None:
         assert canonical_path in methods_by_path
         assert methods_by_path[canonical_path] == methods_by_path[legacy_path]
 
+
+def test_v1_admin_aliases_match_legacy_route_methods() -> None:
+    """Canonical /api/v1/admin aliases reuse the same admin handler contracts."""
+    app = create_app(serve_frontend=False)
+    methods_by_path = _collect_routes(app)
+
+    alias_pairs = (
+        ("/api/admin/import/csv/", "/api/v1/admin/import/csv/"),
+        ("/api/admin/export/csv/", "/api/v1/admin/export/csv/"),
+        ("/api/admin/export/json/", "/api/v1/admin/export/json/"),
+        ("/api/admin/export/summary/", "/api/v1/admin/export/summary/"),
+        ("/api/admin/delete-test-data/", "/api/v1/admin/delete-test-data/"),
+    )
+    for legacy_path, canonical_path in alias_pairs:
+        assert canonical_path in methods_by_path
+        assert methods_by_path[canonical_path] == methods_by_path[legacy_path]
+
+
+def test_v1_bug_reports_alias_matches_legacy_route_methods() -> None:
+    """Canonical /api/v1/bug-reports alias reuses the same handler contract."""
+    app = create_app(serve_frontend=False)
+    methods_by_path = _collect_routes(app)
+
+    assert "/api/v1/bug-reports/" in methods_by_path
+    assert methods_by_path["/api/v1/bug-reports/"] == methods_by_path["/api/bug-reports/"]
+
+
+def test_v1_metrics_alias_matches_legacy_route_methods() -> None:
+    """Canonical /api/v1/metrics alias reuses the same handler contract."""
+    app = create_app(serve_frontend=False)
+    methods_by_path = _collect_routes(app)
+
+    assert "/api/v1/metrics" in methods_by_path
+    assert methods_by_path["/api/v1/metrics"] == methods_by_path["/api/metrics"]
+
+
+def test_v1_debug_alias_matches_legacy_route_methods_outside_production() -> None:
+    """Canonical /api/v1/debug alias reuses the same handler contract (non-prod)."""
+    app = create_app(serve_frontend=False)
+    methods_by_path = _collect_routes(app)
+
+    assert "/api/v1/debug/log" in methods_by_path
+    assert methods_by_path["/api/v1/debug/log"] == methods_by_path["/api/debug/log"]
+
 def test_no_new_bare_api_client_routes() -> None:
     """Regression guard: no client-facing routes under bare /api/* (non-v1)."""
     app = create_app(serve_frontend=False)
@@ -146,6 +190,7 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/roll/clear-manual-die",
             "/api/roll/dismiss-pending",
             "/api/roll/override",
+            "/api/roll/session-mode",
             "/api/roll/set-die",
             "/api/sessions/",
             "/api/sessions/current/",
