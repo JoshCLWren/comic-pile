@@ -7,18 +7,18 @@ selection, and leaves all durable data untouched.
 
 from __future__ import annotations
 
-import os
+from app.config import get_recommendation_settings
 
 # Canonical recommendation algorithm version used when contextual
 # weighting is active.
-CANONICAL_ALGORITHM_VERSION: str = "v1"
+CANONICAL_ALGORITHM_VERSION: str = "v1-contextual"
 
 # Legacy identifier used when the kill switch forces unweighted selection.
 LEGACY_ALGORITHM_VERSION: str = "legacy"
 
 # Control-state labels used in event metrics and decision snapshots.
-ALGORITHM_CONTROL_STATE_WEIGHTED: str = "weighted"
-ALGORITHM_CONTROL_STATE_LEGACY_UNWEIGHTED: str = "unweighted_legacy"
+ALGORITHM_CONTROL_STATE_WEIGHTED: str = "contextual"
+ALGORITHM_CONTROL_STATE_LEGACY_UNWEIGHTED: str = "legacy"
 
 
 def is_legacy_mode_enabled() -> bool:
@@ -30,11 +30,8 @@ def is_legacy_mode_enabled() -> bool:
     ``ALGORITHM_CONTROL_STATE_LEGACY_UNWEIGHTED`` in the roll event so
     metrics remain distinguishable.
     """
-    return os.getenv("RECOMMENDATION_USE_LEGACY_UNWEIGHTED", "").lower() in (
-        "1",
-        "true",
-        "yes",
-    )
+    recommendation_settings = get_recommendation_settings()
+    return recommendation_settings.control_mode == "legacy"
 
 
 def get_current_algorithm_version() -> str:

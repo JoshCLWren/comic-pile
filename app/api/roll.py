@@ -32,6 +32,11 @@ from app.schemas.session import build_session_bandwidth_state
 from comic_pile.queue import get_roll_pool_rows
 from comic_pile.session import get_current_die_for_session, get_or_create
 from app.momentum import weighted_momentum_selection
+from app.recommendation_version import (
+    get_current_algorithm_version,
+    get_current_control_state,
+    is_legacy_mode_enabled,
+)
 
 router = APIRouter(tags=["roll"])
 
@@ -94,20 +99,32 @@ async def roll_dice(
     # Bound the selection to the current die size, matching original semantics.
     bounded_rows = rows[:current_die]
 
+    # Determine algorithm version and control state for this roll.
+    algorithm_version = get_current_algorithm_version()
+    algorithm_control_state = get_current_control_state()
+
     # Apply momentum weighting; weights fall back to uniform (pure-random)
     # when no positive momentum applies, preserving the pure-random bypass.
-    session_events_result = await db.execute(
-        select(Event).where(Event.session_id == current_session_id)
-    )
-    session_events = list(session_events_result.scalars().all())
+    # Legacy mode forces pure-random selection regardless of momentum.
+    if is_legacy_mode_enabled():
+        import random
 
-    selected_index, max_bonus = await weighted_momentum_selection(
-        db=db,
-        bounded_rows=bounded_rows,
-        user_id=user_id,
-        session_events=session_events,
-        now=datetime.now(UTC),
-    )
+        selected_index = random.randint(0, len(bounded_rows) - 1)
+        max_bonus = 0.0
+        session_events = []
+    else:
+        session_events_result = await db.execute(
+            select(Event).where(Event.session_id == current_session_id)
+        )
+        session_events = list(session_events_result.scalars().all())
+
+        selected_index, max_bonus = await weighted_momentum_selection(
+            db=db,
+            bounded_rows=bounded_rows,
+            user_id=user_id,
+            session_events=session_events,
+            now=datetime.now(UTC),
+        )
     selected_thread, unread_count, issue_number = bounded_rows[selected_index]
 
     selected_thread_id = selected_thread.id
@@ -143,6 +160,9 @@ async def roll_dice(
         die=current_die,
         result=selected_index + 1,
         selection_method="momentum" if max_bonus > 0 else "random",
+        recommendation_reason_codes=["momentum_weighted"] if max_bonus > 0 else ["pure_random"],
+        algorithm_version=algorithm_version,
+        algorithm_control_state=algorithm_control_state,
         issue_id=selected_thread_issue_id,
         issue_number=selected_thread_issue_number,
     )
@@ -277,6 +297,9 @@ async def override_roll(
             detail=f"Thread {override_thread_id} is snoozed. Please unsnooze it first before overriding.",
         )
 
+    algorithm_version = get_current_algorithm_version()
+    algorithm_control_state = get_current_control_state()
+
     event = Event(
         type="roll",
         session_id=current_session_id,
@@ -284,6 +307,9 @@ async def override_roll(
         die=current_die,
         result=0,
         selection_method="override",
+        recommendation_reason_codes=[],
+        algorithm_version=algorithm_version,
+        algorithm_control_state=algorithm_control_state,
         issue_id=override_thread_issue_id,
         issue_number=override_thread_issue_number,
     )

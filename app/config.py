@@ -254,15 +254,23 @@ class GitHubSettings(BaseSettings):
         )
 
 
-class RecommendationVersionSettings(BaseSettings):
-    """Recommendation algorithm version and rollback settings."""
+class RecommendationSettings(BaseSettings):
+    """Recommendation-quality diagnostics and algorithm versioning settings."""
 
     model_config = SettingsConfigDict(env_file=[".env.test", ".env", ".envrc"], extra="ignore")
 
-    recommendation_use_legacy_unweighted: bool = Field(
-        default=False,
-        description="Force legacy unweighted roll selection (kill switch); does not destroy learned data",
-        json_schema_extra={"env": "RECOMMENDATION_USE_LEGACY_UNWEIGHTED"},
+    algorithm_version: str = Field(
+        default="v1-contextual",
+        description="Canonical recommendation algorithm version identifier used in diagnostics",
+        json_schema_extra={"env": "RECOMMENDATION_ALGORITHM_VERSION"},
+    )
+    control_mode: Literal["contextual", "legacy"] = Field(
+        default="contextual",
+        description=(
+            "Active recommendation control mode. 'legacy' forces unweighted selection "
+            "while leaving instrumentation active."
+        ),
+        json_schema_extra={"env": "RECOMMENDATION_CONTROL_MODE"},
     )
 
 
@@ -358,9 +366,9 @@ class Settings(BaseSettings):
         return get_redis_settings()
 
     @property
-    def recommendation_version(self) -> RecommendationVersionSettings:
-        """Get recommendation version settings."""
-        return get_recommendation_version_settings()
+    def recommendation(self) -> RecommendationSettings:
+        """Get recommendation settings."""
+        return get_recommendation_settings()
 
 
 @lru_cache
@@ -406,9 +414,9 @@ def get_redis_settings() -> RedisSettings:
 
 
 @lru_cache
-def get_recommendation_version_settings() -> RecommendationVersionSettings:
-    """Get cached recommendation version settings instance."""
-    return RecommendationVersionSettings()
+def get_recommendation_settings() -> RecommendationSettings:
+    """Get cached recommendation settings instance."""
+    return RecommendationSettings()
 
 
 @lru_cache
@@ -426,5 +434,5 @@ def clear_settings_cache() -> None:
     get_rating_settings.cache_clear()
     get_github_settings.cache_clear()
     get_redis_settings.cache_clear()
-    get_recommendation_version_settings.cache_clear()
+    get_recommendation_settings.cache_clear()
     get_settings.cache_clear()
