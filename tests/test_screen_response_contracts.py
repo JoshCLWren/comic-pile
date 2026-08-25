@@ -89,6 +89,7 @@ ROLL_FIELDS = {
     "next_issue_number",
     "total_issues",
     "reading_progress",
+    "explanation",
 }
 
 
@@ -230,9 +231,9 @@ def test_blocked_summary_contract_is_exact_and_named() -> None:
 
 
 def test_roll_screen_contract_is_exact_and_named() -> None:
-    """The Roll screen response exposes exactly the documented 15-field contract."""
+    """The Roll screen response exposes exactly the documented 16-field contract."""
     assert set(RollResponse.model_fields) == ROLL_FIELDS
-    assert len(RollResponse.model_fields) == 15
+    assert len(RollResponse.model_fields) == 16
 
 
 def test_current_session_contract_is_exact_and_named() -> None:
