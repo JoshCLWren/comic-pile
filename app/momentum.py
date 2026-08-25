@@ -138,23 +138,8 @@ async def weighted_momentum_selection(
     user_id: int,
     session_events: list[Event] | None = None,
     now: datetime | None = None,
-    bandwidth_weights: list[float] | None = None,
 ) -> tuple[int, float]:
     """Select an index from bounded_rows using momentum-weighted random choice.
-
-    When ``bandwidth_weights`` is supplied (one positive weight per pool row,
-    e.g. from ``app.services.bandwidth_roll_weighting``), each momentum
-    weight is multiplied by its bandwidth weight so the reader-bandwidth axis
-    biases the same pool without ever excluding a candidate. A neutral
-    bandwidth weight (1.0) leaves the momentum result untouched.
-
-    Args:
-        db: SQLAlchemy async session (reserved for future per-thread queries).
-        bounded_rows: Candidate pool already bounded to the current die size.
-        user_id: Authenticated user id (reserved for future per-user queries).
-        session_events: Recent session events for streak/depth context.
-        now: Reference timestamp; defaults to current UTC time.
-        bandwidth_weights: Optional per-candidate bandwidth multiplier weights.
 
     Returns:
         A tuple of (selected_index, applied_max_bonus) where selected_index
@@ -186,12 +171,6 @@ async def weighted_momentum_selection(
 
     # Weights are 1.0 + bonus, so a zero bonus equals pure-random weight.
     weights = [1.0 + b for b in bonuses]
-
-    # Apply the reader-bandwidth axis multiplicatively when provided.
-    if bandwidth_weights is not None:
-        if len(bandwidth_weights) != len(weights):
-            raise ValueError("bandwidth_weights length must match bounded_rows")
-        weights = [w * bw for w, bw in zip(weights, bandwidth_weights, strict=False)]
 
     # Weighted random selection using cumulative weights.
     total_weight = sum(weights)

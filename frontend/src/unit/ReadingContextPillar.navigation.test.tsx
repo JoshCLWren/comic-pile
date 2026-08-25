@@ -1,6 +1,6 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ReadingContextPillar } from '../pages/RollPage/components/ReadingContextPillar'
 import { issuesApi } from '../services/api-issues'
 import type { ReaderContextResponse } from '../types'
@@ -30,6 +30,10 @@ vi.mock('../pages/RollPage/components/ReadingRouteExplanation', () => ({
 }))
 
 const getReaderContextMock = issuesApi.getReaderContext as ReturnType<typeof vi.fn>
+
+beforeEach(() => {
+  navigateSpy.mockClear()
+})
 
 const activeRatingThread = {
   id: 42,
@@ -137,20 +141,67 @@ function renderPillar() {
   )
 }
 
-describe('ReadingContextPillar navigation (issue #1670)', () => {
-  it('navigates to the thread when a series-chain node is clicked or keyed', async () => {
+describe('ReadingContextPillar navigation (issue #1877)', () => {
+  it('opens the selected chain node’s own context instead of navigating to the active thread', async () => {
     getReaderContextMock.mockResolvedValue(buildContext())
     renderPillar()
 
-    const node = await screen.findByRole('listitem', { name: /open saga issue 5/i })
-    await userEvent.setup().click(node)
-    expect(navigateSpy).toHaveBeenCalledWith('/thread/42')
+    const previousNode = await screen.findByRole('button', { name: 'Show context for Ultimate Black Panther issue 3' })
+    await userEvent.setup().click(previousNode)
 
-    fireEvent.keyDown(node, { key: 'Enter' })
-    expect(navigateSpy).toHaveBeenLastCalledWith('/thread/42')
+    expect(previousNode).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('Issue 3 · Already read · Your rating: ★★★½')).toBeVisible()
+    expect(navigateSpy).not.toHaveBeenCalled()
   })
 
-  it('links each crossover name in the crossover panel to the crossovers page', async () => {
+  it('produces different contexts when different chain nodes are selected', async () => {
+    getReaderContextMock.mockResolvedValue(buildContext())
+    renderPillar()
+
+    const previousNode = await screen.findByRole('button', { name: 'Show context for Ultimate Black Panther issue 3' })
+    const currentNode = screen.getByRole('button', { name: 'Show context for Ultimate Black Panther issue 5' })
+
+    await userEvent.setup().click(previousNode)
+    const previousPanel = screen.getByLabelText('Context for Ultimate Black Panther issue 3')
+    expect(within(previousPanel).getByText('Earlier in Ultimate Black Panther')).toBeVisible()
+
+    await userEvent.setup().click(currentNode)
+    expect(screen.queryByLabelText('Context for Ultimate Black Panther issue 3')).not.toBeInTheDocument()
+    const currentPanel = screen.getByLabelText('Context for Ultimate Black Panther issue 5')
+    expect(within(currentPanel).getByText('Issue 5 · Not read yet')).toBeVisible()
+    expect(within(currentPanel).getByRole('button', { name: 'Open Saga thread' })).toBeVisible()
+  })
+
+  it('exposes the active-thread surface from the current node’s own context', async () => {
+    getReaderContextMock.mockResolvedValue(buildContext())
+    renderPillar()
+
+    const currentNode = await screen.findByRole('button', { name: 'Show context for Ultimate Black Panther issue 5' })
+    await userEvent.setup().click(currentNode)
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Open Saga thread' }))
+    expect(navigateSpy).toHaveBeenCalledTimes(1)
+    expect(navigateSpy).toHaveBeenCalledWith('/thread/42')
+  })
+
+  it('activates chain nodes consistently by pointer, Enter, and Space', async () => {
+    const user = userEvent.setup()
+    getReaderContextMock.mockResolvedValue(buildContext())
+    renderPillar()
+
+    const node = await screen.findByRole('button', { name: 'Show context for Ultimate Black Panther issue 3' })
+    await user.click(node)
+    expect(node).toHaveAttribute('aria-expanded', 'true')
+
+    await user.keyboard('{Enter}')
+    expect(node).toHaveAttribute('aria-expanded', 'false')
+
+    await user.keyboard(' ')
+    expect(node).toHaveAttribute('aria-expanded', 'true')
+    expect(navigateSpy).not.toHaveBeenCalled()
+  })
+
+  it('links every crossover chip to its specific deep-linked destination, not the generic page', async () => {
     getReaderContextMock.mockResolvedValue(
       buildContext({
         local_chain: {
@@ -174,10 +225,24 @@ describe('ReadingContextPillar navigation (issue #1670)', () => {
 
     await screen.findByText('Exact Crossover Context')
     await userEvent.setup().click(screen.getByRole('button', { name: 'Open crossover Animal Man' }))
-    expect(navigateSpy).toHaveBeenLastCalledWith('/crossovers')
+    expect(navigateSpy).toHaveBeenLastCalledWith('/crossovers?group=9')
 
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Open crossover Ultimate Universe Reading Order' }))
-    expect(navigateSpy).toHaveBeenLastCalledWith('/crossovers')
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Open Ultimate Universe Reading Order crossover' }))
+    expect(navigateSpy).toHaveBeenLastCalledWith('/crossovers?group=7')
+
+    expect(navigateSpy).not.toHaveBeenCalledWith('/crossovers')
+  })
+
+  it('carries starts-at context when opening an upcoming crossover', async () => {
+    getReaderContextMock.mockResolvedValue(buildContext())
+    renderPillar()
+
+    const upcoming = await screen.findByRole('button', {
+      name: 'Open crossover Ultimate Universe Reading Order, starts at issue 14',
+    })
+    await userEvent.setup().click(upcoming)
+    expect(navigateSpy).toHaveBeenLastCalledWith('/crossovers?group=7&starts_at=14')
+    expect(screen.getByText(/starts at #14/)).toBeVisible()
   })
 
   it('states where an upcoming crossover begins instead of a bare placeholder', async () => {
@@ -204,13 +269,13 @@ describe('ReadingContextPillar navigation (issue #1670)', () => {
     expect(screen.getByText('Saga #3 must be read before Saga #5')).toBeVisible()
   })
 
-  it('links the membership chips above the series strip to the crossovers page', async () => {
+  it('links the membership chips above the series strip to their specific crossovers', async () => {
     getReaderContextMock.mockResolvedValue(buildContext())
     renderPillar()
 
     const chip = await screen.findByRole('button', { name: 'Open Ultimate Universe Reading Order crossover' })
     await userEvent.setup().click(chip)
-    expect(navigateSpy).toHaveBeenLastCalledWith('/crossovers')
+    expect(navigateSpy).toHaveBeenLastCalledWith('/crossovers?group=7')
   })
 
   it('labels incoming dependency edges "Blocked by:" without counts', async () => {
