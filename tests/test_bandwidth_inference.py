@@ -604,7 +604,7 @@ class TestRollBootstrapSchemaBandwidth:
             active_bandwidth="light",
             bandwidth_confidence=0.8,
             bandwidth_source="inferred",
-            bandwidth_version=1,
+            bandwidth_version=BANDWIDTH_VERSION,
         )
 
         data = response.model_dump()
@@ -612,7 +612,7 @@ class TestRollBootstrapSchemaBandwidth:
         assert data["active_bandwidth"] == "light"
         assert data["bandwidth_confidence"] == 0.8
         assert data["bandwidth_source"] == "inferred"
-        assert data["bandwidth_version"] == 1
+        assert data["bandwidth_version"] == BANDWIDTH_VERSION
 
     def test_schema_defaults_bandwidth_to_none(self) -> None:
         """Schema defaults bandwidth fields to None when not provided."""

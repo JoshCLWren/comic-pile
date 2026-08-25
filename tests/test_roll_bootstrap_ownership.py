@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from app.api import roll as roll_api
 from app.models import DependencyGroup, DependencyGroupMembership, Issue, Thread
 from app.schemas import RollBootstrapResponse, RollBootstrapThread
+from app.services.bandwidth import BANDWIDTH_VERSION
 from tests.conftest import get_or_create_user_async
 
 
@@ -47,7 +48,7 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
         active_bandwidth="balanced",
         bandwidth_confidence=0.0,
         bandwidth_source="inferred",
-        bandwidth_version=1,
+        bandwidth_version=BANDWIDTH_VERSION,
     )
     current_user = SimpleNamespace(id=7)
     owned_snoozed = SimpleNamespace(id=101, title="Owned", format="ongoing")
@@ -110,7 +111,7 @@ async def test_bootstrap_roll_pool_is_never_paginated_below_current_die(monkeypa
         active_bandwidth="balanced",
         bandwidth_confidence=0.0,
         bandwidth_source="inferred",
-        bandwidth_version=1,
+        bandwidth_version=BANDWIDTH_VERSION,
     )
     current_user = SimpleNamespace(id=7)
     pool_rows = [
