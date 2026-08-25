@@ -556,7 +556,11 @@ jobs:
           # log classifier may later replace unknown_failure with a more specific
           # outcome, but capacity never waits on a chained workflow-run event.
           attempt_marker="<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-${WORKER} -->"
-          if [[ "$CONFIGURED" == true && "$JOB_STATUS" == success ]]; then
+          worker_status="$(cat "$WORKER_STATUS_FILE" 2>/dev/null || true)"
+          if [[ "$worker_status" == 2 || "$worker_status" == 3 ]]; then
+            attempt_outcome='control_plane_failure'
+            attempt_detail="factory controller assignment failed with exit status ${worker_status}"
+          elif [[ "$CONFIGURED" == true && "$JOB_STATUS" == success ]]; then
             attempt_outcome='success'
             attempt_detail='factory job completed successfully'
           elif [[ "$CONFIGURED" != true ]]; then
