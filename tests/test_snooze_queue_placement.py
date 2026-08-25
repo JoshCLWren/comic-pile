@@ -176,14 +176,14 @@ async def test_high_affinity_thread_returns_with_position_after_session_expiry(
     )
     await async_db.commit()
 
-    snooze_response = await auth_client.post("/api/snooze/")
+    snooze_response = await auth_client.post("/api/v1/snooze/")
     assert snooze_response.status_code == 200
     assert target.id in snooze_response.json()["snoozed_thread_ids"]
 
     # The snoozed thread is excluded for the rest of the active session:
     # overriding it explicitly is rejected while the snooze state lives.
     override_while_snoozed = await auth_client.post(
-        "/api/roll/override", json={"thread_id": target.id}
+        "/api/v1/roll/override", json={"thread_id": target.id}
     )
     assert override_while_snoozed.status_code == 400
     assert "is snoozed" in override_while_snoozed.json()["detail"]
@@ -199,7 +199,7 @@ async def test_high_affinity_thread_returns_with_position_after_session_expiry(
     # A fresh session has no snoozed threads, so the same thread is selectable
     # again and reports its untouched durable queue position.
     override_after_expiry = await auth_client.post(
-        "/api/roll/override", json={"thread_id": target.id}
+        "/api/v1/roll/override", json={"thread_id": target.id}
     )
     assert override_after_expiry.status_code == 200
     override_data = override_after_expiry.json()
@@ -221,7 +221,7 @@ async def test_rating_still_moves_queue_while_snooze_does_not(
     user_id, threads = await _create_pending_snooze_session(async_db, thread_count=3)
     snoozed_thread = threads[0]
 
-    snooze_response = await auth_client.post("/api/snooze/")
+    snooze_response = await auth_client.post("/api/v1/snooze/")
     assert snooze_response.status_code == 200
     assert await _load_queue(async_db, user_id) == [
         (threads[0].id, 1),
@@ -232,13 +232,13 @@ async def test_rating_still_moves_queue_while_snooze_does_not(
     # Deterministically make one of the unsnoozed threads pending. A random
     # roll would pick between the two remaining candidates.
     override_response = await auth_client.post(
-        "/api/roll/override", json={"thread_id": threads[1].id}
+        "/api/v1/roll/override", json={"thread_id": threads[1].id}
     )
     assert override_response.status_code == 200
     rolled_thread_id = threads[1].id
 
     rate_response = await auth_client.post(
-        "/api/rate/",
+        "/api/v1/rate/",
         json={"rating": 2.0, "issues_read": 1, "finish_session": False},
     )
     assert rate_response.status_code == 200
