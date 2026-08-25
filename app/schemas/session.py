@@ -275,3 +275,52 @@ class SessionHistoryListResponse(BaseModel):
 
     sessions: list[SessionListItem]
     next_page_token: str | None = None
+
+
+class SessionMode(BaseModel):
+    """Canonical session mode state for Roll bootstrap and frontend rendering.
+
+    Describes the active and predicted reading bandwidth and intent, together
+    with the confidence, source, and version metadata needed for the reading-
+    mode UI. When all fields are ``None`` the session is in the legacy null
+    state and the frontend should treat it as the default balanced mode.
+    """
+
+    active_bandwidth: str | None = Field(
+        default=None,
+        description="Current active bandwidth: light, balanced, deep, or null for legacy",
+    )
+    predicted_bandwidth: str | None = Field(
+        default=None, description="Algorithm-predicted bandwidth for this session"
+    )
+    bandwidth_confidence: float | None = Field(
+        default=None, ge=0.0, le=1.0, description="Confidence in the bandwidth prediction"
+    )
+    bandwidth_source: Literal["manual", "inferred"] | None = Field(
+        default=None,
+        description="Origin of the bandwidth value: manual user override or algorithm inference",
+    )
+    bandwidth_version: str | None = Field(
+        default=None, description="Version tag for the bandwidth inference algorithm"
+    )
+    active_intent: str | None = Field(
+        default=None,
+        description="Current active intent: balanced, momentum, familiar, explore, random, or null",
+    )
+    predicted_intent: str | None = Field(
+        default=None, description="Algorithm-predicted intent for this session"
+    )
+    intent_confidence: float | None = Field(
+        default=None, ge=0.0, le=1.0, description="Confidence in the intent prediction"
+    )
+    intent_source: Literal["manual", "inferred"] | None = Field(
+        default=None,
+        description="Origin of the intent value: manual user override or algorithm inference",
+    )
+    intent_version: str | None = Field(
+        default=None, description="Version tag for the intent inference algorithm"
+    )
+    session_mode_correction_guidance: dict | None = Field(
+        default=None,
+        description="Compact guidance when mode differs from prediction (null when no correction)",
+    )
