@@ -181,6 +181,7 @@ class SessionResponse(BaseModel):
     snoozed_thread_ids: list[int] = []
     snoozed_threads: list[SnoozedThreadInfo] = []
     pending_thread_id: int | None = None
+    timezone: str | None = None
     reading_bandwidth: str | None = None
     reading_intent: str | None = None
     reading_mode_source: str | None = None
@@ -258,6 +259,7 @@ class SessionDetailsResponse(BaseModel):
     ladder_path: str
     narrative_summary: dict[str, list[str]]
     current_die: int
+    timezone: str | None = None
     events: list[EventDetail]
 
     @field_serializer("started_at", "ended_at")
@@ -288,8 +290,8 @@ class SessionListItem(BaseModel):
     """Schema for a single session in the history list view.
 
     A deliberate subset of SessionResponse. The list view does not need
-    snoozed_thread_ids, snoozed_threads, or pending_thread_id, which
-    reduces payload size for session history lists.
+    snoozed_thread_ids, snoozed_threads, pending_thread_id, or timezone,
+    which reduces payload size for session history lists.
     """
 
     id: int

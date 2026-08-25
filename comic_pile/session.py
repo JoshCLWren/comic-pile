@@ -279,6 +279,7 @@ async def get_or_create(
     user_id: int,
     *,
     existing_user: User | None = None,
+    timezone: str | None = None,
 ) -> Session:
     """Get the authoritative active session or create one race-safely.
 
@@ -287,6 +288,9 @@ async def get_or_create(
         user_id: User whose authoritative reading session should be resolved.
         existing_user: Already-loaded User owned by the same transaction. When
             provided, the redundant user lookup is skipped.
+        timezone: Optional browser-resolved IANA timezone identifier to set on
+            the new session when one is created. Ignored when reusing an existing
+            session.
 
     Returns:
         The authoritative current Session, creating one when none exists.
@@ -346,7 +350,7 @@ async def get_or_create(
                     )
                     return active_session
 
-                new_session = Session(start_die=start_die, user_id=user_id)
+                new_session = Session(start_die=start_die, user_id=user_id, timezone=timezone)
                 db.add(new_session)
                 await create_session_start_snapshot(db, new_session)
                 await db.commit()
