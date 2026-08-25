@@ -96,7 +96,7 @@ def test_completion_selection_skips_owned_and_cooling_workers():
     assert now is not None
     workers = [str(worker) for worker in range(6, 30)]
     health = {
-        **{worker: ("success", now - 60) for worker in workers},
+        **dict.fromkeys(workers, ("success", now - 60)),
         "6": ("failure", now - 60),
         "10": ("RATE LIMITED", now - 60),
         "14": ("MODEL MISSING", now - 60),
@@ -114,7 +114,7 @@ def test_completion_selection_skips_owned_and_cooling_workers():
 
 def test_completion_selection_prefers_review_capacity_at_high_backlog():
     workers = ["9", "10", "19", "20", "29", "30", "39", "40", "49", "50", "59", "60", "69", "70"]
-    health = {worker: ("success", 0) for worker in workers}
+    health = dict.fromkeys(workers, ("success", 0))
     selected = controller.select_completion_workers(
         workers,
         review_backlog=80,
