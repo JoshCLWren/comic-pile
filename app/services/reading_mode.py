@@ -6,6 +6,8 @@ keeping the router layer thin and focused on HTTP concerns.
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +16,6 @@ from app.database import get_db
 from app.models import Session as SessionModel
 from app.models.user import User
 from app.services.reading_quiz import (
-    QuizResolutionError,
     ReadingModeSource,
     is_valid_reading_mode,
     resolve_quiz_answers,
