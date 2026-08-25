@@ -26,6 +26,9 @@ FAILURE_COOLDOWN_SECONDS = 15 * 60
 MODEL_MISSING_COOLDOWN_SECONDS = 6 * 60 * 60
 WORKER_RE = re.compile(r"(?m)^Worker:\s*opencode-free-model-factory-(?P<worker>\d+)\s*$")
 OUTCOME_RE = re.compile(r"(?m)^Outcome:\s*(?P<outcome>.+?)\s*$")
+ATTEMPT_OUTCOME_RE = re.compile(
+    r"(?m)^Attempt outcome:\s*(?P<outcome>[a-z][a-z0-9_]+)\s*$"
+)
 UPDATED_RE = re.compile(r"(?m)^Updated:\s*(?P<updated>\S+)\s*$")
 OWNER_RE = re.compile(r"^factory:(?P<worker>\d+)$")
 
@@ -89,11 +92,21 @@ def completion_batch_size(review_backlog: int) -> int:
 def cooldown_seconds(outcome: str | None) -> int:
     """Return how long a recently unhealthy worker should yield to healthy peers."""
     normalized = (outcome or "").strip().casefold()
-    if "model missing" in normalized:
+    if normalized in {"success", "work_failure", "no_change", "policy_blocked"}:
+        return 0
+    if normalized in {"model_unavailable", "model missing"} or "model missing" in normalized:
         return MODEL_MISSING_COOLDOWN_SECONDS
-    if "rate limited" in normalized:
+    if normalized in {"provider_unavailable", "rate limited"} or "rate limited" in normalized:
         return RATE_LIMIT_COOLDOWN_SECONDS
-    if normalized in {"failure", "failed", "error"} or "failure" in normalized:
+    if normalized in {
+        "model_interruption",
+        "worker_environment_failure",
+        "control_plane_failure",
+        "unknown_failure",
+        "failure",
+        "failed",
+        "error",
+    } or "failure" in normalized:
         return FAILURE_COOLDOWN_SECONDS
     return 0
 
@@ -105,12 +118,16 @@ def latest_worker_health(
 ) -> dict[str, tuple[str, int]]:
     """Return the newest trusted heartbeat outcome for each fixed worker."""
     latest: dict[str, tuple[str, int]] = {}
+    priorities: dict[str, int] = {}
     for comment in comments:
         if trusted is not None and not trusted(comment):
             continue
         body = str(comment.get("body") or "")
         worker_match = WORKER_RE.search(body)
-        outcome_match = OUTCOME_RE.search(body)
+        # Classified attempt evidence is authoritative for health. Legacy
+        # heartbeat outcomes remain supported while existing records age out.
+        attempt_match = ATTEMPT_OUTCOME_RE.search(body)
+        outcome_match = attempt_match or OUTCOME_RE.search(body)
         updated_match = UPDATED_RE.search(body)
         if not worker_match or not outcome_match or not updated_match:
             continue
@@ -118,9 +135,14 @@ def latest_worker_health(
         if updated is None:
             continue
         worker = worker_match.group("worker")
+        priority = 1 if attempt_match else 0
         previous = latest.get(worker)
-        if previous is None or updated > previous[1]:
+        previous_priority = priorities.get(worker, -1)
+        if previous is None or priority > previous_priority or (
+            priority == previous_priority and updated > previous[1]
+        ):
             latest[worker] = (outcome_match.group("outcome").strip(), updated)
+            priorities[worker] = priority
     return latest
 
 
