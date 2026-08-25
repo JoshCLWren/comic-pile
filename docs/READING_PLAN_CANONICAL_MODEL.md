@@ -73,8 +73,7 @@ Source: `app/schemas/continuity_plan.py:ContinuityPlanWrite`
 * **Ordering is not blocking (#257 boundary).** Within-series issue
   progression is ordinary `position` ordering inside `Issue`; it is never
   encoded as `ContinuityRule` or `Dependency` edges unless the reader
-  chooses `strict_sequential`. See `docs/READING_PLAN_CANONICAL_MODEL.md`
-  guardrail below.
+  chooses `strict_sequential`. See guardrail below.
 
 ## Migration / compatibility strategy
 
