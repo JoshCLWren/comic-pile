@@ -165,4 +165,3 @@ async def test_update_session_mode_records_event(
     mode_event = result.scalars().first()
     assert mode_event is not None
     assert mode_event.type == "session_mode"
-"""

@@ -216,4 +216,3 @@ class TestRecommendationSettingsIntegration:
             clear_settings_cache()
             settings = get_recommendation_settings()
             assert settings.control_mode == "legacy"
-"""

@@ -365,11 +365,6 @@ class Settings(BaseSettings):
         """Get recommendation settings."""
         return get_recommendation_settings()
 
-    @property
-    def recommendation(self) -> RecommendationSettings:
-        """Get recommendation settings."""
-        return get_recommendation_settings()
-
 
 @lru_cache
 def get_database_settings() -> DatabaseSettings:

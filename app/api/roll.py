@@ -2,7 +2,6 @@
 
 import json
 import logging
-import random
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
@@ -53,7 +52,6 @@ from app.momentum import weighted_momentum_selection
 from app.recommendation_version import (
     get_current_algorithm_version,
     get_current_control_state,
-    is_legacy_mode_enabled,
 )
 
 router = APIRouter(tags=["roll"])

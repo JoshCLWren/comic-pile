@@ -249,6 +249,7 @@ async def test_transition_legacy_to_contextual_resumes_safely(
             select(Event).where(Event.type == "roll").order_by(Event.id.desc())
         )
         legacy_event = result.scalars().first()
+        assert legacy_event is not None
         assert legacy_event.algorithm_version == LEGACY_ALGORITHM_VERSION
 
     # Dismiss pending to allow another roll
@@ -264,6 +265,7 @@ async def test_transition_legacy_to_contextual_resumes_safely(
             select(Event).where(Event.type == "roll").order_by(Event.id.desc())
         )
         contextual_event = result.scalars().first()
+        assert contextual_event is not None
         assert contextual_event.algorithm_version == CANONICAL_ALGORITHM_VERSION
         assert contextual_event.algorithm_control_state == ALGORITHM_CONTROL_STATE_WEIGHTED
 
@@ -276,4 +278,3 @@ async def test_transition_legacy_to_contextual_resumes_safely(
     for thread in threads:
         assert thread.queue_position >= 1
         assert thread.issues_remaining >= 0
-"""
