@@ -49,7 +49,7 @@ async def test_snooze_does_not_create_roll_event(
     await async_db.refresh(thread)
 
     # Roll the dice - this creates a "roll" event
-    roll_response = await auth_client.post("/api/roll/")
+    roll_response = await auth_client.post("/api/v1/roll/")
     assert roll_response.status_code == 200
     roll_data = roll_response.json()
     assert roll_data["thread_id"] == thread.id
@@ -62,7 +62,7 @@ async def test_snooze_does_not_create_roll_event(
     assert len(roll_events_before_snooze) == 1, "Should have exactly 1 roll event after rolling"
 
     # Now snooze the thread (without calling setPending first - that was the bug!)
-    snooze_response = await auth_client.post("/api/snooze/")
+    snooze_response = await auth_client.post("/api/v1/snooze/")
     assert snooze_response.status_code == 200
 
     # Verify we STILL have exactly 1 roll event (no phantom roll event created)
@@ -81,7 +81,7 @@ async def test_snooze_does_not_create_roll_event(
     assert snooze_events[0].thread_id == thread.id
 
     # Also verify via the session details API endpoint
-    details_response = await auth_client.get(f"/api/sessions/{session.id}/details")
+    details_response = await auth_client.get(f"/api/v1/sessions/{session.id}/details")
     assert details_response.status_code == 200
     details_data = details_response.json()
 

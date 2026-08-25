@@ -5,7 +5,7 @@ from typing import ClassVar, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.continuity_readiness import ContinuityBlocker
-from app.schemas.session import ActiveThreadInfo, SessionMode
+from app.schemas.session import ActiveThreadInfo, SessionBandwidthState, SessionMode
 
 
 class RollRequest(BaseModel):
@@ -167,6 +167,7 @@ class RollBootstrapResponse(BaseModel):
     session_mode: SessionMode
     active_thread: ActiveThreadInfo | None
     roll_recovery: RollRecoveryInfo | None = None
+    bandwidth: SessionBandwidthState
     roll_pool: list[RollBootstrapThread]
     snoozed_threads: list[RollBootstrapThread]
     snoozed_count: int

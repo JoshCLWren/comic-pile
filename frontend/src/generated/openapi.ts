@@ -5873,6 +5873,7 @@ export interface components {
         RollBootstrapResponse: {
             /** Active Thread */
             active_thread: components["schemas"]["ActiveThreadInfo"] | null;
+            bandwidth: components["schemas"]["SessionBandwidthState"];
             /** Blocked Count */
             blocked_count: number;
             /** Blocked Threads */
@@ -6063,6 +6064,30 @@ export interface components {
             title: string;
             /** Total Issues */
             total_issues?: number | null;
+        };
+        /**
+         * SessionBandwidthState
+         * @description Canonical ephemeral bandwidth state for the active reading session.
+         *
+         *     Every field is always present but nullable so legacy sessions that predate
+         *     bandwidth tracking serialize to a stable, safe shape instead of a missing
+         *     or partially shaped object. This is the single canonical source consumed by
+         *     later weighting and UI work.
+         */
+        SessionBandwidthState: {
+            /** Active Bandwidth */
+            active_bandwidth: ("light" | "balanced" | "deep") | null;
+            /**
+             * Confidence
+             * @default null
+             */
+            confidence: number | null;
+            /** Mode Version */
+            mode_version: string | null;
+            /** Predicted Bandwidth */
+            predicted_bandwidth: ("light" | "balanced" | "deep") | null;
+            /** Source */
+            source: ("inferred" | "manual" | "snooze" | "quiz") | null;
         };
         /**
          * SessionDetailsResponse

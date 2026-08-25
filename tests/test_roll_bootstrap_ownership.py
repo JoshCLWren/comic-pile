@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from app.api import roll as roll_api
 from app.models import DependencyGroup, DependencyGroupMembership, Issue, Thread
 from app.schemas import RollBootstrapResponse, RollBootstrapThread, SessionMode
+from app.schemas.session import SessionBandwidthState, build_session_bandwidth_state
 from tests.conftest import get_or_create_user_async
 
 
@@ -54,6 +55,36 @@ def _mode_session(**kwargs):
         "session_mode_correction_guidance": None,
     }
     return SimpleNamespace(**{**mode_fields, **kwargs})
+
+
+def test_build_session_bandwidth_state_normalizes_legacy_garbage():
+    """Stored junk must never break bootstrap; valid values pass through."""
+    assert build_session_bandwidth_state(
+        predicted_bandwidth="light",
+        active_bandwidth="deep",
+        confidence=0.75,
+        source="quiz",
+        mode_version="v2",
+    ) == SessionBandwidthState(
+        predicted_bandwidth="light",
+        active_bandwidth="deep",
+        confidence=0.75,
+        source="quiz",
+        mode_version="v2",
+    )
+    assert build_session_bandwidth_state(
+        predicted_bandwidth="ultra",
+        active_bandwidth="bogus",
+        confidence=1.5,
+        source="hacked",
+        mode_version=None,
+    ) == SessionBandwidthState(
+        predicted_bandwidth=None,
+        active_bandwidth=None,
+        confidence=None,
+        source=None,
+        mode_version=None,
+    )
 
 
 @pytest.mark.asyncio
@@ -107,6 +138,13 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
             "last_activity_at": None,
         }
     ]
+    assert response.bandwidth == SessionBandwidthState(
+        predicted_bandwidth=None,
+        active_bandwidth=None,
+        confidence=None,
+        source=None,
+        mode_version=None,
+    )
 
 
 @pytest.mark.asyncio
@@ -176,6 +214,13 @@ def test_bootstrap_schema_bounds_summary_lists_without_losing_counts():
         last_rolled_result=None,
         session_mode=SessionMode(),
         active_thread=None,
+        bandwidth=SessionBandwidthState(
+            predicted_bandwidth=None,
+            active_bandwidth=None,
+            confidence=None,
+            source=None,
+            mode_version=None,
+        ),
         roll_pool=summaries,
         snoozed_threads=summaries,
         snoozed_count=len(summaries),
@@ -216,7 +261,7 @@ async def test_bootstrap_pool_includes_threads_without_route_labels(
     async_db.add(thread)
     await async_db.commit()
 
-    response = await auth_client.get("/api/roll/bootstrap")
+    response = await auth_client.get("/api/v1/roll/bootstrap")
     assert response.status_code == 200
     pool = response.json()["roll_pool"]
 
@@ -305,7 +350,7 @@ async def test_bootstrap_pool_aggregates_membership_labels_once(
     )
     await async_db.commit()
 
-    response = await auth_client.get("/api/roll/bootstrap")
+    response = await auth_client.get("/api/v1/roll/bootstrap")
     assert response.status_code == 200
     pool = {item["id"]: item for item in response.json()["roll_pool"]}
 
@@ -331,7 +376,7 @@ async def test_bootstrap_pool_query_count_is_constant(
     """
     user = await get_or_create_user_async(async_db)
 
-    response = await auth_client.get("/api/roll/bootstrap")
+    response = await auth_client.get("/api/v1/roll/bootstrap")
     assert response.status_code == 200
 
     async def _add_pool(thread_count: int, groups_per_thread: int) -> None:
@@ -370,7 +415,7 @@ async def test_bootstrap_pool_query_count_is_constant(
 
         event.listen(db_engine.sync_engine, "before_cursor_execute", _capture)
         try:
-            response = await auth_client.get("/api/roll/bootstrap")
+            response = await auth_client.get("/api/v1/roll/bootstrap")
         finally:
             event.remove(db_engine.sync_engine, "before_cursor_execute", _capture)
         assert response.status_code == 200

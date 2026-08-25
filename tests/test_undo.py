@@ -30,7 +30,7 @@ async def test_list_snapshots_empty(
     await async_db.commit()
     await async_db.refresh(session)
 
-    response = await auth_client.get(f"/api/undo/{session.id}/snapshots")
+    response = await auth_client.get(f"/api/v1/undo/{session.id}/snapshots")
     assert response.status_code == 200
     assert response.json() == []
 
@@ -78,7 +78,7 @@ async def test_list_snapshots_with_data(
     async_db.add(snapshot)
     await async_db.commit()
 
-    response = await auth_client.get(f"/api/undo/{session.id}/snapshots")
+    response = await auth_client.get(f"/api/v1/undo/{session.id}/snapshots")
     assert response.status_code == 200
     snapshots = response.json()
     assert len(snapshots) == 1
@@ -90,7 +90,7 @@ async def test_list_snapshots_with_data(
 @pytest.mark.asyncio
 async def test_list_snapshots_invalid_session(auth_client: AsyncClient) -> None:
     """Test listing snapshots for non-existent session."""
-    response = await auth_client.get("/api/undo/9999/snapshots")
+    response = await auth_client.get("/api/v1/undo/9999/snapshots")
     assert response.status_code == 404
     assert "Session 9999 not found" in response.json()["detail"]
 
@@ -145,7 +145,7 @@ async def test_undo_to_snapshot(
     async_db.add(snapshot)
     await async_db.commit()
 
-    response = await auth_client.post(f"/api/undo/{session.id}/undo/{snapshot.id}")
+    response = await auth_client.post(f"/api/v1/undo/{session.id}/undo/{snapshot.id}")
     assert response.status_code == 200
 
     await async_db.refresh(thread)
@@ -161,7 +161,7 @@ async def test_undo_to_snapshot_invalid_session(
 ) -> None:
     """Test undoing with invalid session ID."""
     _ = async_db, sample_user
-    response = await auth_client.post("/api/undo/9999/undo/1")
+    response = await auth_client.post("/api/v1/undo/9999/undo/1")
     assert response.status_code == 404
     assert "Session 9999 not found" in response.json()["detail"]
 
@@ -176,7 +176,7 @@ async def test_undo_to_snapshot_invalid_snapshot(
     await async_db.commit()
     await async_db.refresh(session)
 
-    response = await auth_client.post(f"/api/undo/{session.id}/undo/9999")
+    response = await auth_client.post(f"/api/v1/undo/{session.id}/undo/9999")
     assert response.status_code == 404
     assert "Snapshot 9999 not found" in response.json()["detail"]
 
@@ -247,7 +247,7 @@ async def test_undo_to_snapshot_restores_thread_states(
     async_db.add(snapshot)
     await async_db.commit()
 
-    await auth_client.post(f"/api/undo/{session.id}/undo/{snapshot.id}")
+    await auth_client.post(f"/api/v1/undo/{session.id}/undo/{snapshot.id}")
 
     await async_db.refresh(thread1)
     await async_db.refresh(thread2)
@@ -293,7 +293,7 @@ async def test_snapshot_created_on_rating(
     await async_db.commit()
 
     response = await auth_client.post(
-        "/api/rate/",
+        "/api/v1/rate/",
         json={"rating": 5.0, "issues_read": 1},
     )
     assert response.status_code == 200
@@ -352,7 +352,7 @@ async def test_multiple_snapshots_listed_in_order(
         async_db.add(snapshot)
         await async_db.commit()
 
-    response = await auth_client.get(f"/api/undo/{session.id}/snapshots")
+    response = await auth_client.get(f"/api/v1/undo/{session.id}/snapshots")
     assert response.status_code == 200
     snapshots = response.json()
     assert len(snapshots) == 3
@@ -421,7 +421,7 @@ async def test_undo_to_earliest_snapshot(
     async_db.add(latest_snapshot)
     await async_db.commit()
 
-    await auth_client.post(f"/api/undo/{session.id}/undo/{earliest_snapshot.id}")
+    await auth_client.post(f"/api/v1/undo/{session.id}/undo/{earliest_snapshot.id}")
 
     await async_db.refresh(thread)
     assert thread.issues_remaining == 100
@@ -471,7 +471,7 @@ async def test_undo_restores_session_state(
     async_db.add(snapshot)
     await async_db.commit()
 
-    response = await auth_client.post(f"/api/undo/{session.id}/undo/{snapshot.id}")
+    response = await auth_client.post(f"/api/v1/undo/{session.id}/undo/{snapshot.id}")
     assert response.status_code == 200
 
     await async_db.refresh(session)
@@ -520,7 +520,7 @@ async def test_undo_to_session_start_snapshot(
     async_db.add(snapshot)
     await async_db.commit()
 
-    await auth_client.post(f"/api/undo/{session.id}/undo/{snapshot.id}")
+    await auth_client.post(f"/api/v1/undo/{session.id}/undo/{snapshot.id}")
 
     await async_db.refresh(session)
     await async_db.refresh(thread)
@@ -578,7 +578,7 @@ async def test_undo_handles_missing_session_state(
     original_start_die = session.start_die
     original_manual_die = session.manual_die
 
-    response = await auth_client.post(f"/api/undo/{session.id}/undo/{snapshot.id}")
+    response = await auth_client.post(f"/api/v1/undo/{session.id}/undo/{snapshot.id}")
     assert response.status_code == 200
 
     await async_db.refresh(session)
@@ -619,7 +619,7 @@ async def test_delta_snapshot_contains_only_rated_thread(
     await async_db.commit()
 
     response = await auth_client.post(
-        "/api/rate/", json={"rating": 5.0, "issues_read": 1},
+        "/api/v1/rate/", json={"rating": 5.0, "issues_read": 1},
     )
     assert response.status_code == 200
 
@@ -664,7 +664,7 @@ async def test_delta_undo_restores_issues_remaining(
     await async_db.commit()
 
     response = await auth_client.post(
-        "/api/rate/", json={"rating": 5.0, "issues_read": 1},
+        "/api/v1/rate/", json={"rating": 5.0, "issues_read": 1},
     )
     assert response.status_code == 200
 
@@ -675,7 +675,7 @@ async def test_delta_undo_restores_issues_remaining(
     snapshot = result.scalars().first()
     assert snapshot is not None
 
-    await auth_client.post(f"/api/undo/{session.id}/undo/{snapshot.id}")
+    await auth_client.post(f"/api/v1/undo/{session.id}/undo/{snapshot.id}")
 
     await async_db.refresh(thread)
     assert thread.issues_remaining == 10
@@ -715,7 +715,7 @@ async def test_delta_undo_restores_queue_positions(
     await async_db.commit()
 
     rate_response = await auth_client.post(
-        "/api/rate/", json={"rating": 5.0, "issues_read": 1},
+        "/api/v1/rate/", json={"rating": 5.0, "issues_read": 1},
     )
     assert rate_response.status_code == 200
 
@@ -726,7 +726,7 @@ async def test_delta_undo_restores_queue_positions(
     snapshot = result.scalars().first()
     assert snapshot is not None
 
-    await auth_client.post(f"/api/undo/{session.id}/undo/{snapshot.id}")
+    await auth_client.post(f"/api/v1/undo/{session.id}/undo/{snapshot.id}")
 
     await async_db.refresh(thread1)
     await async_db.refresh(thread2)
@@ -763,7 +763,7 @@ async def test_delta_undo_restores_session_ended_at(
     await async_db.commit()
 
     response = await auth_client.post(
-        "/api/rate/", json={"rating": 5.0, "finish_session": True},
+        "/api/v1/rate/", json={"rating": 5.0, "finish_session": True},
     )
     assert response.status_code == 200
 
@@ -775,7 +775,7 @@ async def test_delta_undo_restores_session_ended_at(
     assert snapshot is not None
 
     undo_response = await auth_client.post(
-        f"/api/undo/{session.id}/undo/{snapshot.id}",
+        f"/api/v1/undo/{session.id}/undo/{snapshot.id}",
     )
     assert undo_response.status_code == 200
 
@@ -823,7 +823,7 @@ async def test_backward_compat_full_snapshot_undo(
     async_db.add(snapshot)
     await async_db.commit()
 
-    response = await auth_client.post(f"/api/undo/{session.id}/undo/{snapshot.id}")
+    response = await auth_client.post(f"/api/v1/undo/{session.id}/undo/{snapshot.id}")
     assert response.status_code == 200
 
     await async_db.refresh(thread)
@@ -861,7 +861,7 @@ async def test_delta_undo_with_blocked_changes(
     await async_db.commit()
 
     response = await auth_client.post(
-        "/api/rate/", json={"rating": 5.0, "issues_read": 1},
+        "/api/v1/rate/", json={"rating": 5.0, "issues_read": 1},
     )
     assert response.status_code == 200
 
@@ -876,7 +876,7 @@ async def test_delta_undo_with_blocked_changes(
     has_blocked_changes = "_blocked_changes" in ts
     if has_blocked_changes:
         undo_response = await auth_client.post(
-            f"/api/undo/{session.id}/undo/{snapshot.id}",
+            f"/api/v1/undo/{session.id}/undo/{snapshot.id}",
         )
         assert undo_response.status_code == 200
 
