@@ -8,9 +8,10 @@ import json
 import os
 import sys
 import time
+from collections.abc import Iterable, Mapping
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 REPO_URL = f"https://github.com/{REPO}"
