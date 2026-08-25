@@ -977,16 +977,20 @@ export interface paths {
         put?: never;
         /**
          * Snooze Thread
-         * @description Snooze the pending thread, demote it in the queue, and step the die up.
+         * @description Snooze the pending thread for this session and step the die up.
+         *
+         *     Snooze is a temporary session correction, not a durable dislike: the
+         *     thread's queue position is left untouched so long-term ordering stays
+         *     governed by ratings and explicit queue actions.
          *
          *     This endpoint:
          *     1. Gets the current session (must exist with a pending_thread_id)
-         *     2. Moves the pending thread beyond the widened roll range
-         *     3. Adds the pending_thread_id to snoozed_thread_ids
-         *     4. Steps the die UP (wider pool) using dice ladder logic
-         *     5. Records a "snooze" event
-         *     6. Clears pending_thread_id
-         *     7. Returns the updated session
+         *     2. Adds the pending_thread_id to snoozed_thread_ids (excluded from rolls
+         *        for the active session only)
+         *     3. Steps the die UP (wider pool) using dice ladder logic
+         *     4. Records a "snooze" event
+         *     5. Clears pending_thread_id
+         *     6. Returns the updated session
          *
          *     Args:
          *         request: FastAPI request object for rate limiting.
@@ -1498,6 +1502,154 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/delete-test-data/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete Test Data
+         * @description Delete all test data (threads, sessions, events marked as test).
+         *
+         *     Args:
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         Dictionary with counts of deleted threads, sessions, and events.
+         */
+        post: operations["delete_test_data_api_v1_admin_delete_test_data__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/export/csv/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Csv
+         * @description Export active threads as CSV file.
+         *
+         *     Format matches Google Sheets: title, format, issues_remaining
+         *
+         *     Args:
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         StreamingResponse with CSV file attachment.
+         */
+        get: operations["export_csv_api_v1_admin_export_csv__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/export/json/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Json
+         * @description Export full database as JSON for backups.
+         *
+         *     Includes all data: users, threads, sessions, events (excludes test data)
+         *
+         *     Args:
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         StreamingResponse with JSON file attachment.
+         */
+        get: operations["export_json_api_v1_admin_export_json__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/export/summary/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Summary
+         * @description Export narrative session summaries as markdown file.
+         *
+         *     Formats all sessions with read, skipped, and completed lists per PRD Section 11.
+         *     Excludes sessions that only involve test threads.
+         *
+         *     Args:
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         StreamingResponse with markdown file attachment.
+         */
+        get: operations["export_summary_api_v1_admin_export_summary__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/import/csv/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Csv
+         * @description Import threads from CSV file.
+         *
+         *     CSV format: title, format, issues_remaining
+         *     - title: Thread title (required)
+         *     - format: Thread format (required)
+         *     - issues_remaining: Number of issues remaining (required, integer)
+         *
+         *     Threads are inserted at position 1 (front of queue).
+         *
+         *     Args:
+         *         file: CSV file to import.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         Dictionary with "imported" count and "errors" list.
+         *
+         *     Raises:
+         *         HTTPException: If file is not a CSV.
+         */
+        post: operations["import_csv_api_v1_admin_import_csv__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/analytics/metrics": {
         parameters: {
             query?: never;
@@ -1695,6 +1847,453 @@ export interface paths {
          *         HTTPException: If username or email already exists.
          */
         post: operations["register_user_api_v1_auth_register_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bug-reports/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Bug Report
+         * @description Create a bug report or feature request issue on GitHub.
+         *
+         *     Args:
+         *         body: Report type, title, description, and optional diagnostics.
+         *         current_user: The authenticated user.
+         *
+         *     Returns:
+         *         Created GitHub issue URL.
+         *
+         *     Raises:
+         *         HTTPException: If validation fails or GitHub integration is unavailable.
+         */
+        post: operations["create_bug_report_api_v1_bug_reports__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Catalog Issues
+         * @description Search for canonical issues in the shared catalog.
+         *
+         *     Args:
+         *         search: Optional search term to match against issue external_id.
+         *         provider: Filter by provider name (default: comicvine).
+         *         series_external_id: Filter by series external_id to scope the search.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         List of matching external identities for issues.
+         */
+        get: operations["search_catalog_issues_api_v1_catalog_issues_get"];
+        put?: never;
+        /**
+         * Upsert Catalog Issue
+         * @description Upsert a canonical issue into the shared catalog (idempotent).
+         *
+         *     Creation is idempotent: if a canonical existing issue can be identified,
+         *     it is surfaced rather than silently duplicating a run.
+         *
+         *     Args:
+         *         request: Upsert request with provider, entity_type, external_id, and optional metadata.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         The created or existing external identity.
+         */
+        post: operations["upsert_catalog_issue_api_v1_catalog_issues_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/mappings/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Issue Mappings
+         * @description List issue-external identity mappings (inspection endpoint).
+         *
+         *     Read-only inspection may be public where safe.
+         *
+         *     Args:
+         *         issue_id: Optional filter by issue ID.
+         *         status: Optional filter by mapping status.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         List of issue-external identity mappings.
+         */
+        get: operations["list_issue_mappings_api_v1_catalog_mappings_issues_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/mappings/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Series Mappings
+         * @description List thread-series mappings (inspection endpoint).
+         *
+         *     Read-only inspection may be public where safe.
+         *
+         *     Args:
+         *         thread_id: Optional filter by thread ID.
+         *         status: Optional filter by mapping status.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         List of thread-series mappings.
+         */
+        get: operations["list_series_mappings_api_v1_catalog_mappings_series_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Catalog Series
+         * @description Search for canonical series in the shared catalog.
+         *
+         *     Args:
+         *         search: Optional search term to match against series external_id.
+         *         provider: Filter by provider name (default: comicvine).
+         *         db: Database session.
+         *
+         *     Returns:
+         *         List of matching external identities for series.
+         */
+        get: operations["search_catalog_series_api_v1_catalog_series_get"];
+        put?: never;
+        /**
+         * Upsert Catalog Series
+         * @description Upsert a canonical series into the shared catalog (idempotent).
+         *
+         *     Creation is idempotent: if a canonical existing series can be identified,
+         *     it is surfaced rather than silently duplicating a run.
+         *
+         *     Args:
+         *         request: Upsert request with provider, entity_type, external_id, and optional metadata.
+         *         current_user: Authenticated user for authorization.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         The created or existing external identity.
+         */
+        post: operations["upsert_catalog_series_api_v1_catalog_series_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/comicvine/issues/{issue_id}/identity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Api Get Issue Identity
+         * @description Return the current ComicVine identity state for a ComicPile issue.
+         *
+         *     Shows confirmed, candidate, and unresolved mappings.
+         *
+         *     Args:
+         *         issue_id: ComicPile issue ID.
+         *         current_user: Authenticated owner.
+         *         db: Async database session.
+         */
+        get: operations["api_get_issue_identity_api_v1_comicvine_issues__issue_id__identity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/comicvine/issues/{issue_id}/identity:confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Api Confirm Identity
+         * @description Confirm a ComicVine identity for an issue.
+         *
+         *     Creates the mapping if it doesn't exist, or confirms an existing candidate.
+         *
+         *     Args:
+         *         issue_id: ComicPile issue ID.
+         *         request: Confirmation request with comicvine_issue_id.
+         *         current_user: Authenticated owner.
+         *         db: Async database session.
+         */
+        post: operations["api_confirm_identity_api_v1_comicvine_issues__issue_id__identity_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/comicvine/issues/{issue_id}/identity:replace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Api Replace Identity
+         * @description Replace the current confirmed ComicVine identity with a new one.
+         *
+         *     Demotes the old mapping and confirms the new one atomically.
+         *
+         *     Args:
+         *         issue_id: ComicPile issue ID.
+         *         request: Replace request with new comicvine_issue_id and optional reason.
+         *         current_user: Authenticated owner.
+         *         db: Async database session.
+         */
+        post: operations["api_replace_identity_api_v1_comicvine_issues__issue_id__identity_replace_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/comicvine/issues/{issue_id}/metadata:correct": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Api Apply Correction
+         * @description Apply a canonical metadata correction to an issue.
+         *
+         *     The correction preserves the provider's raw value alongside the canonical override.
+         *
+         *     Args:
+         *         issue_id: ComicPile issue ID.
+         *         request: Correction request with field_name and canonical_value.
+         *         current_user: Authenticated owner.
+         *         db: Async database session.
+         */
+        post: operations["api_apply_correction_api_v1_comicvine_issues__issue_id__metadata_correct_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/comicvine/issues/{issue_id}/metadata:corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Api List Corrections
+         * @description List all active corrections for an issue.
+         *
+         *     Args:
+         *         issue_id: ComicPile issue ID.
+         *         current_user: Authenticated owner.
+         *         db: Async database session.
+         */
+        get: operations["api_list_corrections_api_v1_comicvine_issues__issue_id__metadata_corrections_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/comicvine/issues/{issue_id}/metadata:refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Api Refresh Metadata
+         * @description Request a ComicVine metadata refresh for an issue with a confirmed identity.
+         *
+         *     Returns the confirmed ComicVine issue ID for the caller to trigger hydration.
+         *
+         *     Args:
+         *         issue_id: ComicPile issue ID.
+         *         current_user: Authenticated owner.
+         *         db: Async database session.
+         */
+        post: operations["api_refresh_metadata_api_v1_comicvine_issues__issue_id__metadata_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/comicvine/issues/{issue_id}/metadata:revert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Api Revert Correction
+         * @description Revert a metadata correction (soft-delete with audit trail).
+         *
+         *     Args:
+         *         issue_id: ComicPile issue ID.
+         *         request: Revert request with correction_id.
+         *         current_user: Authenticated owner.
+         *         db: Async database session.
+         */
+        post: operations["api_revert_correction_api_v1_comicvine_issues__issue_id__metadata_revert_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/comicvine/issues:import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Api Import Issue
+         * @description Import a ComicVine issue as a new thread with its exact identity preserved.
+         *
+         *     Creates the thread, a single issue row, and a confirmed external-identity
+         *     mapping atomically; optionally inserts the thread into a reading order
+         *     between the surrounding story-arc members.
+         *
+         *     Args:
+         *         request: Import payload with optional anchored reading-order placement.
+         *         current_user: Authenticated owner.
+         *         db: Async database session.
+         *
+         *     Returns:
+         *         Created identifiers and final reading-order placement.
+         */
+        post: operations["api_import_issue_api_v1_comicvine_issues_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/comicvine/search/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Api Search Comicvine Series
+         * @description Search ComicVine for series/volumes by title.
+         *
+         *     Args:
+         *         q: Search query string.
+         *         limit: Maximum results to return.
+         *         current_user: Authenticated user.
+         */
+        get: operations["api_search_comicvine_series_api_v1_comicvine_search_series_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/comicvine/series/{comicvine_volume_id}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Api Get Series Issues
+         * @description Fetch all issues within a ComicVine series/volume.
+         *
+         *     Args:
+         *         comicvine_volume_id: ComicVine volume ID.
+         *         series_name: Optional series name to avoid extra API call.
+         *         current_user: Authenticated user.
+         */
+        get: operations["api_get_series_issues_api_v1_comicvine_series__comicvine_volume_id__issues_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1945,6 +2544,29 @@ export interface paths {
          * @description Preview a derived crossover template from active CBL lists. Read-only: never mutates user data or continuity rules.
          */
         post: operations["preview_crossover_template_api_v1_crossover_templates_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/debug/log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Log Message
+         * @description Receive client-side log messages and output to server terminal.
+         *
+         *     Gated by the ``enable_debug_routes`` flag via ``require_debug_routes`` —
+         *     returns 404 when the flag is off (default), regardless of environment.
+         */
+        post: operations["log_message_api_v1_debug_log_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2238,6 +2860,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Metrics
+         * @description Return simple performance metrics.
+         */
+        get: operations["metrics_api_v1_metrics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/queue/shuffle/": {
         parameters: {
             query?: never;
@@ -2395,6 +3037,113 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reading-mode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Reading Mode
+         * @description Return the active session's current reading mode.
+         *
+         *     Args:
+         *         request: FastAPI request object for rate limiting.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         The current reading-mode state.
+         */
+        get: operations["get_reading_mode_api_v1_reading_mode_get"];
+        put?: never;
+        /**
+         * Set Reading Mode
+         * @description Set the active session reading mode.
+         *
+         *     Args:
+         *         request: FastAPI request object for rate limiting.
+         *         payload: The reading-mode set request.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         The newly stored reading-mode state.
+         *
+         *     Raises:
+         *         HTTPException: If the source is invalid or resolution fails.
+         */
+        post: operations["set_reading_mode_api_v1_reading_mode_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reading-mode/dismiss-suggestion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Reading Mode Suggestion
+         * @description Dismiss the reading-mode suggestion without changing the current mode.
+         *
+         *     The dismissal is remembered only for the active session so the suggestion
+         *     does not immediately reappear in the same session, but it never prevents
+         *     future manual access.
+         *
+         *     Args:
+         *         request: FastAPI request object for rate limiting.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         The unchanged reading-mode state with the suggestion cleared.
+         */
+        post: operations["dismiss_reading_mode_suggestion_api_v1_reading_mode_dismiss_suggestion_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reading-mode/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suggest Reading Mode
+         * @description Mark the active session as a candidate for the reading-mode quiz.
+         *
+         *     Used by flows that detect low confidence or repeated mismatch (for example
+         *     the Snooze correction flow) to offer the quiz without forcing it.
+         *
+         *     Args:
+         *         request: FastAPI request object for rate limiting.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         The reading-mode state with the suggestion enabled.
+         */
+        post: operations["suggest_reading_mode_api_v1_reading_mode_suggest_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reading-order-groups/": {
         parameters: {
             query?: never;
@@ -2539,6 +3288,50 @@ export interface paths {
          * @description List reading orders owned by the current user, ordered by name.
          */
         get: operations["list_reading_orders_api_v1_reading_orders__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reading-orders/{reading_order_id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Insert Reading Order Item
+         * @description Insert a thread into a reading order at a specified position.
+         *
+         *     Shifts existing items at or after the target position to make room. If the
+         *     thread already belongs to the reading order, it is moved to the target
+         *     position instead of being duplicated.
+         */
+        post: operations["insert_reading_order_item_api_v1_reading_orders__reading_order_id__items_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recommendations/diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recommendation-quality diagnostics summary
+         * @description Bounded, read-only recommendation-quality summary for the current user. This is a diagnostics endpoint and never runs during the normal Roll bootstrap path.
+         */
+        get: operations["get_recommendation_diagnostics_api_v1_recommendations_diagnostics_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3030,16 +3823,20 @@ export interface paths {
         put?: never;
         /**
          * Snooze Thread
-         * @description Snooze the pending thread, demote it in the queue, and step the die up.
+         * @description Snooze the pending thread for this session and step the die up.
+         *
+         *     Snooze is a temporary session correction, not a durable dislike: the
+         *     thread's queue position is left untouched so long-term ordering stays
+         *     governed by ratings and explicit queue actions.
          *
          *     This endpoint:
          *     1. Gets the current session (must exist with a pending_thread_id)
-         *     2. Moves the pending thread beyond the widened roll range
-         *     3. Adds the pending_thread_id to snoozed_thread_ids
-         *     4. Steps the die UP (wider pool) using dice ladder logic
-         *     5. Records a "snooze" event
-         *     6. Clears pending_thread_id
-         *     7. Returns the updated session
+         *     2. Adds the pending_thread_id to snoozed_thread_ids (excluded from rolls
+         *        for the active session only)
+         *     3. Steps the die UP (wider pool) using dice ladder logic
+         *     4. Records a "snooze" event
+         *     5. Clears pending_thread_id
+         *     6. Returns the updated session
          *
          *     Args:
          *         request: FastAPI request object for rate limiting.
@@ -3475,6 +4272,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/{thread_id}/issues/{issue_id}/attach-external": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Attach Issue To Thread
+         * @description Attach a confirmed issue identity to a user's reading thread.
+         *
+         *     Args:
+         *         thread_id: The thread to associate with the issue.
+         *         issue_id: The internal ComicPile issue ID to attach the external identity to.
+         *         request: Attachment request with external identity details and mapping status.
+         *         current_user: Authenticated user for authorization.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         The created or updated issue-external identity mapping.
+         */
+        post: operations["attach_issue_to_thread_api_v1_threads__thread_id__issues__issue_id__attach_external_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/{thread_id}/issues:reorder": {
         parameters: {
             query?: never;
@@ -3552,6 +4379,36 @@ export interface paths {
         get: operations["get_thread_reading_orders_api_v1_threads__thread_id__reading_orders_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{thread_id}/series/{series_external_id}/attach": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Attach Series To Thread
+         * @description Attach a confirmed series identity to a user's reading thread.
+         *
+         *     Args:
+         *         thread_id: The thread to associate with the series.
+         *         series_external_id: The external series identity external_id (e.g., ComicVine volume ID).
+         *         request: Attachment request with status and optional evidence/confidence.
+         *         current_user: Authenticated user for authorization.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         The created or updated thread-series mapping.
+         */
+        post: operations["attach_series_to_thread_api_v1_threads__thread_id__series__series_external_id__attach_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3770,6 +4627,32 @@ export interface paths {
          * @description Return blocked status and human-readable blocking reasons for multiple threads.
          */
         post: operations["get_threads_blocking_info_api_v1_threads_getBlockingInfo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/traffic-metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Traffic Metrics
+         * @description Return this instance's per-route traffic counters.
+         *
+         *     Args:
+         *         current_user: Authenticated user requesting the snapshot.
+         *
+         *     Returns:
+         *         Process-local aggregated counters sorted deterministically.
+         */
+        get: operations["get_traffic_metrics_api_v1_traffic_metrics_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4069,6 +4952,11 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_import_csv_api_v1_admin_import_csv__post */
+        Body_import_csv_api_v1_admin_import_csv__post: {
+            /** File */
+            file: string;
+        };
         /**
          * BugReportCreate
          * @description Request schema for creating a bug report or feature request.
@@ -4113,6 +5001,91 @@ export interface components {
             issue_url: string;
         };
         /**
+         * CBLPlacement
+         * @description One ordered CBL observation with inseparable provenance.
+         */
+        CBLPlacement: {
+            /** Position */
+            position: number;
+            /** Source Path */
+            source_path: string;
+        };
+        /**
+         * CanonicalCorrection
+         * @description A user-contributed canonical metadata override.
+         */
+        CanonicalCorrection: {
+            /** Canonical Value */
+            canonical_value: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: number;
+            /** Field Name */
+            field_name: string;
+            /** Id */
+            id: number;
+            /** Provenance */
+            provenance: string;
+            /** Provider Value */
+            provider_value?: string | null;
+        };
+        /**
+         * CatalogIssueSearchResponse
+         * @description Schema for issue search results.
+         */
+        CatalogIssueSearchResponse: {
+            /** Created At */
+            created_at: number;
+            /** Entity Type */
+            entity_type: string;
+            /** External Id */
+            external_id: string;
+            /** External Url */
+            external_url?: string | null;
+            /** Id */
+            id: number;
+            /** Metadata Json */
+            metadata_json: {
+                [key: string]: unknown;
+            };
+            /** Provider */
+            provider: string;
+            /** Provider Updated At */
+            provider_updated_at?: number | null;
+            /** Updated At */
+            updated_at: number;
+        };
+        /**
+         * CatalogSeriesSearchResponse
+         * @description Schema for series search results.
+         */
+        CatalogSeriesSearchResponse: {
+            /** Created At */
+            created_at: number;
+            /** Entity Type */
+            entity_type: string;
+            /** External Id */
+            external_id: string;
+            /** External Url */
+            external_url?: string | null;
+            /** Id */
+            id: number;
+            /** Metadata Json */
+            metadata_json: {
+                [key: string]: unknown;
+            };
+            /** Provider */
+            provider: string;
+            /** Provider Updated At */
+            provider_updated_at?: number | null;
+            /** Updated At */
+            updated_at: number;
+        };
+        /**
          * ComicVineComicPileMatch
          * @description One user-owned ComicPile representation of an external issue.
          */
@@ -4137,6 +5110,26 @@ export interface components {
             name: string;
             /** Roles */
             roles?: string[];
+        };
+        /**
+         * ComicVineIssueCandidate
+         * @description One issue candidate from a series for identity mapping.
+         */
+        ComicVineIssueCandidate: {
+            /** Comicvine Issue Id */
+            comicvine_issue_id: number;
+            /** Cover Date */
+            cover_date?: string | null;
+            /** Image Url */
+            image_url?: string | null;
+            /** Issue Number */
+            issue_number?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Site Detail Url */
+            site_detail_url?: string | null;
+            /** Store Date */
+            store_date?: string | null;
         };
         /**
          * ComicVineIssueIntelligence
@@ -4189,6 +5182,50 @@ export interface components {
             series_name?: string | null;
         };
         /**
+         * ComicVineSeriesIssuesResponse
+         * @description Issues within a ComicVine series.
+         */
+        ComicVineSeriesIssuesResponse: {
+            /** Comicvine Volume Id */
+            comicvine_volume_id: number;
+            /** Issues */
+            issues: components["schemas"]["ComicVineIssueCandidate"][];
+            /** Series Name */
+            series_name: string;
+        };
+        /**
+         * ComicVineSeriesResult
+         * @description One ComicVine series/volume from a search.
+         */
+        ComicVineSeriesResult: {
+            /** Comicvine Volume Id */
+            comicvine_volume_id: number;
+            /** Image Url */
+            image_url?: string | null;
+            /** Issue Count */
+            issue_count?: number | null;
+            /** Name */
+            name: string;
+            /** Publisher */
+            publisher?: string | null;
+            /** Site Detail Url */
+            site_detail_url?: string | null;
+            /** Start Year */
+            start_year?: number | null;
+        };
+        /**
+         * ComicVineSeriesSearchResponse
+         * @description Paginated series search results.
+         */
+        ComicVineSeriesSearchResponse: {
+            /** Query */
+            query: string;
+            /** Results */
+            results: components["schemas"]["ComicVineSeriesResult"][];
+            /** Total Available */
+            total_available?: number | null;
+        };
+        /**
          * ComicVineStoryArc
          * @description An explicit ComicVine story arc and its unordered issue membership.
          */
@@ -4201,6 +5238,19 @@ export interface components {
             name: string;
             /** Related Issues */
             related_issues?: components["schemas"]["ComicVineRelatedIssue"][];
+            /** Total Related Count */
+            total_related_count?: number | null;
+        };
+        /**
+         * ConfirmIdentityRequest
+         * @description Request to confirm a specific ComicVine identity for an issue.
+         */
+        ConfirmIdentityRequest: {
+            /**
+             * Comicvine Issue Id
+             * @description ComicVine issue ID to confirm
+             */
+            comicvine_issue_id: number;
         };
         /**
          * ConnectedThreadInfo
@@ -4353,6 +5403,8 @@ export interface components {
         ContinuityPlanNode: {
             /** Id */
             id: string;
+            /** Label */
+            label?: string | null;
             /** Lane Id */
             lane_id: string;
             /**
@@ -4362,8 +5414,26 @@ export interface components {
             node_type: "issue" | "crossover" | "thread";
             /** Position */
             position: number;
+            /** Reader Optional */
+            reader_optional?: boolean | null;
+            /** Reader Role */
+            reader_role?: ("required/core" | "recommended" | "optional" | "context/prelude" | "aftermath/epilogue" | "skipped/excluded") | null;
             /** Ref Id */
             ref_id: number;
+            /** Source Cbl Placements */
+            source_cbl_placements?: components["schemas"]["CBLPlacement"][] | null;
+            /** Source Confidence */
+            source_confidence?: ("high" | "medium" | "low") | null;
+            /** Source Explanation */
+            source_explanation?: string | null;
+            /** Source Paths */
+            source_paths?: string[] | null;
+            /** Source Role */
+            source_role?: ("core" | "context/prelude" | "epilogue" | "unknown") | null;
+            /** Source Story Arc Ids */
+            source_story_arc_ids?: string[] | null;
+            /** Source Target Story Arc Id */
+            source_target_story_arc_id?: string | null;
         };
         /**
          * ContinuityPlanNodeReadiness
@@ -4641,6 +5711,32 @@ export interface components {
             user_id: number;
         };
         /**
+         * ControlModeGroup
+         * @description One recommendation-quality grouping by control mode and algorithm version.
+         */
+        ControlModeGroup: {
+            /** Acceptance Rate */
+            acceptance_rate: number;
+            /** Accepted Rolls */
+            accepted_rolls: number;
+            /**
+             * Algorithm Version
+             * @description Canonical algorithm version attributed to this group
+             */
+            algorithm_version: string;
+            /**
+             * Control Mode
+             * @description Distinguishable control/intent class: contextual_auto, explicit_correction, blocked_recovery, or legacy
+             */
+            control_mode: string;
+            /** Rolls */
+            rolls: number;
+            /** Snooze Rate */
+            snooze_rate: number;
+            /** Snoozed Rolls */
+            snoozed_rolls: number;
+        };
+        /**
          * ConvergenceTarget
          * @description A single node a converged continuity rule waits for.
          */
@@ -4652,6 +5748,32 @@ export interface components {
              * @enum {string}
              */
             type: "issue" | "crossover";
+        };
+        /**
+         * CoverageInfo
+         * @description Honest labeling of data completeness for the requested range.
+         */
+        CoverageInfo: {
+            /**
+             * Instrumented Event Count
+             * @description Events carrying a selection_method (full context)
+             */
+            instrumented_event_count: number;
+            /**
+             * Legacy Event Count
+             * @description Events without selection_method (pre-instrumentation)
+             */
+            legacy_event_count: number;
+            /**
+             * Note
+             * @description Human-readable explanation of coverage limitations
+             */
+            note: string;
+            /**
+             * Partial Coverage
+             * @description True when legacy events are mixed into the range
+             */
+            partial_coverage: boolean;
         };
         /**
          * CrossoverTemplateAdoptRequest
@@ -5056,6 +6178,48 @@ export interface components {
             width: number;
         };
         /**
+         * EffortBandOutcome
+         * @description Recommendation outcomes bucketed by effort band (die size).
+         */
+        EffortBandOutcome: {
+            /**
+             * Acceptance Rate
+             * @description accepted / rolls (0.0 when no rolls)
+             */
+            acceptance_rate: number;
+            /**
+             * Accepted
+             * @description Rolls whose thread was later rated in range
+             */
+            accepted: number;
+            /**
+             * Band
+             * @description Coarse effort band derived from the die size
+             * @enum {string}
+             */
+            band: "low" | "medium" | "high";
+            /**
+             * Die
+             * @description Die size that represents the effort band
+             */
+            die: number;
+            /**
+             * Rolls
+             * @description Number of roll events in this band
+             */
+            rolls: number;
+            /**
+             * Snooze Rate
+             * @description snoozed / rolls (0.0 when no rolls)
+             */
+            snooze_rate: number;
+            /**
+             * Snoozed
+             * @description Rolls whose thread was later snoozed in range
+             */
+            snoozed: number;
+        };
+        /**
          * EventDetail
          * @description Schema for event detail in session details.
          */
@@ -5085,10 +6249,268 @@ export interface components {
             /** Type */
             type: string;
         };
+        /**
+         * ExternalIdentityResponse
+         * @description Schema for responding with external identity information.
+         */
+        ExternalIdentityResponse: {
+            /**
+             * Created At
+             * @description Creation timestamp (Unix epoch)
+             */
+            created_at: number;
+            /**
+             * Entity Type
+             * @description Entity type: 'issue' or 'series'
+             */
+            entity_type: string;
+            /**
+             * External Id
+             * @description Provider-specific identifier
+             */
+            external_id: string;
+            /**
+             * External Url
+             * @description Optional URL to the external resource
+             */
+            external_url?: string | null;
+            /**
+             * Id
+             * @description Database ID of the external identity
+             */
+            id: number;
+            /**
+             * Metadata Json
+             * @description Arbitrary metadata from the provider
+             */
+            metadata_json?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Provider
+             * @description External provider name
+             */
+            provider: string;
+            /**
+             * Provider Updated At
+             * @description Timestamp of last provider update
+             */
+            provider_updated_at?: number | null;
+            /**
+             * Updated At
+             * @description Last update timestamp (Unix epoch)
+             */
+            updated_at: number;
+        };
+        /**
+         * ExternalIdentityUpsert
+         * @description Schema for upserting an external identity (series or issue).
+         */
+        ExternalIdentityUpsert: {
+            /**
+             * Entity Type
+             * @description Entity type: 'series' or 'issue'
+             */
+            entity_type: string;
+            /**
+             * External Id
+             * @description Provider-specific identifier
+             */
+            external_id: string;
+            /**
+             * External Url
+             * @description Optional URL to the external resource
+             */
+            external_url?: string | null;
+            /**
+             * Metadata Json
+             * @description Optional arbitrary metadata from the provider
+             */
+            metadata_json?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Provider
+             * @description External provider name (e.g., comicvine, cbl)
+             */
+            provider: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * ImportIssueRequest
+         * @description Request to import a ComicVine issue as a new identity-preserving thread.
+         *
+         *     The optional reading-order placement is neighbor-anchored: the anchors are
+         *     the thread IDs of the arc members immediately surrounding the imported
+         *     issue in story-arc order. Anchors absent from the target order fall back
+         *     per ``resolve_anchored_position`` rules.
+         */
+        ImportIssueRequest: {
+            /** Anchor After Thread Id */
+            anchor_after_thread_id?: number | null;
+            /** Anchor Before Thread Id */
+            anchor_before_thread_id?: number | null;
+            /**
+             * Comicvine Issue Id
+             * @description ComicVine issue ID to preserve
+             */
+            comicvine_issue_id: number;
+            /** Issue Number */
+            issue_number?: string | null;
+            /** Reading Order Id */
+            reading_order_id?: number | null;
+            /** Title */
+            title: string;
+        };
+        /**
+         * ImportIssueResponse
+         * @description Result of an identity-preserving ComicVine issue import.
+         */
+        ImportIssueResponse: {
+            /** External Identity Id */
+            external_identity_id: number;
+            /** Issue Id */
+            issue_id: number;
+            /** Position */
+            position?: number | null;
+            /** Reading Order Id */
+            reading_order_id?: number | null;
+            /** Thread Id */
+            thread_id: number;
+            /** Total Items */
+            total_items?: number | null;
+        };
+        /**
+         * InsertReadingOrderItemRequest
+         * @description Request schema for inserting an item into a reading order.
+         */
+        InsertReadingOrderItemRequest: {
+            /** Position */
+            position: number;
+            /** Thread Id */
+            thread_id: number;
+        };
+        /**
+         * InsertReadingOrderItemResponse
+         * @description Response schema for inserting an item into a reading order.
+         */
+        InsertReadingOrderItemResponse: {
+            /** Position */
+            position: number;
+            /** Reading Order Id */
+            reading_order_id: number;
+            /** Thread Id */
+            thread_id: number;
+            /** Total Items */
+            total_items: number;
+        };
+        /**
+         * IssueAttachRequest
+         * @description Schema for attaching an issue to a thread.
+         */
+        IssueAttachRequest: {
+            /**
+             * Confidence
+             * @description Optional confidence score (0-1)
+             */
+            confidence?: number | null;
+            /**
+             * Entity Type
+             * @description Entity type: 'series' or 'issue'
+             */
+            entity_type: string;
+            /**
+             * Evidence Source
+             * @description Optional source of the evidence
+             */
+            evidence_source?: string | null;
+            /**
+             * External Id
+             * @description Provider-specific identifier
+             */
+            external_id: string;
+            /**
+             * External Url
+             * @description Optional URL to the external resource
+             */
+            external_url?: string | null;
+            /**
+             * Issue Id
+             * @description Internal ComicPile issue ID to attach the external identity to
+             */
+            issue_id: number;
+            /**
+             * Metadata Json
+             * @description Optional arbitrary metadata from the provider
+             */
+            metadata_json?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Provider
+             * @description External provider name (e.g., comicvine, cbl)
+             */
+            provider: string;
+            /**
+             * Status
+             * @description Mapping status: unresolved, candidate, confirmed, rejected
+             */
+            status: string;
+        };
+        /**
+         * IssueAttachResponse
+         * @description Schema for the issue-attach response.
+         */
+        IssueAttachResponse: {
+            /**
+             * Confidence
+             * @description Confidence score
+             */
+            confidence?: number | null;
+            /**
+             * Created At
+             * @description Creation timestamp (Unix epoch)
+             */
+            created_at: number;
+            /**
+             * Evidence Source
+             * @description Evidence source
+             */
+            evidence_source?: string | null;
+            /**
+             * External Identity Id
+             * @description External identity ID
+             */
+            external_identity_id: number;
+            /**
+             * Id
+             * @description Mapping database ID
+             */
+            id: number;
+            /**
+             * Issue Id
+             * @description Issue database ID
+             */
+            issue_id: number;
+            /**
+             * Rejection Reason
+             * @description Optional rejection reason
+             */
+            rejection_reason?: string | null;
+            /**
+             * Status
+             * @description Mapping status
+             */
+            status: string;
+            /**
+             * Updated At
+             * @description Last update timestamp (Unix epoch)
+             */
+            updated_at: number;
         };
         /**
          * IssueCreateRange
@@ -5133,6 +6555,70 @@ export interface components {
             source_thread_id: number;
             /** Source Thread Title */
             source_thread_title: string;
+        };
+        /**
+         * IssueExternalIdentityMappingResponse
+         * @description Schema for issue-external identity mapping responses.
+         */
+        IssueExternalIdentityMappingResponse: {
+            /** Confidence */
+            confidence?: number | null;
+            /** Created At */
+            created_at: number;
+            /** Evidence Source */
+            evidence_source?: string | null;
+            /** External Identity Id */
+            external_identity_id: number;
+            /** Id */
+            id: number;
+            /** Issue Id */
+            issue_id: number;
+            /** Rejection Reason */
+            rejection_reason?: string | null;
+            /** Status */
+            status: string;
+            /** Updated At */
+            updated_at: number;
+        };
+        /**
+         * IssueIdentityMapping
+         * @description One external identity mapping for a ComicPile issue.
+         */
+        IssueIdentityMapping: {
+            /** Comicvine Id */
+            comicvine_id: string;
+            /** Confidence */
+            confidence?: number | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Evidence Source */
+            evidence_source?: string | null;
+            /** External Identity Id */
+            external_identity_id: number;
+            /** Provider */
+            provider: string;
+            /** Status */
+            status: string;
+        };
+        /**
+         * IssueIdentityResponse
+         * @description Current identity state for one ComicPile issue.
+         */
+        IssueIdentityResponse: {
+            /** Candidate Mappings */
+            candidate_mappings: components["schemas"]["IssueIdentityMapping"][];
+            /** Confirmed Mappings */
+            confirmed_mappings: components["schemas"]["IssueIdentityMapping"][];
+            /** Has Confirmed Identity */
+            has_confirmed_identity: boolean;
+            /** Has Unresolved */
+            has_unresolved: boolean;
+            /** Issue Id */
+            issue_id: number;
+            /** Thread Id */
+            thread_id: number;
+            /** Thread Title */
+            thread_title: string;
         };
         /**
          * IssueListResponse
@@ -5200,6 +6686,60 @@ export interface components {
             status: string;
             /** Thread Id */
             thread_id: number;
+        };
+        /**
+         * MetadataCorrectionRequest
+         * @description Request to apply a canonical metadata correction.
+         */
+        MetadataCorrectionRequest: {
+            /**
+             * Canonical Value
+             * @description Corrected canonical value
+             */
+            canonical_value: string;
+            /**
+             * Field Name
+             * @description Metadata field to correct
+             */
+            field_name: string;
+            /**
+             * Reason
+             * @description Reason for correction
+             */
+            reason?: string | null;
+        };
+        /**
+         * MetadataCorrectionRevertRequest
+         * @description Request to revert a canonical correction.
+         */
+        MetadataCorrectionRevertRequest: {
+            /**
+             * Correction Id
+             * @description ID of the correction to revert
+             */
+            correction_id: number;
+        };
+        /**
+         * MetadataCorrectionsResponse
+         * @description List of corrections for a ComicPile issue.
+         */
+        MetadataCorrectionsResponse: {
+            /** Corrections */
+            corrections: components["schemas"]["CanonicalCorrection"][];
+            /** Issue Id */
+            issue_id: number;
+        };
+        /**
+         * MetadataRefreshResponse
+         * @description Result of a provider metadata refresh request.
+         */
+        MetadataRefreshResponse: {
+            /** Comicvine Issue Id */
+            comicvine_issue_id?: string | null;
+            /** Issue Id */
+            issue_id: number;
+            /** Refreshed */
+            refreshed: boolean;
         };
         /**
          * MigrateToIssuesRequest
@@ -5412,6 +6952,8 @@ export interface components {
          * @description One persisted one-hop dependency or continuity edge.
          */
         ReaderContextEdge: {
+            /** Explanation */
+            explanation?: string | null;
             /** Id */
             id: number;
             /**
@@ -5423,8 +6965,24 @@ export interface components {
             note?: string | null;
             /** Source Issue Id */
             source_issue_id: number;
+            /** Source Issue Number */
+            source_issue_number?: string | null;
+            /** Source Label */
+            source_label?: string | null;
+            /** Source Thread Id */
+            source_thread_id?: number | null;
+            /** Source Thread Title */
+            source_thread_title?: string | null;
             /** Target Issue Id */
             target_issue_id: number;
+            /** Target Issue Number */
+            target_issue_number?: string | null;
+            /** Target Label */
+            target_label?: string | null;
+            /** Target Thread Id */
+            target_thread_id?: number | null;
+            /** Target Thread Title */
+            target_thread_title?: string | null;
         };
         /**
          * ReaderContextLocalChain
@@ -5523,6 +7081,52 @@ export interface components {
             recent_ratings?: components["schemas"]["ReaderContextRecentRating"][];
             /** Series Name */
             series_name?: string | null;
+        };
+        /**
+         * ReadingModeResponse
+         * @description Current reading-mode state for the active session.
+         */
+        ReadingModeResponse: {
+            /** Bandwidth */
+            bandwidth: string | null;
+            /** Intent */
+            intent: string | null;
+            /** Source */
+            source: string | null;
+            /** Suggested */
+            suggested: boolean;
+        };
+        /**
+         * ReadingModeSetRequest
+         * @description Request to set the active session reading mode.
+         *
+         *     Callers may submit resolved ``bandwidth``/``intent`` directly (manual
+         *     selector), or submit raw quiz ``answers`` with ``source="quiz"`` and let the
+         *     server resolve them through the canonical contract.
+         */
+        ReadingModeSetRequest: {
+            /**
+             * Answers
+             * @description Raw quiz answers keyed by question ID
+             */
+            answers?: {
+                [key: string]: string;
+            } | null;
+            /**
+             * Bandwidth
+             * @description Resolved bandwidth value
+             */
+            bandwidth?: string | null;
+            /**
+             * Intent
+             * @description Resolved intent value
+             */
+            intent?: string | null;
+            /**
+             * Source
+             * @description Origin of the setting: 'quiz' or 'manual'
+             */
+            source: string;
         };
         /**
          * ReadingOrderItemResponse
@@ -5678,6 +7282,95 @@ export interface components {
             total_items: number;
         };
         /**
+         * RecommendationDiagnosticsResponse
+         * @description Bounded, read-only recommendation-quality summary for one user.
+         */
+        RecommendationDiagnosticsResponse: {
+            /**
+             * Active Algorithm Version
+             * @description Algorithm version currently active for this user
+             */
+            active_algorithm_version: string;
+            /**
+             * Active Control Mode
+             * @description Control mode currently active for this user
+             */
+            active_control_mode: string;
+            /**
+             * Avg Consecutive Snoozes Before Acceptance
+             * @description Mean snooze run before acceptance (0.0 when none)
+             */
+            avg_consecutive_snoozes_before_acceptance: number;
+            /**
+             * Avg Time To Acceptance Seconds
+             * @description Mean session-start to first acceptance (None when none)
+             */
+            avg_time_to_acceptance_seconds: number | null;
+            /** @description Coverage/legacy labeling for the range */
+            coverage: components["schemas"]["CoverageInfo"];
+            /** Effort Band Outcomes */
+            effort_band_outcomes?: components["schemas"]["EffortBandOutcome"][];
+            /**
+             * First Roll Adoption Rate
+             * @description Sessions where the first roll was accepted
+             */
+            first_roll_adoption_rate: number;
+            /** Groups By Control Mode */
+            groups_by_control_mode?: components["schemas"]["ControlModeGroup"][];
+            /**
+             * Max Consecutive Snoozes Before Acceptance
+             * @description Longest snooze run before any acceptance in a session
+             */
+            max_consecutive_snoozes_before_acceptance: number;
+            /**
+             * Mode Corrections
+             * @description Explicit manual/override launch-mode corrections
+             */
+            mode_corrections: number;
+            /**
+             * Range End
+             * Format: date-time
+             * @description Exclusive upper bound of the range
+             */
+            range_end: string;
+            /**
+             * Range Start
+             * Format: date-time
+             * @description Inclusive lower bound of the range
+             */
+            range_start: string;
+            /**
+             * Rating Average
+             * @description Mean rating across rated sessions (None when none)
+             */
+            rating_average: number | null;
+            /**
+             * Rating Distribution
+             * @description Rating histogram by integer bucket
+             */
+            rating_distribution?: {
+                [key: string]: number;
+            };
+            /**
+             * Snoozes Per Completed Read
+             * @description total_snoozes / total_rates (0.0 when no reads)
+             */
+            snoozes_per_completed_read: number;
+            /** Total Rates */
+            total_rates: number;
+            /** Total Rolls */
+            total_rolls: number;
+            /** Total Sessions */
+            total_sessions: number;
+            /** Total Snoozes */
+            total_snoozes: number;
+            /**
+             * User Id
+             * @description Owner of the summarized data
+             */
+            user_id: number;
+        };
+        /**
          * RefreshTokenRequest
          * @description Request schema for token refresh.
          */
@@ -5810,6 +7503,22 @@ export interface components {
              * @enum {string}
              */
             visibility: "public" | "internal";
+        };
+        /**
+         * ReplaceIdentityRequest
+         * @description Request to replace the current confirmed identity with a new one.
+         */
+        ReplaceIdentityRequest: {
+            /**
+             * Comicvine Issue Id
+             * @description New ComicVine issue ID to confirm
+             */
+            comicvine_issue_id: number;
+            /**
+             * Reason
+             * @description Optional reason for replacement
+             */
+            reason?: string | null;
         };
         /**
          * RollBootstrapResponse
@@ -6013,6 +7722,32 @@ export interface components {
             total_issues?: number | null;
         };
         /**
+         * RouteTrafficCounter
+         * @description One aggregated (method, route template, status class) tally.
+         */
+        RouteTrafficCounter: {
+            /**
+             * Count
+             * @description Requests observed since process start.
+             */
+            count: number;
+            /**
+             * Method
+             * @description HTTP method, e.g. GET.
+             */
+            method: string;
+            /**
+             * Route
+             * @description Routed path template, e.g. /api/v1/threads/{thread_id}.
+             */
+            route: string;
+            /**
+             * Status Class
+             * @description Response status class, e.g. 2xx or 4xx.
+             */
+            status_class: string;
+        };
+        /**
          * SessionBandwidthState
          * @description Canonical ephemeral bandwidth state for the active reading session.
          *
@@ -6024,10 +7759,7 @@ export interface components {
         SessionBandwidthState: {
             /** Active Bandwidth */
             active_bandwidth: ("light" | "balanced" | "deep") | null;
-            /**
-             * Confidence
-             * @default null
-             */
+            /** Confidence */
             confidence: number | null;
             /** Mode Version */
             mode_version: string | null;
@@ -6094,6 +7826,17 @@ export interface components {
             last_rolled_result: number | null;
             /** Manual Die */
             manual_die: number | null;
+            /** Reading Bandwidth */
+            reading_bandwidth?: string | null;
+            /** Reading Intent */
+            reading_intent?: string | null;
+            /** Reading Mode Source */
+            reading_mode_source?: string | null;
+            /**
+             * Reading Mode Suggested
+             * @default false
+             */
+            reading_mode_suggested: boolean;
             /** Snapshot Count */
             snapshot_count: number;
             /** Start Die */
@@ -6125,6 +7868,17 @@ export interface components {
             manual_die: number | null;
             /** Pending Thread Id */
             pending_thread_id?: number | null;
+            /** Reading Bandwidth */
+            reading_bandwidth?: string | null;
+            /** Reading Intent */
+            reading_intent?: string | null;
+            /** Reading Mode Source */
+            reading_mode_source?: string | null;
+            /**
+             * Reading Mode Suggested
+             * @default false
+             */
+            reading_mode_suggested: boolean;
             /** Snapshot Count */
             snapshot_count: number;
             /**
@@ -6318,6 +8072,28 @@ export interface components {
             total_issues?: number | null;
         };
         /**
+         * ThreadExternalSeriesMappingResponse
+         * @description Schema for thread-series mapping responses.
+         */
+        ThreadExternalSeriesMappingResponse: {
+            /** Confidence */
+            confidence?: number | null;
+            /** Created At */
+            created_at: number;
+            /** Evidence Source */
+            evidence_source?: string | null;
+            /** External Identity Id */
+            external_identity_id: number;
+            /** Id */
+            id: number;
+            /** Status */
+            status: string;
+            /** Thread Id */
+            thread_id: number;
+            /** Updated At */
+            updated_at: number;
+        };
+        /**
          * ThreadIssueDependenciesResponse
          * @description Issue dependency payloads for every issue in one owned thread.
          */
@@ -6385,6 +8161,73 @@ export interface components {
             total_issues?: number | null;
         };
         /**
+         * ThreadSeriesAttachRequest
+         * @description Schema for attaching a series to a thread.
+         */
+        ThreadSeriesAttachRequest: {
+            /**
+             * Confidence
+             * @description Optional confidence score (0-1)
+             */
+            confidence?: number | null;
+            /**
+             * Evidence Source
+             * @description Optional source of the evidence
+             */
+            evidence_source?: string | null;
+            /**
+             * Status
+             * @description Mapping status: unresolved, candidate, confirmed, rejected
+             */
+            status: string;
+        };
+        /**
+         * ThreadSeriesAttachResponse
+         * @description Schema for the series-attach response.
+         */
+        ThreadSeriesAttachResponse: {
+            /**
+             * Confidence
+             * @description Confidence score
+             */
+            confidence?: number | null;
+            /**
+             * Created At
+             * @description Creation timestamp (Unix epoch)
+             */
+            created_at: number;
+            /**
+             * Evidence Source
+             * @description Evidence source
+             */
+            evidence_source?: string | null;
+            /**
+             * External Identity Id
+             * @description External identity ID
+             */
+            external_identity_id: number;
+            /**
+             * Id
+             * @description Mapping database ID
+             */
+            id: number;
+            /**
+             * Status
+             * @description Mapping status
+             */
+            status: string;
+            /**
+             * Thread Id
+             * @description Thread ID
+             */
+            thread_id: number;
+            /**
+             * Updated At
+             * @description Last update timestamp (Unix epoch)
+             */
+            updated_at: number;
+        };
+        /**
          * ThreadUpdate
          * @description Schema for updating a thread.
          */
@@ -6414,6 +8257,26 @@ export interface components {
              * @default bearer
              */
             token_type: string;
+        };
+        /**
+         * TrafficMetricsSnapshot
+         * @description Process-local traffic counters for one serverless instance.
+         *
+         *     Counters are monotonic within a process lifetime, so a collector can
+         *     reconstruct fleet-wide totals by keeping the maximum count per key across
+         *     polls of the same ``instance_id``.
+         */
+        TrafficMetricsSnapshot: {
+            /**
+             * Counters
+             * @description Aggregated request tallies sorted deterministically.
+             */
+            counters?: components["schemas"]["RouteTrafficCounter"][];
+            /**
+             * Instance Id
+             * @description Stable identifier for this process instance.
+             */
+            instance_id: string;
         };
         /**
          * UnreadIssueDetail
@@ -7952,6 +9815,123 @@ export interface operations {
             };
         };
     };
+    delete_test_data_api_v1_admin_delete_test_data__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: number;
+                    };
+                };
+            };
+        };
+    };
+    export_csv_api_v1_admin_export_csv__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    export_json_api_v1_admin_export_json__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    export_summary_api_v1_admin_export_summary__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    import_csv_api_v1_admin_import_csv__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_csv_api_v1_admin_import_csv__post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: number | string[];
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_metrics_api_v1_analytics_metrics_get: {
         parameters: {
             query?: never;
@@ -8128,6 +10108,577 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_bug_report_api_v1_bug_reports__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BugReportCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BugReportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_catalog_issues_api_v1_catalog_issues_get: {
+        parameters: {
+            query?: {
+                /** @description Search by issue external_id */
+                search?: string | null;
+                /** @description Filter by provider */
+                provider?: string | null;
+                /** @description Filter by series external_id (e.g., 4050-justice-league) */
+                series_external_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogIssueSearchResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_catalog_issue_api_v1_catalog_issues_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExternalIdentityUpsert"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalIdentityResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_issue_mappings_api_v1_catalog_mappings_issues_get: {
+        parameters: {
+            query?: {
+                /** @description Filter by issue_id */
+                issue_id?: number | null;
+                /** @description Filter by mapping status */
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueExternalIdentityMappingResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_series_mappings_api_v1_catalog_mappings_series_get: {
+        parameters: {
+            query?: {
+                /** @description Filter by thread_id */
+                thread_id?: number | null;
+                /** @description Filter by mapping status */
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadExternalSeriesMappingResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_catalog_series_api_v1_catalog_series_get: {
+        parameters: {
+            query?: {
+                /** @description Search by series external_id */
+                search?: string | null;
+                /** @description Filter by provider */
+                provider?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogSeriesSearchResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_catalog_series_api_v1_catalog_series_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExternalIdentityUpsert"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalIdentityResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_get_issue_identity_api_v1_comicvine_issues__issue_id__identity_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueIdentityResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_confirm_identity_api_v1_comicvine_issues__issue_id__identity_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmIdentityRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueIdentityResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_replace_identity_api_v1_comicvine_issues__issue_id__identity_replace_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceIdentityRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueIdentityResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_apply_correction_api_v1_comicvine_issues__issue_id__metadata_correct_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetadataCorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataCorrectionsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_list_corrections_api_v1_comicvine_issues__issue_id__metadata_corrections_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataCorrectionsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_refresh_metadata_api_v1_comicvine_issues__issue_id__metadata_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataRefreshResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_revert_correction_api_v1_comicvine_issues__issue_id__metadata_revert_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetadataCorrectionRevertRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataCorrectionsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_import_issue_api_v1_comicvine_issues_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportIssueRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportIssueResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_search_comicvine_series_api_v1_comicvine_search_series_get: {
+        parameters: {
+            query: {
+                /** @description Series search query */
+                q: string;
+                /** @description Maximum results */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComicVineSeriesSearchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_get_series_issues_api_v1_comicvine_series__comicvine_volume_id__issues_get: {
+        parameters: {
+            query?: {
+                /** @description Optional pre-fetched series name */
+                series_name?: string;
+            };
+            header?: never;
+            path: {
+                comicvine_volume_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComicVineSeriesIssuesResponse"];
                 };
             };
             /** @description Validation Error */
@@ -8652,6 +11203,28 @@ export interface operations {
             };
         };
     };
+    log_message_api_v1_debug_log_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+    };
     create_dependency_api_v1_dependencies__post: {
         parameters: {
             query?: never;
@@ -9048,6 +11621,28 @@ export interface operations {
             };
         };
     };
+    metrics_api_v1_metrics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: number | null;
+                    };
+                };
+            };
+        };
+    };
     shuffle_threads_api_v1_queue_shuffle__post: {
         parameters: {
             query?: never;
@@ -9192,6 +11787,99 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_reading_mode_api_v1_reading_mode_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingModeResponse"];
+                };
+            };
+        };
+    };
+    set_reading_mode_api_v1_reading_mode_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingModeSetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingModeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_reading_mode_suggestion_api_v1_reading_mode_dismiss_suggestion_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingModeResponse"];
+                };
+            };
+        };
+    };
+    suggest_reading_mode_api_v1_reading_mode_suggest_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingModeResponse"];
                 };
             };
         };
@@ -9491,6 +12179,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReadingOrderListResponse"];
+                };
+            };
+        };
+    };
+    insert_reading_order_item_api_v1_reading_orders__reading_order_id__items_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reading_order_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InsertReadingOrderItemRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InsertReadingOrderItemResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_recommendation_diagnostics_api_v1_recommendations_diagnostics_get: {
+        parameters: {
+            query?: {
+                /** @description Inclusive lower bound (ISO 8601). Defaults to 30 days ago. */
+                range_start?: string | null;
+                /** @description Exclusive upper bound (ISO 8601). Defaults to now. */
+                range_end?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationDiagnosticsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -10576,6 +13333,42 @@ export interface operations {
             };
         };
     };
+    attach_issue_to_thread_api_v1_threads__thread_id__issues__issue_id__attach_external_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueAttachRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueAttachResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     reorder_issues_api_v1_threads__thread_id__issues_reorder_post: {
         parameters: {
             query?: never;
@@ -10658,6 +13451,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ThreadReadingOrdersResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    attach_series_to_thread_api_v1_threads__thread_id__series__series_external_id__attach_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+                series_external_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThreadSeriesAttachRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadSeriesAttachResponse"];
                 };
             };
             /** @description Validation Error */
@@ -10901,6 +13730,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_traffic_metrics_api_v1_traffic_metrics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrafficMetricsSnapshot"];
                 };
             };
         };
