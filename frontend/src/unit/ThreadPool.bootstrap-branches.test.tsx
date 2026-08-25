@@ -16,7 +16,7 @@ describe('ThreadPool bootstrap edge branches', () => {
       <ThreadPool
         pool={[{ id: 1, title: 'Saga', format: 'Comic' }]}
         blockedThreads={[{ id: 2, title: 'Monstress', format: 'Comic' }]}
-        blockingReasonMap={{}}
+        blockingDependencyMap={{}}
         isRatingView={false}
         isRolling={false}
         rolledResult={null}

@@ -14,7 +14,7 @@ from app.models.external_identity import (
 from app.models.issue import Issue
 from app.models.thread import Thread
 
-MAPPING_STATUSES = frozenset({"unresolved", "candidate", "confirmed", "rejected"})
+MAPPING_STATUSES = frozenset({"unresolved", "candidate", "confirmed", "rejected", "deferred"})
 ENTITY_TYPES = frozenset({"issue", "series"})
 
 

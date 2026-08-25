@@ -290,7 +290,7 @@ export default function RollPage() {
             <ThreadPool
               pool={pool}
               blockedThreads={blockedThreads}
-              blockingReasonMap={state.blockingReasonMap}
+              blockingDependencyMap={state.blockingDependencyMap}
               dieSize={dieSize}
               isRatingView={state.isRatingView}
               isRolling={state.isRolling}

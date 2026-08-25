@@ -5,7 +5,7 @@ import { ThreadPool } from '../pages/RollPage/components/ThreadPool'
 
 const baseProps = {
   blockedThreads: [],
-  blockingReasonMap: {},
+  blockingDependencyMap: {},
   isRatingView: false,
   isRolling: false,
   rolledResult: null,
