@@ -503,6 +503,33 @@ async def get_roll_pool_rows(
     return [(row[0], row[1], row[2]) for row in result]
 
 
+async def get_bounded_roll_pool_rows(
+    user_id: int,
+    db: AsyncSession,
+    current_die: int,
+    snoozed_ids: list[int] | None = None,
+) -> list[tuple[Thread, int, str | None]]:
+    """Return the bounded roll-candidate pool for weighted chooser integration.
+
+    Applies the die-size boundary on top of :func:`get_roll_pool_rows` so that
+    contextual weighting logic cannot draw candidates from outside the active
+    die pool.  The pool remains uniform within these boundaries in this phase;
+    weighting factors are layered on later without changing the boundary.
+
+    Args:
+        user_id: The user ID to filter threads by.
+        db: The database session.
+        current_die: The current die size from the dice ladder; caps pool size.
+        snoozed_ids: Optional list of thread IDs to exclude from the pool.
+
+    Returns:
+        List of ``(Thread, unread_count, next_issue_number)`` tuples, in
+        queue-position order, truncated to ``current_die`` entries.
+    """
+    rows = await get_roll_pool_rows(user_id, db, snoozed_ids)
+    return rows[:current_die]
+
+
 async def get_stale_threads(user_id: int, db: AsyncSession, days: int = 7) -> list[Thread]:
     """Get threads not read in the specified number of days."""
     cutoff_date = datetime.now(UTC) - timedelta(days=days)

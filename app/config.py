@@ -223,6 +223,26 @@ class RatingSettings(BaseSettings):
         return v
 
 
+class RecommendationSettings(BaseSettings):
+    """Recommendation-quality diagnostics and algorithm versioning settings."""
+
+    model_config = SettingsConfigDict(env_file=[".env.test", ".env", ".envrc"], extra="ignore")
+
+    algorithm_version: str = Field(
+        default="v1-contextual",
+        description="Canonical recommendation algorithm version identifier used in diagnostics",
+        json_schema_extra={"env": "RECOMMENDATION_ALGORITHM_VERSION"},
+    )
+    control_mode: Literal["contextual", "legacy"] = Field(
+        default="contextual",
+        description=(
+            "Active recommendation control mode. 'legacy' forces unweighted selection "
+            "while leaving instrumentation active."
+        ),
+        json_schema_extra={"env": "RECOMMENDATION_CONTROL_MODE"},
+    )
+
+
 class GitHubSettings(BaseSettings):
     """GitHub integration settings for bug reporting."""
 
@@ -252,26 +272,6 @@ class GitHubSettings(BaseSettings):
             and self.github_repo_owner.strip()
             and self.github_repo_name.strip()
         )
-
-
-class RecommendationSettings(BaseSettings):
-    """Recommendation-quality diagnostics and algorithm versioning settings."""
-
-    model_config = SettingsConfigDict(env_file=[".env.test", ".env", ".envrc"], extra="ignore")
-
-    algorithm_version: str = Field(
-        default="v1-contextual",
-        description="Canonical recommendation algorithm version identifier used in diagnostics",
-        json_schema_extra={"env": "RECOMMENDATION_ALGORITHM_VERSION"},
-    )
-    control_mode: Literal["contextual", "legacy"] = Field(
-        default="contextual",
-        description=(
-            "Active recommendation control mode. 'legacy' forces unweighted selection "
-            "while leaving instrumentation active."
-        ),
-        json_schema_extra={"env": "RECOMMENDATION_CONTROL_MODE"},
-    )
 
 
 class RedisSettings(BaseSettings):
