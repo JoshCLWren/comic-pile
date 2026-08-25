@@ -27,7 +27,6 @@ from app.api import (
     catalog,
     comicvine_resolution,
     debug,
-
     dependency,
     issue,
     metrics,
