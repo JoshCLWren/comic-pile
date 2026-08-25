@@ -105,6 +105,9 @@ class Event(Base):
     recommendation_context: Mapped[dict[str, object] | None] = mapped_column(
         JSON, nullable=True
     )
+    # Optional JSON metadata capturing decision context at event time (e.g.
+    # Snooze correction before/after bandwidth and reason codes).
+    context: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
 
     __table_args__ = (
         Index("ix_event_session_id", "session_id"),

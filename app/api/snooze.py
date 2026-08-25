@@ -365,6 +365,9 @@ async def snooze_thread(
         last_snooze_direction=last_snooze_direction,
     )
 
+    # Extract pre-correction values before mutating session state
+    confidence_before = current_session.bandwidth_confidence or 0.5
+
     # Apply correction to session state (#1724)
     current_session.active_bandwidth = correction_result.active_bandwidth
     current_session.bandwidth_confidence = correction_result.active_confidence
@@ -372,7 +375,7 @@ async def snooze_thread(
     if current_session.predicted_bandwidth is None:
         current_session.predicted_bandwidth = current_bw
 
-    # Extract correction values for response (before correction is applied to session state)
+    # Extract correction values for response
     pre_correction = SnoozeCorrectionInfo(
         bandwidth_changed=correction_result.bandwidth_changed,
         active_bandwidth=correction_result.active_bandwidth,
@@ -382,12 +385,25 @@ async def snooze_thread(
         suggest_clarification=correction_result.suggest_clarification,
     )
 
+    # Record before/after bandwidth and reason codes in event context
+    snooze_context: dict[str, object] = {
+        "bandwidth_before": current_bw,
+        "bandwidth_after": correction_result.active_bandwidth,
+        "confidence_before": confidence_before,
+        "confidence_after": correction_result.active_confidence,
+        "bandwidth_source": "snooze",
+        "reason_code": correction_result.reason_code,
+        "consecutive_snoozes": consecutive_snoozes,
+        "suggest_clarification": correction_result.suggest_clarification,
+    }
+
     event = Event(
         type="snooze",
         session_id=current_session_id,
         thread_id=pending_thread_id,
         die=current_die,
         die_after=new_die,
+        context=snooze_context,
         source_roll_event_id=await _find_source_roll_event(
             db, current_session_id, pending_thread_id
         ),

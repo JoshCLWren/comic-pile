@@ -81,6 +81,12 @@ async def test_snooze_success(
     assert snooze_event.thread_id == thread.id
     assert snooze_event.die == 6
     assert snooze_event.die_after == 8
+    # Verify bandwidth correction context is recorded
+    assert snooze_event.context is not None
+    assert "bandwidth_before" in snooze_event.context
+    assert "reason_code" in snooze_event.context
+    assert "consecutive_snoozes" in snooze_event.context
+    assert snooze_event.context["consecutive_snoozes"] == 1
 
 
 @pytest.mark.asyncio
