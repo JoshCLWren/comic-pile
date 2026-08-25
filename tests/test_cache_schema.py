@@ -60,9 +60,9 @@ def _real_heads() -> list[str]:
 
 
 def test_cache_migration_is_the_single_head() -> None:
-    """The cache migration must be the only Alembic head; duplicate down_revisions branch history."""
-    assert _real_heads() == ["h9i0j1k2l3m4"], (
-        f"Expected a single head h9i0j1k2l3m4, got {_real_heads()}"
+    """The migration history must have a single head; duplicate down_revisions branch history."""
+    assert _real_heads() == ["c85700000001"], (
+        f"Expected a single head c85700000001, got {_real_heads()}"
     )
 
 
