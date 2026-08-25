@@ -229,7 +229,7 @@ async def confirm_inbox_candidate(
 
     issue = await db.get(Issue, mapping.issue_id)
     thread = await db.get(Thread, issue.thread_id) if issue else None
-    if not thread or thread.user_id != user_id:
+    if not issue or not thread or thread.user_id != user_id:
         raise ExternalIdentityMappingError("mapping not owned by this user")
 
     await link_issue_external_identity(
@@ -290,7 +290,7 @@ async def reject_inbox_candidate(
 
     issue = await db.get(Issue, mapping.issue_id)
     thread = await db.get(Thread, issue.thread_id) if issue else None
-    if not thread or thread.user_id != user_id:
+    if not issue or not thread or thread.user_id != user_id:
         raise ExternalIdentityMappingError("mapping not owned by this user")
 
     await link_issue_external_identity(
@@ -325,7 +325,7 @@ async def defer_inbox_item(
 
     issue = await db.get(Issue, mapping.issue_id)
     thread = await db.get(Thread, issue.thread_id) if issue else None
-    if not thread or thread.user_id != user_id:
+    if not issue or not thread or thread.user_id != user_id:
         raise ExternalIdentityMappingError("mapping not owned by this user")
 
     mapping.status = "deferred"
@@ -357,7 +357,7 @@ async def skip_inbox_item(
 
     issue = await db.get(Issue, mapping.issue_id)
     thread = await db.get(Thread, issue.thread_id) if issue else None
-    if not thread or thread.user_id != user_id:
+    if not issue or not thread or thread.user_id != user_id:
         raise ExternalIdentityMappingError("mapping not owned by this user")
 
     mapping.status = "rejected"
