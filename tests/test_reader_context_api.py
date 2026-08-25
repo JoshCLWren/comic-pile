@@ -645,6 +645,8 @@ async def test_reader_context_cross_thread_edge_without_expansion(
             "target_issue_number": other_issues[0].issue_number,
             "source_thread_title": "Neighborhood",
             "target_thread_title": "Distant",
+            "source_status": "read",
+            "target_status": "read",
             "note": "cross-thread",
             "source_label": "Neighborhood #3",
             "target_label": "Distant #1",
@@ -766,12 +768,73 @@ async def test_reader_context_continuity_rule_edges(
             "target_issue_number": issues[3].issue_number,
             "source_thread_title": "Rules",
             "target_thread_title": "Rules",
+            "source_status": "read",
+            "target_status": "read",
             "note": "directive",
             "source_label": "Rules #2",
             "target_label": "Rules #4",
             "explanation": "Rules #2 must be read before Rules #4",
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_reader_context_edge_statuses_orient_prerequisites(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Edge payloads carry each endpoint's owned read status for orientation.
+
+    Issue #1916 fixture: the path into the active issue crosses threads, so
+    the reader-facing prerequisite presentation needs authoritative read
+    state for every endpoint instead of guessing from arrow direction.
+    """
+    manhunter_thread, mm = await _make_thread(
+        async_db,
+        default_user,
+        title="Absolute Martian Manhunter",
+        issue_count=4,
+        queue_position=1,
+        read_through=1,
+    )
+    _evil_thread, evil = await _make_thread(
+        async_db,
+        default_user,
+        title="Absolute Evil",
+        issue_count=1,
+        queue_position=2,
+    )
+    into_evil = ContinuityRule(
+        user_id=default_user.id,
+        source_type="issue",
+        source_id=mm[0].id,
+        target_type="issue",
+        target_id=evil[0].id,
+        satisfaction_type="item_read",
+    )
+    into_current = ContinuityRule(
+        user_id=default_user.id,
+        source_type="issue",
+        source_id=evil[0].id,
+        target_type="issue",
+        target_id=mm[1].id,
+        satisfaction_type="item_read",
+    )
+    async_db.add_all([into_evil, into_current])
+    await async_db.flush()
+
+    response = await auth_client.get(f"/api/v1/issues/{mm[1].id}/reader-context")
+
+    assert response.status_code == 200
+    edges = {
+        edge["source_issue_id"]: edge
+        for edge in response.json()["local_chain"]["edges"]
+    }
+    assert edges[mm[0].id]["source_status"] == "read"
+    assert edges[mm[0].id]["target_status"] == "unread"
+    assert edges[evil[0].id]["source_status"] == "unread"
+    assert edges[evil[0].id]["target_status"] == "unread"
 
 
 @pytest.mark.asyncio

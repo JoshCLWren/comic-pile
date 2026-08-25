@@ -684,6 +684,11 @@ async def _local_edges(
             thread.id,
         )
 
+    def _issue_status(raw_issue_id: int) -> str | None:
+        """Return the owned read/unread status of one edge endpoint."""
+        issue = issue_map.get(raw_issue_id)
+        return issue.status if issue is not None else None
+
     edges: list[ReaderContextEdge] = []
 
     def _human_label(raw_label: str | None) -> str:
@@ -718,6 +723,8 @@ async def _local_edges(
                 target_issue_number=target_number,
                 source_thread_title=source_title,
                 target_thread_title=target_title,
+                source_status=_issue_status(dependency.source_issue_id),
+                target_status=_issue_status(dependency.target_issue_id),
                 note=dependency.note,
                 explanation=_build_edge_explanation(
                     "dependency",
@@ -749,6 +756,8 @@ async def _local_edges(
                 target_issue_number=target_number,
                 source_thread_title=source_title,
                 target_thread_title=target_title,
+                source_status=_issue_status(rule.source_id),
+                target_status=_issue_status(rule.target_id),
                 note=rule.note,
                 explanation=_build_edge_explanation(
                     "continuity",

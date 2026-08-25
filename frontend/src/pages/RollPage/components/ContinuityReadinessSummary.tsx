@@ -1,12 +1,15 @@
-import { useContinuityReadiness } from '../../../hooks/useContinuityReadiness'
+import { useContinuityReadiness, type ContinuityReadinessState } from '../../../hooks/useContinuityReadiness'
 import { readingContextType } from '../readingContextTypography'
 
 interface ContinuityReadinessSummaryProps {
   issueId: number | null | undefined
+  /** Shared readiness state from a parent hook; fetches internally when omitted. */
+  readinessState?: ContinuityReadinessState
 }
 
-export function ContinuityReadinessSummary({ issueId }: ContinuityReadinessSummaryProps) {
-  const { readiness, isLoading, error, refetch } = useContinuityReadiness(issueId)
+export function ContinuityReadinessSummary({ issueId, readinessState }: ContinuityReadinessSummaryProps) {
+  const hooked = useContinuityReadiness(issueId, { skip: readinessState !== undefined })
+  const { readiness, isLoading, error, refetch } = readinessState ?? hooked
 
   if (issueId == null) {
     return (
