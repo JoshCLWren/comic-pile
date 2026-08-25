@@ -9,26 +9,27 @@ interface UseRollDependenciesParams {
 
 /**
  * Owns dependency recovery on the Roll page: expanding the hidden blocked
- * pool lazily loads each blocked thread's blocking reasons exactly once, and
- * never loads them while the section stays collapsed.
+ * pool loads every blocked thread's named blockers with one batched request,
+ * and never loads them while the section stays collapsed.
  */
 export function useRollDependencies({ state, bootstrap }: UseRollDependenciesParams) {
-  const { blockedExpanded, setBlockedExpanded, setBlockingReasonMap } = state
+  const { blockedExpanded, setBlockedExpanded, setBlockingDependencyMap } = state
 
   async function handleToggleBlocked() {
     if (!blockedExpanded) {
       const blockedThreads = bootstrap?.blocked_threads ?? []
-      const details = await Promise.all(
-        blockedThreads.map(async (thread): Promise<[number, string[]]> => {
-          try {
-            const info = await dependenciesApi.getBlockingInfo(thread.id)
-            return [thread.id, info.blocking_reasons ?? []]
-          } catch {
-            return [thread.id, []]
-          }
-        }),
-      )
-      setBlockingReasonMap(Object.fromEntries(details))
+      try {
+        const response = await dependenciesApi.getBatchBlockingInfo(
+          blockedThreads.map((thread) => thread.id),
+        )
+        const map: typeof state.blockingDependencyMap = {}
+        for (const [threadId, info] of Object.entries(response.threads)) {
+          map[Number(threadId)] = info.blocking_dependencies ?? []
+        }
+        setBlockingDependencyMap(map)
+      } catch {
+        setBlockingDependencyMap({})
+      }
     }
     setBlockedExpanded(!blockedExpanded)
   }

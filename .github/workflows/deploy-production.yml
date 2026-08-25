@@ -1,0 +1,152 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_run:
+    workflows:
+      - Factory Ready Merge Drain
+      - Factory Completion Drain
+    types:
+      - completed
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: vercel-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  VERCEL_ORG_ID: team_1na05XWOpOb6wB1CA4m3GPRT
+  VERCEL_PROJECT_ID: prj_TLT92644pRPZbZSMoXddCfQLZgK8
+  VERCEL_TEAM_SLUG: joshclwrens-projects
+
+jobs:
+  deploy:
+    name: Migrate Neon and deploy exact main SHA
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out deployment commit
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Install locked runtime dependencies
+        run: uv sync --locked --no-dev
+
+      - name: Get production database connection string
+        id: neon
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$NEON_API_KEY" || -z "$NEON_PROJECT_ID" ]]; then
+            echo "NEON_API_KEY secret and NEON_PROJECT_ID variable are required for production migrations." >&2
+            exit 1
+          fi
+          uri="$(curl --fail --silent --show-error \
+            --url "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri?database_name=neondb&role_name=neondb_owner" \
+            --header 'Accept: application/json' \
+            --header "Authorization: Bearer ${NEON_API_KEY}" \
+            | jq -r '.uri')"
+          if [[ -z "$uri" || "$uri" == "null" ]]; then
+            echo "Failed to retrieve the Neon production connection string." >&2
+            exit 1
+          fi
+          echo "::add-mask::$uri"
+          echo "db_url=$uri" >> "$GITHUB_OUTPUT"
+
+      - name: Check single Alembic head
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+        run: |
+          set -euo pipefail
+          heads="$(.venv/bin/alembic heads)"
+          count="$(grep -c '(head)' <<< "$heads")"
+          if [[ "$count" -ne 1 ]]; then
+            echo "ERROR: $count Alembic heads detected - resolve before deploying" >&2
+            printf '%s\n' "$heads"
+            exit 1
+          fi
+          echo "Single head confirmed: $heads"
+
+      - name: Migrate production database before deploy
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+        run: |
+          set -euo pipefail
+          .venv/bin/alembic upgrade head
+          expected="$(.venv/bin/alembic heads | awk 'NR==1 {print $1}')"
+          current="$(.venv/bin/alembic current | awk 'NR==1 {print $1}')"
+          echo "Production Alembic revision: $current"
+          if [[ -z "$expected" || "$current" != "$expected" ]]; then
+            echo "ERROR: production schema is not at application head (current=$current expected=$expected)" >&2
+            exit 1
+          fi
+
+      - name: Require Vercel token
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [[ -z "$VERCEL_TOKEN" ]]; then
+            echo "Repository secret VERCEL_TOKEN is required for production deployment." >&2
+            exit 1
+          fi
+
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@58.1.0
+
+      - name: Link production project
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          vercel pull \
+            --yes \
+            --environment=production \
+            --scope "$VERCEL_TEAM_SLUG" \
+            --token "$VERCEL_TOKEN"
+
+      - name: Deploy exact commit to production
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          deploy_sha="$(git rev-parse HEAD)"
+          commit_message="$(git log -1 --pretty=%s)"
+          vercel deploy \
+            --prod \
+            --yes \
+            --logs \
+            --scope "$VERCEL_TEAM_SLUG" \
+            --token "$VERCEL_TOKEN" \
+            --meta githubDeployment=1 \
+            --meta githubCommitRef=main \
+            --meta githubCommitSha="$deploy_sha" \
+            --meta githubCommitMessage="$commit_message" \
+            --meta githubCommitOrg="$GITHUB_REPOSITORY_OWNER" \
+            --meta githubCommitRepo="${GITHUB_REPOSITORY#*/}" \
+            --meta githubOrg="$GITHUB_REPOSITORY_OWNER" \
+            --meta githubRepo="${GITHUB_REPOSITORY#*/}" \
+            --meta githubCommitAuthorLogin="$GITHUB_ACTOR"
+
+      - name: Smoke production health
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error \
+            --retry 10 --retry-delay 2 --retry-all-errors \
+            https://comic-pile.vercel.app/health >/dev/null

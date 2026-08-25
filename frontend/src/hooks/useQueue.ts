@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react'
-import { useInfiniteQuery } from '@tanstack/react-query'
+import { useCallback } from 'react'
+import { useInfiniteQuery, useMutation } from '@tanstack/react-query'
 import { invalidateAfterQueueMovement } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
@@ -21,6 +21,38 @@ function toApiSort(sort: QueueSortBy): ApiSort {
 }
 
 /**
+ * Canonical bounded Queue list query options: the documented `queue.pages`
+ * key plus the exact first-page fetch contract consumed by
+ * `useInfiniteQuery` in `useQueueThreads`.
+ *
+ * Sharing this factory keeps speculative warm-up (route prefetch) and the
+ * live screen on one contract, so a warmed first page is read by the Queue
+ * screen instead of hydrating a cache no consumer reads.
+ *
+ * @param searchTerm - Retained search filter; empty string means no filter.
+ * @param sort - Retained sort order; drives the server-side deterministic cursor.
+ */
+export function queueThreadsQueryOptions(searchTerm?: string, sort: QueueSortBy = 'position') {
+  const normalizedSearch = searchTerm?.trim() || undefined
+  const apiSort = toApiSort(sort)
+
+  return {
+    queryKey: queryKeys.queue.list({ search: normalizedSearch, sort: sort as QueueSort, pageSize: QUEUE_PAGE_SIZE }),
+    queryFn: ({ pageParam }: { pageParam: string | null }) =>
+      threadsApi.list(
+        {
+          ...(normalizedSearch ? { search: normalizedSearch } : {}),
+          sort: apiSort,
+          ...(pageParam ? {} : { page_size: QUEUE_PAGE_SIZE }),
+        },
+        pageParam ?? undefined,
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage: ThreadListResponse) => lastPage.next_page_token ?? undefined,
+  }
+}
+
+/**
  * Bounded, incremental Queue loader built on TanStack Query's infinite query
  * and the canonical `queue.pages` query key.
  *
@@ -33,22 +65,8 @@ function toApiSort(sort: QueueSortBy): ApiSort {
  * @param sort - Retained sort order; drives the server-side deterministic cursor.
  */
 export function useQueueThreads(searchTerm?: string, sort: QueueSortBy = 'position') {
-  const normalizedSearch = searchTerm?.trim() || undefined
-  const apiSort = toApiSort(sort)
-
   const query = useInfiniteQuery({
-    queryKey: queryKeys.queue.list({ search: normalizedSearch, sort: sort as QueueSort, pageSize: QUEUE_PAGE_SIZE }),
-    queryFn: ({ pageParam }) =>
-      threadsApi.list(
-        {
-          ...(normalizedSearch ? { search: normalizedSearch } : {}),
-          sort: apiSort,
-          ...(pageParam ? {} : { page_size: QUEUE_PAGE_SIZE }),
-        },
-        pageParam ?? undefined,
-      ),
-    initialPageParam: null as string | null,
-    getNextPageParam: (lastPage: ThreadListResponse) => lastPage.next_page_token ?? undefined,
+    ...queueThreadsQueryOptions(searchTerm, sort),
     retry: false,
   })
 
@@ -76,91 +94,75 @@ export function useQueueThreads(searchTerm?: string, sort: QueueSortBy = 'positi
 }
 
 export function useMoveToPosition() {
-  const [isPending, setIsPending] = useState(false)
-  const [isError, setIsError] = useState(false)
-
-  const mutate = useCallback(async ({ id, position }: MoveToPositionPayload) => {
-    try {
-      setIsPending(true)
-      setIsError(false)
+  const mutation = useMutation({
+    mutationFn: async ({ id, position }: MoveToPositionPayload) => {
       await queueApi.moveToPosition(id, position)
       await invalidateAfterQueueMovement(queryClient)
-    } catch (error: unknown) {
-      setIsError(true)
+    },
+    onError: (error) => {
       console.error('Failed to move thread to position:', getApiErrorDetail(error))
-      throw error
-    } finally {
-      setIsPending(false)
-    }
-  }, [])
+    },
+  })
 
-  return { mutate, isPending, isError }
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+  }
 }
 
 export function useMoveToFront() {
-  const [isPending, setIsPending] = useState(false)
-  const [isError, setIsError] = useState(false)
-
-  const mutate = useCallback(async (id: number) => {
-    try {
-      setIsPending(true)
-      setIsError(false)
+  const mutation = useMutation({
+    mutationFn: async (id: number) => {
       await queueApi.moveToFront(id)
       await invalidateAfterQueueMovement(queryClient)
-    } catch (error: unknown) {
-      setIsError(true)
+    },
+    onError: (error) => {
       console.error('Failed to move thread to front:', getApiErrorDetail(error))
-      throw error
-    } finally {
-      setIsPending(false)
-    }
-  }, [])
+    },
+  })
 
-  return { mutate, isPending, isError }
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+  }
 }
 
 export function useMoveToBack() {
-  const [isPending, setIsPending] = useState(false)
-  const [isError, setIsError] = useState(false)
-
-  const mutate = useCallback(async (id: number) => {
-    try {
-      setIsPending(true)
-      setIsError(false)
+  const mutation = useMutation({
+    mutationFn: async (id: number) => {
       await queueApi.moveToBack(id)
       await invalidateAfterQueueMovement(queryClient)
-    } catch (error: unknown) {
-      setIsError(true)
+    },
+    onError: (error) => {
       console.error('Failed to move thread to back:', getApiErrorDetail(error))
-      throw error
-    } finally {
-      setIsPending(false)
-    }
-  }, [])
+    },
+  })
 
-  return { mutate, isPending, isError }
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+  }
 }
 
 export function useShuffleQueue() {
-  const [isPending, setIsPending] = useState(false)
-  const [isError, setIsError] = useState(false)
-
-  const mutate = useCallback(async () => {
-    try {
-      setIsPending(true)
-      setIsError(false)
+  const mutation = useMutation({
+    mutationFn: async () => {
       await queueApi.shuffle()
       await invalidateAfterQueueMovement(queryClient)
-    } catch (error: unknown) {
-      setIsError(true)
+    },
+    onError: (error) => {
       console.error('Failed to shuffle queue:', getApiErrorDetail(error))
-      throw error
-    } finally {
-      setIsPending(false)
-    }
-  }, [])
+    },
+  })
 
-  return { mutate, isPending, isError }
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+  }
 }
 
 // Re-export delete thread hook for backward compatibility

@@ -525,7 +525,7 @@ async def test_get_current_session_active(
     token = create_access_token(data={"sub": default_user.username, "jti": "test"})
     headers = {"Authorization": f"Bearer {token}"}
 
-    response = await client.get("/api/sessions/current/", headers=headers)
+    response = await client.get("/api/v1/sessions/current/", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == session.id
@@ -555,7 +555,7 @@ async def test_get_current_session_no_active(
     token = create_access_token(data={"sub": default_user.username, "jti": "test"})
     headers = {"Authorization": f"Bearer {token}"}
 
-    response = await client.get("/api/sessions/current/", headers=headers)
+    response = await client.get("/api/v1/sessions/current/", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert "id" in data
@@ -576,7 +576,7 @@ async def test_list_sessions(
         async_db.add(session)
     await async_db.commit()
 
-    response = await auth_client.get("/api/sessions/?page_size=3")
+    response = await auth_client.get("/api/v1/sessions/?page_size=3")
     assert response.status_code == 200
     data = response.json()
     assert "sessions" in data
@@ -600,7 +600,7 @@ async def test_list_sessions_pagination(
         await async_db.commit()
         time.sleep(0.01)
 
-    first_page = await auth_client.get("/api/sessions/?page_size=2")
+    first_page = await auth_client.get("/api/v1/sessions/?page_size=2")
     assert first_page.status_code == 200
     first_data = first_page.json()
     assert "sessions" in first_data
@@ -610,7 +610,7 @@ async def test_list_sessions_pagination(
     next_token = first_data.get("next_page_token")
     assert next_token is not None
 
-    second_page = await auth_client.get("/api/sessions/", params={"page_token": next_token})
+    second_page = await auth_client.get("/api/v1/sessions/", params={"page_token": next_token})
     assert second_page.status_code == 200
     second_data = second_page.json()
     assert "sessions" in second_data
@@ -634,7 +634,7 @@ async def test_get_session_by_id(
     await async_db.commit()
     await async_db.refresh(session)
 
-    response = await auth_client.get(f"/api/sessions/{session.id}")
+    response = await auth_client.get(f"/api/v1/sessions/{session.id}")
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == session.id
@@ -644,7 +644,7 @@ async def test_get_session_by_id(
 @pytest.mark.asyncio
 async def test_get_session_not_found(auth_client: AsyncClient) -> None:
     """Test getting a non-existent session."""
-    response = await auth_client.get("/api/sessions/9999")
+    response = await auth_client.get("/api/v1/sessions/9999")
     assert response.status_code == 404
     assert "Session not found" in response.json()["detail"]
 
@@ -692,7 +692,7 @@ async def test_get_session_includes_ladder_path(
     async_db.add(event2)
     await async_db.commit()
 
-    response = await auth_client.get(f"/api/sessions/{session.id}")
+    response = await auth_client.get(f"/api/v1/sessions/{session.id}")
     assert response.status_code == 200
     data = response.json()
     assert "6 → 8" in data["ladder_path"]
@@ -741,7 +741,7 @@ async def test_get_session_includes_snapshot_info(
     async_db.add(snapshot)
     await async_db.commit()
 
-    response = await auth_client.get(f"/api/sessions/{session.id}")
+    response = await auth_client.get(f"/api/v1/sessions/{session.id}")
     assert response.status_code == 200
     data = response.json()
     assert data["snapshot_count"] == 1
@@ -792,7 +792,7 @@ async def test_restore_session_start(
     session.manual_die = 20
     await async_db.commit()
 
-    response = await auth_client.post(f"/api/sessions/{session.id}/restore-session-start")
+    response = await auth_client.post(f"/api/v1/sessions/{session.id}/restore-session-start")
     assert response.status_code == 200
     data = response.json()
     assert data["start_die"] == 6
@@ -821,7 +821,7 @@ async def test_restore_session_start_no_snapshot(
     await async_db.commit()
     await async_db.refresh(session)
 
-    response = await auth_client.post(f"/api/sessions/{session.id}/restore-session-start")
+    response = await auth_client.post(f"/api/v1/sessions/{session.id}/restore-session-start")
     assert response.status_code == 404
     assert "No session start snapshot found" in response.json()["detail"]
 
@@ -847,28 +847,28 @@ async def test_session_endpoints_return_404_for_non_owner(
     intruder_headers = {"Authorization": f"Bearer {intruder_token}"}
 
     get_response = await auth_client.get(
-        f"/api/sessions/{owner_session.id}",
+        f"/api/v1/sessions/{owner_session.id}",
         headers=intruder_headers,
     )
     assert get_response.status_code == 404
     assert get_response.json()["detail"] == "Session not found"
 
     details_response = await auth_client.get(
-        f"/api/sessions/{owner_session.id}/details",
+        f"/api/v1/sessions/{owner_session.id}/details",
         headers=intruder_headers,
     )
     assert details_response.status_code == 404
     assert details_response.json()["detail"] == "Session not found"
 
     snapshots_response = await auth_client.get(
-        f"/api/sessions/{owner_session.id}/snapshots",
+        f"/api/v1/sessions/{owner_session.id}/snapshots",
         headers=intruder_headers,
     )
     assert snapshots_response.status_code == 404
     assert snapshots_response.json()["detail"] == "Session not found"
 
     restore_response = await auth_client.post(
-        f"/api/sessions/{owner_session.id}/restore-session-start",
+        f"/api/v1/sessions/{owner_session.id}/restore-session-start",
         headers=intruder_headers,
     )
     assert restore_response.status_code == 404
@@ -916,9 +916,9 @@ async def test_restore_session_start_with_deleted_threads(
     thread2.issues_remaining = 0
     await async_db.commit()
 
-    await auth_client.delete(f"/api/threads/{thread2.id}")
+    await auth_client.delete(f"/api/v1/threads/{thread2.id}")
 
-    response = await auth_client.post(f"/api/sessions/{session.id}/restore-session-start")
+    response = await auth_client.post(f"/api/v1/sessions/{session.id}/restore-session-start")
     assert response.status_code == 200
 
     refreshed_thread1 = await async_db.get(Thread, thread1.id)
@@ -976,12 +976,12 @@ async def test_restore_session_start_clears_pending_thread_id(
     thread2.issues_remaining = 0
     await async_db.commit()
 
-    await auth_client.delete(f"/api/threads/{thread2.id}")
+    await auth_client.delete(f"/api/v1/threads/{thread2.id}")
 
     await async_db.refresh(session)
     assert session.pending_thread_id is None
 
-    response = await auth_client.post(f"/api/sessions/{session.id}/restore-session-start")
+    response = await auth_client.post(f"/api/v1/sessions/{session.id}/restore-session-start")
     assert response.status_code == 200
 
     restored_thread2 = await async_db.get(Thread, thread2.id)
@@ -1038,7 +1038,7 @@ async def test_restore_session_start_recomputes_blocked_status(
     thread2.is_blocked = True
     await async_db.commit()
 
-    response = await auth_client.post(f"/api/sessions/{session.id}/restore-session-start")
+    response = await auth_client.post(f"/api/v1/sessions/{session.id}/restore-session-start")
     assert response.status_code == 200
 
     # refresh_user_blocked_status should correct the stale True → False (no active dep).
@@ -1420,7 +1420,7 @@ async def test_get_current_session_after_get_or_create_no_lazy_load(
     async_db.add(thread2)
     await async_db.commit()
 
-    response = await auth_client.get("/api/sessions/current/")
+    response = await auth_client.get("/api/v1/sessions/current/")
     assert response.status_code == 200
     data = response.json()
     assert "id" in data

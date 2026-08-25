@@ -203,3 +203,20 @@ it('uses human labels and explicit fallback text for sparse events', () => {
   expect(screen.getByText('Thread unavailable')).toBeInTheDocument()
   expect(screen.getAllByText('No additional event details recorded.')).toHaveLength(2)
 })
+
+it('renders reader-language event descriptions instead of the placeholder', () => {
+  mockedUseSessionDetails.mockReturnValue({ data: {
+    session_id: 18, started_at: '2024-01-01', ended_at: null, start_die: 6, current_die: 6,
+    ladder_path: 'd6', narrative_summary: {},
+    events: [
+      { id: 10, timestamp: '2024-01-01', type: 'snooze', thread_title: 'Wolverine', description: 'Snoozed Wolverine' },
+      { id: 11, timestamp: '2024-01-02', type: 'undo', thread_title: null, description: 'Restored thread' },
+    ],
+  }, isPending: false, refetch: refetchDetailsSpy })
+
+  render(<MemoryRouter><SessionPage /></MemoryRouter>)
+
+  expect(screen.getByText('Snoozed Wolverine')).toBeInTheDocument()
+  expect(screen.getByText('Restored thread')).toBeInTheDocument()
+  expect(screen.queryByText('No additional event details recorded.')).not.toBeInTheDocument()
+})

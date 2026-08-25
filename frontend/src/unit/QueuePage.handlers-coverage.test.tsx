@@ -15,6 +15,7 @@ vi.mock('../hooks/useQueue', () => ({ useMoveToBack: vi.fn(), useMoveToFront: vi
 vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn(), useUnsnooze: vi.fn() }))
 vi.mock('../services/api', () => ({ threadsApi: { setPending: vi.fn() }, dependenciesApi: { listBlockedThreadIds: vi.fn(), getBlockingInfo: vi.fn() } }))
+vi.mock('../hooks/useQueueBlockingInfo', () => ({ useQueueBlockingInfo: vi.fn(() => ({})) }))
 vi.mock('../services/api-issues', () => ({ issuesApi: { create: vi.fn(), markRead: vi.fn(), migrateThread: vi.fn() } }))
 vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: () => ({ setRestoreAction: vi.fn(), clearRestoreAction: vi.fn() }) }))
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] }) }))

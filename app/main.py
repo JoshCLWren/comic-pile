@@ -28,17 +28,21 @@ from app.api import (
     comicvine_resolution,
     debug,
     dependency,
+    identity_inbox,
     issue,
     metrics,
     ping,
     queue,
     rate,
+    reading_mode,
     reading_orders,
+    recommendation_diagnostics,
     roll,
     session,
     snooze,
     test_helpers,
     thread,
+    traffic_metrics,
     undo,
     preferences,
 )
@@ -202,6 +206,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     # tracking (issue #834) and future regression checks can read startup
     # telemetry. It returns only process startup epoch and duration.
     app.include_router(metrics.router, prefix="/api", tags=["metrics"])
+    app.include_router(metrics.router, prefix="/api/v1", tags=["metrics"])
 
     # Lightweight ping endpoint for cold-start mitigation (issue #1389).
     # Zero database/ORM overhead; keeps Vercel serverless functions warm.
@@ -215,26 +220,30 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
     # API route prefix convention:
 
+    # - Every domain resource is reachable under the versioned /api/v1/* surface.
     # - Legacy resources remain available under /api/* as compatibility aliases.
-    # - Retained client resources migrate to the versioned /api/v1/* surface.
     # - Retained auth, session, snooze, undo, roll, and rating resources have
     #   explicit v1 aliases while legacy paths remain compatibility surfaces.
-    # - Non-production tooling routes (debug, test) are also mounted under
-    #   bare /api/* but only in non-production/test environments — they are
-    #   intentional exceptions to the versioning rule, not client APIs.
+    # - Admin (internal ops), bug reports, metrics, and non-production debug
+    #   tooling expose canonical /api/v1 twins of their legacy mounts.
+    # - Ping is operational telemetry exempt from versioning; test helpers stay
+    #   test-only tooling under bare /api/test/* in test environments.
     # Add new client resources under /api/v1/*; do not introduce new bare
     # /api/* routes.
     app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
     app.include_router(roll.router, prefix="/api/v1/roll", tags=["roll"])
     app.include_router(admin.router, prefix="/api", tags=["admin"])
+    app.include_router(admin.router, prefix="/api/v1", tags=["admin"])
     app.include_router(analytics.router, prefix="/api", tags=["analytics"])
     app.include_router(bug_report.router, prefix="/api/bug-reports", tags=["bug-reports"])
+    app.include_router(bug_report.router, prefix="/api/v1/bug-reports", tags=["bug-reports"])
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(thread.router, prefix="/api/threads", tags=["threads"])
     app.include_router(thread.router, prefix="/api/v1/threads", tags=["threads"])
     if app_settings.environment != "production":
         app.include_router(debug.router, prefix="/api", tags=["debug"])
+        app.include_router(debug.router, prefix="/api/v1", tags=["debug"])
     app.include_router(issue.router, tags=["issues"])
     app.include_router(comicvine_resolution.router, tags=["comicvine-resolution"])
     app.include_router(rate.router, prefix="/api/rate", tags=["rate"])
@@ -242,15 +251,21 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
     app.include_router(queue.router, prefix="/api/v1/queue", tags=["queue"])
     app.include_router(reading_orders.router, tags=["reading-orders"])
+    app.include_router(
+        recommendation_diagnostics.router, prefix="/api", tags=["recommendations"]
+    )
     app.include_router(session.router, prefix="/api/sessions", tags=["session"])
     app.include_router(session.router, prefix="/api/v1/sessions", tags=["session"])
+    app.include_router(reading_mode.router, tags=["reading-mode"])
     app.include_router(snooze.router, prefix="/api/snooze", tags=["snooze"])
     app.include_router(snooze.router, prefix="/api/v1/snooze", tags=["snooze"])
     app.include_router(undo.router, prefix="/api/undo", tags=["undo"])
     app.include_router(undo.router, prefix="/api/v1/undo", tags=["undo"])
     app.include_router(preferences.router, prefix="/api/v1", tags=["users"])
+    app.include_router(traffic_metrics.router, prefix="/api", tags=["traffic"])
     app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
     app.include_router(catalog.router, tags=["catalog"])
+    app.include_router(identity_inbox.router, tags=["identity-inbox"])
     if os.getenv("TEST_ENVIRONMENT") == "true":
         app.include_router(test_helpers.router, prefix="/api", tags=["test"])
 

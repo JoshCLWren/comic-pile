@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import {
@@ -25,11 +26,14 @@ vi.mock('../services/api', () => ({
 const mockedSessionApi = vi.mocked(sessionApi)
 
 function renderWithProvider<T>(hook: () => T): { result: { current: T } } {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   return renderHook(hook, {
     wrapper: ({ children }: { children: ReactNode }) => (
-      <CacheProvider>
-        <ToastProvider>{children}</ToastProvider>
-      </CacheProvider>
+      <QueryClientProvider client={client}>
+        <CacheProvider>
+          <ToastProvider>{children}</ToastProvider>
+        </CacheProvider>
+      </QueryClientProvider>
     ),
   })
 }
@@ -165,8 +169,10 @@ it('handles empty ids, non-Error failures, persisted session changes, and restor
   await act(async () => {
     await expect(restore.result.current.mutate(8)).rejects.toBe('restore failed')
   })
-  expect(restore.result.current.isError).toBe(true)
-  expect(restore.result.current.error?.message).toBe('Failed to restore session')
+  await waitFor(() => {
+    expect(restore.result.current.isError).toBe(true)
+    expect(restore.result.current.error?.message).toBe('Failed to restore session')
+  })
 })
 
 it('continues when session storage cannot be read or written', async () => {

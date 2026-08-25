@@ -7,13 +7,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.continuity_chains import resolve_continuity_chains
-from app.continuity_readiness import (
-    _GraphSnapshot,
-    _crossover_readiness,
-    _group_issue_ids,
-    _is_read,
-    _issue_readiness,
-    _load_snapshot,
+from app.services.continuity_graph import (
+    GraphSnapshot,
+    crossover_readiness,
+    group_issue_ids,
+    is_read,
+    issue_readiness,
+    load_snapshot,
 )
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
@@ -41,6 +41,7 @@ class _PlanNodeRow:
     ref_id: int
     lane_id: str
     position: int
+    fallback_label: str | None = None
 
 
 def plan_rule_marker(plan_id: int) -> str:
@@ -51,62 +52,71 @@ def plan_rule_marker(plan_id: int) -> str:
 def _node_label(
     node_type: PlanNodeType,
     ref_id: int,
-    snapshot: _GraphSnapshot,
+    snapshot: GraphSnapshot,
+    fallback_label: str | None = None,
 ) -> str:
     """Return a stable human label for a visible plan node."""
     if node_type == "crossover":
         group = snapshot.groups.get(ref_id)
-        return group.name if group is not None else f"Crossover {ref_id}"
+        if group is not None:
+            return group.name
+        if fallback_label:
+            return f"[deleted crossover] {fallback_label}"
+        return "[deleted crossover]"
     if node_type == "thread":
         thread = snapshot.threads.get(ref_id)
         if thread is not None:
             return thread.title
-        return f"Thread {ref_id}"
+        if fallback_label:
+            return f"[deleted series] {fallback_label}"
+        return "[deleted series]"
     issue = snapshot.issues.get(ref_id)
     if issue is None:
-        return f"Issue {ref_id}"
+        if fallback_label:
+            return f"[deleted series] {fallback_label}"
+        return f"[deleted series] #{ref_id}"
     thread = snapshot.threads.get(issue.thread_id)
     if thread is None:
         return f"Issue {issue.issue_number}"
     return f"{thread.title} #{issue.issue_number}"
 
 
-def _thread_complete(thread_id: int, snapshot: _GraphSnapshot) -> bool:
+def _thread_complete(thread_id: int, snapshot: GraphSnapshot) -> bool:
     """Return whether every issue of one owned thread is read."""
     thread = snapshot.threads.get(thread_id)
     return thread is not None and thread.next_unread_issue_id is None
 
 
-def _is_complete(node_type: PlanNodeType, ref_id: int, snapshot: _GraphSnapshot) -> bool:
+def _is_complete(node_type: PlanNodeType, ref_id: int, snapshot: GraphSnapshot) -> bool:
     """Return whether the referenced node is fully read."""
     if node_type == "issue":
-        return _is_read(ref_id, snapshot)
+        return is_read(ref_id, snapshot)
     if node_type == "thread":
         return _thread_complete(ref_id, snapshot)
-    member_ids = _group_issue_ids(ref_id, snapshot)
-    return bool(member_ids) and all(_is_read(issue_id, snapshot) for issue_id in member_ids)
+    member_ids = group_issue_ids(ref_id, snapshot)
+    return bool(member_ids) and all(is_read(issue_id, snapshot) for issue_id in member_ids)
 
 
 def _readiness_blockers(
     node_type: PlanNodeType,
     ref_id: int,
-    snapshot: _GraphSnapshot,
+    snapshot: GraphSnapshot,
 ) -> tuple[list[ContinuityBlocker], int | None]:
     """Return direct readiness blockers mirroring the continuity readiness API."""
     if node_type == "issue":
-        return _issue_readiness(ref_id, snapshot), None
+        return issue_readiness(ref_id, snapshot), None
     if node_type == "thread":
         thread = snapshot.threads.get(ref_id)
         if thread is None:
             return [], None
         evaluated_issue_id = thread.next_unread_issue_id
         blockers = (
-            _issue_readiness(evaluated_issue_id, snapshot)
+            issue_readiness(evaluated_issue_id, snapshot)
             if evaluated_issue_id is not None
             else []
         )
         return blockers, evaluated_issue_id
-    return _crossover_readiness(ref_id, snapshot), None
+    return crossover_readiness(ref_id, snapshot), None
 
 
 def _dangling_diagnostic(
@@ -228,7 +238,7 @@ async def _node_chains(
     user_id: int,
     node_type: PlanNodeType,
     ref_id: int,
-    snapshot: _GraphSnapshot,
+    snapshot: GraphSnapshot,
 ) -> tuple[
     list[list[ContinuityPlanChainNode]],
     list[ContinuityPlanReadinessDiagnostic],
@@ -310,7 +320,7 @@ async def evaluate_plan_readiness(
     Returns:
         Deterministic per-node readiness, aggregate diagnostics, and summary.
     """
-    snapshot = await _load_snapshot(db, user_id)
+    snapshot = await load_snapshot(db, user_id)
     lanes = [ContinuityPlanLane(**lane) for lane in plan.lanes_json]
     lane_order = {lane.id: lane.order for lane in lanes}
 
@@ -322,6 +332,8 @@ async def evaluate_plan_readiness(
             ref_id = int(node["ref_id"])
         except (KeyError, TypeError, ValueError):
             ref_id = 0
+        raw_label = node.get("label")
+        fallback = str(raw_label).strip() if isinstance(raw_label, str) and raw_label.strip() else None
         node_rows.append(
             _PlanNodeRow(
                 id=str(node.get("id", "")),
@@ -330,6 +342,7 @@ async def evaluate_plan_readiness(
                 ref_id=ref_id,
                 lane_id=str(node.get("lane_id", "")),
                 position=int(node.get("position", 0)),
+                fallback_label=fallback,
             )
         )
     node_keys = [
@@ -367,7 +380,7 @@ async def evaluate_plan_readiness(
                     ref_id=ref_id,
                     lane_id=row.lane_id,
                     position=row.position,
-                    label=_node_label(node_type, ref_id, snapshot),
+                    label=_node_label(node_type, ref_id, snapshot, row.fallback_label),
                     is_readable=False,
                     is_complete=False,
                     blockers=[],
@@ -410,7 +423,7 @@ async def evaluate_plan_readiness(
                 ref_id=ref_id,
                 lane_id=row.lane_id,
                 position=row.position,
-                label=_node_label(node_type, ref_id, snapshot),
+                label=_node_label(node_type, ref_id, snapshot, row.fallback_label),
                 is_readable=is_readable,
                 is_complete=is_complete,
                 evaluated_issue_id=evaluated_issue_id,

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import QueueThreadCard from '../pages/QueuePage/QueueThreadCard'
-import type { Thread } from '../types'
+import type { BlockingDependency, Thread } from '../types'
 
 const { useCrossoverGroups } = vi.hoisted(() => ({
   useCrossoverGroups: vi.fn(() => ({ groupsByThreadId: {}, isPending: false, error: null })),
@@ -83,7 +83,7 @@ function renderCard(thread: Thread, overrides: Partial<Parameters<typeof QueueTh
     thread,
     index: 0,
     isBlocked: false,
-    blockingReasons: [] as string[],
+    blockingDependencies: [] as BlockingDependency[],
     isDragOver: false,
     snoozeIcon: '',
     snoozeLabel: '',
@@ -177,11 +177,34 @@ describe('QueueThreadCard', () => {
     const thread = createMockThread()
     renderCard(thread, {
       isBlocked: true,
-      blockingReasons: ['Blocked by: Prequel Thread'],
+      blockingDependencies: [],
     })
 
     const blockedButton = screen.getByRole('button', { name: /View dependencies for Test Thread/ })
     expect(blockedButton).toBeInTheDocument()
+  })
+
+  it('names the blocking dependency and links to the blocker thread', () => {
+    const blocker: BlockingDependency = {
+      thread_id: 42,
+      thread_title: 'Prequel Thread',
+      issue_number: '3',
+      label: 'Needs Prequel Thread: #3',
+    }
+    renderCard(createMockThread(), {
+      isBlocked: true,
+      blockingDependencies: [
+        blocker,
+        { ...blocker, thread_id: 43, thread_title: 'Other Blocker', label: 'Needs Other Blocker: #1' },
+      ],
+    })
+
+    const blockerLink = screen.getByRole('link', { name: 'Open Prequel Thread' })
+    expect(blockerLink).toHaveAttribute('href', '/thread/42')
+    expect(blockerLink).toHaveTextContent('Needs Prequel Thread: #3')
+    expect(screen.getByRole('button', { name: /View all dependencies for Test Thread/ })).toHaveTextContent(
+      '+1 more',
+    )
   })
 
   it('does not render blocked explanation when thread is not blocked', () => {
@@ -207,6 +230,18 @@ describe('QueueThreadCard', () => {
     const thread = createMockThread({ issues_remaining: 7 })
     renderCard(thread)
     expect(screen.getByText('7 issues remaining')).toBeInTheDocument()
+  })
+
+  it('hides "Up next" for blocked threads even when a next unread issue exists', () => {
+    const thread = createMockThread({
+      total_issues: 10,
+      issues_remaining: 3,
+      next_unread_issue_number: '5',
+      is_blocked: true,
+    })
+    renderCard(thread, { isBlocked: true, blockingDependencies: [{ thread_id: 2, thread_title: 'Prerequisite', issue_number: '4', label: 'Blocked by dependency' }] })
+    expect(screen.queryByText(/Up next/)).not.toBeInTheDocument()
+    expect(screen.getByText('3 issues remaining')).toBeInTheDocument()
   })
 
   it('renders next unread issue number when migrated and available', () => {
@@ -295,7 +330,7 @@ describe('QueueThreadCard', () => {
     ].map((name) => [name, vi.fn()])) as Record<string, ReturnType<typeof vi.fn>>
     renderCard(createMockThread({ total_issues: null, issues_remaining: 0, notes: null }), {
       isBlocked: true,
-      blockingReasons: ['Read A first', 'Read B first'],
+      blockingDependencies: [],
       isDragOver: true,
       ...callbacks,
     })
@@ -513,7 +548,7 @@ describe('QueueThreadCard', () => {
         onCardClick, 
         onDependencies,
         isBlocked: true,
-        blockingReasons: ['Blocked by: Prequel Thread']
+        blockingDependencies: []
       })
 
       // Test blocked dependency button
@@ -522,5 +557,55 @@ describe('QueueThreadCard', () => {
       await user.click(blockedButton)
       expect(onDependencies).toHaveBeenCalledTimes(1)
       expect(onCardClick).not.toHaveBeenCalled()
+    })
+
+    it('renders snooze button with aria-disabled when not the pending thread', () => {
+      renderCard(createMockThread(), {
+        snoozeDisabled: true,
+        snoozeLabel: 'Snooze',
+        snoozeIcon: '😴',
+      })
+
+      const snoozeButton = screen.getByRole('button', { name: 'Snooze' })
+      expect(snoozeButton).toHaveAttribute('aria-disabled', 'true')
+      expect(snoozeButton).toHaveAttribute('tabindex', '0')
+    })
+
+    it('renders hidden snooze description when snooze is disabled', () => {
+      renderCard(createMockThread({ title: 'The Maxx' }), {
+        snoozeDisabled: true,
+        snoozeLabel: 'Snooze',
+        snoozeIcon: '😴',
+      })
+
+      const description = screen.getByText(
+        'Only the comic currently waiting to be read can be snoozed.',
+      )
+      expect(description).toHaveClass('sr-only')
+      expect(description).toHaveAttribute('id', 'snooze-description-the-maxx')
+    })
+
+    it('does not render hidden snooze description when snooze is enabled', () => {
+      renderCard(createMockThread(), {
+        snoozeDisabled: false,
+        snoozeLabel: 'Snooze',
+        snoozeIcon: '😴',
+      })
+
+      expect(
+        screen.queryByText('Only the comic currently waiting to be read can be snoozed.'),
+      ).not.toBeInTheDocument()
+    })
+
+    it('renders snooze button without aria-disabled when enabled', () => {
+      renderCard(createMockThread(), {
+        snoozeDisabled: false,
+        snoozeLabel: 'Snooze',
+        snoozeIcon: '😴',
+      })
+
+      const snoozeButton = screen.getByRole('button', { name: 'Snooze' })
+      expect(snoozeButton).not.toHaveAttribute('aria-disabled')
+      expect(snoozeButton).not.toHaveAttribute('tabindex')
     })
   })

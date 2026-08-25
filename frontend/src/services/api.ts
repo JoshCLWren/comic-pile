@@ -7,6 +7,7 @@ import axios, {
 import type {
   AnalyticsMetrics,
   AuthTokens,
+  BatchBlockingInfoResponse,
   BlockingInfoResponse,
   BugReportResponse,
   ConnectedDependenciesResponse,
@@ -382,6 +383,8 @@ export const dependenciesApi = {
     api.get<IssueDependenciesResponse>(`/v1/issues/${issueId}/dependencies`),
   getBlockingInfo: (threadId: number) =>
     api.post<BlockingInfoResponse>(`/v1/threads/${threadId}:getBlockingInfo`),
+  getBatchBlockingInfo: (threadIds: number[]) =>
+    api.post<BatchBlockingInfoResponse>('/v1/threads:getBlockingInfo', { thread_ids: threadIds }),
   getConnectedThreads: (threadId: number) =>
     api.get<ConnectedDependenciesResponse>(`/v1/threads/${threadId}/connected`),
   createDependency: ({ sourceType = 'thread', sourceId, targetType = 'thread', targetId }: DependencyCreatePayload) =>
@@ -424,6 +427,25 @@ export interface ComicVineStoryArc {
   name: string
   comicvine_url: string | null
   related_issues: ComicVineRelatedIssue[]
+  total_related_count: number | null
+}
+
+export interface ComicVineImportIssuePayload {
+  title: string
+  comicvine_issue_id: number
+  issue_number?: string | null
+  reading_order_id?: number | null
+  anchor_before_thread_id?: number | null
+  anchor_after_thread_id?: number | null
+}
+
+export interface ComicVineImportIssueResult {
+  thread_id: number
+  issue_id: number
+  external_identity_id: number
+  reading_order_id: number | null
+  position: number | null
+  total_items: number | null
 }
 
 export interface ComicVineIssueIntelligence {
@@ -517,6 +539,8 @@ export interface MetadataCorrectionsResponse {
 export const comicVineApi = {
   getIssueIntelligence: (issueId: number) =>
     api.get<ComicVineIssueIntelligence | null>(`/v1/issues/${issueId}/comicvine`),
+  importIssue: (payload: ComicVineImportIssuePayload) =>
+    api.post<ComicVineImportIssueResult, ComicVineImportIssuePayload>('/v1/comicvine/issues:import', payload),
   searchSeries: (query: string, limit = 10) =>
     api.get<ComicVineSeriesSearchResponse>(`/v1/comicvine/search/series`, { params: { q: query, limit } }),
   getSeriesIssues: (volumeId: number, seriesName = '') =>
@@ -538,7 +562,7 @@ export const comicVineApi = {
 }
 
 export const tasksApi = {
-  getMetrics: () => api.get<AnalyticsMetrics>('/analytics/metrics'),
+  getMetrics: () => api.get<AnalyticsMetrics>('/v1/analytics/metrics'),
 }
 
 export const snoozeApi = {
@@ -553,5 +577,5 @@ export const migrationApi = {
 
 export const bugReportsApi = {
   create: (data: { title: string; description: string; diagnostics?: unknown }) =>
-    api.post<BugReportResponse>('/bug-reports/', data),
+    api.post<BugReportResponse>('/v1/bug-reports/', data),
 }

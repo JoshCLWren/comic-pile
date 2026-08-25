@@ -43,7 +43,7 @@ async def test_session_lifecycle_creates_history_events(
     await async_db.commit()
 
     rate_response = await auth_client.post(
-        "/api/rate/",
+        "/api/v1/rate/",
         json={"rating": 5.0, "issues_read": 1},
     )
     assert rate_response.status_code == 200
@@ -105,7 +105,7 @@ async def test_undo_operation_creates_history_event(
     )
     initial_events = initial_events_result.scalars().all()
 
-    response = await auth_client.post(f"/api/undo/{session.id}/undo/{snapshot.id}")
+    response = await auth_client.post(f"/api/v1/undo/{session.id}/undo/{snapshot.id}")
     assert response.status_code == 200
 
     final_events_result = await async_db.execute(
@@ -167,7 +167,7 @@ async def test_session_restore_preserves_events(
     )
     initial_events = initial_events_result.scalars().all()
 
-    response = await auth_client.post(f"/api/sessions/{session.id}/restore-session-start")
+    response = await auth_client.post(f"/api/v1/sessions/{session.id}/restore-session-start")
     assert response.status_code == 200
 
     final_events_result = await async_db.execute(
@@ -231,11 +231,11 @@ async def test_multiple_undos_in_sequence(
     thread.issues_remaining = 4
     await async_db.commit()
 
-    await auth_client.post(f"/api/undo/{session.id}/undo/{snapshot2.id}")
+    await auth_client.post(f"/api/v1/undo/{session.id}/undo/{snapshot2.id}")
     await async_db.refresh(thread)
     assert thread.issues_remaining == 6
 
-    await auth_client.post(f"/api/undo/{session.id}/undo/{snapshot1.id}")
+    await auth_client.post(f"/api/v1/undo/{session.id}/undo/{snapshot1.id}")
     await async_db.refresh(thread)
     assert thread.issues_remaining == 8
 
@@ -281,13 +281,66 @@ async def test_get_session_details_endpoint(
     async_db.add(rate_event)
     await async_db.commit()
 
-    response = await auth_client.get(f"/api/sessions/{session.id}/details")
+    response = await auth_client.get(f"/api/v1/sessions/{session.id}/details")
     assert response.status_code == 200
     data = response.json()
     event_types = [e["type"] for e in data["events"]]
     assert "roll" in event_types
     assert "rate" in event_types
     assert any(e.get("thread_title") == "Test Comic" for e in data["events"])
+
+
+@pytest.mark.asyncio
+async def test_get_session_details_describes_events_in_reader_language(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """Session timeline events expose reader-language descriptions (issue #1694)."""
+    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Promethea",
+        format="comic",
+        issues_remaining=10,
+        queue_position=1,
+        user_id=default_user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+
+    async_db.add_all(
+        [
+            Event(
+                type="roll",
+                session_id=session.id,
+                selected_thread_id=thread.id,
+                die=6,
+                result=4,
+                selection_method="random",
+            ),
+            Event(
+                type="rate",
+                session_id=session.id,
+                thread_id=thread.id,
+                rating=4.0,
+                issues_read=2,
+            ),
+            Event(type="snooze", session_id=session.id, thread_id=thread.id),
+        ]
+    )
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/sessions/{session.id}/details")
+    assert response.status_code == 200
+    data = response.json()
+
+    descriptions = {event["type"]: event["description"] for event in data["events"]}
+    assert descriptions["roll"] == "Selected Promethea"
+    assert descriptions["rate"] == "Rated · Promethea · 2 issues read · 4.0/5"
+    assert descriptions["snooze"] == "Snoozed Promethea"
+    assert all(value for value in descriptions.values()), descriptions
 
 
 @pytest.mark.asyncio
@@ -323,7 +376,7 @@ async def test_get_session_snapshots_endpoint(
     async_db.add(snapshot)
     await async_db.commit()
 
-    response = await auth_client.get(f"/api/sessions/{session.id}/snapshots")
+    response = await auth_client.get(f"/api/v1/sessions/{session.id}/snapshots")
     assert response.status_code == 200
     data = response.json()
     assert any(s["description"] == "Test snapshot" for s in data["snapshots"])
@@ -366,7 +419,7 @@ async def test_rating_creates_snapshot_automatically(
     initial_snapshots = initial_snapshots_result.scalars().all()
 
     response = await auth_client.post(
-        "/api/rate/",
+        "/api/v1/rate/",
         json={"rating": 5.0, "issues_read": 1},
     )
     assert response.status_code == 200
@@ -407,7 +460,7 @@ async def test_session_response_includes_restore_point_info(
 
     await create_session_start_snapshot(async_db, session)
 
-    response = await auth_client.get(f"/api/sessions/{session.id}")
+    response = await auth_client.get(f"/api/v1/sessions/{session.id}")
     assert response.status_code == 200
     data = response.json()
     assert "snapshot_count" in data
@@ -428,7 +481,7 @@ async def test_multiple_sessions_listed_in_reverse_order(
         async_db.add(session)
     await async_db.commit()
 
-    response = await auth_client.get("/api/sessions/")
+    response = await auth_client.get("/api/v1/sessions/")
     assert response.status_code == 200
     sessions = response.json()["sessions"]
 
@@ -479,7 +532,7 @@ async def test_undo_to_snapshot_with_session_state(
     async_db.add(snapshot)
     await async_db.commit()
 
-    response = await auth_client.post(f"/api/undo/{session.id}/undo/{snapshot.id}")
+    response = await auth_client.post(f"/api/v1/undo/{session.id}/undo/{snapshot.id}")
     assert response.status_code == 200
     data = response.json()
 
@@ -531,7 +584,7 @@ async def test_current_session_response_includes_ladder_path(
     async_db.add(rate_event)
     await async_db.commit()
 
-    response = await auth_client.get("/api/sessions/current/")
+    response = await auth_client.get("/api/v1/sessions/current/")
     assert response.status_code == 200
     data = response.json()
     assert "ladder_path" in data

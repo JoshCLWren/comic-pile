@@ -40,6 +40,7 @@ async def test_batch_blocking_info_deduplicates_thread_ids(
             str(thread.id): {
                 "is_blocked": False,
                 "blocking_reasons": [],
+                "blocking_dependencies": [],
             }
         }
     }

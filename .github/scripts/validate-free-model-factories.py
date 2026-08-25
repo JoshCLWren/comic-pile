@@ -76,11 +76,11 @@ def main() -> None:
     dispatcher = DISPATCHER.read_text(encoding='utf-8')
     assert 'workflow_run:' not in dispatcher
     assert 'schedule:' in dispatcher
-    for minute in SCHEDULE_MINUTES:
-        assert f"cron: '{minute} 0-23 * * *'" in dispatcher
-    assert 'SCHEDULE_EXPR: ${{ github.event.schedule }}' in dispatcher
+    assert "cron: '*/5 * * * *'" in dispatcher
+    assert dispatcher.count('    - cron:') == 1, 'dispatcher must use a single collapsed cron timer'
+    assert 'minute="$(date -u +%M)"' in dispatcher
+    assert 'gh workflow run factory-ready-merge-drain.yml' in dispatcher
     assert 'elif [[ "$EVENT_NAME" == schedule ]]; then' in dispatcher
-    assert 'minute="${SCHEDULE_EXPR%% *}"' in dispatcher
     assert 'workers=\'["6","39","46"]\'' in dispatcher
     assert 'gh workflow run free-model-factory-entry.yml' in dispatcher
     assert "'.github/scripts/factory-work-controller.py'" in dispatcher
