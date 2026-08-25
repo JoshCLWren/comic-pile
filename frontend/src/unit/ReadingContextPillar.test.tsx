@@ -9,6 +9,9 @@ vi.mock('../services/api-issues', () => ({
     getReaderContext: vi.fn(),
   },
 }))
+vi.mock('../pages/RollPage/components/ReadingOrderGroups', () => ({
+  ReadingOrderGroups: () => null,
+}))
 
 import { issuesApi } from '../services/api-issues'
 
