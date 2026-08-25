@@ -69,6 +69,7 @@ function buildContext(): ReaderContextResponse {
         id: 7,
         name: 'Ultimate Universe Reading Order',
         applies_to_current_issue: false,
+        membership_kind: 'issue' as const,
         next_member: { issue_id: 205, issue_number: '14' },
         average_rating: null,
         ratings_count: 0,

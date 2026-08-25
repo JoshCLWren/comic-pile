@@ -51,7 +51,7 @@ async def test_current_session_prefers_older_pending_session_over_newer_blank_du
     await async_db.refresh(pending_session)
     await async_db.refresh(newer_blank_session)
 
-    response = await auth_client.get("/api/sessions/current/")
+    response = await auth_client.get("/api/v1/sessions/current/")
 
     assert response.status_code == 200
     data = response.json()

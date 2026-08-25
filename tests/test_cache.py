@@ -54,19 +54,19 @@ async def test_cache_thread_list_warm_then_create(
     await cache.clear_pattern("cache:*")
 
     # Warm the list cache
-    response1 = await auth_client.get("/api/threads/")
+    response1 = await auth_client.get("/api/v1/threads/")
     assert response1.status_code == 200
     initial_threads = response1.json()["threads"]
 
     # Create a new thread
     response = await auth_client.post(
-        "/api/threads/",
+        "/api/v1/threads/",
         json={"title": "Cache Test Thread", "format": "Comic", "issues_remaining": 5},
     )
     assert response.status_code == 201
 
     # Reread - should reflect new thread (list should be different after invalidation)
-    response2 = await auth_client.get("/api/threads/")
+    response2 = await auth_client.get("/api/v1/threads/")
     assert response2.status_code == 200
     new_threads = response2.json()["threads"]
     assert len(new_threads) == len(initial_threads) + 1 or new_threads != initial_threads
@@ -82,19 +82,19 @@ async def test_cache_thread_detail_warm_then_update(
     thread = sample_data["threads"][0]
 
     # Warm the detail cache
-    response1 = await auth_client.get(f"/api/threads/{thread.id}")
+    response1 = await auth_client.get(f"/api/v1/threads/{thread.id}")
     assert response1.status_code == 200
     assert response1.json()["title"] == thread.title
 
     new_title = "Superman (Updated)"
     response = await auth_client.put(
-        f"/api/threads/{thread.id}",
+        f"/api/v1/threads/{thread.id}",
         json={"title": new_title, "format": "Comic", "issues_remaining": 10},
     )
     assert response.status_code == 200
 
     # Reread - should reflect new title
-    response2 = await auth_client.get(f"/api/threads/{thread.id}")
+    response2 = await auth_client.get(f"/api/v1/threads/{thread.id}")
     assert response2.status_code == 200
     assert response2.json()["title"] == new_title
 
@@ -123,22 +123,22 @@ async def test_cache_session_details_warm_then_rate(
     await async_db.commit()
 
     # Roll dice first so rate endpoint has an active thread
-    roll_response = await auth_client.post("/api/roll/")
+    roll_response = await auth_client.post("/api/v1/roll/")
     assert roll_response.status_code == 200
 
     # Determine which session is active after the roll
-    current_resp = await auth_client.get("/api/sessions/current/")
+    current_resp = await auth_client.get("/api/v1/sessions/current/")
     assert current_resp.status_code == 200
     active_session_id = current_resp.json()["id"]
 
     # Warm session details cache using the active session
-    response1 = await auth_client.get(f"/api/sessions/{active_session_id}/details")
+    response1 = await auth_client.get(f"/api/v1/sessions/{active_session_id}/details")
     assert response1.status_code == 200
     initial_event_count = len(response1.json()["events"])
 
     # Rate a thread
     rate_response = await auth_client.post(
-        "/api/rate/",
+        "/api/v1/rate/",
         json={
             "rating": 4,
             "finish_session": False,
@@ -147,7 +147,7 @@ async def test_cache_session_details_warm_then_rate(
     assert rate_response.status_code == 200
 
     # Reread session details - should include new rate event
-    response2 = await auth_client.get(f"/api/sessions/{active_session_id}/details")
+    response2 = await auth_client.get(f"/api/v1/sessions/{active_session_id}/details")
     assert response2.status_code == 200
     assert len(response2.json()["events"]) > initial_event_count
 
@@ -176,22 +176,22 @@ async def test_cache_session_snapshots_warm_then_rate(
     await async_db.commit()
 
     # Roll dice first so rate endpoint has an active thread
-    roll_response = await auth_client.post("/api/roll/")
+    roll_response = await auth_client.post("/api/v1/roll/")
     assert roll_response.status_code == 200
 
     # Determine which session is active after the roll
-    current_resp = await auth_client.get("/api/sessions/current/")
+    current_resp = await auth_client.get("/api/v1/sessions/current/")
     assert current_resp.status_code == 200
     active_session_id = current_resp.json()["id"]
 
     # Warm snapshot cache using the active session
-    response1 = await auth_client.get(f"/api/sessions/{active_session_id}/snapshots")
+    response1 = await auth_client.get(f"/api/v1/sessions/{active_session_id}/snapshots")
     assert response1.status_code == 200
     initial_count = len(response1.json()["snapshots"])
 
     # Rate
     rate_response = await auth_client.post(
-        "/api/rate/",
+        "/api/v1/rate/",
         json={
             "rating": 4,
             "finish_session": False,
@@ -200,7 +200,7 @@ async def test_cache_session_snapshots_warm_then_rate(
     assert rate_response.status_code == 200
 
     # Reread - should include new snapshot
-    response2 = await auth_client.get(f"/api/sessions/{active_session_id}/snapshots")
+    response2 = await auth_client.get(f"/api/v1/sessions/{active_session_id}/snapshots")
     assert response2.status_code == 200
     assert len(response2.json()["snapshots"]) > initial_count
 
@@ -396,13 +396,13 @@ async def test_cache_current_session_warm_then_set_pending(
     """Manual selection invalidates a previously warmed current-session response."""
     thread = sample_data["threads"][0]
 
-    before = await auth_client.get("/api/sessions/current/")
+    before = await auth_client.get("/api/v1/sessions/current/")
     assert before.status_code == 200
 
-    pending = await auth_client.post(f"/api/threads/{thread.id}/set-pending")
+    pending = await auth_client.post(f"/api/v1/threads/{thread.id}/set-pending")
     assert pending.status_code == 200
 
-    after = await auth_client.get("/api/sessions/current/")
+    after = await auth_client.get("/api/v1/sessions/current/")
     assert after.status_code == 200
     assert after.json()["active_thread"]["id"] == thread.id
 

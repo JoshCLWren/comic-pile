@@ -48,7 +48,7 @@ async def test_reactivate_thread_uses_max_numeric_issue_number(
     await async_db.commit()
 
     response = await auth_client.post(
-        "/api/threads/reactivate",
+        "/api/v1/threads/reactivate",
         json={"thread_id": thread.id, "issues_to_add": 2},
     )
 
@@ -90,7 +90,7 @@ async def test_migrate_thread_to_issues_success(
     await async_db.refresh(thread)
 
     response = await auth_client.post(
-        f"/api/threads/{thread.id}:migrateToIssues",
+        f"/api/v1/threads/{thread.id}:migrateToIssues",
         json={"last_issue_read": 15, "total_issues": 25},
     )
 
@@ -133,7 +133,7 @@ async def test_migrate_thread_to_issues_last_exceeds_total(
     await async_db.refresh(thread)
 
     response = await auth_client.post(
-        f"/api/threads/{thread.id}:migrateToIssues",
+        f"/api/v1/threads/{thread.id}:migrateToIssues",
         json={"last_issue_read": 30, "total_issues": 25},
     )
 
@@ -162,7 +162,7 @@ async def test_migrate_thread_to_issues_negative_values_blocked(
     await async_db.refresh(thread)
 
     response = await auth_client.post(
-        f"/api/threads/{thread.id}:migrateToIssues",
+        f"/api/v1/threads/{thread.id}:migrateToIssues",
         json={"last_issue_read": -1, "total_issues": 25},
     )
 
@@ -173,7 +173,7 @@ async def test_migrate_thread_to_issues_negative_values_blocked(
 async def test_migrate_thread_to_issues_thread_not_found(auth_client: AsyncClient) -> None:
     """Test migration returns 404 for non-existent thread."""
     response = await auth_client.post(
-        "/api/threads/999:migrateToIssues",
+        "/api/v1/threads/999:migrateToIssues",
         json={"last_issue_read": 15, "total_issues": 25},
     )
 
@@ -204,7 +204,7 @@ async def test_migrate_thread_to_issues_already_migrated(
     await async_db.refresh(thread)
 
     response = await auth_client.post(
-        f"/api/threads/{thread.id}:migrateToIssues",
+        f"/api/v1/threads/{thread.id}:migrateToIssues",
         json={"last_issue_read": 15, "total_issues": 25},
     )
 
@@ -235,7 +235,7 @@ async def test_migrate_thread_to_issues_other_user_thread(
     await async_db.refresh(thread)
 
     response = await auth_client.post(
-        f"/api/threads/{thread.id}:migrateToIssues",
+        f"/api/v1/threads/{thread.id}:migrateToIssues",
         json={"last_issue_read": 15, "total_issues": 25},
     )
 
@@ -264,7 +264,7 @@ async def test_migrate_thread_to_issues_completed(
     await async_db.refresh(thread)
 
     response = await auth_client.post(
-        f"/api/threads/{thread.id}:migrateToIssues",
+        f"/api/v1/threads/{thread.id}:migrateToIssues",
         json={"last_issue_read": 25, "total_issues": 25},
     )
 
@@ -305,7 +305,7 @@ async def test_migrate_thread_to_issues_unread(
     await async_db.refresh(thread)
 
     response = await auth_client.post(
-        f"/api/threads/{thread.id}:migrateToIssues",
+        f"/api/v1/threads/{thread.id}:migrateToIssues",
         json={"last_issue_read": 0, "total_issues": 25},
     )
 
@@ -332,7 +332,7 @@ async def test_create_thread_without_total_issues_maintains_backward_compat(
 ) -> None:
     """Creating thread without total_issues uses old system (backward compat)."""
     response = await auth_client.post(
-        "/api/threads/",
+        "/api/v1/threads/",
         json={
             "title": "Old Style Thread",
             "format": "Comic",
@@ -360,7 +360,7 @@ async def test_create_thread_with_total_issues_enables_tracking(
 ) -> None:
     """Creating thread with total_issues enables issue tracking."""
     response = await auth_client.post(
-        "/api/threads/",
+        "/api/v1/threads/",
         json={
             "title": "New Style Thread",
             "format": "Comic",
@@ -430,7 +430,7 @@ async def test_migration_enables_issue_tracking(
     assert not thread.uses_issue_tracking()
 
     response = await auth_client.post(
-        f"/api/threads/{thread.id}:migrateToIssues",
+        f"/api/v1/threads/{thread.id}:migrateToIssues",
         json={"last_issue_read": 15, "total_issues": 25},
     )
 
@@ -471,7 +471,7 @@ async def test_stale_endpoint_excludes_blocked_threads(
     async_db.add(blocked_thread)
     await async_db.commit()
 
-    response = await auth_client.get("/api/threads/stale?days=30")
+    response = await auth_client.get("/api/v1/threads/stale?days=30")
     assert response.status_code == 200
     data = response.json()
     thread_ids = {t["id"] for t in data}
@@ -501,7 +501,7 @@ async def test_stale_endpoint_includes_unblocked_stale_threads(
     async_db.add(unblocked_thread)
     await async_db.commit()
 
-    response = await auth_client.get("/api/threads/stale?days=30")
+    response = await auth_client.get("/api/v1/threads/stale?days=30")
     assert response.status_code == 200
     data = response.json()
     thread_ids = {t["id"] for t in data}
@@ -554,7 +554,7 @@ async def test_list_threads_issues_remaining_correct(
     await async_db.commit()
 
     await invalidate_cache("cache:*")
-    response = await auth_client.get("/api/threads/?page_size=10")
+    response = await auth_client.get("/api/v1/threads/?page_size=10")
     assert response.status_code == 200
     data = response.json()
 
@@ -613,7 +613,7 @@ async def test_list_threads_mixed_migrated_unmigrated(
     await async_db.commit()
 
     await invalidate_cache("cache:*")
-    response = await auth_client.get("/api/threads/?page_size=10")
+    response = await auth_client.get("/api/v1/threads/?page_size=10")
     assert response.status_code == 200
     data = response.json()
 
@@ -672,7 +672,7 @@ async def test_bulk_issues_remaining_no_n_plus_one(
 
     event.listen(db_engine.sync_engine, "before_cursor_execute", _capture)
     try:
-        response = await auth_client.get("/api/threads/?page_size=50")
+        response = await auth_client.get("/api/v1/threads/?page_size=50")
     finally:
         event.remove(db_engine.sync_engine, "before_cursor_execute", _capture)
 

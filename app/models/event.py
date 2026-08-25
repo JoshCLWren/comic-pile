@@ -5,7 +5,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -90,6 +91,19 @@ class Event(Base):
     # NULL for historical events and roll events themselves.
     source_roll_event_id: Mapped[int | None] = mapped_column(
         ForeignKey("events.id", ondelete="SET NULL"), nullable=True
+    )
+    # Recommendation reason codes explaining why this thread was selected at roll
+    # time. Persisted so the explanation matches the decision-time context rather
+    # than the current (possibly mutated) thread state.
+    recommendation_reason_codes: Mapped[list[str] | None] = mapped_column(
+        ARRAY(Text), nullable=True
+    )
+    # Full recommendation context captured at decision time, including bandwidth,
+    # intent, taste bank factors, primary score, and affinity notes. Used by the
+    # explanation endpoint to reconstruct human-readable reasons without recomputing
+    # from potentially mutated current state.
+    recommendation_context: Mapped[dict[str, object] | None] = mapped_column(
+        JSON, nullable=True
     )
 
     __table_args__ = (

@@ -29,6 +29,7 @@ import { RatingView } from './components/RatingView'
 import { ThreadPool } from './components/ThreadPool'
 import { RollHeader } from './components/RollHeader'
 import { RollModals } from './components/RollModals'
+import ReadingModeLauncher from '../../components/ReadingModeLauncher'
 
 /**
  * Route entry for the Roll page. The component composes the focused retained
@@ -232,6 +233,8 @@ export default function RollPage() {
         onOpenOverride={modals.openOverrideModal}
         onOpenDieModal={() => state.setIsDieModalOpen(true)}
       />
+
+      <ReadingModeLauncher />
 
       <div className="flex-1 flex flex-col min-h-0">
         <div className="flex-1 flex flex-col relative md:glass-card md:rounded-xl">
