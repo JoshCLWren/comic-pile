@@ -2,12 +2,9 @@
 from pathlib import Path
 
 
-WORKFLOW = (
-    Path(__file__).resolve().parents[1]
-    / ".github"
-    / "workflows"
-    / "free-model-factory-run.yml"
-)
+ROOT = Path(__file__).resolve().parents[1]
+WORKFLOW = ROOT / ".github" / "workflows" / "free-model-factory-run.yml"
+WORKER = ROOT / ".github" / "scripts" / "free-model-factory-worker.sh"
 
 
 def test_terminal_step_publishes_normalized_attempt_evidence():
