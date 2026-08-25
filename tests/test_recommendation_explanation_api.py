@@ -1,10 +1,11 @@
 """API tests for GET /api/roll/events/{event_id}/recommendation-explanation.
 
 Requires Phase 8 (or simulated) recommendation_context on the roll event record.
-Because the Event model does not yet carry a ``recommendation_context`` column
-at this phase boundary, these tests use ``setattr`` on the event instance after
-reading it from the database — a well-established SQLAlchemy test pattern that
-keeps the migration with Phase 8 while making Phase 9 contract verifiable here.
+The Event model now declares the ``recommendation_context`` column for type
+checking, but the database migration (Phase 8) has not yet been applied. These
+tests attach the context directly to the event instance — a well-established
+SQLAlchemy test pattern that keeps the migration with Phase 8 while making
+Phase 9 contract verifiable here.
 """
 
 from __future__ import annotations
@@ -28,9 +29,10 @@ def _make_roll_event_row(
 ) -> Event:
     """Attach simulated Phase 8 fields to an Event row fetched from the DB.
 
-    Uses ``setattr`` because the columns have not been added to the model yet;
-    the API shares this test session, so the attached values are visible to the
-    endpoint without a persistence migration.
+    The database migration for ``recommendation_context`` (Phase 8) has not yet
+    been applied, so we attach the context directly to the instance. The API
+    shares this test session, so the attached values are visible to the endpoint
+    without a persistence migration.
     """
     event.selection_method = selection_method
     if recommendation_context is not None:
