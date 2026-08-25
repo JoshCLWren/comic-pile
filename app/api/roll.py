@@ -33,7 +33,7 @@ from app.schemas import (
     SessionModeUpdateRequest,
 )
 from app.schemas.session import build_session_bandwidth_state
-from comic_pile.queue import get_roll_pool_rows
+from comic_pile.queue import get_bounded_roll_pool_rows
 from comic_pile.session import get_current_die_for_session, get_or_create
 from app.momentum import weighted_momentum_selection
 
@@ -88,15 +88,15 @@ async def roll_dice(
 
     snoozed_ids = current_session.snoozed_thread_ids or []
 
-    rows = await get_roll_pool_rows(user_id, db, snoozed_ids)
-    if not rows:
+    bounded_rows = await get_bounded_roll_pool_rows(user_id, db, current_die, snoozed_ids)
+    if not bounded_rows:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No active threads available to roll",
         )
 
-    # Bound the selection to the current die size, matching original semantics.
-    bounded_rows = rows[:current_die]
+    # get_bounded_roll_pool_rows already applied the die cap, so the contextual
+    # weighting below cannot draw from outside the active die pool.
 
     # Apply momentum weighting; weights fall back to uniform (pure-random)
     # when no positive momentum applies, preserving the pure-random bypass.
