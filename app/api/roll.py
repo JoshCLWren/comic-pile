@@ -38,9 +38,9 @@ from app.schemas import (
 )
 from app.schemas.session import build_session_bandwidth_state
 from comic_pile.queue import get_bounded_roll_pool_rows
-from comic_pile.roll_weights import calculate_weights
 from comic_pile.session import get_current_die_for_session, get_or_create
 from app.momentum import weighted_momentum_selection
+from app.services.bandwidth_roll_weighting import resolve_bandwidth_weights
 
 router = APIRouter(tags=["roll"])
 
@@ -111,12 +111,26 @@ async def roll_dice(
     session_events = list(session_events_result.scalars().all())
 
     # Issue #1715: combine the momentum axis with the reader bandwidth axis
-    # (light/balanced/deep). Bandwidth weights are neutral in balanced mode and
-    # when the pool shares one effort level, so this never overrides momentum;
-    # it only adds a contextual bias when the reader requests one.
-    bandwidth = roll_request.bandwidth
-    bandwidth_weights = calculate_weights(bounded_rows, bandwidth)
-    bandwidth_applied = len({round(w, 6) for w in bandwidth_weights}) > 1
+    # (light/balanced/deep) using the documented #1712 weight table fed by the
+    # Phase 1 effort pipeline. An explicitly requested bandwidth wins; otherwise
+    # the session's active reading mode applies; anything absent or unrecognized
+    # normalizes to balanced, which is exactly neutral and preserves legacy
+    # selection. Weights are strictly positive, so candidates are reweighted
+    # inside the die pool without ever being excluded.
+    if "bandwidth" in roll_request.model_fields_set:
+        bandwidth = roll_request.bandwidth
+    else:
+        bandwidth = (
+            current_session.reading_bandwidth
+            or current_session.active_bandwidth
+            or "balanced"
+        )
+    bandwidth_weights, bandwidth_applied = await resolve_bandwidth_weights(
+        db=db,
+        user_id=user_id,
+        bounded_rows=bounded_rows,
+        bandwidth=bandwidth,
+    )
 
     selected_index, max_bonus = await weighted_momentum_selection(
         db=db,

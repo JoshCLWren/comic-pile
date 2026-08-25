@@ -23,7 +23,6 @@ from comic_pile.reading_effort import (
     median,
     resolve_issue_effort,
 )
-from comic_pile.roll_weights import select_weighted
 from comic_pile.session import (
     end_session,
     get_or_create,
@@ -49,7 +48,6 @@ __all__ = [
     "move_to_back",
     "move_to_front",
     "move_to_position",
-    "select_weighted",
     "end_session",
     "get_or_create",
     "is_active",

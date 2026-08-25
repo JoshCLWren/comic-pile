@@ -1,248 +1,324 @@
-"""Tests for pure weight calculation and weighted selection."""
+"""Tests for documented bandwidth weighting inside the bounded roll pool.
 
-import random
+Covers the #1715 integration: the pure #1712 weight table applied to the
+die-bounded pool, the Phase 1 effort pipeline feeding it, and the roll
+endpoint's additive response semantics.
+"""
+
+from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from comic_pile.roll_weights import (
-    WEIGHT_CAP,
-    WEIGHT_MIN,
-    WEIGHT_NEUTRAL,
-    calculate_weights,
-    select_weighted,
+from app.models import Event, Session as SessionModel, Thread
+from app.services.bandwidth_roll_weighting import (
+    build_bandwidth_candidate_weights,
+    build_user_effort_summary,
+    load_user_decision_events,
+    resolve_bandwidth_weights,
+    resolve_candidate_efforts,
 )
+from tests.conftest import get_or_create_user_async
 
 
-def _rows(*efforts: int) -> list[tuple[object, int, object]]:
-    """Build pool rows where position-1 carries the effort proxy (unread count)."""
-    return [(object(), e, None) for e in efforts]
+def _rows(*thread_ids: int) -> list[tuple[object, int, object]]:
+    """Build pool rows carrying distinct thread ids in pool order."""
+    return [(SimpleNamespace(id=thread_id), 3, None) for thread_id in thread_ids]
 
 
-class TestCalculateWeights:
-    """Weight computation across bandwidth modes, boundaries, and caps."""
+class TestDocumentedWeightTable:
+    """Weights must come from the centralized #1712 cap table, not ad-hoc math."""
 
-    def test_balanced_all_neutral(self) -> None:
-        """Balanced mode gives every candidate the neutral weight."""
-        weights = calculate_weights(_rows(1, 3, 5), "balanced")
-        assert weights == [WEIGHT_NEUTRAL, WEIGHT_NEUTRAL, WEIGHT_NEUTRAL]
+    def test_light_uses_documented_band_weights(self) -> None:
+        rows = _rows(1, 2, 3)
+        efforts = [(1, 6.0), (2, 15.0), (3, 30.0)]
+        weights, applied = build_bandwidth_candidate_weights(rows, efforts, "light")
+        assert weights == [1.5, 1.0, 0.75]
+        assert applied is True
 
-    def test_balanced_single_candidate_weight_neutral(self) -> None:
-        """A single candidate in balanced mode receives the neutral weight."""
-        weights = calculate_weights(_rows(7), "balanced")
-        assert weights == [WEIGHT_NEUTRAL]
+    def test_deep_uses_documented_band_weights(self) -> None:
+        rows = _rows(1, 2, 3)
+        efforts = [(1, 6.0), (2, 15.0), (3, 30.0)]
+        weights, applied = build_bandwidth_candidate_weights(rows, efforts, "deep")
+        assert weights == [0.9, 1.0, 1.25]
+        assert applied is True
 
-    def test_light_favors_lower_effort(self) -> None:
-        """Light mode assigns strictly higher weights to lower-effort rows."""
-        rows = _rows(0, 5, 10)
-        weights = calculate_weights(rows, "light")
+    def test_balanced_is_exactly_neutral(self) -> None:
+        rows = _rows(1, 2)
+        efforts = [(1, 6.0), (2, 30.0)]
+        weights, applied = build_bandwidth_candidate_weights(rows, efforts, "balanced")
+        assert weights == [1.0, 1.0]
+        assert applied is False
+
+    def test_unknown_mode_normalizes_to_balanced(self) -> None:
+        rows = _rows(1, 2)
+        efforts = [(1, 6.0), (2, 30.0)]
+        weights, applied = build_bandwidth_candidate_weights(rows, efforts, "speed")
+        assert weights == [1.0, 1.0]
+        assert applied is False
+
+    def test_none_bandwidth_normalizes_to_balanced(self) -> None:
+        rows = _rows(1, 2)
+        efforts = [(1, 6.0), (2, 30.0)]
+        weights, applied = build_bandwidth_candidate_weights(rows, efforts, None)
+        assert weights == [1.0, 1.0]
+        assert applied is False
+
+    def test_unknown_effort_is_neutral_in_every_mode(self) -> None:
+        rows = _rows(1, 2)
+        efforts = [(1, None), (2, 30.0)]
+        for mode in ("light", "balanced", "deep", "nonsense"):
+            weights, _ = build_bandwidth_candidate_weights(rows, efforts, mode)
+            assert weights[0] == 1.0
+
+    def test_all_positive_so_no_candidate_is_excluded(self) -> None:
+        rows = _rows(1, 2, 3)
+        efforts = [(1, 6.0), (2, 15.0), (3, 30.0)]
+        for mode in ("light", "deep"):
+            weights, _ = build_bandwidth_candidate_weights(rows, efforts, mode)
+            assert all(weight > 0 for weight in weights)
+
+    def test_light_favors_lower_effort_monotonically(self) -> None:
+        rows = _rows(1, 2, 3)
+        efforts = [(1, 6.0), (2, 15.0), (3, 30.0)]
+        weights, _ = build_bandwidth_candidate_weights(rows, efforts, "light")
         assert weights[0] > weights[1] > weights[2]
-        assert weights[2] >= WEIGHT_MIN
 
-    def test_light_monotonic_decreasing(self) -> None:
-        """Light mode weight decreases monotonically as effort rises."""
-        rows = _rows(*range(11))
-        weights = calculate_weights(rows, "light")
-        assert all(a > b for a, b in zip(weights, weights[1:], strict=False))
+    def test_weight_spread_stays_within_documented_caps(self) -> None:
+        rows = _rows(1, 2)
+        efforts = [(1, 1.0), (2, 600.0)]
+        light_weights, _ = build_bandwidth_candidate_weights(rows, efforts, "light")
+        deep_weights, _ = build_bandwidth_candidate_weights(rows, efforts, "deep")
+        assert max(light_weights) / min(light_weights) <= 1.5 / 0.75 + 1e-9
+        assert max(deep_weights) / min(deep_weights) <= 1.25 / 0.9 + 1e-9
 
-    def test_deep_favors_higher_effort(self) -> None:
-        """Deep mode assigns strictly higher weights to higher-effort rows."""
-        rows = _rows(0, 5, 10)
-        weights = calculate_weights(rows, "deep")
-        assert weights[0] < weights[1] < weights[2]
-        assert weights[2] <= WEIGHT_CAP
+    def test_equal_efforts_stay_equal_and_unapplied(self) -> None:
+        rows = _rows(1, 2, 3)
+        efforts = [(1, 10.0), (2, 20.0), (3, 30.0)]
+        unknown = [(1, None), (2, None), (3, None)]
+        for candidate_efforts in (efforts, unknown):
+            weights, applied = build_bandwidth_candidate_weights(
+                rows, candidate_efforts, "light"
+            )
+            assert len(set(weights)) == 1
+            assert applied is False
 
-    def test_deep_monotonic_increasing(self) -> None:
-        """Deep mode weight increases monotonically as effort rises."""
-        rows = _rows(*range(11))
-        weights = calculate_weights(rows, "deep")
-        assert all(a < b for a, b in zip(weights, weights[1:], strict=False))
+    def test_single_candidate_pool_reports_unapplied(self) -> None:
+        rows = _rows(7)
+        weights, applied = build_bandwidth_candidate_weights(rows, [(7, 6.0)], "light")
+        assert weights == [1.5]
+        assert applied is False
 
-    def test_deep_all_weights_positive(self) -> None:
-        """Deep mode never produces a zero or negative weight."""
-        rows = _rows(0, 5, 10)
-        weights = calculate_weights(rows, "deep")
-        assert all(w > 0 for w in weights)
-        min_w = min(weights)
-        assert min_w >= WEIGHT_MIN
+    def test_empty_pool_yields_no_weights(self) -> None:
+        weights, applied = build_bandwidth_candidate_weights([], [], "light")
+        assert weights == []
+        assert applied is False
 
-    def test_light_zero_effort_gets_highest_weight(self) -> None:
-        """The zero-effort candidate carries the top weight in light mode."""
-        rows = _rows(0, 1)
-        weights = calculate_weights(rows, "light")
-        assert weights[0] == max(weights)
-        assert weights[0] > WEIGHT_NEUTRAL
-
-    def test_deep_zero_effort_not_excluded(self) -> None:
-        """Deep mode keeps zero-effort candidates selectable."""
-        rows = _rows(0, 1)
-        weights = calculate_weights(rows, "deep")
-        assert weights[0] > 0
-        assert weights[0] >= WEIGHT_MIN
-
-    def test_all_equal_effort_balanced_neutral(self) -> None:
-        """Equal candidates stay neutral-weighted in balanced mode."""
-        weights = calculate_weights(_rows(3, 3, 3), "balanced")
-        assert all(abs(w - WEIGHT_NEUTRAL) < 1e-9 for w in weights)
-
-    def test_all_equal_effort_light_neutral(self) -> None:
-        """Equal candidates receive equal neutral weights in light mode."""
-        weights = calculate_weights(_rows(0, 0), "light")
-        assert all(abs(w - WEIGHT_NEUTRAL) < 1e-9 for w in weights)
-
-    def test_all_equal_effort_deep_neutral(self) -> None:
-        """Equal candidates receive equal neutral weights in deep mode."""
-        weights = calculate_weights(_rows(5, 5), "deep")
-        assert all(abs(w - WEIGHT_NEUTRAL) < 1e-9 for w in weights)
-
-    def test_none_effort_treated_as_zero(self) -> None:
-        """Unknown effort is clamped into range instead of crashing either mode."""
-        rows = [(object(), 0, None), (object(), None, None)]
-        weights_l = calculate_weights(rows, "light")
-        weights_d = calculate_weights(rows, "deep")
-        assert all(w >= WEIGHT_MIN for w in weights_l)
-        assert all(w >= WEIGHT_MIN for w in weights_d)
-
-    def test_upper_cap_not_exceeded(self) -> None:
-        """No mode exceeds WEIGHT_CAP even with extreme effort spread."""
-        rows = _rows(0, 1000)
-        for mode in ("light", "deep"):
-            weights = calculate_weights(rows, mode)
-            assert max(weights) <= WEIGHT_CAP
-
-    def test_lower_floor_not_broken(self) -> None:
-        """No mode drops below WEIGHT_MIN even with extreme effort spread."""
-        rows = _rows(0, 1000)
-        for mode in ("light", "deep"):
-            weights = calculate_weights(rows, mode)
-            assert all(w >= WEIGHT_MIN for w in weights)
-
-    def test_empty_pool_raises_value_error(self) -> None:
-        """An empty candidate pool is rejected explicitly."""
-        with pytest.raises(ValueError, match="at least one candidate"):
-            calculate_weights([], "balanced")
-
-    def test_invalid_bandwidth_raises_value_error(self) -> None:
-        """An unknown bandwidth mode is rejected explicitly."""
-        with pytest.raises(ValueError, match="Unknown bandwidth mode"):
-            calculate_weights(_rows(1, 2), "speed")
-
-    @pytest.mark.parametrize("mode", ["light", "balanced", "deep"])
-    def test_output_length_matches_input(self, mode: str) -> None:
-        """One weight is returned per candidate for every pool size."""
-        for size in (1, 2, 5, 20):
-            weights = calculate_weights(_rows(*range(size)), mode)
-            assert len(weights) == size
-
-    @pytest.mark.parametrize("mode", ["light", "balanced", "deep"])
-    def test_all_weights_positive(self, mode: str) -> None:
-        """Every computed weight stays positive in every mode."""
-        rows = _rows(0, 1, 5, 10, 50)
-        weights = calculate_weights(rows, mode)
-        assert all(w > 0 for w in weights)
-
-    def test_balanced_mode_value_constant_across_efforts(self) -> None:
-        """Balanced mode ignores effort spread entirely."""
-        rows = _rows(0, 1, 2, 5, 10, 50, 100)
-        weights = calculate_weights(rows, "balanced")
-        assert len({round(w, 9) for w in weights}) == 1
+    def test_output_order_matches_pool_order(self) -> None:
+        rows = _rows(9, 4, 6)
+        efforts = [(9, 30.0), (4, 6.0), (6, 15.0)]
+        weights, _ = build_bandwidth_candidate_weights(rows, efforts, "light")
+        assert weights == [0.75, 1.5, 1.0]
 
 
-class TestSelectWeighted:
-    """Seeded deterministic behavior of weighted selection."""
+def _latency_events(
+    session_id: int,
+    thread_id: int,
+    *,
+    count: int,
+    duration_seconds: float,
+    start: datetime,
+) -> list[Event]:
+    """Build linked roll/rate event pairs with fixed elapsed durations."""
+    events: list[Event] = []
+    rolls: list[Event] = []
+    for offset in range(count):
+        rolled_at = start + timedelta(minutes=offset * 10)
+        rolls.append(
+            Event(
+                type="roll",
+                session_id=session_id,
+                selected_thread_id=thread_id,
+                timestamp=rolled_at,
+            )
+        )
+    events.extend(rolls)
+    for offset, roll_event in enumerate(rolls):
+        events.append(
+            Event(
+                type="rate",
+                session_id=session_id,
+                thread_id=thread_id,
+                rating=4.0,
+                issues_read=1,
+                source_roll_event_id=-(offset + 1),
+                timestamp=roll_event.timestamp + timedelta(seconds=duration_seconds),
+            )
+        )
+    return events
 
-    def test_single_candidate_always_chosen(self) -> None:
-        """A one-candidate pool always selects that candidate."""
-        idx, row, weight = select_weighted(_rows(5), "light")
-        assert idx == 0
-        assert row[1] == 5
-        assert weight >= WEIGHT_MIN
 
-    def test_balanced_approximately_uniform(self) -> None:
-        """Balanced selection is statistically uniform across candidates."""
-        rows = _rows(0, 1, 2, 3, 4)
-        rng = random.Random(42)
-        picked = [select_weighted(rows, "balanced", rng=rng)[0] for _ in range(2000)]
-        counts = {i: picked.count(i) for i in range(5)}
-        expected = 400.0
-        for count in counts.values():
-            assert abs(count - expected) / expected < 0.15
+async def _seed_history(
+    async_db: AsyncSession,
+    user_id: int,
+    entries: list[tuple[int, float]],
+) -> dict[int, Thread]:
+    """Persist linked roll/rate histories; entries are (thread_id, seconds)."""
+    reading_session = SessionModel(user_id=user_id)
+    async_db.add(reading_session)
+    await async_db.flush()
 
-    def test_light_favors_low_effort_statistically(self) -> None:
-        """Light mode picks low-effort candidates far more often."""
-        rows = _rows(0, 1, 2, 3, 4)
-        rng = random.Random(99)
-        picks = [select_weighted(rows, "light", rng=rng)[0] for _ in range(4000)]
-        zero_count = picks.count(0)
-        max_effort_count = picks.count(4)
-        assert zero_count > max_effort_count * 2, (
-            f"light mode should significantly favor index 0 "
-            f"(effort=0): got {zero_count} vs {max_effort_count} highest-effort picks"
+    threads: dict[int, Thread] = {}
+    pending_links: list[tuple[Event, Event]] = []
+    base = datetime.now(UTC) - timedelta(days=2)
+    for index, (thread_key, duration_seconds) in enumerate(entries):
+        if thread_key not in threads:
+            thread = Thread(
+                title=f"Thread {thread_key}",
+                format="Comic",
+                issues_remaining=5,
+                queue_position=len(threads) + 1,
+                status="active",
+                user_id=user_id,
+            )
+            async_db.add(thread)
+            await async_db.flush()
+            threads[thread_key] = thread
+
+        pair = _latency_events(
+            reading_session.id,
+            threads[thread_key].id,
+            count=1,
+            duration_seconds=duration_seconds,
+            start=base + timedelta(hours=index),
+        )
+        roll_event, rate_event = pair
+        async_db.add_all(pair)
+        await async_db.flush()
+        pending_links.append((roll_event, rate_event))
+
+    for roll_event, rate_event in pending_links:
+        rate_event.source_roll_event_id = roll_event.id
+    await async_db.flush()
+    return threads
+
+
+@pytest.mark.asyncio
+class TestEffortPipelineIntegration:
+    """The Phase 0/1 pipeline feeds trusted per-thread minutes to the weights."""
+
+    async def test_trusted_history_resolves_minutes(self, async_db: AsyncSession) -> None:
+        user = await get_or_create_user_async(async_db)
+        await _seed_history(async_db, user.id, [(11, 300.0), (12, 3600.0)])
+
+        events = await load_user_decision_events(async_db, user.id)
+        summary = build_user_effort_summary(events)
+        efforts = resolve_candidate_efforts(summary, _rows(12, 11))
+
+        assert efforts == [(12, 60.0), (11, 5.0)]
+
+    async def test_invalid_durations_are_excluded(self, async_db: AsyncSession) -> None:
+        user = await get_or_create_user_async(async_db)
+        await _seed_history(async_db, user.id, [(21, 5.0), (22, 60000.0)])
+
+        events = await load_user_decision_events(async_db, user.id)
+        summary = build_user_effort_summary(events)
+
+        assert summary.threads == {}
+
+    async def test_sparse_history_stays_neutral(self, async_db: AsyncSession) -> None:
+        user = await get_or_create_user_async(async_db)
+        await _seed_history(async_db, user.id, [(31, 300.0), (32, 420.0)])
+
+        events = await load_user_decision_events(async_db, user.id)
+        summary = build_user_effort_summary(events)
+        efforts = resolve_candidate_efforts(summary, _rows(31))
+
+        assert efforts == [(31, None)]
+
+    async def test_history_is_scoped_to_one_reader(self, async_db: AsyncSession) -> None:
+        reader = await get_or_create_user_async(async_db)
+        other = await get_or_create_user_async(async_db, username="other-bandwidth-reader")
+        await _seed_history(async_db, reader.id, [(41, 300.0)])
+        await _seed_history(async_db, other.id, [(42, 3600.0)])
+
+        own_events = await load_user_decision_events(async_db, reader.id)
+        summary = build_user_effort_summary(own_events)
+
+        assert set(summary.threads) == {41}
+
+    async def test_resolve_bandwidth_weights_end_to_end(
+        self, async_db: AsyncSession
+    ) -> None:
+        user = await get_or_create_user_async(async_db)
+        await _seed_history(async_db, user.id, [(51, 300.0), (52, 3600.0)])
+
+        rows = _rows(51, 52)
+        weights, applied = await resolve_bandwidth_weights(
+            async_db, user_id=user.id, bounded_rows=rows, bandwidth="deep"
         )
 
-    def test_deep_mode_includes_low_effort(self) -> None:
-        """Deep mode still selects low-effort candidates sometimes."""
-        rows = _rows(0, 5, 10)
-        rng = random.Random(77)
-        picks = [select_weighted(rows, "deep", rng=rng)[0] for _ in range(2000)]
-        assert picks.count(0) > 0, "deep mode must not exclude low-effort candidates"
+        assert weights == [0.9, 1.25]
+        assert applied is True
 
-    def test_no_candidate_outside_pool_chosen(self) -> None:
-        """Selection indices never escape the bounded pool."""
-        pool = _rows(0, 2, 4)
-        rng = random.Random(123)
-        for _ in range(500):
-            idx, _, _ = select_weighted(pool, "light", rng=rng)
-            assert 0 <= idx < len(pool)
+    async def test_resolve_bandwidth_weights_without_history_is_neutral(
+        self, async_db: AsyncSession
+    ) -> None:
+        user = await get_or_create_user_async(async_db)
+        rows = _rows(61, 62)
 
-    def test_deterministic_with_same_seed(self) -> None:
-        """Two generators sharing a seed agree on the first selection."""
-        rows = _rows(1, 2, 3, 4, 5)
-        rng1 = random.Random(42)
-        rng2 = random.Random(42)
-        result1 = select_weighted(rows, "light", rng=rng1)
-        result2 = select_weighted(rows, "light", rng=rng2)
-        assert result1[0] == result2[0], "same seed must produce identical selections"
-
-    def test_same_seed_always_agrees(self) -> None:
-        """Repeated fresh seeds reproduce identical selections."""
-        rows = _rows(1, 2, 3, 4, 5)
-        all_agree = all(
-            select_weighted(rows, "light", rng=random.Random(42))[0]
-            == select_weighted(rows, "light", rng=random.Random(42))[0]
-            for _ in range(200)
+        weights, applied = await resolve_bandwidth_weights(
+            async_db, user_id=user.id, bounded_rows=rows, bandwidth="light"
         )
-        assert all_agree, "same seed must always produce the same selection"
 
-    def test_result_returns_positive_weight(self) -> None:
-        """The reported weight for the chosen candidate is positive."""
-        _, _, weight = select_weighted(_rows(3, 7, 1), "light")
-        assert weight > 0
+        assert weights == [1.0, 1.0]
+        assert applied is False
 
-    def test_selected_index_always_in_range(self) -> None:
-        """A default-generator selection stays inside the pool."""
-        rows = _rows(3, 7, 1)
-        idx, _, _ = select_weighted(rows, "balanced")
-        assert 0 <= idx < len(rows)
+    async def test_load_user_decision_events_filters_types(
+        self, async_db: AsyncSession
+    ) -> None:
+        user = await get_or_create_user_async(async_db)
+        await _seed_history(async_db, user.id, [(71, 300.0)])
+        noise = Event(type="snooze", thread_id=None)
+        async_db.add(noise)
+        await async_db.flush()
 
-    def test_selected_row_matches_index(self) -> None:
-        """The returned row object matches the selected index."""
-        rows = _rows(2, 4, 6)
-        idx, row, _ = select_weighted(rows, "balanced", rng=random.Random(0))
-        assert rows[idx] is row
+        events = await load_user_decision_events(async_db, user.id)
 
-    def test_selected_effort_matches_row(self) -> None:
-        """The selected row's effort matches its index position."""
-        rows = _rows(10, 20, 30)
-        idx, row, _ = select_weighted(rows, "light", rng=random.Random(5))
-        assert rows[idx][1] == row[1]
+        assert {event.type for event in events} <= {"roll", "rate"}
 
-    @pytest.mark.parametrize("bad_mode", ["fast", "medium", "unknown", ""])
-    def test_invalid_bandwidth_raises_value_error(self, bad_mode: str) -> None:
-        """Selection rejects unknown bandwidth modes explicitly."""
-        with pytest.raises(ValueError, match="Unknown bandwidth mode"):
-            select_weighted(_rows(1, 2), bad_mode)
 
-    def test_empty_pool_raises_in_select_weighted(self) -> None:
-        """Selection rejects an empty candidate pool explicitly."""
-        with pytest.raises(ValueError):
-            select_weighted([], "balanced")
+@pytest.mark.asyncio
+class TestRollEndpointBandwidthSemantics:
+    """Roll responses stay backward compatible and report bandwidth honestly."""
+
+    async def test_explicit_light_bandwidth_reports_weighting(
+        self, auth_client: AsyncClient, async_db: AsyncSession
+    ) -> None:
+        user = await get_or_create_user_async(async_db)
+        await _seed_history(async_db, user.id, [(81, 300.0), (82, 3600.0)])
+
+        response = await auth_client.post("/api/v1/roll/", json={"bandwidth": "light"})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "bandwidth_weighted" in data["recommendation_reason_codes"]
+        assert data["selection_method"] in {"bandwidth", "momentum_weighted"}
+
+    async def test_default_roll_preserves_legacy_semantics(
+        self, auth_client: AsyncClient, async_db: AsyncSession
+    ) -> None:
+        user = await get_or_create_user_async(async_db)
+        await _seed_history(async_db, user.id, [(91, 300.0), (92, 3600.0)])
+
+        response = await auth_client.post("/api/v1/roll/")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "bandwidth_weighted" not in data["recommendation_reason_codes"]
+        assert data["recommendation_reason_codes"] in (
+            ["pure_random"],
+            ["momentum_weighted"],
+        )

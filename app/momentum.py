@@ -143,7 +143,7 @@ async def weighted_momentum_selection(
     """Select an index from bounded_rows using momentum-weighted random choice.
 
     When ``bandwidth_weights`` is supplied (one positive weight per pool row,
-    e.g. from ``comic_pile.roll_weights.calculate_weights``), each momentum
+    e.g. from ``app.services.bandwidth_roll_weighting``), each momentum
     weight is multiplied by its bandwidth weight so the reader-bandwidth axis
     biases the same pool without ever excluding a candidate. A neutral
     bandwidth weight (1.0) leaves the momentum result untouched.
