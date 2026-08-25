@@ -65,7 +65,7 @@ function EdgeEndpoint({
   return (
     <button
       type="button"
-      className="min-w-0 break-words text-left font-mono underline decoration-dotted underline-offset-2 text-[var(--theme-text-primary)]"
+      className="inline-flex min-h-6 items-center break-words text-left font-mono underline decoration-dotted underline-offset-2 text-[var(--theme-text-primary)]"
       style={endpointStyle}
       onClick={() => onOpen(threadId)}
       aria-label={`Open thread for ${label ?? fallbackLabel}`}
@@ -243,7 +243,7 @@ export function ReadingContextPillar({
                 <button
                   key={crossover.id}
                   type="button"
-                  className="rounded-full px-3 py-1 font-bold text-[var(--theme-comic-accent)] transition hover:brightness-125"
+                  className="inline-flex min-h-7 items-center rounded-full px-3 font-bold text-[var(--theme-comic-accent)] transition hover:brightness-125 focus:ring-2 focus:ring-amber-500"
                   style={{
                     ...readingContextType('chipLabel'),
                     border: '1px solid rgba(212,137,14,0.4)',
@@ -337,8 +337,9 @@ export function ReadingContextPillar({
                             <button
                               key={membership.id}
                               type="button"
-                              className="rounded-full px-2 py-0.5 text-[8px] font-bold transition"
+                              className="inline-flex min-h-6 items-center rounded-full px-2 font-bold transition focus:ring-2 focus:ring-amber-500"
                               style={{
+                                ...readingContextType('chipLabel'),
                                 border: '1px solid rgba(212,137,14,0.4)',
                                 backgroundColor: 'rgba(212, 137, 14, 0.12)',
                                 color: 'rgb(250, 204, 139)',
@@ -354,8 +355,9 @@ export function ReadingContextPillar({
                       {isCurrent && activeRatingThread && (
                         <button
                           type="button"
-                          className="rounded-lg px-2 py-1 text-[9px] font-black transition focus:ring-2"
+                          className="inline-flex min-h-6 items-center rounded-lg px-2 font-black transition focus:ring-2"
                           style={{
+                            ...readingContextType('chipLabel'),
                             border: '1px solid rgba(6,182,212,0.4)',
                             backgroundColor: 'rgba(6, 182, 212, 0.09)',
                             color: 'var(--theme-continuity-accent)',
@@ -419,7 +421,7 @@ export function ReadingContextPillar({
                   <button
                     key={crossover.id}
                     type="button"
-                    className="rounded-full px-3 py-1 font-bold text-[var(--theme-comic-accent)] transition hover:brightness-125"
+                    className="inline-flex min-h-7 items-center rounded-full px-3 font-bold text-[var(--theme-comic-accent)] transition hover:brightness-125 focus:ring-2 focus:ring-amber-500"
                     style={{
                       ...readingContextType('chipLabel'),
                       border: '1px solid rgba(212,137,14,0.4)',
