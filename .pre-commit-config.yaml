@@ -1,0 +1,6 @@
+repos:
+- repo: local
+  hooks:
+  - id: no-backup
+    name: Check for backup files
+    entry: bash -c 'git ls-files --others --exclude-standard | grep -q \.backup && echo "Found backup files" && exit 1'
