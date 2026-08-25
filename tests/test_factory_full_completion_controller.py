@@ -23,7 +23,7 @@ def test_selector_uses_calculated_target_without_backlog_thresholds():
     full.configure_demand_selection(controller, target=7)
 
     workers = [str(worker) for worker in range(6, 26)]
-    health = {worker: ("success", 0) for worker in workers}
+    health = dict.fromkeys(workers, ("success", 0))
     selected = controller.select_completion_workers(
         workers,
         review_backlog=3,
