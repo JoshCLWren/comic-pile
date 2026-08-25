@@ -112,13 +112,6 @@ async def roll_dice(
             detail="No active threads available to roll",
         )
 
-    bounded_rows = await get_bounded_roll_pool_rows(user_id, db, current_die, snoozed_ids)
-    if not bounded_rows:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No active threads available to roll",
-        )
-
     pool_size = len(bounded_rows)
     selection_bandwidth = (
         roll_request.bandwidth if roll_request.bandwidth is not None else DEFAULT_BANDWIDTH
