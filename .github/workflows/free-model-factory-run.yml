@@ -514,7 +514,15 @@ jobs:
           FACTORY_RUNTIME_MODEL: ${{ steps.lane.outputs.runtime_model }}
           FACTORY_DISPLAY: ${{ steps.lane.outputs.display }}
           FACTORY_BRANCH_SUFFIX: ${{ steps.lane.outputs.branch_suffix }}
-        run: bash .github/scripts/free-model-factory-worker.sh
+        run: |
+          set +e
+          bash .github/scripts/free-model-factory-worker.sh
+          worker_status=$?
+          set -e
+          # Write after the worker (and model) exits, so attempt code cannot
+          # forge the trusted wrapper's source classification.
+          printf '%s\n' "$worker_status" > "$RUNNER_TEMP/factory-worker-status"
+          exit "$worker_status"
 
       - name: Report terminal heartbeat
         if: always()
@@ -527,6 +535,7 @@ jobs:
           CONFIGURED: ${{ steps.lane.outputs.configured }}
           REASON: ${{ steps.lane.outputs.reason }}
           JOB_STATUS: ${{ job.status }}
+          WORKER_STATUS_FILE: ${{ runner.temp }}/factory-worker-status
         run: |
           set -Eeuo pipefail
           [[ -n "${WORKER:-}" ]] || exit 0
@@ -547,7 +556,11 @@ jobs:
           # log classifier may later replace unknown_failure with a more specific
           # outcome, but capacity never waits on a chained workflow-run event.
           attempt_marker="<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-${WORKER} -->"
-          if [[ "$CONFIGURED" == true && "$JOB_STATUS" == success ]]; then
+          worker_status="$(cat "$WORKER_STATUS_FILE" 2>/dev/null || true)"
+          if [[ "$worker_status" == 2 || "$worker_status" == 3 ]]; then
+            attempt_outcome='control_plane_failure'
+            attempt_detail="factory controller assignment failed with exit status ${worker_status}"
+          elif [[ "$CONFIGURED" == true && "$JOB_STATUS" == success ]]; then
             attempt_outcome='success'
             attempt_detail='factory job completed successfully'
           elif [[ "$CONFIGURED" != true ]]; then
