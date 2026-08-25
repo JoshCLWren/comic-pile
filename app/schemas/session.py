@@ -51,7 +51,7 @@ class SessionBandwidthState(BaseModel):
 
     predicted_bandwidth: BandwidthLevel | None
     active_bandwidth: BandwidthLevel | None
-    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    confidence: float | None = Field(default=..., ge=0.0, le=1.0)
     source: BandwidthSource | None
     mode_version: str | None
 
