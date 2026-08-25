@@ -4,7 +4,7 @@ import logging
 import os
 import secrets
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 from fastapi import Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -139,7 +139,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     """
     app_settings = get_app_settings()
     _configure_logging(app_settings.environment)
-    startup_state: dict[str, Any] = {}
+    startup_state: dict[str, str] = {}
 
     app = FastAPI(
         title="Dice-Driven Comic Tracker",
@@ -456,8 +456,8 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
     async def _init_provided_cache(
         provider_name: str,
-        startup_state: dict[str, Any],
-        **kwargs: Any,
+        startup_state: dict[str, str],
+        config: dict[str, str],
     ) -> None:
         """Initialize the configured cache provider with demotion support.
 
@@ -469,10 +469,10 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         Args:
             provider_name: ``"postgres"`` or ``"redis"``.
             startup_state: Shared dict between startup and shutdown events.
-            **kwargs: Provider-specific constructor arguments.
+            config: Provider-specific keyword arguments for ``cache.configure``.
         """
         try:
-            await cache.configure(provider_name, **kwargs)
+            await cache.configure(provider_name, **config)
             startup_state["cache_provider_type"] = provider_name
             logger.info(
                 "Cache provider '%s' initialized successfully", provider_name
@@ -504,7 +504,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             await _init_provided_cache(
                 "postgres",
                 startup_state,
-                database_url=app_settings.database.async_url,
+                {"database_url": get_database_settings().async_url},
             )
             return
 
@@ -513,14 +513,16 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
                 await _init_provided_cache(
                     "redis",
                     startup_state,
-                    url=redis_settings.upstash_redis_rest_url,
-                    token=redis_settings.upstash_redis_rest_token,
+                    {
+                        "url": redis_settings.upstash_redis_rest_url,
+                        "token": redis_settings.upstash_redis_rest_token,
+                    },
                 )
             elif redis_settings.redis_url:
                 await _init_provided_cache(
                     "redis",
                     startup_state,
-                    local_url=redis_settings.redis_url,
+                    {"local_url": redis_settings.redis_url},
                 )
             else:
                 logger.warning(
@@ -531,6 +533,10 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     @app.on_event("shutdown")
     async def shutdown_event():
         """Close cache connection on application shutdown."""
+        logger.info(
+            "Shutting down cache (provider=%s)",
+            startup_state.get("cache_provider_type", "unconfigured"),
+        )
         await cache.close()
 
     return app

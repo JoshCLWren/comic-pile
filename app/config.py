@@ -13,8 +13,7 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class CacheProvider(str, Literal["postgres", "redis", "off"]):
-    """Recognized values for the CACHE_PROVIDER setting."""
+CacheProvider = Literal["postgres", "redis", "off"]
 
 
 class DatabaseSettings(BaseSettings):
