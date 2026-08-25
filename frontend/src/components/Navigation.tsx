@@ -94,7 +94,7 @@ function NavIcon({ name }: { name: string }) {
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="10"></circle>
         <path d="M16 8v6a2 2 0 0 1-2 2h-4"></path>
-        <cirche d="M12 8v6"></circle>
+        <path d="M12 8v6"></path>
         <line x1="8" y1="8" x2="16" y2="16"></line>
       </svg>
     ),
@@ -281,7 +281,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
         </div>
       </nav>
 
-      <nav className="fixed bottom-0 left-0 right-0 nav-container z-40" role="navigation" aria-label="Main navigation">
+      <nav className="fixed bottom-0 left-0 right-0 nav-container z-40 md:hidden" role="navigation" aria-label="Main navigation">
         <div className="flex h-14 items-center justify-around px-1 md:h-20 md:px-2 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl mx-auto">
           {MAIN_NAV_ITEMS.map((item) => renderNavItem(item, isActive(item.path)))}
           {!isMobile && SECONDARY_NAV_ITEMS.map((item) => renderNavItem(item, isActive(item.path)))}
