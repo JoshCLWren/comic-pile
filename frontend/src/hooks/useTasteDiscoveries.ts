@@ -12,8 +12,10 @@ interface TasteDiscoveriesState {
 
 /**
  * Load prompt-eligible Taste Bank discoveries once per Roll visit and manage
- * the local response queue. Discovery failures never surface as page errors:
- * the card simply stays hidden so rolling and rating are never interrupted.
+ * the local response queue. Verdicts are submitted through the canonical
+ * Taste Bank signal API; dismissal only suppresses the discovery card.
+ * Discovery failures never surface as page errors: the card simply stays
+ * hidden so rolling and rating are never interrupted.
  */
 export function useTasteDiscoveries() {
   const [state, setState] = useState<TasteDiscoveriesState>({
@@ -58,7 +60,7 @@ export function useTasteDiscoveries() {
 
       pendingIdsRef.current.add(current.id)
       try {
-        await tasteApi.submitVerdict(current.id, verdict)
+        await tasteApi.submitVerdict(current.signal_type, current.external_key, verdict)
         removeCurrent(current.id)
         return true
       } catch {

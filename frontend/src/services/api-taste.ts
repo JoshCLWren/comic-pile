@@ -6,12 +6,12 @@ export type TasteVerdict = 'confirmed' | 'sometimes' | 'rejected'
 /** One prompt-eligible inferred taste pattern. */
 export interface TasteDiscovery {
   id: number
-  feature_type: string
-  creator_role: string | null
-  label: string
+  signal_type: string
+  external_key: string
+  display_name: string
   prompt: string
   evidence_count: number
-  distinct_threads: number
+  distinct_thread_count: number
 }
 
 /** Ranked eligible discoveries for the authenticated reader. */
@@ -20,23 +20,30 @@ export interface TasteDiscoveryListResponse {
   generated_at: string
 }
 
-/** Canonical state of one taste signal after a response. */
+/** Canonical state of one taste signal after a verdict response. */
 export interface TasteSignalResponse {
-  id: number
-  feature_type: string
-  creator_role: string | null
-  label: string
-  verdict: TasteVerdict | null
+  user_id: number
+  signal_type: string
+  external_key: string
+  display_name: string
+  affinity_estimate: number | null
+  confidence: number | null
+  evidence_count: number
+  distinct_thread_count: number
+  user_verdict: TasteVerdict | null
   verdict_at: string | null
-  dismissed_at: string | null
-  prompted_at: string | null
-  prompt_count: number
+  first_observed_at: string | null
+  last_observed_at: string | null
+  last_prompted_at: string | null
 }
 
 export const tasteApi = {
   getDiscoveries: () => api.get<TasteDiscoveryListResponse>('/v1/taste/discoveries'),
-  submitVerdict: (signalId: number, verdict: TasteVerdict) =>
-    api.post<TasteSignalResponse>(`/v1/taste/discoveries/${signalId}/verdict`, { verdict }),
   dismiss: (signalId: number) =>
-    api.post<TasteSignalResponse>(`/v1/taste/discoveries/${signalId}/dismiss`),
+    api.post<{ dismissed: boolean }>(`/v1/taste/discoveries/${signalId}/dismiss`),
+  submitVerdict: (signalType: string, externalKey: string, verdict: TasteVerdict) =>
+    api.put<TasteSignalResponse>(
+      `/v1/users/me/taste-signals/${encodeURIComponent(signalType)}/${encodeURIComponent(externalKey)}/verdict`,
+      { verdict },
+    ),
 }
