@@ -268,7 +268,7 @@ class TestDiscoveryAPI:
             async_db,
             external_key="creator:writer:top",
             display_name="Top",
-            affinity_estimate=1.2,
+            affinity_estimate=1.0,
             confidence=0.9,
             evidence_count=9,
             distinct_thread_count=6,
