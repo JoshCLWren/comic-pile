@@ -7758,7 +7758,7 @@ export interface components {
             /** Active Bandwidth */
             active_bandwidth: ("light" | "balanced" | "deep") | null;
             /** Confidence */
-            confidence?: number | null;
+            confidence: number | null;
             /** Mode Version */
             mode_version: string | null;
             /** Predicted Bandwidth */

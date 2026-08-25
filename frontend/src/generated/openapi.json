@@ -6928,6 +6928,7 @@
         "required": [
           "predicted_bandwidth",
           "active_bandwidth",
+          "confidence",
           "source",
           "mode_version"
         ],
