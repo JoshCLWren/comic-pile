@@ -410,3 +410,171 @@ async def test_roll_bootstrap_counts_null_activity_old_threads_as_stale(
 
     assert data["stale_thread_count"] == 1
     assert data["stale_thread"]["title"] == "Old No Activity"
+
+
+@pytest.mark.asyncio
+async def test_roll_die_boundary_caps_result(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Roll result stays within current_die even when the pool is larger.
+
+    Verifies that the bounded candidate pool acts as a hard ceiling: the API
+    must never return a die result greater than the current die face count.
+    """
+    from datetime import UTC, datetime
+
+    from app.models import Session as SessionModel, Thread
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+    now = datetime.now(UTC)
+
+    # auth_client does not create a session; the roll endpoint resolves one lazily,
+    # so create the authoritative open session up front.
+    session = SessionModel(
+        user_id=user.id,
+        start_die=8,
+        started_at=now,
+        manual_die=4,
+    )
+    async_db.add(session)
+    await async_db.commit()
+
+    threads = [
+        Thread(
+            title=f"Pool Thread {i}",
+            format="Comic",
+            issues_remaining=3,
+            queue_position=i + 1,
+            status="active",
+            user_id=user.id,
+            created_at=now,
+        )
+        for i in range(8)
+    ]
+    async_db.add_all(threads)
+    await async_db.commit()
+
+    response = await auth_client.post("/api/roll/")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["die_size"] == 4
+    assert 1 <= data["result"] <= 4
+
+
+@pytest.mark.asyncio
+async def test_roll_d20_includes_all_available_threads(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A d20 die does not fabricate candidates beyond the available pool.
+
+    When the active pool is smaller than the die face count the bounded pool
+    must be the entire eligible pool, not empty.
+    """
+    from datetime import UTC, datetime
+
+    from app.models import Session as SessionModel, Thread
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+    now = datetime.now(UTC)
+
+    # auth_client does not create a session; the roll endpoint resolves one lazily,
+    # so create the authoritative open session up front.
+    session = SessionModel(
+        user_id=user.id,
+        start_die=8,
+        started_at=now,
+        manual_die=20,
+    )
+    async_db.add(session)
+    await async_db.commit()
+
+    threads = [
+        Thread(
+            title=f"d20 Thread {i}",
+            format="Comic",
+            issues_remaining=2,
+            queue_position=i + 1,
+            status="active",
+            user_id=user.id,
+            created_at=now,
+        )
+        for i in range(6)
+    ]
+    async_db.add_all(threads)
+    await async_db.commit()
+
+    response = await auth_client.post("/api/roll/")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["die_size"] == 20
+    assert 1 <= data["result"] <= 6
+
+
+@pytest.mark.asyncio
+async def test_roll_snoozed_thread_excluded_from_pool(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A snoozed thread is excluded from the bounded roll pool before selection.
+
+    Threads in the session's snoozed list must not count toward pool size and
+    must not be selectable during that roll.
+    """
+    from datetime import UTC, datetime
+
+    from app.models import Session as SessionModel, Thread
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+    now = datetime.now(UTC)
+
+    # auth_client does not create a session; the roll endpoint resolves one lazily,
+    # so create the authoritative open session up front.
+    session = SessionModel(
+        user_id=user.id,
+        start_die=8,
+        started_at=now,
+        manual_die=4,
+    )
+    async_db.add(session)
+    await async_db.commit()
+
+    snoozed_thread = Thread(
+        title="Snoozed Thread",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        created_at=now,
+    )
+    active_threads = [
+        Thread(
+            title=f"Active Thread {i}",
+            format="Comic",
+            issues_remaining=2,
+            queue_position=i + 2,
+            status="active",
+            user_id=user.id,
+            created_at=now,
+        )
+        for i in range(5)
+    ]
+    async_db.add(snoozed_thread)
+    async_db.add_all(active_threads)
+    await async_db.commit()
+    await async_db.refresh(snoozed_thread)
+
+    session.snoozed_thread_ids = [snoozed_thread.id]
+    await async_db.commit()
+
+    response = await auth_client.post("/api/roll/")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["die_size"] == 4
+    assert 1 <= data["result"] <= 4
+    assert data["thread_id"] != snoozed_thread.id

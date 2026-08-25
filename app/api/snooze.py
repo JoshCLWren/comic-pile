@@ -16,11 +16,14 @@ from app.models import Event, Snapshot, Thread
 from app.models import Session as SessionModel
 from app.models.user import User
 from app.schemas import ActiveThreadInfo, SessionResponse
-from app.schemas.session import SnoozeCorrectionInfo, SnoozedThreadInfo, build_session_bandwidth_state
+from app.schemas.session import (
+    SnoozeCorrectionInfo,
+    SnoozedThreadInfo,
+    build_session_bandwidth_state,
+)
 from comic_pile.bandwidth_correction import (
     classify_candidate_effort,
     compute_snooze_correction,
-    normalize_bandwidth,
 )
 from comic_pile.dice_ladder import step_up
 from comic_pile.session import get_current_die_for_session
@@ -28,9 +31,6 @@ from comic_pile.session import get_current_die_for_session
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# Maximum recent snooze events inspected for contradictory-evidence detection.
-_SNOOZE_HISTORY_LIMIT = 10
 
 
 async def _find_source_roll_event(
@@ -58,115 +58,6 @@ async def _find_source_roll_event(
     )
     row = result.scalar_one_or_none()
     return row
-
-
-async def _build_snooze_correction_context(
-    session: SessionModel,
-    session_id: int,
-    db: AsyncSession,
-) -> tuple[dict[str, object], SnoozeCorrectionInfo | None]:
-    """Compute and apply the Snooze bandwidth correction for one rejection.
-
-    Calls the pure correction service after the rejected candidate has been
-    recorded, applies the proposed transition to the session's ephemeral
-    bandwidth state only when the correction contract says to do so, and
-    returns compact before/after metadata for the Snooze event's context
-    plus a structured correction info for the API response.
-
-    A failure anywhere in this flow must never make Snooze fail: the problem
-    is logged, the session state is left untouched, and the returned context
-    records the degradation instead.
-
-    Args:
-        session: The active session model to inspect and mutate.
-        session_id: ID of the session (used for snooze-history lookups).
-        db: Database session used to load recent snooze history.
-
-    Returns:
-        Tuple of (context metadata dict, SnoozeCorrectionInfo or None).
-    """
-    bandwidth_before = session.active_bandwidth
-    confidence_before = session.bandwidth_confidence
-    try:
-        history_result = await db.execute(
-            select(Event)
-            .where(Event.session_id == session_id)
-            .where(Event.type == "snooze")
-            .order_by(Event.timestamp.desc(), Event.id.desc())
-            .limit(_SNOOZE_HISTORY_LIMIT)
-        )
-        previous_snoozes = list(history_result.scalars().all())
-        consecutive_snoozes = len(previous_snoozes) + 1
-
-        last_snooze_direction: str | None = None
-        if previous_snoozes:
-            prior_context = previous_snoozes[0].context
-            if isinstance(prior_context, dict):
-                direction = prior_context.get("direction")
-                if direction in ("heavier", "lighter"):
-                    last_snooze_direction = str(direction)
-
-        # No effort model exists yet (Phase 1); candidates carry no estimate,
-        # so the classification is intentionally unknown evidence for now.
-        candidate_effort_level = classify_candidate_effort(None, None)
-
-        current_bandwidth = normalize_bandwidth(bandwidth_before)
-        correction = compute_snooze_correction(
-            current_bandwidth=current_bandwidth,
-            current_confidence=confidence_before,
-            candidate_effort_level=candidate_effort_level,
-            consecutive_snoozes=consecutive_snoozes,
-            last_snooze_direction=last_snooze_direction,
-            predicted_bandwidth=session.predicted_bandwidth,
-        )
-
-        applied = False
-        if correction.applies:
-            session.active_bandwidth = correction.active_bandwidth
-            session.bandwidth_confidence = correction.active_confidence
-            session.bandwidth_source = "snooze"
-            # Preserve the original launch prediction for accuracy analysis;
-            # seed it once from the pre-correction state when absent.
-            if session.predicted_bandwidth is None:
-                session.predicted_bandwidth = current_bandwidth
-            applied = True
-
-        context: dict[str, object] = {
-            "bandwidth_before": bandwidth_before,
-            "bandwidth_after": session.active_bandwidth if applied else None,
-            "confidence_before": confidence_before,
-            "confidence_after": session.bandwidth_confidence if applied else None,
-            "bandwidth_source": "snooze" if applied else None,
-            "reason_code": correction.reason_code,
-            "candidate_effort_level": candidate_effort_level,
-            "consecutive_snoozes": consecutive_snoozes,
-            "suggest_clarification": correction.suggest_clarification,
-            "direction": correction.direction,
-            "predicted_bandwidth": session.predicted_bandwidth,
-        }
-
-        # Build structured correction info for the API response
-        correction_info = SnoozeCorrectionInfo(
-            bandwidth_changed=correction.bandwidth_changed,
-            active_bandwidth=correction.active_bandwidth,
-            active_confidence=correction.active_confidence,
-            predicted_bandwidth=correction.predicted_bandwidth,
-            reason_code=correction.reason_code,
-            suggest_clarification=correction.suggest_clarification,
-        )
-
-        return context, correction_info
-    except Exception:
-        logger.exception("Snooze bandwidth correction failed; degrading safely")
-        return {
-            "bandwidth_before": bandwidth_before,
-            "bandwidth_after": None,
-            "confidence_before": confidence_before,
-            "confidence_after": None,
-            "bandwidth_source": None,
-            "reason_code": None,
-            "correction_error": "snooze_correction_failed",
-        }, None
 
 
 async def get_active_thread_info(
@@ -316,20 +207,20 @@ async def snooze_thread(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> SessionResponse:
-    """Snooze the pending thread for this session and step the die up.
-
-    Snooze is a temporary session correction, not a durable dislike: the
-    thread's queue position is left untouched so long-term ordering stays
-    governed by ratings and explicit queue actions.
+    """Snooze the pending thread and step the die up.
 
     This endpoint:
     1. Gets the current session (must exist with a pending_thread_id)
-    2. Adds the pending_thread_id to snoozed_thread_ids (excluded from rolls
-       for the active session only)
+    2. Adds the pending_thread_id to snoozed_thread_ids
     3. Steps the die UP (wider pool) using dice ladder logic
-    4. Records a "snooze" event
-    5. Clears pending_thread_id
-    6. Returns the updated session
+    4. Computes a structured bandwidth correction from the snooze evidence
+    5. Applies the correction to ephemeral session bandwidth state
+    6. Records a "snooze" event
+    7. Clears pending_thread_id
+    8. Returns the updated session with correction guidance
+
+    The snoozed thread's durable queue position is NOT changed (issue #1721).
+    Rating remains the authority for long-term promotion/demotion behavior.
 
     Args:
         request: FastAPI request object for rate limiting.
@@ -338,7 +229,8 @@ async def snooze_thread(
 
     Returns:
         SessionResponse containing the updated session with snoozed_thread_ids,
-        cleared pending_thread_id, and current die state.
+        cleared pending_thread_id, current die state, bandwidth state, and
+        structured correction guidance.
 
     Raises:
         HTTPException: If no active session exists or no pending thread to snooze.
@@ -435,12 +327,75 @@ async def snooze_thread(
     else:
         logger.info(f"Snooze: thread {pending_thread_id} already in snoozed list")
 
-    # Phase 4: interpret this Snooze as a bandwidth correction on ephemeral
-    # session state. Durable queue affinity above is unchanged by this step,
-    # and a correction failure never fails the Snooze itself.
-    snooze_context, correction_info = await _build_snooze_correction_context(
-        current_session, current_session_id, db
+    # Compute bandwidth correction from snooze evidence (pure, side-effect-free)
+    recent_snooze_result = await db.execute(
+        select(Event)
+        .where(Event.session_id == current_session_id)
+        .where(Event.type == "snooze")
+        .order_by(Event.timestamp.desc(), Event.id.desc())
+        .limit(10)
     )
+    recent_snoozes = list(recent_snooze_result.scalars().all())
+    consecutive_snoozes = len(recent_snoozes) + 1  # +1 for the current snooze
+
+    # Determine last snooze direction relative to current bandwidth
+    last_snooze_direction: str | None = None
+    current_bw = current_session.active_bandwidth or "balanced"
+    if recent_snoozes:
+        # Use the most recent previous snooze's die step as a proxy for direction
+        prev_die = recent_snoozes[0].die or 6
+        prev_die_after = recent_snoozes[0].die_after or 8
+        if prev_die_after > prev_die:
+            last_snooze_direction = "heavier"
+        elif prev_die_after < prev_die:
+            last_snooze_direction = "lighter"
+
+    # Classify the snoozed candidate's effort
+    candidate_effort = classify_candidate_effort(
+        effort_source=None,  # No effort model yet; defaults to balanced
+        effort_minutes=None,
+    )
+
+    correction_result = compute_snooze_correction(
+        current_bandwidth=current_bw,
+        current_confidence=current_session.bandwidth_confidence or 0.5,
+        predicted_bandwidth=current_session.predicted_bandwidth or current_bw,
+        candidate_effort_level=candidate_effort,
+        consecutive_snoozes=consecutive_snoozes,
+        last_snooze_direction=last_snooze_direction,
+    )
+
+    # Extract pre-correction values before mutating session state
+    confidence_before = current_session.bandwidth_confidence or 0.5
+
+    # Apply correction to session state (#1724)
+    current_session.active_bandwidth = correction_result.active_bandwidth
+    current_session.bandwidth_confidence = correction_result.active_confidence
+    current_session.bandwidth_source = "snooze"
+    if current_session.predicted_bandwidth is None:
+        current_session.predicted_bandwidth = current_bw
+
+    # Extract correction values for response
+    pre_correction = SnoozeCorrectionInfo(
+        bandwidth_changed=correction_result.bandwidth_changed,
+        active_bandwidth=correction_result.active_bandwidth,
+        active_confidence=correction_result.active_confidence,
+        predicted_bandwidth=correction_result.predicted_bandwidth,
+        reason_code=correction_result.reason_code,
+        suggest_clarification=correction_result.suggest_clarification,
+    )
+
+    # Record before/after bandwidth and reason codes in event context
+    snooze_context: dict[str, object] = {
+        "bandwidth_before": current_bw,
+        "bandwidth_after": correction_result.active_bandwidth,
+        "confidence_before": confidence_before,
+        "confidence_after": correction_result.active_confidence,
+        "bandwidth_source": "snooze",
+        "reason_code": correction_result.reason_code,
+        "consecutive_snoozes": consecutive_snoozes,
+        "suggest_clarification": correction_result.suggest_clarification,
+    }
 
     event = Event(
         type="snooze",
@@ -449,7 +404,9 @@ async def snooze_thread(
         die=current_die,
         die_after=new_die,
         context=snooze_context,
-        source_roll_event_id=await _find_source_roll_event(db, current_session_id, pending_thread_id),
+        source_roll_event_id=await _find_source_roll_event(
+            db, current_session_id, pending_thread_id
+        ),
     )
     db.add(event)
 
@@ -468,9 +425,7 @@ async def snooze_thread(
     )
     pre_snoozed_threads: list[SnoozedThreadInfo] = []
     if pre_snoozed_ids:
-        snooze_result = await db.execute(
-            select(Thread).where(Thread.id.in_(pre_snoozed_ids))
-        )
+        snooze_result = await db.execute(select(Thread).where(Thread.id.in_(pre_snoozed_ids)))
         threads_by_id = {t.id: t for t in snooze_result.scalars().all()}
         pre_snoozed_threads = [
             SnoozedThreadInfo(id=sid, title=threads_by_id[sid].title)
@@ -492,7 +447,7 @@ async def snooze_thread(
         snapshot_count=pre_snapshot_count,
         snoozed_threads=pre_snoozed_threads,
         snoozed_thread_ids=pre_snoozed_ids,
-        correction=correction_info,
+        correction=pre_correction,
     )
 
 
@@ -547,9 +502,7 @@ async def unsnooze_thread(
     pre_snoozed_ids = list(snoozed_ids)
     pre_snoozed_threads: list[SnoozedThreadInfo] = []
     if pre_snoozed_ids:
-        snooze_result = await db.execute(
-            select(Thread).where(Thread.id.in_(pre_snoozed_ids))
-        )
+        snooze_result = await db.execute(select(Thread).where(Thread.id.in_(pre_snoozed_ids)))
         threads_by_id = {t.id: t for t in snooze_result.scalars().all()}
         pre_snoozed_threads = [
             SnoozedThreadInfo(id=sid, title=threads_by_id[sid].title)

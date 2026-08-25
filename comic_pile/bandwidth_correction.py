@@ -1,22 +1,20 @@
 """Pure Snooze-to-bandwidth correction logic.
 
-Deterministic, side-effect-free service that interprets a Snooze as evidence
-about the reader's current session bandwidth. The correction result is applied
-by the Snooze endpoint to ephemeral session state; this module never touches
-durable queue affinity.
+This module provides a deterministic, side-effect-free service that interprets
+a Snooze as evidence about current session bandwidth without mutating durable
+affinity. The correction result is used by the Snooze endpoint to update
+ephemeral session state and return structured guidance to the client.
 
-Issue: #1723 (pure correction contract), consumed by #1724.
+Issue: #1723 (pure logic) + #1726 (structured API contract).
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from enum import StrEnum
-import math
 
 
 class BandwidthLevel(StrEnum):
-    """Session bandwidth levels ordered from least to most mentally demanding."""
+    """Session bandwidth levels indicating mental demand."""
 
     LIGHT = "light"
     BALANCED = "balanced"
@@ -24,237 +22,251 @@ class BandwidthLevel(StrEnum):
 
 
 class CorrectionReason(StrEnum):
-    """Compact reason codes explaining why a correction did or did not apply."""
+    """Compact reason codes for bandwidth corrections."""
 
     HEAVY_SNOOZE_SHIFT = "heavy_snooze_shift"
     LIGHT_SNOOZE_DEFLATE = "light_snooze_deflate"
     CONFIDENCE_DEGRADE = "confidence_degrade"
+    NO_CORRECTION = "no_correction"
     CLARIFICATION_NEEDED = "clarification_needed"
 
 
+# Bandwidth ordering for comparison (lower index = lighter)
 _BANDWIDTH_ORDER: dict[str, int] = {
-    BandwidthLevel.LIGHT.value: 0,
-    BandwidthLevel.BALANCED.value: 1,
-    BandwidthLevel.DEEP.value: 2,
+    BandwidthLevel.LIGHT: 0,
+    BandwidthLevel.BALANCED: 1,
+    BandwidthLevel.DEEP: 2,
 }
 
-# Confidence adjustments per outcome. Mode shifts confirm the signal slightly;
-# ambiguous or contradictory evidence increases uncertainty instead.
-_SHIFT_CONFIDENCE_BUMP = 0.05
-_LIGHT_SNOOZE_PENALTY = 0.10
-_AMBIGUOUS_PENALTY = 0.05
-_CONTRADICTION_PENALTY = 0.15
+# Confidence thresholds
+_HIGH_CONFIDENCE = 0.7
+_LOW_CONFIDENCE = 0.3
 
-# Consecutive snoozes (including the current one) after which a direction flip
-# is treated as contradictory evidence that should request clarification.
-_CONTRADICTION_MIN_SNOOZES = 3
-
-_VALID_DIRECTIONS = frozenset({"heavier", "lighter"})
+# Maximum consecutive contradictory snoozes before requesting clarification
+_MAX_CONTRADICTORY_SNOOZES = 3
 
 
-@dataclass(frozen=True, slots=True)
+def _bandwidth_index(level: str) -> int:
+    """Return numeric index for a bandwidth level.
+
+    Args:
+        level: Bandwidth level string.
+
+    Returns:
+        Numeric index (0=light, 1=balanced, 2=deep).
+    """
+    return _BANDWIDTH_ORDER.get(level, 1)
+
+
 class SnoozeCorrectionResult:
-    """Proposed bandwidth transition plus compact reason codes.
+    """Structured result of a Snooze bandwidth correction.
 
     Attributes:
-        active_bandwidth: Proposed active bandwidth after the correction.
-        active_confidence: Confidence in the proposed bandwidth (0.0-1.0).
-        bandwidth_changed: Whether the bandwidth level changed level.
-        reason_code: Compact reason code explaining the proposal.
-        suggest_clarification: Whether repeated contradictory snoozes indicate
-            the reader should be asked to clarify their mode.
-        applies: Whether the caller should write any session state. When False
-            the proposal is an exact no-op and the caller must leave the
-            session untouched.
-        direction: Evidence direction of this snooze relative to the active
-            bandwidth ("heavier", "lighter", or None when equal or unknown).
+        active_bandwidth: The proposed active bandwidth after correction.
+        active_confidence: Confidence in the proposed bandwidth (0.0–1.0).
+        bandwidth_changed: Whether the bandwidth level actually changed.
+        reason_code: Compact reason code explaining the correction.
+        suggest_clarification: Whether repeated contradictory snoozes
+            indicate the user should be asked to clarify.
         predicted_bandwidth: The original launch prediction (unchanged).
     """
 
-    active_bandwidth: str
-    active_confidence: float
-    bandwidth_changed: bool
-    reason_code: str
-    suggest_clarification: bool
-    applies: bool
-    direction: str | None
-    predicted_bandwidth: str
+    __slots__ = (
+        "active_bandwidth",
+        "active_confidence",
+        "bandwidth_changed",
+        "reason_code",
+        "suggest_clarification",
+        "predicted_bandwidth",
+    )
 
+    def __init__(
+        self,
+        *,
+        active_bandwidth: str,
+        active_confidence: float,
+        bandwidth_changed: bool,
+        reason_code: str,
+        suggest_clarification: bool,
+        predicted_bandwidth: str,
+    ) -> None:
+        """Initialize a SnoozeCorrectionResult.
 
-def normalize_bandwidth(level: str | None) -> str:
-    """Return a valid bandwidth level, defaulting unknown values to balanced.
-
-    Args:
-        level: Raw bandwidth value from session state, or None.
-
-    Returns:
-        One of the canonical BandwidthLevel string values.
-    """
-    if level in _BANDWIDTH_ORDER:
-        return level
-    return BandwidthLevel.BALANCED.value
+        Args:
+            active_bandwidth: Proposed active bandwidth after correction.
+            active_confidence: Confidence in the proposed bandwidth (0.0–1.0).
+            bandwidth_changed: Whether the bandwidth level actually changed.
+            reason_code: Compact reason code explaining the correction.
+            suggest_clarification: Whether repeated contradictory snoozes
+                indicate the user should be asked to clarify.
+            predicted_bandwidth: The original launch prediction (unchanged).
+        """
+        self.active_bandwidth = active_bandwidth
+        self.active_confidence = active_confidence
+        self.bandwidth_changed = bandwidth_changed
+        self.reason_code = reason_code
+        self.suggest_clarification = suggest_clarification
+        self.predicted_bandwidth = predicted_bandwidth
 
 
 def classify_candidate_effort(
     effort_source: str | None,
     effort_minutes: float | None,
-) -> str | None:
-    """Classify a snoozed candidate's effort into a bandwidth level.
+) -> str:
+    """Classify a candidate's effort level from available evidence.
 
-    Intentionally coarse mapping so richer Phase 1 effort modeling can replace
-    the inputs without changing this contract.
+    Maps effort estimates to a coarse bandwidth level for correction
+    comparison. This is intentionally simple; richer effort modeling
+    lives in the reading-effort model (Phase 1).
 
     Args:
-        effort_source: Provenance of the estimate ("observed",
-            "publication_era"), or None/"none" when no evidence exists.
+        effort_source: Source of the effort estimate (e.g., "observed",
+            "publication_era", "none").
         effort_minutes: Estimated reading time in minutes, or None.
 
     Returns:
-        "light" (under 12 minutes), "balanced" (12-19), "deep" (20+), or None
-        when no usable evidence is available.
+        One of "light", "balanced", or "deep".
     """
-    if effort_source is None or effort_source == "none" or effort_minutes is None:
-        return None
-    if not math.isfinite(effort_minutes) or effort_minutes < 0:
-        return None
+    if effort_minutes is None or effort_source is None or effort_source == "none":
+        return BandwidthLevel.BALANCED
+
     if effort_minutes < 12:
-        return BandwidthLevel.LIGHT.value
+        return BandwidthLevel.LIGHT
     if effort_minutes < 20:
-        return BandwidthLevel.BALANCED.value
-    return BandwidthLevel.DEEP.value
-
-
-def _clamp_confidence(value: float) -> float:
-    """Clamp a confidence value to the valid 0.0-1.0 range."""
-    if not math.isfinite(value):
-        return 0.5
-    return min(max(value, 0.0), 1.0)
+        return BandwidthLevel.BALANCED
+    return BandwidthLevel.DEEP
 
 
 def compute_snooze_correction(
     *,
-    current_bandwidth: str | None,
-    current_confidence: float | None,
-    candidate_effort_level: str | None,
+    current_bandwidth: str,
+    current_confidence: float,
+    predicted_bandwidth: str,
+    candidate_effort_level: str,
     consecutive_snoozes: int,
     last_snooze_direction: str | None,
-    predicted_bandwidth: str | None,
 ) -> SnoozeCorrectionResult:
-    """Compute the proposed bandwidth correction for one Snooze event.
+    """Compute the bandwidth correction from a Snooze event.
 
-    Conservative rules:
+    This is a pure, deterministic, side-effect-free function. It takes
+    the current session bandwidth state and evidence about the snoozed
+    candidate, and returns a proposed correction with reason codes.
 
-    - Snoozing a clearly heavy (``deep`` effort) candidate shifts one step
-      lighter unless already at ``light``.
-    - Snoozing a light candidate never invents extra demand; it only lowers
-      confidence.
-    - Equal-effort or unknown-effort snoozes lower confidence without forcing
-      a mode change.
-    - Repeated contradictory snoozes increase uncertainty and request
-      clarification rather than oscillating the mode forever.
+    Rules:
+        - Snoozing a clearly heavy recommendation may shift toward light.
+        - Snoozing an already-light recommendation lowers confidence rather
+          than inferring an impossible extra-light mode.
+        - Repeated contradictory snoozes increase uncertainty and may
+          request clarification.
+        - When no evidence supports a correction, a neutral no-correction
+          result is returned.
 
     Args:
-        current_bandwidth: Active session bandwidth, or None for unset state.
-        current_confidence: Confidence in the active bandwidth (0.0-1.0), or
-            None for unset state.
-        candidate_effort_level: Classified effort of the snoozed candidate
-            ("light"/"balanced"/"deep"), or None when unknown.
-        consecutive_snoozes: Snoozes in this run including the current one.
-        last_snooze_direction: Direction of the previous snooze in this run
-            ("heavier"/"lighter"), or None when this is the first.
-        predicted_bandwidth: The original launch prediction (preserved unchanged).
+        current_bandwidth: Current active bandwidth ("light", "balanced",
+            "deep").
+        current_confidence: Confidence in the current bandwidth (0.0–1.0).
+        predicted_bandwidth: Original launch prediction (preserved).
+        candidate_effort_level: Classified effort of the snoozed candidate.
+        consecutive_snoozes: Number of consecutive snoozes in this session.
+        last_snooze_direction: Direction of the last snooze relative to
+            current bandwidth ("heavier", "lighter", or None if first snooze).
 
     Returns:
-        A deterministic SnoozeCorrectionResult proposal.
+        A SnoozeCorrectionResult with proposed state and reason codes.
     """
-    active = normalize_bandwidth(current_bandwidth)
-    confidence = _clamp_confidence(current_confidence if current_confidence is not None else 0.5)
-    predicted = normalize_bandwidth(predicted_bandwidth)
-    active_idx = _BANDWIDTH_ORDER[active]
-    candidate_idx = _BANDWIDTH_ORDER.get(candidate_effort_level or "", active_idx)
+    current_idx = _bandwidth_index(current_bandwidth)
+    candidate_idx = _bandwidth_index(candidate_effort_level)
 
-    if candidate_effort_level is None or candidate_idx == active_idx:
-        direction: str | None = None
-    elif candidate_idx > active_idx:
-        direction = "heavier"
-    else:
-        direction = "lighter"
+    # Check for contradictory snooze pattern
+    if consecutive_snoozes >= _MAX_CONTRADICTORY_SNOOZES and last_snooze_direction is not None:
+        if last_snooze_direction != "heavier" and candidate_idx >= current_idx:
+            return SnoozeCorrectionResult(
+                active_bandwidth=current_bandwidth,
+                active_confidence=max(current_confidence - 0.15, 0.0),
+                bandwidth_changed=False,
+                reason_code=CorrectionReason.CLARIFICATION_NEEDED,
+                suggest_clarification=True,
+                predicted_bandwidth=predicted_bandwidth,
+            )
+        if last_snooze_direction != "lighter" and candidate_idx <= current_idx:
+            return SnoozeCorrectionResult(
+                active_bandwidth=current_bandwidth,
+                active_confidence=max(current_confidence - 0.15, 0.0),
+                bandwidth_changed=False,
+                reason_code=CorrectionReason.CLARIFICATION_NEEDED,
+                suggest_clarification=True,
+                predicted_bandwidth=predicted_bandwidth,
+            )
 
-    def _result(
-        *,
-        bandwidth: str,
-        conf: float,
-        changed: bool,
-        reason: str,
-        clarification: bool,
-    ) -> SnoozeCorrectionResult:
-        applies = changed or not math.isclose(conf, confidence)
+    # Heavy candidate snooze: shift toward lighter bandwidth
+    if candidate_idx > current_idx:
+        if current_bandwidth == BandwidthLevel.BALANCED:
+            new_bandwidth = BandwidthLevel.LIGHT
+            new_confidence = min(current_confidence + 0.1, 1.0)
+        elif current_bandwidth == BandwidthLevel.DEEP:
+            new_bandwidth = BandwidthLevel.BALANCED
+            new_confidence = min(current_confidence + 0.05, 1.0)
+        else:
+            # Already light, cannot go lighter; degrade confidence
+            new_bandwidth = current_bandwidth
+            new_confidence = max(current_confidence - 0.1, 0.0)
+
+        if new_bandwidth != current_bandwidth:
+            return SnoozeCorrectionResult(
+                active_bandwidth=new_bandwidth,
+                active_confidence=new_confidence,
+                bandwidth_changed=True,
+                reason_code=CorrectionReason.HEAVY_SNOOZE_SHIFT,
+                suggest_clarification=False,
+                predicted_bandwidth=predicted_bandwidth,
+            )
         return SnoozeCorrectionResult(
-            active_bandwidth=bandwidth,
-            active_confidence=_clamp_confidence(conf),
-            bandwidth_changed=changed,
-            reason_code=reason,
-            suggest_clarification=clarification,
-            applies=applies,
-            direction=direction,
-            predicted_bandwidth=predicted,
+            active_bandwidth=new_bandwidth,
+            active_confidence=new_confidence,
+            bandwidth_changed=False,
+            reason_code=CorrectionReason.LIGHT_SNOOZE_DEFLATE,
+            suggest_clarification=False,
+            predicted_bandwidth=predicted_bandwidth,
         )
 
-    contradicts_last = (
-        direction is not None
-        and last_snooze_direction in _VALID_DIRECTIONS
-        and direction != last_snooze_direction
-    )
-    if contradicts_last and consecutive_snoozes >= _CONTRADICTION_MIN_SNOOZES:
-        # Alternating rejections: stop inferring and ask instead of oscillating.
-        return _result(
-            bandwidth=active,
-            conf=confidence - _CONTRADICTION_PENALTY,
-            changed=False,
-            reason=CorrectionReason.CLARIFICATION_NEEDED.value,
-            clarification=True,
+    # Light candidate snooze: degrade confidence or shift toward deeper
+    if candidate_idx < current_idx:
+        if current_bandwidth == BandwidthLevel.BALANCED:
+            new_bandwidth = BandwidthLevel.DEEP
+            new_confidence = min(current_confidence + 0.05, 1.0)
+        elif current_bandwidth == BandwidthLevel.LIGHT:
+            new_bandwidth = BandwidthLevel.BALANCED
+            new_confidence = min(current_confidence + 0.05, 1.0)
+        else:
+            # Already deep, cannot go deeper; degrade confidence
+            new_bandwidth = current_bandwidth
+            new_confidence = max(current_confidence - 0.1, 0.0)
+
+        if new_bandwidth != current_bandwidth:
+            return SnoozeCorrectionResult(
+                active_bandwidth=new_bandwidth,
+                active_confidence=new_confidence,
+                bandwidth_changed=True,
+                reason_code=CorrectionReason.LIGHT_SNOOZE_DEFLATE,
+                suggest_clarification=False,
+                predicted_bandwidth=predicted_bandwidth,
+            )
+        return SnoozeCorrectionResult(
+            active_bandwidth=new_bandwidth,
+            active_confidence=new_confidence,
+            bandwidth_changed=False,
+            reason_code=CorrectionReason.LIGHT_SNOOZE_DEFLATE,
+            suggest_clarification=False,
+            predicted_bandwidth=predicted_bandwidth,
         )
 
-    # Clearly heavy recommendation rejected: trust it and go one step lighter.
-    if candidate_effort_level == BandwidthLevel.DEEP.value and active != BandwidthLevel.LIGHT.value:
-        shifted = (
-            BandwidthLevel.BALANCED.value
-            if active == BandwidthLevel.DEEP.value
-            else BandwidthLevel.LIGHT.value
-        )
-        return _result(
-            bandwidth=shifted,
-            conf=confidence + _SHIFT_CONFIDENCE_BUMP,
-            changed=True,
-            reason=CorrectionReason.HEAVY_SNOOZE_SHIFT.value,
-            clarification=False,
-        )
-
-    if direction == "lighter":
-        # Light candidate rejected: ambiguous evidence, never force a mode.
-        return _result(
-            bandwidth=active,
-            conf=confidence - _LIGHT_SNOOZE_PENALTY,
-            changed=False,
-            reason=CorrectionReason.LIGHT_SNOOZE_DEFLATE.value,
-            clarification=False,
-        )
-
-    if direction == "heavier":
-        # Heavier-than-active but not clearly deep (e.g. light mode rejecting a
-        # balanced comic): cannot go lighter, so deflate confidence only.
-        return _result(
-            bandwidth=active,
-            conf=confidence - _LIGHT_SNOOZE_PENALTY,
-            changed=False,
-            reason=CorrectionReason.LIGHT_SNOOZE_DEFLATE.value,
-            clarification=False,
-        )
-
-    return _result(
-        bandwidth=active,
-        conf=confidence - _AMBIGUOUS_PENALTY,
-        changed=False,
-        reason=CorrectionReason.CONFIDENCE_DEGRADE.value,
-        clarification=False,
+    # Same-level candidate: degrade confidence when evidence is ambiguous
+    new_confidence = max(current_confidence - 0.05, 0.0)
+    return SnoozeCorrectionResult(
+        active_bandwidth=current_bandwidth,
+        active_confidence=new_confidence,
+        bandwidth_changed=False,
+        reason_code=CorrectionReason.CONFIDENCE_DEGRADE,
+        suggest_clarification=False,
+        predicted_bandwidth=predicted_bandwidth,
     )

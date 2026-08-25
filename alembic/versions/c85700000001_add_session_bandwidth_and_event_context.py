@@ -1,7 +1,7 @@
 """Add event context metadata for Snooze bandwidth corrections.
 
 Revision ID: c85700000001
-Revises: 05f8245be920
+Revises: h9i0j1k2l3m4
 Create Date: 2026-08-23 00:00:00.000000
 """
 

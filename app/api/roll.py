@@ -1,5 +1,6 @@
 """Roll API routes."""
 
+import json
 import logging
 from datetime import UTC, datetime, timedelta
 
@@ -8,7 +9,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import Text, func, or_, select
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Annotated
+from typing import Annotated, Any
 
 from app.api.session import (
     _invalidate_session_caches,
@@ -18,12 +19,15 @@ from app.auth import get_current_user
 
 from app.database import get_db
 from app.middleware import limiter
-from app.models import DependencyGroup, DependencyGroupMembership, Event, Issue, Thread
+from app.models import DependencyGroup, DependencyGroupMembership, Event, Issue, Session, Thread
 from app.models.user import User
 from app.roll_recovery import build_roll_recovery
 from app.services.explanation_projection import get_primary_explanation
+from app.services.recommendation_explanation import RecommendationExplanationProjection
 from app.schemas import (
+    ExplainableFactorResponse,
     OverrideRequest,
+    RecommendationExplanationResponse,
     RollBootstrapResponse,
     RollBootstrapThread,
     RollRequest,
@@ -33,7 +37,7 @@ from app.schemas import (
     SessionModeUpdateRequest,
 )
 from app.schemas.session import build_session_bandwidth_state
-from comic_pile.queue import get_roll_pool_rows
+from comic_pile.queue import get_bounded_roll_pool_rows
 from comic_pile.session import get_current_die_for_session, get_or_create
 from app.momentum import weighted_momentum_selection
 
@@ -88,15 +92,15 @@ async def roll_dice(
 
     snoozed_ids = current_session.snoozed_thread_ids or []
 
-    rows = await get_roll_pool_rows(user_id, db, snoozed_ids)
-    if not rows:
+    bounded_rows = await get_bounded_roll_pool_rows(user_id, db, current_die, snoozed_ids)
+    if not bounded_rows:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No active threads available to roll",
         )
 
-    # Bound the selection to the current die size, matching original semantics.
-    bounded_rows = rows[:current_die]
+    # get_bounded_roll_pool_rows already applied the die cap, so the contextual
+    # weighting below cannot draw from outside the active die pool.
 
     # Apply momentum weighting; weights fall back to uniform (pure-random)
     # when no positive momentum applies, preserving the pure-random bypass.
@@ -692,4 +696,85 @@ async def roll_bootstrap(
         stale_thread=stale_thread,
         session_id=current_session_id,
         user_id=user_id,
+    )
+
+
+@router.get(
+    "/events/{event_id}/recommendation-explanation",
+    response_model=RecommendationExplanationResponse,
+)
+async def get_roll_recommendation_explanation(
+    event_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> RecommendationExplanationResponse:
+    """Return human-readable explanations for a historical roll event.
+
+    Derives explanations solely from the recommendation context persisted at
+    roll decision time, never recomputing scores from current mutable state.
+    Unknown or absent context degrades gracefully to an empty explanation list.
+
+    Args:
+        event_id: Identifier of the roll event to explain.
+        current_user: Authenticated owner of the session that generated the event.
+        db: Async database session.
+
+    Returns:
+        RecommendationExplanationResponse carrying the event identifier and
+        ordered list of human-readable explanation factors.
+
+    Raises:
+        HTTPException 404: When the event does not exist or does not belong
+            to the current user's session.
+        HTTPException 422: When the event type is not ``"roll"``.
+    """
+    result = await db.execute(
+        select(Event, Session.user_id)
+        .join(Session, Event.session_id == Session.id)
+        .where(Event.id == event_id)
+    )
+    row = result.one_or_none()
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Event {event_id} not found",
+        )
+    event, session_user_id = row
+    if session_user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Event {event_id} not found",
+        )
+    if event.type != "roll":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Event {event_id} is not a roll event",
+        )
+
+    context: dict[str, Any] | None = None
+    if hasattr(event, "recommendation_context") and event.recommendation_context is not None:
+        raw = event.recommendation_context
+        if isinstance(raw, dict):
+            context = raw
+        elif isinstance(raw, str):
+            try:
+                context = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                context = None
+
+    factors = RecommendationExplanationProjection.project_recommendation_context(
+        context=context,
+        selection_method=event.selection_method,
+    )
+
+    return RecommendationExplanationResponse(
+        event_id=event_id,
+        factors=[
+            ExplainableFactorResponse(
+                code=f.code,
+                label=f.label,
+                detail=f.detail,
+            )
+            for f in factors
+        ],
     )
