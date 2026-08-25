@@ -20,7 +20,7 @@ def _require_git() -> str:
     """Return the git executable path or skip when git is unavailable."""
     git_path = shutil.which("git")
     if git_path is None:
-        pytest.skip(reason="git is not available")
+        pytest.skip("git is not available")
     assert git_path is not None
     return git_path
 
