@@ -1,4 +1,4 @@
-"""Regression tests for the explicit Redis cache feature gate."""
+"""Regression tests for the explicit cache feature gate."""
 
 from collections.abc import Awaitable, Callable
 from typing import cast
@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from app.cache import RedisCache, cached
+from app.cache import UpstashCache, cached
 from app.config import RedisSettings
 
 
@@ -70,6 +70,8 @@ async def test_disabled_cache_reads_fall_through_without_remote_commands(monkeyp
     remote_client = AsyncMock()
     monkeypatch.setattr(cache_module.cache, "_initialized", False)
     monkeypatch.setattr(cache_module.cache, "_client", remote_client)
+    monkeypatch.setattr(cache_module.cache, "_backend", None)
+    monkeypatch.setattr(cache_module.cache, "_demoted", True)
     wrapped = AsyncMock(return_value={"source": "database"})
 
     @cached(ttl=60)
@@ -85,7 +87,7 @@ async def test_disabled_cache_reads_fall_through_without_remote_commands(monkeyp
 @pytest.mark.asyncio
 async def test_uninitialized_cache_invalidation_makes_no_remote_calls() -> None:
     """Disabled invalidation remains a safe no-op."""
-    cache_client = RedisCache()
+    cache_client = UpstashCache()
     remote_client = AsyncMock()
     cache_client._initialized = False
     cache_client._client = remote_client
@@ -104,6 +106,7 @@ async def test_upstash_initialization_does_not_ping_remote_service(monkeypatch) 
     remote_client = AsyncMock()
     monkeypatch.setattr(cache_module.cache, "_initialized", False)
     monkeypatch.setattr(cache_module.cache, "_client", None)
+    monkeypatch.setattr(cache_module.cache, "_backend", None)
     monkeypatch.setattr(cache_module, "UpstashRedis", lambda **_: remote_client)
 
     await cache_module.cache.initialize(
@@ -125,6 +128,7 @@ async def test_local_redis_initialization_does_not_ping_service(monkeypatch) -> 
     from_url = Mock(return_value=local_client)
     monkeypatch.setattr(cache_module.cache, "_initialized", False)
     monkeypatch.setattr(cache_module.cache, "_client", None)
+    monkeypatch.setattr(cache_module.cache, "_backend", None)
     monkeypatch.setattr(cache_module.aioredis.Redis, "from_url", from_url)
 
     await cache_module.cache.initialize(local_url="redis://localhost:6379/0")
