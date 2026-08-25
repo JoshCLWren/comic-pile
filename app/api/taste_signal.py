@@ -15,9 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models.taste_signal import TasteSignal
 from app.models.user import User
-from app.repositories.taste_signal import get_signal, get_user_signals, upsert_signal
+from app.repositories.taste_signal import get_user_signals, upsert_signal
 from app.schemas.taste_verdict import (
     TasteSignalListResponse,
     TasteSignalResponse,
