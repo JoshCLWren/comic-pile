@@ -215,7 +215,7 @@ describe('IdentityInboxPage', () => {
     await userEvent.click(deferButton)
 
     await waitFor(() =>
-      expect(mockPost).toHaveBeenCalledWith('/v1/identity-inbox/1/defer', undefined),
+      expect(mockPost).toHaveBeenCalledWith('/v1/identity-inbox/1/defer'),
     )
   })
 
@@ -238,7 +238,7 @@ describe('IdentityInboxPage', () => {
     await userEvent.click(skipButton)
 
     await waitFor(() =>
-      expect(mockPost).toHaveBeenCalledWith('/v1/identity-inbox/1/skip', undefined),
+      expect(mockPost).toHaveBeenCalledWith('/v1/identity-inbox/1/skip'),
     )
   })
 
