@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   useDeleteThread,
   useMoveToBack,
@@ -68,8 +69,12 @@ function makeThread(overrides: Partial<Thread>): Thread {
   }
 }
 
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+})
+
 function wrapper({ children }: { children: ReactNode }) {
-  return <>{children}</>
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
 }
 
 beforeEach(() => {

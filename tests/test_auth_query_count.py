@@ -49,7 +49,7 @@ async def test_authenticated_request_uses_single_auth_query(
 ) -> None:
     """An authenticated request resolves auth with exactly one SELECT."""
     with _captured_selects(db_engine) as select_statements:
-        response = await auth_client.get("/api/auth/me")
+        response = await auth_client.get("/api/v1/auth/me")
 
     assert response.status_code == 200
     assert len(select_statements) == 1, select_statements
@@ -59,10 +59,10 @@ async def test_authenticated_request_uses_single_auth_query(
 @pytest.mark.asyncio
 async def test_revoked_access_token_is_rejected(auth_client: AsyncClient) -> None:
     """A revoked access token is rejected after the single-query change."""
-    logout_response = await auth_client.post("/api/auth/logout")
+    logout_response = await auth_client.post("/api/v1/auth/logout")
     assert logout_response.status_code == 200
 
-    response = await auth_client.get("/api/auth/me")
+    response = await auth_client.get("/api/v1/auth/me")
     assert response.status_code == 401
     assert response.json()["detail"] == "Token has been revoked"
 
@@ -77,6 +77,6 @@ async def test_deleted_user_token_is_rejected(
     await async_db.execute(delete(User).where(User.username == test_username))
     await async_db.flush()
 
-    response = await auth_client.get("/api/auth/me")
+    response = await auth_client.get("/api/v1/auth/me")
     assert response.status_code == 401
     assert response.json()["detail"] == "User not found"

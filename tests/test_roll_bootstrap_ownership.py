@@ -11,7 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.api import roll as roll_api
 from app.models import DependencyGroup, DependencyGroupMembership, Issue, Thread
-from app.schemas import RollBootstrapResponse, RollBootstrapThread
+from app.schemas import RollBootstrapResponse, RollBootstrapThread, SessionMode
+from app.schemas.session import SessionBandwidthState, build_session_bandwidth_state
 from tests.conftest import get_or_create_user_async
 
 
@@ -35,13 +36,62 @@ class _Result:
         return self
 
 
+def _mode_session(**kwargs):
+    """Build a session double carrying every bootstrap-exposed mode attribute."""
+    mode_fields = {
+        "manual_die": None,
+        "pending_thread_id": None,
+        "snoozed_thread_ids": [],
+        "active_bandwidth": None,
+        "predicted_bandwidth": None,
+        "bandwidth_confidence": None,
+        "bandwidth_source": None,
+        "bandwidth_version": None,
+        "active_intent": None,
+        "predicted_intent": None,
+        "intent_confidence": None,
+        "intent_source": None,
+        "intent_version": None,
+        "session_mode_correction_guidance": None,
+    }
+    return SimpleNamespace(**{**mode_fields, **kwargs})
+
+
+def test_build_session_bandwidth_state_normalizes_legacy_garbage():
+    """Stored junk must never break bootstrap; valid values pass through."""
+    assert build_session_bandwidth_state(
+        predicted_bandwidth="light",
+        active_bandwidth="deep",
+        confidence=0.75,
+        source="quiz",
+        mode_version="v2",
+    ) == SessionBandwidthState(
+        predicted_bandwidth="light",
+        active_bandwidth="deep",
+        confidence=0.75,
+        source="quiz",
+        mode_version="v2",
+    )
+    assert build_session_bandwidth_state(
+        predicted_bandwidth="ultra",
+        active_bandwidth="bogus",
+        confidence=1.5,
+        source="hacked",
+        mode_version=None,
+    ) == SessionBandwidthState(
+        predicted_bandwidth=None,
+        active_bandwidth=None,
+        confidence=None,
+        source=None,
+        mode_version=None,
+    )
+
+
 @pytest.mark.asyncio
 async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
     """Do not expose a foreign snoozed ID or omit fields required by RollPage."""
-    current_session = SimpleNamespace(
+    current_session = _mode_session(
         id=55,
-        manual_die=None,
-        pending_thread_id=None,
         snoozed_thread_ids=[101, 202],
         timezone=None,
     )
@@ -92,18 +142,19 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
             "last_activity_at": None,
         }
     ]
+    assert response.bandwidth == SessionBandwidthState(
+        predicted_bandwidth=None,
+        active_bandwidth=None,
+        confidence=None,
+        source=None,
+        mode_version=None,
+    )
 
 
 @pytest.mark.asyncio
 async def test_bootstrap_roll_pool_is_never_paginated_below_current_die(monkeypatch):
     """A d100 bootstrap may return all 100 eligible faces instead of a smaller summary page."""
-    current_session = SimpleNamespace(
-        id=55,
-        manual_die=100,
-        pending_thread_id=None,
-        snoozed_thread_ids=[],
-        timezone=None,
-    )
+    current_session = _mode_session(id=55, manual_die=100, timezone=None)
     current_user = SimpleNamespace(id=7)
     pool_rows = [
         SimpleNamespace(
@@ -165,7 +216,15 @@ def test_bootstrap_schema_bounds_summary_lists_without_losing_counts():
         manual_die=None,
         pending_thread_id=None,
         last_rolled_result=None,
+        session_mode=SessionMode(),
         active_thread=None,
+        bandwidth=SessionBandwidthState(
+            predicted_bandwidth=None,
+            active_bandwidth=None,
+            confidence=None,
+            source=None,
+            mode_version=None,
+        ),
         roll_pool=summaries,
         snoozed_threads=summaries,
         snoozed_count=len(summaries),
@@ -206,7 +265,7 @@ async def test_bootstrap_pool_includes_threads_without_route_labels(
     async_db.add(thread)
     await async_db.commit()
 
-    response = await auth_client.get("/api/roll/bootstrap")
+    response = await auth_client.get("/api/v1/roll/bootstrap")
     assert response.status_code == 200
     pool = response.json()["roll_pool"]
 
@@ -295,7 +354,7 @@ async def test_bootstrap_pool_aggregates_membership_labels_once(
     )
     await async_db.commit()
 
-    response = await auth_client.get("/api/roll/bootstrap")
+    response = await auth_client.get("/api/v1/roll/bootstrap")
     assert response.status_code == 200
     pool = {item["id"]: item for item in response.json()["roll_pool"]}
 
@@ -321,7 +380,7 @@ async def test_bootstrap_pool_query_count_is_constant(
     """
     user = await get_or_create_user_async(async_db)
 
-    response = await auth_client.get("/api/roll/bootstrap")
+    response = await auth_client.get("/api/v1/roll/bootstrap")
     assert response.status_code == 200
 
     async def _add_pool(thread_count: int, groups_per_thread: int) -> None:
@@ -360,7 +419,7 @@ async def test_bootstrap_pool_query_count_is_constant(
 
         event.listen(db_engine.sync_engine, "before_cursor_execute", _capture)
         try:
-            response = await auth_client.get("/api/roll/bootstrap")
+            response = await auth_client.get("/api/v1/roll/bootstrap")
         finally:
             event.remove(db_engine.sync_engine, "before_cursor_execute", _capture)
         assert response.status_code == 200
@@ -383,3 +442,179 @@ async def test_bootstrap_pool_query_count_is_constant(
     ]
     assert len(label_selects) == 1
     assert "array_agg" in label_selects[0]
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_session_mode_defaults_when_no_fields_set(monkeypatch):
+    """A session with no bandwidth/intent state produces a null SessionMode."""
+    current_session = SimpleNamespace(
+        id=55,
+        manual_die=None,
+        pending_thread_id=None,
+        snoozed_thread_ids=[],
+        active_bandwidth=None,
+        predicted_bandwidth=None,
+        bandwidth_confidence=None,
+        bandwidth_source=None,
+        bandwidth_version=None,
+        active_intent=None,
+        predicted_intent=None,
+        intent_confidence=None,
+        intent_source=None,
+        intent_version=None,
+        session_mode_correction_guidance=None,
+    )
+    current_user = SimpleNamespace(id=7)
+
+    monkeypatch.setattr(
+        roll_api,
+        "get_or_create",
+        AsyncMock(return_value=current_session),
+    )
+    monkeypatch.setattr(
+        roll_api,
+        "get_session_with_thread_safe",
+        AsyncMock(return_value=(current_session, None)),
+    )
+    monkeypatch.setattr(
+        roll_api,
+        "get_current_die_for_session",
+        AsyncMock(return_value=4),
+    )
+
+    db = AsyncMock()
+    db.execute.side_effect = [
+        _Result(rows=[]),
+        _Result(rows=[]),
+        _Result(scalar_value=0),
+        _Result(rows=[]),
+        _Result(scalar_value=0),
+    ]
+
+    response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
+
+    mode = response.session_mode
+    assert mode.active_bandwidth is None
+    assert mode.predicted_bandwidth is None
+    assert mode.bandwidth_confidence is None
+    assert mode.bandwidth_source is None
+    assert mode.active_intent is None
+    assert mode.predicted_intent is None
+    assert mode.intent_confidence is None
+    assert mode.intent_source is None
+    assert mode.session_mode_correction_guidance is None
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_session_mode_reflects_stored_fields(monkeypatch):
+    """Bootstrap echoes all session mode fields set by the inference pipeline."""
+    current_session = SimpleNamespace(
+        id=55,
+        manual_die=None,
+        pending_thread_id=None,
+        snoozed_thread_ids=[],
+        active_bandwidth="light",
+        predicted_bandwidth="light",
+        bandwidth_confidence=0.82,
+        bandwidth_source="inferred",
+        bandwidth_version="infer-v2",
+        active_intent="momentum",
+        predicted_intent="momentum",
+        intent_confidence=0.75,
+        intent_source="inferred",
+        intent_version="intent-v1",
+        session_mode_correction_guidance=None,
+    )
+    current_user = SimpleNamespace(id=7)
+
+    monkeypatch.setattr(
+        roll_api,
+        "get_or_create",
+        AsyncMock(return_value=current_session),
+    )
+    monkeypatch.setattr(
+        roll_api,
+        "get_session_with_thread_safe",
+        AsyncMock(return_value=(current_session, None)),
+    )
+    monkeypatch.setattr(
+        roll_api,
+        "get_current_die_for_session",
+        AsyncMock(return_value=4),
+    )
+
+    db = AsyncMock()
+    db.execute.side_effect = [
+        _Result(rows=[]),
+        _Result(rows=[]),
+        _Result(scalar_value=0),
+        _Result(rows=[]),
+        _Result(scalar_value=0),
+    ]
+
+    response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
+
+    mode = response.session_mode
+    assert mode.active_bandwidth == "light"
+    assert mode.predicted_bandwidth == "light"
+    assert mode.bandwidth_confidence == 0.82
+    assert mode.bandwidth_source == "inferred"
+    assert mode.bandwidth_version == "infer-v2"
+    assert mode.active_intent == "momentum"
+    assert mode.predicted_intent == "momentum"
+    assert mode.intent_confidence == 0.75
+    assert mode.intent_source == "inferred"
+    assert mode.intent_version == "intent-v1"
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_session_mode_includes_guidance(monkeypatch):
+    """Correction guidance flows through from session to bootstrap response."""
+    guidance = {"source": "snooze", "confidence": 0.6, "summary": "Roll again"}
+    current_session = SimpleNamespace(
+        id=55,
+        manual_die=None,
+        pending_thread_id=None,
+        snoozed_thread_ids=[],
+        active_bandwidth=None,
+        predicted_bandwidth="light",
+        bandwidth_confidence=0.82,
+        bandwidth_source="inferred",
+        bandwidth_version="infer-v2",
+        active_intent=None,
+        predicted_intent=None,
+        intent_confidence=None,
+        intent_source=None,
+        intent_version=None,
+        session_mode_correction_guidance=guidance,
+    )
+    current_user = SimpleNamespace(id=7)
+
+    monkeypatch.setattr(
+        roll_api,
+        "get_or_create",
+        AsyncMock(return_value=current_session),
+    )
+    monkeypatch.setattr(
+        roll_api,
+        "get_session_with_thread_safe",
+        AsyncMock(return_value=(current_session, None)),
+    )
+    monkeypatch.setattr(
+        roll_api,
+        "get_current_die_for_session",
+        AsyncMock(return_value=4),
+    )
+
+    db = AsyncMock()
+    db.execute.side_effect = [
+        _Result(rows=[]),
+        _Result(rows=[]),
+        _Result(scalar_value=0),
+        _Result(rows=[]),
+        _Result(scalar_value=0),
+    ]
+
+    response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
+
+    assert response.session_mode.session_mode_correction_guidance == guidance

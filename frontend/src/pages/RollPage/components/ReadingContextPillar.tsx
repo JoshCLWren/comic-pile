@@ -380,12 +380,18 @@ export function ReadingContextPillar({
                     >
                       {crossover.name}
                     </span>
-                    {crossover.next_member && (
+                    {crossover.next_member ? (
                       <span
                         className="whitespace-nowrap text-[var(--theme-text-muted)]"
                         style={readingContextType('metaLabel')}
                       >
                         — starts at #{crossover.next_member.issue_number}
+                      </span>
+                    ) : (
+                      <span className="italic text-[var(--theme-text-muted)]" style={readingContextType('metaLabel')}>
+                        {crossover.membership_kind === 'thread'
+                          ? 'issue unknown — membership covers a moving thread'
+                          : 'no upcoming issue'}
                       </span>
                     )}
                   </div>
@@ -404,7 +410,7 @@ export function ReadingContextPillar({
               className="font-bold text-[var(--theme-text-primary)]"
               style={readingContextType('sectionHeading')}
             >
-              Dependency &amp; Continuity Edges
+              Dependency & Continuity Edges
             </h3>
           </div>
 
