@@ -33,6 +33,7 @@ EXPECTED_ROLL_RESPONSE_KEYS = {
     "issues_remaining",
     "queue_position",
     "die_size",
+    "explanation",
     "result",
     "offset",
     "snoozed_count",
