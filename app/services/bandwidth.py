@@ -41,7 +41,7 @@ _DEEP_SNOOZE_MAX_RATE = 0.15
 _BAND_RATIO_THRESHOLD = 0.6
 
 # Bandwidth version - increment when inference logic changes
-BANDWIDTH_VERSION = 1
+BANDWIDTH_VERSION = 2
 
 
 @dataclass(frozen=True)
