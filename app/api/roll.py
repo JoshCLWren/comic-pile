@@ -333,7 +333,6 @@ async def override_roll(
         die=current_die,
         result=0,
         selection_method="override",
-        selection_method="override",
         recommendation_reason_codes=[],
         recommendation_context=override_recommendation_context,
         issue_id=override_thread_issue_id,
