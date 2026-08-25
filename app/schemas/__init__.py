@@ -32,6 +32,12 @@ from app.schemas.reading_mode import (
 )
 from app.schemas.preferences import ThemeId, UserPreferencesPatchRequest, UserPreferencesResponse
 from app.schemas.rate import RateRequest
+from app.schemas.recommendation_diagnostics import (
+    ControlModeGroup,
+    CoverageInfo,
+    EffortBandOutcome,
+    RecommendationDiagnosticsResponse,
+)
 from app.schemas.roll import (
     OverrideRequest,
     RollBootstrapResponse,
@@ -44,6 +50,7 @@ from app.schemas.roll import (
 from app.schemas.session import (
     ActiveThreadInfo,
     EventDetail,
+    SessionBandwidthState,
     SessionDetailsResponse,
     SessionHistoryListResponse,
     SessionListItem,
@@ -121,7 +128,13 @@ __all__ = [
     "SessionDetailsResponse",
     "ActiveThreadInfo",
     "EventDetail",
+    "SessionBandwidthState",
     # Snapshot
     "SnapshotResponse",
     "SnapshotsListResponse",
+    # Recommendation diagnostics
+    "RecommendationDiagnosticsResponse",
+    "ControlModeGroup",
+    "CoverageInfo",
+    "EffortBandOutcome",
 ]

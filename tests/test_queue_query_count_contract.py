@@ -64,7 +64,7 @@ async def test_queue_query_count_is_constant_for_page_size(
         {
             "type": "http",
             "method": "GET",
-            "path": "/api/threads/",
+            "path": "/api/v1/threads/",
             "headers": [],
             "query_string": b"",
         }

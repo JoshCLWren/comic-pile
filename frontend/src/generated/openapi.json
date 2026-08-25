@@ -43,9 +43,31 @@
             "description": "DEPRECATED: Always equals next_issue_number. Use next_issue_number instead.",
             "title": "Issue Number"
           },
+          "issues_read": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issues Read"
+          },
           "issues_remaining": {
             "title": "Issues Remaining",
             "type": "integer"
+          },
+          "last_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Rating"
           },
           "last_rolled_result": {
             "anyOf": [
@@ -2577,6 +2599,17 @@
       "EventDetail": {
         "description": "Schema for event detail in session details.",
         "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
           "die": {
             "anyOf": [
               {
@@ -3284,6 +3317,14 @@
             "title": "Id",
             "type": "integer"
           },
+          "membership_kind": {
+            "enum": [
+              "issue",
+              "thread"
+            ],
+            "title": "Membership Kind",
+            "type": "string"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -3312,7 +3353,8 @@
         "required": [
           "id",
           "name",
-          "applies_to_current_issue"
+          "applies_to_current_issue",
+          "membership_kind"
         ],
         "title": "ReaderContextCrossover",
         "type": "object"
@@ -4344,6 +4386,9 @@
               }
             ]
           },
+          "bandwidth": {
+            "$ref": "#/components/schemas/SessionBandwidthState"
+          },
           "blocked_count": {
             "title": "Blocked Count",
             "type": "integer"
@@ -4451,6 +4496,7 @@
           "pending_thread_id",
           "last_rolled_result",
           "active_thread",
+          "bandwidth",
           "roll_pool",
           "snoozed_threads",
           "snoozed_count",
@@ -4755,6 +4801,17 @@
             "title": "Die Size",
             "type": "integer"
           },
+          "explanation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explanation"
+          },
           "format": {
             "title": "Format",
             "type": "string"
@@ -4866,6 +4923,93 @@
           "snoozed_count"
         ],
         "title": "RollResponse",
+        "type": "object"
+      },
+      "SessionBandwidthState": {
+        "description": "Canonical ephemeral bandwidth state for the active reading session.\n\nEvery field is always present but nullable so legacy sessions that predate\nbandwidth tracking serialize to a stable, safe shape instead of a missing\nor partially shaped object. This is the single canonical source consumed by\nlater weighting and UI work.",
+        "properties": {
+          "active_bandwidth": {
+            "anyOf": [
+              {
+                "enum": [
+                  "light",
+                  "balanced",
+                  "deep"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Bandwidth"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Confidence"
+          },
+          "mode_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode Version"
+          },
+          "predicted_bandwidth": {
+            "anyOf": [
+              {
+                "enum": [
+                  "light",
+                  "balanced",
+                  "deep"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted Bandwidth"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "inferred",
+                  "manual",
+                  "snooze",
+                  "quiz"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "predicted_bandwidth",
+          "active_bandwidth",
+          "source",
+          "mode_version"
+        ],
+        "title": "SessionBandwidthState",
         "type": "object"
       },
       "SessionDetailsResponse": {

@@ -53,7 +53,7 @@ async def test_rate_creates_snapshot_without_greenlet_error(
     async_db.add(event)
     await async_db.commit()
 
-    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
+    response = await auth_client.post("/api/v1/rate/", json={"rating": 4.0, "issues_read": 1})
     assert response.status_code == 200
 
     result = await async_db.execute(

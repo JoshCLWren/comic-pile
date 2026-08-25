@@ -153,6 +153,7 @@ logs/
 # Temporary files
 *.tmp
 *.bak
+*.pid
 .env.production
 
 # AI tool sessions and configuration

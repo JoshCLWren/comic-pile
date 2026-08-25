@@ -4,6 +4,7 @@ import { useRollBootstrap } from '../../../hooks/useRollBootstrap'
 import { useRollPrerequisiteSwitch } from '../../../hooks/useRollPrerequisiteSwitch'
 import type { RollRecoveryPrerequisite } from '../../../types/rollBootstrap'
 import { getApiErrorDetail } from '../../../utils/apiError'
+import { readingContextType } from '../readingContextTypography'
 import { RollRecoveryCard } from './RollRecoveryCard'
 
 interface ReadingOrderGroupsProps {
@@ -49,7 +50,10 @@ export function ReadingOrderGroups({ threadId, className }: ReadingOrderGroupsPr
         <>
           {recoveryCard}
           <div className="text-center" role="status" aria-live="polite">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500">
+            <span
+              className="font-bold uppercase tracking-wider text-[var(--theme-text-muted)]"
+              style={readingContextType('statLabel')}
+            >
               Loading crossovers…
             </span>
           </div>
@@ -63,7 +67,7 @@ export function ReadingOrderGroups({ threadId, className }: ReadingOrderGroupsPr
       <div className={className}>
         <>
           {recoveryCard}
-          <p className="text-center text-[10px] font-bold text-rose-500" role="alert">
+          <p className="text-center font-bold text-rose-400" style={readingContextType('bodyCopy')} role="alert">
             Unable to load crossovers.
           </p>
         </>
@@ -86,7 +90,8 @@ export function ReadingOrderGroups({ threadId, className }: ReadingOrderGroupsPr
         <section aria-labelledby="crossovers-heading" className="space-y-2 text-center">
           <h3
             id="crossovers-heading"
-            className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-500"
+            className="font-bold uppercase tracking-[0.14em] text-[var(--theme-text-muted)]"
+            style={readingContextType('statLabel')}
           >
             Crossovers
           </h3>

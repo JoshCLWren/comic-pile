@@ -9,6 +9,7 @@ type DisplayEvent = {
   timestamp: string
   type: string
   thread_title?: string | null
+  description?: string | null
   rating?: number | null
   result?: number | null
   die?: number | null
@@ -67,6 +68,8 @@ function EventRecord({ event }: { event: DisplayEvent }) {
             <li key={item} className="break-words">{item}</li>
           ))}
         </ul>
+      ) : event.description ? (
+        <p className="mt-1 text-xs text-stone-400 break-words">{event.description}</p>
       ) : (
         <p className="mt-1 text-xs text-stone-500">No additional event details recorded.</p>
       )}

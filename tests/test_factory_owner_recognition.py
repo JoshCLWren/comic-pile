@@ -1,9 +1,10 @@
 """Regression coverage for shared factory owner-label recognition boundaries.
 
-Issue #1178: the shared NVIDIA and OmniRoute worker scripts capped owner
-recognition at ``factory:16`` (``1[0-6]``), so a factory:17 PR could be treated
-as unowned and briefly adopted by another worker. The boundary must extend
-through ``factory:17`` without altering NVIDIA provider/model behavior.
+Issue #1178 raised the shared NVIDIA and OmniRoute worker owner boundary from
+``factory:16`` through ``factory:17``. The fixed-model roster has since grown
+(see ``.github/free-model-factories.tsv``, workers 6-71), so every worker must
+now use the canonical ``factory_work_policy`` boundary covering
+``factory:1``-``factory:79``.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / ".github" / "scripts"
 
-EXPECTED_OWNER_RE = r"^factory:(unowned|local|([1-9]|1[0-7]))$"
+EXPECTED_OWNER_RE = r"^factory:(unowned|local|[1-9]|[1-3][0-9]|[4-7][0-9])$"
 
 OWNER_RE_SCRIPTS = (
     SCRIPTS / "omniroute-factory-worker.sh",
@@ -37,33 +38,37 @@ def _extract_owner_re(path: Path) -> str:
     return match.group(1)
 
 
-def test_shared_owner_re_extends_through_factory_17() -> None:
-    """Every shared worker must recognize owners through factory:17."""
+def test_shared_owner_re_matches_canonical_boundary() -> None:
+    """Every shared worker must use the canonical 1-79 owner boundary."""
     for path in OWNER_RE_SCRIPTS:
         owner_re = _extract_owner_re(path)
         assert owner_re == EXPECTED_OWNER_RE, (
-            f"{path.name} owner boundary must reach factory:17, got {owner_re!r}"
+            f"{path.name} must match the canonical factory_work_policy boundary, got {owner_re!r}"
         )
 
 
-def test_factory_17_is_recognized_as_owned() -> None:
-    """factory:17 must never be treated as unowned by the shared workers."""
+def test_roster_workers_are_recognized_as_owned() -> None:
+    """Every roster worker label must be treated as owned by the shared workers."""
     pattern = re.compile(EXPECTED_OWNER_RE)
     for label in (
         "factory:1",
         "factory:9",
-        "factory:16",
         "factory:17",
+        "factory:39",
+        "factory:46",
+        "factory:60",
+        "factory:71",
+        "factory:79",
         "factory:unowned",
         "factory:local",
     ):
         assert pattern.fullmatch(label), f"{label} must be a recognized factory owner"
 
 
-def test_factory_18_and_above_remain_out_of_scope() -> None:
-    """The recognition boundary stops at factory:17, not factory:18+."""
+def test_factory_80_and_above_remain_out_of_scope() -> None:
+    """The recognition boundary stops at factory:79, not factory:80+."""
     pattern = re.compile(EXPECTED_OWNER_RE)
-    for label in ("factory:18", "factory:19", "factory:99", "factory:abc", "factory:"):
+    for label in ("factory:80", "factory:99", "factory:100", "factory:abc", "factory:"):
         assert not pattern.fullmatch(label), (
             f"{label} must remain outside the shared owner boundary"
         )

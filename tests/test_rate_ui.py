@@ -51,7 +51,7 @@ async def test_both_buttons_available_when_thread_complete(
 
     # Rate the last issue (issues_remaining becomes 0)
     response = await auth_client.post(
-        "/api/rate/", json={"rating": 5.0, "issues_read": 1, "finish_session": False}
+        "/api/v1/rate/", json={"rating": 5.0, "issues_read": 1, "finish_session": False}
     )
     assert response.status_code == 200
 
@@ -67,7 +67,7 @@ async def test_both_buttons_available_when_thread_complete(
     # Get current session to verify session is still active even though thread completed
     # NOTE: As of issue #297, completed threads no longer show as active_thread
     # The user must roll again to get a new thread
-    response = await auth_client.get("/api/sessions/current/")
+    response = await auth_client.get("/api/v1/sessions/current/")
     assert response.status_code == 200
     data = response.json()
     assert data["active_thread"] is None  # Completed thread removed from active slot
@@ -130,7 +130,7 @@ async def test_can_still_rate_after_thread_complete(
 
     # Rate the last issue of thread1 (issues_remaining becomes 0, thread completes)
     response = await auth_client.post(
-        "/api/rate/", json={"rating": 5.0, "issues_read": 1, "finish_session": False}
+        "/api/v1/rate/", json={"rating": 5.0, "issues_read": 1, "finish_session": False}
     )
     assert response.status_code == 200
 
@@ -143,12 +143,12 @@ async def test_can_still_rate_after_thread_complete(
     assert session.ended_at is None
 
     # Save & Continue should leave no pending thread selected.
-    current_session_response = await auth_client.get("/api/sessions/current/")
+    current_session_response = await auth_client.get("/api/v1/sessions/current/")
     assert current_session_response.status_code == 200
     assert current_session_response.json()["pending_thread_id"] is None
 
     # User can roll again immediately.
-    roll_response = await auth_client.post("/api/roll/")
+    roll_response = await auth_client.post("/api/v1/roll/")
     assert roll_response.status_code == 200
     data = roll_response.json()
     assert data["thread_id"] == thread2.id
