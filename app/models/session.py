@@ -5,7 +5,17 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, JSON, String
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    JSON,
+    String,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.constants import BANDWIDTH_SOURCE_VALUES, BANDWIDTH_VALUES
@@ -49,6 +59,9 @@ class Session(Base):
     bandwidth_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     bandwidth_source: Mapped[str | None] = mapped_column(String(30), nullable=True)
     bandwidth_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    bandwidth_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # Reading-mode quiz / manual selector state. Applies only to this session.
     reading_bandwidth: Mapped[str | None] = mapped_column(String(16), nullable=True)
     reading_intent: Mapped[str | None] = mapped_column(String(16), nullable=True)

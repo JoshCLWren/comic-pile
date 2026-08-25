@@ -1,13 +1,14 @@
-"""Add ephemeral bandwidth state to reading sessions.
+"""Add session bandwidth update timestamp and validation constraints.
 
-Revision ID: c85500000001
-Revises: d4e5f6a7b8c9
-Create Date: 2026-08-23 00:00:00.000000
+Revision ID: c85900000001
+Revises: c85800000001
+Create Date: 2026-08-25 00:00:00.000000
 
-Adds nullable, session-scoped bandwidth state (issue #1706): predicted and
-active bandwidth, confidence, provenance source, mode version, and update
-timestamp. Existing rows stay valid because every column is nullable; CHECK
-constraints reject invalid enum values and out-of-range confidence.
+Completes the ephemeral session bandwidth schema (issues #1706/#1708): the
+bandwidth columns themselves landed in c85600000001; this revision adds the
+``bandwidth_updated_at`` lifecycle timestamp plus CHECK constraints that keep
+persisted enum values and confidence inside their valid ranges. Every change
+is nullable/permissive for existing rows.
 """
 
 from collections.abc import Sequence
@@ -16,8 +17,8 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "c85500000001"
-down_revision: str | Sequence[str] | None = "d4e5f6a7b8c9"
+revision: str = "c85900000001"
+down_revision: str | Sequence[str] | None = "c85800000001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -26,12 +27,7 @@ _BANDWIDTH_SOURCE_VALUES = ("inferred", "manual", "snooze", "quiz")
 
 
 def upgrade() -> None:
-    """Add nullable ephemeral bandwidth columns with validation constraints."""
-    op.add_column("sessions", sa.Column("predicted_bandwidth", sa.String(20), nullable=True))
-    op.add_column("sessions", sa.Column("active_bandwidth", sa.String(20), nullable=True))
-    op.add_column("sessions", sa.Column("bandwidth_confidence", sa.Float(), nullable=True))
-    op.add_column("sessions", sa.Column("bandwidth_source", sa.String(20), nullable=True))
-    op.add_column("sessions", sa.Column("bandwidth_mode_version", sa.Integer(), nullable=True))
+    """Add the bandwidth update timestamp and enum/range constraints."""
     op.add_column(
         "sessions",
         sa.Column("bandwidth_updated_at", sa.DateTime(timezone=True), nullable=True),
@@ -60,17 +56,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Drop the ephemeral bandwidth columns and their constraints."""
+    """Drop the bandwidth constraints and update timestamp."""
     op.drop_constraint("ck_sessions_bandwidth_confidence_range", "sessions", type_="check")
     op.drop_constraint("ck_sessions_bandwidth_source_valid", "sessions", type_="check")
     op.drop_constraint("ck_sessions_active_bandwidth_valid", "sessions", type_="check")
     op.drop_constraint("ck_sessions_predicted_bandwidth_valid", "sessions", type_="check")
     op.drop_column("sessions", "bandwidth_updated_at")
-    op.drop_column("sessions", "bandwidth_mode_version")
-    op.drop_column("sessions", "bandwidth_source")
-    op.drop_column("sessions", "bandwidth_confidence")
-    op.drop_column("sessions", "active_bandwidth")
-    op.drop_column("sessions", "predicted_bandwidth")
 
 
 def _format_in_list(values: tuple[str, ...]) -> str:
