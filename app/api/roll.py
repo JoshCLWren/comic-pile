@@ -176,7 +176,7 @@ async def roll_dice(
         issues_remaining=selected_thread_issues_remaining,
         queue_position=selected_thread_queue_position,
         die_size=current_die,
-        result=selected_index + 1,
+        result=plan.index + 1,
         offset=offset,
         snoozed_count=snoozed_count,
         issue_id=selected_thread_issue_id,
