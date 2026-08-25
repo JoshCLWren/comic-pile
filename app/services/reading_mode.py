@@ -26,6 +26,7 @@ class ReadingModeService:
     """Service for managing session reading-mode state."""
 
     def __init__(self, db: AsyncSession):
+        """Store the async database session used for all persistence calls."""
         self.db = db
 
     async def _get_active_session(self, user: User) -> SessionModel:

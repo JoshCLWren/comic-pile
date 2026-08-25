@@ -62,9 +62,9 @@ class RecommendationContext(Base):
     balanced_neutrality: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     __table_args__ = (
-        Index("ix_recommendation_context_event_id", "event_id"),
-        Index("ix_recommendation_context_created_at", "created_at"),
-        Index("ix_recommendation_context_intent", "intent"),
+        Index("ix_recommendation_contexts_event_id", "event_id"),
+        Index("ix_recommendation_contexts_created_at", "created_at"),
+        Index("ix_recommendation_contexts_intent", "intent"),
     )
 
     event: Mapped[Event] = relationship("Event", back_populates="recommendation_context", lazy="raise")

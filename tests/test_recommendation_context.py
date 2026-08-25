@@ -57,7 +57,7 @@ async def test_roll_creates_recommendation_context(
     context = result.scalar_one_or_none()
     assert context is not None
 
-    # Verify random bypass is explicit
+    # Verify random bypass is explicit (no positive momentum in this pool)
     assert context.random_bypass is True
     # Verify balanced neutrality is explicit
     assert context.balanced_neutrality is True
@@ -71,8 +71,87 @@ async def test_roll_creates_recommendation_context(
     assert context.bandwidth == "balanced"
     assert context.bandwidth_source == "default"
     assert context.bandwidth_confidence == 0.0
-    # Verify final weight
+    # Verify final weight equals the selected candidate's chooser weight
+    assert context.candidate_factors is not None
+    selected_factors = [
+        factor
+        for factor in context.candidate_factors
+        if factor["candidate_id"] == roll_data["thread_id"]
+    ]
+    assert len(selected_factors) == 1
+    assert context.final_weight == selected_factors[0]["weight"]
     assert context.final_weight == 1.0
+
+
+@pytest.mark.asyncio
+async def test_momentum_roll_records_factor_breakdown(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """A momentum-weighted roll must record weights, reason codes, and flags."""
+    from datetime import timedelta
+
+    now = datetime.now(UTC)
+    hot = Thread(
+        title="Hot Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=default_user.id,
+        last_rating=5.0,
+        last_activity_at=now - timedelta(hours=2),
+        created_at=now,
+    )
+    cold = Thread(
+        title="Cold Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=2,
+        status="active",
+        user_id=default_user.id,
+        created_at=now,
+    )
+    async_db.add_all([hot, cold])
+    await async_db.commit()
+    hot_id, cold_id = hot.id, cold.id
+
+    roll_response = await auth_client.post("/api/roll/")
+    assert roll_response.status_code == 200
+    roll_data = roll_response.json()
+
+    result = await async_db.execute(
+        select(RecommendationContext)
+        .join(Event, Event.id == RecommendationContext.event_id)
+        .where(Event.selected_thread_id == roll_data["thread_id"])
+        .where(Event.type == "roll")
+    )
+    context = result.scalar_one_or_none()
+    assert context is not None
+
+    # Weighting applied: pure-random bypass and balanced neutrality are off.
+    assert context.random_bypass is False
+    assert context.balanced_neutrality is False
+
+    # Every bounded candidate is recorded with stable compact reason codes.
+    assert context.candidate_factors is not None
+    factors_by_candidate = {
+        factor["candidate_id"]: factor for factor in context.candidate_factors
+    }
+    assert set(factors_by_candidate) == {hot_id, cold_id}
+
+    # The highly-rated fresh candidate carries its momentum evidence.
+    hot_factors = factors_by_candidate[hot_id]
+    assert "recent_high_rating" in hot_factors["factors"]
+    assert hot_factors["weight"] > 1.0
+
+    # The unrated candidate stays at the pure-random weight.
+    cold_factors = factors_by_candidate[cold_id]
+    assert cold_factors["factors"] == []
+    assert cold_factors["weight"] == 1.0
+
+    # Final stored weight equals the chooser weight of the selected candidate.
+    selected_factors = factors_by_candidate[roll_data["thread_id"]]
+    assert context.final_weight == selected_factors["weight"]
 
 
 @pytest.mark.asyncio

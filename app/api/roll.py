@@ -29,7 +29,10 @@ from app.schemas import (
     RollRequest,
     RollResponse,
 )
-from app.schemas.recommendation_context import RecommendationContextCreate
+from app.schemas.recommendation_context import (
+    CandidateFactor,
+    RecommendationContextCreate,
+)
 from app.schemas.session import build_session_bandwidth_state
 from app.momentum import weighted_momentum_selection
 from comic_pile.queue import get_roll_pool_rows
@@ -103,7 +106,7 @@ async def roll_dice(
     )
     session_events = list(session_events_result.scalars().all())
 
-    selected_index, max_bonus = await weighted_momentum_selection(
+    selected_index, max_bonus, candidate_weights = await weighted_momentum_selection(
         db=db,
         bounded_rows=bounded_rows,
         user_id=user_id,
@@ -150,21 +153,30 @@ async def roll_dice(
     )
     db.add(event)
 
-    # Record recommendation context for auditability
-    # Current system uses random selection with balanced intent (no weighting)
-    # and balanced bandwidth (no effort inference). Record this explicitly.
+    # Record recommendation context for auditability: capture the active
+    # session reading mode plus the exact per-candidate weights and reason
+    # codes passed to the momentum chooser so any roll can be reproduced
+    # and explained from persisted data alone.
+    has_explicit_mode = bool(current_session.reading_intent)
     context_data = RecommendationContextCreate(
         schema_version=1,
-        intent="balanced",
-        intent_source="default",
-        intent_confidence=0.0,
-        bandwidth="balanced",
-        bandwidth_source="default",
-        bandwidth_confidence=0.0,
-        candidate_factors=None,
-        final_weight=1.0,
-        random_bypass=True,
-        balanced_neutrality=True,
+        intent=current_session.reading_intent or "balanced",
+        intent_source=current_session.reading_mode_source or "default",
+        intent_confidence=1.0 if has_explicit_mode else 0.0,
+        bandwidth=current_session.reading_bandwidth or "balanced",
+        bandwidth_source=current_session.reading_mode_source or "default",
+        bandwidth_confidence=1.0 if current_session.reading_bandwidth else 0.0,
+        candidate_factors=[
+            CandidateFactor(
+                candidate_id=breakdown.candidate_id,
+                factors=list(breakdown.factors),
+                weight=breakdown.weight,
+            )
+            for breakdown in candidate_weights
+        ],
+        final_weight=candidate_weights[selected_index].weight,
+        random_bypass=max_bonus <= 0.0,
+        balanced_neutrality=max_bonus <= 0.0,
     )
 
     # Flush event to get its ID for the recommendation context FK
