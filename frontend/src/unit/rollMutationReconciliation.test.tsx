@@ -161,7 +161,7 @@ describe('Roll mutation reconciliation', () => {
     const initial = bootstrapState(6, 7)
     mockedBootstrap.mockResolvedValue(initial)
 
-    const { result, unmount } = renderHook(() => useRollBootstrap(), { wrapper })
+    const { result, unmount } = renderHook(() => useRollBootstrap(), { innerWrapper })
     await waitFor(() => expect(result.current.data).toBe(initial))
 
     act(() => {

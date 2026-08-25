@@ -59,9 +59,14 @@ describe('useRollBootstrap', () => {
   it('loads bootstrap data and exposes a successful refetch', async () => {
     mockedBootstrap.mockResolvedValue(bootstrapResponse)
 
-    const { result } = renderBootstrap()
+    const r = renderBootstrap()
+    console.error('DEBUG r:', r)
+    console.error('DEBUG r.result:', r.result)
+    console.error('DEBUG r.result.current:', r.result?.current)
+    console.error('DEBUG r.current:', r.current)
+    console.error('DEBUG r.error:', r.error)
 
-    expect(result.current.isPending).toBe(true)
+    expect(r.result.current.isPending).toBe(true)
     expect(result.current.data).toBeNull()
 
     await waitFor(() => expect(result.current.isPending).toBe(false))
