@@ -11,7 +11,7 @@ from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from typing import Literal
 
-from app.cache import UpstashCache
+from app.cache import CacheClient
 
 logger = logging.getLogger(__name__)
 
@@ -148,14 +148,6 @@ def _cache_operation_timeout_seconds() -> float:
     return parsed
 
 
-def _record_cache_timeout_failure(cache: UpstashCache) -> None:
-    """Feed wrapper-level timeouts into the cache circuit breaker when available."""
-    breaker = getattr(cache, "_circuit_breaker", None)
-    record_failure = getattr(breaker, "record_failure", None)
-    if callable(record_failure):
-        record_failure()
-
-
 async def _await_cache_operation[T](
     operation: str,
     awaitable: Awaitable[T],
@@ -177,7 +169,7 @@ async def _await_cache_operation[T](
         return fallback, True
 
 
-def install_cache_instrumentation(cache: UpstashCache) -> None:
+def install_cache_instrumentation(cache: CacheClient) -> None:
     """Wrap cache operations with timing, outcomes, and a fail-open timeout."""
     if getattr(cache, "_performance_instrumented", False):
         return
@@ -192,7 +184,7 @@ def install_cache_instrumentation(cache: UpstashCache) -> None:
         started_at = time.perf_counter()
         result, timed_out = await _await_cache_operation("get", original_get(key), None)
         if timed_out:
-            _record_cache_timeout_failure(cache)
+            cache.record_failure()
             return None
 
         duration_ms = (time.perf_counter() - started_at) * 1000
@@ -213,7 +205,7 @@ def install_cache_instrumentation(cache: UpstashCache) -> None:
             False,
         )
         if timed_out:
-            _record_cache_timeout_failure(cache)
+            cache.record_failure()
             return False
 
         duration_ms = (time.perf_counter() - started_at) * 1000
@@ -232,7 +224,7 @@ def install_cache_instrumentation(cache: UpstashCache) -> None:
             False,
         )
         if timed_out:
-            _record_cache_timeout_failure(cache)
+            cache.record_failure()
             return False
 
         duration_ms = (time.perf_counter() - started_at) * 1000
@@ -251,7 +243,7 @@ def install_cache_instrumentation(cache: UpstashCache) -> None:
             0,
         )
         if timed_out:
-            _record_cache_timeout_failure(cache)
+            cache.record_failure()
             return 0
 
         duration_ms = (time.perf_counter() - started_at) * 1000

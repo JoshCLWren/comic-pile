@@ -83,7 +83,7 @@ async def test_restore_recounts_are_bulk_constant(
 
     sa_event.listen(db_engine.sync_engine, "before_cursor_execute", record_statement)
     try:
-        response = await auth_client.post(f"/api/sessions/{session.id}/restore-session-start")
+        response = await auth_client.post(f"/api/v1/sessions/{session.id}/restore-session-start")
     finally:
         sa_event.remove(db_engine.sync_engine, "before_cursor_execute", record_statement)
 
