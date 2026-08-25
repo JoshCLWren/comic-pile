@@ -16,7 +16,7 @@ from app.models import Event, Snapshot, Thread
 from app.models import Session as SessionModel
 from app.models.user import User
 from app.schemas import ActiveThreadInfo, SessionResponse
-from app.schemas.session import SnoozeCorrectionInfo, SnoozedThreadInfo
+from app.schemas.session import SnoozeCorrectionInfo, SnoozedThreadInfo, build_session_bandwidth_state
 from comic_pile.bandwidth_correction import (
     classify_candidate_effort,
     compute_snooze_correction,
@@ -27,6 +27,33 @@ from comic_pile.session import get_current_die_for_session
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+async def _find_source_roll_event(
+    db: AsyncSession,
+    session_id: int,
+    thread_id: int,
+) -> int | None:
+    """Find the originating roll event for a given thread in this session.
+
+    Args:
+        db: Database session.
+        session_id: Current reading session ID.
+        thread_id: Thread that was rolled/snoozed.
+
+    Returns:
+        The ID of the most recent roll event selecting this thread, or None.
+    """
+    result = await db.execute(
+        select(Event.id)
+        .where(Event.session_id == session_id)
+        .where(Event.type == "roll")
+        .where(Event.selected_thread_id == thread_id)
+        .order_by(Event.timestamp.desc(), Event.id.desc())
+        .limit(1)
+    )
+    row = result.scalar_one_or_none()
+    return row
 
 
 async def get_active_thread_info(
@@ -154,10 +181,17 @@ async def build_session_response(
         snapshot_count=snapshot_count,
         snoozed_thread_ids=resolved_ids,
         snoozed_threads=snoozed_threads,
-        active_bandwidth=session.active_bandwidth,
-        bandwidth_confidence=session.bandwidth_confidence,
-        bandwidth_source=session.bandwidth_source,
-        predicted_bandwidth=session.predicted_bandwidth,
+        reading_bandwidth=session.reading_bandwidth,
+        reading_intent=session.reading_intent,
+        reading_mode_source=session.reading_mode_source,
+        reading_mode_suggested=session.reading_mode_suggested,
+        bandwidth=build_session_bandwidth_state(
+            predicted_bandwidth=session.predicted_bandwidth,
+            active_bandwidth=session.active_bandwidth,
+            confidence=session.bandwidth_confidence,
+            source=session.bandwidth_source,
+            mode_version=session.bandwidth_version,
+        ),
         correction=correction,
     )
 
@@ -275,6 +309,20 @@ async def snooze_thread(
                 last_rolled_result=roll_result,
             )
 
+    # Snooze must not mutate durable queue state: the thread keeps its exact
+    # queue position and returns to the pool when session snooze state expires.
+
+    snoozed_ids = (
+        list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
+    )
+    logger.info(f"Snooze: pending_thread_id={pending_thread_id}, snoozed_ids before={snoozed_ids}")
+    if pending_thread_id not in snoozed_ids:
+        snoozed_ids.append(pending_thread_id)
+        current_session.snoozed_thread_ids = snoozed_ids
+        logger.info(f"Snooze: added to snoozed list, snoozed_ids after={snoozed_ids}")
+    else:
+        logger.info(f"Snooze: thread {pending_thread_id} already in snoozed list")
+
     # Compute bandwidth correction from snooze evidence (pure, side-effect-free)
     recent_snooze_result = await db.execute(
         select(Event)
@@ -331,35 +379,13 @@ async def snooze_thread(
         suggest_clarification=correction_result.suggest_clarification,
     )
 
-    # Record snooze context in event metadata
-    snooze_context = {
-        "bandwidth_before": pre_correction_bandwidth or current_bw,
-        "bandwidth_after": correction_result.active_bandwidth,
-        "confidence_after": correction_result.active_confidence,
-        "reason_code": correction_result.reason_code,
-        "consecutive_snoozes": consecutive_snoozes,
-    }
-
-    snoozed_ids = (
-        list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
-    )
-    logger.info(f"Snooze: pending_thread_id={pending_thread_id}, snoozed_ids before={snoozed_ids}")
-    if pending_thread_id not in snoozed_ids:
-        snoozed_ids.append(pending_thread_id)
-        current_session.snoozed_thread_ids = snoozed_ids
-        logger.info(f"Snooze: added to snoozed list, snoozed_ids after={snoozed_ids}")
-    else:
-        logger.info(f"Snooze: thread {pending_thread_id} already in snoozed list")
-
     event = Event(
         type="snooze",
         session_id=current_session_id,
         thread_id=pending_thread_id,
         die=current_die,
         die_after=new_die,
-        # Store correction context in the event's selection_method field
-        # (repurposed for snooze events to carry structured metadata)
-        selection_method=str(snooze_context) if snooze_context else None,
+        source_roll_event_id=await _find_source_roll_event(db, current_session_id, pending_thread_id),
     )
     db.add(event)
 

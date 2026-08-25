@@ -131,18 +131,24 @@ async def test_snooze_returns_bandwidth_state(
 
     data = response.json()
 
-    # Verify bandwidth state fields are present in session response
-    assert "inferred_bandwidth" in data
-    assert "bandwidth_confidence" in data
-    assert "bandwidth_source" in data
-    assert "predicted_bandwidth" in data
+    # Verify bandwidth state is present in session response
+    assert "bandwidth" in data
+    bandwidth = data["bandwidth"]
+    assert bandwidth is not None
+    assert isinstance(bandwidth, dict)
+
+    # Verify bandwidth fields
+    assert "active_bandwidth" in bandwidth
+    assert "confidence" in bandwidth
+    assert "source" in bandwidth
+    assert "predicted_bandwidth" in bandwidth
 
     # After a snooze, bandwidth should be set
-    assert data["inferred_bandwidth"] is not None
-    assert data["inferred_bandwidth"] in ("light", "balanced", "deep")
-    assert data["bandwidth_source"] == "snooze"
-    assert data["bandwidth_confidence"] is not None
-    assert 0.0 <= data["bandwidth_confidence"] <= 1.0
+    assert bandwidth["active_bandwidth"] is not None
+    assert bandwidth["active_bandwidth"] in ("light", "balanced", "deep")
+    assert bandwidth["source"] == "snooze"
+    assert bandwidth["confidence"] is not None
+    assert 0.0 <= bandwidth["confidence"] <= 1.0
 
 
 @pytest.mark.asyncio
