@@ -13,7 +13,6 @@ from app.database import Base
 if TYPE_CHECKING:
     from app.models.revoked_token import RevokedToken
     from app.models.session import Session
-    from app.models.taste_signal import TasteSignal
     from app.models.thread import Thread
     from app.models.user_preferences import UserPreferences
 
@@ -44,7 +43,4 @@ class User(Base):
     )
     preferences: Mapped[UserPreferences | None] = relationship(
         "UserPreferences", back_populates="user", uselist=False, lazy="raise"
-    )
-    taste_signals: Mapped[list[TasteSignal]] = relationship(
-        "TasteSignal", back_populates="user", cascade="all, delete-orphan", lazy="raise"
     )

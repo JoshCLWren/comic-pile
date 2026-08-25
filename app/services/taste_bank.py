@@ -1,140 +1,209 @@
-"""Centralized, deterministic Taste Bank discovery eligibility rules.
+"""Taste Bank discovery surfacing for the Roll page (issue #1750).
 
-These rules decide which inferred taste signals may be surfaced as an
-occasional "ComicPile noticed something" discovery card (issue #1750). The
-rules are deliberately conservative and pure: given the same signal state and
-clock reading they always produce the same answer.
+This service adapts the canonical prompt-eligibility engine
+(``app.services.prompt_eligibility``, issue #1746) and the durable Taste Bank
+model to the occasional "ComicPile noticed something" discovery card:
 
-Suppression model:
+- Only signals that pass the canonical eligibility gates are surfaced.
+- Explicit verdicts are never written here; verdicts go through the canonical
+  Taste Bank verdict API (issue #1749). Signals with any explicit verdict are
+  excluded from discovery entirely.
+- Dismissal only starts a temporary suppression window by writing
+  ``prompt_suppressed_until``; it never sets or implies a verdict.
+- Surfacing a signal records ``last_prompted_at`` so the canonical cooldown
+  suppresses immediate re-prompting.
 
-- An explicit verdict ends prompting permanently. ``rejected`` never prompts
-  again; ``confirmed`` and ``sometimes`` are already-known preferences.
-- A dismissal is only a temporary cooldown. It never sets or implies a
-  verdict.
-- A recent prompt starts a cooldown so the same pattern does not nag.
+Discovery never blocks rolling or rating: callers treat every failure here as
+"no card".
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
 
-from app.models.taste_signal import (
-    SIGNAL_VERDICT_CONFIRMED,
-    SIGNAL_VERDICT_REJECTED,
-    SIGNAL_VERDICT_SOMETIMES,
-    TasteSignal,
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.taste_signal import SIGNAL_CREATOR, TasteSignal
+from app.repositories import taste_signals as taste_signals_repository
+from app.schemas.taste import TasteSignal as EligibilitySignal
+from app.schemas.taste_discovery import (
+    TasteDiscovery,
+    TasteDiscoveryListResponse,
 )
+from app.services.prompt_eligibility import evaluate_prompt_eligibility
 
-if TYPE_CHECKING:
-    from collections.abc import Sequence
-
-# Minimum evidence before ComicPile dares to ask.
-MIN_PROMPT_EVIDENCE_COUNT = 3
-# Mean rating points above the reader's baseline required to prompt.
-MIN_PROMPT_AFFINITY_DELTA = 0.5
-# Evidence must span more than one thread so one lucky comic cannot prompt.
-MIN_PROMPT_DISTINCT_THREADS = 2
-# After surfacing a signal, wait this long before surfacing it again.
-PROMPT_COOLDOWN_DAYS = 30
-# A dismissal suppresses re-prompting for this long. It is not a verdict.
-DISMISSAL_SUPPRESSION_DAYS = 14
 # Upper bound on discoveries returned at once; Roll shows one at a time.
 MAX_ACTIVE_DISCOVERIES = 3
 
-PROMPT_COOLDOWN = timedelta(days=PROMPT_COOLDOWN_DAYS)
+# A dismissal suppresses re-prompting for this long. It is not a verdict.
+DISMISSAL_SUPPRESSION_DAYS = 14
 DISMISSAL_SUPPRESSION = timedelta(days=DISMISSAL_SUPPRESSION_DAYS)
 
 
-def is_prompt_eligible(signal: TasteSignal, *, now: datetime | None = None) -> bool:
-    """Return whether a signal may currently be surfaced as a discovery.
+def _is_creator_role(signal: TasteSignal) -> bool:
+    """Return whether a creator signal carries a specific role segment.
 
     Args:
-        signal: The inferred taste signal to evaluate.
-        now: Current time; defaults to the current UTC time.
+        signal: The durable ORM signal.
 
     Returns:
-        True when the signal has enough diverse evidence, no explicit verdict,
-        and is outside both the prompt cooldown and any dismissal suppression.
+        True for keys shaped like ``creator:<role>:<name>``.
     """
-    current_time = now if now is not None else datetime.now(UTC)
+    if signal.signal_type != SIGNAL_CREATOR:
+        return False
+    return len(signal.external_key.split(":")) >= 3
 
-    if signal.verdict is not None:
-        return False
-    if signal.evidence_count < MIN_PROMPT_EVIDENCE_COUNT:
-        return False
-    if signal.distinct_threads < MIN_PROMPT_DISTINCT_THREADS:
-        return False
-    if signal.affinity_delta < MIN_PROMPT_AFFINITY_DELTA:
-        return False
-    if signal.prompted_at is not None and current_time - signal.prompted_at < PROMPT_COOLDOWN:
-        return False
+
+def _to_eligibility_signal(
+    signal: TasteSignal, *, now: datetime
+) -> EligibilitySignal | None:
+    """Convert a durable signal into the canonical eligibility input.
+
+    Signals carrying an explicit verdict are dropped entirely: confirmed and
+    sometimes patterns are already-known preferences and rejected ones are
+    suppressed for good, so none of them should ever surface again. Signals
+    inside their dismissal-suppression window are skipped as well.
+
+    Args:
+        signal: The durable ORM signal.
+        now: Current UTC time used for dismissal-suppression evaluation.
+
+    Returns:
+        The canonical eligibility signal, or ``None`` when the row must not be
+        evaluated.
+    """
+    if signal.user_verdict is not None:
+        return None
     if (
-        signal.dismissed_at is not None
-        and current_time - signal.dismissed_at < DISMISSAL_SUPPRESSION
+        signal.prompt_suppressed_until is not None
+        and now < signal.prompt_suppressed_until
     ):
-        return False
-    return True
-
-
-def rank_prompt_eligible(signals: Sequence[TasteSignal], *, now: datetime | None = None) -> list[
-    TasteSignal
-]:
-    """Filter signals down to prompt-eligible ones, strongest first.
-
-    Args:
-        signals: Candidate inferred signals for one user.
-        now: Current time; defaults to the current UTC time.
-
-    Returns:
-        Eligible signals ordered by strength: highest affinity delta first,
-        then the richest evidence count as a tiebreaker.
-    """
-    eligible = [signal for signal in signals if is_prompt_eligible(signal, now=now)]
-    return sorted(eligible, key=lambda signal: (-signal.affinity_delta, -signal.evidence_count))
+        return None
+    return EligibilitySignal(
+        user_id=signal.user_id,
+        signal_type=signal.signal_type,
+        stable_key=signal.external_key,
+        display_name=signal.display_name,
+        affinity=signal.affinity_estimate or 0.0,
+        confidence=signal.confidence or 0.0,
+        evidence_count=signal.evidence_count,
+        evidence_diversity=signal.distinct_thread_count,
+        verdict=None,
+        last_prompted_at=signal.last_prompted_at,
+        last_rejected_at=None,
+        is_creator_role=_is_creator_role(signal),
+    )
 
 
 def build_discovery_prompt(signal: TasteSignal) -> str:
-    """Build concise human-readable prompt copy for a signal.
+    """Build concise human-readable prompt copy for a durable signal.
 
     Args:
-        signal: The eligible signal to describe.
+        signal: The eligible durable signal.
 
     Returns:
-        Prompt copy that states the observed pattern and asks for a verdict.
+        Prompt copy stating the observed pattern with evidence context.
     """
     reads = f"across {signal.evidence_count} reads"
-    if signal.feature_type == "creator":
-        role = signal.creator_role
-        if role == "writer":
-            subject = f"comics written by {signal.label}"
-        elif role == "artist":
-            subject = f"comics with art by {signal.label}"
-        else:
-            subject = f"comics involving {signal.label}"
+    if signal.signal_type == SIGNAL_CREATOR:
+        subject = f"comics involving {signal.display_name}"
+        if ":writer:" in signal.external_key:
+            subject = f"comics written by {signal.display_name}"
+        elif ":artist:" in signal.external_key:
+            subject = f"comics with art by {signal.display_name}"
         return (
             f"You've rated {subject} well above your usual baseline {reads}. "
-            f"Is {signal.label} generally a draw for you?"
+            f"Is {signal.display_name} generally a draw for you?"
         )
     return (
-        f"You've rated {signal.label} issues well above your usual baseline {reads}. "
-        f"Do you generally enjoy {signal.label}?"
+        f"You've rated {signal.display_name} issues well above your usual "
+        f"baseline {reads}. Do you generally enjoy {signal.display_name}?"
     )
+
+
+async def list_discoveries(
+    db: AsyncSession, *, user_id: int, limit: int = MAX_ACTIVE_DISCOVERIES
+) -> TasteDiscoveryListResponse:
+    """Return ranked eligible discoveries and record the prompting.
+
+    Args:
+        db: Async database session.
+        user_id: Authenticated reader id.
+        limit: Maximum number of discoveries to return.
+
+    Returns:
+        Ranked discoveries with concise evidence context; prompting timestamps
+        are persisted so the canonical cooldown applies.
+    """
+    now = datetime.now(UTC)
+
+    signals = await taste_signals_repository.list_for_user(db, user_id)
+
+    eligibility_inputs: list[EligibilitySignal] = []
+    by_stable_key: dict[str, TasteSignal] = {}
+    for signal in signals:
+        converted = _to_eligibility_signal(signal, now=now)
+        if converted is None:
+            continue
+        eligibility_inputs.append(converted)
+        by_stable_key[converted.stable_key] = signal
+
+    result = evaluate_prompt_eligibility(eligibility_inputs)
+
+    discovered: list[TasteDiscovery] = []
+    for candidate in result.candidates[:limit]:
+        signal = by_stable_key[candidate.signal.stable_key]
+        discovered.append(
+            TasteDiscovery(
+                id=signal.id,
+                signal_type=signal.signal_type,
+                external_key=signal.external_key,
+                display_name=signal.display_name,
+                prompt=build_discovery_prompt(signal),
+                evidence_count=signal.evidence_count,
+                distinct_thread_count=signal.distinct_thread_count,
+            )
+        )
+        signal.last_prompted_at = now
+
+    if discovered:
+        await taste_signals_repository.commit(db)
+
+    return TasteDiscoveryListResponse(discoveries=discovered, generated_at=now)
+
+
+async def dismiss_discovery(
+    db: AsyncSession, *, signal_id: int, user_id: int
+) -> TasteSignal | None:
+    """Dismiss one discovery without recording any verdict.
+
+    Dismissal writes only ``prompt_suppressed_until``; it can therefore never
+    count as confirmation.
+
+    Args:
+        db: Async database session.
+        signal_id: Target signal id.
+        user_id: Authenticated owner id.
+
+    Returns:
+        The updated signal, or ``None`` when missing or foreign.
+    """
+    signal = await taste_signals_repository.get_owned(
+        db, signal_id=signal_id, user_id=user_id
+    )
+    if signal is None:
+        return None
+
+    signal.prompt_suppressed_until = datetime.now(UTC) + DISMISSAL_SUPPRESSION
+    await taste_signals_repository.commit(db)
+    return signal
 
 
 __all__ = [
     "DISMISSAL_SUPPRESSION",
     "DISMISSAL_SUPPRESSION_DAYS",
     "MAX_ACTIVE_DISCOVERIES",
-    "MIN_PROMPT_AFFINITY_DELTA",
-    "MIN_PROMPT_DISTINCT_THREADS",
-    "MIN_PROMPT_EVIDENCE_COUNT",
-    "PROMPT_COOLDOWN",
-    "PROMPT_COOLDOWN_DAYS",
-    "SIGNAL_VERDICT_CONFIRMED",
-    "SIGNAL_VERDICT_REJECTED",
-    "SIGNAL_VERDICT_SOMETIMES",
     "build_discovery_prompt",
-    "is_prompt_eligible",
-    "rank_prompt_eligible",
+    "dismiss_discovery",
+    "list_discoveries",
 ]
