@@ -535,6 +535,7 @@ jobs:
           CONFIGURED: ${{ steps.lane.outputs.configured }}
           REASON: ${{ steps.lane.outputs.reason }}
           JOB_STATUS: ${{ job.status }}
+          WORKER_STATUS_FILE: ${{ runner.temp }}/factory-worker-status
         run: |
           set -Eeuo pipefail
           [[ -n "${WORKER:-}" ]] || exit 0
