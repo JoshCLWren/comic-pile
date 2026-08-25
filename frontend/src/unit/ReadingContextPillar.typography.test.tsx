@@ -168,10 +168,16 @@ describe('ReadingContextPillar rendered typography (#1873)', () => {
       'sectionHeading',
     )
 
-    const currentIssueRow = screen.getByRole('listitem', { name: /open saga issue 5/i })
+    const currentIssueButton = screen.getByRole('button', {
+      name: /show context for ultimate black panther issue 5/i,
+    })
+    const currentIssueRow = currentIssueButton.closest('[role="listitem"]') as HTMLElement
     expectComputedFontSize(within(currentIssueRow).getByText('5'), 'primaryValue')
 
-    const ratedIssueRow = screen.getByRole('listitem', { name: /open saga issue 3/i })
+    const ratedIssueButton = screen.getByRole('button', {
+      name: /show context for ultimate black panther issue 3/i,
+    })
+    const ratedIssueRow = ratedIssueButton.closest('[role="listitem"]') as HTMLElement
     expectComputedFontSize(
       within(ratedIssueRow).getByLabelText('Your rating: 3.5 stars'),
       'metaLabel',

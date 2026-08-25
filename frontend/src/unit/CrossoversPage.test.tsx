@@ -3,13 +3,24 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CrossoversPage from '../pages/CrossoversPage'
 import { dependencyGroupsApi } from '../services/api-dependency-groups'
+import { issuesApi } from '../services/api-issues'
 
 vi.mock('../services/api-dependency-groups', () => ({
   dependencyGroupsApi: {
     list: vi.fn(),
+    get: vi.fn(),
     create: vi.fn(),
     rename: vi.fn(),
     delete: vi.fn(),
+    addMember: vi.fn(),
+    addIssueRange: vi.fn(),
+    removeMember: vi.fn(),
+  },
+}))
+
+vi.mock('../services/api-issues', () => ({
+  issuesApi: {
+    list: vi.fn(),
   },
 }))
 
@@ -36,6 +47,10 @@ const annihilation = {
 beforeEach(() => {
   vi.clearAllMocks()
   api.list.mockResolvedValue([])
+  api.get.mockResolvedValue({ id: 7, name: 'Annihilation', memberships: [] })
+  api.addMember.mockResolvedValue({ id: 99, group_id: 7, thread_id: null, issue_id: null })
+  api.addIssueRange.mockResolvedValue({ added_issue_ids: [], already_present_issue_ids: [] })
+  issuesApi.list.mockResolvedValue([])
   vi.spyOn(window, 'confirm').mockReturnValue(true)
 })
 
