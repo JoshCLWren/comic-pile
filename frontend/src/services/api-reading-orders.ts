@@ -1,4 +1,5 @@
 import api from './api'
+import type { ContinuityPlan } from './api-continuity-plans'
 
 export interface ReadingOrderItem {
   thread_id: number
@@ -115,7 +116,7 @@ export const readingOrdersApi = {
     planName?: string
     laneId?: string
     laneName?: string
-  }): Promise<unknown> => {
+  }): Promise<ContinuityPlan> => {
     return api.post(`/v1/continuity-plans/from-reading-order`, {
       reading_order_id: params.readingOrderId,
       plan_name: params.planName ?? null,
