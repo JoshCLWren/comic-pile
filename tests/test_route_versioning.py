@@ -192,6 +192,7 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/roll/override",
             "/api/roll/session-mode",
             "/api/roll/set-die",
+            "/api/roll/events/{event_id}/recommendation-explanation",
             "/api/sessions/",
             "/api/sessions/current/",
             "/api/sessions/{session_id}",
