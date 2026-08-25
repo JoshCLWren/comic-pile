@@ -31,19 +31,17 @@ def load_module() -> ModuleType:
 CANDIDATES = load_module()
 
 
-def test_nvidia_catalog_discovers_models_dynamically() -> None:
-    """NVIDIA candidates come from the supplied live catalog."""
+def test_nvidia_requires_runtime_evidence_without_account_catalog() -> None:
+    """NVIDIA candidates are not guessed without reliable enumeration."""
     result = CANDIDATES.discover(
         "nvidia",
-        json.dumps({"data": [{"id": "vendor/new-code-model"}, {"id": "vendor/other"}]}),
+        json.dumps({"data": [{"id": "vendor/new-code-model"}]}),
         ["vendor/new-code-model"],
     )
 
-    assert result.status == "available"
-    assert [candidate.model for candidate in result.candidates] == [
-        "vendor/new-code-model"
-    ]
-    assert result.candidates[0].runtime_model == "nvidia/vendor/new-code-model"
+    assert result.mode == "runtime_only"
+    assert result.status == "indeterminate"
+    assert result.candidates == ()
 
 
 def test_openrouter_requires_catalog_evidence_of_free_cost() -> None:
