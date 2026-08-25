@@ -1,0 +1,62 @@
+name: Factory Status Pages
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/scripts/generate_factory_status_dashboard.py'
+      - '.github/scripts/factory_capacity_policy.py'
+      - '.github/scripts/factory_full_completion_controller.py'
+      - '.github/scripts/factory_completion_controller.py'
+      - '.github/workflows/factory-status-pages.yml'
+      - '.github/free-model-factories.tsv'
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  actions: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: factory-status-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Generate factory dashboard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONPATH: .github/scripts
+        run: python3 .github/scripts/generate_factory_status_dashboard.py
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload dashboard
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
