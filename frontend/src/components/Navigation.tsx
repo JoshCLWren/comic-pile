@@ -7,6 +7,7 @@ import { useAuth } from '../App'
 import api from '../services/api'
 import { useToast } from '../contexts/useToast'
 import { DEFAULT_THEME, getAppliedTheme, isSupportedTheme, readStoredThemePreference, selectTheme } from '../services/theme'
+import { persistThemePreference } from '../services/themePreferenceSync'
 import type { ThemeId } from '../services/theme'
 import type { AuthUser } from '../types'
 import type { DiagnosticData } from '../hooks/useDiagnostics'
@@ -135,16 +136,16 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
     setIsMoreOpen(value => !value)
   }
 
-  const setTheme = async (themeId: string) => {
+  const setTheme = (themeId: string) => {
     const applied = selectTheme(themeId)
     if (applied === null) return
     setActiveTheme(applied)
-    try {
-      await api.patch('/v1/users/me/preferences', { theme: themeId })
-    } catch (err: unknown) {
-      console.error('Failed to persist theme preference:', err)
+    // The choice is already applied and mirrored locally; server persistence
+    // retries in the background and reports sustained failure once per
+    // outage episode instead of once per click (issue #1872).
+    persistThemePreference(applied, () => {
       showToast('Theme applied for this session, but saving your preference failed.', 'error')
-    }
+    })
   }
 
   const handleLogout = useCallback(async () => {

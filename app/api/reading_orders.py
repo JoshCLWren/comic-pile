@@ -5,16 +5,20 @@ order is the continuity plan (``ContinuityPlan``); see
 ``docs/READING_PLAN_CANONICAL_MODEL.md``. These endpoints remain readable
 and adoptable but are not the source of truth for new ordering intent.
 """
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from fastapi import APIRouter, Depends
 
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import Issue, Thread
 from app.models.reading_order import ReadingOrder, ReadingOrderItem
 from app.models.user import User
+from app.services.reading_order_placement import apply_insert
 from app.schemas.reading_order import (
     ReadingOrderItemResponse,
     ReadingOrderListResponse,
@@ -116,3 +120,93 @@ async def get_thread_reading_orders(
         )
 
     return ThreadReadingOrdersResponse(reading_orders=order_responses)
+
+
+class InsertReadingOrderItemRequest(BaseModel):
+    """Request schema for inserting an item into a reading order."""
+
+    thread_id: int = Field(..., gt=0)
+    position: int = Field(..., ge=1)
+
+
+class InsertReadingOrderItemResponse(BaseModel):
+    """Response schema for inserting an item into a reading order."""
+
+    reading_order_id: int
+    thread_id: int
+    position: int
+    total_items: int
+
+
+@router.post(
+    "/api/v1/reading-orders/{reading_order_id}/items",
+    response_model=InsertReadingOrderItemResponse,
+    status_code=201,
+)
+async def insert_reading_order_item(
+    reading_order_id: int,
+    payload: InsertReadingOrderItemRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> InsertReadingOrderItemResponse:
+    """Insert a thread into a reading order at a specified position.
+
+    Shifts existing items at or after the target position to make room. If the
+    thread already belongs to the reading order, it is moved to the target
+    position instead of being duplicated.
+    """
+    order = (
+        await db.execute(
+            select(ReadingOrder).where(
+                ReadingOrder.id == reading_order_id,
+                ReadingOrder.user_id == current_user.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if order is None:
+        raise HTTPException(status_code=404, detail=f"Reading order {reading_order_id} not found")
+
+    thread = (
+        await db.execute(
+            select(Thread).where(
+                Thread.id == payload.thread_id,
+                Thread.user_id == current_user.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if thread is None:
+        raise HTTPException(status_code=404, detail=f"Thread {payload.thread_id} not found")
+
+    existing = (
+        await db.execute(
+            select(ReadingOrderItem)
+            .where(ReadingOrderItem.reading_order_id == reading_order_id)
+            .order_by(ReadingOrderItem.position)
+        )
+    ).scalars().all()
+
+    target_pos = payload.position
+    apply_insert(list(existing), payload.thread_id, target_pos)
+
+    already_present = any(item.thread_id == payload.thread_id for item in existing)
+    if not already_present:
+        db.add(
+            ReadingOrderItem(
+                reading_order_id=reading_order_id,
+                thread_id=payload.thread_id,
+                position=target_pos,
+            )
+        )
+    await db.commit()
+
+    result = await db.execute(
+        select(ReadingOrderItem).where(ReadingOrderItem.reading_order_id == reading_order_id)
+    )
+    total = len(result.scalars().all())
+
+    return InsertReadingOrderItemResponse(
+        reading_order_id=reading_order_id,
+        thread_id=payload.thread_id,
+        position=payload.position,
+        total_items=total,
+    )

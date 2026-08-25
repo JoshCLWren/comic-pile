@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.external_identities import (
@@ -19,6 +19,7 @@ from app.models.external_identity import (
 )
 from app.models.issue import Issue
 from app.models.metadata_correction import IssueMetadataCorrection
+from app.models.reading_order import ReadingOrder, ReadingOrderItem
 from app.models.thread import Thread
 from app.schemas.comicvine_resolution import (
     CanonicalCorrection,
@@ -26,15 +27,41 @@ from app.schemas.comicvine_resolution import (
     ComicVineSeriesIssuesResponse,
     ComicVineSeriesSearchResponse,
     ComicVineSeriesResult,
+    ImportIssueRequest,
+    ImportIssueResponse,
     IssueIdentityMapping,
     IssueIdentityResponse,
     MetadataCorrectionRequest,
     MetadataCorrectionsResponse,
     MetadataRefreshResponse,
 )
+from app.services.reading_order_placement import apply_insert, resolve_anchored_position
 from comic_pile.comicvine_provider import ComicVineClient
 
 logger = logging.getLogger(__name__)
+
+
+def _coerce_provider_int(value: object) -> int | None:
+    """Coerce a ComicVine value into an int when it is numeric.
+
+    The provider returns fields such as ``start_year`` as strings, so both
+    native ints and numeric strings must normalize to ints.
+
+    Args:
+        value: Raw provider field value.
+
+    Returns:
+        The parsed integer, or ``None`` when the value is not numeric.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    return None
 
 
 async def search_comicvine_series(
@@ -64,7 +91,7 @@ async def search_comicvine_series(
             "query": query,
             "resources": "volume",
             "limit": clamped_limit,
-            "field_list": "id,name,publisher,start_year,site_detail_url,image",
+            "field_list": "id,name,publisher,start_year,count_of_issues,site_detail_url,image",
         },
     )
     results = response.payload.get("results")
@@ -97,7 +124,8 @@ async def search_comicvine_series(
                 comicvine_volume_id=volume_id,
                 name=name,
                 publisher=publisher if isinstance(publisher, str) else None,
-                start_year=row.get("start_year") if isinstance(row.get("start_year"), int) else None,
+                start_year=_coerce_provider_int(row.get("start_year")),
+                issue_count=_coerce_provider_int(row.get("count_of_issues")),
                 site_detail_url=row.get("site_detail_url")
                 if isinstance(row.get("site_detail_url"), str)
                 else None,
@@ -550,3 +578,121 @@ async def revert_metadata_correction(
         created_by=correction.created_by,
         created_at=correction.created_at,
     )
+
+
+class ImportTargetNotFoundError(Exception):
+    """A referenced import target (reading order) does not exist for the user."""
+
+
+async def import_comicvine_issue(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    request: ImportIssueRequest,
+) -> ImportIssueResponse:
+    """Import a ComicVine issue as a new thread with its exact identity preserved.
+
+    Atomically (pending the caller's commit) creates a thread, a single issue
+    row, and a confirmed external-identity mapping so story-arc panels can
+    match the imported thread back to its ComicVine issue. When a reading
+    order is requested, the thread is inserted between the surrounding arc
+    members using neighbor-anchored placement.
+
+    Args:
+        db: Async database session; the caller owns the transaction commit.
+        user_id: Owner who will receive the imported thread.
+        request: Validated import payload with optional anchored placement.
+
+    Returns:
+        The created identifiers plus final reading-order placement.
+
+    Raises:
+        ImportTargetNotFoundError: ``request.reading_order_id`` does not exist
+            for this user.
+    """
+    order: ReadingOrder | None = None
+    if request.reading_order_id is not None:
+        order = (
+            await db.execute(
+                select(ReadingOrder).where(
+                    ReadingOrder.id == request.reading_order_id,
+                    ReadingOrder.user_id == user_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if order is None:
+            raise ImportTargetNotFoundError(
+                f"Reading order {request.reading_order_id} not found"
+            )
+
+    max_position = (
+        await db.execute(
+            select(func.max(Thread.queue_position)).where(Thread.user_id == user_id)
+        )
+    ).scalar() or 0
+    thread = Thread(
+        title=request.title.strip(),
+        format="Comics",
+        issues_remaining=1,
+        total_issues=1,
+        queue_position=max_position + 1,
+        status="active",
+        user_id=user_id,
+    )
+    db.add(thread)
+    await db.flush()
+
+    issue = Issue(
+        thread_id=thread.id,
+        issue_number=request.issue_number or "1",
+        position=1,
+        status="unread",
+    )
+    db.add(issue)
+    await db.flush()
+
+    mapping = await confirm_comicvine_identity(
+        db,
+        user_id=user_id,
+        issue_id=issue.id,
+        comicvine_issue_id=request.comicvine_issue_id,
+    )
+
+    response = ImportIssueResponse(
+        thread_id=thread.id,
+        issue_id=issue.id,
+        external_identity_id=mapping.external_identity_id,
+    )
+
+    if order is not None:
+        existing_items = (
+            (
+                await db.execute(
+                    select(ReadingOrderItem)
+                    .where(ReadingOrderItem.reading_order_id == order.id)
+                    .order_by(ReadingOrderItem.position)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        positions_by_thread = {item.thread_id: item.position for item in existing_items}
+        target_pos = resolve_anchored_position(
+            positions_by_thread,
+            request.anchor_before_thread_id,
+            request.anchor_after_thread_id,
+            len(existing_items),
+        )
+        apply_insert(list(existing_items), thread.id, target_pos)
+        db.add(
+            ReadingOrderItem(
+                reading_order_id=order.id,
+                thread_id=thread.id,
+                position=target_pos,
+            )
+        )
+        response.reading_order_id = order.id
+        response.position = target_pos
+        response.total_items = len(existing_items) + 1
+
+    return response

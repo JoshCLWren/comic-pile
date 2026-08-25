@@ -80,6 +80,7 @@ export interface ThreadCreatePayload {
   title: string;
   format: string;
   issues_remaining: number;
+  total_issues?: number;
   notes?: string | null;
 }
 
@@ -130,6 +131,8 @@ export interface SessionThread {
   next_issue_id?: number | null;
   next_issue_number?: string | null;
   last_rolled_result?: number | null;
+  issues_read?: number | null;
+  last_rating?: number | null;
 }
 
 export interface SessionCurrent {
@@ -143,6 +146,34 @@ export interface SessionCurrent {
   ladder_path?: string;
   active_thread?: SessionThread | null;
   snoozed_threads?: SessionThread[];
+  reading_bandwidth?: ReadingBandwidth | null;
+  reading_intent?: ReadingIntent | null;
+  reading_mode_source?: ReadingModeSource | null;
+  reading_mode_suggested?: boolean;
+}
+
+export type ReadingBandwidth = 'light' | 'balanced' | 'deep'
+export type ReadingIntent = 'momentum' | 'familiar' | 'explore' | 'random'
+export type ReadingModeSource = 'quiz' | 'manual'
+
+export interface ReadingModeState {
+  bandwidth: ReadingBandwidth | null
+  intent: ReadingIntent | null
+  source: ReadingModeSource | null
+  suggested: boolean
+}
+
+export interface QuizAnswerOption {
+  id: string
+  label: string
+  bandwidth?: ReadingBandwidth | null
+  intent?: ReadingIntent | null
+}
+
+export interface QuizQuestion {
+  id: string
+  prompt: string
+  answers: QuizAnswerOption[]
 }
 
 export interface SessionSummary {

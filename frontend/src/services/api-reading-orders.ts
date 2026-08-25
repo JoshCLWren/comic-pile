@@ -69,9 +69,25 @@ export interface ReadingOrderProjectionResult {
   total_positions: number
 }
 
+export interface InsertReadingOrderItemResponse {
+  reading_order_id: number
+  thread_id: number
+  position: number
+  total_items: number
+}
+
 export const readingOrdersApi = {
   list: async (): Promise<ReadingOrderListResponse> => {
     return api.get<ReadingOrderListResponse>('/v1/reading-orders/')
+  },
+  insertItem: async (
+    readingOrderId: number,
+    data: { thread_id: number; position: number },
+  ): Promise<InsertReadingOrderItemResponse> => {
+    return api.post<InsertReadingOrderItemResponse>(
+      `/v1/reading-orders/${readingOrderId}/items`,
+      data,
+    )
   },
   previewProjection: async (
     planId: number,

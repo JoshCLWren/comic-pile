@@ -1,14 +1,12 @@
 """Tests for request, database, and cache performance diagnostics."""
 
 import asyncio
-from typing import cast
 
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 
-from app.cache import UpstashCache
 from app.database import AsyncSessionLocal, async_engine
 from app.middleware.request_logging import add_request_logging_middleware
 from app.performance_diagnostics import (
@@ -83,23 +81,20 @@ def test_diagnostics_aggregate_mixed_cache_activity() -> None:
         end_request_diagnostics(token)
 
 
-class _FakeCircuitBreaker:
-    """Minimal circuit breaker used by the cache timeout test."""
-
-    def __init__(self) -> None:
-        self.failures = 0
-
-    def record_failure(self) -> None:
-        """Record one wrapper-level timeout."""
-        self.failures += 1
-
-
 class _SlowCache:
-    """Cache-shaped object whose reads exceed the configured timeout."""
+    """Cache-shaped provider whose reads exceed the configured timeout."""
 
     def __init__(self) -> None:
         self.is_initialized = True
-        self._circuit_breaker = _FakeCircuitBreaker()
+        self.failures = 0
+
+    def record_failure(self) -> None:
+        """Count one wrapper-level failure fed into the provider."""
+        self.failures += 1
+
+    async def ping(self) -> None:
+        """Satisfy the provider probe surface."""
+        return None
 
     async def get(self, key: str) -> object | None:
         """Return too slowly for the timeout wrapper."""
@@ -128,12 +123,11 @@ async def test_cache_timeout_fails_open_and_records_failure(monkeypatch) -> None
     """A stalled cache read should return a miss rather than delaying the request."""
     monkeypatch.setenv("CACHE_OPERATION_TIMEOUT_SECONDS", "0.001")
     fake_cache = _SlowCache()
-    cache = cast(UpstashCache, fake_cache)
-    install_cache_instrumentation(cache)
+    install_cache_instrumentation(fake_cache)
 
     token = begin_request_diagnostics()
     try:
-        result = await cache.get("slow-key")
+        result = await fake_cache.get("slow-key")
         diagnostics = get_request_diagnostics()
     finally:
         end_request_diagnostics(token)
@@ -141,4 +135,4 @@ async def test_cache_timeout_fails_open_and_records_failure(monkeypatch) -> None
     assert result is None
     assert diagnostics.cache_status == "timeout"
     assert diagnostics.cache_timeouts == 1
-    assert fake_cache._circuit_breaker.failures == 1
+    assert fake_cache.failures == 1
