@@ -108,10 +108,16 @@ async def roll_dice(
     algorithm_version = get_current_algorithm_version()
     algorithm_control_state = get_current_control_state()
 
+    # Random intent is an independent user-level bypass that forces pure-random
+    # selection without engaging the legacy kill switch. It records contextual
+    # version/state but with pure_random reason code.
+    random_intent_bypass = current_session.active_intent == "random"
+
     # Apply momentum weighting; weights fall back to uniform (pure-random)
     # when no positive momentum applies, preserving the pure-random bypass.
     # Legacy mode forces pure-random selection regardless of momentum.
-    if is_legacy_mode_enabled():
+    # Random intent also forces pure-random selection as a user-level bypass.
+    if is_legacy_mode_enabled() or random_intent_bypass:
         selected_index = random.randint(0, len(bounded_rows) - 1)
         max_bonus = 0.0
         session_events = []
@@ -132,6 +138,7 @@ async def roll_dice(
     # Derive concise, user-facing reason codes from the actual decision-time
     # selection context. Momentum weighting is applied only when a positive
     # bonus exists; otherwise the selection is genuinely unweighted/pure-random.
+    # Both legacy mode and random intent bypass produce pure_random reason code.
     recommendation_reason_codes = (
         ["momentum_weighted"] if max_bonus > 0 else ["pure_random"]
     )
