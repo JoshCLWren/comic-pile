@@ -30,6 +30,19 @@ function bootstrapWith(
     manual_die: null,
     pending_thread_id: null,
     last_rolled_result: null,
+    session_mode: {
+      active_bandwidth: null,
+      predicted_bandwidth: null,
+      bandwidth_confidence: null,
+      bandwidth_source: null,
+      bandwidth_version: null,
+      active_intent: null,
+      predicted_intent: null,
+      intent_confidence: null,
+      intent_source: null,
+      intent_version: null,
+      session_mode_correction_guidance: null,
+    },
     active_thread: null,
     roll_pool: [],
     snoozed_threads: [],
@@ -38,7 +51,7 @@ function bootstrapWith(
     blocked_threads: blockedThreads,
     stale_thread_count: 0,
     stale_thread: null,
-  } as RollBootstrapResponse
+  }
 }
 
 describe('useRollDependencies batched blocking details', () => {
