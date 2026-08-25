@@ -116,6 +116,7 @@ def latest_worker_health(
 ) -> dict[str, tuple[str, int]]:
     """Return the newest trusted heartbeat outcome for each fixed worker."""
     latest: dict[str, tuple[str, int]] = {}
+    priorities: dict[str, int] = {}
     for comment in comments:
         if trusted is not None and not trusted(comment):
             continue
@@ -123,7 +124,8 @@ def latest_worker_health(
         worker_match = WORKER_RE.search(body)
         # Classified attempt evidence is authoritative for health. Legacy
         # heartbeat outcomes remain supported while existing records age out.
-        outcome_match = ATTEMPT_OUTCOME_RE.search(body) or OUTCOME_RE.search(body)
+        attempt_match = ATTEMPT_OUTCOME_RE.search(body)
+        outcome_match = attempt_match or OUTCOME_RE.search(body)
         updated_match = UPDATED_RE.search(body)
         if not worker_match or not outcome_match or not updated_match:
             continue
@@ -131,9 +133,14 @@ def latest_worker_health(
         if updated is None:
             continue
         worker = worker_match.group("worker")
+        priority = 1 if attempt_match else 0
         previous = latest.get(worker)
-        if previous is None or updated > previous[1]:
+        previous_priority = priorities.get(worker, -1)
+        if previous is None or priority > previous_priority or (
+            priority == previous_priority and updated > previous[1]
+        ):
             latest[worker] = (outcome_match.group("outcome").strip(), updated)
+            priorities[worker] = priority
     return latest
 
 
