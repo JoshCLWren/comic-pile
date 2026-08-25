@@ -12,7 +12,7 @@ model (issue #1705):
 ``d4e5f6a7b8c9``; this migration only adds the context payload column.
 
 Revision ID: c85700000001
-Revises: f7e8d9c0b1a2
+Revises: h9i0j1k2l3m4
 Create Date: 2026-08-25 00:00:00.000000
 """
 
@@ -23,7 +23,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "c85700000001"
-down_revision: str | Sequence[str] | None = "f7e8d9c0b1a2"
+down_revision: str | Sequence[str] | None = "h9i0j1k2l3m4"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
