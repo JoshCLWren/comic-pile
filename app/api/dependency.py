@@ -353,11 +353,11 @@ async def get_threads_blocking_info(
                 blocking_dependencies=[_to_blocking_dependency_schema(dep) for dep in dependencies],
             )
         else:
-result[tid] = BlockingExplanation(
-                    is_blocked=False,
-                    blocking_reasons=[],
-                    blocking_dependencies=[],
-                )
+            result[tid] = BlockingExplanation(
+                is_blocked=False,
+                blocking_reasons=[],
+                blocking_dependencies=[],
+            )
 
     return BatchBlockingExplanationResponse(threads=result)
 

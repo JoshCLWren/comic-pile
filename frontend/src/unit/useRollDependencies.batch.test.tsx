@@ -39,7 +39,7 @@ function bootstrapWith(
     stale_thread_count: 0,
     stale_thread: null,
     session_mode: null,
-  }
+  } as RollBootstrapResponse
 }
 
 describe('useRollDependencies batched blocking details', () => {
