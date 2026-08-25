@@ -26,7 +26,7 @@ from app.schemas import (
     SnapshotResponse,
     SnapshotsListResponse,
 )
-from app.schemas.session import SnoozedThreadInfo
+from app.schemas.session import SnoozedThreadInfo, build_session_bandwidth_state
 from app.services.ownership import get_owned_session_or_404
 from app.services.session_history_projection import project_session_history_events
 from app.services.thread_issue_stats import load_next_issue_numbers, load_unread_counts
@@ -439,12 +439,17 @@ async def get_current_session(
                 snoozed_thread_ids=active_session.snoozed_thread_ids or [],
                 snoozed_threads=snoozed_threads,
                 pending_thread_id=active_session.pending_thread_id,
-                predicted_bandwidth=active_session.predicted_bandwidth,
-                active_bandwidth=active_session.active_bandwidth,
-                bandwidth_confidence=active_session.bandwidth_confidence,
-                bandwidth_source=active_session.bandwidth_source,
-                bandwidth_mode_version=active_session.bandwidth_mode_version,
-                bandwidth_updated_at=active_session.bandwidth_updated_at,
+                reading_bandwidth=active_session.reading_bandwidth,
+                reading_intent=active_session.reading_intent,
+                reading_mode_source=active_session.reading_mode_source,
+                reading_mode_suggested=active_session.reading_mode_suggested,
+                bandwidth=build_session_bandwidth_state(
+                    predicted_bandwidth=active_session.predicted_bandwidth,
+                    active_bandwidth=active_session.active_bandwidth,
+                    confidence=active_session.bandwidth_confidence,
+                    source=active_session.bandwidth_source,
+                    mode_version=active_session.bandwidth_version,
+                ),
             )
         except OperationalError as e:
             if "deadlock" in str(e).lower():
@@ -649,6 +654,10 @@ async def list_sessions(
             has_restore_point=snapshot_count_num > 0,
             snapshot_count=snapshot_count_num,
             pending_thread_id=session.pending_thread_id,
+            reading_bandwidth=session.reading_bandwidth,
+            reading_intent=session.reading_intent,
+            reading_mode_source=session.reading_mode_source,
+            reading_mode_suggested=session.reading_mode_suggested,
         )
         responses.append(_to_session_list_item(sr))
 
@@ -705,12 +714,17 @@ async def get_session(
         has_restore_point=snapshot_count > 0,
         snapshot_count=snapshot_count,
         pending_thread_id=session.pending_thread_id,
-        predicted_bandwidth=session.predicted_bandwidth,
-        active_bandwidth=session.active_bandwidth,
-        bandwidth_confidence=session.bandwidth_confidence,
-        bandwidth_source=session.bandwidth_source,
-        bandwidth_mode_version=session.bandwidth_mode_version,
-        bandwidth_updated_at=session.bandwidth_updated_at,
+        reading_bandwidth=session.reading_bandwidth,
+        reading_intent=session.reading_intent,
+        reading_mode_source=session.reading_mode_source,
+        reading_mode_suggested=session.reading_mode_suggested,
+        bandwidth=build_session_bandwidth_state(
+            predicted_bandwidth=session.predicted_bandwidth,
+            active_bandwidth=session.active_bandwidth,
+            confidence=session.bandwidth_confidence,
+            source=session.bandwidth_source,
+            mode_version=session.bandwidth_version,
+        ),
     )
 
 
@@ -1059,6 +1073,36 @@ async def restore_session_start(
             if snapshot.session_state:
                 session.start_die = snapshot.session_state.get("start_die", session.start_die)
                 session.manual_die = snapshot.session_state.get("manual_die", session.manual_die)
+                session.active_bandwidth = snapshot.session_state.get(
+                    "active_bandwidth", session.active_bandwidth
+                )
+                session.predicted_bandwidth = snapshot.session_state.get(
+                    "predicted_bandwidth", session.predicted_bandwidth
+                )
+                session.bandwidth_confidence = snapshot.session_state.get(
+                    "bandwidth_confidence", session.bandwidth_confidence
+                )
+                session.bandwidth_source = snapshot.session_state.get(
+                    "bandwidth_source", session.bandwidth_source
+                )
+                session.bandwidth_version = snapshot.session_state.get(
+                    "bandwidth_version", session.bandwidth_version
+                )
+                session.active_intent = snapshot.session_state.get(
+                    "active_intent", session.active_intent
+                )
+                session.predicted_intent = snapshot.session_state.get(
+                    "predicted_intent", session.predicted_intent
+                )
+                session.intent_confidence = snapshot.session_state.get(
+                    "intent_confidence", session.intent_confidence
+                )
+                session.intent_source = snapshot.session_state.get(
+                    "intent_source", session.intent_source
+                )
+                session.intent_version = snapshot.session_state.get(
+                    "intent_version", session.intent_version
+                )
 
             await db.commit()
             await db.refresh(session)
@@ -1091,6 +1135,17 @@ async def restore_session_start(
                 has_restore_point=snapshot_count > 0,
                 snapshot_count=snapshot_count,
                 pending_thread_id=session.pending_thread_id,
+                reading_bandwidth=session.reading_bandwidth,
+                reading_intent=session.reading_intent,
+                reading_mode_source=session.reading_mode_source,
+                reading_mode_suggested=session.reading_mode_suggested,
+                bandwidth=build_session_bandwidth_state(
+                    predicted_bandwidth=session.predicted_bandwidth,
+                    active_bandwidth=session.active_bandwidth,
+                    confidence=session.bandwidth_confidence,
+                    source=session.bandwidth_source,
+                    mode_version=session.bandwidth_version,
+                ),
             )
         except OperationalError as e:
             if "deadlock" in str(e).lower():

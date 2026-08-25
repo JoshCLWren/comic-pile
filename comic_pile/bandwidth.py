@@ -35,7 +35,7 @@ NEUTRAL_BANDWIDTH_CONFIDENCE: float = 0.1
 # Current inference/mode contract version. Later phases that change how
 # predicted bandwidth is produced should bump this so stale session state can
 # be identified in analytics.
-CURRENT_BANDWIDTH_MODE_VERSION = 1
+CURRENT_BANDWIDTH_MODE_VERSION = "v1"
 
 
 def _validate_confidence(bandwidth_confidence: float | None) -> None:
@@ -105,7 +105,7 @@ async def apply_bandwidth_state(
     active_bandwidth: str | None,
     bandwidth_source: str | None = None,
     bandwidth_confidence: float | None = None,
-    bandwidth_mode_version: int | None = CURRENT_BANDWIDTH_MODE_VERSION,
+    bandwidth_mode_version: str | None = CURRENT_BANDWIDTH_MODE_VERSION,
 ) -> Session:
     """Validate and persist ephemeral bandwidth state onto a session.
 
@@ -139,7 +139,7 @@ async def apply_bandwidth_state(
     session.active_bandwidth = active_bandwidth
     session.bandwidth_source = bandwidth_source
     session.bandwidth_confidence = bandwidth_confidence
-    session.bandwidth_mode_version = bandwidth_mode_version
+    session.bandwidth_version = bandwidth_mode_version
     session.bandwidth_updated_at = datetime.now(UTC)
 
     await db.flush()
@@ -160,7 +160,7 @@ def clear_ephemeral_bandwidth(session: Session) -> None:
     session.active_bandwidth = None
     session.bandwidth_confidence = None
     session.bandwidth_source = None
-    session.bandwidth_mode_version = None
+    session.bandwidth_version = None
     session.bandwidth_updated_at = None
 
 
@@ -182,7 +182,7 @@ def capture_ephemeral_bandwidth(session: Session) -> dict[str, object]:
         "active_bandwidth": session.active_bandwidth,
         "bandwidth_confidence": session.bandwidth_confidence,
         "bandwidth_source": session.bandwidth_source,
-        "bandwidth_mode_version": session.bandwidth_mode_version,
+        "bandwidth_mode_version": session.bandwidth_version,
         "bandwidth_updated_at": session.bandwidth_updated_at.isoformat()
         if session.bandwidth_updated_at
         else None,
@@ -233,7 +233,7 @@ def restore_ephemeral_bandwidth(session: Session, state: dict[str, object]) -> N
 
     if "bandwidth_mode_version" in state:
         version = state["bandwidth_mode_version"]
-        session.bandwidth_mode_version = int(version) if version is not None else None
+        session.bandwidth_version = str(version) if version is not None else None
 
     if "bandwidth_updated_at" in state:
         updated_at = state["bandwidth_updated_at"]
