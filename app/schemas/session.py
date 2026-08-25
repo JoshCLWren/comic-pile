@@ -93,6 +93,48 @@ def build_session_bandwidth_state(
     )
 
 
+SnoozeCorrectionReason = Literal[
+    "heavy_snooze_shift",
+    "light_snooze_deflate",
+    "confidence_degrade",
+    "no_correction",
+    "clarification_needed",
+]
+
+
+class SnoozeCorrectionInfo(BaseModel):
+    """Structured Snooze correction guidance for the client (#1726).
+
+    Returned with every Snooze response so the frontend can later decide
+    whether to show a clarification sheet, without implementing modal UI in
+    this phase. Fields are compact codes and flags, never prose.
+    """
+
+    bandwidth_changed: bool = Field(
+        description="Whether the active bandwidth level changed after this snooze",
+    )
+    active_bandwidth: str | None = Field(
+        default=None,
+        description="Active bandwidth level after correction: light, balanced, or deep",
+    )
+    active_confidence: float | None = Field(
+        default=None,
+        description="Confidence in the proposed active bandwidth (0.0-1.0)",
+    )
+    predicted_bandwidth: str | None = Field(
+        default=None,
+        description="Original launch prediction bandwidth (unchanged)",
+    )
+    reason_code: SnoozeCorrectionReason = Field(
+        description=(
+            "Compact reason code: heavy_snooze_shift, light_snooze_deflate, "
+            "confidence_degrade, no_correction, or clarification_needed"
+        ),
+    )
+    suggest_clarification: bool = Field(
+        default=False,
+        description="True when repeated contradictory snoozes make the mode uncertain",
+    )
 class ActiveThreadInfo(BaseModel):
     """Schema for active thread information in session response."""
 
@@ -143,6 +185,20 @@ class SessionResponse(BaseModel):
     reading_intent: str | None = None
     reading_mode_source: str | None = None
     reading_mode_suggested: bool = False
+    bandwidth: SessionBandwidthState | None = Field(
+        default=None,
+        description=(
+            "Canonical ephemeral bandwidth state for the session. Null on endpoints "
+            "that do not load bandwidth state."
+        ),
+    )
+    correction: SnoozeCorrectionInfo | None = Field(
+        default=None,
+        description=(
+            "Structured correction result from the most recent Snooze. "
+            "Null when no correction was applied."
+        ),
+    )
 
     @field_serializer("started_at", "ended_at")
     def serialize_datetime(self, value: datetime | None) -> str | None:
