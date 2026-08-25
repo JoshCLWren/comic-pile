@@ -30,6 +30,20 @@ def test_production_workflow_migrates_before_deploying() -> None:
     assert "branches:\n      - main" in workflow
 
 
+def test_production_workflow_reconciles_factory_merges_without_push_events() -> None:
+    """Factory-token merges must still trigger migration-gated production deploys."""
+    workflow = (
+        REPOSITORY_ROOT / ".github" / "workflows" / "deploy-production.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "workflow_run:" in workflow
+    assert "Factory Ready Merge Drain" in workflow
+    assert "Factory Completion Drain" in workflow
+    assert "schedule:" in workflow
+    assert "cron: '*/5 * * * *'" in workflow
+    assert "ref: main" in workflow
+
+
 def test_production_workflow_uses_known_good_setup_uv_pin() -> None:
     """Do not restore the invalid setup-uv major-version shorthand again."""
     workflow = (
