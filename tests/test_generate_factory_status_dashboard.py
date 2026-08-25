@@ -1,3 +1,4 @@
+"""Regression coverage for the generated factory status dashboard."""
 from __future__ import annotations
 
 import importlib.util
@@ -18,6 +19,7 @@ SPEC.loader.exec_module(dashboard)
 
 
 def test_dashboard_surfaces_operational_state_in_one_page():
+    """Render the core factory metrics, throughput, and allocator state together."""
     rendered = dashboard.render_dashboard(
         {
             "generated_at": "2026-08-24T23:50:00Z",
