@@ -826,7 +826,9 @@ class TestReleaseWriterReaderFacingCopy:
         payload = _valid_payload()
         payload["body"] = "Engineering follow-up tracked in issue #1551 (source_roll_event_id)."
         result = release_writer._validate_release(json.dumps(payload))
-        assert "issue #1551" in result["body"]
+        body = result["body"]
+        assert isinstance(body, str)
+        assert "issue #1551" in body
 
         internal = _valid_payload()
         internal["visibility"] = "internal"
