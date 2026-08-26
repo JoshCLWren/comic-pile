@@ -142,14 +142,18 @@ def persist_funnel_telemetry(controller, result: dict[str, object]) -> None:
             f"Completion demand: {result.get('completion_demand', 0)}",
             f"Production demand: {result.get('production_demand', 0)}",
             f"Idle executable workers: {result.get('idle_workers', 0)}",
-            f"Executable capacity: {result.get('executable_capacity', 0)}",
+            f"Executable slot capacity: {result.get('executable_slot_capacity', 0)}",
+            "Slot health: "
+            + json.dumps(result.get("slot_health_counts", {}), sort_keys=True),
+            f"Executable provider/model candidates: "
+            f"{result.get('executable_candidate_count', 0)}",
             "Candidate health: "
-            + json.dumps(result.get("health_counts", {}), sort_keys=True),
-            "Executable models: "
+            + json.dumps(result.get("candidate_health_counts", {}), sort_keys=True),
+            "Executable provider/models: "
             + (
                 ", ".join(
-                    f"{item.get('provider')}/{item.get('model')} (Factory {item.get('worker')})"
-                    for item in result.get("executable_candidates", [])
+                    f"{item.get('provider')}/{item.get('model')}"
+                    for item in result.get("executable_provider_models", [])
                     if isinstance(item, dict)
                 )
                 or "none"

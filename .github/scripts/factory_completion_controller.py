@@ -368,28 +368,73 @@ def capacity_report(
     *,
     now_epoch: int,
 ) -> dict[str, object]:
-    """Return evidence-derived fleet capacity and candidate health details."""
-    states = {"unknown": 0, "healthy": 0, "degraded": 0, "cooling": 0, "unavailable": 0}
-    executable: list[dict[str, str]] = []
-    details: list[dict[str, str]] = []
+    """Return distinct candidate health separately from executable slot capacity."""
+    slot_states = {
+        "unknown": 0,
+        "healthy": 0,
+        "degraded": 0,
+        "cooling": 0,
+        "unavailable": 0,
+    }
+    executable_slots: list[dict[str, str]] = []
+    slot_details: list[dict[str, str]] = []
+    candidate_details: dict[tuple[str, str], tuple[dict[str, str], int]] = {}
     for candidate in candidates:
         worker = str(candidate["worker"])
+        provider = str(candidate["provider"])
+        model = str(candidate["model"])
         state = worker_health_state(worker, health, now_epoch=now_epoch)
-        states[state] += 1
+        slot_states[state] += 1
         detail = {
             "worker": worker,
-            "provider": str(candidate["provider"]),
-            "model": str(candidate["model"]),
+            "provider": provider,
+            "model": model,
             "health": state,
         }
-        details.append(detail)
+        slot_details.append(detail)
         if state in {"healthy", "degraded"}:
-            executable.append(detail)
+            executable_slots.append(detail)
+
+        status = health.get(worker)
+        updated = status[1] if status is not None else -1
+        provider_model = {
+            "provider": provider,
+            "model": model,
+            "health": state,
+        }
+        key = (provider, model)
+        previous = candidate_details.get(key)
+        if previous is None or updated > previous[1]:
+            candidate_details[key] = (provider_model, updated)
+
+    provider_models = [
+        detail
+        for detail, _updated in sorted(
+            candidate_details.values(),
+            key=lambda item: (item[0]["provider"], item[0]["model"]),
+        )
+    ]
+    candidate_states = dict.fromkeys(slot_states, 0)
+    for detail in provider_models:
+        candidate_states[detail["health"]] += 1
+    executable_provider_models = [
+        detail
+        for detail in provider_models
+        if detail["health"] in {"healthy", "degraded"}
+    ]
     return {
-        "executable_capacity": len(executable),
-        "health_counts": states,
-        "executable_candidates": executable,
-        "candidates": details,
+        # Keep the established slot fields stable for allocation callers.
+        "executable_capacity": len(executable_slots),
+        "health_counts": slot_states,
+        "executable_candidates": executable_slots,
+        "candidates": slot_details,
+        # Candidate fields never count repeated numbered slots as distinct models.
+        "executable_slot_capacity": len(executable_slots),
+        "slot_health_counts": slot_states,
+        "executable_candidate_count": len(executable_provider_models),
+        "candidate_health_counts": candidate_states,
+        "executable_provider_models": executable_provider_models,
+        "provider_models": provider_models,
     }
 
 

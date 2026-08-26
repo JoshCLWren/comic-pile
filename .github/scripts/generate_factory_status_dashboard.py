@@ -85,7 +85,8 @@ def collect_snapshot() -> dict[str, Any]:
 
     workers = completion.load_manifest_workers(MANIFEST)
     owned = completion.owned_worker_ids([*issues, *prs])
-    health_counts = capacity.get("health_counts") or {}
+    slot_health_counts = capacity.get("slot_health_counts") or {}
+    candidate_health_counts = capacity.get("candidate_health_counts") or {}
 
     hour = iso_search_time(timedelta(hours=1))
     day = iso_search_time(timedelta(hours=24))
@@ -108,11 +109,18 @@ def collect_snapshot() -> dict[str, Any]:
         "configured_workers": len(workers),
         "busy_workers": len(set(workers) & owned),
         "idle_workers": demand.idle_workers,
+        # Preserve the established snapshot key for existing JSON consumers.
         "executable_capacity": capacity.get("executable_capacity", 0),
-        "healthy_candidates": health_counts.get("healthy", 0),
-        "degraded_candidates": health_counts.get("degraded", 0),
-        "cooling_candidates": health_counts.get("cooling", 0),
-        "unavailable_candidates": health_counts.get("unavailable", 0),
+        "executable_slot_capacity": capacity.get("executable_slot_capacity", 0),
+        "healthy_slots": slot_health_counts.get("healthy", 0),
+        "degraded_slots": slot_health_counts.get("degraded", 0),
+        "cooling_slots": slot_health_counts.get("cooling", 0),
+        "unavailable_slots": slot_health_counts.get("unavailable", 0),
+        "executable_candidate_count": capacity.get("executable_candidate_count", 0),
+        "healthy_candidates": candidate_health_counts.get("healthy", 0),
+        "degraded_candidates": candidate_health_counts.get("degraded", 0),
+        "cooling_candidates": candidate_health_counts.get("cooling", 0),
+        "unavailable_candidates": candidate_health_counts.get("unavailable", 0),
         "pipeline": {
             "review": count_with_label(prs, "factory:review"),
             "changes_requested": count_with_label(prs, "factory:changes-requested"),
@@ -219,7 +227,7 @@ footer {{ margin-top:14px; color:var(--muted); font-size:12px; }}
 <section class="metrics">{card_html}</section>
 <section class="grid">
 <div class="panel"><h2>Live allocation</h2><div><span class="big">{completion_pct}%</span> completion · <span class="big">{production_pct}%</span> production</div><div class="ratio"><div class="completion"></div><div class="production"></div></div><div class="muted">Target completion workers: <strong>{esc(snapshot['completion_target'])}</strong> from {esc(snapshot['idle_workers'])} currently idle.</div><div class="sub" style="margin-top:12px">{esc(funnel_text)}</div></div>
-<div class="panel"><h2>Executable capacity now</h2><div class="row"><span>Executable</span><strong class="good">{esc(snapshot['executable_capacity'])}</strong></div><div class="row"><span>Healthy</span><strong>{esc(snapshot['healthy_candidates'])}</strong></div><div class="row"><span>Degraded</span><strong class="warn">{esc(snapshot['degraded_candidates'])}</strong></div><div class="row"><span>Cooling</span><strong class="warn">{esc(snapshot['cooling_candidates'])}</strong></div><div class="row"><span>Unavailable</span><strong class="bad">{esc(snapshot['unavailable_candidates'])}</strong></div><div class="sub" style="margin-top:10px">{esc(snapshot['busy_workers'])} busy · {esc(snapshot['idle_workers'])} idle executable slots · {esc(snapshot['configured_workers'])} configured slots</div></div>
+<div class="panel"><h2>Executable capacity now</h2><div class="row"><span>Executable slots</span><strong class="good">{esc(snapshot['executable_slot_capacity'])}</strong></div><div class="row"><span>Executable provider/models</span><strong class="good">{esc(snapshot['executable_candidate_count'])}</strong></div><div class="row"><span>Candidate health</span><strong>{esc(snapshot['healthy_candidates'])} healthy · {esc(snapshot['degraded_candidates'])} degraded</strong></div><div class="row"><span>Candidate exclusions</span><strong>{esc(snapshot['cooling_candidates'])} cooling · {esc(snapshot['unavailable_candidates'])} unavailable</strong></div><div class="sub" style="margin-top:10px">{esc(snapshot['healthy_slots'])} healthy · {esc(snapshot['degraded_slots'])} degraded · {esc(snapshot['cooling_slots'])} cooling · {esc(snapshot['unavailable_slots'])} unavailable slots</div><div class="sub" style="margin-top:6px">{esc(snapshot['busy_workers'])} busy · {esc(snapshot['idle_workers'])} idle executable · {esc(snapshot['configured_workers'])} configured slots</div></div>
 <div class="panel"><h2>PR pipeline</h2>{pipeline_html}</div>
 <div class="panel"><h2>Throughput · last hour</h2><div class="row"><span>Opened</span><strong>{esc(throughput['opened_hour'])}</strong></div><div class="row"><span>Merged</span><strong>{esc(throughput['merged_hour'])}</strong></div><div class="row"><span>Net PR change</span><strong class="{'good' if throughput['net_hour'] < 0 else 'bad' if throughput['net_hour'] > 0 else ''}">{signed(int(throughput['net_hour']))}</strong></div></div>
 <div class="panel"><h2>Throughput · last 24h</h2><div class="row"><span>Opened</span><strong>{esc(throughput['opened_day'])}</strong></div><div class="row"><span>Merged</span><strong>{esc(throughput['merged_day'])}</strong></div><div class="row"><span>Net PR change</span><strong class="{'good' if throughput['net_day'] < 0 else 'bad' if throughput['net_day'] > 0 else ''}">{signed(int(throughput['net_day']))}</strong></div></div>
