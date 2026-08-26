@@ -1,7 +1,7 @@
 """Add bandwidth_updated_at column to sessions table.
 
 Revision ID: add_bandwidth_updated_at
-Revises: 1690_session_timezone
+Revises: c85500000002
 Create Date: 2026-08-25 00:00:00.000000
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "add_bandwidth_updated_at"
-down_revision: str | Sequence[str] | None = "1690_session_timezone"
+down_revision: str | Sequence[str] | None = "c85500000002"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

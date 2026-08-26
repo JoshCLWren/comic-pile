@@ -376,17 +376,54 @@ class TestSessionBandwidthInitialization:
     """Test that sessions are initialized with bandwidth state."""
 
     @pytest.mark.asyncio
-    async def test_new_session_has_bandwidth_fields(self, async_db: AsyncSession) -> None:
-        """Newly created sessions should have bandwidth fields set."""
+    async def test_new_session_without_evidence_stays_unset(
+        self, async_db: AsyncSession
+    ) -> None:
+        """Sessions without comparable history keep NULL bandwidth columns.
+
+        Persisting a zero-confidence pseudo-inference would misreport state and
+        permanently lock the session away from later backfill, so sparse or
+        missing history must leave the canonical default (unset) in place.
+        """
         user = await _create_user(async_db)
 
         from comic_pile.session import get_or_create
 
         session = await get_or_create(async_db, user.id, existing_user=user)
 
-        assert session.predicted_bandwidth is not None
-        assert session.active_bandwidth is not None
+        assert session.predicted_bandwidth is None
+        assert session.active_bandwidth is None
+        assert session.bandwidth_confidence is None
+        assert session.bandwidth_source is None
+        assert session.bandwidth_version is None
+        assert session.bandwidth_updated_at is None
+
+    @pytest.mark.asyncio
+    async def test_new_session_with_evidence_infers_bandwidth(
+        self, async_db: AsyncSession
+    ) -> None:
+        """A user with enough light-history evidence gets inferred bandwidth."""
+        user = await _create_user(async_db)
+        thread = await _create_thread(async_db, user.id, "Quick Read")
+
+        history = Session(start_die=6, user_id=user.id)
+        async_db.add(history)
+        await async_db.flush()
+
+        now = datetime.now(UTC)
+        for i in range(5):
+            roll_time = now - timedelta(days=10 - i)
+            rate_time = roll_time + timedelta(minutes=7 + i)
+            await _seed_roll_rate_pair(async_db, history.id, thread.id, roll_time, rate_time)
+
+        from comic_pile.session import get_or_create
+
+        session = await get_or_create(async_db, user.id, existing_user=user)
+
+        assert session.predicted_bandwidth == "light"
+        assert session.active_bandwidth == "light"
         assert session.bandwidth_confidence is not None
+        assert session.bandwidth_confidence > 0.0
         assert session.bandwidth_source == "inferred"
         assert session.bandwidth_version == str(BANDWIDTH_VERSION)
         assert session.bandwidth_updated_at is not None
@@ -395,12 +432,24 @@ class TestSessionBandwidthInitialization:
     async def test_existing_session_not_overwritten(self, async_db: AsyncSession) -> None:
         """Reusing an existing session should not overwrite bandwidth state."""
         user = await _create_user(async_db)
+        thread = await _create_thread(async_db, user.id, "Steady Read")
+
+        history = Session(start_die=6, user_id=user.id)
+        async_db.add(history)
+        await async_db.flush()
+
+        now = datetime.now(UTC)
+        for i in range(4):
+            roll_time = now - timedelta(days=10 - i)
+            rate_time = roll_time + timedelta(minutes=8)
+            await _seed_roll_rate_pair(async_db, history.id, thread.id, roll_time, rate_time)
 
         from comic_pile.session import get_or_create
 
         session1 = await get_or_create(async_db, user.id, existing_user=user)
         original_bw = session1.predicted_bandwidth
         original_conf = session1.bandwidth_confidence
+        assert original_bw is not None
 
         # Reuse the same session
         session2 = await get_or_create(async_db, user.id, existing_user=user)
@@ -413,11 +462,23 @@ class TestSessionBandwidthInitialization:
     async def test_bandwidth_persists_across_refreshes(self, async_db: AsyncSession) -> None:
         """Bandwidth state should persist and not change on refresh."""
         user = await _create_user(async_db)
+        thread = await _create_thread(async_db, user.id, "Persistent Read")
+
+        history = Session(start_die=6, user_id=user.id)
+        async_db.add(history)
+        await async_db.flush()
+
+        now = datetime.now(UTC)
+        for i in range(4):
+            roll_time = now - timedelta(days=10 - i)
+            rate_time = roll_time + timedelta(minutes=9)
+            await _seed_roll_rate_pair(async_db, history.id, thread.id, roll_time, rate_time)
 
         from comic_pile.session import get_or_create
 
         session = await get_or_create(async_db, user.id, existing_user=user)
         original_bw = session.predicted_bandwidth
+        assert original_bw is not None
 
         await async_db.refresh(session)
         assert session.predicted_bandwidth == original_bw
@@ -450,7 +511,7 @@ class TestBootstrapBandwidthExposure:
     async def test_bootstrap_bandwidth_values_are_valid(
         self, auth_client: AsyncClient, sample_data: dict
     ) -> None:
-        """Bandwidth values in bootstrap are valid enum values."""
+        """Bandwidth values in bootstrap are valid enum values or safely unset."""
         response = await auth_client.get("/api/roll/bootstrap")
         assert response.status_code == 200
 
@@ -458,26 +519,47 @@ class TestBootstrapBandwidthExposure:
         valid_bandwidths = {"light", "balanced", "deep"}
         valid_sources = {"inferred", "manual", "snooze", "quiz"}
 
-        assert data["predicted_bandwidth"] in valid_bandwidths
-        assert data["active_bandwidth"] in valid_bandwidths
-        assert isinstance(data["bandwidth_confidence"], (int, float))
-        assert 0.0 <= data["bandwidth_confidence"] <= 1.0
-        assert data["bandwidth_source"] in valid_sources
-        assert isinstance(data["bandwidth_version"], int)
+        assert data["predicted_bandwidth"] in valid_bandwidths | {None}
+        assert data["active_bandwidth"] in valid_bandwidths | {None}
+        assert data["bandwidth_confidence"] is None or (
+            isinstance(data["bandwidth_confidence"], (int, float))
+            and 0.0 <= data["bandwidth_confidence"] <= 1.0
+        )
+        assert data["bandwidth_source"] in valid_sources | {None}
+        assert data["bandwidth_version"] is None or isinstance(data["bandwidth_version"], int)
 
     @pytest.mark.asyncio
     async def test_bootstrap_bandwidth_matches_session(
-        self, auth_client: AsyncClient, sample_data: dict
+        self, auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
     ) -> None:
         """Bootstrap bandwidth matches the underlying session state."""
+        # Seed enough light-history evidence for inference to persist state.
+        now = datetime.now(UTC)
+        for i in range(3):
+            roll_time = now - timedelta(hours=4 - i)
+            rate_time = roll_time + timedelta(minutes=6 + i)
+            await _seed_roll_rate_pair(
+                async_db, sample_data["sessions"][0].id, sample_data["threads"][0].id,
+                roll_time, rate_time,
+            )
+        await async_db.commit()
+
         response = await auth_client.get("/api/roll/bootstrap")
         assert response.status_code == 200
 
         data = response.json()
-        # Bandwidth should be consistent
-        assert data["predicted_bandwidth"] == data["active_bandwidth"] or True
-        # Source should always be inferred for new sessions
+        nested = data["bandwidth"]
+        # Flat acceptance fields must mirror the canonical nested state.
+        assert data["predicted_bandwidth"] == nested["predicted_bandwidth"]
+        assert data["active_bandwidth"] == nested["active_bandwidth"]
+        assert data["bandwidth_confidence"] == nested["confidence"]
+        assert data["bandwidth_source"] == nested["source"]
+
+        # Seeded evidence yields a real inference, not the unset default.
+        assert data["predicted_bandwidth"] == "light"
+        assert data["active_bandwidth"] == "light"
         assert data["bandwidth_source"] == "inferred"
+        assert nested["mode_version"] == str(BANDWIDTH_VERSION)
 
 
 # ---------------------------------------------------------------------------

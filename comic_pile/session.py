@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_session_settings
 from app.models import Event, Issue, Session, Snapshot, Thread, User
 from app.performance_diagnostics import get_request_diagnostics
-from app.services.bandwidth import BANDWIDTH_VERSION, infer_bandwidth
+from app.services.bandwidth import BANDWIDTH_VERSION, MIN_EVIDENCE_THRESHOLD, infer_bandwidth
 from app.services.snapshot_contract import USES_ISSUE_TRACKING_KEY
 
 logger = logging.getLogger(__name__)
@@ -280,11 +280,17 @@ async def _ensure_session_bandwidth(
     session: Session,
     user_id: int,
 ) -> bool:
-    """Populate Phase 2 bandwidth fields when a session lacks them.
+    """Populate Phase 2 bandwidth fields when real evidence exists.
 
     Sessions created before this feature (or outside ``get_or_create``) carry
     NULL bandwidth columns. Backfill them once so bootstrap and roll responses
     always expose the same canonical state without rewriting valid values.
+
+    Inference only persists when the user has at least
+    ``MIN_EVIDENCE_THRESHOLD`` comparable historical decisions. Sparse or
+    missing history leaves the columns NULL so downstream consumers record the
+    honest default state instead of a zero-confidence pseudo-inference, and a
+    later session resolution can backfill once evidence accumulates.
 
     Args:
         db: Async database session used for inference queries.
@@ -292,29 +298,29 @@ async def _ensure_session_bandwidth(
         user_id: Owning user whose reading history drives inference.
 
     Returns:
-        True when bandwidth fields were newly written, False when already set.
+        True when bandwidth fields were newly written, False when already set
+        or when no persistable inference exists yet.
     """
     if session.predicted_bandwidth is not None and session.bandwidth_version is not None:
         return False
 
     try:
         inference = await infer_bandwidth(db, user_id)
-        predicted = inference.predicted
-        confidence = inference.confidence
-        source = inference.source
     except Exception:
         logger.warning(
-            "Bandwidth inference failed for user %d, defaulting to balanced",
+            "Bandwidth inference failed for user %d; leaving bandwidth unset",
             user_id,
+            exc_info=True,
         )
-        predicted = "balanced"
-        confidence = 0.0
-        source = "inferred"
+        return False
 
-    session.predicted_bandwidth = predicted
-    session.active_bandwidth = predicted
-    session.bandwidth_confidence = confidence
-    session.bandwidth_source = source
+    if inference.evidence_count < MIN_EVIDENCE_THRESHOLD:
+        return False
+
+    session.predicted_bandwidth = inference.predicted
+    session.active_bandwidth = inference.predicted
+    session.bandwidth_confidence = inference.confidence
+    session.bandwidth_source = inference.source
     session.bandwidth_version = str(BANDWIDTH_VERSION)
     session.bandwidth_updated_at = datetime.now(UTC)
     return True

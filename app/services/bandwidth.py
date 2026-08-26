@@ -22,8 +22,10 @@ logger = logging.getLogger(__name__)
 BandwidthLevel = Literal["light", "balanced", "deep"]
 BandwidthSource = Literal["inferred", "manual", "snooze", "quiz"]
 
-# Minimum number of comparable historical decisions required for inference
-_MIN_EVIDENCE_THRESHOLD = 3
+# Minimum number of comparable historical decisions required for inference.
+# Below this threshold no bandwidth state is persisted: the session keeps NULL
+# columns so consumers treat it as unset/default instead of a real inference.
+MIN_EVIDENCE_THRESHOLD = 3
 
 # Confidence thresholds for non-neutral predictions
 _HIGH_CONFIDENCE_THRESHOLD = 0.7
@@ -160,7 +162,7 @@ async def infer_bandwidth(
             }
         )
 
-    if len(comparable_decisions) < _MIN_EVIDENCE_THRESHOLD:
+    if len(comparable_decisions) < MIN_EVIDENCE_THRESHOLD:
         return _neutral_result(evidence_count=len(comparable_decisions))
 
     # Count snooze events for effort-band analysis
