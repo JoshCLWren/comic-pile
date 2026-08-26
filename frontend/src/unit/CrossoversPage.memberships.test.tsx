@@ -182,7 +182,7 @@ describe('CrossoversPage membership editing', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add thread' }))
     expect(await screen.findByText('Uncanny X-Men (whole series)')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Remove issue 31 from Annihilation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Nova #2 from Annihilation' }))
     await waitFor(() => expect(screen.queryByText('Nova #2')).not.toBeInTheDocument())
     expect(screen.getByRole('button', { name: /Secret Invasion.*1 member/ })).toBeInTheDocument()
   })
@@ -270,7 +270,7 @@ describe('CrossoversPage membership editing', () => {
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Remove issue 31 from Annihilation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Nova #2 from Annihilation' }))
     await waitFor(() => expect(screen.queryByText('Nova #2')).not.toBeInTheDocument())
     expect(api.removeMember).toHaveBeenCalledWith(7, 1)
     expect(screen.getByText('Annihilation')).toBeInTheDocument()
