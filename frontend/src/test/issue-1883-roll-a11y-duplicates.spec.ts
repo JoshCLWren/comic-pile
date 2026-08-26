@@ -1,4 +1,5 @@
-import { type APIRequestContext, type Page, test, expect } from './fixtures';
+import { test, expect } from './fixtures';
+import type { APIRequestContext, Page } from '@playwright/test';
 import {
   createThread,
   generateTestUser,

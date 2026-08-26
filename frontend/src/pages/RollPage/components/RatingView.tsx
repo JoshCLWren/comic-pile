@@ -1,5 +1,5 @@
 import type { ReadingOrder } from '../../../services/api-reading-orders'
-import type { ConnectedThreadInfo } from '../../../types'
+import type { ConnectedThreadInfo, ReaderContextResponse } from '../../../types'
 import type { RatingThread } from '../types'
 import { ComicPillar } from './ComicPillar'
 import { ReadingContextPillar } from './ReadingContextPillar'
@@ -26,6 +26,8 @@ interface RatingViewProps {
   onSnooze: () => void
   onCancel: () => void
   onRefreshThread: () => void
+  readerContext: ReaderContextResponse | null
+  isReaderContextLoading: boolean
 }
 
 export function RatingView({
@@ -45,6 +47,8 @@ export function RatingView({
   onSnooze,
   onCancel,
   onRefreshThread,
+  readerContext,
+  isReaderContextLoading,
 }: RatingViewProps) {
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
   const hasReadingContextContent = readingOrders.length > 0 || connectedThreads.length > 0
@@ -70,6 +74,8 @@ export function RatingView({
           onRefreshThread={onRefreshThread}
           rolledResult={rolledResult}
           currentDie={currentDie}
+          readerContext={readerContext}
+          isReaderContextLoading={isReaderContextLoading}
         />
 
         <YourContextPillar
@@ -78,6 +84,8 @@ export function RatingView({
           rating={rating}
           predictedDie={predictedDie}
           onUpdateRating={onUpdateRating}
+          readerContext={readerContext}
+          isLoading={isReaderContextLoading}
         />
 
         <div
