@@ -451,7 +451,23 @@ class TestInferTasteBankPositive:
     ) -> None:
         """Strong repeated above-baseline ratings should produce positive affinity."""
         user = await _create_user(async_db, username="positive_affinity_1")
-        thread = await _create_thread(async_db, user, title="Spider-Man", queue_pos=1)
+
+        # Establish baseline with neutral ratings on different content
+        baseline_thread = await _create_thread(async_db, user, title="Baseline Series", queue_pos=1)
+        baseline_issue = await _create_issue(async_db, baseline_thread, number="1")
+        await _add_confirmed_identity(
+            async_db,
+            baseline_issue,
+            {"publisher": "Baseline Comics", "cover_date": "2000-01-01"},
+        )
+        baseline_session = await _create_session(async_db, user)
+        for rating in [3.0, 3.0, 3.0]:
+            await _add_rate_event(async_db, user, baseline_thread, baseline_issue, rating, baseline_session.id)
+            baseline_thread.issues_remaining = max(0, baseline_thread.issues_remaining - 1)
+        await async_db.commit()
+
+        # Now test feature with above-baseline ratings
+        thread = await _create_thread(async_db, user, title="Spider-Man", queue_pos=2)
         issue = await _create_issue(async_db, thread, number="1")
         await _add_confirmed_identity(
             async_db,
@@ -463,7 +479,6 @@ class TestInferTasteBankPositive:
             },
         )
 
-        user_baseline = 3.0
         session = await _create_session(async_db, user)
 
         for _ in range(6):

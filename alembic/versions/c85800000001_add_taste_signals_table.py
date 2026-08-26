@@ -1,7 +1,7 @@
 """Add the taste_signals table for the Taste Bank inference model.
 
 Revision ID: c85800000001
-Revises: c85700000001_add_taste_evidence
+Revises: c85400000001
 Create Date: 2026-08-26 00:00:00.000000
 
 """
@@ -9,11 +9,12 @@ Create Date: 2026-08-26 00:00:00.000000
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy import ForeignKey
 
 from alembic import op
 
 revision: str = "c85800000001"
-down_revision: str | None = "c85700000001"
+down_revision: str | Sequence[str] | None = "c85400000001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -26,8 +27,8 @@ def upgrade() -> None:
         sa.Column(
             "user_id",
             sa.Integer(),
+            ForeignKey("users.id", ondelete="CASCADE", name="fk_taste_signal_user_id_users"),
             nullable=False,
-            ForeignKey("users.id", name="fk_taste_signal_user_id_users", ondelete="CASCADE"),
         ),
         sa.Column(
             "signal_type",
