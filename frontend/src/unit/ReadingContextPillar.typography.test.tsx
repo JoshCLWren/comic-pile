@@ -32,6 +32,12 @@ vi.mock('../pages/RollPage/components/ReadingOrderGroups', () => ({
 vi.mock('../pages/RollPage/components/ReadingRouteExplanation', () => ({
   ReadingRouteExplanation: () => null,
 }))
+vi.mock('../hooks/useContinuityReadiness', () => ({
+  useContinuityReadiness: () => ({ readiness: null, isLoading: false, error: null, refetch: vi.fn() }),
+}))
+vi.mock('../pages/RollPage/components/ReadingPathPanel', () => ({
+  ReadingPathPanel: () => null,
+}))
 
 const getReaderContextMock = issuesApi.getReaderContext as ReturnType<typeof vi.fn>
 

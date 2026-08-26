@@ -641,6 +641,10 @@ export interface ReaderContextEdge {
   target_thread_id: number | null
   source_label: string | null
   target_label: string | null
+  /** Owned read status of the source endpoint ("read"/"unread"), when resolvable */
+  source_status?: string | null
+  /** Owned read status of the target endpoint ("read"/"unread"), when resolvable */
+  target_status?: string | null
   note: string | null
   explanation: string | null
 }
