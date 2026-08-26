@@ -6,7 +6,7 @@ export const RELEASE_PAGE_SIZE = 20
 const TICKET_REFERENCE_PATTERN = /(?<![\w&])#\d{1,7}\b/g
 const SCHEMA_IDENTIFIER_PATTERN = /\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/g
 const PHASE_TERMINOLOGY_PATTERN =
-  /\bphases?\s+(?:\d+(?:\.\d+)*|one|two|three|four|five|six|seven|eight|nine|ten)(?:\s+(?:and|or)\s+(?:\d+(?:\.\d+)*|one|two|three|four|five|six|seven|eight|nine|ten))?\b/gi
+  /\bphases?\s+(?:\d+(?:\.\d+)*|one|two|three|four|five|six|seven|eight|nine|ten)(?:(?:\s+(?:and|or)\s+(?:\d+(?:\.\d+)*|one|two|three|four|five|six|seven|eight|nine|ten)))?\b/gi
 
 export const UNFINISHED_WORK_PATTERN =
   /\b(?:incomplete|unfinished|todo|wip|not yet implemented)\b/i
