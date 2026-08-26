@@ -25,6 +25,7 @@ on:
       - '.github/scripts/factory-gh-rest-shim.sh'
       - '.github/scripts/free-model-factory-worker.sh'
       - '.github/scripts/free-model-factory-worker-primitives.sh'
+      - '.github/scripts/factory_provider_candidates.py'
       - '.github/scripts/kilo-auto-factory-run.sh'
       - '.github/free-model-factories.tsv'
 
