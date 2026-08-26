@@ -36,6 +36,28 @@ async def _create_session_with_thread(
     return session, thread
 
 
+async def _add_thread_to_session(
+    async_db: AsyncSession,
+    session: SessionModel,
+    user_id: int,
+    *,
+    title: str = "Test Thread",
+    queue_position: int = 1,
+) -> Thread:
+    """Add a thread to an existing session."""
+    thread = Thread(
+        title=title,
+        format="Comic",
+        issues_remaining=5,
+        queue_position=queue_position,
+        status="active",
+        user_id=user_id,
+    )
+    async_db.add(thread)
+    await async_db.flush()
+    return thread
+
+
 def _add_roll_event(
     async_db: AsyncSession,
     session_id: int,
@@ -132,8 +154,8 @@ async def test_consecutive_cycles_link_each_snooze_to_its_own_roll(
     session, thread_a = await _create_session_with_thread(
         async_db, user.id, title="Thread A", queue_position=1
     )
-    _, thread_b = await _create_session_with_thread(
-        async_db, user.id, title="Thread B", queue_position=2
+    thread_b = await _add_thread_to_session(
+        async_db, session, user.id, title="Thread B", queue_position=2
     )
 
     roll_a = _add_roll_event(async_db, session.id, thread_a.id)
@@ -211,8 +233,8 @@ async def test_snooze_does_not_link_to_other_threads_roll(
     session, thread_a = await _create_session_with_thread(
         async_db, user.id, title="Rolled Thread", queue_position=1
     )
-    _, thread_b = await _create_session_with_thread(
-        async_db, user.id, title="Manually Pending Thread", queue_position=2
+    thread_b = await _add_thread_to_session(
+        async_db, session, user.id, title="Manually Pending Thread", queue_position=2
     )
 
     other_roll = _add_roll_event(async_db, session.id, thread_a.id)
@@ -284,6 +306,7 @@ async def test_snooze_source_roll_survives_later_session_reads(
     session, thread = await _create_session_with_thread(async_db, user.id)
 
     roll_event = _add_roll_event(async_db, session.id, thread.id)
+    await async_db.flush()  # Ensure roll_event.id is assigned
     linked_snooze = Event(
         type="snooze",
         session_id=session.id,
