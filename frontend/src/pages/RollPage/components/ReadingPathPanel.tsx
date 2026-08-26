@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import type { ReaderContextEdge, ReaderContextResponse } from '../../../types'
-import type { PathStep } from '../readingPath'
 import {
   buildPrerequisiteLanes,
   classifyEdgesRelativeToCurrent,
@@ -81,14 +80,24 @@ export function ReadingPathPanel({
     return fallbackAnchorLabel
   }, [currentIssue, seriesName, fallbackAnchorLabel])
 
-  const { fromCurrent, later } = classifyEdgesRelativeToCurrent(
-    context.local_chain.edges,
-    context.issue_id,
-  )
   const prerequisiteLanes = useMemo(
     () => buildPrerequisiteLanes(context.local_chain.edges, context.issue_id),
     [context],
   )
+  const { fromCurrent, later: rawLater } = classifyEdgesRelativeToCurrent(
+    context.local_chain.edges,
+    context.issue_id,
+  )
+  const later = useMemo(() => {
+    if (prerequisiteLanes.length === 0) return rawLater
+    const prerequisiteIds = new Set(prerequisiteLanes.flatMap((lane) => lane.map((step) => step.issueId)))
+    // Prerequisites that are two hops away (e.g. MM6 -> Evil1 -> current) appear in rawLater
+    // but must not be rendered as downstream context or they compete with the anchored path.
+    return rawLater.filter(
+      (edge) =>
+        !prerequisiteIds.has(edge.source_issue_id) && !prerequisiteIds.has(edge.target_issue_id),
+    )
+  }, [prerequisiteLanes, rawLater])
 
   const blockerLabels = useMemo(() => {
     if (!readinessState.readiness || readinessState.readiness.is_readable) return []
