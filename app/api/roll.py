@@ -243,7 +243,7 @@ async def roll_dice(
         intent_confidence=1.0 if has_explicit_mode else 0.0,
         bandwidth=normalize_bandwidth(selection_bandwidth).value,
         bandwidth_source=current_session.bandwidth_source or "default",
-        bandwidth_confidence=1.0 if current_session.active_bandwidth else 0.0,
+        bandwidth_confidence=current_session.bandwidth_confidence or 0.0,
         candidate_factors=[
             CandidateFactor(
                 candidate_id=breakdown.candidate_id,
