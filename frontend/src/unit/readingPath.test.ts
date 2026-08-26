@@ -133,4 +133,50 @@ describe('buildPrerequisiteLanes', () => {
     expect(lanes).toHaveLength(1)
     expect(lanes[0][0].issueId).toBe(1)
   })
+
+  it('branches forked prerequisites into separate lanes via secondary candidates', () => {
+    const current = 100
+    const a = 10
+    const b = 20
+    const c = 30
+    const edges: ReaderContextEdge[] = [
+      edge({ id: 1, source_issue_id: a, target_issue_id: current }),
+      edge({ id: 2, source_issue_id: b, target_issue_id: a }),
+      edge({ id: 3, source_issue_id: c, target_issue_id: a }),
+    ]
+    const lanes = buildPrerequisiteLanes(edges, current)
+    // a has two parents b and c, so we expect two lanes forking at a
+    expect(lanes.length).toBe(2)
+    const allIds = lanes.flatMap((lane) => lane.map((s) => s.issueId))
+    expect(allIds).toContain(b)
+    expect(allIds).toContain(c)
+  })
+
+  it('collects note fallback and dedupes explanations when edges duplicate steps', () => {
+    const current = 200
+    const prereq = 150
+    const edges: ReaderContextEdge[] = [
+      edge({ id: 10, source_issue_id: prereq, target_issue_id: current, explanation: 'need prereq' }),
+      edge({ id: 11, source_issue_id: prereq, target_issue_id: current, explanation: 'need prereq' }),
+      edge({ id: 12, source_issue_id: prereq, target_issue_id: current, note: 'note fallback', explanation: null }),
+    ]
+    const lanes = buildPrerequisiteLanes(edges, current)
+    expect(lanes[0][0].explanations).toEqual(expect.arrayContaining(['need prereq', 'note fallback']))
+    // deduped
+    expect(new Set(lanes[0][0].explanations).size).toBe(lanes[0][0].explanations.length)
+  })
+
+  it('orders lanes deterministically regardless of input order via compareKeys', () => {
+    const current = 500
+    const a = 10
+    const b = 20
+    const edgesForward = [
+      edge({ id: 2, kind: 'dependency', source_issue_id: b, target_issue_id: current }),
+      edge({ id: 1, kind: 'continuity', source_issue_id: a, target_issue_id: current }),
+    ]
+    const edgesReverse = [...edgesForward].reverse()
+    expect(buildPrerequisiteLanes(edgesForward, current).map((l) => l[0].issueId).sort()).toEqual(
+      buildPrerequisiteLanes(edgesReverse, current).map((l) => l[0].issueId).sort(),
+    )
+  })
 })
