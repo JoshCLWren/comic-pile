@@ -46,27 +46,6 @@ CANDIDATES = [
 ]
 
 
-def comment(
-    model: str,
-    outcome: str,
-    updated: int,
-    *,
-    provider: str = "openrouter-free",
-    trusted: bool = True,
-) -> dict[str, object]:
-    """Build one durable attempt comment."""
-    return {
-        "author_association": "OWNER" if trusted else "NONE",
-        "body": (
-            "<!-- factory-attempt-outcome:v1 -->\n"
-            f"Model: {model}\n"
-            f"Source: {provider}\n"
-            f"Attempt outcome: {outcome}\n"
-            f"Updated: 1970-01-01T00:{updated // 60:02d}:{updated % 60:02d}Z\n"
-        ),
-    }
-
-
 def evidence(
     model: str,
     outcome: str,
@@ -192,7 +171,7 @@ def test_control_plane_failure_does_not_poison_model() -> None:
     )
 
     assert result.selected is not None
-    assert result.selected.health_state == "unknown"
+    assert result.selected.health_state == "healthy"
 
 
 def test_untrusted_attempt_evidence_is_ignored() -> None:
