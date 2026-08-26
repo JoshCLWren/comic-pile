@@ -249,9 +249,32 @@ def select_candidate(
         )
 
     states = {candidate.health_state for candidate in ranked}
-    if "cooling" in states:
+    evidence = latest_attempt_evidence(comments)
+    attempts = tuple(evidence.values())
+    providers = {candidate.provider for candidate in ranked}
+    provider_cooling = any(
+        _provider_state(provider, attempts, now_epoch=now_epoch) == "cooling"
+        for provider in providers
+    )
+    cooling_outcomes = {
+        item.outcome
+        for candidate in ranked
+        if candidate.health_state == "cooling"
+        for item in [evidence.get((candidate.provider, candidate.model))]
+        if item is not None
+    }
+    if provider_cooling:
         failure = "provider_unavailable"
-        detail = "all discovered candidates are cooling"
+        detail = "provider-wide evidence is cooling all discovered candidates"
+    elif "unknown_failure" in cooling_outcomes:
+        failure = "unknown_failure"
+        detail = "unknown candidate failures are still cooling"
+    elif "model_interruption" in cooling_outcomes:
+        failure = "model_interruption"
+        detail = "transient model interruptions are still cooling"
+    elif "cooling" in states:
+        failure = "unknown_failure"
+        detail = "all discovered candidates are cooling without safe attribution"
     elif states == {"unavailable"}:
         failure = "model_unavailable"
         detail = "all discovered candidates have permanent unavailable evidence"
