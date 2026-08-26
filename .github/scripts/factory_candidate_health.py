@@ -172,7 +172,7 @@ def rank_candidates(
     now_epoch: int,
 ) -> tuple[RankedCandidate, ...]:
     """Annotate discovered candidates with combined provider/model health."""
-    evidence = latest_attempt_evidence(comments)
+    evidence = latest_attempt_evidence(comment_list)
     attempts = tuple(evidence.values())
     ranked: list[RankedCandidate] = []
     for candidate in candidates:
@@ -224,7 +224,8 @@ def select_candidate(
     now_epoch: int,
 ) -> Selection:
     """Prefer healthy, then degraded, then unknown probe candidates."""
-    ranked = rank_candidates(candidates, comments, now_epoch=now_epoch)
+    comment_list = tuple(comments)
+    ranked = rank_candidates(candidates, comment_list, now_epoch=now_epoch)
     priority = {"healthy": 0, "degraded": 1, "unknown": 2}
     usable = [candidate for candidate in ranked if candidate.health_state in priority]
     if usable:
