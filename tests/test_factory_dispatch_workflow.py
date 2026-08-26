@@ -17,3 +17,4 @@ def test_push_smoke_workers_are_derived_from_current_provider_rows():
     assert "!seen[$2]++ {print $1}" in workflow
     assert '"$manifest"' in workflow
     assert ".github/scripts/factory_provider_candidates.py" in workflow
+    assert ".github/scripts/factory_candidate_health.py" in workflow
