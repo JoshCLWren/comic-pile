@@ -29,6 +29,7 @@ from app.schemas import (
     RollRequest,
     RollResponse,
 )
+from app.schemas.session import SessionMode, SessionBandwidthState, build_session_bandwidth_state
 from comic_pile.queue import get_roll_pool_rows
 from comic_pile.session import get_current_die_for_session, get_or_create
 
@@ -528,14 +529,39 @@ async def roll_bootstrap(
                 last_activity_at=stale_last_activity,
             )
 
+    # Build structured session mode and bandwidth state
+    session_mode = SessionMode(
+        active_bandwidth=current_session.active_bandwidth,
+        predicted_bandwidth=current_session.predicted_bandwidth,
+        bandwidth_confidence=current_session.bandwidth_confidence,
+        bandwidth_source=current_session.bandwidth_source,
+        bandwidth_version=current_session.bandwidth_version,
+        active_intent=current_session.active_intent,
+        predicted_intent=current_session.predicted_intent,
+        intent_confidence=current_session.intent_confidence,
+        intent_source=current_session.intent_source,
+        intent_version=current_session.intent_version,
+        session_mode_correction_guidance=current_session.session_mode_correction_guidance,
+    )
+
+    bandwidth_state = build_session_bandwidth_state(
+        predicted_bandwidth=current_session.predicted_bandwidth,
+        active_bandwidth=current_session.active_bandwidth,
+        confidence=current_session.bandwidth_confidence,
+        source=current_session.bandwidth_source,
+        mode_version=current_session.bandwidth_version,
+    )
+
     return RollBootstrapResponse(
         current_die=die_size,
         manual_die=manual_die,
         pending_thread_id=pending_thread_id,
         last_rolled_result=last_rolled_result,
+        session_mode=session_mode,
         active_thread=active_thread,
         roll_pool=roll_pool,
         roll_recovery=roll_recovery,
+        bandwidth=bandwidth_state,
         snoozed_threads=snoozed_threads,
         snoozed_count=len(snoozed_threads),
         blocked_count=blocked_count,

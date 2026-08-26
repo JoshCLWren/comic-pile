@@ -365,7 +365,7 @@ class TestBandwidthInferenceResult:
             snooze_rate_by_band={"light": 0.0, "medium": 0.0, "deep": 0.0},
         )
         with pytest.raises(AttributeError):
-            object.__setattr__(result, "predicted", "light")
+            result.predicted = "light"
 
 # ---------------------------------------------------------------------------
 # Integration tests: session initialization
@@ -388,7 +388,7 @@ class TestSessionBandwidthInitialization:
         assert session.active_bandwidth is not None
         assert session.bandwidth_confidence is not None
         assert session.bandwidth_source == "inferred"
-        assert session.bandwidth_version == BANDWIDTH_VERSION
+        assert session.bandwidth_version == str(BANDWIDTH_VERSION)
         assert session.bandwidth_updated_at is not None
 
     @pytest.mark.asyncio
@@ -583,6 +583,7 @@ class TestRollBootstrapSchemaBandwidth:
     def test_schema_serializes_bandwidth_fields(self) -> None:
         """Schema correctly serializes bandwidth fields."""
         from app.schemas.roll import RollBootstrapResponse
+        from app.schemas.session import SessionMode, SessionBandwidthState
 
         response = RollBootstrapResponse(
             session_id=1,
@@ -591,7 +592,21 @@ class TestRollBootstrapSchemaBandwidth:
             manual_die=None,
             pending_thread_id=None,
             last_rolled_result=None,
+            session_mode=SessionMode(
+                active_bandwidth="light",
+                predicted_bandwidth="light",
+                bandwidth_confidence=0.8,
+                bandwidth_source="inferred",
+                bandwidth_version=str(BANDWIDTH_VERSION),
+            ),
             active_thread=None,
+            bandwidth=SessionBandwidthState(
+                predicted_bandwidth="light",
+                active_bandwidth="light",
+                confidence=0.8,
+                source="inferred",
+                mode_version=str(BANDWIDTH_VERSION),
+            ),
             roll_pool=[],
             snoozed_threads=[],
             snoozed_count=0,
@@ -616,6 +631,7 @@ class TestRollBootstrapSchemaBandwidth:
     def test_schema_defaults_bandwidth_to_none(self) -> None:
         """Schema defaults bandwidth fields to None when not provided."""
         from app.schemas.roll import RollBootstrapResponse
+        from app.schemas.session import SessionMode, SessionBandwidthState
 
         response = RollBootstrapResponse(
             session_id=1,
@@ -624,7 +640,15 @@ class TestRollBootstrapSchemaBandwidth:
             manual_die=None,
             pending_thread_id=None,
             last_rolled_result=None,
+            session_mode=SessionMode(),
             active_thread=None,
+            bandwidth=SessionBandwidthState(
+                predicted_bandwidth=None,
+                active_bandwidth=None,
+                confidence=None,
+                source=None,
+                mode_version=None,
+            ),
             roll_pool=[],
             snoozed_threads=[],
             snoozed_count=0,
