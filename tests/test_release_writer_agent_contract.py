@@ -67,6 +67,19 @@ def test_release_writer_helper_documents_all_commands() -> None:
         assert f"release_writer.py {command}" in agent_text, f"missing {command} docs"
 
 
+def test_release_writer_contract_requires_reader_facing_copy_rules() -> None:
+    """The release-writer instructions must demand reader-facing, spell-checked copy."""
+    agent_text = RELEASE_WRITER_AGENT.read_text(encoding="utf-8")
+    assert "State the user-visible change and its benefit" in agent_text
+    for forbidden_artifact in ("#1551", "source_roll_event_id", "Phase 2 and 3"):
+        assert f"Never include {forbidden_artifact}" in agent_text or (
+            f"`{forbidden_artifact}`" in agent_text
+        ), f"missing guidance about {forbidden_artifact}"
+    assert "incomplete fix" in agent_text
+    assert "loading states" in agent_text
+    assert "Spell-check every title, category, and summary" in agent_text
+
+
 def test_release_writer_all_read_helpers_are_get_only(monkeypatch) -> None:
     """All read-only helper commands (_recent, _pr, _files, _issues) use GET only."""
     import io
