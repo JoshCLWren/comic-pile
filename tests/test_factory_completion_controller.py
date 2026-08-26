@@ -199,6 +199,39 @@ def test_capacity_report_names_only_executable_candidates():
             "health": "healthy",
         }
     ]
+    assert report["executable_slot_capacity"] == 1
+    assert report["candidate_health_counts"] == report["health_counts"]
+    assert report["executable_candidate_count"] == 1
+    assert report["executable_provider_models"] == [
+        {
+            "provider": "opencode-free",
+            "model": "mimo",
+            "health": "healthy",
+        }
+    ]
+
+
+def test_capacity_report_does_not_count_repeated_slots_as_distinct_candidates():
+    candidates = [
+        {"worker": "60", "provider": "openrouter-free", "model": "stealth/ox-alpha"},
+        {"worker": "61", "provider": "openrouter-free", "model": "stealth/ox-alpha"},
+        {"worker": "62", "provider": "openrouter-free", "model": "stealth/ox-alpha"},
+    ]
+    health = dict.fromkeys(("60", "61", "62"), ("success", 100))
+
+    report = controller.capacity_report(candidates, health, now_epoch=100)
+
+    assert report["executable_slot_capacity"] == 3
+    assert report["slot_health_counts"]["healthy"] == 3
+    assert report["executable_candidate_count"] == 1
+    assert report["candidate_health_counts"]["healthy"] == 1
+    assert report["executable_provider_models"] == [
+        {
+            "provider": "openrouter-free",
+            "model": "stealth/ox-alpha",
+            "health": "healthy",
+        }
+    ]
 
 
 def test_catalog_success_makes_peer_capability_slots_executable():
