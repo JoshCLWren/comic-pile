@@ -1,196 +1,141 @@
-"""Versioned recommendation-context snapshots attached to roll events.
+"""Bounded candidate-pool snapshots for versioned recommendation contexts.
 
-Every new roll event persists a small, versioned JSON snapshot describing what
-ComicPile knew at decision time. The payload is observational instrumentation
-for later analysis; building it never changes selection probabilities, dice
-behavior, queue movement, or snooze semantics.
+``app/services/reading_effort.py`` owns the recommendation-context payload
+contract and builds the selected-candidate snapshot. This module adds the
+bounded candidate-pool projection introduced by ``context_version = 2``
+(issue #1704) plus tolerant readers that normalize effort fields from any
+historical payload shape.
 
-Payload is bounded by the current die pool: only bounded candidate threads in
-exact selection order appear, with scalar decision-time fields. Full thread
-objects, descriptions, ComicVine payloads, covers, and other heavy metadata are
-never serialized here.
-
-Schema version history
-----------------------
-
-``context_version = 1``
-    Phase-0 baseline shape: algorithm version, die size, pool size, selection
-    method, session timezone/daypart when known, the ``selected`` block, and
-    the ordered ``candidates`` list. No effort fields.
-
-``context_version = 2`` (current)
-    Extends v1 with reading-effort estimates captured at decision time:
-
-    - ``selected.effort``: ``{minutes, band, source, confidence}``.
-    - Each entry in ``candidates`` additionally carries ``effort_minutes``,
-      ``effort_band``, ``effort_source``, and ``effort_confidence``.
+The candidate list mirrors the current die pool in exact selection order and
+carries only scalar decision-time fields. Full thread objects, descriptions,
+ComicVine payloads, covers, and other heavy metadata are never serialized.
 
 Compatibility contract
 ----------------------
 
 - Historical events with ``recommendation_context IS NULL`` remain valid.
-- v1 payloads without effort fields remain valid readers of every consumer;
-  use :func:`selected_effort_from_context` and
-  :func:`candidate_efforts_from_context`, which normalize missing or malformed
-  effort fields to neutral ``None`` values instead of raising.
+- v1 payloads without a ``candidates`` list remain valid; readers normalize
+  missing or malformed effort fields to neutral values instead of raising.
 - New fields may be added within a version; consumers must ignore unknown keys.
-- Any breaking shape change requires bumping :data:`RECOMMENDATION_CONTEXT_VERSION`.
+- Any breaking shape change requires bumping
+  :data:`~app.services.reading_effort.RECOMMENDATION_CONTEXT_VERSION`.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 from datetime import datetime
 
+from app.models import Thread
 from app.services.reading_effort import (
-    EFFORT_SOURCE_UNKNOWN,
+    RECOMMENDATION_CONTEXT_VERSION,
     EffortEstimate,
-    NEUTRAL_EFFORT_ESTIMATE,
+    neutral_estimate,
 )
 
-RECOMMENDATION_CONTEXT_VERSION = 2
-
-LEGACY_ALGORITHM_VERSION = "legacy-unweighted-dice-v1"
-
-SELECTION_METHOD_RANDOM = "random"
-SELECTION_METHOD_OVERRIDE = "override"
+EFFORT_SOURCE_UNKNOWN = "unknown"
 
 _CANDIDATE_EFFORT_KEYS = (
     "effort_minutes",
     "effort_band",
     "effort_source",
     "effort_confidence",
+    "effort_sample_count",
 )
 
 
-@dataclass(frozen=True)
-class ContextCandidate:
-    """Bounded decision-time facts about one candidate thread."""
-
-    thread_id: int
-    queue_position: int | None
-    last_rating: float | None
-    last_activity_at: datetime | None
-
-
 def _serialize_timestamp(value: datetime | None) -> str | None:
-    """Serialize a decision-time timestamp as an ISO-8601 string."""
+    """Serialize a decision-time timestamp as an ISO-8601 string.
+
+    Args:
+        value: Timestamp to serialize, if any.
+
+    Returns:
+        ISO-8601 string, or ``None`` when the timestamp is missing.
+    """
     if value is None:
         return None
     return value.isoformat()
 
 
-def _candidate_effort_fields(
-    candidate: ContextCandidate,
-    efforts_by_thread: Mapping[int, EffortEstimate],
-) -> dict[str, float | str | None]:
-    """Return the four bounded effort fields recorded for one candidate."""
-    estimate = efforts_by_thread.get(candidate.thread_id, NEUTRAL_EFFORT_ESTIMATE)
-    return {
-        "effort_minutes": estimate.minutes,
-        "effort_band": estimate.band,
-        "effort_source": estimate.source,
-        "effort_confidence": estimate.confidence,
-    }
-
-
-def build_recommendation_context(
+def attach_candidate_pool(
+    context: Mapping[str, object],
     *,
-    selection_method: str,
-    die_size: int,
-    candidates: Sequence[ContextCandidate],
-    selected_index: int,
-    result: int,
+    threads: Sequence[Thread],
     efforts_by_thread: Mapping[int, EffortEstimate],
-    algorithm_version: str = LEGACY_ALGORITHM_VERSION,
-    session_timezone: str | None = None,
-    local_hour: int | None = None,
-    daypart: str | None = None,
 ) -> dict[str, object]:
-    """Build the versioned recommendation-context snapshot for a roll event.
+    """Extend a selected-candidate snapshot with the bounded die pool.
+
+    Purely observational: the input mapping is not mutated, selection
+    probabilities are untouched, and every field is JSON-safe by construction.
 
     Args:
-        selection_method: How the roll chose its winner (``random`` or
-            ``override``).
-        die_size: Current die size bounding the candidate pool.
-        candidates: Bounded candidate threads in exact selection order.
-        selected_index: Zero-based index into ``candidates`` that won.
-        result: Recorded die result (1-based for random rolls, 0 for overrides).
-        efforts_by_thread: Reading-effort estimates keyed by thread ID;
-            candidates absent from the mapping record neutral/null effort.
-        algorithm_version: Identifier of the selection algorithm in effect.
-        session_timezone: Reader timezone name when known from the reading
-            session; ``None`` until #1690 lands.
-        local_hour: Local clock hour derived from the persisted timezone when
-            safely derivable; ``None`` otherwise.
-        daypart: Coarse local daypart label when derivable; ``None`` otherwise.
+        context: Snapshot produced by
+            :func:`~app.services.reading_effort.build_recommendation_context`.
+        threads: Bounded candidate threads in exact selection order. Must
+            include the selected thread so per-candidate effort covers it.
+        efforts_by_thread: Estimates keyed by thread ID; absent entries
+            record neutral effort.
 
     Returns:
-        JSON-safe context dictionary stamped with
-        :data:`RECOMMENDATION_CONTEXT_VERSION`.
+        A new dict stamped with the current
+        :data:`~app.services.reading_effort.RECOMMENDATION_CONTEXT_VERSION`
+        and an ordered ``candidates`` list carrying scalar decision-time
+        fields plus the five effort fields per candidate.
     """
-    if not candidates:
-        raise ValueError("Recommendation context requires at least the selected candidate")
-    if not 0 <= selected_index < len(candidates):
-        raise ValueError(
-            f"Selected index {selected_index} outside candidate pool size {len(candidates)}"
-        )
-
-    selected = candidates[selected_index]
-    selected_effort = efforts_by_thread.get(selected.thread_id, NEUTRAL_EFFORT_ESTIMATE)
-
-    return {
-        "context_version": RECOMMENDATION_CONTEXT_VERSION,
-        "algorithm_version": algorithm_version,
-        "selection_method": selection_method,
-        "die_size": die_size,
-        "pool_size": len(candidates),
-        "session_timezone": session_timezone,
-        "local_hour": local_hour,
-        "daypart": daypart,
-        "selected": {
-            "thread_id": selected.thread_id,
-            "candidate_index": selected_index,
-            "result": result,
-            "queue_position": selected.queue_position,
-            "last_rating": selected.last_rating,
-            "last_activity_at": _serialize_timestamp(selected.last_activity_at),
-            "effort": {
-                "minutes": selected_effort.minutes,
-                "band": selected_effort.band,
-                "source": selected_effort.source,
-                "confidence": selected_effort.confidence,
-            },
-        },
-        "candidates": [
+    neutral = neutral_estimate()
+    candidates: list[dict[str, object]] = []
+    for thread in threads:
+        estimate = efforts_by_thread.get(thread.id, neutral)
+        candidates.append(
             {
-                "thread_id": candidate.thread_id,
-                "queue_position": candidate.queue_position,
-                "last_rating": candidate.last_rating,
-                "last_activity_at": _serialize_timestamp(candidate.last_activity_at),
-                **_candidate_effort_fields(candidate, efforts_by_thread),
+                "thread_id": thread.id,
+                "queue_position": thread.queue_position,
+                "last_rating": thread.last_rating,
+                "last_activity_at": _serialize_timestamp(thread.last_activity_at),
+                "effort_minutes": (
+                    round(estimate.minutes, 2) if estimate.minutes is not None else None
+                ),
+                "effort_band": estimate.band,
+                "effort_source": estimate.source.value,
+                "effort_confidence": round(estimate.confidence, 3),
+                "effort_sample_count": estimate.sample_count,
             }
-            for candidate in candidates
-        ],
-    }
-
-
-def _neutral_effort_payload() -> dict[str, float | str | None]:
-    """Return the neutral selected-candidate effort payload."""
-    return {
-        "minutes": None,
-        "band": None,
-        "source": EFFORT_SOURCE_UNKNOWN,
-        "confidence": None,
-    }
+        )
+    enriched = dict(context)
+    enriched["context_version"] = RECOMMENDATION_CONTEXT_VERSION
+    enriched["candidates"] = candidates
+    return enriched
 
 
 def _numeric_or_none(value: object) -> float | None:
-    """Return the value as a float when it is a real number, else ``None``."""
+    """Coerce a stored JSON value to a float, or ``None`` when not numeric.
+
+    Args:
+        value: Raw value from a persisted payload.
+
+    Returns:
+        The value as a float; ``None`` for missing, boolean, or non-numeric
+        values.
+    """
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
     return float(value)
+
+
+def _int_or_none(value: object) -> int | None:
+    """Coerce a stored JSON value to an int, or ``None`` when not integral.
+
+    Args:
+        value: Raw value from a persisted payload.
+
+    Returns:
+        The value as an int; ``None`` for missing, boolean, or non-integral
+        values.
+    """
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value
 
 
 def selected_effort_from_context(
@@ -198,9 +143,10 @@ def selected_effort_from_context(
 ) -> dict[str, float | str | None]:
     """Normalize the selected-candidate effort block from any context version.
 
-    Tolerates historical events with no context, v1 payloads without effort
-    fields, and malformed payloads, so analysis code never has to special-case
-    legacy rows.
+    Reads the flat ``selected_candidate`` effort fields used by every current
+    version and tolerates historical events with no context, malformed
+    payloads, or missing fields, so analysis code never special-cases legacy
+    rows.
 
     Args:
         context: Stored recommendation-context payload, if any.
@@ -209,22 +155,36 @@ def selected_effort_from_context(
         Dict with ``minutes``, ``band``, ``source``, and ``confidence`` keys;
         neutral values when absent or unreadable.
     """
-    neutral = _neutral_effort_payload()
     if not isinstance(context, Mapping):
-        return neutral
+        return {"minutes": None, "band": None, "source": EFFORT_SOURCE_UNKNOWN, "confidence": None}
 
-    selected = context.get("selected")
+    selected = context.get("selected_candidate")
     if not isinstance(selected, Mapping):
-        return neutral
+        selected = context.get("selected")
+    if not isinstance(selected, Mapping):
+        return {"minutes": None, "band": None, "source": EFFORT_SOURCE_UNKNOWN, "confidence": None}
 
-    effort = selected.get("effort")
-    if not isinstance(effort, Mapping):
-        return neutral
+    nested = selected.get("effort")
+    if isinstance(nested, Mapping):
+        selected = nested
+        minutes_key, band_key, source_key, confidence_key = (
+            "minutes",
+            "band",
+            "source",
+            "confidence",
+        )
+    else:
+        minutes_key, band_key, source_key, confidence_key = (
+            "effort_minutes",
+            "effort_band",
+            "effort_source",
+            "effort_confidence",
+        )
 
-    minutes = effort.get("minutes")
-    band = effort.get("band")
-    source = effort.get("source", EFFORT_SOURCE_UNKNOWN)
-    confidence = effort.get("confidence")
+    minutes = selected.get(minutes_key)
+    band = selected.get(band_key)
+    source = selected.get(source_key, EFFORT_SOURCE_UNKNOWN)
+    confidence = selected.get(confidence_key)
 
     return {
         "minutes": _numeric_or_none(minutes),
@@ -243,8 +203,8 @@ def candidate_efforts_from_context(
         context: Stored recommendation-context payload, if any.
 
     Returns:
-        One dict per stored candidate with ``thread_id`` plus the four
-        normalized effort keys. Missing or non-dict candidate lists yield an
+        One dict per stored candidate with ``thread_id`` plus the five
+        normalized effort keys. Missing or non-list candidate entries yield an
         empty list, matching the bounded-pool contract.
     """
     if not isinstance(context, Mapping):
@@ -258,21 +218,14 @@ def candidate_efforts_from_context(
     for raw in raw_candidates:
         if not isinstance(raw, Mapping):
             continue
-        raw_thread_id = raw.get("thread_id")
-        thread_id = (
-            raw_thread_id
-            if isinstance(raw_thread_id, int) and not isinstance(raw_thread_id, bool)
-            else None
-        )
-        effort_values: dict[str, float | str | None] = dict.fromkeys(
-            _CANDIDATE_EFFORT_KEYS,  # type: ignore[arg-type]
-            None,  # type: ignore[arg-type]
-        )
+        effort_values: dict[str, float | str | int | None] = {
+            key: None for key in _CANDIDATE_EFFORT_KEYS
+        }
         for key in _CANDIDATE_EFFORT_KEYS:
             value = raw.get(key)
             if isinstance(value, bool):
                 continue
             if isinstance(value, (int, float, str)):
                 effort_values[key] = value
-        normalized.append({"thread_id": thread_id, **effort_values})
+        normalized.append({"thread_id": _int_or_none(raw.get("thread_id")), **effort_values})
     return normalized
