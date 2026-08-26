@@ -269,17 +269,37 @@ jobs:
             exit 1
           fi
 
-          candidate_index=$(( (10#$WORKER - 1) % candidate_count ))
-          model="$(jq -r --argjson index "$candidate_index" '.candidates[$index].model' <<< "$discovery")"
-          runtime_model="$(jq -r --argjson index "$candidate_index" '.candidates[$index].runtime_model' <<< "$discovery")"
+          discovery_file="$RUNNER_TEMP/factory-provider-discovery.json"
+          comments_file="$RUNNER_TEMP/factory-attempt-comments.json"
+          printf '%s\n' "$discovery" > "$discovery_file"
+          if ! gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
+            > "$comments_file"; then
+            printf 'control_plane_failure\tFactory health evidence could not be read\n' > "$discovery_outcome"
+            exit 1
+          fi
+
+          selection="$(python3 .github/scripts/factory_candidate_health.py \
+            --discovery "$discovery_file" --comments "$comments_file" \
+            --worker "$WORKER")"
+          model="$(jq -r '.selected.model // empty' <<< "$selection")"
+          runtime_model="$(jq -r '.selected.runtime_model // empty' <<< "$selection")"
+          health_state="$(jq -r '.selected.health_state // empty' <<< "$selection")"
+          if [[ -z "$model" || -z "$runtime_model" ]]; then
+            failure_outcome="$(jq -r '.failure_outcome // "unknown_failure"' <<< "$selection")"
+            failure_detail="$(jq -r '.detail // "candidate health selection failed"' <<< "$selection")"
+            printf '%s\t%s\n' "$failure_outcome" "$failure_detail" > "$discovery_outcome"
+            exit 1
+          fi
+
           {
             echo "model=$model"
             echo "runtime_model=$runtime_model"
             echo "display=${SOURCE} · ${model}"
-            echo "reason=selected-from-live-provider-catalog"
+            echo "reason=selected-${health_state}-from-live-provider-catalog"
           } >> "$GITHUB_OUTPUT"
-          printf 'Factory %s selected executor: provider=%s model=%s runtime=%s\n' \
-            "$WORKER" "$SOURCE" "$model" "$runtime_model"
+          printf 'Factory %s selected executor: provider=%s model=%s runtime=%s health=%s\n' \
+            "$WORKER" "$SOURCE" "$model" "$runtime_model" "$health_state"
 
       - name: Report selected executor heartbeat
         if: always()
