@@ -153,7 +153,7 @@ async def roll_dice(
         )
         session_events = list(session_events_result.scalars().all())
 
-selected_index, max_bonus, candidate_weights = await weighted_momentum_selection(
+        selected_index, max_bonus, candidate_weights = await weighted_momentum_selection(
             db=db,
             bounded_rows=bounded_rows,
             user_id=user_id,
