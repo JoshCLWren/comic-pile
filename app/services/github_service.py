@@ -1,6 +1,6 @@
 """GitHub service for creating user feedback issues."""
 
-from github import Github
+from github import Github, GithubException
 
 from app.config import get_github_settings
 from app.schemas.bug_report import BugReportDiagnostics, ReportType
@@ -41,7 +41,7 @@ async def create_bug_report_issue(
     g = Github(settings.github_token)
     try:
         repo = g.get_repo(f"{settings.github_repo_owner}/{settings.github_repo_name}")
-    except Exception as e:
+    except GithubException as e:
         raise RuntimeError(f"Failed to access GitHub repository: {e.data}") from e
 
     report_label = "Feature request" if report_type == "feature" else "Bug report"
@@ -110,6 +110,6 @@ async def create_bug_report_issue(
             body=body,
             labels=_labels_for_report_type(report_type),
         )
-    except Exception as e:
+    except GithubException as e:
         raise RuntimeError(f"Failed to create GitHub issue: {e.data}") from e
     return issue.html_url
