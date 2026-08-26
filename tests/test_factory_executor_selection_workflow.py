@@ -24,7 +24,7 @@ def test_catalog_backed_providers_use_central_adapter() -> None:
 
 
 def test_catalog_backed_slots_share_provider_candidates() -> None:
-    \"\"\"Catalog-backed slots rank candidates across both supported providers.\"\"\"
+    """Catalog-backed slots rank candidates across both supported providers."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
     selector = workflow.split(
         "- name: Select execution candidate at dispatch time", maxsplit=1
@@ -33,7 +33,7 @@ def test_catalog_backed_slots_share_provider_candidates() -> None:
     assert "opencode-free|openrouter-free)" in selector
     assert "catalog_candidates='[]'" in selector
     assert "$left + $right | unique_by([.provider, .model])" in selector
-    assert "source=\\"$(jq -r '.selected.provider // empty'" in selector
+    assert ".selected.provider // empty" in selector
     assert "Selected unsupported catalog provider" in selector
 
 
@@ -80,9 +80,14 @@ def test_discovery_failures_publish_normalized_outcomes() -> None:
     """Catalog transport and eligibility failures are not generic failures."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
-    assert "provider_unavailable\\tOpenCode model discovery command failed" in workflow
-    assert "provider_unavailable\\tOpenRouter model catalog request failed" in workflow
-    assert "model_unavailable\\t%s catalog exposed no policy-eligible candidate" in workflow
+    assert "catalog_failures+=('OpenCode model discovery command failed')" in workflow
+    assert "catalog_failures+=('OpenRouter model catalog request failed')" in workflow
+    assert "provider_unavailable\\t%s" in workflow
+    assert "No catalog provider was executable" in workflow
+    assert (
+        "model_unavailable\\tLive catalogs exposed no policy-eligible candidate"
+        in workflow
+    )
     assert 'discovery_record="$(cat "$DISCOVERY_OUTCOME_FILE"' in workflow
     assert "attempt_outcome attempt_detail" in workflow
     assert "outcome='selection-failed'" in workflow
