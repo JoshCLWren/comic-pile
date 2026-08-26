@@ -1,38 +1,53 @@
-import { useCallback, useEffect, useRef } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import type { RollBootstrapResponse } from '../types/rollBootstrap'
-import { rollBootstrapApi } from '../services/rollBootstrapApi'
-import { useToast } from '../contexts/useToast'
-import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from './rollMutationReconciliation'
-import { queryKeys } from '../query/queryKeys'
-import { queryClient } from '../query/queryClient'
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { RollBootstrapResponse } from '../types/rollBootstrap';
+import { rollBootstrapApi } from '../services/rollBootstrapApi';
+import { useToast } from '../contexts/useToast';
+import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from './rollMutationReconciliation';
 
-const STORAGE_KEY_PREFIX = 'comic_pile_last_session_id'
+const STORAGE_KEY_PREFIX = 'comic_pile_last_session_id';
+
+/** Best-effort browser IANA timezone used to timestamp the reading session. */
+export function resolveBrowserTimezone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export function useRollBootstrap() {
-  const { showToast } = useToast()
-  const lastNotifiedSessionIdRef = useRef<number | null>(null)
-  const justReconciledRef = useRef<RollBootstrapResponse | null>(null)
-  const reconciliationExpiryRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [data, setData] = useState<RollBootstrapResponse | null>(null);
+  const [isPending, setIsPending] = useState(true);
+  const [isError, setIsError] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  const { showToast } = useToast();
+  const lastNotifiedSessionIdRef = useRef<number | null>(null);
+  const justReconciledRef = useRef<RollBootstrapResponse | null>(null);
+  const reconciliationExpiryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestGenerationRef = useRef(0);
 
-  const query = useQuery({
-    queryKey: queryKeys.roll.bootstrap(),
-    queryFn: async () => {
-      const result = await rollBootstrapApi.get()
+  const fetchBootstrap = useCallback(async () => {
+    const requestGeneration = ++requestGenerationRef.current;
+    setIsPending(true);
+    setIsError(false);
+    setError(null);
+    try {
+      const result = await rollBootstrapApi.get(resolveBrowserTimezone());
+      if (requestGeneration !== requestGenerationRef.current) return result;
 
-      const currentSessionId = result.session_id
-      const currentUserId = result.user_id ?? 'anonymous'
-      const storageKey = `${STORAGE_KEY_PREFIX}_${currentUserId}`
-      let storedSessionId: string | null = null
+      const currentSessionId = result.session_id;
+      const currentUserId = result.user_id ?? 'anonymous';
+      const storageKey = `${STORAGE_KEY_PREFIX}_${currentUserId}`;
+      let storedSessionId: string | null = null;
       try {
-        storedSessionId = localStorage.getItem(storageKey)
+        storedSessionId = localStorage.getItem(storageKey);
       } catch {
         // Session loading should still succeed when browser storage is unavailable.
       }
-      let previousSessionId: number | null = null
+      let previousSessionId: number | null = null;
       if (storedSessionId) {
-        const parsed = parseInt(storedSessionId, 10)
-        previousSessionId = Number.isFinite(parsed) ? parsed : null
+        const parsed = parseInt(storedSessionId, 10);
+        previousSessionId = Number.isFinite(parsed) ? parsed : null;
       }
 
       if (
@@ -40,65 +55,75 @@ export function useRollBootstrap() {
         currentSessionId !== previousSessionId &&
         currentSessionId !== lastNotifiedSessionIdRef.current
       ) {
-        showToast('Session started. Happy reading!', 'info')
-        lastNotifiedSessionIdRef.current = currentSessionId
+        showToast('Session started. Happy reading!', 'info');
+        lastNotifiedSessionIdRef.current = currentSessionId;
       }
 
       try {
-        localStorage.setItem(storageKey, currentSessionId.toString())
+        localStorage.setItem(storageKey, currentSessionId.toString());
       } catch {
         // Persisting the session ID is best effort and must not hide the API result.
       }
 
-      return result
-    },
-    staleTime: 30_000,
-    retry: false,
-  })
-
-  const refetchBootstrap = useCallback(async (): Promise<RollBootstrapResponse | undefined> => {
-    const reconciled = justReconciledRef.current
-    if (reconciled) {
-      justReconciledRef.current = null
-      if (reconciliationExpiryRef.current) {
-        clearTimeout(reconciliationExpiryRef.current)
-        reconciliationExpiryRef.current = null
+      setData(result);
+      return result;
+    } catch (err: unknown) {
+      const normalized = err instanceof Error ? err : new Error('Failed to fetch roll bootstrap');
+      if (requestGeneration === requestGenerationRef.current) {
+        setIsError(true);
+        setError(normalized);
       }
-      return reconciled
+      throw normalized;
+    } finally {
+      if (requestGeneration === requestGenerationRef.current) setIsPending(false);
+    }
+  }, [showToast]);
+
+  const refetchBootstrap = useCallback(async () => {
+    const reconciled = justReconciledRef.current;
+    if (reconciled) {
+      justReconciledRef.current = null;
+      if (reconciliationExpiryRef.current) {
+        clearTimeout(reconciliationExpiryRef.current);
+        reconciliationExpiryRef.current = null;
+      }
+      return reconciled;
     }
 
-    const result = await query.refetch()
-    return result.data
-  }, [query])
+    return fetchBootstrap();
+  }, [fetchBootstrap]);
+
+  useEffect(() => {
+    // Defer the request by one microtask so consumers can reliably observe the
+    // initial loading state before even an already-resolved test or cache value settles.
+    void Promise.resolve().then(fetchBootstrap).catch(() => undefined);
+  }, [fetchBootstrap]);
 
   useEffect(() => {
     const handleReconciledBootstrap = (event: Event) => {
-      const reconciled = (event as CustomEvent<RollBootstrapResponse>).detail
-      if (!reconciled) return
+      const reconciled = (event as CustomEvent<RollBootstrapResponse>).detail;
+      if (!reconciled) return;
 
-      justReconciledRef.current = reconciled
-      if (reconciliationExpiryRef.current) clearTimeout(reconciliationExpiryRef.current)
+      requestGenerationRef.current += 1;
+      justReconciledRef.current = reconciled;
+      if (reconciliationExpiryRef.current) clearTimeout(reconciliationExpiryRef.current);
       reconciliationExpiryRef.current = setTimeout(() => {
-        if (justReconciledRef.current === reconciled) justReconciledRef.current = null
-        reconciliationExpiryRef.current = null
-      }, 0)
+        if (justReconciledRef.current === reconciled) justReconciledRef.current = null;
+        reconciliationExpiryRef.current = null;
+      }, 0);
 
-      // Update the query cache directly
-      queryClient.setQueryData(queryKeys.roll.bootstrap(), reconciled)
-    }
+      setData(reconciled);
+      setIsPending(false);
+      setIsError(false);
+      setError(null);
+    };
 
-    window.addEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, handleReconciledBootstrap)
+    window.addEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, handleReconciledBootstrap);
     return () => {
-      window.removeEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, handleReconciledBootstrap)
-      if (reconciliationExpiryRef.current) clearTimeout(reconciliationExpiryRef.current)
-    }
-  }, [])
+      window.removeEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, handleReconciledBootstrap);
+      if (reconciliationExpiryRef.current) clearTimeout(reconciliationExpiryRef.current);
+    };
+  }, []);
 
-  return {
-    data: query.data ?? null,
-    isPending: query.isLoading,
-    isError: query.isError,
-    error: query.error ?? null,
-    refetch: refetchBootstrap,
-  }
+  return { data, isPending, isError, error, refetch: refetchBootstrap };
 }

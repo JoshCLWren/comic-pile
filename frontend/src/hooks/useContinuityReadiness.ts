@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   continuityReadinessApi,
@@ -5,27 +6,32 @@ import {
 } from '../services/api-continuity-readiness'
 import { queryKeys } from '../query/queryKeys'
 
-interface ContinuityReadinessState {
+export interface ContinuityReadinessState {
   readiness: ContinuityReadinessResponse | null
   isLoading: boolean
   error: Error | null
   refetch: () => void
 }
 
-function normalizeError(error: unknown): Error {
-  if (error instanceof Error) {
-    return error
-  }
+export interface UseContinuityReadinessOptions {
+  skip?: boolean
+}
+
+function normalizeContinuityReadinessError(error: unknown): Error | null {
+  if (error == null) return null
+  if (error instanceof Error) return error
   return new Error('Unable to load readiness')
 }
 
 export function useContinuityReadiness(
   issueId: number | null | undefined,
+  options: UseContinuityReadinessOptions = {},
 ): ContinuityReadinessState {
-  const enabled = issueId != null
+  const { skip = false } = options
+  const enabled = issueId != null && !skip
 
   const query = useQuery({
-    queryKey: queryKeys.continuity.readiness('issue', issueId ?? -1),
+    queryKey: enabled ? queryKeys.continuity.readiness('issue', issueId) : undefined,
     queryFn: async () => {
       if (!enabled) {
         throw new Error('No issue ID')
@@ -37,10 +43,12 @@ export function useContinuityReadiness(
     retry: false,
   })
 
+  const refetch = useCallback(() => query.refetch(), [query])
+
   return {
     readiness: query.data ?? null,
     isLoading: query.isLoading,
-    error: query.error ? normalizeError(query.error) : null,
-    refetch: query.refetch,
+    error: normalizeContinuityReadinessError(query.error),
+    refetch,
   }
 }

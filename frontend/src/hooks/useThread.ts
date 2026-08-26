@@ -1,6 +1,4 @@
-import { useCallback, useState } from 'react';
-import axios from 'axios';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { threadsApi } from '../services/api';
 import type { ReactivateThreadPayload, Thread, ThreadCreatePayload, ThreadUpdatePayload } from '../types';
 import { applyEditedThreadToQueuePages, invalidateAfterQueueMutation } from '../query/cacheEffects';
@@ -8,165 +6,90 @@ import { queryClient } from '../query/queryClient';
 import { queryKeys } from '../query/queryKeys';
 
 export function useThread(id?: number | null) {
-  const query = useQuery({
-    queryKey: queryKeys.thread.detail(id ?? -1),
-    queryFn: async () => {
-      if (id == null) {
-        throw new Error('No thread ID')
-      }
-      return threadsApi.get(id)
-    },
-    enabled: id != null,
-    staleTime: 30_000,
-    retry: false,
-  })
+  const { data, isPending, isError, refetch } = useQuery({
+    queryKey: id ? queryKeys.thread.detail(id) : [],
+    queryFn: () => threadsApi.get(id!),
+    enabled: !!id,
+    initialData: null as Thread | null,
+  });
 
-  return {
-    data: query.data ?? null,
-    isPending: query.isLoading,
-    isError: query.isError,
-  }
+  return { data, isPending, isError, refetch };
 }
 
 export function useStaleThreads(days?: number) {
-  const query = useQuery({
-    queryKey: queryKeys.thread.stale({ days }),
-    queryFn: async () => {
-      return threadsApi.listStale(days)
-    },
-    enabled: true,
-    staleTime: 30_000,
-    retry: false,
-  })
-
-  const refetch = useCallback(async () => {
-    return query.refetch()
-  }, [query])
+  const { data, isPending, isError, refetch } = useQuery({
+    queryKey: queryKeys.thread.summaries(),
+    queryFn: () => threadsApi.listStale(days),
+  });
 
   return {
-    data: query.data ?? null,
-    isPending: query.isLoading,
-    isError: query.isError,
-    refetch,
-  }
+    data: data ?? null,
+    isPending,
+    isError,
+    // Preserve the historical void-returning refetch contract for callers.
+    refetch: async () => {
+      await refetch();
+    },
+  };
 }
 
 export function useCreateThread() {
-  const [isPending, setIsPending] = useState(false);
-  const [isError, setIsError] = useState(false);
-
-  const mutate = useCallback(
-    async (data: ThreadCreatePayload) => {
-      setIsPending(true);
-      setIsError(false);
-
-      try {
-        const result = await threadsApi.create(data);
-        await invalidateAfterQueueMutation(queryClient);
-        return result;
-      } catch (error: unknown) {
-        const detail = axios.isAxiosError<{ detail?: string }>(error)
-          ? error.response?.data?.detail || error.message
-          : error instanceof Error ? error.message : 'Unknown error';
-        console.error('Failed to create thread:', detail);
-        setIsError(true);
-        throw error;
-      } finally {
-        setIsPending(false);
-      }
+  const mutation = useMutation({
+    mutationFn: (data: ThreadCreatePayload) => threadsApi.create(data),
+    onSuccess: async () => {
+      await invalidateAfterQueueMutation(queryClient);
     },
-    []
-  );
+  });
 
-  return { mutate, isPending, isError };
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+  };
 }
 
 export function useUpdateThread() {
-  const [isPending, setIsPending] = useState(false);
-  const [isError, setIsError] = useState(false);
-
-  const mutate = useCallback(
-    async ({ id, data }: { id: number; data: ThreadUpdatePayload }) => {
-      setIsPending(true);
-      setIsError(false);
-
-      try {
-        const result = await threadsApi.update(id, data);
-        applyEditedThreadToQueuePages(queryClient, result);
-        return result;
-      } catch (error: unknown) {
-        const detail = axios.isAxiosError<{ detail?: string }>(error)
-          ? error.response?.data?.detail || error.message
-          : error instanceof Error ? error.message : 'Unknown error';
-        console.error('Failed to update thread:', detail);
-        setIsError(true);
-        throw error;
-      } finally {
-        setIsPending(false);
-      }
+  const mutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: ThreadUpdatePayload }) =>
+      threadsApi.update(id, data),
+    onSuccess: (result) => {
+      applyEditedThreadToQueuePages(queryClient, result);
     },
-    []
-  );
+  });
 
-  return { mutate, isPending, isError };
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+  };
 }
 
 export function useDeleteThread() {
-  const [isPending, setIsPending] = useState(false);
-  const [isError, setIsError] = useState(false);
-
-  const mutate = useCallback(
-    async (id: number) => {
-      setIsPending(true);
-      setIsError(false);
-
-      try {
-        const result = await threadsApi.delete(id);
-        await invalidateAfterQueueMutation(queryClient);
-        return result;
-      } catch (error: unknown) {
-        const detail = axios.isAxiosError<{ detail?: string }>(error)
-          ? error.response?.data?.detail || error.message
-          : error instanceof Error ? error.message : 'Unknown error';
-        console.error('Failed to delete thread:', detail);
-        setIsError(true);
-        throw error;
-      } finally {
-        setIsPending(false);
-      }
+  const mutation = useMutation({
+    mutationFn: (id: number) => threadsApi.delete(id),
+    onSuccess: async () => {
+      await invalidateAfterQueueMutation(queryClient);
     },
-    []
-  );
+  });
 
-  return { mutate, isPending, isError };
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+  };
 }
 
 export function useReactivateThread() {
-  const [isPending, setIsPending] = useState(false);
-  const [isError, setIsError] = useState(false);
-
-  const mutate = useCallback(
-    async (data: ReactivateThreadPayload) => {
-      setIsPending(true);
-      setIsError(false);
-
-      try {
-        const result = await threadsApi.reactivate(data);
-        await invalidateAfterQueueMutation(queryClient);
-        return result;
-      } catch (error: unknown) {
-        const detail = axios.isAxiosError<{ detail?: string }>(error)
-          ? error.response?.data?.detail || error.message
-          : error instanceof Error ? error.message : 'Unknown error';
-        console.error('Failed to reactivate thread:', detail);
-        setIsError(true);
-        throw error;
-      } finally {
-        setIsPending(false);
-      }
+  const mutation = useMutation({
+    mutationFn: (data: ReactivateThreadPayload) => threadsApi.reactivate(data),
+    onSuccess: async () => {
+      await invalidateAfterQueueMutation(queryClient);
     },
-    []
-  );
+  });
 
-  return { mutate, isPending, isError };
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+  };
 }

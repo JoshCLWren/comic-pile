@@ -1,9 +1,8 @@
-import { useQuery } from '@tanstack/react-query'
+import { useCallback, useEffect, useState } from 'react'
 import {
   continuityReadinessApi,
   type ContinuityChainResponse,
 } from '../services/api-continuity-readiness'
-import { queryKeys } from '../query/queryKeys'
 
 interface ContinuityChainsState {
   chains: ContinuityChainResponse | null
@@ -12,35 +11,47 @@ interface ContinuityChainsState {
   refetch: () => void
 }
 
-function normalizeError(error: unknown): Error {
-  if (error instanceof Error) {
-    return error
-  }
-  return new Error('Unable to load chain')
+const EMPTY_STATE: ContinuityChainsState = {
+  chains: null,
+  isLoading: false,
+  error: null,
+  refetch: () => undefined,
 }
 
 export function useContinuityChains(
   issueId: number | null | undefined,
 ): ContinuityChainsState {
-  const enabled = issueId != null
+  const [state, setState] = useState(EMPTY_STATE)
+  const [attempt, setAttempt] = useState(0)
+  const refetch = useCallback(() => setAttempt((value) => value + 1), [])
 
-  const query = useQuery({
-    queryKey: queryKeys.continuity.chains('issue', issueId ?? -1),
-    queryFn: async () => {
-      if (!enabled) {
-        throw new Error('No issue ID')
-      }
-      return continuityReadinessApi.resolveChains('issue', issueId)
-    },
-    enabled,
-    staleTime: 30_000,
-    retry: false,
-  })
+  useEffect(() => {
+    if (issueId == null) {
+      setState({ ...EMPTY_STATE, refetch })
+      return
+    }
 
-  return {
-    chains: query.data ?? null,
-    isLoading: query.isLoading,
-    error: query.error ? normalizeError(query.error) : null,
-    refetch: query.refetch,
-  }
+    let isCurrent = true
+    setState({ chains: null, isLoading: true, error: null, refetch })
+
+    continuityReadinessApi.resolveChains('issue', issueId).then(
+      (chains) => {
+        if (isCurrent) {
+          setState({ chains, isLoading: false, error: null, refetch })
+        }
+      },
+      (reason: unknown) => {
+        if (isCurrent) {
+          const error = reason instanceof Error ? reason : new Error('Unable to load chain')
+          setState({ chains: null, isLoading: false, error, refetch })
+        }
+      },
+    )
+
+    return () => {
+      isCurrent = false
+    }
+  }, [attempt, issueId, refetch])
+
+  return state
 }

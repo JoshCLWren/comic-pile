@@ -1,43 +1,40 @@
-import { useQuery } from '@tanstack/react-query'
+import { useCallback, useEffect, useState } from 'react'
 import { comicVineApi, type ComicVineIssueIntelligence } from '../services/api'
-import { queryKeys } from '../query/queryKeys'
 
 interface ComicVineIssueIntelligenceState {
   metadata: ComicVineIssueIntelligence | null
   isLoading: boolean
-  error: Error | null
   refetch: () => void
-}
-
-function normalizeError(error: unknown): Error {
-  if (error instanceof Error) {
-    return error
-  }
-  return new Error('Unable to load comic intelligence')
 }
 
 export function useComicVineIssueIntelligence(
   issueId: number | null | undefined,
 ): ComicVineIssueIntelligenceState {
-  const enabled = issueId != null
+  const [metadata, setMetadata] = useState<ComicVineIssueIntelligence | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [refreshCounter, setRefreshCounter] = useState(0)
 
-  const query = useQuery({
-    queryKey: queryKeys.comicVine.issueIntelligence(issueId ?? -1),
-    queryFn: async () => {
-      if (!enabled) {
-        throw new Error('No issue ID')
-      }
-      return comicVineApi.getIssueIntelligence(issueId)
-    },
-    enabled,
-    staleTime: 30_000,
-    retry: false,
-  })
+  useEffect(() => {
+    let active = true
+    setMetadata(null)
+    if (!issueId) return () => { active = false }
 
-  return {
-    metadata: query.data ?? null,
-    isLoading: query.isLoading,
-    error: query.error ? normalizeError(query.error) : null,
-    refetch: query.refetch,
-  }
+    setIsLoading(true)
+    comicVineApi.getIssueIntelligence(issueId)
+      .then((result) => {
+        if (active) setMetadata(result)
+      })
+      .catch(() => {
+        if (active) setMetadata(null)
+      })
+      .finally(() => {
+        if (active) setIsLoading(false)
+      })
+
+    return () => { active = false }
+  }, [issueId, refreshCounter])
+
+  const refetch = useCallback(() => setRefreshCounter((counter) => counter + 1), [])
+
+  return { metadata, isLoading, refetch }
 }
