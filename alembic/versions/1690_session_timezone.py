@@ -21,8 +21,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-<<<<<<< HEAD
     op.drop_column("sessions", "timezone")
-=======
-    op.drop_column("sessions", "timezone")
->>>>>>> main
