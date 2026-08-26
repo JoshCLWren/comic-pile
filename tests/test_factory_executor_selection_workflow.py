@@ -23,6 +23,20 @@ def test_catalog_backed_providers_use_central_adapter() -> None:
     assert "--worker \"$WORKER\"" in selector
 
 
+def test_catalog_backed_slots_share_provider_candidates() -> None:
+    \"\"\"Catalog-backed slots rank candidates across both supported providers.\"\"\"
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    selector = workflow.split(
+        "- name: Select execution candidate at dispatch time", maxsplit=1
+    )[1].split("- name: Report selected executor heartbeat", maxsplit=1)[0]
+
+    assert "opencode-free|openrouter-free)" in selector
+    assert "catalog_candidates='[]'" in selector
+    assert "$left + $right | unique_by([.provider, .model])" in selector
+    assert "source=\\"$(jq -r '.selected.provider // empty'" in selector
+    assert "Selected unsupported catalog provider" in selector
+
+
 def test_runtime_only_providers_keep_real_probe_authority() -> None:
     """Non-enumerating providers retain their request until a real probe."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
@@ -38,6 +52,9 @@ def test_selected_executor_metadata_reaches_worker_and_telemetry() -> None:
     """Provider and selected model remain attempt metadata, not slot identity."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
+    selected_source = (
+        "${{ steps.executor.outputs.source || steps.lane.outputs.source }}"
+    )
     selected_model = (
         "${{ steps.executor.outputs.model || steps.lane.outputs.model }}"
     )
@@ -45,9 +62,16 @@ def test_selected_executor_metadata_reaches_worker_and_telemetry() -> None:
         "${{ steps.executor.outputs.runtime_model "
         "|| steps.lane.outputs.runtime_model }}"
     )
+    selected_branch = (
+        "${{ steps.executor.outputs.branch_suffix "
+        "|| steps.lane.outputs.branch_suffix }}"
+    )
+    assert f"SOURCE: {selected_source}" in workflow
+    assert f"FACTORY_SOURCE: {selected_source}" in workflow
     assert f"MODEL: {selected_model}" in workflow
     assert f"FACTORY_MODEL: {selected_model}" in workflow
     assert f"FACTORY_RUNTIME_MODEL: {selected_runtime}" in workflow
+    assert f"FACTORY_BRANCH_SUFFIX: {selected_branch}" in workflow
     assert "from-live-provider-catalog" in workflow
     assert "health_state=" in workflow
 
