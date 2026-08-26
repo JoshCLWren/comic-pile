@@ -7,6 +7,7 @@ from app.models.continuity_rule import ContinuityRule, ContinuityRuleSelectedMem
 from app.models.dependency import Dependency
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
 from app.models.event import Event
+from app.models.recommendation_context import RecommendationContext
 from app.models.external_identity import (
     ExternalIdentity,
     IssueExternalIdentityMapping,
@@ -39,6 +40,7 @@ __all__ = [
     "DependencyGroupMembership",
     "Event",
     "ExternalIdentity",
+    "RecommendationContext",
     "FailedLoginAttempt",
     "Issue",
     "IssueExternalIdentityMapping",

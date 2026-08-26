@@ -3451,13 +3451,17 @@ export interface components {
         };
         /**
          * DependencyGroupMemberResponse
-         * @description One persisted group membership.
+         * @description One persisted group membership with human-readable target metadata. ``series_title`` carries the owning thread's title for both membership kinds. For issue-level memberships, ``issue_number`` identifies the exact issue inside that series. A missing value means the target could not be resolved and the client must render a readable fallback instead of raw IDs.
          */
         DependencyGroupMemberResponse: {
             /** Id */
             id: number;
             /** Issue Id */
             issue_id: number | null;
+            /** Issue Number */
+            issue_number?: string | null;
+            /** Series Title */
+            series_title?: string | null;
             /** Thread Id */
             thread_id: number | null;
         };

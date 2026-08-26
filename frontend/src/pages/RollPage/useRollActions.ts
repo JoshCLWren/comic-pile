@@ -117,7 +117,7 @@ export function useRollActions({
       await refetchBootstrap()
     } catch (error) {
       console.error('Shuffle failed:', error)
-      console.log(`Blocked thread roll attempt prevented`);
+      alert(`Failed to shuffle pool: ${getApiErrorDetail(error)}`)
     }
   }
 

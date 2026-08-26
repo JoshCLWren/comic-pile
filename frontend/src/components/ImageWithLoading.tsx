@@ -8,6 +8,8 @@ interface ImageWithLoadingProps {
   loading?: 'eager' | 'lazy'
   width?: number | string
   height?: number | string
+  srcSet?: string
+  sizes?: string
   onError?: () => void
 }
 
@@ -26,6 +28,8 @@ export default function ImageWithLoading({
   loading = 'lazy',
   width,
   height,
+  srcSet,
+  sizes,
   onError,
 }: ImageWithLoadingProps) {
   const [isLoaded, setIsLoaded] = useState(false)
@@ -51,6 +55,8 @@ export default function ImageWithLoading({
         className={`${className} transition-opacity duration-300 ${isLoaded && !hasError ? 'opacity-100' : 'opacity-0'} ${hasError ? 'hidden' : ''}`}
         width={width}
         height={height}
+        srcSet={srcSet}
+        sizes={sizes}
         onLoad={() => setIsLoaded(true)}
         onError={() => {
           setHasError(true)

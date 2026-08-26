@@ -11,11 +11,16 @@ from __future__ import annotations
 
 import math
 import random
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Thread
+
+# Stable compact reason codes recorded in recommendation contexts.
+MOMENTUM_RECENT_HIGH_RATING = "recent_high_rating"
+MOMENTUM_SAME_THREAD_MOMENTUM = "same_thread_momentum"
 
 # Maximum momentum bonus (capped) for any single candidate.
 _MAX_MOMENTUM_BONUS = 2.0
@@ -72,6 +77,121 @@ def _decay_factor(staleness_hours: float, half_life_hours: float = _DECAY_HALF_L
     return math.pow(2.0, -staleness_hours / half_life_hours)
 
 
+@dataclass(frozen=True)
+class MomentumCandidateWeight:
+    """Chooser-facing weight and reason codes for a single candidate.
+
+    Attributes:
+        candidate_id: The thread ID this weight applies to.
+        weight: The exact combined weight passed to the chooser (1.0 + bonus).
+        factors: Stable compact reason codes explaining the bonus components.
+    """
+
+    candidate_id: int
+    weight: float
+    factors: tuple[str, ...]
+
+
+def _momentum_components(
+    thread: Thread,
+    session_events: list[Event],
+    last_rating: float | None = None,
+    now: datetime | None = None,
+) -> tuple[float, float]:
+    """Compute the capped momentum bonus split into its two components.
+
+    Args:
+        thread: The active thread being evaluated.
+        session_events: Recent session events for streak/depth context.
+        last_rating: Most recent durable rating for the thread (from Thread.model).
+        now: Reference timestamp; defaults to current UTC time.
+
+    Returns:
+        A ``(rating_component, streak_component)`` tuple whose sum is the
+        capped total bonus. Each component is individually non-negative.
+    """
+    if now is None:
+        now = datetime.now(UTC)
+
+    # Use the durable last_rating from the thread model when available,
+    # otherwise fall back to the session event history.
+    effective_rating = last_rating if last_rating is not None else thread.last_rating
+
+    if effective_rating is None:
+        # No rating evidence means no positive momentum boost.
+        return 0.0, 0.0
+
+    # Low-rated recent runs must not receive an automatic positive boost;
+    # without a rating component the streak component is also suppressed so
+    # low-rated runs never gain positive momentum from streak depth alone.
+    if effective_rating < _HIGH_RATING_THRESHOLD:
+        return 0.0, 0.0
+
+    # Compute staleness from the most recent activity timestamp. Threads
+    # without a known activity time have fully decayed momentum.
+    staleness_hours = _calculate_staleness_decay_hours(
+        thread.last_activity_at,
+        now=now,
+    )
+
+    decay_factor_value = _decay_factor(staleness_hours)
+
+    # Modest base bonus scaled by how highly rated the thread is.
+    base_bonus = min(
+        (effective_rating - _HIGH_RATING_THRESHOLD) * 0.5,
+        1.0,
+    )
+    rating_component = base_bonus * decay_factor_value
+
+    # Streak depth adds a small additional boost, capped.
+    streak_depth = _streak_depth_for_thread(thread, session_events)
+    streak_component = min(streak_depth * _STREAK_BONUS_PER_STEP, 1.0)
+    # Streak also decays slightly with overall staleness.
+    streak_component *= max(0.25, decay_factor_value)
+
+    return rating_component, streak_component
+
+
+def compute_momentum_breakdown(
+    thread: Thread,
+    session_events: list[Event],
+    last_rating: float | None = None,
+    now: datetime | None = None,
+) -> MomentumCandidateWeight:
+    """Compute the chooser weight plus stable reason codes for one candidate.
+
+    Args:
+        thread: The active thread being evaluated.
+        session_events: Recent session events for streak/depth context.
+        last_rating: Most recent durable rating for the thread (from Thread.model).
+        now: Reference timestamp; defaults to current UTC time.
+
+    Returns:
+        A :class:`MomentumCandidateWeight` with ``weight`` equal to
+        ``1.0 + compute_momentum_bonus(...)`` and reason codes naming every
+        positive bonus component.
+    """
+    rating_component, streak_component = _momentum_components(
+        thread=thread,
+        session_events=session_events,
+        last_rating=last_rating,
+        now=now,
+    )
+    total_bonus = min(rating_component + streak_component, _MAX_MOMENTUM_BONUS)
+
+    factors: list[str] = []
+    if rating_component > 0.0:
+        factors.append(MOMENTUM_RECENT_HIGH_RATING)
+    if streak_component > 0.0:
+        factors.append(MOMENTUM_SAME_THREAD_MOMENTUM)
+
+    return MomentumCandidateWeight(
+        candidate_id=thread.id,
+        weight=1.0 + total_bonus,
+        factors=tuple(factors),
+    )
+
+
 def compute_momentum_bonus(
     thread: Thread,
     session_events: list[Event],
@@ -91,60 +211,30 @@ def compute_momentum_bonus(
         when the most recent durable rating is high; zero (or near-zero) for
         low-rated runs so they do not receive an automatic positive boost.
     """
-    if now is None:
-        now = datetime.now(UTC)
-
-    # Use the durable last_rating from the thread model when available,
-    # otherwise fall back to the session event history.
-    effective_rating = last_rating if last_rating is not None else thread.last_rating
-
-    if effective_rating is None:
-        # No rating evidence means no positive momentum boost.
-        return 0.0
-
-    # Low-rated recent runs must not receive an automatic positive boost.
-    if effective_rating < _HIGH_RATING_THRESHOLD:
-        return 0.0
-
-    # Compute staleness from the most recent activity timestamp. Threads
-    # without a known activity time have fully decayed momentum.
-    staleness_hours = _calculate_staleness_decay_hours(
-        thread.last_activity_at,
+    rating_component, streak_component = _momentum_components(
+        thread=thread,
+        session_events=session_events,
+        last_rating=last_rating,
         now=now,
     )
-
-    decay_factor_value = _decay_factor(staleness_hours)
-
-    # Modest base bonus scaled by how highly rated the thread is.
-    base_bonus = min(
-        (effective_rating - _HIGH_RATING_THRESHOLD) * 0.5,
-        1.0,
-    )
-    decayed_bonus = base_bonus * decay_factor_value
-
-    # Streak depth adds a small additional boost, capped.
-    streak_depth = _streak_depth_for_thread(thread, session_events)
-    streak_bonus = min(streak_depth * _STREAK_BONUS_PER_STEP, 1.0)
-    # Streak also decays slightly with overall staleness.
-    streak_bonus *= max(0.25, decay_factor_value)
-
-    total_bonus = decayed_bonus + streak_bonus
-    return min(total_bonus, _MAX_MOMENTUM_BONUS)
+    return min(rating_component + streak_component, _MAX_MOMENTUM_BONUS)
 
 
 async def weighted_momentum_selection(
-    db: AsyncSession,
+    db: AsyncSession | None,
     bounded_rows: list,
     user_id: int,
     session_events: list[Event] | None = None,
     now: datetime | None = None,
-) -> tuple[int, float]:
+) -> tuple[int, float, list[MomentumCandidateWeight]]:
     """Select an index from bounded_rows using momentum-weighted random choice.
 
     Returns:
-        A tuple of (selected_index, applied_max_bonus) where selected_index
-        is within the bounded pool and applied_max_bonus reports the largest
-        bonus value among candidates (for observability / cap verification).
+        A tuple of ``(selected_index, applied_max_bonus, candidate_weights)``
+        where selected_index is within the bounded pool, applied_max_bonus
+        reports the largest bonus value among candidates (for observability /
+        cap verification), and candidate_weights carries the exact chooser
+        weight plus reason codes for every bounded candidate in pool order.
     """
     if session_events is None:
         session_events = []
@@ -154,23 +244,23 @@ async def weighted_momentum_selection(
     if not bounded_rows:
         raise ValueError("bounded_rows must not be empty")
 
-    # Compute bonuses for each thread in the bounded pool.
-    bonuses = []
+    # Compute chooser weights plus per-candidate reason codes for the pool.
+    breakdowns = []
     for row in bounded_rows:
         # Handle both tuple rows (Thread, unread, issue_number) and plain threads.
         thread_obj = row[0] if isinstance(row, tuple) else row
-        bonus = compute_momentum_bonus(
-            thread=thread_obj,
-            session_events=session_events,
-            last_rating=thread_obj.last_rating,
-            now=now,
+        breakdowns.append(
+            compute_momentum_breakdown(
+                thread=thread_obj,
+                session_events=session_events,
+                last_rating=thread_obj.last_rating,
+                now=now,
+            )
         )
-        bonuses.append(bonus)
 
+    weights = [breakdown.weight for breakdown in breakdowns]
+    bonuses = [weight - 1.0 for weight in weights]
     max_bonus = max(bonuses) if bonuses else 0.0
-
-    # Weights are 1.0 + bonus, so a zero bonus equals pure-random weight.
-    weights = [1.0 + b for b in bonuses]
 
     # Weighted random selection using cumulative weights.
     total_weight = sum(weights)
@@ -187,4 +277,4 @@ async def weighted_momentum_selection(
                 selected_index = i
                 break
 
-    return selected_index, max_bonus
+    return selected_index, max_bonus, breakdowns

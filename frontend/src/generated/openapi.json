@@ -2073,7 +2073,7 @@
         "type": "object"
       },
       "DependencyGroupMemberResponse": {
-        "description": "One persisted group membership.",
+        "description": "One persisted group membership with human-readable target metadata. ``series_title`` carries the owning thread's title for both membership kinds. For issue-level memberships, ``issue_number`` identifies the exact issue inside that series. A missing value means the target could not be resolved and the client must render a readable fallback instead of raw IDs.",
         "properties": {
           "id": {
             "title": "Id",
@@ -2089,6 +2089,28 @@
               }
             ],
             "title": "Issue Id"
+          },
+          "issue_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Number"
+          },
+          "series_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series Title"
           },
           "thread_id": {
             "anyOf": [

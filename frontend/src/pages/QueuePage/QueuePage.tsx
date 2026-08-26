@@ -128,6 +128,7 @@ export default function QueuePage() {
       const snoozeLabel = isSnoozed ? 'Unsnooze' : 'Snooze'
       const snoozeDisabled = !isSnoozed && session?.pending_thread_id !== thread.id
       const readDisabled = isBlocked
+      const blockingReasons = blockingDependencies.map((dep) => dep.label)
       const readDisabledReason = blockingReasons.length > 0 ? blockingReasons.join('\n') : 'Blocked by dependency'
 
       return (

@@ -40,8 +40,8 @@ const annihilation = {
   name: 'Annihilation',
   created_at: '2026-08-06T00:00:00Z',
   memberships: [
-    { id: 1, issue_id: 11, thread_id: null },
-    { id: 2, issue_id: null, thread_id: 22 },
+    { id: 1, issue_id: 11, thread_id: null, series_title: 'Nova', issue_number: '4' },
+    { id: 2, issue_id: null, thread_id: 22, series_title: 'Nova', issue_number: null },
   ],
 }
 
@@ -153,22 +153,22 @@ describe('CrossoversPage', () => {
     fireEvent.click(groupButton)
 
     expect(groupButton).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByText('Issue 11')).toBeInTheDocument()
-    expect(screen.getByText('Thread 22')).toBeInTheDocument()
+    expect(screen.getByText('Nova #4')).toBeInTheDocument()
+    expect(screen.getByText('Nova (whole series)')).toBeInTheDocument()
   })
 
   it('shows singular and empty membership states and collapses details', async () => {
     api.list.mockResolvedValue([
-      { ...annihilation, id: 8, name: 'Secret Wars', memberships: [{ id: 3, issue_id: 12, thread_id: null }] },
+      { ...annihilation, id: 8, name: 'Secret Wars', memberships: [{ id: 3, issue_id: 12, thread_id: null, series_title: 'Mighty Avengers', issue_number: '12' }] },
       { ...annihilation, id: 9, name: 'House of M', memberships: [] },
     ])
     renderPage()
 
     const secretWars = await screen.findByRole('button', { name: /Secret Wars.*1 member/ })
     fireEvent.click(secretWars)
-    expect(screen.getByText('Issue 12')).toBeInTheDocument()
+    expect(screen.getByText('Mighty Avengers #12')).toBeInTheDocument()
     fireEvent.click(secretWars)
-    expect(screen.queryByText('Issue 12')).not.toBeInTheDocument()
+    expect(screen.queryByText('Mighty Avengers #12')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /House of M.*0 members/ }))
     expect(screen.getByText('This crossover has no comics yet.')).toBeInTheDocument()

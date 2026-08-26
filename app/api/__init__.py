@@ -14,6 +14,7 @@ from app.api import reading_order_projection as reading_order_projection
 from app.api import recommendation_diagnostics as recommendation_diagnostics
 from app.api import releases as releases
 from app.api import roll_recovery_switch as roll_recovery_switch
+from app.api import taste_signal as taste_signal
 
 analytics.router.include_router(health.router)
 dependency.router.include_router(issue_dependency_batch.router)
@@ -42,4 +43,5 @@ __all__ = [
     "recommendation_diagnostics",
     "releases",
     "roll_recovery_switch",
+    "taste_signal",
 ]

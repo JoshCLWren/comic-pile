@@ -4,6 +4,7 @@ import { type ComicVineRelatedIssue } from '../../../services/api'
 import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass, normalizeArcName, computeArcNeighborAnchors } from '../../../utils/comicIdentity'
 import AddToComicPileDialog from '../../../components/AddToComicPileDialog'
 import ImageWithLoading from '../../../components/ImageWithLoading'
+import { optimizedImageSrcSet, optimizedImageUrl } from '../../../services/imageDelivery'
 
 interface ComicIdentityProps {
   issueId: number | null | undefined
@@ -103,7 +104,9 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
       >
         {metadata.image_url && metadata.image_url !== failedImageUrl ? (
           <ImageWithLoading
-            src={metadata.image_url}
+            src={optimizedImageUrl(metadata.image_url, 720) ?? metadata.image_url}
+            srcSet={optimizedImageSrcSet(metadata.image_url, [240, 480, 720]) ?? undefined}
+            sizes="(min-width: 1024px) 480px, calc(100vw - 2rem)"
             alt=""
             loading="eager"
             className="h-full w-full object-contain"

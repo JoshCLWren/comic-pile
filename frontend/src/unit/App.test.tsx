@@ -1,5 +1,5 @@
 import { expect, test, vi, beforeEach, describe, afterEach } from 'vitest'
-import { render, screen, waitFor, act } from '@testing-library/react'
+import { render, screen, waitFor, act, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { useEffect } from 'react'
 import type { AuthContextValue } from '../App'
@@ -84,11 +84,13 @@ test('renders retained navigation labels', async () => {
   renderWithAuth('/')
 
   await waitFor(() => {
-    expect(screen.getByRole('link', { name: /roll page/i })).toBeInTheDocument()
+    const mobileNav = screen.getByRole('navigation', { name: /mobile navigation/i })
+    expect(within(mobileNav).getByRole('link', { name: /roll page/i })).toBeInTheDocument()
   })
-  expect(screen.getByRole('link', { name: /queue page/i })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /history page/i })).toBeInTheDocument()
-  expect(screen.queryByRole('link', { name: /analytics page/i })).not.toBeInTheDocument()
+  const mobileNav = screen.getByRole('navigation', { name: /mobile navigation/i })
+  expect(within(mobileNav).getByRole('link', { name: /queue page/i })).toBeInTheDocument()
+  expect(within(mobileNav).getByRole('link', { name: /history page/i })).toBeInTheDocument()
+  expect(within(mobileNav).queryByRole('link', { name: /analytics page/i })).not.toBeInTheDocument()
 })
 
 test('throws when the auth hook is used outside its provider', () => {
