@@ -19,6 +19,8 @@ def test_push_smoke_workers_are_derived_from_current_provider_rows():
     assert ".github/scripts/factory_provider_candidates.py" in workflow
     assert ".github/scripts/factory_candidate_health.py" in workflow
 
+# Assert the exact shell branches so future refactors keep the race bounded.
+
 def test_stale_run_cancellation_retries_transient_status_race():
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
