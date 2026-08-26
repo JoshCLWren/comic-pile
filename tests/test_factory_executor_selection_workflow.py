@@ -58,3 +58,4 @@ def test_discovery_failures_publish_normalized_outcomes() -> None:
     assert "model_unavailable\\t%s catalog exposed no policy-eligible candidate" in workflow
     assert 'discovery_record="$(cat "$DISCOVERY_OUTCOME_FILE"' in workflow
     assert "attempt_outcome attempt_detail" in workflow
+    assert "outcome='selection-failed'" in workflow
