@@ -28,3 +28,7 @@ def test_stale_run_cancellation_retries_transient_status_race():
     assert "for _ in {1..15}; do" in workflow
     assert '[[ "$current_status" == completed ]]' in workflow
     assert '[[ "$current_status" == queued || "$current_status" == in_progress ]]' in workflow
+    assert 'cancel_output=""' in workflow
+    assert 'grep -qi "workflow run that is completed"' in workflow
+    assert 'status_from_cancel=true' in workflow
+    assert 'if [[ "$status_from_cancel" != true ]]; then' in workflow
