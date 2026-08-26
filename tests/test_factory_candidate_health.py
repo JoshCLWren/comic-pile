@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
 
@@ -56,7 +56,7 @@ def evidence(
     trusted: bool = True,
 ) -> dict[str, object]:
     """Build evidence relative to the fixed test clock."""
-    timestamp = datetime.fromtimestamp(NOW - age, tz=timezone.utc)
+    timestamp = datetime.fromtimestamp(NOW - age, tz=UTC)
     return {
         "author_association": "OWNER" if trusted else "NONE",
         "body": (
