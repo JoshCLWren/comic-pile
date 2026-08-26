@@ -1,7 +1,7 @@
 """Add recommendation_contexts table for intent/Taste Bank factor recording.
 
 Revision ID: c85500000002
-Revises: 05f8245be920
+Revises: 1690_session_timezone
 Create Date: 2026-08-24 00:00:00.000000
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "c85500000002"
-down_revision: str | Sequence[str] | None = "05f8245be920"
+down_revision: str | Sequence[str] | None = "1690_session_timezone"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
