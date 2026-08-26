@@ -4,6 +4,9 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 SCRIPT = (
     Path(__file__).resolve().parents[1]
@@ -32,8 +35,11 @@ def test_dashboard_surfaces_operational_state_in_one_page():
             "configured_workers": 46,
             "busy_workers": 20,
             "idle_workers": 20,
-            "cooling_workers": 4,
-            "unavailable_workers": 2,
+            "executable_capacity": 22,
+            "healthy_candidates": 18,
+            "degraded_candidates": 4,
+            "cooling_candidates": 3,
+            "unavailable_candidates": 2,
             "pipeline": {
                 "review": 8,
                 "changes_requested": 21,
@@ -65,4 +71,52 @@ def test_dashboard_surfaces_operational_state_in_one_page():
     assert "Net PR change" in rendered
     assert "-8" in rendered
     assert "target 15 · selected 15 · claims 14" in rendered
+    assert "Executable capacity now" in rendered
+    assert "22" in rendered
     assert "refreshes every 5 min" in rendered
+
+
+def test_collect_snapshot_unpacks_demand_and_authoritative_capacity(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Use the allocator's demand/capacity tuple without recomputing health."""
+    work = SimpleNamespace(list_issues=lambda: [], list_prs=lambda: [])
+    completion = SimpleNamespace(
+        load_controller=lambda: work,
+        load_manifest_workers=lambda _path: ["39", "40"],
+        owned_worker_ids=lambda _items: {"39"},
+    )
+    demand = SimpleNamespace(
+        completion=7,
+        production=3,
+        completion_share=0.7,
+        idle_workers=1,
+    )
+    capacity = {
+        "executable_capacity": 1,
+        "health_counts": {
+            "healthy": 1,
+            "degraded": 0,
+            "cooling": 1,
+            "unavailable": 0,
+        },
+    }
+    full = SimpleNamespace(
+        current_demand=lambda _controller: (demand, capacity),
+        completion_worker_target=lambda _demand: 1,
+    )
+
+    def fake_load_module(_name: str, path: Path):
+        return full if path.name == "factory_full_completion_controller.py" else completion
+
+    monkeypatch.setattr(dashboard, "load_module", fake_load_module)
+    monkeypatch.setattr(dashboard, "github_search_total", lambda *_args: 0)
+    monkeypatch.setattr(dashboard, "latest_completion_funnel", lambda _controller: {})
+
+    snapshot = dashboard.collect_snapshot()
+
+    assert snapshot["completion_demand"] == 7
+    assert snapshot["production_demand"] == 3
+    assert snapshot["executable_capacity"] == 1
+    assert snapshot["healthy_candidates"] == 1
+    assert snapshot["cooling_candidates"] == 1
