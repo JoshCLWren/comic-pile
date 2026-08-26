@@ -27,6 +27,8 @@ def _is_ancestor(script: ScriptDirectory, candidate: str, start: str) -> bool:
             continue
         seen.add(current)
         revision = script.revision_map.get_revision(current)
+        if revision is None:
+            continue
         down = revision.down_revision
         if isinstance(down, str):
             stack.append(down)

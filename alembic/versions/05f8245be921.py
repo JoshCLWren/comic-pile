@@ -8,7 +8,7 @@ history has a single linear head.
 `c85700000001_add_deferred_status` was already merged by `05f8245be920`,
 so only the two true leaf heads are listed below.
 
-Revision ID: 05f8245be921_merge_session_timezone_bandwidth
+Revision ID: 05f8245be921
 Revises: ("c85900000001", "c85500000002")
 Create Date: 2026-08-26
 
@@ -17,8 +17,8 @@ Create Date: 2026-08-26
 from collections.abc import Sequence
 from alembic import op
 
-revision: str = "05f8245be921_merge_session_timezone_bandwidth"
-down_revision: str | Sequence[str] | None = "c85900000001", "c85500000002"
+revision: str = "05f8245be921"
+down_revision: str | Sequence[str] | None = ("c85900000001", "c85500000002")
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
