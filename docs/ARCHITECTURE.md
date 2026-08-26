@@ -192,8 +192,20 @@ Comic Pile is a dice-driven comic reading tracker built with:
 - Secure defaults for headers and cookies
 - Regular dependency updates
 
+## Canonical Reader Order
+
+**Decision** (#1619): `continuity_plans` is the canonical reader-owned reading
+plan; `reading_orders` is a legacy compatibility view. New ordering intent
+must target the canonical plan. Legacy orders remain readable and can be
+adopted via `POST /api/v1/continuity-plans/from-reading-order` without data
+loss; projection `plan → reading_order` remains only as export/migration
+tooling. Within-series `Issue.position` is never compiled into blocking
+`ContinuityRule` edges unless the user explicitly chooses
+`strict_sequential`. See [READING_PLAN_CANONICAL_MODEL.md](READING_PLAN_CANONICAL_MODEL.md).
+
 ## Related Documentation
 
+- [READING_PLAN_CANONICAL_MODEL.md](READING_PLAN_CANONICAL_MODEL.md): Canonical reader-order decision record for #1619
 - [AGENTS.md](../AGENTS.md): Project guidelines and conventions for coding agents
 - [API.md](API.md): Complete API reference documentation
 - [REACT_ARCHITECTURE.md](REACT_ARCHITECTURE.md): Frontend-specific architecture

@@ -35,7 +35,7 @@ load_dotenv(".env.test")
 
 TRUNCATE_TEST_DATA_SQL = text(
     "TRUNCATE TABLE sessions, events, threads, issues, snapshots, dependencies, "
-    "revoked_tokens, failed_login_attempts, user_preferences, users, "
+    "revoked_tokens, failed_login_attempts, user_preferences, taste_signals, users, "
     "recommendation_contexts "
     "RESTART IDENTITY CASCADE;"
 )
@@ -116,6 +116,7 @@ def _has_schema_drift(conn: Connection) -> bool:
         "failed_login_attempts",
         "user_preferences",
         "recommendation_contexts",
+        "taste_signals",
     }
 
     for table_name in required_table_names:
@@ -452,6 +453,7 @@ async def async_db_committed(db_engine: AsyncEngine) -> AsyncIterator[SQLAlchemy
         await session.execute(text("DELETE FROM revoked_tokens"))
         await session.execute(text("DELETE FROM failed_login_attempts"))
         await session.execute(text("DELETE FROM user_preferences"))
+        await session.execute(text("DELETE FROM taste_signals"))
         await session.execute(text("DELETE FROM users"))
         await session.execute(text("DELETE FROM issue_external_identity_mappings"))
         await session.execute(text("DELETE FROM thread_external_series_mappings"))
@@ -472,6 +474,7 @@ async def async_db_committed(db_engine: AsyncEngine) -> AsyncIterator[SQLAlchemy
         await cleanup_session.execute(text("DELETE FROM revoked_tokens"))
         await cleanup_session.execute(text("DELETE FROM failed_login_attempts"))
         await cleanup_session.execute(text("DELETE FROM user_preferences"))
+        await cleanup_session.execute(text("DELETE FROM taste_signals"))
         await cleanup_session.execute(text("DELETE FROM users"))
         await cleanup_session.execute(text("DELETE FROM issue_external_identity_mappings"))
         await cleanup_session.execute(text("DELETE FROM thread_external_series_mappings"))

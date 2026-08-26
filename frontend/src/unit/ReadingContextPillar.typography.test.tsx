@@ -69,6 +69,7 @@ function buildContext(): ReaderContextResponse {
         id: 7,
         name: 'Ultimate Universe Reading Order',
         applies_to_current_issue: false,
+        membership_kind: 'issue' as const,
         next_member: { issue_id: 205, issue_number: '14' },
         average_rating: null,
         ratings_count: 0,
@@ -168,10 +169,16 @@ describe('ReadingContextPillar rendered typography (#1873)', () => {
       'sectionHeading',
     )
 
-    const currentIssueRow = screen.getByRole('listitem', { name: /open saga issue 5/i })
+    const currentIssueButton = screen.getByRole('button', {
+      name: /show context for ultimate black panther issue 5/i,
+    })
+    const currentIssueRow = currentIssueButton.closest('[role="listitem"]') as HTMLElement
     expectComputedFontSize(within(currentIssueRow).getByText('5'), 'primaryValue')
 
-    const ratedIssueRow = screen.getByRole('listitem', { name: /open saga issue 3/i })
+    const ratedIssueButton = screen.getByRole('button', {
+      name: /show context for ultimate black panther issue 3/i,
+    })
+    const ratedIssueRow = ratedIssueButton.closest('[role="listitem"]') as HTMLElement
     expectComputedFontSize(
       within(ratedIssueRow).getByLabelText('Your rating: 3.5 stars'),
       'metaLabel',
@@ -182,16 +189,16 @@ describe('ReadingContextPillar rendered typography (#1873)', () => {
     })
     expectComputedFontSize(membershipChip, 'chipLabel')
 
-    const upcomingCrossoverName = screen.getByRole('button', {
-      name: 'Open crossover Ultimate Universe Reading Order',
+    const upcomingCrossoverButton = screen.getByRole('button', {
+      name: 'Open crossover Ultimate Universe Reading Order, starts at issue 14',
     })
     expectReadable(
-      within(upcomingCrossoverName).getByText('Ultimate Universe Reading Order'),
+      within(upcomingCrossoverButton).getByText('Ultimate Universe Reading Order'),
       READING_CONTEXT_TYPE_FLOORS.primaryValue,
       'upcoming crossover name',
     )
     expectComputedFontSize(
-      within(upcomingCrossoverName).getByText('— starts at #14'),
+      within(upcomingCrossoverButton).getByText('— starts at #14'),
       'metaLabel',
     )
 

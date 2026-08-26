@@ -51,6 +51,13 @@ vi.mock('../hooks/useQueue', () => ({
   useShuffleQueue: () => ({ mutate: vi.fn(), isPending: false }),
 }))
 vi.mock('../hooks', () => ({ useRate: () => ({ mutate: vi.fn(), isPending: false }) }))
+vi.mock('../services/api-taste', () => ({
+  tasteApi: {
+    getDiscoveries: vi.fn().mockResolvedValue({ discoveries: [], generated_at: new Date().toISOString() }),
+    dismiss: vi.fn().mockResolvedValue({ dismissed: true }),
+    submitVerdict: vi.fn().mockResolvedValue({}),
+  },
+}))
 vi.mock('../services/api', () => ({
   threadsApi: {
     list: spies.list,

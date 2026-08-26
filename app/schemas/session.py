@@ -51,7 +51,7 @@ class SessionBandwidthState(BaseModel):
 
     predicted_bandwidth: BandwidthLevel | None
     active_bandwidth: BandwidthLevel | None
-    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    confidence: float | None = Field(default=..., ge=0.0, le=1.0)
     source: BandwidthSource | None
     mode_version: str | None
 
@@ -93,6 +93,48 @@ def build_session_bandwidth_state(
     )
 
 
+SnoozeCorrectionReason = Literal[
+    "heavy_snooze_shift",
+    "light_snooze_deflate",
+    "confidence_degrade",
+    "no_correction",
+    "clarification_needed",
+]
+
+
+class SnoozeCorrectionInfo(BaseModel):
+    """Structured Snooze correction guidance for the client (#1726).
+
+    Returned with every Snooze response so the frontend can later decide
+    whether to show a clarification sheet, without implementing modal UI in
+    this phase. Fields are compact codes and flags, never prose.
+    """
+
+    bandwidth_changed: bool = Field(
+        description="Whether the active bandwidth level changed after this snooze",
+    )
+    active_bandwidth: str | None = Field(
+        default=None,
+        description="Active bandwidth level after correction: light, balanced, or deep",
+    )
+    active_confidence: float | None = Field(
+        default=None,
+        description="Confidence in the proposed active bandwidth (0.0-1.0)",
+    )
+    predicted_bandwidth: str | None = Field(
+        default=None,
+        description="Original launch prediction bandwidth (unchanged)",
+    )
+    reason_code: SnoozeCorrectionReason = Field(
+        description=(
+            "Compact reason code: heavy_snooze_shift, light_snooze_deflate, "
+            "confidence_degrade, no_correction, or clarification_needed"
+        ),
+    )
+    suggest_clarification: bool = Field(
+        default=False,
+        description="True when repeated contradictory snoozes make the mode uncertain",
+    )
 class ActiveThreadInfo(BaseModel):
     """Schema for active thread information in session response."""
 
@@ -139,10 +181,25 @@ class SessionResponse(BaseModel):
     snoozed_thread_ids: list[int] = []
     snoozed_threads: list[SnoozedThreadInfo] = []
     pending_thread_id: int | None = None
+    timezone: str | None = None
     reading_bandwidth: str | None = None
     reading_intent: str | None = None
     reading_mode_source: str | None = None
     reading_mode_suggested: bool = False
+    bandwidth: SessionBandwidthState | None = Field(
+        default=None,
+        description=(
+            "Canonical ephemeral bandwidth state for the session. Null on endpoints "
+            "that do not load bandwidth state."
+        ),
+    )
+    correction: SnoozeCorrectionInfo | None = Field(
+        default=None,
+        description=(
+            "Structured correction result from the most recent Snooze. "
+            "Null when no correction was applied."
+        ),
+    )
 
     @field_serializer("started_at", "ended_at")
     def serialize_datetime(self, value: datetime | None) -> str | None:
@@ -202,6 +259,7 @@ class SessionDetailsResponse(BaseModel):
     ladder_path: str
     narrative_summary: dict[str, list[str]]
     current_die: int
+    timezone: str | None = None
     events: list[EventDetail]
 
     @field_serializer("started_at", "ended_at")
@@ -232,8 +290,8 @@ class SessionListItem(BaseModel):
     """Schema for a single session in the history list view.
 
     A deliberate subset of SessionResponse. The list view does not need
-    snoozed_thread_ids, snoozed_threads, or pending_thread_id, which
-    reduces payload size for session history lists.
+    snoozed_thread_ids, snoozed_threads, pending_thread_id, or timezone,
+    which reduces payload size for session history lists.
     """
 
     id: int
@@ -275,3 +333,52 @@ class SessionHistoryListResponse(BaseModel):
 
     sessions: list[SessionListItem]
     next_page_token: str | None = None
+
+
+class SessionMode(BaseModel):
+    """Canonical session mode state for Roll bootstrap and frontend rendering.
+
+    Describes the active and predicted reading bandwidth and intent, together
+    with the confidence, source, and version metadata needed for the reading-
+    mode UI. When all fields are ``None`` the session is in the legacy null
+    state and the frontend should treat it as the default balanced mode.
+    """
+
+    active_bandwidth: str | None = Field(
+        default=None,
+        description="Current active bandwidth: light, balanced, deep, or null for legacy",
+    )
+    predicted_bandwidth: str | None = Field(
+        default=None, description="Algorithm-predicted bandwidth for this session"
+    )
+    bandwidth_confidence: float | None = Field(
+        default=None, ge=0.0, le=1.0, description="Confidence in the bandwidth prediction"
+    )
+    bandwidth_source: Literal["manual", "inferred"] | None = Field(
+        default=None,
+        description="Origin of the bandwidth value: manual user override or algorithm inference",
+    )
+    bandwidth_version: str | None = Field(
+        default=None, description="Version tag for the bandwidth inference algorithm"
+    )
+    active_intent: str | None = Field(
+        default=None,
+        description="Current active intent: balanced, momentum, familiar, explore, random, or null",
+    )
+    predicted_intent: str | None = Field(
+        default=None, description="Algorithm-predicted intent for this session"
+    )
+    intent_confidence: float | None = Field(
+        default=None, ge=0.0, le=1.0, description="Confidence in the intent prediction"
+    )
+    intent_source: Literal["manual", "inferred"] | None = Field(
+        default=None,
+        description="Origin of the intent value: manual user override or algorithm inference",
+    )
+    intent_version: str | None = Field(
+        default=None, description="Version tag for the intent inference algorithm"
+    )
+    session_mode_correction_guidance: dict | None = Field(
+        default=None,
+        description="Compact guidance when mode differs from prediction (null when no correction)",
+    )

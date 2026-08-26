@@ -67,4 +67,4 @@ class RecommendationContext(Base):
         Index("ix_recommendation_contexts_intent", "intent"),
     )
 
-    event: Mapped[Event] = relationship("Event", back_populates="recommendation_context", lazy="raise")
+    event: Mapped[Event] = relationship("Event", back_populates="recommendation_context_record", lazy="raise")

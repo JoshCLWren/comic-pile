@@ -256,6 +256,16 @@ async def create_session_start_snapshot(db: AsyncSession, session: Session) -> N
             "start_die": session.start_die,
             "manual_die": session.manual_die,
             "current_die": session.start_die,
+            "active_bandwidth": session.active_bandwidth,
+            "predicted_bandwidth": session.predicted_bandwidth,
+            "bandwidth_confidence": session.bandwidth_confidence,
+            "bandwidth_source": session.bandwidth_source,
+            "bandwidth_version": session.bandwidth_version,
+            "active_intent": session.active_intent,
+            "predicted_intent": session.predicted_intent,
+            "intent_confidence": session.intent_confidence,
+            "intent_source": session.intent_source,
+            "intent_version": session.intent_version,
         },
         description="Session start",
     )
@@ -269,6 +279,7 @@ async def get_or_create(
     user_id: int,
     *,
     existing_user: User | None = None,
+    timezone: str | None = None,
 ) -> Session:
     """Get the authoritative active session or create one race-safely.
 
@@ -277,6 +288,9 @@ async def get_or_create(
         user_id: User whose authoritative reading session should be resolved.
         existing_user: Already-loaded User owned by the same transaction. When
             provided, the redundant user lookup is skipped.
+        timezone: Optional browser-resolved IANA timezone identifier to set on
+            the new session when one is created. Ignored when reusing an existing
+            session.
 
     Returns:
         The authoritative current Session, creating one when none exists.
@@ -336,7 +350,7 @@ async def get_or_create(
                     )
                     return active_session
 
-                new_session = Session(start_die=start_die, user_id=user_id)
+                new_session = Session(start_die=start_die, user_id=user_id, timezone=timezone)
                 db.add(new_session)
                 await create_session_start_snapshot(db, new_session)
                 await db.commit()

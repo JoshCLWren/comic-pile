@@ -46,7 +46,7 @@ async def test_create_threads_to_meet_20(
     ]
 
     for thread in threads_data:
-        resp = await auth_client.post("/api/threads/", json=thread)
+        resp = await auth_client.post("/api/v1/threads/", json=thread)
         assert resp.status_code == 201
         data = resp.json()
         assert "id" in data

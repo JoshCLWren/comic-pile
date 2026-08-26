@@ -41,7 +41,7 @@ def _schema_candidates() -> list[Path]:
 # non-client tooling or administrative surfaces, never versioned client
 # resources. Every other bare ``/api`` path must be a compatibility alias for a
 # family that also has a canonical ``/api/v1`` route.
-LEGACY_ONLY_TOOLING = frozenset({"admin", "bug-reports", "debug", "metrics", "ping"})
+LEGACY_ONLY_TOOLING = frozenset({"admin", "debug", "metrics", "ping"})
 
 # Retained first-party client families that must expose a canonical
 # ``/api/v1`` route. These are the durable product APIs, not tooling.
@@ -49,6 +49,7 @@ REQUIRED_V1_FAMILIES = frozenset(
     {
         "analytics",
         "auth",
+        "bug-reports",
         "continuity",
         "continuity-plans",
         "continuity-rules",
@@ -65,6 +66,11 @@ REQUIRED_V1_FAMILIES = frozenset(
         "undo",
     }
 )
+
+
+# The generated client surface (issue #1741) must reference no bare domain
+# paths at all; ``/api/ping`` is the single documented exemption.
+CLIENT_EXEMPT_BARE_PATHS = frozenset({"/api/ping"})
 
 
 def _load_schema() -> dict:
@@ -160,3 +166,33 @@ def test_legacy_api_aliases_are_explicit_allowlist() -> None:
         f"{unexpected}. Add a canonical /api/v1 route or extend "
         "LEGACY_ONLY_TOOLING."
     )
+
+
+def test_generated_client_has_zero_bare_domain_path_references() -> None:
+    """The committed generated client must be v1-only plus the ping exemption.
+
+    Issue #1741 acceptance: ``frontend/src/generated/openapi.ts`` has zero
+    bare domain-path references. The schema that feeds that generated client
+    therefore keeps only infrastructure paths, canonical ``/api/v1`` routes,
+    and the exempt ``/api/ping`` heartbeat path.
+    """
+    schema = _load_schema()
+    paths = list(schema.get("paths", {}))
+
+    violations = [
+        path
+        for path in paths
+        if path.startswith("/api/")
+        and path not in CLIENT_EXEMPT_BARE_PATHS
+        and not path.startswith("/api/v1/")
+    ]
+    assert not violations, (
+        "Generated client schema contains bare domain-path references "
+        f"(issue #1741): {violations}. Regenerate with "
+        "`python scripts/generate_openapi_types.py` after adding /api/v1 twins."
+    )
+
+    assert any(path.startswith("/api/v1/") for path in paths), (
+        "Generated client schema lost all canonical /api/v1 routes."
+    )
+    assert "/api/ping" in paths, "Ping heartbeat path missing from client schema."

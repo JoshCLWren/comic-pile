@@ -252,7 +252,11 @@ async def test_issue_dependency_api_lifecycle(auth_client, async_db, test_userna
     info = info_resp.json()
     assert info["is_blocked"] is True
     assert info["blocking_reasons"]
-    assert "issue #1" in info["blocking_reasons"][0].lower()
+    assert "#1" in info["blocking_reasons"][0].lower()
+    assert info["blocking_dependencies"]
+    assert info["blocking_dependencies"][0]["thread_id"] == source_thread.id
+    assert info["blocking_dependencies"][0]["thread_title"] == source_thread.title
+    assert "source issue thread" in info["blocking_dependencies"][0]["label"].lower()
     target_thread = Thread(
         title="Negative Target Thread",
         format="Comic",
@@ -1398,9 +1402,12 @@ async def test_batch_blocking_info_multiple_threads(auth_client, async_db, test_
 
     assert threads[str(t2.id)]["is_blocked"] is True
     assert len(threads[str(t2.id)]["blocking_reasons"]) > 0
+    assert len(threads[str(t2.id)]["blocking_dependencies"]) > 0
+    assert threads[str(t2.id)]["blocking_dependencies"][0]["thread_id"] == t1.id
 
     assert threads[str(t3.id)]["is_blocked"] is False
     assert threads[str(t3.id)]["blocking_reasons"] == []
+    assert threads[str(t3.id)]["blocking_dependencies"] == []
 
 
 @pytest.mark.asyncio

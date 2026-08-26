@@ -54,6 +54,9 @@ SESSION_HISTORY_DROPPED_FIELDS = {
     "snoozed_thread_ids",
     "snoozed_threads",
     "pending_thread_id",
+    "timezone",
+    "bandwidth",
+    "correction",
 }
 CURRENT_SESSION_FIELDS = SESSION_HISTORY_FIELDS | SESSION_HISTORY_DROPPED_FIELDS
 ISSUE_FIELDS = {
@@ -68,6 +71,7 @@ ISSUE_FIELDS = {
 BLOCKING_EXPLANATION_FIELDS = {
     "is_blocked",
     "blocking_reasons",
+    "blocking_dependencies",
 }
 THREAD_DEPENDENCIES_FIELDS = {
     "blocking",
@@ -89,6 +93,7 @@ ROLL_FIELDS = {
     "next_issue_number",
     "total_issues",
     "reading_progress",
+    "explanation",
 }
 
 
@@ -162,9 +167,9 @@ def test_session_history_item_contract_is_exact_and_measurably_narrower() -> Non
 
     assert history_fields == SESSION_HISTORY_FIELDS
     assert full_fields - history_fields == SESSION_HISTORY_DROPPED_FIELDS
-    assert len(full_fields) == 19
+    assert len(full_fields) == 22
     assert len(history_fields) == 16
-    assert (len(full_fields) - len(history_fields)) / len(full_fields) == 3 / 19
+    assert (len(full_fields) - len(history_fields)) / len(full_fields) == 6 / 22
 
 
 def test_session_history_records_serialized_byte_reduction() -> None:
@@ -187,6 +192,21 @@ def test_session_history_records_serialized_byte_reduction() -> None:
         reading_intent="explore",
         reading_mode_source="quiz",
         reading_mode_suggested=False,
+        bandwidth={
+            "predicted_bandwidth": "deep",
+            "active_bandwidth": "deep",
+            "confidence": 0.8,
+            "source": "inferred",
+            "mode_version": "v1",
+        },
+        correction={
+            "bandwidth_changed": False,
+            "active_bandwidth": "deep",
+            "active_confidence": 0.6,
+            "predicted_bandwidth": "deep",
+            "reason_code": "confidence_degrade",
+            "suggest_clarification": False,
+        },
         snoozed_thread_ids=[11, 12, 13],
         snoozed_threads=[
             {"id": 11, "title": "Thread Eleven"},
@@ -230,29 +250,29 @@ def test_blocked_summary_contract_is_exact_and_named() -> None:
 
 
 def test_roll_screen_contract_is_exact_and_named() -> None:
-    """The Roll screen response exposes exactly the documented 15-field contract."""
+    """The Roll screen response exposes exactly the documented 16-field contract."""
     assert set(RollResponse.model_fields) == ROLL_FIELDS
-    assert len(RollResponse.model_fields) == 15
+    assert len(RollResponse.model_fields) == 16
 
 
 def test_current_session_contract_is_exact_and_named() -> None:
-    """The current-session screen exposes exactly the named 19-field contract."""
+    """The current-session screen exposes exactly the named 22-field contract."""
     assert set(SessionResponse.model_fields) == CURRENT_SESSION_FIELDS
-    assert len(SessionResponse.model_fields) == 19
+    assert len(SessionResponse.model_fields) == 22
 
 
 def test_routes_publish_the_screen_specific_openapi_contracts() -> None:
     """Affected retained routes advertise their intended response models."""
-    assert _response_schema("/api/threads/") == {
+    assert _response_schema("/api/v1/threads/") == {
         "$ref": "#/components/schemas/QueueThreadListResponse"
     }
-    assert _response_schema("/api/threads/{thread_id}") == {
+    assert _response_schema("/api/v1/threads/{thread_id}") == {
         "$ref": "#/components/schemas/ThreadDetail"
     }
-    assert _response_schema("/api/sessions/") == {
+    assert _response_schema("/api/v1/sessions/") == {
         "$ref": "#/components/schemas/SessionHistoryListResponse"
     }
-    assert _response_schema("/api/sessions/current/") == {
+    assert _response_schema("/api/v1/sessions/current/") == {
         "$ref": "#/components/schemas/SessionResponse"
     }
     assert _response_schema("/api/v1/threads/{thread_id}/issues") == {
@@ -261,7 +281,7 @@ def test_routes_publish_the_screen_specific_openapi_contracts() -> None:
     assert _response_schema("/api/v1/threads/{thread_id}/dependencies") == {
         "$ref": "#/components/schemas/ThreadDependenciesResponse"
     }
-    assert _response_schema("/api/roll/", method="post") == {
+    assert _response_schema("/api/v1/roll/", method="post") == {
         "$ref": "#/components/schemas/RollResponse"
     }
     assert _response_schema(
