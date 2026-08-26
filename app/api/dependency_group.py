@@ -14,7 +14,6 @@ from sqlalchemy.orm import selectinload
 
 from app.auth import get_current_user
 from app.cache import invalidate_cache
-from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
 from app.models import DependencyGroup, DependencyGroupMembership, Issue, Thread
 from app.models.user import User
@@ -29,6 +28,8 @@ from app.schemas.dependency_group import (
     DependencyGroupUpdate,
 )
 from comic_pile.dependencies import refresh_user_blocked_status
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/reading-order-groups", tags=["reading-order-groups"])
 MAX_RANGE_SIZE = 250
