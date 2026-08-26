@@ -347,7 +347,8 @@ jobs:
               echo "Canceling stale fixed-model entry run ${run_id}${worker:+ for Factory ${worker}}"
               cancel_succeeded=false
               # GitHub can briefly report a queued run after accepting or
-              # rejecting cancellation for a run that has already completed.
+              # rejecting cancellation for a run that completed between the
+              # stale-run listing and the cancel request.
               # Retry the transition before treating it as a real control-plane
               # failure, while keeping the wait bounded per stale run.
               for _ in {1..15}; do
