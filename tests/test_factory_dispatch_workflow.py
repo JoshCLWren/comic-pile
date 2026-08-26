@@ -10,6 +10,7 @@ WORKFLOW = (
 )
 
 
+# Keep dispatcher assertions tied to the checked-in workflow contract.
 def test_push_smoke_workers_are_derived_from_current_provider_rows():
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
