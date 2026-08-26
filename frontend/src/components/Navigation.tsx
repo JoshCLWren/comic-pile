@@ -391,37 +391,6 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
           </div>
         </nav>
       )}
-
-      <div className="fixed right-4 top-4 z-50 hidden items-center gap-3 md:flex">
-        {isLoading ? <span className="hidden md:inline text-xs font-medium px-2 py-1 text-[var(--theme-text-muted)]">Loading...</span> : hasError ? <span className="hidden md:inline text-xs font-medium px-2 py-1 text-amber-500" title="Failed to load user data">User</span> : username ? <span className="hidden md:inline text-xs font-medium px-2 py-1 text-[var(--theme-text-muted)]">{username}</span> : null}
-        <div
-          className="flex items-center gap-1 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-1"
-          role="group"
-          aria-label="Appearance"
-        >
-          <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--theme-text-muted)' }}>Theme</span>
-          {APPEARANCE_OPTIONS.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              data-theme={option.id}
-              onClick={() => setTheme(option.id)}
-              aria-pressed={activeTheme === option.id}
-              className={`rounded-md px-2 py-1 text-xs font-bold transition-colors ${
-                activeTheme === option.id
-                  ? 'bg-white/10 text-[var(--theme-text-primary)]'
-                  : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-        <button onClick={handleLogout} className="px-2 py-1.5 md:px-3 text-xs font-bold uppercase tracking-widest text-red-400 hover:text-red-300 bg-[#110e0a]/60 hover:bg-[#110e0a]/80 rounded-lg transition-colors" aria-label="Log out">
-          <span className="md:hidden" aria-hidden="true">⎋</span>
-          <span className="hidden md:inline">Log Out</span>
-        </button>
-      </div>
     </>
   )
 }
