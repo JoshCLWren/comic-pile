@@ -157,6 +157,7 @@ describe('CrossoverDetailPage', () => {
     mockedGroups.get.mockImplementation(
       () => new Promise<DependencyGroup>((resolve) => { resolveGet = resolve }),
     )
+    mockedGroups.plansForGroup.mockResolvedValue([])
     mockedReadiness.evaluate.mockResolvedValue(readableReadiness)
 
     renderPage()

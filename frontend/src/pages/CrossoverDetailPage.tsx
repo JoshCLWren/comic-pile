@@ -75,7 +75,7 @@ export default function CrossoverDetailPage() {
       setReadiness(readinessData)
 
       const plans = await dependencyGroupsApi.plansForGroup(groupId)
-      setLinkedPlans(plans)
+      setLinkedPlans(plans ?? [])
     } catch (err) {
       setError(getApiErrorDetail(err))
     } finally {
