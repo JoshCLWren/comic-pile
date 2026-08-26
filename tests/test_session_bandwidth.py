@@ -374,7 +374,7 @@ async def test_clear_ephemeral_bandwidth_resets_all_fields(default_user) -> None
         active_bandwidth="light",
         bandwidth_source="quiz",
         bandwidth_confidence=0.4,
-        bandwidth_version=3,
+        bandwidth_version="3",
         bandwidth_updated_at=datetime.now(UTC),
     )
     clear_ephemeral_bandwidth(session)
@@ -396,7 +396,7 @@ def test_capture_and_restore_round_trip() -> None:
         active_bandwidth: str | None
         bandwidth_confidence: float | None
         bandwidth_source: str | None
-        bandwidth_version: int | None
+        bandwidth_version: str | None
         bandwidth_updated_at: datetime | None
 
     source = _StubSession()
@@ -416,7 +416,7 @@ def test_capture_and_restore_round_trip() -> None:
     target.active_bandwidth = "deep"
     target.bandwidth_confidence = 0.2
     target.bandwidth_source = "snooze"
-    target.bandwidth_version = 99
+    target.bandwidth_version = "99"
     target.bandwidth_updated_at = datetime.now(UTC)
 
     restore_ephemeral_bandwidth(target, captured)
@@ -473,7 +473,7 @@ async def test_current_session_endpoint_exposes_bandwidth_state(
         active_bandwidth="light",
         bandwidth_source="manual",
         bandwidth_confidence=0.75,
-        bandwidth_version=1,
+        bandwidth_version="1",
         bandwidth_updated_at=datetime.now(UTC),
     )
     async_db.add(session)
@@ -486,12 +486,13 @@ async def test_current_session_endpoint_exposes_bandwidth_state(
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == session.id
-    assert data["predicted_bandwidth"] == "balanced"
-    assert data["active_bandwidth"] == "light"
-    assert data["bandwidth_confidence"] == 0.75
-    assert data["bandwidth_source"] == "manual"
-    assert data["bandwidth_version"] == 1
-    assert data["bandwidth_updated_at"] is not None
+    # Bandwidth state is nested under the "bandwidth" field
+    assert data["bandwidth"] is not None
+    assert data["bandwidth"]["predicted_bandwidth"] == "balanced"
+    assert data["bandwidth"]["active_bandwidth"] == "light"
+    assert data["bandwidth"]["confidence"] == 0.75
+    assert data["bandwidth"]["source"] == "manual"
+    assert data["bandwidth"]["mode_version"] == "1"
 
 
 @pytest.mark.asyncio
@@ -507,9 +508,11 @@ async def test_get_session_by_id_exposes_null_bandwidth_for_legacy_row(
     response = await auth_client.get(f"/api/sessions/{session.id}")
     assert response.status_code == 200
     data = response.json()
-    assert data["predicted_bandwidth"] is None
-    assert data["active_bandwidth"] is None
-    assert data["bandwidth_source"] is None
+    # Bandwidth state is nested under the "bandwidth" field
+    assert data["bandwidth"] is not None
+    assert data["bandwidth"]["predicted_bandwidth"] is None
+    assert data["bandwidth"]["active_bandwidth"] is None
+    assert data["bandwidth"]["source"] is None
 
 
 def test_bandwidth_state_never_lands_on_thread_or_list_view() -> None:
@@ -574,7 +577,7 @@ async def test_undo_delta_restore_recovers_pre_rating_bandwidth(
     session.active_bandwidth = "deep"
     session.bandwidth_source = "snooze"
     session.bandwidth_confidence = 0.1
-    session.bandwidth_version = 42
+    session.bandwidth_version = "42"
     session.bandwidth_updated_at = datetime.now(UTC)
     await async_db.commit()
 
