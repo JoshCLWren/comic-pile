@@ -266,11 +266,9 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
     )
   }
 
-  const allNavItems = [...MAIN_NAV_ITEMS, ...SECONDARY_NAV_ITEMS]
-
   return (
     <>
-      <nav className="fixed top-0 left-0 right-0 nav-container z-40 hidden md:flex" role="navigation" aria-label="Main navigation">
+      <nav className="fixed top-0 left-0 right-0 nav-container z-40 hidden md:flex" role="navigation" aria-label="Desktop navigation">
         <div className="flex items-center justify-between px-4 h-16 max-w-7xl mx-auto w-full">
           <div className="flex items-center gap-1">
             {MAIN_NAV_ITEMS.map((item) => renderNavItem(item, isActive(item.path), true))}
@@ -281,7 +279,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
         </div>
       </nav>
 
-      <nav className="fixed bottom-0 left-0 right-0 nav-container z-40 md:hidden" role="navigation" aria-label="Main navigation">
+      <nav className="fixed bottom-0 left-0 right-0 nav-container z-40 md:hidden" role="navigation" aria-label="Mobile navigation">
         <div className="flex h-14 items-center justify-around px-1 md:h-20 md:px-2 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl mx-auto">
           {MAIN_NAV_ITEMS.map((item) => renderNavItem(item, isActive(item.path)))}
           {!isMobile && SECONDARY_NAV_ITEMS.map((item) => renderNavItem(item, isActive(item.path)))}
