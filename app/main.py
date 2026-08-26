@@ -46,6 +46,7 @@ from app.api import (
     traffic_metrics,
     undo,
     preferences,
+    taste_signal,
 )
 from app.cache import cache
 from app.config import get_app_settings, get_database_settings, get_redis_settings
@@ -264,6 +265,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(undo.router, prefix="/api/undo", tags=["undo"])
     app.include_router(undo.router, prefix="/api/v1/undo", tags=["undo"])
     app.include_router(preferences.router, prefix="/api/v1", tags=["users"])
+    app.include_router(taste_signal.router, prefix="/api/v1", tags=["taste-signals"])
     app.include_router(traffic_metrics.router, prefix="/api", tags=["traffic"])
     app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
     app.include_router(catalog.router, tags=["catalog"])
