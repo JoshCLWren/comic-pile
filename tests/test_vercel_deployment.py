@@ -58,7 +58,13 @@ def test_vercel_routes_backend_before_spa_fallback() -> None:
     }
     assert routes[2]["src"] == "/"
     assert routes[2]["dest"] == "/index.html"
-    assert routes[3] == {"handle": "filesystem"}
+    # Route 3 is the /assets/.+ cache headers route (added for edge caching)
+    assert routes[3] == {
+        "src": "/assets/.+",
+        "continue": True,
+        "headers": {"Cache-Control": "public, max-age=31536000, immutable"},
+    }
+    assert routes[4] == {"handle": "filesystem"}
     assert routes[-1]["src"] == "/(.*)"
     assert routes[-1]["dest"] == "/index.html"
 

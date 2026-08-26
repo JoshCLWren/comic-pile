@@ -381,7 +381,14 @@ describe('ComicVineIssueCard', () => {
   })
 
   it('calls onAdded callback when issue is added via dialog', async () => {
-    importIssue.mockResolvedValue({ thread_id: 42 })
+    importIssue.mockResolvedValue({
+      thread_id: 42,
+      issue_id: 1,
+      external_identity_id: 1,
+      reading_order_id: null,
+      position: 1,
+      total_items: 1,
+    })
     getIntelligence.mockResolvedValue({
       comicvine_issue_id: '500',
       comicvine_url: null,
