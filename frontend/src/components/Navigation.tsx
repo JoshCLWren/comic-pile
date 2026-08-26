@@ -212,6 +212,9 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
     const applied = selectTheme(themeId)
     if (applied === null) return
     setActiveTheme(applied)
+    // The choice is already applied and mirrored locally; server persistence
+    // retries in the background and reports sustained failure once per
+    // outage episode instead of once per click (issue #1872).
     persistThemePreference(applied, () => {
       showToast('Theme applied for this session, but saving your preference failed.', 'error')
     })
@@ -235,7 +238,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
     }`
 
   const desktopNavItemClass = (active: boolean) =>
-    `desktop-nav-item flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 ${
+    `desktop-nav-item flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-all duration-200 ${
       active ? 'bg-white/10 text-amber-400' : 'text-stone-400 hover:bg-white/5'
     }`
 
@@ -268,14 +271,50 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
 
   return (
     <>
-      <nav className="fixed top-0 left-0 right-0 nav-container z-40 hidden md:flex" role="navigation" aria-label="Desktop navigation">
-        <div className="flex items-center justify-between px-4 h-16 max-w-7xl mx-auto w-full">
-          <div className="flex items-center gap-1">
-            {MAIN_NAV_ITEMS.map((item) => renderNavItem(item, isActive(item.path), true))}
+      <nav
+        className="fixed bottom-0 left-0 top-0 z-40 hidden w-56 flex-col border-r border-[var(--glass-border)] bg-[var(--bg-darker)] md:flex"
+        role="navigation"
+        aria-label="Desktop navigation"
+      >
+        <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 py-4">
+          {MAIN_NAV_ITEMS.map((item) => renderNavItem(item, isActive(item.path), true))}
+          <div className="my-2 border-t border-[var(--glass-border)]" aria-hidden="true" />
+          {SECONDARY_NAV_ITEMS.map((item) => renderNavItem(item, isActive(item.path), true))}
+        </div>
+        <div className="border-t border-[var(--glass-border)] px-3 py-3">
+          {isLoading ? (
+            <span className="text-xs font-medium text-[var(--theme-text-muted)]">Loading...</span>
+          ) : hasError ? (
+            <span className="text-xs font-medium text-amber-500" title="Failed to load user data">User</span>
+          ) : username ? (
+            <span className="block truncate text-xs font-medium text-[var(--theme-text-muted)]">{username}</span>
+          ) : null}
+          <div
+            className="mt-2 flex items-center gap-1 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-1"
+            role="group"
+            aria-label="Appearance"
+          >
+            <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--theme-text-muted)' }}>Theme</span>
+            {APPEARANCE_OPTIONS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                data-theme={option.id}
+                onClick={() => setTheme(option.id)}
+                aria-pressed={activeTheme === option.id}
+                className={`rounded-md px-2 py-1 text-xs font-bold transition-colors ${
+                  activeTheme === option.id
+                    ? 'bg-white/10 text-[var(--theme-text-primary)]'
+                    : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
-          <div className="flex items-center gap-1">
-            {SECONDARY_NAV_ITEMS.map((item) => renderNavItem(item, isActive(item.path), true))}
-          </div>
+          <button onClick={handleLogout} className="mt-2 w-full px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-red-400 hover:text-red-300 bg-[#110e0a]/60 hover:bg-[#110e0a]/80 rounded-lg transition-colors" aria-label="Log out">
+            Log Out
+          </button>
         </div>
       </nav>
 
