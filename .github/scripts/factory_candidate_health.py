@@ -8,9 +8,10 @@ import json
 import re
 import sys
 import time
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
 
 from factory_completion_controller import (
     FAILURE_COOLDOWN_SECONDS,
@@ -100,10 +101,13 @@ def latest_attempt_evidence(
         updated = parse_time(updated_match.group("updated"))
         if updated is None:
             continue
+        outcome = outcome_match.group("outcome")
+        if outcome in IGNORED_MODEL_OUTCOMES:
+            continue
         evidence = AttemptEvidence(
             provider=provider_match.group("provider"),
             model=model_match.group("model"),
-            outcome=outcome_match.group("outcome"),
+            outcome=outcome,
             updated=updated,
         )
         key = (evidence.provider, evidence.model)
@@ -120,7 +124,11 @@ def _provider_state(
     now_epoch: int,
 ) -> str:
     """Return provider health from the newest provider-relevant attempt."""
-    relevant = [item for item in evidence if item.provider == provider]
+    relevant = [
+        item
+        for item in evidence
+        if item.provider == provider and item.outcome != "unknown_failure"
+    ]
     if not relevant:
         return "unknown"
     newest = max(relevant, key=lambda item: item.updated)
