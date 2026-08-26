@@ -7,7 +7,6 @@ import importlib.util
 import json
 import os
 import sys
-import time
 from collections.abc import Iterable, Mapping
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -86,7 +85,6 @@ def collect_snapshot() -> dict[str, Any]:
 
     workers = completion.load_manifest_workers(MANIFEST)
     owned = completion.owned_worker_ids([*issues, *prs])
-    now_epoch = int(time.time())
     health_counts = capacity.get("health_counts") or {}
 
     hour = iso_search_time(timedelta(hours=1))
