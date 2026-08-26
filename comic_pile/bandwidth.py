@@ -291,7 +291,8 @@ async def initialize_session_bandwidth(db: AsyncSession, session: Session) -> Se
     try:
         observations = await _historical_observations(db, session.user_id)
         started_at = session.started_at
-        prediction = infer_bandwidth(observations, session_hour=started_at.hour)
+        session_hour = started_at.hour if started_at is not None else None
+        prediction = infer_bandwidth(observations, session_hour=session_hour)
     except Exception:
         logger.warning(
             "Bandwidth inference failed for session %s; failing closed to balanced",

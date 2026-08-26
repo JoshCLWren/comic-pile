@@ -67,10 +67,10 @@ async def test_roll_creates_recommendation_context(
     assert context.intent == "balanced"
     assert context.intent_source == "default"
     assert context.intent_confidence == 0.0
-    # Verify bandwidth is balanced (default)
+    # Verify bandwidth is balanced; Phase 2 initialization sets source to "inferred"
     assert context.bandwidth == "balanced"
-    assert context.bandwidth_source == "default"
-    assert context.bandwidth_confidence == 0.0
+    assert context.bandwidth_source == "inferred"
+    assert context.bandwidth_confidence == pytest.approx(0.1)
     # Verify final weight equals the selected candidate's chooser weight
     assert context.candidate_factors is not None
     selected_factors = [
