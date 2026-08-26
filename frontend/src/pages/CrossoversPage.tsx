@@ -1,5 +1,6 @@
-import { FormEvent, useCallback, useEffect, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import axios from 'axios'
+import { useSearchParams } from 'react-router-dom'
 import {
   ContinuityIssueRangeSelector,
   ContinuityThreadSelector,
@@ -92,6 +93,10 @@ export default function CrossoversPage() {
   const [isLoadingRangeIssues, setIsLoadingRangeIssues] = useState(false)
   const [rangeLoadError, setRangeLoadError] = useState<string | null>(null)
   const [membershipMessage, setMembershipMessage] = useState<string | null>(null)
+  const [searchParams] = useSearchParams()
+  const requestedGroupId = searchParams.get('group')
+  const startsAtParam = searchParams.get('starts_at')
+  const deepLinkAppliedRef = useRef(false)
 
   const loadGroups = useCallback(async () => {
     setIsLoading(true)
@@ -119,6 +124,16 @@ export default function CrossoversPage() {
     void loadGroups()
     void loadThreads()
   }, [loadGroups, loadThreads])
+
+  useEffect(() => {
+    if (deepLinkAppliedRef.current) return
+    if (!requestedGroupId || groups.length === 0) return
+    const requestedId = Number(requestedGroupId)
+    if (!Number.isInteger(requestedId)) return
+    if (!groups.some((group) => group.id === requestedId)) return
+    deepLinkAppliedRef.current = true
+    setExpandedId(requestedId)
+  }, [requestedGroupId, groups])
 
   const clearRangeState = () => {
     setRangeThread(null)
@@ -334,6 +349,9 @@ export default function CrossoversPage() {
 
                 {isExpanded && !isEditing && (
                   <div className="mt-4 space-y-4 border-t border-stone-800 pt-4 text-sm text-stone-400">
+                    {requestedGroupId === String(group.id) && startsAtParam && (
+                      <p role="status" className="text-xs font-bold text-amber-500">Starts at #{startsAtParam}</p>
+                    )}
                     {group.memberships.length === 0 ? <p>This crossover has no comics yet.</p> : (
                       <ul className="grid gap-2" aria-label={`${group.name} members`}>
                         {group.memberships.map((member) => {

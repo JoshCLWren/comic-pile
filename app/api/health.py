@@ -151,10 +151,7 @@ async def _cache_probe() -> None:
     Raises:
         RuntimeError: If the cache has not been initialized.
     """
-    client = getattr(cache, "_client", None)
-    if not cache.is_initialized or client is None:
-        raise RuntimeError("Cache is not initialized")
-    await client.ping()
+    await cache.ping()
 
 
 def _overall_status(

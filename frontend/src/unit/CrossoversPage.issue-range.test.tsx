@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CrossoversPage from '../pages/CrossoversPage'
 import { threadsApi } from '../services/api'
@@ -32,6 +33,14 @@ vi.mock('../services/api-dependency-groups', () => ({
 const groupsApi = vi.mocked(dependencyGroupsApi)
 const threadApi = vi.mocked(threadsApi)
 const issueApi = vi.mocked(issuesApi)
+
+function renderPage() {
+  return render(
+    <MemoryRouter>
+      <CrossoversPage />
+    </MemoryRouter>,
+  )
+}
 
 const crossover = {
   id: 7,
@@ -121,7 +130,7 @@ beforeEach(() => {
 
 describe('CrossoversPage issue ranges', () => {
   it('uses shared issue selectors and never exposes issue positions', async () => {
-    render(<CrossoversPage />)
+    renderPage()
     await screen.findByText('Annihilation')
     openRangeForm()
     await loadIssues()
@@ -150,7 +159,7 @@ describe('CrossoversPage issue ranges', () => {
       ],
     })
 
-    render(<CrossoversPage />)
+    renderPage()
     await screen.findByText('Annihilation')
     openRangeForm()
     await loadIssues()
@@ -165,7 +174,7 @@ describe('CrossoversPage issue ranges', () => {
   })
 
   it('shows reversed-range validation using comic issue labels', async () => {
-    render(<CrossoversPage />)
+    renderPage()
     await screen.findByText('Annihilation')
     openRangeForm()
     await loadIssues()
@@ -193,7 +202,7 @@ describe('CrossoversPage issue ranges', () => {
         next_page_token: null,
       })
 
-    render(<CrossoversPage />)
+    renderPage()
     await screen.findByText('Annihilation')
     openRangeForm()
     await loadIssues()
@@ -221,7 +230,7 @@ describe('CrossoversPage issue ranges', () => {
         next_page_token: 'repeat-page',
       })
 
-    render(<CrossoversPage />)
+    renderPage()
     await screen.findByText('Annihilation')
     openRangeForm()
     await loadIssues()
@@ -241,7 +250,7 @@ describe('CrossoversPage issue ranges', () => {
         next_page_token: null,
       })
 
-      render(<CrossoversPage />)
+      renderPage()
       await screen.findByText('Annihilation')
       openRangeForm()
       fireEvent.change(screen.getByLabelText('Comic series for issue range'), { target: { value: 'Nova' } })
@@ -257,7 +266,7 @@ describe('CrossoversPage issue ranges', () => {
   )
 
   it('disables add range button when no series is selected', async () => {
-    render(<CrossoversPage />)
+    renderPage()
     await screen.findByText('Annihilation')
     openRangeForm()
 
@@ -267,7 +276,7 @@ describe('CrossoversPage issue ranges', () => {
   })
 
   it('disables add range button when query matches no series', async () => {
-    render(<CrossoversPage />)
+    renderPage()
     await screen.findByText('Annihilation')
     openRangeForm()
     fireEvent.change(screen.getByLabelText('Comic series for issue range'), { target: { value: 'abc' } })
@@ -279,7 +288,7 @@ describe('CrossoversPage issue ranges', () => {
   })
 
   it('shows validation error when series selected but no issue range chosen', async () => {
-    render(<CrossoversPage />)
+    renderPage()
     await screen.findByText('Annihilation')
     openRangeForm()
     fireEvent.change(screen.getByLabelText('Comic series for issue range'), { target: { value: 'Nova' } })
@@ -300,7 +309,7 @@ describe('CrossoversPage issue ranges', () => {
       next_page_token: null,
     })
 
-    render(<CrossoversPage />)
+    renderPage()
     await screen.findByText('Annihilation')
     openRangeForm()
     fireEvent.change(screen.getByLabelText('Comic series for issue range'), { target: { value: 'Nova' } })
@@ -314,7 +323,7 @@ describe('CrossoversPage issue ranges', () => {
 
   it('clears range state when expanding another crossover', async () => {
     groupsApi.list.mockResolvedValue([crossover, secondCrossover])
-    render(<CrossoversPage />)
+    renderPage()
     await screen.findByText('Annihilation')
 
     openRangeForm()
@@ -328,7 +337,7 @@ describe('CrossoversPage issue ranges', () => {
 
   it('reports issue-loading failures without exposing position inputs', async () => {
     issueApi.list.mockRejectedValue(new Error('Issues unavailable'))
-    render(<CrossoversPage />)
+    renderPage()
     await screen.findByText('Annihilation')
     openRangeForm()
 
@@ -343,7 +352,7 @@ describe('CrossoversPage issue ranges', () => {
 
   it('keeps controls locked while a range save is pending', async () => {
     groupsApi.addIssueRange.mockImplementation(() => new Promise(() => undefined))
-    render(<CrossoversPage />)
+    renderPage()
     await screen.findByText('Annihilation')
     openRangeForm()
     await loadIssues()
@@ -359,7 +368,7 @@ describe('CrossoversPage issue ranges', () => {
     groupsApi.delete.mockResolvedValue(undefined)
     vi.spyOn(window, 'confirm').mockReturnValue(true)
 
-    render(<CrossoversPage />)
+    renderPage()
     await screen.findByText('Annihilation')
     openRangeForm()
     await loadIssues()

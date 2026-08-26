@@ -3,8 +3,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import WhatsNewPage, {
   groupReleasesByDay,
+  hasUnfinishedWorkMarkers,
   isDisplayableRelease,
   releaseDisplayText,
+  releaseTimeLabel,
   RELEASE_PAGE_SIZE,
   sortReleasesNewestFirst,
 } from '../pages/WhatsNewPage'
@@ -85,20 +87,96 @@ describe('release ordering helpers', () => {
       expect(days[1].releases.map(item => item.id)).toEqual([1])
     })
 
-    it('strips markdown and bare GitHub links from visible card copy', () => {
+    it('strips markdown, bare GitHub links, and internal ticket references from visible card copy', () => {
       expect(releaseDisplayText(
-        '[#1058](https://github.com/JoshCLWren/comic-pile/pull/1058) persists reading lists',
-      )).toBe('#1058 persists reading lists')
+        '[Fix queue](https://github.com/JoshCLWren/comic-pile/pull/1058) persists reading lists',
+      )).toBe('Fix queue persists reading lists')
       expect(releaseDisplayText(
         'https://github.com/JoshCLWren/comic-pile/pull/1058 persists reading lists',
       )).toBe('persists reading lists')
       expect(releaseDisplayText('`queue` search')).toBe('queue search')
+      expect(releaseDisplayText('incomplete #1551 fix for the roll screen')).toBe(
+        'incomplete fix for the roll screen',
+      )
+    })
+
+    it('strips internal issue references so ticket numbers never reach readers', () => {
+      expect(releaseDisplayText('Roll recovery now resumes interrupted sessions (#1886)')).toBe(
+        'Roll recovery now resumes interrupted sessions',
+      )
+      expect(releaseDisplayText('Fixed dice history #1551 and #1705 rendering')).toBe(
+        'Fixed dice history and rendering',
+      )
+    })
+
+    it('strips database and schema identifiers from visible copy', () => {
+      expect(releaseDisplayText('Added `source_roll_event_id` instrumentation detail')).toBe(
+        'Added instrumentation detail',
+      )
+      expect(releaseDisplayText('roll_event rows now expire automatically')).toBe(
+        'rows now expire automatically',
+      )
+    })
+
+    it('strips implementation phase terminology from visible copy', () => {
+      expect(releaseDisplayText('Ships the Phase 2 and 3 reading-order upgrades')).toBe(
+        'Ships the reading-order upgrades',
+      )
+      expect(releaseDisplayText('Completes phase two of the library redesign')).toBe(
+        'Completes of the library redesign',
+      )
+    })
+
+    it('flags unfinished-work commentary for omission', () => {
+      expect(hasUnfinishedWorkMarkers(release({ title: 'incomplete #1551 fix' }))).toBe(true)
+      expect(hasUnfinishedWorkMarkers(release({ summary: 'TODO: finish the rollout' }))).toBe(true)
+      expect(hasUnfinishedWorkMarkers(release({ title: 'Queue cards open details' }))).toBe(false)
+    })
+
+    it('hides entries whose copy is only a low-information internal fragment', () => {
+      expect(isDisplayableRelease(release({ id: 1, title: 'loading states', summary: 'loading states' }))).toBe(false)
+      expect(isDisplayableRelease(release({ id: 2, title: 'wip' }))).toBe(false)
+    })
+
+    it('keeps useful historical entries that already meet the reader-facing contract', () => {
+      expect(isDisplayableRelease(release({
+        id: 3,
+        title: 'Reading queue remembers your place',
+        summary: 'Reopening a comic now resumes on the exact page you left.',
+      }))).toBe(true)
     })
 
     it('hides placeholder-sized titles from the public page', () => {
       expect(isDisplayableRelease(release({ id: 1, title: 'T' }))).toBe(false)
       expect(isDisplayableRelease(release({ id: 2, title: 'S' }))).toBe(false)
       expect(isDisplayableRelease(release({ id: 3, title: 'Add queue search' }))).toBe(true)
+    })
+  })
+
+describe('release time-of-day formatting', () => {
+    it('formats the release time-of-day for the requested timezone', () => {
+      expect(releaseTimeLabel('2026-08-11T20:30:00Z', 'UTC')).toMatch(/^\d{1,2}:\d{2}/)
+      expect(releaseTimeLabel('2026-08-11T20:30:00Z', 'UTC')).not.toBe(
+        releaseTimeLabel('2026-08-11T21:30:00Z', 'UTC'),
+      )
+    })
+
+    it('hides the published-time line when the timestamp is malformed', () => {
+      expect(releaseTimeLabel('not-a-date')).toBe('')
+    })
+
+    it('renders the local published time-of-day on each card', async () => {
+      api.list.mockResolvedValue({
+        releases: [release({ id: 11, title: 'Timed release note' })],
+        total: 1,
+        limit: RELEASE_PAGE_SIZE,
+        offset: 0,
+      })
+
+      render(<WhatsNewPage />)
+
+      expect(await screen.findByText('Timed release note')).toBeInTheDocument()
+      expect(screen.getByText(/Published at \d{1,2}:\d{2}/)).toBeInTheDocument()
     })
   })
 
@@ -268,6 +346,63 @@ describe('WhatsNewPage', () => {
       expect(screen.queryByText('T')).not.toBeInTheDocument()
       expect(screen.queryByText('S')).not.toBeInTheDocument()
       expect(screen.getByText('1 update published this day.')).toBeInTheDocument()
+    })
+
+    it('omits internal-artifact entries so ticket numbers, schema identifiers, and unfinished-work notes never render', async () => {
+      api.list.mockResolvedValue({
+        releases: [
+          release({
+            id: 1,
+            title: 'Real reader update',
+            summary: 'Your pile now syncs instantly across devices.',
+          }),
+          release({
+            id: 2,
+            title: 'incomplete #1551 fix',
+            summary: 'Added source_roll_event_id instrumentation for Phase 2 and 3.',
+          }),
+          release({
+            id: 3,
+            title: 'loading states',
+            summary: 'loading states',
+          }),
+        ],
+        total: 3,
+        limit: RELEASE_PAGE_SIZE,
+        offset: 0,
+      })
+
+      render(<WhatsNewPage />)
+
+      expect(await screen.findByText('Real reader update')).toBeInTheDocument()
+      expect(screen.queryByText(/incomplete/i)).not.toBeInTheDocument()
+      expect(screen.queryByText(/1551/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/source_roll_event_id/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Phase 2 and 3/i)).not.toBeInTheDocument()
+      expect(screen.queryByText('loading states')).not.toBeInTheDocument()
+      expect(screen.getByText('1 update published this day.')).toBeInTheDocument()
+    })
+
+    it('renders sanitized copy when a historical entry carries strippable internal fragments', async () => {
+      api.list.mockResolvedValue({
+        releases: [
+          release({
+            id: 4,
+            title: 'Roll recovery resumes interrupted sessions (#1886)',
+            summary: 'Interrupted rolls now continue where you left off instead of restarting.',
+          }),
+        ],
+        total: 1,
+        limit: RELEASE_PAGE_SIZE,
+        offset: 0,
+      })
+
+      render(<WhatsNewPage />)
+
+      expect(
+        await screen.findByText('Roll recovery resumes interrupted sessions'),
+      ).toBeInTheDocument()
+      expect(screen.queryByText(/1886/)).not.toBeInTheDocument()
     })
 
     it('strips bare GitHub URLs from release titles and summaries', async () => {

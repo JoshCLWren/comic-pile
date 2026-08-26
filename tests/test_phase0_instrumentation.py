@@ -59,7 +59,7 @@ async def test_roll_populates_issue_id_and_number(
     # Ensure no pending roll blocks the new roll (409 guard in app/api/roll.py:66).
     assert session.pending_thread_id is None
 
-    response = await auth_client.post("/api/roll/")
+    response = await auth_client.post("/api/v1/roll/")
     assert response.status_code == 200
 
     data = response.json()
@@ -121,7 +121,7 @@ async def test_roll_override_populates_issue_id_and_number(
     await async_db.commit()
 
     response = await auth_client.post(
-        "/api/roll/override", json={"thread_id": thread.id}
+        "/api/v1/roll/override", json={"thread_id": thread.id}
     )
     assert response.status_code == 200
 
@@ -145,11 +145,14 @@ async def test_roll_override_populates_issue_id_and_number(
 async def test_roll_nullable_issue_fields_for_non_issue_tracked(
     auth_client: AsyncClient,
     sample_data: dict,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Roll event has NULL issue_id/issue_number for non-issue-tracked threads."""
     _ = sample_data
+    monkeypatch.setattr("app.momentum.random.randint", lambda _start, _end: 0)
+    monkeypatch.setattr("app.momentum.random.uniform", lambda _a, _b: 0.0)
 
-    response = await auth_client.post("/api/roll/")
+    response = await auth_client.post("/api/v1/roll/")
     assert response.status_code == 200
 
     data = response.json()
@@ -200,7 +203,7 @@ async def test_rate_links_to_source_roll_event(
     await async_db.commit()
 
     response = await auth_client.post(
-        "/api/rate/", json={"rating": 4.0}
+        "/api/v1/rate/", json={"rating": 4.0}
     )
     assert response.status_code == 200
 
@@ -257,7 +260,7 @@ async def test_snooze_links_to_source_roll_event(
     session.pending_thread_id = thread.id
     await async_db.commit()
 
-    response = await auth_client.post("/api/snooze/")
+    response = await auth_client.post("/api/v1/snooze/")
     assert response.status_code == 200
 
     result = await async_db.execute(
@@ -324,7 +327,7 @@ async def test_rate_links_to_correct_roll_in_multi_roll_session(
     await async_db.commit()
 
     response = await auth_client.post(
-        "/api/rate/", json={"rating": 4.0}
+        "/api/v1/rate/", json={"rating": 4.0}
     )
     assert response.status_code == 200
 
@@ -344,7 +347,7 @@ async def test_rate_links_to_correct_roll_in_multi_roll_session(
     await async_db.commit()
 
     response = await auth_client.post(
-        "/api/rate/", json={"rating": 3.0}
+        "/api/v1/rate/", json={"rating": 3.0}
     )
     assert response.status_code == 200
 
@@ -400,9 +403,9 @@ async def test_unsnooze_does_not_set_source_roll_event_id(
     session.pending_thread_id = thread.id
     await async_db.commit()
 
-    await auth_client.post("/api/snooze/")
+    await auth_client.post("/api/v1/snooze/")
 
-    response = await auth_client.post(f"/api/snooze/{thread.id}/unsnooze")
+    response = await auth_client.post(f"/api/v1/snooze/{thread.id}/unsnooze")
     assert response.status_code == 200
 
     result = await async_db.execute(

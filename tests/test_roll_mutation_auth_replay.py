@@ -63,7 +63,7 @@ async def test_rate_expired_token_has_no_partial_write_and_replay_commits_once(
     session, thread = await _pending_roll(async_db)
 
     _set_access_token(auth_client, test_username, expired=True)
-    rejected = await auth_client.post("/api/rate/", json={"rating": 4.5})
+    rejected = await auth_client.post("/api/v1/rate/", json={"rating": 4.5})
     assert rejected.status_code == 401
 
     await async_db.refresh(session)
@@ -77,10 +77,10 @@ async def test_rate_expired_token_has_no_partial_write_and_replay_commits_once(
     assert result.scalars().all() == []
 
     _set_access_token(auth_client, test_username, expired=False)
-    replay = await auth_client.post("/api/rate/", json={"rating": 4.5})
+    replay = await auth_client.post("/api/v1/rate/", json={"rating": 4.5})
     assert replay.status_code == 200
 
-    duplicate = await auth_client.post("/api/rate/", json={"rating": 4.5})
+    duplicate = await auth_client.post("/api/v1/rate/", json={"rating": 4.5})
     assert duplicate.status_code == 400
 
     await async_db.refresh(session)
@@ -106,7 +106,7 @@ async def test_snooze_expired_token_has_no_partial_write_and_replay_commits_once
     session, thread = await _pending_roll(async_db)
 
     _set_access_token(auth_client, test_username, expired=True)
-    rejected = await auth_client.post("/api/snooze/")
+    rejected = await auth_client.post("/api/v1/snooze/")
     assert rejected.status_code == 401
 
     await async_db.refresh(session)
@@ -118,10 +118,10 @@ async def test_snooze_expired_token_has_no_partial_write_and_replay_commits_once
     assert result.scalars().all() == []
 
     _set_access_token(auth_client, test_username, expired=False)
-    replay = await auth_client.post("/api/snooze/")
+    replay = await auth_client.post("/api/v1/snooze/")
     assert replay.status_code == 200
 
-    duplicate = await auth_client.post("/api/snooze/")
+    duplicate = await auth_client.post("/api/v1/snooze/")
     assert duplicate.status_code == 400
 
     await async_db.refresh(session)

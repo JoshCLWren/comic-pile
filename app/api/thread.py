@@ -9,6 +9,7 @@ import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
+from sqlalchemy import delete as sa_delete
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -519,6 +520,10 @@ async def delete_thread(
         .values(pending_thread_id=None)
     )
 
+    # Collect issue ids that will disappear with the thread for plan cleanup.
+    issue_ids_result = await db.execute(select(Issue.id).where(Issue.thread_id == thread_id))
+    deleted_issue_ids: set[int] = set(issue_ids_result.scalars().all())
+
     delete_event = Event(
         type="delete",
         timestamp=datetime.now(UTC),
@@ -526,6 +531,90 @@ async def delete_thread(
     )
     db.add(delete_event)
     try:
+        # Prune continuity plans that reference this thread or its issues.
+        # This prevents orphaned steps that would otherwise 404 on reopen.
+        from app.models.continuity_plan import ContinuityPlan
+        from app.models.continuity_rule import ContinuityRule
+
+        plans_result = await db.execute(
+            select(ContinuityPlan).where(ContinuityPlan.user_id == current_user.id)
+        )
+        for plan in plans_result.scalars().all():
+            original = list(plan.nodes_json or [])
+            pruned: list[dict[str, object]] = []
+            changed = False
+            for node in original:
+                try:
+                    ntype = str(node.get("node_type", ""))
+                    ref = int(node.get("ref_id", 0))
+                except (TypeError, ValueError):
+                    pruned.append(node)
+                    continue
+                if ntype == "thread" and ref == thread_id:
+                    changed = True
+                    continue
+                if ntype == "issue" and ref in deleted_issue_ids:
+                    changed = True
+                    continue
+                pruned.append(node)
+            if changed:
+                # Renormalize contiguous positions per lane after removal.
+                by_lane: dict[str, list[dict[str, object]]] = {}
+                for n in pruned:
+                    by_lane.setdefault(str(n.get("lane_id", "")), []).append(n)
+                normalized: list[dict[str, object]] = []
+                for _lane_id, lane_nodes in by_lane.items():
+                    lane_nodes.sort(key=lambda x: int(x.get("position", 0)))  # type: ignore[arg-type]
+                    for idx, n in enumerate(lane_nodes):
+                        n["position"] = idx
+                        normalized.append(n)
+                plan.nodes_json = normalized
+                # Remove plan-owned rules that pointed at deleted issues.
+                marker = f"continuity-plan:{plan.id}"
+                if deleted_issue_ids:
+                    await db.execute(
+                        sa_delete(ContinuityRule).where(
+                            ContinuityRule.user_id == current_user.id,
+                            ContinuityRule.note == marker,
+                            (
+                                (ContinuityRule.source_type == "issue")
+                                & (ContinuityRule.source_id.in_(deleted_issue_ids))
+                            )
+                            | (
+                                (ContinuityRule.target_type == "issue")
+                                & (ContinuityRule.target_id.in_(deleted_issue_ids))
+                            ),
+                        )
+                    )
+                # If strict plan now has <2 nodes, remove remaining linear edges
+                if len(pruned) < 2:
+                    await db.execute(
+                        sa_delete(ContinuityRule).where(
+                            ContinuityRule.user_id == current_user.id,
+                            ContinuityRule.note == marker,
+                        )
+                    )
+
+        # Delete any continuity rules (non-plan-owned) that directly reference deleted issues.
+        if deleted_issue_ids:
+            await db.execute(
+                sa_delete(ContinuityRule).where(
+                    ContinuityRule.user_id == current_user.id,
+                    (
+                        (ContinuityRule.source_type == "issue")
+                        & (ContinuityRule.source_id.in_(deleted_issue_ids))
+                    )
+                    | (
+                        (ContinuityRule.target_type == "issue")
+                        & (ContinuityRule.target_id.in_(deleted_issue_ids))
+                    ),
+                )
+            )
+
+        from comic_pile.dependencies import refresh_user_blocked_status
+
+        await refresh_user_blocked_status(current_user.id, db)
+
         await db.delete(thread)
         await db.commit()
         await invalidate_user_view(current_user.id)

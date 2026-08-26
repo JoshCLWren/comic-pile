@@ -25,6 +25,8 @@ on:
       - '.github/scripts/factory-gh-rest-shim.sh'
       - '.github/scripts/free-model-factory-worker.sh'
       - '.github/scripts/free-model-factory-worker-primitives.sh'
+      - '.github/scripts/factory_provider_candidates.py'
+      - '.github/scripts/factory_candidate_health.py'
       - '.github/scripts/kilo-auto-factory-run.sh'
       - '.github/free-model-factories.tsv'
 
@@ -92,8 +94,15 @@ jobs:
         run: |
           set -Eeuo pipefail
           sha="$(git rev-parse origin/main)"
-          total="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '.total_count // 0' 2>/dev/null || echo 0)"
-          failing="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '[.check_runs[] | select(.conclusion=="FAILURE" or .conclusion=="TIMED_OUT" or .conclusion=="CANCELLED" or .conclusion=="STARTUP_FAILURE")] | length' 2>/dev/null || echo 0)"
+          # Fail-closed: if GitHub is rate-limiting/erroring we cannot prove
+          # main is healthy, so treat it as red rather than merging blind.
+          total="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '.total_count // 0' 2>/dev/null || echo UNAVAILABLE)"
+          failing="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '[.check_runs[] | select(.conclusion=="FAILURE" or .conclusion=="TIMED_OUT" or .conclusion=="CANCELLED" or .conclusion=="STARTUP_FAILURE")] | length' 2>/dev/null || echo UNAVAILABLE)"
+          if [[ "$total" == "UNAVAILABLE" || "$failing" == "UNAVAILABLE" ]]; then
+            echo "GitHub API unavailable proving main health at ${sha}; failing closed as main_red=true for this tick" >&2
+            echo "main_red=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [[ "${total:-0}" != "0" && "${failing:-0}" != "0" ]]; then
             echo "Main $sha has $failing failing check(s) out of $total - factory will prioritize main-breakage lane 0 and drain will pause merges"
             echo "failing=$failing" >> "$GITHUB_OUTPUT"
@@ -173,6 +182,7 @@ jobs:
                 ;;
               deny)
                 echo "PR #${pr} mechanical gates deny merge: ${gate_reason}"
+                python3 "$review_controller" demote-ready --pr "$pr" || echo "Unable to demote ready PR #${pr}; retrying next tick" >&2
                 continue
                 ;;
               *)
@@ -345,7 +355,10 @@ jobs:
 
               run_status=''
               conclusion=''
-              for _ in {1..90}; do
+              # Bounded wait: 30s per run, not 180s. A hung run must not hold
+              # the dispatch concurrency group and starve the next cron tick;
+              # controller reconciliation recovers any lease it abandons.
+              for _ in {1..15}; do
                 read -r run_status conclusion < <(
                   gh run view "$run_id" --json status,conclusion \
                     --jq '[.status, (.conclusion // "")] | @tsv'
@@ -354,8 +367,8 @@ jobs:
                 sleep 2
               done
               [[ "$run_status" == completed ]] || {
-                echo "Stale fixed-model entry run ${run_id} did not reach a terminal state" >&2
-                exit 1
+                echo "Stale fixed-model entry run ${run_id} did not reach a terminal state within 30s; leaving it to reconciliation" >&2
+                continue
               }
 
               if [[ "$conclusion" != cancelled ]]; then
@@ -379,7 +392,12 @@ jobs:
             workers="$(awk -F '\t' -v minute="$minute" '$4 == minute {print $1}' "$manifest" | jq -Rsc 'split("\n") | map(select(length > 0))')"
             echo "Scheduled :$(printf '%02d' "$minute") batch"
           else
-            workers='["6","39","46"]'
+            # A control-plane change should smoke one current lane per provider.
+            # Resolve these from the manifest so retired workers cannot remain
+            # embedded in dispatcher behavior.
+            workers="$(awk -F '\t' '
+              $0 !~ /^#/ && NF >= 3 && !seen[$2]++ {print $1}
+            ' "$manifest" | jq -Rsc 'split("\n") | map(select(length > 0))')"
           fi
 
           [[ "$workers" != '[]' ]] || { echo 'Dispatcher resolved no workers' >&2; exit 1; }

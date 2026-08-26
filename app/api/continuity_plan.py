@@ -24,6 +24,7 @@ from app.schemas.continuity_plan import (
     ContinuityPlanWrite,
 )
 from app.schemas.continuity_rule import ContinuityNodeType
+from app.schemas.reading_order import ReadingOrderAdoptRequest
 
 router = APIRouter(tags=["continuity-plans"])
 
@@ -261,6 +262,42 @@ async def update_continuity_plan(
         raise
     await db.refresh(plan)
     await _refresh_blocked_state(current_user.id, db)
+    return _to_response(plan)
+
+
+@router.post(
+    "/continuity-plans/from-reading-order",
+    response_model=ContinuityPlanResponse,
+    status_code=status.HTTP_201_CREATED,
+    description=(
+        "Adopt a legacy reading order into the canonical continuity plan. "
+        "The source reading order is not mutated; the new plan is the "
+        "canonical owner of the ordering intent. See "
+        "docs/READING_PLAN_CANONICAL_MODEL.md."
+    ),
+)
+async def adopt_reading_order(
+    payload: ReadingOrderAdoptRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ContinuityPlanResponse:
+    """Create a canonical plan from one owned legacy reading order."""
+    from app.services.reading_order_adoption import adopt_reading_order_to_plan
+
+    plan = await adopt_reading_order_to_plan(
+        db,
+        user_id=current_user.id,
+        reading_order_id=payload.reading_order_id,
+        plan_name=payload.plan_name,
+        lane_id=payload.lane_id,
+        lane_name=payload.lane_name,
+    )
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+    await db.refresh(plan)
     return _to_response(plan)
 
 

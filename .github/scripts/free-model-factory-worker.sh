@@ -168,7 +168,7 @@ run_agent() {
 select_controller_assignment() {
   local -a prs=() issues=()
   local pr_json issue_json pr_numbers issue_numbers
-  local pr branch linked_issue issue
+  local pr branch linked_issue issue pr_stage
 
   if ! pr_json="$(gh pr list --state open --limit 200 --label "$OWNER" --json number,labels)"; then
     log "unable to query controller-leased PRs for ${OWNER}"
@@ -206,6 +206,11 @@ select_controller_assignment() {
       return 3
     fi
     linked_issue="$(linked_issue_from_branch "$branch")"
+    pr_stage="$(jq -r --argjson pr "$pr" '.[] | select(.number == $pr) | [.labels[].name | select(. == "factory:review" or . == "factory:changes-requested" or . == "factory:conflict" or . == "factory:ci")] | first // empty' <<< "$pr_json")"
+    if [[ -z "$pr_stage" ]]; then
+      log "controller-leased PR #${pr} has no supported completion stage"
+      return 3
+    fi
 
     for issue in "${issues[@]:-}"; do
       [[ -n "$issue" ]] || continue
@@ -218,6 +223,7 @@ select_controller_assignment() {
     MODE='pr'
     NUMBER="$pr"
     BRANCH="$branch"
+    ASSIGNED_PR_STAGE="$pr_stage"
     return 0
   fi
 
@@ -245,6 +251,7 @@ trap 'release_owned_targets session-end-handoff || true' EXIT
 MODE=''
 NUMBER=''
 BRANCH=''
+ASSIGNED_PR_STAGE=''
 
 set +e
 select_controller_assignment
@@ -257,6 +264,8 @@ if (( assignment_status == 1 )); then
 fi
 
 if (( assignment_status != 0 )); then
+  # Exit 2 and 3 are reserved for controller invariant/read failures. The
+  # trusted workflow wrapper persists this source result after the process exits.
   release_owned_targets 'controller-assignment-read-failed' || true
   exit "$assignment_status"
 fi
@@ -346,13 +355,27 @@ if persist_pr_changes "$NUMBER" "$BRANCH"; then
 fi
 
 if (( transient_failure == 1 )); then
-  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'transient-model-interruption'
+  release_pr_and_issue "$NUMBER" "$BRANCH" "$ASSIGNED_PR_STAGE" 'transient-model-interruption'
   log "assignment complete; remaining budget $(remaining)s"
   exit 0
 fi
 
 if (( agent_status != 0 )); then
-  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'review-agent-failed'
+  release_pr_and_issue "$NUMBER" "$BRANCH" "$ASSIGNED_PR_STAGE" 'review-agent-failed'
+  log "assignment complete; remaining budget $(remaining)s"
+  exit 0
+fi
+
+if [[ "$ASSIGNED_PR_STAGE" != 'factory:review' ]]; then
+  repair_log="/tmp/opencode-factory-${WORKER}.log"
+  repair_verdict="$(factory_extract_semantic_verdict "$repair_log" || true)"
+  if [[ "$repair_verdict" == 'approve' ]]; then
+    log "repair attempt for PR #${NUMBER} found no persisted change and reports ready; handing off for independent review"
+    release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'repair-no-change-ready-handoff'
+  else
+    log "repair attempt for PR #${NUMBER} produced no persisted change; preserving ${ASSIGNED_PR_STAGE} without invoking the review controller"
+    release_pr_and_issue "$NUMBER" "$BRANCH" "$ASSIGNED_PR_STAGE" 'repair-no-persisted-change-handoff'
+  fi
   log "assignment complete; remaining budget $(remaining)s"
   exit 0
 fi

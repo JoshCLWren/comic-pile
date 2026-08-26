@@ -18,6 +18,7 @@ import {
   readStoredThemePreference,
 } from './services/theme'
 import { isDefinitiveAuthenticationFailure } from './services/authFailure'
+import { reconcileStoredThemeWithServer } from './services/themePreferenceSync'
 import type { AuthTokens, AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
 import { usePingHeartbeat } from './hooks/usePingHeartbeat'
@@ -62,7 +63,11 @@ async function fetchAndApplyPersistedTheme(timeout?: number): Promise<void> {
       if (storedTheme === null || theme === storedTheme) {
         applyTheme(theme)
       } else {
+        // The locally stored choice is newer than the server value (a prior
+        // persistence attempt likely failed during an outage, issue #1872).
+        // Keep it rendered and quietly converge the server to it.
         ensureThemeApplied()
+        reconcileStoredThemeWithServer(storedTheme)
       }
     } else {
       // Unknown/stale ids must not strand the tokens; keep any rendered theme
@@ -89,6 +94,7 @@ const HelpPage = lazyRoute('help')
 const WhatsNewPage = lazyRoute('whatsNew')
 const LoginPage = lazyRoute('login')
 const RegisterPage = lazyRoute('register')
+const IdentityInboxPage = lazyRoute('identityInbox')
 
 export interface AuthContextValue {
   isAuthenticated: boolean
@@ -340,6 +346,7 @@ function AppRoutes() {
         <Route path="/continuity-plans/:id" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><ContinuityPlannerPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/whats-new" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><WhatsNewPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/help" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><HelpPage /></AuthenticatedLayout></ProtectedRoute>} />
+        <Route path="/identity-inbox" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><IdentityInboxPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/glossary" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><HelpPage /></AuthenticatedLayout></ProtectedRoute>} />
       </Routes>
       {isAuthenticated && <BugReportConnected onSubmit={submit} />}

@@ -121,6 +121,20 @@ def test_worker_recovery_is_same_session_bounded_and_fail_closed() -> None:
     assert '--review-log "$sanitized_review_log"' in worker
 
 
+def test_repair_lease_does_not_enter_review_controller_without_handoff() -> None:
+    """A no-change repair must remain repair work instead of crashing review validation."""
+    worker = WORKER.read_text()
+
+    assert "ASSIGNED_PR_STAGE" in worker
+    repair_guard = "if [[ \"$ASSIGNED_PR_STAGE\" != 'factory:review' ]]; then"
+    assert repair_guard in worker
+    guard_index = worker.index(repair_guard)
+    controller_index = worker.index('python3 "$TRUSTED_REVIEW_CONTROLLER" review')
+    assert guard_index < controller_index
+    assert "repair-no-persisted-change-handoff" in worker
+    assert "release_pr_and_issue \"$NUMBER\" \"$BRANCH\" \"$ASSIGNED_PR_STAGE\"" in worker
+
+
 def test_status_vocabulary_is_canonical_and_includes_recovery_failure() -> None:
     helper = HELPER.read_text()
     expected = {

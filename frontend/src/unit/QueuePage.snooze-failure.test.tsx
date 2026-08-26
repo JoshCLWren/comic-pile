@@ -33,6 +33,7 @@ vi.mock('../hooks/useQueue', () => ({
 
 vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn(), useUnsnooze: vi.fn() }))
+vi.mock('../hooks/useQueueBlockingInfo', () => ({ useQueueBlockingInfo: vi.fn(() => ({})) }))
 vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: vi.fn() }))
 
 vi.mock('../services/api', () => ({
@@ -198,7 +199,8 @@ it('keeps snooze disabled before session data has loaded', async () => {
   renderQueue()
 
   const snoozeButton = screen.getAllByLabelText('Snooze')[0]
-  expect(snoozeButton).toBeDisabled()
+  expect(snoozeButton).toHaveAttribute('aria-disabled', 'true')
+  expect(snoozeButton).toHaveAttribute('tabindex', '0')
   await user.click(snoozeButton)
 
   expect(refetchSession).not.toHaveBeenCalled()

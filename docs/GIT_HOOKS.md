@@ -25,6 +25,9 @@ If a hook is blocking you, it's telling you something is wrong. **Fix it.**
 Runs automatically before each commit.
 
 **What it does:**
+- Blocks staged backup artifacts (`*.bak`, `*.backup`, `*.orig`, `*~`) — these are
+  editor/LLM leftovers that never belong in version control. Deleting (untracking)
+  an already-tracked backup is still allowed.
 - Runs `bash scripts/lint.sh` to check code quality
 
 **What it checks:**
