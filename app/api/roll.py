@@ -21,6 +21,7 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.middleware import limiter
 from app.models import DependencyGroup, DependencyGroupMembership, Event, Issue, Session, Thread
+from app.models.recommendation_context import RecommendationContext
 from app.models.user import User
 from app.roll_recovery import build_roll_recovery
 from app.services.explanation_projection import get_primary_explanation
@@ -41,7 +42,9 @@ from app.schemas import (
     SessionModeResponse,
     SessionModeUpdateRequest,
 )
+from app.schemas.recommendation_context import CandidateFactor, RecommendationContextCreate
 from app.schemas.session import build_session_bandwidth_state
+from app.momentum import MomentumCandidateWeight, weighted_momentum_selection
 from comic_pile.queue import get_bounded_roll_pool_rows
 from comic_pile.recommendation_selection import (
     DEFAULT_BANDWIDTH,
@@ -53,7 +56,6 @@ from comic_pile.recommendation_selection import (
     select_from_pool,
 )
 from comic_pile.session import get_current_die_for_session, get_or_create
-from app.momentum import weighted_momentum_selection
 
 router = APIRouter(tags=["roll"])
 
@@ -122,6 +124,7 @@ async def roll_dice(
     resolved_mode = resolve_selection_mode(selection_bandwidth, selection_intent)
 
     max_bonus = 0.0
+    candidate_weights: list = []
     if resolved_mode is SelectionMode.PURE_RANDOM_BYPASS:
         selection = select_from_pool(
             pool_size,
@@ -129,6 +132,16 @@ async def roll_dice(
             intent=selection_intent,
         )
         selected_index = selection.index
+        # Populate candidate_weights for pure-random bypass so recommendation
+        # context records uniform weights for all bounded candidates.
+        candidate_weights = [
+            MomentumCandidateWeight(
+                candidate_id=row[0].id if isinstance(row, tuple) else row.id,
+                weight=1.0,
+                factors=(),
+            )
+            for row in bounded_rows
+        ]
     else:
         # get_bounded_roll_pool_rows already applied the die cap, so the contextual
         # weighting below cannot draw from outside the active die pool.
@@ -140,7 +153,7 @@ async def roll_dice(
         )
         session_events = list(session_events_result.scalars().all())
 
-        selected_index, max_bonus = await weighted_momentum_selection(
+        selected_index, max_bonus, candidate_weights = await weighted_momentum_selection(
             db=db,
             bounded_rows=bounded_rows,
             user_id=user_id,
@@ -219,6 +232,55 @@ async def roll_dice(
         pool_size,
     )
 
+    # Record recommendation context for auditability: capture the active
+    # session reading mode so any roll can be reproduced and explained
+    # from persisted data alone.
+    has_explicit_mode = bool(current_session.active_intent)
+    context_data = RecommendationContextCreate(
+        schema_version=1,
+        intent=normalize_intent(selection_intent).value,
+        intent_source=current_session.intent_source or "default",
+        intent_confidence=1.0 if has_explicit_mode else 0.0,
+        bandwidth=normalize_bandwidth(selection_bandwidth).value,
+        bandwidth_source=current_session.bandwidth_source or "default",
+        bandwidth_confidence=1.0 if current_session.active_bandwidth else 0.0,
+        candidate_factors=[
+            CandidateFactor(
+                candidate_id=breakdown.candidate_id,
+                factors=list(breakdown.factors),
+                weight=breakdown.weight,
+            )
+            for breakdown in candidate_weights
+        ]
+        if candidate_weights
+        else None,
+        final_weight=candidate_weights[selected_index].weight
+        if candidate_weights
+        else None,
+        random_bypass=max_bonus <= 0.0,
+        balanced_neutrality=max_bonus <= 0.0,
+    )
+
+    # Flush event to get its ID for the recommendation context FK
+    await db.flush()
+
+    rec_context = RecommendationContext(
+        event_id=event.id,
+        schema_version=context_data.schema_version,
+        intent=context_data.intent,
+        intent_source=context_data.intent_source,
+        intent_confidence=context_data.intent_confidence,
+        bandwidth=context_data.bandwidth,
+        bandwidth_source=context_data.bandwidth_source,
+        bandwidth_confidence=context_data.bandwidth_confidence,
+        candidate_factors=[f.model_dump() for f in context_data.candidate_factors]
+        if context_data.candidate_factors
+        else None,
+        final_weight=context_data.final_weight,
+        random_bypass=context_data.random_bypass,
+        balanced_neutrality=context_data.balanced_neutrality,
+    )
+    db.add(rec_context)
     if current_session:
         current_session.pending_thread_id = selected_thread_id
         current_session.pending_thread_updated_at = datetime.now(UTC)
@@ -377,6 +439,43 @@ async def override_roll(
         issue_number=override_thread_issue_number,
     )
     db.add(event)
+
+    # Record recommendation context for override selection
+    # Override is a manual selection, not a weighted recommendation
+    context_data = RecommendationContextCreate(
+        schema_version=1,
+        intent="balanced",
+        intent_source="manual_override",
+        intent_confidence=1.0,
+        bandwidth="balanced",
+        bandwidth_source="manual_override",
+        bandwidth_confidence=1.0,
+        candidate_factors=None,
+        final_weight=1.0,
+        random_bypass=False,
+        balanced_neutrality=True,
+    )
+
+    # Flush event to get its ID for the recommendation context FK
+    await db.flush()
+
+    rec_context = RecommendationContext(
+        event_id=event.id,
+        schema_version=context_data.schema_version,
+        intent=context_data.intent,
+        intent_source=context_data.intent_source,
+        intent_confidence=context_data.intent_confidence,
+        bandwidth=context_data.bandwidth,
+        bandwidth_source=context_data.bandwidth_source,
+        bandwidth_confidence=context_data.bandwidth_confidence,
+        candidate_factors=[f.model_dump() for f in context_data.candidate_factors]
+        if context_data.candidate_factors
+        else None,
+        final_weight=context_data.final_weight,
+        random_bypass=context_data.random_bypass,
+        balanced_neutrality=context_data.balanced_neutrality,
+    )
+    db.add(rec_context)
 
     current_session.pending_thread_id = override_thread_id
     current_session.pending_thread_updated_at = datetime.now(UTC)

@@ -47,6 +47,10 @@ from app.schemas.roll import (
     SessionModeResponse,
     SessionModeUpdateRequest,
 )
+from app.schemas.recommendation_context import (
+    RecommendationContextCreate,
+    RecommendationContextResponse,
+)
 from app.schemas.session import (
     ActiveThreadInfo,
     EventDetail,
@@ -118,6 +122,9 @@ __all__ = [
     "ExplainableFactorResponse",
     "SessionModeResponse",
     "SessionModeUpdateRequest",
+    # Recommendation Context
+    "RecommendationContextCreate",
+    "RecommendationContextResponse",
     # Rate
     "RateRequest",
     # Session
