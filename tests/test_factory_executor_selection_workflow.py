@@ -18,7 +18,9 @@ def test_catalog_backed_providers_use_central_adapter() -> None:
     assert "https://openrouter.ai/api/v1/models" in selector
     assert ".github/scripts/factory_provider_candidates.py" in selector
     assert ".github/free-model-factories.tsv | sort -u" in selector
-    assert "candidate_index=" in selector
+    assert ".github/scripts/factory_candidate_health.py" in selector
+    assert "factory-attempt-comments.json" in selector
+    assert "--worker \"$WORKER\"" in selector
 
 
 def test_runtime_only_providers_keep_real_probe_authority() -> None:
@@ -46,7 +48,8 @@ def test_selected_executor_metadata_reaches_worker_and_telemetry() -> None:
     assert f"MODEL: {selected_model}" in workflow
     assert f"FACTORY_MODEL: {selected_model}" in workflow
     assert f"FACTORY_RUNTIME_MODEL: {selected_runtime}" in workflow
-    assert "selected-from-live-provider-catalog" in workflow
+    assert "from-live-provider-catalog" in workflow
+    assert "health_state=" in workflow
 
 
 def test_discovery_failures_publish_normalized_outcomes() -> None:
