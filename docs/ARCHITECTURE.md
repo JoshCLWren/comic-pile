@@ -85,6 +85,18 @@ Comic Pile is a dice-driven comic reading tracker built with:
 - Shared database and services for authentic development experience
 - Database migrations managed via Alembic
 
+### 7. Backend Code Layering: Router → Service → Repository
+**Decision**: Enforce router/service/repository as the house standard for all backend API modules
+**Documented in**: [AGENTS.md](../AGENTS.md) (Layering Rule under API Patterns)
+**Date**: 2026-08-23
+
+**Key Points**:
+- Routers (`app/api/`) validate requests, apply auth dependencies, call one service, and map HTTP statuses — no query construction, no business rules, no persistence
+- Services (`app/services/`) own business logic and orchestration
+- Repositories (`app/repositories/`) own all query construction and persistence, returning ORM models or plain tuples — never HTTP types
+- Legacy routers are migrated incrementally; `tests/test_router_layering_conformance.py` keeps violations from growing beyond `tests/router_layering_baseline.json`
+- Services and repositories must respect the MissingGreenlet extraction-before-commit rule
+
 ## Infrastructure Choices
 
 ### Build Tools
@@ -180,13 +192,26 @@ Comic Pile is a dice-driven comic reading tracker built with:
 - Secure defaults for headers and cookies
 - Regular dependency updates
 
+## Canonical Reader Order
+
+**Decision** (#1619): `continuity_plans` is the canonical reader-owned reading
+plan; `reading_orders` is a legacy compatibility view. New ordering intent
+must target the canonical plan. Legacy orders remain readable and can be
+adopted via `POST /api/v1/continuity-plans/from-reading-order` without data
+loss; projection `plan → reading_order` remains only as export/migration
+tooling. Within-series `Issue.position` is never compiled into blocking
+`ContinuityRule` edges unless the user explicitly chooses
+`strict_sequential`. See [READING_PLAN_CANONICAL_MODEL.md](READING_PLAN_CANONICAL_MODEL.md).
+
 ### Repository Layer (`app/repositories/`)
-- New package for SQLAlchemy query construction and persistence by model family (`thread_repository`, `session_repository`, `issue_repository`).
+
+- Package for SQLAlchemy query construction and persistence by model family (`thread_repository`, `session_repository`, `issue_repository`, `continuity_repository`).
 - Returns ORM models or plain tuples; never HTTP types or response schemas.
 - Services (`app/services/`) own business logic and transaction boundaries.
 
 ## Related Documentation
 
+- [READING_PLAN_CANONICAL_MODEL.md](READING_PLAN_CANONICAL_MODEL.md): Canonical reader-order decision record for #1619
 - [AGENTS.md](../AGENTS.md): Project guidelines and conventions for coding agents
 - [API.md](API.md): Complete API reference documentation
 - [REACT_ARCHITECTURE.md](REACT_ARCHITECTURE.md): Frontend-specific architecture

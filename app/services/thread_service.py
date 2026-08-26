@@ -17,12 +17,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache_invalidation import invalidate_user_view
 from app.models import Event, Issue, Thread
-from app.repositories import issue_repository, session_repository, thread_repository
+from app.repositories import (
+    continuity_repository,
+    issue_repository,
+    session_repository,
+    thread_repository,
+)
 from app.schemas import (
     QueueThreadListItem,
     QueueThreadListResponse,
     ReactivateRequest,
     RollResponse,
+    SetCurrentIssueResponse,
     ThreadCreate,
     ThreadDetail,
     ThreadResponse,
@@ -433,8 +439,10 @@ async def update_thread(
 async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
     """Delete an owned thread and detach dependent session state.
 
-    Sessions pointing at the thread lose their pending pointer and a
-    tombstone event records the deletion.
+    Sessions pointing at the thread lose their pending pointer, continuity
+    plans and rules that reference the thread or its issues are pruned so no
+    orphaned steps remain, blocked flags are refreshed, and a tombstone event
+    records the deletion.
 
     Args:
         db: Database session.
@@ -449,6 +457,9 @@ async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
 
     await session_repository.detach_pending_thread_references(db, thread_id)
 
+    # Collect issue ids that will disappear with the thread for plan cleanup.
+    deleted_issue_ids = await issue_repository.issue_ids_for_thread(db, thread_id)
+
     delete_event = Event(
         type="delete",
         timestamp=datetime.now(UTC),
@@ -456,6 +467,59 @@ async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
     )
     db.add(delete_event)
     try:
+        # Prune continuity plans that reference this thread or its issues.
+        # This prevents orphaned steps that would otherwise 404 on reopen.
+        plans = await continuity_repository.plans_for_user(db, user_id)
+        for plan in plans:
+            original = list(plan.nodes_json or [])
+            pruned: list[dict[str, object]] = []
+            changed = False
+            for node in original:
+                try:
+                    ntype = str(node.get("node_type", ""))
+                    ref = int(node.get("ref_id", 0))
+                except (TypeError, ValueError):
+                    pruned.append(node)
+                    continue
+                if ntype == "thread" and ref == thread_id:
+                    changed = True
+                    continue
+                if ntype == "issue" and ref in deleted_issue_ids:
+                    changed = True
+                    continue
+                pruned.append(node)
+            if changed:
+                # Renormalize contiguous positions per lane after removal.
+                by_lane: dict[str, list[dict[str, object]]] = {}
+                for n in pruned:
+                    by_lane.setdefault(str(n.get("lane_id", "")), []).append(n)
+                normalized: list[dict[str, object]] = []
+                for _lane_id, lane_nodes in by_lane.items():
+                    lane_nodes.sort(key=lambda x: int(x.get("position", 0)))
+                    for idx, n in enumerate(lane_nodes):
+                        n["position"] = idx
+                        normalized.append(n)
+                plan.nodes_json = normalized
+                # Remove plan-owned rules that pointed at deleted issues.
+                marker = f"continuity-plan:{plan.id}"
+                if deleted_issue_ids:
+                    await continuity_repository.delete_plan_rules_referencing_issues(
+                        db, user_id, marker, deleted_issue_ids
+                    )
+                # If strict plan now has <2 nodes, remove remaining linear edges
+                if len(pruned) < 2:
+                    await continuity_repository.delete_rules_for_marker(db, user_id, marker)
+
+        # Delete any continuity rules (non-plan-owned) that directly reference deleted issues.
+        if deleted_issue_ids:
+            await continuity_repository.delete_rules_referencing_issues(
+                db, user_id, deleted_issue_ids
+            )
+
+        from comic_pile.dependencies import refresh_user_blocked_status
+
+        await refresh_user_blocked_status(user_id, db)
+
         await thread_repository.delete_thread(db, thread)
         await db.commit()
     except IntegrityError as exc:
@@ -719,7 +783,202 @@ async def migrate_thread_to_issues(
     return response
 
 
-# SECTION 6 MARKER
+async def migrate_thread_to_issues_simple(
+    db: AsyncSession,
+    user_id: int,
+    thread_id: int,
+    *,
+    issue_number: str,
+) -> ThreadResponse:
+    """Migrate a legacy thread using the issue the user just rated.
+
+    Infers ``total_issues`` from ``issues_remaining`` and the given issue
+    number when the thread has no issues yet, marks every earlier position as
+    read, keeps the rated issue unread for the rating flow, and points
+    ``next_unread_issue_id`` at it.
+
+    Args:
+        db: Database session.
+        user_id: Owner that must own the thread.
+        thread_id: Primary key of the thread to migrate.
+        issue_number: Displayed number of the issue just rated.
+
+    Returns:
+        ThreadResponse with the migrated thread.
+
+    Raises:
+        NotFoundError: When the thread does not exist for this user.
+        InvalidRequestError: When the thread already tracks issues, the issue
+            is missing and cannot be created, or the number is non-numeric.
+    """
+    thread = await _require_owned_thread(db, user_id, thread_id)
+
+    if thread.total_issues is not None:
+        raise InvalidRequestError(f"Thread {thread_id} already uses issue tracking")
+
+    current_issue = await issue_repository.find_in_thread_by_number(
+        db, thread_id, issue_number
+    )
+
+    if not current_issue:
+        try:
+            issue_num_int = int(issue_number)
+            total_issues = issue_num_int + max(thread.issues_remaining - 1, 0)
+
+            for i in range(1, total_issues + 1):
+                if i < issue_num_int:
+                    issue_status = "read"
+                    read_at = datetime.now(UTC)
+                else:
+                    issue_status = "unread"
+                    read_at = None
+
+                await issue_repository.add_issue(
+                    db,
+                    Issue(
+                        thread_id=thread.id,
+                        issue_number=str(i),
+                        status=issue_status,
+                        read_at=read_at,
+                        position=i,
+                    ),
+                )
+
+            current_issue = await issue_repository.find_in_thread_by_number(
+                db, thread_id, issue_number
+            )
+
+            if not current_issue:
+                raise InvalidRequestError(
+                    f"Failed to create issue '{issue_number}'."
+                    " Please add it via Edit Thread first."
+                )
+        except ValueError:
+            raise InvalidRequestError(
+                f"Non-numeric issue '{issue_number}' not found in thread."
+                " Please add it via Edit Thread first."
+            ) from None
+
+    all_issues = await issue_repository.issues_ordered(db, thread_id)
+
+    for issue in all_issues:
+        if issue.position < current_issue.position:
+            if issue.status != "read":
+                issue.status = "read"
+                issue.read_at = datetime.now(UTC)
+        elif issue.position == current_issue.position:
+            issue.status = "unread"
+            issue.read_at = None
+
+    thread.total_issues = len(all_issues)
+    thread.next_unread_issue_id = current_issue.id
+    thread.reading_progress = "in_progress"
+
+    response = await thread_to_response(thread, db)
+
+    await db.commit()
+    await invalidate_user_view(user_id)
+
+    return response
+
+
+async def set_current_issue(
+    db: AsyncSession,
+    user_id: int,
+    thread_id: int,
+    *,
+    issue_number: str,
+) -> SetCurrentIssueResponse:
+    """Atomically correct the current issue for an active owned thread.
+
+    Marks every issue before the target as read, ensures the target is
+    unread, updates ``thread.next_unread_issue_id``, and pins
+    ``session.pending_issue_id`` so the active roll reflects the corrected
+    position immediately.
+
+    Args:
+        db: Database session.
+        user_id: Owner that must own the thread.
+        thread_id: Primary key of the thread whose current issue is corrected.
+        issue_number: Displayed number of the target issue.
+
+    Returns:
+        SetCurrentIssueResponse with the corrected thread and issue info.
+
+    Raises:
+        NotFoundError: When the thread or target issue does not exist for this
+            user.
+        InvalidRequestError: When the thread is not active or does not use
+            issue tracking.
+    """
+    thread = await _require_owned_thread(db, user_id, thread_id)
+
+    if thread.status != "active":
+        raise InvalidRequestError(f"Thread {thread_id} is not active")
+
+    if not thread.uses_issue_tracking():
+        raise InvalidRequestError(f"Thread {thread_id} does not use issue tracking")
+
+    target_number = issue_number.strip()
+
+    target_issue = await issue_repository.find_in_thread_by_number(
+        db, thread_id, target_number
+    )
+
+    if not target_issue:
+        raise NotFoundError(f"Issue '{target_number}' not found in thread {thread_id}")
+
+    all_issues = await issue_repository.issues_ordered(db, thread_id)
+
+    now = datetime.now(UTC)
+    for issue in all_issues:
+        if issue.position < target_issue.position:
+            if issue.status != "read":
+                issue.status = "read"
+                issue.read_at = now
+        elif issue.position == target_issue.position:
+            if issue.status != "unread":
+                issue.status = "unread"
+                issue.read_at = None
+
+    thread.total_issues = len(all_issues)
+    thread.next_unread_issue_id = target_issue.id
+    thread.reading_progress = "in_progress"
+    thread.issues_remaining = await thread.get_issues_remaining(db)
+
+    target_issue_id = target_issue.id
+    target_issue_number = target_issue.issue_number
+
+    # Extract attributes before commit so post-commit access never triggers a
+    # lazy load (MissingGreenlet rule from AGENTS.md).
+    issues_remaining = thread.issues_remaining
+    total_issues = thread.total_issues
+    reading_progress = thread.reading_progress
+    queue_position = thread.queue_position
+    thread_title = thread.title
+    thread_format = thread.format
+
+    current_session = await get_or_create(db, user_id=user_id)
+    current_session.pending_thread_id = thread_id
+    current_session.pending_issue_id = target_issue_id
+    current_session.pending_thread_updated_at = now
+
+    await db.commit()
+    await invalidate_user_view(user_id)
+
+    return SetCurrentIssueResponse(
+        thread_id=thread_id,
+        title=thread_title,
+        format=thread_format,
+        issues_remaining=issues_remaining,
+        queue_position=queue_position,
+        issue_id=target_issue_id,
+        issue_number=target_issue_number,
+        next_issue_id=target_issue_id,
+        next_issue_number=target_issue_number,
+        total_issues=total_issues,
+        reading_progress=reading_progress,
+    )
 
 
 

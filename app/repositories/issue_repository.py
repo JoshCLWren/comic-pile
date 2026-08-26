@@ -282,6 +282,20 @@ async def list_page(
     return list(result.scalars().all())
 
 
+async def issue_ids_for_thread(db: AsyncSession, thread_id: int) -> set[int]:
+    """Collect the primary keys of every issue in a thread.
+
+    Args:
+        db: Database session.
+        thread_id: Thread whose issue IDs are collected.
+
+    Returns:
+        The set of issue IDs belonging to the thread.
+    """
+    result = await db.execute(select(Issue.id).where(Issue.thread_id == thread_id))
+    return set(result.scalars().all())
+
+
 def is_thread_number_conflict(exc: IntegrityError) -> bool:
     """Report whether an integrity error came from issue thread/number uniqueness.
 
