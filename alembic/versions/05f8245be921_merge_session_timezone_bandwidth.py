@@ -15,12 +15,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "05f8245be921_merge_session_timezone_bandwidth"
-down_revision: str | Sequence[str] | None = (
-    "1690_session_timezone",
-    "c85700000001",
-    "c85900000001",
-    "c85500000002",
-)
+down_revision: str | Sequence[str] | None = "1690_session_timezone", "c85700000001", "c85900000001", "c85500000002"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
