@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { dependencyGroupsApi, type DependencyGroup, type DependencyGroupMember } from '../services/api-dependency-groups'
+import { dependencyGroupsApi, type DependencyGroup, type DependencyGroupMember, type DependencyGroupSummary } from '../services/api-dependency-groups'
 import { threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 import { continuityReadinessApi, type ContinuityReadinessResponse, type ContinuityBlocker } from '../services/api-continuity-readiness'
@@ -28,6 +28,7 @@ export default function CrossoverDetailPage() {
   const [crossover, setCrossover] = useState<DependencyGroup | null>(null)
   const [members, setMembers] = useState<CrossoverMember[]>([])
   const [readiness, setReadiness] = useState<ContinuityReadinessResponse | null>(null)
+  const [linkedPlans, setLinkedPlans] = useState<DependencyGroupSummary[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -72,6 +73,9 @@ export default function CrossoverDetailPage() {
 
       const readinessData = await continuityReadinessApi.evaluate('crossover', groupId)
       setReadiness(readinessData)
+
+      const plans = await dependencyGroupsApi.plansForGroup(groupId)
+      setLinkedPlans(plans)
     } catch (err) {
       setError(getApiErrorDetail(err))
     } finally {
@@ -389,10 +393,19 @@ export default function CrossoverDetailPage() {
               >
                 ← Back to Crossovers
               </Link>
+              {linkedPlans.length > 0 && linkedPlans.map((plan) => (
+                <Link
+                  key={plan.id}
+                  to={`/continuity-plans/${plan.id}`}
+                  className="rounded-lg bg-violet-500 px-4 py-2 text-sm font-bold text-stone-950"
+                >
+                  Reading Plan: {plan.name}
+                </Link>
+              ))}
               {sortedMembers.length > 0 && sortedMembers[0].thread && (
                 <Link
                   to={`/threads/${sortedMembers[0].thread.id}`}
-                  className="rounded-lg bg-violet-500 px-4 py-2 text-sm font-bold text-stone-950"
+                  className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-bold text-stone-950"
                 >
                   View First Series
                 </Link>

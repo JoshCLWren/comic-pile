@@ -16,6 +16,7 @@ vi.mock('../services/api-dependency-groups', () => ({
   dependencyGroupsApi: {
     get: vi.fn(),
     listForThread: vi.fn(),
+    plansForGroup: vi.fn(),
   },
 }))
 
@@ -127,6 +128,7 @@ function renderPage() {
       <Routes>
         <Route path="/crossovers/:group" element={<CrossoverDetailPage />} />
         <Route path="/threads/:id" element={<div>Thread page</div>} />
+        <Route path="/continuity-plans/:id" element={<div>Plan page</div>} />
       </Routes>
     </MemoryRouter>,
   )
@@ -141,6 +143,7 @@ function mockPopulatedData() {
   mockedGroups.listForThread.mockImplementation(async (threadId: number) =>
     threadId === 22 ? [{ id: 9, name: 'X of Swords' }] : [],
   )
+  mockedGroups.plansForGroup.mockResolvedValue([])
   mockedReadiness.evaluate.mockResolvedValue(readableReadiness)
 }
 
@@ -312,5 +315,40 @@ describe('CrossoverDetailPage', () => {
 
     expect(historyBack).toHaveBeenCalled()
     historyBack.mockRestore()
+  })
+
+  it('shows linked reading plans and navigates to the plan page', async () => {
+    mockPopulatedData()
+    mockedGroups.plansForGroup.mockResolvedValue([
+      { id: 12, name: 'Annihilation Reading Order' },
+      { id: 15, name: 'Cosmic Marvel' },
+    ])
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('Annihilation')).toBeInTheDocument()
+    })
+
+    const planLink1 = screen.getByRole('link', { name: 'Reading Plan: Annihilation Reading Order' })
+    expect(planLink1).toHaveAttribute('href', '/continuity-plans/12')
+
+    const planLink2 = screen.getByRole('link', { name: 'Reading Plan: Cosmic Marvel' })
+    expect(planLink2).toHaveAttribute('href', '/continuity-plans/15')
+
+    expect(mockedGroups.plansForGroup).toHaveBeenCalledWith(7)
+  })
+
+  it('omits reading plan links when no plans reference the crossover', async () => {
+    mockPopulatedData()
+    mockedGroups.plansForGroup.mockResolvedValue([])
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('Annihilation')).toBeInTheDocument()
+    })
+
+    expect(screen.queryByRole('link', { name: /Reading Plan/ })).not.toBeInTheDocument()
   })
 })
