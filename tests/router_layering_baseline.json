@@ -20,6 +20,5 @@
   "session": ["execute-call", "query-import"],
   "snooze": ["execute-call", "query-import"],
   "test_helpers": ["execute-call", "query-import"],
-  "thread": ["execute-call", "query-import"],
   "undo": ["execute-call", "query-import"]
 }

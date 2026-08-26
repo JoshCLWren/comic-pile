@@ -6,7 +6,12 @@ import type {
 } from '../types/rollBootstrap'
 
 export const rollBootstrapApi = {
-  get: () => api.get<RollBootstrapResponse>('/v1/roll/bootstrap'),
+  get: (timezone?: string) => {
+    if (!timezone) return api.get<RollBootstrapResponse>('/v1/roll/bootstrap')
+    return api.get<RollBootstrapResponse>('/v1/roll/bootstrap', {
+      params: { timezone },
+    })
+  },
   switchPrerequisite: (request: RollPrerequisiteSwitchRequest) =>
     api.post<RollPrerequisiteSwitchResponse>('/v1/roll/switch-prerequisite', request),
 }

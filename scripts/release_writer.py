@@ -32,6 +32,83 @@ _VERSION_STEP_PATTERN = re.compile(r"v?\d+(?:\.\d+)*")
 _MARKDOWN_LINK_PATTERN = re.compile(r"\[([^\]]+)\]\((https?:\/\/[^)]+)\)")
 _BACKTICK_PATTERN = re.compile(r"`([^`]+)`")
 _MIN_PUBLIC_CONTENT = {"category": 2, "title": 4, "summary": 12}
+_READER_FACING_FIELDS = ("category", "title", "summary")
+
+_TICKET_REFERENCE_PATTERN = re.compile(r"(?<![\w&])#\d{1,7}\b")
+_SCHEMA_IDENTIFIER_PATTERN = re.compile(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b")
+_PHASE_TERMINOLOGY_PATTERN = re.compile(
+    r"\bphases?\s+(?:\d+(?:\.\d+)*|one|two|three|four|five|six|seven|eight|nine|ten)\b",
+    re.IGNORECASE,
+)
+_UNFINISHED_WORK_PATTERN = re.compile(
+    r"\b(?:incomplete|unfinished|todo|wip|not yet implemented)\b",
+    re.IGNORECASE,
+)
+
+_KNOWN_TYPOS: dict[str, str] = {
+    "appearnence": "appearance",
+    "appearence": "appearance",
+    "recieve": "receive",
+    "recieved": "received",
+    "seperate": "separate",
+    "seperated": "separated",
+    "occured": "occurred",
+    "untill": "until",
+    "definately": "definitely",
+    "accross": "across",
+    "existance": "existence",
+    "persistant": "persistent",
+    "successfull": "successful",
+    "compatability": "compatibility",
+}
+
+
+def _visible_release_text(value: object) -> str:
+    """Return release copy as readers see it after stripping Markdown formatting.
+
+    Args:
+        value: Raw release copy that may contain Markdown links or backticks.
+
+    Returns:
+        The visible text with link syntax resolved and backticks unwrapped.
+    """
+    text = _MARKDOWN_LINK_PATTERN.sub(r"\1", str(value))
+    return _BACKTICK_PATTERN.sub(r"\1", text)
+
+
+def _reader_facing_error(field_name: str, value: object) -> str | None:
+    """Describe the first internal engineering artifact in reader-facing copy.
+
+    Args:
+        field_name: Name of the release field being inspected.
+        value: Raw release copy that may hide internal artifacts behind Markdown.
+
+    Returns:
+        A human-readable failure message, or None when the copy reads as
+        ordinary reader-facing product language.
+    """
+    text = _visible_release_text(value)
+    for pattern, kind in (
+        (_TICKET_REFERENCE_PATTERN, "internal ticket reference"),
+        (_SCHEMA_IDENTIFIER_PATTERN, "database/schema identifier"),
+        (_PHASE_TERMINOLOGY_PATTERN, "implementation phase terminology"),
+        (_UNFINISHED_WORK_PATTERN, "unfinished-work commentary"),
+    ):
+        match = pattern.search(text)
+        if match:
+            fragment = match.group(0).strip()
+            return (
+                f"{field_name} must use reader-facing product language: "
+                f"{kind} '{fragment}'"
+            )
+    lowered = text.lower()
+    for wrong, right in _KNOWN_TYPOS.items():
+        if re.search(rf"\b{wrong}\b", lowered):
+            return (
+                f"{field_name} must be spell-checked before publication: "
+                f"'{wrong}' (did you mean '{right}'?)"
+            )
+    return None
 
 
 def _display_length(value: object) -> int:
@@ -170,6 +247,10 @@ def _validate_release(raw: str) -> dict[str, object]:
                     f"{name} must contain meaningful release content "
                     f"(at least {minimum} visible characters)"
                 )
+        for name in _READER_FACING_FIELDS:
+            error = _reader_facing_error(name, payload[name])
+            if error:
+                _fail(error)
     return payload
 
 

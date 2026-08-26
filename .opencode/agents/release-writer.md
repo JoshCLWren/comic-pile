@@ -36,4 +36,16 @@ For each merged pull request you are asked to process:
    `python scripts/release_writer.py retract <repository> <pr-number> <merge-sha>`
    with the repository, PR number, and merge SHA of the release to retract.
 
-Keep summaries user-facing and concrete. The helper validates allowed fields and lengths and holds the credential boundary. Never print, inspect, or request release credentials. Never put credentials in prompts or command arguments.
+Keep summaries user-facing and concrete. Every public entry must read like ordinary product language for ComicPile readers:
+
+- State the user-visible change and its benefit; never describe an implementation task name.
+- Never include GitHub ticket or PR references such as `#1551`.
+- Never include database, schema, column, or code identifiers such as `source_roll_event_id`.
+- Never include implementation phase terminology such as `Phase 2 and 3`.
+- Never publish unfinished-work commentary such as `incomplete fix`, `WIP`, or `TODO`; if the change is not user-visible and complete, classify it as internal instead.
+- Rewrite low-information fragments such as `loading states` into the concrete reader benefit, or skip the release.
+- Spell-check every title, category, and summary before publishing; the ledger rejects known misspellings such as `appearnence`.
+
+The publication API enforces these rules and returns HTTP 422 for public published copy that violates them. When that happens, rewrite the copy in reader-facing language rather than bypassing the check.
+
+The helper validates allowed fields and lengths and holds the credential boundary. Never print, inspect, or request release credentials. Never put credentials in prompts or command arguments.

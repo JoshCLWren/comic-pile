@@ -185,6 +185,8 @@ async def build_session_response(
         snapshot_count=snapshot_count,
         snoozed_thread_ids=resolved_ids,
         snoozed_threads=snoozed_threads,
+        pending_thread_id=session.pending_thread_id,
+        timezone=session.timezone,
         reading_bandwidth=session.reading_bandwidth,
         reading_intent=session.reading_intent,
         reading_mode_source=session.reading_mode_source,

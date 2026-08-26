@@ -570,6 +570,8 @@ async def undo_to_snapshot(
                 last_rolled_result=pre_active_event.result if pre_active_event else None,
                 has_restore_point=pre_snapshot_count > 0,
                 snapshot_count=pre_snapshot_count,
+                pending_thread_id=session.pending_thread_id,
+                timezone=session.timezone,
             )
         except OperationalError as error:
             if "deadlock" not in str(error).lower():

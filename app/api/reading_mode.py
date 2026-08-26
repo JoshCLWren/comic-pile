@@ -11,20 +11,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
-from app.cache_invalidation import invalidate_user_view
-from app.database import get_db
 from app.middleware import limiter
-from app.models import Session as SessionModel
 from app.models.user import User
-from app.services.reading_quiz import (
-    QuizResolutionError,
-    ReadingModeSource,
-    is_valid_reading_mode,
-    resolve_quiz_answers,
-)
+from app.services.reading_mode import ReadingModeService, get_reading_mode_service
+from app.services.reading_quiz import QuizResolutionError, ReadingModeSource
 
 router = APIRouter(tags=["reading-mode"])
 
@@ -44,26 +36,6 @@ class ReadingModeSetRequest(BaseModel):
     )
     source: str = Field(..., description="Origin of the setting: 'quiz' or 'manual'")
 
-    def resolve_bandwidth_intent(self) -> tuple[str, str]:
-        """Resolve the request into a valid (bandwidth, intent) pair.
-
-        Returns:
-            Tuple of validated bandwidth and intent strings.
-
-        Raises:
-            QuizResolutionError: If the answers cannot be resolved.
-            HTTPException: If neither answers nor both bandwidth/intent are present.
-        """
-        if self.answers:
-            mode = resolve_quiz_answers(self.answers)
-            return mode.bandwidth, mode.intent
-        if self.bandwidth and self.intent:
-            return self.bandwidth, self.intent
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Provide either quiz answers or both bandwidth and intent",
-        )
-
 
 class ReadingModeResponse(BaseModel):
     """Current reading-mode state for the active session."""
@@ -74,37 +46,25 @@ class ReadingModeResponse(BaseModel):
     suggested: bool
 
 
-async def _get_active_session(db: AsyncSession, user: User) -> SessionModel:
-    """Return the active session for the current user, creating one if needed."""
-    from comic_pile.session import get_or_create
-
-    return await get_or_create(db, user_id=user.id, existing_user=user)
-
-
 @router.get("/api/v1/reading-mode")
 @limiter.limit("200/minute")
 async def get_reading_mode(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
+    service: Annotated[ReadingModeService, Depends(get_reading_mode_service)],
 ) -> ReadingModeResponse:
     """Return the active session's current reading mode.
 
     Args:
         request: FastAPI request object for rate limiting.
         current_user: The authenticated user making the request.
-        db: SQLAlchemy session for database operations.
+        service: Reading mode service dependency.
 
     Returns:
         The current reading-mode state.
     """
-    session = await _get_active_session(db, current_user)
-    return ReadingModeResponse(
-        bandwidth=session.reading_bandwidth,
-        intent=session.reading_intent,
-        source=session.reading_mode_source,
-        suggested=session.reading_mode_suggested,
-    )
+    data = await service.get_reading_mode(current_user)
+    return ReadingModeResponse(**data)
 
 
 @router.post("/api/v1/reading-mode")
@@ -113,7 +73,7 @@ async def set_reading_mode(
     request: Request,
     payload: ReadingModeSetRequest,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
+    service: Annotated[ReadingModeService, Depends(get_reading_mode_service)],
 ) -> ReadingModeResponse:
     """Set the active session reading mode.
 
@@ -121,7 +81,7 @@ async def set_reading_mode(
         request: FastAPI request object for rate limiting.
         payload: The reading-mode set request.
         current_user: The authenticated user making the request.
-        db: SQLAlchemy session for database operations.
+        service: Reading mode service dependency.
 
     Returns:
         The newly stored reading-mode state.
@@ -136,35 +96,20 @@ async def set_reading_mode(
         )
 
     try:
-        bandwidth, intent = payload.resolve_bandwidth_intent()
-    except QuizResolutionError as exc:
+        data = await service.set_reading_mode(
+            current_user,
+            bandwidth=payload.bandwidth,
+            intent=payload.intent,
+            answers=payload.answers,
+            source=payload.source,
+        )
+    except (QuizResolutionError, ValueError) as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
         ) from exc
 
-    if not is_valid_reading_mode(bandwidth, intent):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Invalid reading-mode values: {bandwidth!r}/{intent!r}",
-        )
-
-    session = await _get_active_session(db, current_user)
-    session.reading_bandwidth = bandwidth
-    session.reading_intent = intent
-    session.reading_mode_source = payload.source
-    session.reading_mode_suggested = False
-
-    await db.commit()
-    await db.refresh(session)
-    await invalidate_user_view(current_user.id)
-
-    return ReadingModeResponse(
-        bandwidth=session.reading_bandwidth,
-        intent=session.reading_intent,
-        source=session.reading_mode_source,
-        suggested=session.reading_mode_suggested,
-    )
+    return ReadingModeResponse(**data)
 
 
 @router.post("/api/v1/reading-mode/dismiss-suggestion")
@@ -172,7 +117,7 @@ async def set_reading_mode(
 async def dismiss_reading_mode_suggestion(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
+    service: Annotated[ReadingModeService, Depends(get_reading_mode_service)],
 ) -> ReadingModeResponse:
     """Dismiss the reading-mode suggestion without changing the current mode.
 
@@ -183,24 +128,13 @@ async def dismiss_reading_mode_suggestion(
     Args:
         request: FastAPI request object for rate limiting.
         current_user: The authenticated user making the request.
-        db: SQLAlchemy session for database operations.
+        service: Reading mode service dependency.
 
     Returns:
         The unchanged reading-mode state with the suggestion cleared.
     """
-    session = await _get_active_session(db, current_user)
-    session.reading_mode_suggested = False
-
-    await db.commit()
-    await db.refresh(session)
-    await invalidate_user_view(current_user.id)
-
-    return ReadingModeResponse(
-        bandwidth=session.reading_bandwidth,
-        intent=session.reading_intent,
-        source=session.reading_mode_source,
-        suggested=session.reading_mode_suggested,
-    )
+    data = await service.dismiss_suggestion(current_user)
+    return ReadingModeResponse(**data)
 
 
 @router.post("/api/v1/reading-mode/suggest")
@@ -208,7 +142,7 @@ async def dismiss_reading_mode_suggestion(
 async def suggest_reading_mode(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
+    service: Annotated[ReadingModeService, Depends(get_reading_mode_service)],
 ) -> ReadingModeResponse:
     """Mark the active session as a candidate for the reading-mode quiz.
 
@@ -218,21 +152,10 @@ async def suggest_reading_mode(
     Args:
         request: FastAPI request object for rate limiting.
         current_user: The authenticated user making the request.
-        db: SQLAlchemy session for database operations.
+        service: Reading mode service dependency.
 
     Returns:
         The reading-mode state with the suggestion enabled.
     """
-    session = await _get_active_session(db, current_user)
-    session.reading_mode_suggested = True
-
-    await db.commit()
-    await db.refresh(session)
-    await invalidate_user_view(current_user.id)
-
-    return ReadingModeResponse(
-        bandwidth=session.reading_bandwidth,
-        intent=session.reading_intent,
-        source=session.reading_mode_source,
-        suggested=session.reading_mode_suggested,
-    )
+    data = await service.suggest_reading_mode(current_user)
+    return ReadingModeResponse(**data)

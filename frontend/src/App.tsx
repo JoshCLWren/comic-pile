@@ -308,7 +308,7 @@ function PublicRoute({ children }: { children: ReactNode }) {
 
 function AuthenticatedLayout({ children, onBugReportSubmit, wide = false }: { children: ReactNode; onBugReportSubmit: BugReportSubmit; wide?: boolean }) {
   const maxWidthClass = wide ? 'max-w-lg md:max-w-2xl lg:max-w-5xl xl:max-w-[1536px]' : 'max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl';
-  return <div className="flex min-h-screen" data-app-shell-ready><main className={`flex-1 container mx-auto px-3 md:px-4 py-4 md:py-6 ${maxWidthClass} pb-28`}>{children}</main><Navigation onBugReportSubmit={onBugReportSubmit} /></div>
+  return <div className="flex min-h-screen" data-app-shell-ready><main className={`flex-1 container mx-auto px-3 md:px-4 py-4 md:py-6 ${maxWidthClass} pb-28 md:ml-56 md:pb-6`}>{children}</main><Navigation onBugReportSubmit={onBugReportSubmit} /></div>
 }
 
 function PublicLayout({ children, onBugReportSubmit }: { children: ReactNode; onBugReportSubmit: BugReportSubmit }) {

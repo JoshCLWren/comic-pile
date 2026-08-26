@@ -47,6 +47,7 @@ MODEL_INTERRUPTION_RE = re.compile(
 )
 CONTROL_PLANE_RE = re.compile(
     r"factory[-_ ](?:work|review|completion)[-_ ]controller|"
+    r"controller-assignment-read-failed|"
     r"(?:lease|state[- ]machine|lifecycle|dispatch(?:er)?) (?:error|failed|failure|exception)",
     re.I,
 )
@@ -330,6 +331,15 @@ class ClassifierTests(unittest.TestCase):
     def test_control_plane_failure_is_distinct(self) -> None:
         """Controller lifecycle exceptions are not attributed to the model."""
         result = classify(self.BASE + "FIXED_MODEL_OPENCODE_OK\\nlifecycle exception\\n")
+        self.assertEqual(result.outcome_class, "control_plane_failure")
+
+    def test_assignment_read_failure_is_control_plane(self) -> None:
+        """Explicit controller assignment failures do not poison model health."""
+        result = classify(
+            self.BASE
+            + "FIXED_MODEL_OPENCODE_OK\\n"
+            + "released pr #1897 (controller-assignment-read-failed)\\n"
+        )
         self.assertEqual(result.outcome_class, "control_plane_failure")
 
     def test_work_failure_is_distinct(self) -> None:

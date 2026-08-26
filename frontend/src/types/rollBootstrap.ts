@@ -145,4 +145,5 @@ export interface RollBootstrapResponse {
   blocked_threads: RollBootstrapThread[]
   stale_thread_count: number
   stale_thread: RollBootstrapThread | null
+  timezone?: string | null
 }
