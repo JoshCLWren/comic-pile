@@ -15,7 +15,7 @@ from typing import Literal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event
+from app.models import Event, Session
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +95,8 @@ async def infer_bandwidth(
     Returns:
         BandwidthInference with predicted level, confidence, and evidence data.
     """
-    # Query paired roll→rate events to measure reading effort
+    # Query paired roll→rate events to measure reading effort, scoped to user
+    user_session_ids = select(Session.id).where(Session.user_id == user_id)
     roll_events = await db.execute(
         select(
             Event.id.label("roll_id"),
@@ -104,6 +105,7 @@ async def infer_bandwidth(
             Event.selected_thread_id,
         )
         .where(Event.session_id.is_not(None))
+        .where(Event.session_id.in_(user_session_ids))
         .where(Event.type == "roll")
         .where(Event.selected_thread_id.is_not(None))
         .order_by(Event.timestamp.desc())

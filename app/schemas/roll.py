@@ -6,12 +6,21 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.continuity_readiness import ContinuityBlocker
 from app.schemas.session import ActiveThreadInfo, SessionBandwidthState, SessionMode
+from comic_pile.recommendation_selection import Bandwidth, Intent
 
 
 class RollRequest(BaseModel):
-    """Schema for roll request."""
+    """Schema for roll request.
+
+    Optional reading-mode context may be supplied for telemetry and for the
+    selection control path. Both fields are neutral-by-default: absent values
+    resolve to ``balanced`` and never change legacy unweighted selection.
+    """
 
     model_config = ConfigDict(extra="forbid")
+
+    bandwidth: Bandwidth | None = None
+    intent: Intent | None = None
 
 
 class RollResponse(BaseModel):
@@ -176,8 +185,9 @@ class RollBootstrapResponse(BaseModel):
     blocked_threads: list[RollBootstrapThread]
     stale_thread_count: int
     stale_thread: RollBootstrapThread | None
+    timezone: str | None = None
 
-    # Phase 2: ephemeral bandwidth state
+    # Phase 2: flat ephemeral bandwidth fields for acceptance regression
     predicted_bandwidth: str | None = None
     active_bandwidth: str | None = None
     bandwidth_confidence: float | None = None
