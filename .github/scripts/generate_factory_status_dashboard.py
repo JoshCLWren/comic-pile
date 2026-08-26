@@ -109,6 +109,8 @@ def collect_snapshot() -> dict[str, Any]:
         "configured_workers": len(workers),
         "busy_workers": len(set(workers) & owned),
         "idle_workers": demand.idle_workers,
+        # Preserve the established snapshot key for existing JSON consumers.
+        "executable_capacity": capacity.get("executable_capacity", 0),
         "executable_slot_capacity": capacity.get("executable_slot_capacity", 0),
         "healthy_slots": slot_health_counts.get("healthy", 0),
         "degraded_slots": slot_health_counts.get("degraded", 0),
