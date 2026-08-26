@@ -11,7 +11,6 @@ Covers all acceptance criteria for issue #1745:
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncGenerator
 
 import pytest
 from sqlalchemy import select
@@ -22,7 +21,6 @@ from app.models import Session as SessionModel
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 from app.models.user import User
 from app.services.comicvine_taste_features import (
-    TasteFeature,
     _extract_era,
     _extract_publisher,
     _extract_teams,
@@ -31,11 +29,9 @@ from app.services.comicvine_taste_features import (
     extract_taste_features,
 )
 from app.services.taste_bank_inference import (
-    MAX_BASELINE_EVENTS,
     _FeatureObservationGroup,
     _compute_baseline_stats,
     _compute_inferred_values,
-    _group_observations,
     infer_taste_bank,
     rebuild_user_taste_bank,
 )
@@ -177,6 +173,7 @@ class TestExtractCreators:
     """Creator feature extraction: role preservation and deduplication."""
 
     def test_single_creator(self) -> None:
+        """Single creator with writer role is extracted correctly."""
         metadata: dict[str, object] = {
             "person_credits": [
                 {"name": "Stan Lee", "role": "writer"},
@@ -190,6 +187,7 @@ class TestExtractCreators:
         assert features[0].role == "writer"
 
     def test_multiple_roles_for_same_creator(self) -> None:
+        """Creator with multiple roles is deduplicated and sorted."""
         metadata: dict[str, object] = {
             "person_credits": [
                 {"name": "Frank Miller", "role": "writer, artist"},
@@ -201,6 +199,7 @@ class TestExtractCreators:
         assert features[0].role == "artist"
 
     def test_multiple_distinct_creators(self) -> None:
+        """Multiple distinct creators are both extracted."""
         metadata: dict[str, object] = {
             "person_credits": [
                 {"name": "Stan Lee", "role": "writer"},
@@ -213,6 +212,7 @@ class TestExtractCreators:
         assert names == {"Stan Lee", "Jack Kirby"}
 
     def test_duplicate_creator_deduplicated(self) -> None:
+        """Duplicate creator entries produce a single feature."""
         metadata: dict[str, object] = {
             "person_credits": [
                 {"name": "Stan Lee", "role": "writer"},
@@ -223,10 +223,12 @@ class TestExtractCreators:
         assert len(features) == 1
 
     def test_empty_person_credits(self) -> None:
+        """Empty metadata returns no creator features."""
         features = _extract_creators({})
         assert features == []
 
     def test_creator_credits_fallback(self) -> None:
+        """Falls back to creator_credits when person_credits is absent."""
         metadata: dict[str, object] = {
             "creator_credits": [
                 {"name": "Alan Moore", "role": "writer"},
@@ -241,6 +243,7 @@ class TestExtractCharacters:
     """Character feature extraction: story arc and character credit sources."""
 
     def test_story_arc_characters(self) -> None:
+        """Characters from story_arc_credits are extracted with char: IDs."""
         metadata: dict[str, object] = {
             "story_arc_credits": [
                 {"id": 101, "name": "Wolverine"},
@@ -254,6 +257,7 @@ class TestExtractCharacters:
         assert "char:102" in stable_keys
 
     def test_character_credits_fallback(self) -> None:
+        """Falls back to character_credits when story_arc_credits is absent."""
         metadata: dict[str, object] = {
             "character_credits": [
                 {"id": 201, "name": "Batman"},
@@ -264,6 +268,7 @@ class TestExtractCharacters:
         assert features[0].stable_key == "char:201"
 
     def test_character_no_id_uses_name(self) -> None:
+        """Character without id uses lowercase name as stable key."""
         metadata: dict[str, object] = {
             "story_arc_credits": [
                 {"name": "Unknown Hero"},
@@ -274,6 +279,7 @@ class TestExtractCharacters:
         assert features[0].stable_key == "unknown hero"
 
     def test_duplicate_characters_deduplicated(self) -> None:
+        """Duplicate characters with the same id produce one feature."""
         metadata: dict[str, object] = {
             "story_arc_credits": [
                 {"id": 101, "name": "Wolverine"},
@@ -284,6 +290,7 @@ class TestExtractCharacters:
         assert len(features) == 1
 
     def test_empty_character_credits(self) -> None:
+        """Empty metadata returns no character features."""
         features = _extract_characters({})
         assert features == []
 
@@ -292,6 +299,7 @@ class TestExtractTeams:
     """Team feature extraction from team_credits."""
 
     def test_single_team(self) -> None:
+        """Single team is extracted with team: ID key."""
         metadata: dict[str, object] = {
             "team_credits": [
                 {"id": 301, "name": "X-Men"},
@@ -303,10 +311,12 @@ class TestExtractTeams:
         assert features[0].display_name == "X-Men"
 
     def test_empty_team_credits(self) -> None:
+        """Empty metadata returns no team features."""
         features = _extract_teams({})
         assert features == []
 
     def test_team_no_id_uses_name(self) -> None:
+        """Team without id uses lowercase name as stable key."""
         metadata: dict[str, object] = {
             "team_credits": [
                 {"name": "Justice League"},
@@ -321,6 +331,7 @@ class TestExtractPublisher:
     """Publisher feature extraction."""
 
     def test_top_level_publisher(self) -> None:
+        """Top-level publisher key is extracted."""
         metadata: dict[str, object] = {"publisher": "Marvel Comics"}
         features = _extract_publisher(metadata)
         assert len(features) == 1
@@ -328,12 +339,14 @@ class TestExtractPublisher:
         assert features[0].signal_type == "publisher"
 
     def test_publisher_name_fallback(self) -> None:
+        """Falls back to publisher_name key."""
         metadata: dict[str, object] = {"publisher_name": "DC Comics"}
         features = _extract_publisher(metadata)
         assert len(features) == 1
         assert features[0].display_name == "DC Comics"
 
     def test_volume_publisher(self) -> None:
+        """Extracts publisher from nested volume object."""
         metadata: dict[str, object] = {
             "volume": {"publisher_name": "Image Comics"}
         }
@@ -342,6 +355,7 @@ class TestExtractPublisher:
         assert features[0].display_name == "Image Comics"
 
     def test_no_publisher(self) -> None:
+        """Empty metadata returns no publisher feature."""
         features = _extract_publisher({})
         assert features == []
 
@@ -350,28 +364,34 @@ class TestExtractEra:
     """Era (decade bucket) feature extraction."""
 
     def test_cover_date_to_era(self) -> None:
+        """Cover date is converted to a decade bucket."""
         features = _extract_era({"cover_date": "1995-03-15"})
         assert len(features) == 1
         assert features[0].stable_key == "1990s"
         assert features[0].signal_type == "era"
 
     def test_year_string(self) -> None:
+        """Four-digit year string is parsed into a decade."""
         features = _extract_era({"cover_date": "2001"})
         assert features[0].stable_key == "2000s"
 
     def test_store_date_fallback(self) -> None:
+        """Falls back to store_date when cover_date is absent."""
         features = _extract_era({"store_date": "1987-06-01"})
         assert features[0].stable_key == "1980s"
 
     def test_volume_start_year(self) -> None:
+        """Extracts era from volume start_year."""
         features = _extract_era({"volume": {"start_year": "2010"}})
         assert features[0].stable_key == "2010s"
 
     def test_no_date(self) -> None:
+        """Empty metadata returns no era feature."""
         features = _extract_era({})
         assert features == []
 
     def test_invalid_date(self) -> None:
+        """Unparseable date returns no era feature."""
         features = _extract_era({"cover_date": "not-a-year"})
         assert features == []
 
@@ -380,6 +400,7 @@ class TestExtractTasteFeaturesIntegration:
     """Integrated feature extraction: all five feature types from full metadata."""
 
     def test_full_metadata_extraction(self) -> None:
+        """All five feature types are extracted from complete metadata."""
         metadata: dict[str, object] = {
             "person_credits": [
                 {"name": "Stan Lee", "role": "writer"},
@@ -398,11 +419,13 @@ class TestExtractTasteFeaturesIntegration:
         assert types == {"creator", "character", "team", "publisher", "era"}
 
     def test_non_dict_metadata_returns_empty(self) -> None:
+        """Non-dict inputs produce no features."""
         assert extract_taste_features("not a dict") == []
         assert extract_taste_features(None) == []  # type: ignore[arg-type]
         assert extract_taste_features([]) == []  # type: ignore[arg-type]
 
     def test_empty_dict_returns_empty(self) -> None:
+        """Empty dict produces no features."""
         assert extract_taste_features({}) == []
 
 
@@ -415,22 +438,26 @@ class TestComputeBaselineStats:
     """Test the baseline rating statistic computation."""
 
     def test_no_ratings(self) -> None:
+        """Empty rating list returns zero mean and default std."""
         mean, std = _compute_baseline_stats([])
         assert mean == 0.0
         assert std == 1.0
 
     def test_single_rating(self) -> None:
+        """Single rating returns that rating as mean with default std."""
         mean, std = _compute_baseline_stats([4.0])
         assert mean == 4.0
         assert std == 1.0
 
     def test_multiple_ratings(self) -> None:
+        """Multiple ratings produce correct mean and positive std."""
         ratings = [3.0, 4.0, 5.0, 3.5, 4.5]
         mean, std = _compute_baseline_stats(ratings)
         assert abs(mean - 4.0) < 0.01
         assert std > 0
 
     def test_identical_ratings(self) -> None:
+        """Identical ratings return the value as mean with floor std."""
         ratings = [4.0, 4.0, 4.0, 4.0]
         mean, std = _compute_baseline_stats(ratings)
         assert mean == 4.0
@@ -482,7 +509,7 @@ class TestInferTasteBankPositive:
         session = await _create_session(async_db, user)
 
         for _ in range(6):
-            event = await _add_rate_event(
+            await _add_rate_event(
                 async_db, user, thread, issue, 5.0, session.id
             )
             thread.issues_remaining -= 1
@@ -495,7 +522,9 @@ class TestInferTasteBankPositive:
         creator_signals = [s for s in signals if s.signal_type == "creator"]
         assert len(creator_signals) >= 1
         stan_lee = next(s for s in creator_signals if s.external_key == "stan lee")
+        assert stan_lee.affinity_estimate is not None
         assert stan_lee.affinity_estimate > 0.3
+        assert stan_lee.confidence is not None
         assert stan_lee.confidence >= 0.2
 
 
@@ -528,6 +557,7 @@ class TestInferTasteBankSparse:
             None,
         )
         assert batman_signal is not None
+        assert batman_signal.confidence is not None
         assert batman_signal.confidence < 0.3
 
     @pytest.mark.asyncio
@@ -575,6 +605,7 @@ class TestInferTasteBankSparse:
         assert claremont is not None
         assert claremont.evidence_count == 2
         assert claremont.distinct_thread_count == 1
+        assert claremont.confidence is not None
         assert claremont.confidence < 0.3
 
 
@@ -625,6 +656,7 @@ class TestInferTasteBankDiversity:
         )
         assert claremont is not None
         assert claremont.distinct_thread_count == 2
+        assert claremont.confidence is not None
         assert claremont.confidence > 0.1
 
     def test_run_diversity_increases_confidence(self) -> None:
@@ -739,6 +771,7 @@ class TestInferTasteBankVerdictPersistence:
         await async_db.refresh(signal)
 
         assert signal.user_verdict == "rejected"
+        assert signal.affinity_estimate is not None
         assert signal.affinity_estimate <= 0.01
 
     @pytest.mark.asyncio
@@ -832,6 +865,7 @@ class TestInferTasteBankVerdictPersistence:
         await async_db.refresh(signal)
 
         assert signal.user_verdict == "confirmed"
+        assert signal.affinity_estimate is not None
         assert signal.affinity_estimate >= 0.0
 
 
@@ -912,6 +946,7 @@ class TestInferTasteBankNegative:
             None,
         )
         assert publisher_signal is not None
+        assert publisher_signal.affinity_estimate is not None
         assert publisher_signal.affinity_estimate < -0.05
         assert publisher_signal.evidence_count == 3
 
@@ -1091,6 +1126,7 @@ class TestInferTasteBankSignalCreation:
         ]
         assert len(frank_miller_signals) == 1
         assert frank_miller_signals[0].evidence_count == 2
+        assert frank_miller_signals[0].confidence is not None
         assert frank_miller_signals[0].confidence > 0.1
 
 
@@ -1141,6 +1177,8 @@ class TestInferTasteBankNegativeAffinityAboveBaseline:
 
 
 class TestRebuildAlias:
+    """Rebuild alias: rebuild_user_taste_bank delegates to infer_taste_bank."""
+
     @pytest.mark.asyncio
     async def test_rebuild_alias_returns_signals(self, async_db: AsyncSession) -> None:
         """rebuild_user_taste_bank should be a thin alias for infer_taste_bank."""
