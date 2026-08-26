@@ -120,11 +120,11 @@ export function buildPrerequisiteLanes(
     return step
   }
 
-  const walk = (firstEdge: ReaderContextEdge) => {
+  const walk = (firstEdge: ReaderContextEdge, prefix: PathStep[] = []) => {
     if (visited.has(firstEdge.source_issue_id)) return
     visited.add(firstEdge.source_issue_id)
 
-    const steps: PathStep[] = [makeLaneStep(firstEdge)]
+    const steps: PathStep[] = [...prefix, makeLaneStep(firstEdge)]
     let cursor = firstEdge.source_issue_id
 
     while (true) {
@@ -133,7 +133,7 @@ export function buildPrerequisiteLanes(
       )
       if (candidates.length === 0) break
       for (const fork of candidates.slice(1)) {
-        walk(fork)
+        walk(fork, [...steps])
       }
       const nextEdge = candidates[0]
       visited.add(nextEdge.source_issue_id)
@@ -141,7 +141,7 @@ export function buildPrerequisiteLanes(
       cursor = nextEdge.source_issue_id
     }
 
-    lanes.push(steps.reverse())
+    lanes.push([...steps].reverse())
   }
 
   for (const edge of incoming.get(currentIssueId) ?? []) {
