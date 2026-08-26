@@ -37,7 +37,7 @@ async def api_optimize_remote_image(
     ],
     width: Annotated[
         int,
-        Query(ge=16, le=2048, description="Desired rendered width in pixels"),
+        Query(ge=16, le=10000, description="Desired rendered width in pixels"),
     ],
 ) -> Response:
     """Fetch, optimize, and serve an allowlisted remote cover image.

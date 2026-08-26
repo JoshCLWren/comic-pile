@@ -341,7 +341,7 @@ class ImageDeliverySettings(BaseSettings):
     )
     image_optimizer_max_upstream_bytes: int = Field(
         default=4_000_000,
-        ge=50_000,
+        ge=1,
         le=50_000_000,
         description=(
             "Maximum accepted upstream image payload size in bytes. Kept below "
