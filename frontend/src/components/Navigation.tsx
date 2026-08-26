@@ -53,71 +53,71 @@ const APPEARANCE_OPTIONS: Array<{ id: ThemeId; label: string; ariaLabel: string;
 function NavIcon({ name }: { name: string }) {
   const icons: Record<string, React.ReactNode> = {
     roll: (
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <>
         <circle cx="12" cy="12" r="10"></circle>
         <path d="M8 8h4v8H8"></path>
         <path d="M12 8h4v8h-4"></path>
-      </svg>
+      </>
     ),
     queue: (
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <>
         <path d="M4 4v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4"></path>
         <path d="M8 4v16"></path>
         <path d="M12 4v16"></path>
         <line x1="4" y1="10" x2="20" y2="10"></line>
-      </svg>
+      </>
     ),
     history: (
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <>
         <path d="M13.5 20q-5.775-4.3-7.5-10"></path>
         <path d="M7 10l4-4 4 4"></path>
         <path d="M11 14H4"></path>
-      </svg>
+      </>
     ),
     crossovers: (
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <>
         <path d="M10 6V4a2 2 0 0 1 2-2 2 2 0 0 1 2 2v2"></path>
         <path d="M6 18v2a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-2"></path>
         <path d="M12 12H4"></path>
         <path d="M8 6l4-4 4 4"></path>
         <path d="M4 18h16"></path>
-      </svg>
+      </>
     ),
     planner: (
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <>
         <circle cx="12" cy="12" r="10"></circle>
         <path d="M8 12h8"></path>
         <path d="M12 8v8"></path>
-      </svg>
+      </>
     ),
     new: (
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <>
         <circle cx="12" cy="12" r="10"></circle>
         <path d="M16 8v6a2 2 0 0 1-2 2h-4"></path>
         <path d="M12 8v6"></path>
         <line x1="8" y1="8" x2="16" y2="16"></line>
-      </svg>
+      </>
     ),
     help: (
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <>
         <circle cx="12" cy="12" r="10"></circle>
         <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
         <line x1="12" y1="17" x2="12.01" y2="17"></line>
-      </svg>
+      </>
     ),
     glossary: (
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <>
         <path d="M4 4v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4H4z"></path>
         <path d="M8 8h8"></path>
         <path d="M8 12h8"></path>
         <path d="M8 16h8"></path>
-      </svg>
+      </>
     ),
   }
 
   return (
-    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      {icons[name] || icons.roll}
+    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {icons[name] ?? icons.roll}
     </svg>
   )
 }
