@@ -23,12 +23,14 @@ class TasteFeature:
             a normalized display string.
         display_name: Human-readable name for UI display.
         role: For creator features, the primary role (e.g. "writer", "artist").
+        roles: All roles associated with this feature, as a sorted tuple.
     """
 
     signal_type: str
     stable_key: str
     display_name: str
     role: str | None = None
+    roles: tuple[str, ...] = ()
 
 
 def _string(value: object) -> str | None:
@@ -88,6 +90,7 @@ def _extract_creators(metadata: dict[str, object]) -> list[TasteFeature]:
                 stable_key=name.lower().strip(),
                 display_name=name.strip(),
                 role=primary_role,
+                roles=roles,
             )
         )
 
