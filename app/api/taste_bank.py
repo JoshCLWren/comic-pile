@@ -3,12 +3,14 @@
 Provides authenticated access to a user's inferred taste signals and
 endpoints to trigger taste-bank rebuilds.
 
-State changes are restricted to test environments for rebuild endpoints.
+Rebuild endpoints are restricted to test environments; reading and verdict
+endpoints are available everywhere.
 """
 
 from __future__ import annotations
 
 import os
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -17,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models.taste_bank import TasteEvidence, TasteSignal
+from app.models.taste_signal import TasteSignal
 from app.models.user import User
 from app.schemas.taste_bank import (
     TasteBankRebuildResponse,
@@ -27,7 +29,7 @@ from app.schemas.taste_bank import (
 )
 from app.services.taste_bank import rebuild_user_taste_bank
 
-router = APIRouter()
+router = APIRouter(prefix="/api/v1/taste-bank", tags=["taste-bank"])
 
 
 def _require_test_environment() -> None:
@@ -39,10 +41,41 @@ def _require_test_environment() -> None:
         )
 
 
+def _signal_to_response(signal: TasteSignal) -> TasteBankSignalResponse:
+    """Map a persisted :class:`TasteSignal` row onto its API response.
+
+    Args:
+        signal: Persisted taste-signal row from the database.
+
+    Returns:
+        API response carrying the signal's inferred state and verdict.
+    """
+    return TasteBankSignalResponse(
+        id=signal.id,
+        user_id=signal.user_id,
+        signal_type=signal.signal_type,
+        stable_key=signal.external_key,
+        display_name=signal.display_name,
+        inferred_affinity=(
+            signal.affinity_estimate if signal.affinity_estimate is not None else 0.0
+        ),
+        evidence_count=signal.evidence_count,
+        distinct_threads_count=signal.distinct_thread_count,
+        confidence=signal.confidence if signal.confidence is not None else 0.0,
+        user_verdict=signal.user_verdict,
+        last_observed_at=(
+            signal.last_observed_at.isoformat() if signal.last_observed_at else None
+        ),
+        prompt_suppressed=(
+            signal.prompt_suppressed_until is not None
+            and signal.prompt_suppressed_until > datetime.now(UTC)
+        ),
+    )
+
+
 @router.get(
     "/user/{user_id}",
     response_model=TasteBankSummaryResponse,
-    tags=["taste-bank"],
 )
 async def get_user_taste_bank(
     user_id: int,
@@ -74,31 +107,12 @@ async def get_user_taste_bank(
     )
     signals = result.scalars().all()
 
-    high_confidence = sum(1 for s in signals if s.confidence >= 0.7)
+    high_confidence = sum(1 for s in signals if (s.confidence or 0.0) >= 0.7)
     explicit_verdict = sum(1 for s in signals if s.user_verdict is not None)
 
-    response_signals = [
-        TasteBankSignalResponse(
-            id=s.id,
-            user_id=s.user_id,
-            signal_type=s.signal_type,  # type: ignore[arg-type]
-            stable_key=s.stable_key,
-            display_name=s.display_name,
-            inferred_affinity=s.inferred_affinity,
-            evidence_count=s.evidence_count,
-            distinct_threads_count=s.distinct_threads_count,
-            distinct_runs_count=s.distinct_runs_count,
-            confidence=s.confidence,
-            user_verdict=s.user_verdict,  # type: ignore[arg-type]
-            last_observed_at=s.last_observed_at.isoformat() if s.last_observed_at else None,
-            prompt_suppressed=bool(s.prompt_suppressed),
-        )
-        for s in signals
-    ]
-
     return TasteBankSummaryResponse(
-        signals=response_signals,
-        total_signals=len(response_signals),
+        signals=[_signal_to_response(s) for s in signals],
+        total_signals=len(signals),
         high_confidence_count=high_confidence,
         explicit_verdict_count=explicit_verdict,
     )
@@ -107,7 +121,6 @@ async def get_user_taste_bank(
 @router.post(
     "/user/{user_id}/rebuild",
     response_model=TasteBankRebuildResponse,
-    tags=["taste-bank"],
 )
 async def rebuild_user_taste_bank_endpoint(
     user_id: int,
@@ -116,7 +129,7 @@ async def rebuild_user_taste_bank_endpoint(
 ) -> TasteBankRebuildResponse:
     """Trigger a full taste-bank rebuild from the user's reading history.
 
-    Available only in test and development environments.
+    Available only in test environments.
 
     Args:
         user_id: Target user ID (must match authenticated user).
@@ -145,7 +158,6 @@ async def rebuild_user_taste_bank_endpoint(
 @router.post(
     "/signals/{signal_id}/verdict",
     response_model=TasteBankSignalResponse,
-    tags=["taste-bank"],
 )
 async def update_signal_verdict(
     signal_id: int,
@@ -154,6 +166,9 @@ async def update_signal_verdict(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TasteBankSignalResponse:
     """Apply or update an explicit user verdict on a taste signal.
+
+    Explicit verdicts are authoritative: later inference recalculations never
+    overwrite them.
 
     Args:
         signal_id: ID of the taste signal to update.
@@ -164,9 +179,7 @@ async def update_signal_verdict(
     Returns:
         Updated taste signal.
     """
-    result = await db.execute(
-        select(TasteSignal).where(TasteSignal.id == signal_id)
-    )
+    result = await db.execute(select(TasteSignal).where(TasteSignal.id == signal_id))
     signal = result.scalar_one_or_none()
     if signal is None:
         raise HTTPException(
@@ -180,27 +193,12 @@ async def update_signal_verdict(
             detail="You can only update your own taste signals",
         )
 
-    if verdict_update.verdict == "suppress":
-        signal.prompt_suppressed = 1
-    else:
-        signal.user_verdict = verdict_update.verdict
-        signal.confidence = max(signal.confidence, 0.8)
+    signal.user_verdict = verdict_update.verdict
+    signal.verdict_at = datetime.now(UTC)
+    # A user verdict is authoritative evidence; floor confidence accordingly.
+    signal.confidence = max(signal.confidence or 0.0, 0.8)
 
     await db.commit()
     await db.refresh(signal)
 
-    return TasteBankSignalResponse(
-        id=signal.id,
-        user_id=signal.user_id,
-        signal_type=signal.signal_type,  # type: ignore[arg-type]
-        stable_key=signal.stable_key,
-        display_name=signal.display_name,
-        inferred_affinity=signal.inferred_affinity,
-        evidence_count=signal.evidence_count,
-        distinct_threads_count=signal.distinct_threads_count,
-        distinct_runs_count=signal.distinct_runs_count,
-        confidence=signal.confidence,
-        user_verdict=signal.user_verdict,  # type: ignore[arg-type]
-        last_observed_at=signal.last_observed_at.isoformat() if signal.last_observed_at else None,
-        prompt_suppressed=bool(signal.prompt_suppressed),
-    )
+    return _signal_to_response(signal)

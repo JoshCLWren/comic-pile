@@ -32,7 +32,9 @@ from app.services.comicvine_taste_features import (
 )
 from app.services.taste_bank import (
     MAX_BASELINE_EVENTS,
+    _FeatureObservationGroup,
     _compute_baseline_stats,
+    _compute_inferred_values,
     _group_observations,
     infer_taste_bank,
     rebuild_user_taste_bank,
@@ -477,8 +479,8 @@ class TestInferTasteBankPositive:
 
         creator_signals = [s for s in signals if s.signal_type == "creator"]
         assert len(creator_signals) >= 1
-        stan_lee = next(s for s in creator_signals if s.stable_key == "stan lee")
-        assert stan_lee.inferred_affinity > 0.3
+        stan_lee = next(s for s in creator_signals if s.external_key == "stan lee")
+        assert stan_lee.affinity_estimate > 0.3
         assert stan_lee.confidence >= 0.2
 
 
@@ -507,7 +509,7 @@ class TestInferTasteBankSparse:
 
         signals = await infer_taste_bank(async_db, user.id)
         batman_signal = next(
-            (s for s in signals if s.signal_type == "creator" and s.stable_key == "bob kane"),
+            (s for s in signals if s.signal_type == "creator" and s.external_key == "bob kane"),
             None,
         )
         assert batman_signal is not None
@@ -552,12 +554,12 @@ class TestInferTasteBankSparse:
 
         signals = await infer_taste_bank(async_db, user.id)
         claremont = next(
-            (s for s in signals if s.signal_type == "creator" and s.stable_key == "chris claremont"),
+            (s for s in signals if s.signal_type == "creator" and s.external_key == "chris claremont"),
             None,
         )
         assert claremont is not None
         assert claremont.evidence_count == 2
-        assert claremont.distinct_threads_count == 1
+        assert claremont.distinct_thread_count == 1
         assert claremont.confidence < 0.3
 
 
@@ -603,13 +605,38 @@ class TestInferTasteBankDiversity:
 
         signals = await infer_taste_bank(async_db, user.id)
         claremont = next(
-            (s for s in signals if s.signal_type == "creator" and s.stable_key == "chris claremont"),
+            (s for s in signals if s.signal_type == "creator" and s.external_key == "chris claremont"),
             None,
         )
         assert claremont is not None
-        assert claremont.distinct_threads_count == 2
-        assert claremont.distinct_runs_count == 2
+        assert claremont.distinct_thread_count == 2
         assert claremont.confidence > 0.1
+
+    def test_run_diversity_increases_confidence(self) -> None:
+        """Cross-session evidence earns more confidence than a single-run cluster."""
+        multi_run = _FeatureObservationGroup(
+            signal_type="creator",
+            stable_key="same creator",
+            display_name="Same Creator",
+            role=None,
+            ratings=(5.0, 5.0),
+            thread_ids=(1, 1),
+            session_ids=(11, 12),
+        )
+        single_run = _FeatureObservationGroup(
+            signal_type="creator",
+            stable_key="same creator",
+            display_name="Same Creator",
+            role=None,
+            ratings=(5.0, 5.0),
+            thread_ids=(1, 1),
+            session_ids=(11, 11),
+        )
+
+        _, multi_confidence = _compute_inferred_values(multi_run, baseline_mean=3.0)
+        _, single_confidence = _compute_inferred_values(single_run, baseline_mean=3.0)
+
+        assert multi_confidence > single_confidence
 
 
 class TestInferTasteBankVerdictPersistence:
@@ -642,7 +669,7 @@ class TestInferTasteBankVerdictPersistence:
             select(TasteSignal).where(
                 TasteSignal.user_id == user.id,
                 TasteSignal.signal_type == "creator",
-                TasteSignal.stable_key == "jack kirby",
+                TasteSignal.external_key == "jack kirby",
             )
         )
         signal = result.scalar_one()
@@ -684,7 +711,7 @@ class TestInferTasteBankVerdictPersistence:
             select(TasteSignal).where(
                 TasteSignal.user_id == user.id,
                 TasteSignal.signal_type == "publisher",
-                TasteSignal.stable_key == "dc comics",
+                TasteSignal.external_key == "dc comics",
             )
         )
         signal = result.scalar_one()
@@ -697,7 +724,7 @@ class TestInferTasteBankVerdictPersistence:
         await async_db.refresh(signal)
 
         assert signal.user_verdict == "rejected"
-        assert signal.inferred_affinity <= 0.01
+        assert signal.affinity_estimate <= 0.01
 
     @pytest.mark.asyncio
     async def test_sometimes_verdict_survives_rebuild(
@@ -724,7 +751,7 @@ class TestInferTasteBankVerdictPersistence:
             select(TasteSignal).where(
                 TasteSignal.user_id == user.id,
                 TasteSignal.signal_type == "creator",
-                TasteSignal.stable_key == "geoff johns",
+                TasteSignal.external_key == "geoff johns",
             )
         )
         signal = result.scalar_one()
@@ -764,7 +791,7 @@ class TestInferTasteBankVerdictPersistence:
             select(TasteSignal).where(
                 TasteSignal.user_id == user.id,
                 TasteSignal.signal_type == "creator",
-                TasteSignal.stable_key == "stan lee",
+                TasteSignal.external_key == "stan lee",
             )
         )
         signal = result.scalar_one()
@@ -790,7 +817,7 @@ class TestInferTasteBankVerdictPersistence:
         await async_db.refresh(signal)
 
         assert signal.user_verdict == "confirmed"
-        assert signal.inferred_affinity >= 0.0
+        assert signal.affinity_estimate >= 0.0
 
 
 class TestInferTasteBankNeutral:
@@ -820,7 +847,7 @@ class TestInferTasteBankNeutral:
 
         signals = await infer_taste_bank(async_db, user.id)
         neutral_signal = next(
-            (s for s in signals if s.signal_type == "publisher" and s.stable_key == "neutral comics"),
+            (s for s in signals if s.signal_type == "publisher" and s.external_key == "neutral comics"),
             None,
         )
         assert neutral_signal is not None
@@ -866,11 +893,11 @@ class TestInferTasteBankNegative:
 
         signals = await infer_taste_bank(async_db, user.id)
         publisher_signal = next(
-            (s for s in signals if s.signal_type == "publisher" and s.stable_key == "underrated comics"),
+            (s for s in signals if s.signal_type == "publisher" and s.external_key == "underrated comics"),
             None,
         )
         assert publisher_signal is not None
-        assert publisher_signal.inferred_affinity < -0.05
+        assert publisher_signal.affinity_estimate < -0.05
         assert publisher_signal.evidence_count == 3
 
 
@@ -965,7 +992,7 @@ class TestInferTasteBankSignalCreation:
                 select(TasteSignal).where(
                     TasteSignal.user_id == user.id,
                     TasteSignal.signal_type == "creator",
-                    TasteSignal.stable_key == "alan moore",
+                    TasteSignal.external_key == "alan moore",
                 )
             )
         ).scalar_one()
@@ -1045,7 +1072,7 @@ class TestInferTasteBankSignalCreation:
         all_signals = (await async_db.execute(select(TasteSignal))).scalars().all()
         frank_miller_signals = [
             s for s in all_signals
-            if s.stable_key == "frank miller" and s.signal_type == "creator"
+            if s.external_key == "frank miller" and s.signal_type == "creator"
         ]
         assert len(frank_miller_signals) == 1
         assert frank_miller_signals[0].evidence_count == 2
@@ -1084,7 +1111,7 @@ class TestInferTasteBankNegativeAffinityAboveBaseline:
 
         signals = await infer_taste_bank(async_db, user.id)
         creator_signal = next(
-            (s for s in signals if s.stable_key == "same creator" and s.signal_type == "creator"),
+            (s for s in signals if s.external_key == "same creator" and s.signal_type == "creator"),
             None,
         )
         if creator_signal is not None:
@@ -1115,7 +1142,7 @@ class TestRebuildAlias:
         signals = await rebuild_user_taste_bank(async_db, user.id)
         assert len(signals) >= 1
         publisher = next(
-            (s for s in signals if s.signal_type == "publisher" and s.stable_key == "test comics"),
+            (s for s in signals if s.signal_type == "publisher" and s.external_key == "test comics"),
             None,
         )
         assert publisher is not None

@@ -10,10 +10,7 @@ to display name. Missing or unconfirmed metadata yields no fabricated evidence.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Sequence
-
-from app.schemas.comicvine import ComicVineCreator
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True, slots=True)
