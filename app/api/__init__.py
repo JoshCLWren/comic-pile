@@ -9,7 +9,6 @@ from app.api import dependency as dependency
 from app.api import dependency_group as dependency_group
 from app.api import dependency_group_batch as dependency_group_batch
 from app.api import health as health
-from app.api import images as images
 from app.api import issue_dependency_batch as issue_dependency_batch
 from app.api import reading_order_projection as reading_order_projection
 from app.api import recommendation_diagnostics as recommendation_diagnostics
@@ -17,7 +16,6 @@ from app.api import releases as releases
 from app.api import roll_recovery_switch as roll_recovery_switch
 
 analytics.router.include_router(health.router)
-dependency.router.include_router(issue_dependency_batch.router)
 dependency.router.include_router(issue_dependency_batch.router)
 dependency.router.include_router(dependency_group.router)
 dependency.router.include_router(dependency_group_batch.router)
@@ -39,7 +37,6 @@ __all__ = [
     "dependency_group",
     "dependency_group_batch",
     "health",
-    "images",
     "issue_dependency_batch",
     "reading_order_projection",
     "recommendation_diagnostics",
