@@ -82,23 +82,12 @@ def collect_snapshot() -> dict[str, Any]:
 
     issues = work.list_issues()
     prs = work.list_prs()
-    demand = full.current_demand(completion)
+    demand, capacity = full.current_demand(completion)
 
     workers = completion.load_manifest_workers(MANIFEST)
     owned = completion.owned_worker_ids([*issues, *prs])
     now_epoch = int(time.time())
-    health = completion.latest_worker_health(completion.registry_comments())
-    cooling = {
-        worker
-        for worker in workers
-        if completion.worker_is_cooling(worker, health, now_epoch=now_epoch)
-    }
-    unavailable = {
-        worker
-        for worker in cooling
-        if "model missing" in str(health.get(worker, ("", 0))[0]).casefold()
-    }
-    transient_cooling = cooling - unavailable
+    health_counts = capacity.get("health_counts") or {}
 
     hour = iso_search_time(timedelta(hours=1))
     day = iso_search_time(timedelta(hours=24))
@@ -121,8 +110,11 @@ def collect_snapshot() -> dict[str, Any]:
         "configured_workers": len(workers),
         "busy_workers": len(set(workers) & owned),
         "idle_workers": demand.idle_workers,
-        "cooling_workers": len(transient_cooling),
-        "unavailable_workers": len(unavailable),
+        "executable_capacity": capacity.get("executable_capacity", 0),
+        "healthy_candidates": health_counts.get("healthy", 0),
+        "degraded_candidates": health_counts.get("degraded", 0),
+        "cooling_candidates": health_counts.get("cooling", 0),
+        "unavailable_candidates": health_counts.get("unavailable", 0),
         "pipeline": {
             "review": count_with_label(prs, "factory:review"),
             "changes_requested": count_with_label(prs, "factory:changes-requested"),
@@ -229,7 +221,7 @@ footer {{ margin-top:14px; color:var(--muted); font-size:12px; }}
 <section class="metrics">{card_html}</section>
 <section class="grid">
 <div class="panel"><h2>Live allocation</h2><div><span class="big">{completion_pct}%</span> completion · <span class="big">{production_pct}%</span> production</div><div class="ratio"><div class="completion"></div><div class="production"></div></div><div class="muted">Target completion workers: <strong>{esc(snapshot['completion_target'])}</strong> from {esc(snapshot['idle_workers'])} currently idle.</div><div class="sub" style="margin-top:12px">{esc(funnel_text)}</div></div>
-<div class="panel"><h2>Fleet capacity</h2><div class="row"><span>Configured</span><strong>{esc(snapshot['configured_workers'])}</strong></div><div class="row"><span>Busy</span><strong>{esc(snapshot['busy_workers'])}</strong></div><div class="row"><span>Idle</span><strong>{esc(snapshot['idle_workers'])}</strong></div><div class="row"><span>Cooling</span><strong class="warn">{esc(snapshot['cooling_workers'])}</strong></div><div class="row"><span>Unavailable</span><strong class="bad">{esc(snapshot['unavailable_workers'])}</strong></div></div>
+<div class="panel"><h2>Executable capacity now</h2><div class="row"><span>Executable</span><strong class="good">{esc(snapshot['executable_capacity'])}</strong></div><div class="row"><span>Healthy</span><strong>{esc(snapshot['healthy_candidates'])}</strong></div><div class="row"><span>Degraded</span><strong class="warn">{esc(snapshot['degraded_candidates'])}</strong></div><div class="row"><span>Cooling</span><strong class="warn">{esc(snapshot['cooling_candidates'])}</strong></div><div class="row"><span>Unavailable</span><strong class="bad">{esc(snapshot['unavailable_candidates'])}</strong></div><div class="sub" style="margin-top:10px">{esc(snapshot['busy_workers'])} busy · {esc(snapshot['idle_workers'])} idle executable slots · {esc(snapshot['configured_workers'])} configured slots</div></div>
 <div class="panel"><h2>PR pipeline</h2>{pipeline_html}</div>
 <div class="panel"><h2>Throughput · last hour</h2><div class="row"><span>Opened</span><strong>{esc(throughput['opened_hour'])}</strong></div><div class="row"><span>Merged</span><strong>{esc(throughput['merged_hour'])}</strong></div><div class="row"><span>Net PR change</span><strong class="{'good' if throughput['net_hour'] < 0 else 'bad' if throughput['net_hour'] > 0 else ''}">{signed(int(throughput['net_hour']))}</strong></div></div>
 <div class="panel"><h2>Throughput · last 24h</h2><div class="row"><span>Opened</span><strong>{esc(throughput['opened_day'])}</strong></div><div class="row"><span>Merged</span><strong>{esc(throughput['merged_day'])}</strong></div><div class="row"><span>Net PR change</span><strong class="{'good' if throughput['net_day'] < 0 else 'bad' if throughput['net_day'] > 0 else ''}">{signed(int(throughput['net_day']))}</strong></div></div>
