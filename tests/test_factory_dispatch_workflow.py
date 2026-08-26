@@ -24,5 +24,5 @@ def test_stale_run_cancellation_retries_transient_status_race():
 
     assert "cancel_succeeded=false" in workflow
     assert "for _ in {1..15}; do" in workflow
-    assert 'current_status" == completed' in workflow
+    assert '[[ "${current_status}" == completed ]]' in workflow
     assert 'current_status" == queued ||' in workflow
