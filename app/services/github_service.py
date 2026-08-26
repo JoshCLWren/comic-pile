@@ -1,6 +1,6 @@
 """GitHub service for creating user feedback issues."""
 
-from github import GitHub as Github
+from github import Github
 
 from app.config import get_github_settings
 from app.schemas.bug_report import BugReportDiagnostics, ReportType
