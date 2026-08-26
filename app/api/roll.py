@@ -42,7 +42,7 @@ from app.schemas import (
     SessionModeResponse,
     SessionModeUpdateRequest,
 )
-from app.schemas.recommendation_context import RecommendationContextCreate
+from app.schemas.recommendation_context import CandidateFactor, RecommendationContextCreate
 from app.schemas.session import build_session_bandwidth_state
 from app.momentum import weighted_momentum_selection
 from comic_pile.queue import get_bounded_roll_pool_rows
@@ -124,6 +124,7 @@ async def roll_dice(
     resolved_mode = resolve_selection_mode(selection_bandwidth, selection_intent)
 
     max_bonus = 0.0
+    candidate_weights: list = []
     if resolved_mode is SelectionMode.PURE_RANDOM_BYPASS:
         selection = select_from_pool(
             pool_size,
@@ -142,7 +143,7 @@ async def roll_dice(
         )
         session_events = list(session_events_result.scalars().all())
 
-        selected_index, max_bonus = await weighted_momentum_selection(
+        selected_index, max_bonus, candidate_weights = await weighted_momentum_selection(
             db=db,
             bounded_rows=bounded_rows,
             user_id=user_id,
@@ -233,8 +234,19 @@ async def roll_dice(
         bandwidth=normalize_bandwidth(selection_bandwidth).value,
         bandwidth_source=current_session.bandwidth_source or "default",
         bandwidth_confidence=1.0 if current_session.active_bandwidth else 0.0,
-        candidate_factors=None,
-        final_weight=None,
+        candidate_factors=[
+            CandidateFactor(
+                candidate_id=breakdown.candidate_id,
+                factors=list(breakdown.factors),
+                weight=breakdown.weight,
+            )
+            for breakdown in candidate_weights
+        ]
+        if candidate_weights
+        else None,
+        final_weight=candidate_weights[selected_index].weight
+        if candidate_weights
+        else None,
         random_bypass=max_bonus <= 0.0,
         balanced_neutrality=max_bonus <= 0.0,
     )
@@ -251,8 +263,10 @@ async def roll_dice(
         bandwidth=context_data.bandwidth,
         bandwidth_source=context_data.bandwidth_source,
         bandwidth_confidence=context_data.bandwidth_confidence,
-        candidate_factors=None,
-        final_weight=None,
+        candidate_factors=[f.model_dump() for f in context_data.candidate_factors]
+        if context_data.candidate_factors
+        else None,
+        final_weight=context_data.final_weight,
         random_bypass=context_data.random_bypass,
         balanced_neutrality=context_data.balanced_neutrality,
     )

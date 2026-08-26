@@ -71,11 +71,16 @@ async def test_roll_creates_recommendation_context(
     assert context.bandwidth == "balanced"
     assert context.bandwidth_source == "default"
     assert context.bandwidth_confidence == 0.0
-    # Per-candidate factors are not populated in this phase (requires
-    # extended momentum API); context is sufficient for intent/bandwidth
-    # auditability and explanation.
-    assert context.candidate_factors is None
-    assert context.final_weight is None
+    # Verify final weight equals the selected candidate's chooser weight
+    assert context.candidate_factors is not None
+    selected_factors = [
+        factor
+        for factor in context.candidate_factors
+        if factor["candidate_id"] == roll_data["thread_id"]
+    ]
+    assert len(selected_factors) == 1
+    assert context.final_weight == selected_factors[0]["weight"]
+    assert context.final_weight == 1.0
 
 
 @pytest.mark.asyncio
@@ -126,11 +131,26 @@ async def test_momentum_roll_records_factor_breakdown(
     assert context.random_bypass is False
     assert context.balanced_neutrality is False
 
-    # Per-candidate factors are not populated in this phase (requires
-    # extended momentum API). Context records intent/bandwidth and the
-    # random bypass / neutrality flags for explanation and auditability.
-    assert context.candidate_factors is None
-    assert context.final_weight is None
+    # Every bounded candidate is recorded with stable compact reason codes.
+    assert context.candidate_factors is not None
+    factors_by_candidate = {
+        factor["candidate_id"]: factor for factor in context.candidate_factors
+    }
+    assert set(factors_by_candidate) == {hot.id, cold.id}
+
+    # The highly-rated fresh candidate carries its momentum evidence.
+    hot_factors = factors_by_candidate[hot.id]
+    assert "recent_high_rating" in hot_factors["factors"]
+    assert hot_factors["weight"] > 1.0
+
+    # The unrated candidate stays at the pure-random weight.
+    cold_factors = factors_by_candidate[cold.id]
+    assert cold_factors["factors"] == []
+    assert cold_factors["weight"] == 1.0
+
+    # Final stored weight equals the chooser weight of the selected candidate.
+    selected_factors = factors_by_candidate[roll_data["thread_id"]]
+    assert context.final_weight == selected_factors["weight"]
 
 
 @pytest.mark.asyncio
