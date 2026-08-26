@@ -96,10 +96,12 @@ async def test_generation_invalidation_is_visible_across_application_clients(
 def test_remote_cache_remains_explicitly_disabled_by_default() -> None:
     """Provider credentials alone must not silently turn remote caching back on."""
     settings = RedisSettings(
+        cache_provider="redis",
         cache_enabled=False,
         upstash_redis_rest_url="https://example.invalid",
         upstash_redis_rest_token="test-token",
     )
 
     assert settings.cache_enabled is False
+    assert settings.effective_provider == "off"
     assert settings.is_configured is False
