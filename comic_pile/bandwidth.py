@@ -105,7 +105,7 @@ async def apply_bandwidth_state(
     active_bandwidth: str | None,
     bandwidth_source: str | None = None,
     bandwidth_confidence: float | None = None,
-    bandwidth_mode_version: str | None = CURRENT_BANDWIDTH_MODE_VERSION,
+    bandwidth_version: str | None = CURRENT_BANDWIDTH_MODE_VERSION,
 ) -> Session:
     """Validate and persist ephemeral bandwidth state onto a session.
 
@@ -120,7 +120,7 @@ async def apply_bandwidth_state(
         active_bandwidth: Active bandwidth, or None to clear it.
         bandwidth_source: Provenance; required when any bandwidth is set.
         bandwidth_confidence: Confidence between 0 and 1.
-        bandwidth_mode_version: Mode contract version stamped with the update.
+        bandwidth_version: Mode contract version stamped with the update.
 
     Returns:
         The same session instance with validated bandwidth state applied.
@@ -139,7 +139,7 @@ async def apply_bandwidth_state(
     session.active_bandwidth = active_bandwidth
     session.bandwidth_source = bandwidth_source
     session.bandwidth_confidence = bandwidth_confidence
-    session.bandwidth_version = bandwidth_mode_version
+    session.bandwidth_version = bandwidth_version
     session.bandwidth_updated_at = datetime.now(UTC)
 
     await db.flush()
@@ -182,7 +182,7 @@ def capture_ephemeral_bandwidth(session: Session) -> dict[str, object]:
         "active_bandwidth": session.active_bandwidth,
         "bandwidth_confidence": session.bandwidth_confidence,
         "bandwidth_source": session.bandwidth_source,
-        "bandwidth_mode_version": session.bandwidth_version,
+        "bandwidth_version": session.bandwidth_version,
         "bandwidth_updated_at": session.bandwidth_updated_at.isoformat()
         if session.bandwidth_updated_at
         else None,
@@ -231,8 +231,8 @@ def restore_ephemeral_bandwidth(session: Session, state: dict[str, object]) -> N
         source = state["bandwidth_source"]
         session.bandwidth_source = str(source) if source is not None else None
 
-    if "bandwidth_mode_version" in state:
-        version = state["bandwidth_mode_version"]
+    if "bandwidth_version" in state:
+        version = state["bandwidth_version"]
         session.bandwidth_version = str(version) if version is not None else None
 
     if "bandwidth_updated_at" in state:

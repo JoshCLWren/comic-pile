@@ -56,7 +56,7 @@ async def test_predicted_and_active_bandwidth_stored_independently(
         active_bandwidth=Bandwidth.LIGHT,
         bandwidth_source=BandwidthSource.MANUAL,
         bandwidth_confidence=None,
-        bandwidth_mode_version=None,
+        bandwidth_version=None,
     )
     assert session.predicted_bandwidth == "balanced"
     assert session.active_bandwidth == "light"
@@ -87,7 +87,7 @@ async def test_existing_sessions_without_bandwidth_remain_valid(
     assert fetched.active_bandwidth is None
     assert fetched.bandwidth_confidence is None
     assert fetched.bandwidth_source is None
-    assert fetched.bandwidth_mode_version is None
+    assert fetched.bandwidth_version is None
     assert fetched.bandwidth_updated_at is None
 
 
@@ -235,7 +235,7 @@ async def test_end_session_clears_ephemeral_bandwidth(
     assert session.active_bandwidth is None
     assert session.bandwidth_confidence is None
     assert session.bandwidth_source is None
-    assert session.bandwidth_mode_version is None
+    assert session.bandwidth_version is None
     assert session.bandwidth_updated_at is None
 
 
@@ -274,7 +274,7 @@ async def test_get_or_create_initializes_inferred_bandwidth_exactly_once(
     assert created.active_bandwidth == "balanced"
     assert created.bandwidth_source == "inferred"
     assert created.bandwidth_confidence == 0.1
-    assert created.bandwidth_mode_version == CURRENT_BANDWIDTH_MODE_VERSION
+    assert created.bandwidth_version == CURRENT_BANDWIDTH_MODE_VERSION
     assert created.bandwidth_updated_at is not None
 
     initialized_updated_at = created.bandwidth_updated_at
@@ -338,7 +338,7 @@ async def test_get_or_create_initializes_legacy_unended_session(
     assert resolved.predicted_bandwidth == "balanced"
     assert resolved.active_bandwidth == "balanced"
     assert resolved.bandwidth_source == "inferred"
-    assert resolved.bandwidth_mode_version == CURRENT_BANDWIDTH_MODE_VERSION
+    assert resolved.bandwidth_version == CURRENT_BANDWIDTH_MODE_VERSION
 
 
 @pytest.mark.asyncio
@@ -374,7 +374,7 @@ async def test_clear_ephemeral_bandwidth_resets_all_fields(default_user) -> None
         active_bandwidth="light",
         bandwidth_source="quiz",
         bandwidth_confidence=0.4,
-        bandwidth_mode_version=3,
+        bandwidth_version=3,
         bandwidth_updated_at=datetime.now(UTC),
     )
     clear_ephemeral_bandwidth(session)
@@ -383,7 +383,7 @@ async def test_clear_ephemeral_bandwidth_resets_all_fields(default_user) -> None
         "active_bandwidth": None,
         "bandwidth_confidence": None,
         "bandwidth_source": None,
-        "bandwidth_mode_version": None,
+        "bandwidth_version": None,
         "bandwidth_updated_at": None,
     }
 
@@ -396,7 +396,7 @@ def test_capture_and_restore_round_trip() -> None:
         active_bandwidth: str | None
         bandwidth_confidence: float | None
         bandwidth_source: str | None
-        bandwidth_mode_version: int | None
+        bandwidth_version: int | None
         bandwidth_updated_at: datetime | None
 
     source = _StubSession()
@@ -404,7 +404,7 @@ def test_capture_and_restore_round_trip() -> None:
     source.active_bandwidth = "light"
     source.bandwidth_confidence = 0.9
     source.bandwidth_source = "inferred"
-    source.bandwidth_mode_version = CURRENT_BANDWIDTH_MODE_VERSION
+    source.bandwidth_version = CURRENT_BANDWIDTH_MODE_VERSION
     updated_at = datetime.now(UTC).replace(microsecond=0)
     source.bandwidth_updated_at = updated_at
 
@@ -416,7 +416,7 @@ def test_capture_and_restore_round_trip() -> None:
     target.active_bandwidth = "deep"
     target.bandwidth_confidence = 0.2
     target.bandwidth_source = "snooze"
-    target.bandwidth_mode_version = 99
+    target.bandwidth_version = 99
     target.bandwidth_updated_at = datetime.now(UTC)
 
     restore_ephemeral_bandwidth(target, captured)
@@ -424,7 +424,7 @@ def test_capture_and_restore_round_trip() -> None:
     assert target.active_bandwidth == "light"
     assert target.bandwidth_confidence == 0.9
     assert target.bandwidth_source == "inferred"
-    assert target.bandwidth_mode_version == CURRENT_BANDWIDTH_MODE_VERSION
+    assert target.bandwidth_version == CURRENT_BANDWIDTH_MODE_VERSION
     assert target.bandwidth_updated_at == updated_at
 
 
@@ -473,7 +473,7 @@ async def test_current_session_endpoint_exposes_bandwidth_state(
         active_bandwidth="light",
         bandwidth_source="manual",
         bandwidth_confidence=0.75,
-        bandwidth_mode_version=1,
+        bandwidth_version=1,
         bandwidth_updated_at=datetime.now(UTC),
     )
     async_db.add(session)
@@ -490,7 +490,7 @@ async def test_current_session_endpoint_exposes_bandwidth_state(
     assert data["active_bandwidth"] == "light"
     assert data["bandwidth_confidence"] == 0.75
     assert data["bandwidth_source"] == "manual"
-    assert data["bandwidth_mode_version"] == 1
+    assert data["bandwidth_version"] == 1
     assert data["bandwidth_updated_at"] is not None
 
 
@@ -550,7 +550,7 @@ async def test_undo_delta_restore_recovers_pre_rating_bandwidth(
         "active_bandwidth": "light",
         "bandwidth_confidence": 0.8,
         "bandwidth_source": "inferred",
-        "bandwidth_mode_version": CURRENT_BANDWIDTH_MODE_VERSION,
+        "bandwidth_version": CURRENT_BANDWIDTH_MODE_VERSION,
         "bandwidth_updated_at": datetime.now(UTC).replace(microsecond=0).isoformat(),
     }
     snapshot = Snapshot(
@@ -574,7 +574,7 @@ async def test_undo_delta_restore_recovers_pre_rating_bandwidth(
     session.active_bandwidth = "deep"
     session.bandwidth_source = "snooze"
     session.bandwidth_confidence = 0.1
-    session.bandwidth_mode_version = 42
+    session.bandwidth_version = 42
     session.bandwidth_updated_at = datetime.now(UTC)
     await async_db.commit()
 
@@ -589,7 +589,7 @@ async def test_undo_delta_restore_recovers_pre_rating_bandwidth(
     assert refreshed.active_bandwidth == "light"
     assert refreshed.bandwidth_source == "inferred"
     assert refreshed.bandwidth_confidence == 0.8
-    assert refreshed.bandwidth_mode_version == CURRENT_BANDWIDTH_MODE_VERSION
+    assert refreshed.bandwidth_version == CURRENT_BANDWIDTH_MODE_VERSION
     assert refreshed.bandwidth_updated_at is not None
     assert refreshed.bandwidth_updated_at.tzinfo is not None
 
@@ -612,7 +612,7 @@ async def test_apply_stamps_mode_version_and_timestamp(
         bandwidth_source=BandwidthSource.QUIZ,
         bandwidth_confidence=1.0,
     )
-    assert session.bandwidth_mode_version == CURRENT_BANDWIDTH_MODE_VERSION
+    assert session.bandwidth_version == CURRENT_BANDWIDTH_MODE_VERSION
     assert session.bandwidth_updated_at is not None
     stamped = session.bandwidth_updated_at
     if stamped.tzinfo is None:
