@@ -308,7 +308,7 @@ describe('CrossoverDetailPage', () => {
     const historyBack = vi.spyOn(window.history, 'back').mockImplementation(() => {})
 
     renderPage()
-    fireEvent.click(await screen.findByRole('link', { name: 'Back', exact: true }))
+    fireEvent.click(await screen.findByRole('link', { name: 'Back' }))
 
     expect(historyBack).toHaveBeenCalled()
     historyBack.mockRestore()
