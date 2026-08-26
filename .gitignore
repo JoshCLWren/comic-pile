@@ -212,3 +212,7 @@ prod_backup_*.json
 
 # Local production-profile authentication state
 prod-profile-storage-state*.json
+
+# Benchmark run outputs (machine-generated on every run)
+benchmarks/results/
+benchmarks/control-environment*.json
