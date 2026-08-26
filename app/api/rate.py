@@ -23,6 +23,7 @@ from app.services.snapshot_contract import (
     SNAPSHOT_VERSION_KEY,
     USES_ISSUE_TRACKING_KEY,
 )
+from comic_pile.bandwidth import capture_ephemeral_bandwidth
 from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.dice_ladder import step_down, step_up
 from comic_pile.queue import move_to_back, move_to_front, move_to_safe_position
@@ -313,6 +314,7 @@ async def rate_thread(
             if current_session.snoozed_thread_ids
             else None
         ),
+        **capture_ephemeral_bandwidth(current_session),
     }
 
     # Validate thread has issues remaining. For issue-tracked threads, rely on
