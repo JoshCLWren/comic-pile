@@ -157,30 +157,6 @@ jobs:
               -f name="$label" -f color='5319e7' -f description="$description" >/dev/null
           fi
 
-      - name: Report running heartbeat
-        shell: bash
-        env:
-          WORKER: ${{ steps.lane.outputs.worker }}
-          MODEL: ${{ steps.lane.outputs.model }}
-          SOURCE: ${{ steps.lane.outputs.source }}
-          MINUTE: ${{ steps.lane.outputs.minute }}
-          CONFIGURED: ${{ steps.lane.outputs.configured }}
-          REASON: ${{ steps.lane.outputs.reason }}
-        run: |
-          set -Eeuo pipefail
-          marker="<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-${WORKER} -->"
-          now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          if [[ "$CONFIGURED" == true ]]; then outcome='running'; else outcome='unconfigured'; fi
-          body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nModel: %s\nSource: %s\nSlot: :%02d hourly\nOutcome: %s\nConfiguration: %s\nUpdated: %s\nRun: %s' \
-            "$marker" "$WORKER" "$MODEL" "$SOURCE" "$MINUTE" "$outcome" "$REASON" "$now" "$GITHUB_RUN_ID")"
-          comment_id="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
-            | jq -r --arg marker "$marker" '[.[] | select(.body | contains($marker)) | .id] | last // empty')"
-          if [[ -n "$comment_id" ]]; then
-            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$body" >/dev/null
-          else
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" -f body="$body" >/dev/null
-          fi
-
       - name: Stop cleanly when optional credentials are not configured
         if: steps.lane.outputs.configured != 'true'
         shell: bash
@@ -226,6 +202,118 @@ jobs:
           echo "$bin_dir" >> "$GITHUB_PATH"
           "$bin_dir/kilo" --version
 
+      - name: Select execution candidate at dispatch time
+        id: executor
+        if: steps.lane.outputs.configured == 'true'
+        shell: bash
+        env:
+          WORKER: ${{ steps.lane.outputs.worker }}
+          SOURCE: ${{ steps.lane.outputs.source }}
+          LANE_MODEL: ${{ steps.lane.outputs.model }}
+          LANE_RUNTIME_MODEL: ${{ steps.lane.outputs.runtime_model }}
+          LANE_DISPLAY: ${{ steps.lane.outputs.display }}
+        run: |
+          set -Eeuo pipefail
+          catalog="$RUNNER_TEMP/factory-provider-catalog"
+          discovery_outcome="$RUNNER_TEMP/factory-discovery-outcome"
+
+          case "$SOURCE" in
+            opencode-free)
+              if ! opencode models opencode --refresh > "$catalog"; then
+                printf 'provider_unavailable\tOpenCode model discovery command failed\n' > "$discovery_outcome"
+                exit 1
+              fi
+              ;;
+            openrouter-free)
+              if ! curl --silent --show-error --fail-with-body \
+                --connect-timeout 5 --max-time 30 \
+                --header "Authorization: Bearer ${OPENROUTER_API_KEY}" \
+                https://openrouter.ai/api/v1/models > "$catalog"; then
+                printf 'provider_unavailable\tOpenRouter model catalog request failed\n' > "$discovery_outcome"
+                exit 1
+              fi
+              ;;
+            nvidia|kilo-auto|omniroute-opencode)
+              # These adapters cannot enumerate reliably. Preserve the lane
+              # request and let the existing real invocation/probe prove it.
+              {
+                echo "model=$LANE_MODEL"
+                echo "runtime_model=$LANE_RUNTIME_MODEL"
+                echo "display=$LANE_DISPLAY"
+                echo "reason=selected-by-runtime-evidence"
+              } >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+            *)
+              printf 'control_plane_failure\tUnsupported provider adapter: %s\n' "$SOURCE" > "$discovery_outcome"
+              exit 1
+              ;;
+          esac
+
+          configured_args=()
+          while IFS= read -r configured_model; do
+            [[ -n "$configured_model" ]] || continue
+            configured_args+=(--configured-model "$configured_model")
+          done < <(
+            awk -F '\t' -v source="$SOURCE" \
+              '$0 !~ /^#/ && $2 == source {print $3}' \
+              .github/free-model-factories.tsv | sort -u
+          )
+
+          discovery="$(python3 .github/scripts/factory_provider_candidates.py \
+            --provider "$SOURCE" --catalog "$catalog" "${configured_args[@]}")"
+          discovery_status="$(jq -r '.status' <<< "$discovery")"
+          candidate_count="$(jq '.candidates | length' <<< "$discovery")"
+          if [[ "$discovery_status" != available || "$candidate_count" == 0 ]]; then
+            printf 'model_unavailable\t%s catalog exposed no policy-eligible candidate\n' "$SOURCE" > "$discovery_outcome"
+            exit 1
+          fi
+
+          candidate_index=$(( (10#$WORKER - 1) % candidate_count ))
+          model="$(jq -r --argjson index "$candidate_index" '.candidates[$index].model' <<< "$discovery")"
+          runtime_model="$(jq -r --argjson index "$candidate_index" '.candidates[$index].runtime_model' <<< "$discovery")"
+          {
+            echo "model=$model"
+            echo "runtime_model=$runtime_model"
+            echo "display=${SOURCE} · ${model}"
+            echo "reason=selected-from-live-provider-catalog"
+          } >> "$GITHUB_OUTPUT"
+          printf 'Factory %s selected executor: provider=%s model=%s runtime=%s\n' \
+            "$WORKER" "$SOURCE" "$model" "$runtime_model"
+
+      - name: Report selected executor heartbeat
+        if: always()
+        shell: bash
+        env:
+          WORKER: ${{ steps.lane.outputs.worker }}
+          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
+          SOURCE: ${{ steps.lane.outputs.source }}
+          MINUTE: ${{ steps.lane.outputs.minute }}
+          CONFIGURED: ${{ steps.lane.outputs.configured }}
+          REASON: ${{ steps.executor.outputs.reason || steps.lane.outputs.reason }}
+          EXECUTOR_OUTCOME: ${{ steps.executor.outcome }}
+        run: |
+          set -Eeuo pipefail
+          [[ -n "${WORKER:-}" ]] || exit 0
+          marker="<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-${WORKER} -->"
+          now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          if [[ "$CONFIGURED" != true ]]; then
+            outcome='unconfigured'
+          elif [[ "$EXECUTOR_OUTCOME" != success ]]; then
+            outcome='selection-failed'
+          else
+            outcome='running'
+          fi
+          body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nModel: %s\nSource: %s\nSlot: :%02d hourly\nOutcome: %s\nConfiguration: %s\nUpdated: %s\nRun: %s' \
+            "$marker" "$WORKER" "$MODEL" "$SOURCE" "$MINUTE" "$outcome" "$REASON" "$now" "$GITHUB_RUN_ID")"
+          comment_id="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
+            | jq -r --arg marker "$marker" '[.[] | select(.body | contains($marker)) | .id] | last // empty')"
+          if [[ -n "$comment_id" ]]; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$body" >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" -f body="$body" >/dev/null
+          fi
+
       - name: Create ephemeral OmniRoute runtime secrets
         if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source == 'omniroute-opencode'
         shell: bash
@@ -263,7 +351,7 @@ jobs:
         shell: bash
         env:
           WORKER: ${{ steps.lane.outputs.worker }}
-          MODEL: ${{ steps.lane.outputs.model }}
+          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
         run: |
           set -Eeuo pipefail
           docker pull "$OMNIROUTE_IMAGE"
@@ -360,7 +448,7 @@ jobs:
         if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source == 'nvidia'
         shell: bash
         env:
-          MODEL: ${{ steps.lane.outputs.model }}
+          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
         run: |
           set -Eeuo pipefail
           [[ -n "${NVIDIA_API_KEY:-}" ]] || { echo 'NVIDIA_API_KEY missing after lane configured=true' >&2; exit 1; }
@@ -415,7 +503,7 @@ jobs:
         if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source != 'kilo-auto'
         shell: bash
         env:
-          RUNTIME_MODEL: ${{ steps.lane.outputs.runtime_model }}
+          RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
         run: |
           set -Eeuo pipefail
           before="$(git status --porcelain)"
@@ -452,7 +540,7 @@ jobs:
         if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source == 'kilo-auto'
         shell: bash
         env:
-          FACTORY_RUNTIME_MODEL: ${{ steps.lane.outputs.runtime_model }}
+          FACTORY_RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
         run: |
           set -Eeuo pipefail
           before="$(git status --porcelain)"
@@ -510,9 +598,9 @@ jobs:
         env:
           FACTORY_WORKER: ${{ steps.lane.outputs.worker }}
           FACTORY_SOURCE: ${{ steps.lane.outputs.source }}
-          FACTORY_MODEL: ${{ steps.lane.outputs.model }}
-          FACTORY_RUNTIME_MODEL: ${{ steps.lane.outputs.runtime_model }}
-          FACTORY_DISPLAY: ${{ steps.lane.outputs.display }}
+          FACTORY_MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
+          FACTORY_RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
+          FACTORY_DISPLAY: ${{ steps.executor.outputs.display || steps.lane.outputs.display }}
           FACTORY_BRANCH_SUFFIX: ${{ steps.lane.outputs.branch_suffix }}
         run: |
           set +e
@@ -529,13 +617,14 @@ jobs:
         shell: bash
         env:
           WORKER: ${{ steps.lane.outputs.worker }}
-          MODEL: ${{ steps.lane.outputs.model }}
+          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
           SOURCE: ${{ steps.lane.outputs.source }}
           MINUTE: ${{ steps.lane.outputs.minute }}
           CONFIGURED: ${{ steps.lane.outputs.configured }}
-          REASON: ${{ steps.lane.outputs.reason }}
+          REASON: ${{ steps.executor.outputs.reason || steps.lane.outputs.reason }}
           JOB_STATUS: ${{ job.status }}
           WORKER_STATUS_FILE: ${{ runner.temp }}/factory-worker-status
+          DISCOVERY_OUTCOME_FILE: ${{ runner.temp }}/factory-discovery-outcome
         run: |
           set -Eeuo pipefail
           [[ -n "${WORKER:-}" ]] || exit 0
@@ -557,7 +646,10 @@ jobs:
           # outcome, but capacity never waits on a chained workflow-run event.
           attempt_marker="<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-${WORKER} -->"
           worker_status="$(cat "$WORKER_STATUS_FILE" 2>/dev/null || true)"
-          if [[ "$worker_status" == 2 || "$worker_status" == 3 ]]; then
+          discovery_record="$(cat "$DISCOVERY_OUTCOME_FILE" 2>/dev/null || true)"
+          if [[ -n "$discovery_record" ]]; then
+            IFS="$(printf '\t')" read -r attempt_outcome attempt_detail <<< "$discovery_record"
+          elif [[ "$worker_status" == 2 || "$worker_status" == 3 ]]; then
             attempt_outcome='control_plane_failure'
             attempt_detail="factory controller assignment failed with exit status ${worker_status}"
           elif [[ "$CONFIGURED" == true && "$JOB_STATUS" == success ]]; then
