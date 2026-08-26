@@ -46,6 +46,26 @@ EXPECTED_ROLL_RESPONSE_KEYS = {
 }
 
 
+def _extract_selection_context(payload: dict[str, object] | None) -> dict[str, object] | None:
+    """Extract the selection context from a merged recommendation context payload.
+
+    The merged payload has the structure:
+    {
+        "selection": {...selection context...},
+        "effort": {...effort context...}
+    }
+
+    Args:
+        payload: The merged recommendation context from Event.recommendation_context.
+
+    Returns:
+        The selection context dict, or None if not present.
+    """
+    if not payload or not isinstance(payload, dict):
+        return None
+    return payload.get("selection") if isinstance(payload.get("selection"), dict) else None
+
+
 async def _latest_roll_event(async_db: AsyncSession) -> Event:
     """Fetch the newest roll event with fresh database state."""
     result = await async_db.execute(
@@ -58,11 +78,13 @@ async def _latest_roll_event(async_db: AsyncSession) -> Event:
     return result.scalar_one()
 
 
-async def _latest_roll_context(async_db: AsyncSession) -> RecommendationContextV1:
-    """Fetch and validate the newest roll event's context snapshot."""
+async def _latest_roll_selection_context(async_db: AsyncSession) -> RecommendationContextV1:
+    """Fetch and validate the newest roll event's selection context snapshot."""
     event = await _latest_roll_event(async_db)
     assert event.recommendation_context is not None
-    return validate_recommendation_context(event.recommendation_context)
+    selection_context = _extract_selection_context(event.recommendation_context)
+    assert selection_context is not None
+    return validate_recommendation_context(selection_context)
 
 
 @pytest.mark.asyncio
@@ -91,7 +113,7 @@ async def test_random_roll_persists_versioned_context(
     # User-visible roll response shape is unchanged by instrumentation.
     assert set(body.keys()) == EXPECTED_ROLL_RESPONSE_KEYS
 
-    context = await _latest_roll_context(async_db)
+    context = await _latest_roll_selection_context(async_db)
     assert context.schema_version == RECOMMENDATION_CONTEXT_SCHEMA_VERSION == 1
     assert context.algorithm_version == ALGORITHM_VERSION_LEGACY_UNWEIGHTED
     assert context.selection_method == "random"
@@ -149,7 +171,7 @@ async def test_context_candidates_match_bounded_pool_for_large_library(
     assert response.status_code == 200
     body = response.json()
 
-    context = await _latest_roll_context(async_db)
+    context = await _latest_roll_selection_context(async_db)
     expected_candidates = [1, 2, 4, 5, *extra_ids[:4]]
     assert context.candidate_thread_ids == expected_candidates
     assert len(context.candidate_thread_ids) == context.die_size == body["die_size"] == 8
@@ -164,7 +186,13 @@ async def test_context_candidates_match_bounded_pool_for_large_library(
     assert "Extra Series" not in serialized
     payload = event.recommendation_context
     assert isinstance(payload, dict)
-    assert all(key not in payload for key in ("title", "notes", "description"))
+    # The merged payload has "selection" and "effort" keys; neither should
+    # contain thread titles or heavy metadata.
+    selection_payload = payload.get("selection", {})
+    effort_payload = payload.get("effort", {})
+    for key in ("title", "notes", "description"):
+        assert key not in selection_payload
+        assert key not in effort_payload
 
 
 @pytest.mark.asyncio
@@ -181,7 +209,7 @@ async def test_queue_movement_after_roll_cannot_change_snapshot(
     roll_response = await auth_client.post("/api/roll/")
     assert roll_response.status_code == 200
 
-    context_before = await _latest_roll_context(async_db)
+    context_before = await _latest_roll_selection_context(async_db)
     assert context_before.selected_queue_position == 1
     assert context_before.candidate_thread_ids == [1, 2, 4, 5]
 
@@ -195,7 +223,7 @@ async def test_queue_movement_after_roll_cannot_change_snapshot(
     )
     assert positions_result.scalar_one() == 4
 
-    context_after = await _latest_roll_context(async_db)
+    context_after = await _latest_roll_selection_context(async_db)
     assert context_after == context_before
     assert context_after.selected_queue_position == 1
     assert context_after.candidate_thread_ids == [1, 2, 4, 5]
@@ -228,7 +256,9 @@ async def test_override_context_distinguishes_manual_selection_from_random(
     )
     override_event, random_event = result.scalars().all()
 
-    override_context = validate_recommendation_context(override_event.recommendation_context)
+    override_selection_context = _extract_selection_context(override_event.recommendation_context)
+    assert override_selection_context is not None
+    override_context = validate_recommendation_context(override_selection_context)
     assert override_context.selection_method == "override"
     assert override_context.selected_candidate_index is None
     assert override_context.selected_result == 0 == override_event.result
@@ -238,7 +268,9 @@ async def test_override_context_distinguishes_manual_selection_from_random(
     assert override_context.candidate_thread_ids == [1, 2, 4, 5]
     assert override_context.schema_version == RECOMMENDATION_CONTEXT_SCHEMA_VERSION
 
-    random_context = validate_recommendation_context(random_event.recommendation_context)
+    random_selection_context = _extract_selection_context(random_event.recommendation_context)
+    assert random_selection_context is not None
+    random_context = validate_recommendation_context(random_selection_context)
     assert random_context.selection_method == "random"
     assert isinstance(random_context.selected_candidate_index, int)
     assert random_context.selected_result == 1
@@ -280,7 +312,7 @@ async def test_override_outside_bounded_pool_still_records_pool(
     )
     assert response.status_code == 200
 
-    context = await _latest_roll_context(async_db)
+    context = await _latest_roll_selection_context(async_db)
     # Pool (11 threads) exceeds the die, so candidates stay bounded at 8.
     assert len(context.candidate_thread_ids) == context.die_size == 8
     assert far_thread.id not in context.candidate_thread_ids

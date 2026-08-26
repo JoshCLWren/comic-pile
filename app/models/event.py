@@ -50,10 +50,14 @@ class Event(Base):
           thread was removed from the snoozed list.
 
     Recommendation Context:
-        New "roll" events also persist ``recommendation_context``, a nullable
-        versioned JSON snapshot of the decision-time selection context built by
-        :mod:`app.services.recommendation_context`. Historical events with no
-        snapshot remain valid.
+        New "roll" events persist ``recommendation_context``, a nullable
+        versioned JSON snapshot merging two observational contexts:
+        - Selection context (built by :mod:`app.services.recommendation_context`):
+          records the algorithm, die size, bounded candidate pool, and selected
+          thread's position at decision time.
+        - Effort context (built by :mod:`app.services.reading_effort`):
+          records the reading-effort estimate, band, source, and confidence.
+        Historical events with no snapshot remain valid.
 
     Thread ID Fields:
         This model has two thread reference fields with different purposes:
@@ -86,8 +90,9 @@ class Event(Base):
     selected_thread_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     selection_method: Mapped[str | None] = mapped_column(String(50), nullable=True)
     # Versioned recommendation-context snapshot captured at roll time.
-    # Column type matches the events.recommendation_context column created by
-    # migration c85800000001 (generic JSON on all dialects).
+    # Merges selection context (from app.services.recommendation_context) and
+    # effort context (from app.services.reading_effort) under "selection" and
+    # "effort" keys respectively. Column type matches the generic JSON column.
     recommendation_context: Mapped[dict[str, object] | None] = mapped_column(
         JSON(),
         nullable=True,
@@ -119,13 +124,6 @@ class Event(Base):
     # than the current (possibly mutated) thread state.
     recommendation_reason_codes: Mapped[list[str] | None] = mapped_column(
         ARRAY(Text), nullable=True
-    )
-    # Full recommendation context captured at decision time, including bandwidth,
-    # intent, taste bank factors, primary score, and affinity notes. Used by the
-    # explanation endpoint to reconstruct human-readable reasons without recomputing
-    # from potentially mutated current state.
-    recommendation_context: Mapped[dict[str, object] | None] = mapped_column(
-        JSON, nullable=True
     )
     # Optional JSON metadata capturing decision context at event time (e.g.
     # Snooze correction before/after bandwidth and reason codes).

@@ -3,8 +3,9 @@
 import json
 import logging
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
 from sqlalchemy import Text, func, or_, select
 from sqlalchemy.dialects.postgresql import ARRAY
@@ -23,6 +24,15 @@ from app.models import DependencyGroup, DependencyGroupMembership, Event, Issue,
 from app.models.user import User
 from app.roll_recovery import build_roll_recovery
 from app.services.explanation_projection import get_primary_explanation
+from app.services.reading_effort import (
+    build_recommendation_context as build_effort_recommendation_context,
+    compute_effort_estimate,
+)
+from app.services.recommendation_context import (
+    SELECTION_METHOD_OVERRIDE,
+    SELECTION_METHOD_RANDOM,
+    build_recommendation_context as build_selection_recommendation_context,
+)
 from app.services.recommendation_explanation import RecommendationExplanationProjection
 from app.schemas import (
     ExplainableFactorResponse,
@@ -37,18 +47,45 @@ from app.schemas import (
     SessionModeUpdateRequest,
 )
 from app.schemas.session import build_session_bandwidth_state
-from app.services.recommendation_context import (
-    SELECTION_METHOD_OVERRIDE,
-    SELECTION_METHOD_RANDOM,
-    build_recommendation_context,
+from comic_pile.queue import get_bounded_roll_pool_rows
+from comic_pile.recommendation_selection import (
+    DEFAULT_BANDWIDTH,
+    DEFAULT_INTENT,
+    SelectionMode,
+    normalize_bandwidth,
+    normalize_intent,
+    resolve_selection_mode,
+    select_from_pool,
 )
-from comic_pile.queue import get_bounded_roll_pool_rows, get_roll_pool_rows
 from comic_pile.session import get_current_die_for_session, get_or_create
 from app.momentum import weighted_momentum_selection
 
 router = APIRouter(tags=["roll"])
 
 logger = logging.getLogger(__name__)
+
+
+def _merge_recommendation_contexts(
+    selection_context: dict[str, object] | None,
+    effort_context: dict[str, object] | None,
+) -> dict[str, object] | None:
+    """Merge selection and effort recommendation contexts into a single payload.
+
+    Args:
+        selection_context: Selection-time context from app.services.recommendation_context.
+        effort_context: Effort-estimate context from app.services.reading_effort.
+
+    Returns:
+        Merged context dict with namespaced keys, or None if both inputs are None.
+    """
+    if selection_context is None and effort_context is None:
+        return None
+    merged: dict[str, object] = {}
+    if selection_context is not None:
+        merged["selection"] = selection_context
+    if effort_context is not None:
+        merged["effort"] = effort_context
+    return merged
 
 
 @router.post("/", response_model=RollResponse)
@@ -104,23 +141,40 @@ async def roll_dice(
             detail="No active threads available to roll",
         )
 
-    # get_bounded_roll_pool_rows already applied the die cap, so the contextual
-    # weighting below cannot draw from outside the active die pool.
-
-    # Apply momentum weighting; weights fall back to uniform (pure-random)
-    # when no positive momentum applies, preserving the pure-random bypass.
-    session_events_result = await db.execute(
-        select(Event).where(Event.session_id == current_session_id)
+    pool_size = len(bounded_rows)
+    selection_bandwidth = (
+        roll_request.bandwidth if roll_request.bandwidth is not None else DEFAULT_BANDWIDTH
     )
-    session_events = list(session_events_result.scalars().all())
+    selection_intent = roll_request.intent if roll_request.intent is not None else DEFAULT_INTENT
 
-    selected_index, max_bonus = await weighted_momentum_selection(
-        db=db,
-        bounded_rows=bounded_rows,
-        user_id=user_id,
-        session_events=session_events,
-        now=datetime.now(UTC),
-    )
+    resolved_mode = resolve_selection_mode(selection_bandwidth, selection_intent)
+
+    max_bonus = 0.0
+    if resolved_mode is SelectionMode.PURE_RANDOM_BYPASS:
+        selection = select_from_pool(
+            pool_size,
+            bandwidth=selection_bandwidth,
+            intent=selection_intent,
+        )
+        selected_index = selection.index
+    else:
+        # get_bounded_roll_pool_rows already applied the die cap, so the contextual
+        # weighting below cannot draw from outside the active die pool.
+
+        # Apply momentum weighting; weights fall back to uniform (pure-random)
+        # when no positive momentum applies, preserving the pure-random bypass.
+        session_events_result = await db.execute(
+            select(Event).where(Event.session_id == current_session_id)
+        )
+        session_events = list(session_events_result.scalars().all())
+
+        selected_index, max_bonus = await weighted_momentum_selection(
+            db=db,
+            bounded_rows=bounded_rows,
+            user_id=user_id,
+            session_events=session_events,
+            now=datetime.now(UTC),
+        )
     # Derive concise, user-facing reason codes from the actual decision-time
     # selection context. Momentum weighting is applied only when a positive
     # bonus exists; otherwise the selection is genuinely unweighted/pure-random.
@@ -140,18 +194,6 @@ async def roll_dice(
     selected_thread_reading_progress = selected_thread.reading_progress
     selected_thread_next_unread_issue_id = selected_thread.next_unread_issue_id
 
-    recommendation_context = build_recommendation_context(
-        selection_method=SELECTION_METHOD_RANDOM,
-        die_size=current_die,
-        candidate_thread_ids=[row[0].id for row in bounded_rows],
-        selected_thread_id=selected_thread_id,
-        selected_queue_position=selected_thread_queue_position,
-        selected_candidate_index=selected_index,
-        selected_result=selected_index + 1,
-        selected_last_rating=selected_thread.last_rating,
-        selected_last_activity_at=selected_thread.last_activity_at,
-    )
-
     selected_thread_issue_id = None
     selected_thread_issue_number = None
     if selected_thread.uses_issue_tracking() and selected_thread_next_unread_issue_id:
@@ -167,6 +209,42 @@ async def roll_dice(
                 selected_thread_issue_id = next_issue.id
                 selected_thread_issue_number = next_issue.issue_number
 
+    # Decision-time context is purely observational: it records the estimate
+    # that existed when this roll happened and never changes the selection.
+    effort_estimate = await compute_effort_estimate(
+        db,
+        user_id=user_id,
+        thread_id=selected_thread_id,
+        issue_id=selected_thread_issue_id,
+    )
+    effort_context = build_effort_recommendation_context(
+        effort_estimate,
+        thread_id=selected_thread_id,
+        issue_id=selected_thread_issue_id,
+        issue_number=selected_thread_issue_number,
+    )
+
+    # Build selection context snapshot for issue #1691.
+    captured_at = datetime.now(UTC)
+    selection_context = build_selection_recommendation_context(
+        selection_method=SELECTION_METHOD_RANDOM,
+        die_size=current_die,
+        candidate_thread_ids=[row[0].id for row in bounded_rows],
+        selected_thread_id=selected_thread_id,
+        selected_queue_position=selected_thread_queue_position,
+        selected_candidate_index=selected_index,
+        selected_result=selected_index + 1,
+        selected_last_rating=selected_thread.last_rating,
+        selected_last_activity_at=selected_thread.last_activity_at,
+        session_timezone=current_session.timezone,
+        captured_at=captured_at,
+    )
+
+    recommendation_context = _merge_recommendation_contexts(
+        selection_context=selection_context,
+        effort_context=effort_context,
+    )
+
     event = Event(
         type="roll",
         session_id=current_session_id,
@@ -180,6 +258,15 @@ async def roll_dice(
         issue_number=selected_thread_issue_number,
     )
     db.add(event)
+
+    logger.info(
+        "roll selection mode=%s bandwidth=%s intent=%s max_bonus=%.3f pool_size=%s",
+        resolved_mode.value,
+        normalize_bandwidth(selection_bandwidth).value,
+        normalize_intent(selection_intent).value,
+        max_bonus,
+        pool_size,
+    )
 
     if current_session:
         current_session.pending_thread_id = selected_thread_id
@@ -311,10 +398,28 @@ async def override_roll(
             detail=f"Thread {override_thread_id} is snoozed. Please unsnooze it first before overriding.",
         )
 
-    override_pool_rows = await get_roll_pool_rows(current_user.id, db, snoozed_ids)
+    # Get the bounded pool for the selection context snapshot.
+    override_pool_rows = await get_bounded_roll_pool_rows(current_user.id, db, current_die, snoozed_ids)
     bounded_override_rows = override_pool_rows[:current_die]
 
-    override_recommendation_context = build_recommendation_context(
+    # Decision-time context is purely observational: it records the estimate
+    # that existed when this roll happened and never changes the selection.
+    effort_estimate = await compute_effort_estimate(
+        db,
+        user_id=current_user.id,
+        thread_id=override_thread_id,
+        issue_id=override_thread_issue_id,
+    )
+    effort_context = build_effort_recommendation_context(
+        effort_estimate,
+        thread_id=override_thread_id,
+        issue_id=override_thread_issue_id,
+        issue_number=override_thread_issue_number,
+    )
+
+    # Build selection context snapshot for issue #1691.
+    captured_at = datetime.now(UTC)
+    selection_context = build_selection_recommendation_context(
         selection_method=SELECTION_METHOD_OVERRIDE,
         die_size=current_die,
         candidate_thread_ids=[row[0].id for row in bounded_override_rows],
@@ -324,6 +429,13 @@ async def override_roll(
         selected_result=0,
         selected_last_rating=override_thread.last_rating,
         selected_last_activity_at=override_thread.last_activity_at,
+        session_timezone=current_session.timezone,
+        captured_at=captured_at,
+    )
+
+    recommendation_context = _merge_recommendation_contexts(
+        selection_context=selection_context,
+        effort_context=effort_context,
     )
 
     event = Event(
@@ -334,7 +446,7 @@ async def override_roll(
         result=0,
         selection_method="override",
         recommendation_reason_codes=[],
-        recommendation_context=override_recommendation_context,
+        recommendation_context=recommendation_context,
         issue_id=override_thread_issue_id,
         issue_number=override_thread_issue_number,
     )

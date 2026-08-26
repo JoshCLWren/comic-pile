@@ -323,36 +323,50 @@ Manually select a thread instead of rolling.
 
 Every new `roll` event (both `POST /roll/` and `POST /roll/override`) persists a
 versioned JSON snapshot of the decision-time recommendation context in the
-event's `recommendation_context` field (JSON column created by migration
-`c85800000001`). The snapshot is
+event's `recommendation_context` field (JSON column). The snapshot is
 written once at roll time and is never rewritten by later queue movement.
 Historical events without a snapshot remain valid, and the field is never
 returned by any API response; it exists for later analysis only.
 
-Schema version 1 (see
-`app/services/recommendation_context.py` for the authoritative contract):
+The payload merges two observational contexts under namespaced keys:
 
 ```json
 {
-  "schema_version": 1,
-  "algorithm_version": "legacy-unweighted-v1",
-  "selection_method": "random",
-  "die_size": 8,
-  "pool_size": 4,
-  "candidate_thread_ids": [1, 2, 4, 5],
-  "selected_thread_id": 4,
-  "selected_queue_position": 3,
-  "selected_candidate_index": 2,
-  "selected_result": 3,
-  "selected_last_rating": 4.5,
-  "selected_last_activity_at": "2026-08-01T15:00:00+00:00",
-  "session_timezone": null,
-  "local_hour": null,
-  "daypart": null
+  "selection": {
+    "schema_version": 1,
+    "algorithm_version": "legacy-unweighted-v1",
+    "selection_method": "random",
+    "die_size": 8,
+    "pool_size": 4,
+    "candidate_thread_ids": [1, 2, 4, 5],
+    "selected_thread_id": 4,
+    "selected_queue_position": 3,
+    "selected_candidate_index": 2,
+    "selected_result": 3,
+    "selected_last_rating": 4.5,
+    "selected_last_activity_at": "2026-08-01T15:00:00+00:00",
+    "session_timezone": null,
+    "local_hour": null,
+    "daypart": null
+  },
+  "effort": {
+    "context_version": 1,
+    "selected_candidate": {
+      "thread_id": 4,
+      "issue_id": 123,
+      "issue_number": "5",
+      "effort_minutes": 15.5,
+      "effort_band": "balanced",
+      "effort_source": "observed_thread",
+      "effort_confidence": 0.6,
+      "effort_sample_count": 3
+    }
+  }
 }
 ```
 
-Field notes:
+Selection context field notes (see
+`app/services/recommendation_context.py` for the authoritative contract):
 
 - `candidate_thread_ids` holds at most the current die size of thread IDs in
   exact selection order (queue order). No titles or other heavy metadata are
@@ -362,6 +376,16 @@ Field notes:
   real draws.
 - `session_timezone`, `local_hour`, and `daypart` are reserved for the session
   timezone phase and stay `null` until that data actually exists.
+
+Effort context field notes (see `app/services/reading_effort.py`):
+
+- `effort_minutes` is the estimated reading time in minutes, or `null` when
+  unknown.
+- `effort_band` is one of `light`, `balanced`, `deep`, or `unknown`.
+- `effort_source` indicates provenance: `observed_issue`, `observed_thread`,
+  `era_prior`, or `unknown`.
+- `effort_confidence` and `effort_sample_count` reflect the strength of the
+  observed estimate; era priors have low confidence and zero samples.
 
 ---
 
