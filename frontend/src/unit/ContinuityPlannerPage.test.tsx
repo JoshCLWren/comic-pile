@@ -161,7 +161,7 @@ describe('ContinuityPlannerPage', () => {
       name: 'Saved lane',
       ordering_mode: 'strict_sequential',
       lanes: [{ id: 'main', name: 'Reading order', order: 0 }],
-      nodes: [{ id: 'crossover-8', node_type: 'crossover', ref_id: 8, lane_id: 'main', position: 0 }],
+      nodes: [{ id: 'crossover-8', node_type: 'crossover', ref_id: 8, lane_id: 'main', position: 0 , label: 'Fourth World'}],
       created_at: '2026-08-12T00:00:00Z',
       updated_at: '2026-08-12T00:00:00Z',
     })
@@ -190,8 +190,8 @@ describe('ContinuityPlannerPage', () => {
       ordering_mode: 'strict_sequential',
       lanes: [{ id: 'main', name: 'Reading order', order: 0 }],
       nodes: [
-        { id: 'issue-40', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0 },
-        { id: 'crossover-8', node_type: 'crossover', ref_id: 8, lane_id: 'main', position: 1 },
+        { id: 'issue-40', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0 , label: 'Mister Miracle #Annual 1'},
+        { id: 'crossover-8', node_type: 'crossover', ref_id: 8, lane_id: 'main', position: 1 , label: 'Fourth World'},
       ],
       created_at: '2026-08-12T00:00:00Z',
       updated_at: '2026-08-12T00:00:00Z',
@@ -410,8 +410,8 @@ describe('ContinuityPlannerPage', () => {
       ordering_mode: 'strict_sequential',
       lanes: [{ id: 'main', name: 'Reading order', order: 0 }],
       nodes: [
-        { id: 'issue-40', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0 },
-        { id: 'crossover-8', node_type: 'crossover', ref_id: 8, lane_id: 'main', position: 1 },
+        { id: 'issue-40', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0 , label: 'Mister Miracle #Annual 1'},
+        { id: 'crossover-8', node_type: 'crossover', ref_id: 8, lane_id: 'main', position: 1 , label: 'Fourth World'},
       ],
       created_at: '2026-08-12T00:00:00Z',
       updated_at: '2026-08-12T00:00:00Z',
@@ -512,19 +512,18 @@ describe('ContinuityPlannerPage', () => {
     expect(mocks.create).not.toHaveBeenCalled()
   })
 
-  it('falls back to an "Unavailable issue" label when an issue lookup fails during hydration', async () => {
+  it('falls back to a deleted-series label when an issue has no persisted title', async () => {
     mocks.get.mockResolvedValue({
       id: 12,
       user_id: 1,
       name: 'Saved lane',
       ordering_mode: 'strict_sequential',
       lanes: [{ id: 'main', name: 'Reading order', order: 0 }],
-      nodes: [{ id: 'issue-40', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0 }],
+      nodes: [{ id: 'issue-40', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0 , label: 'Mister Miracle #Annual 1'}],
       created_at: '2026-08-12T00:00:00Z',
       updated_at: '2026-08-12T00:00:00Z',
     })
     mocks.getIssue.mockReset()
-    mocks.getIssue.mockRejectedValueOnce(new Error('lookup failed'))
 
     render(
       <MemoryRouter initialEntries={['/continuity-plans/12']}>
@@ -534,17 +533,18 @@ describe('ContinuityPlannerPage', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('Unavailable issue')).toBeVisible()
+    expect(await screen.findByText('Mister Miracle #Annual 1')).toBeVisible()
+    expect(mocks.getIssue).not.toHaveBeenCalled()
   })
 
-  it('renders an Unavailable crossover label when the saved crossover is missing from the current group list', async () => {
+  it('renders a deleted-crossover label when the saved crossover is missing from the current group list', async () => {
     mocks.get.mockResolvedValue({
       id: 12,
       user_id: 1,
       name: 'Saved lane',
       ordering_mode: 'strict_sequential',
       lanes: [{ id: 'main', name: 'Reading order', order: 0 }],
-      nodes: [{ id: 'crossover-99', node_type: 'crossover', ref_id: 99, lane_id: 'main', position: 0 }],
+      nodes: [{ id: 'crossover-99', node_type: 'crossover', ref_id: 99, lane_id: 'main', position: 0 , label: 'Missing crossover'}],
       created_at: '2026-08-12T00:00:00Z',
       updated_at: '2026-08-12T00:00:00Z',
     })
@@ -557,7 +557,7 @@ describe('ContinuityPlannerPage', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('Unavailable crossover')).toBeVisible()
+    expect(await screen.findByText('Missing crossover')).toBeVisible()
   })
 
   it('shows a plan-level load error when fetching the plan fails', async () => {
@@ -658,8 +658,8 @@ describe('ContinuityPlannerPage', () => {
       ordering_mode: 'strict_sequential',
       lanes: [{ id: 'main', name: 'Reading order', order: 0 }],
       nodes: [
-        { id: 'issue-40', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0 },
-        { id: 'crossover-8', node_type: 'crossover', ref_id: 8, lane_id: 'main', position: 1 },
+        { id: 'issue-40', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0 , label: 'Mister Miracle #Annual 1'},
+        { id: 'crossover-8', node_type: 'crossover', ref_id: 8, lane_id: 'main', position: 1 , label: 'Fourth World'},
       ],
       created_at: '2026-08-12T00:00:00Z',
       updated_at: '2026-08-12T00:00:00Z',
@@ -688,8 +688,8 @@ describe('ContinuityPlannerPage', () => {
       ordering_mode: 'strict_sequential',
       lanes: [{ id: 'main', name: 'Reading order', order: 0 }],
       nodes: [
-        { id: 'issue-40', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0 },
-        { id: 'crossover-8', node_type: 'crossover', ref_id: 8, lane_id: 'main', position: 1 },
+        { id: 'issue-40', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0 , label: 'Mister Miracle #Annual 1'},
+        { id: 'crossover-8', node_type: 'crossover', ref_id: 8, lane_id: 'main', position: 1 , label: 'Fourth World'},
       ],
       created_at: '2026-08-12T00:00:00Z',
       updated_at: '2026-08-12T00:00:00Z',
@@ -926,8 +926,8 @@ describe('ContinuityPlannerPage', () => {
         { id: 'lane-1', name: 'Lane 2', order: 1 },
       ],
       nodes: [
-        { id: 'issue-40', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0 },
-        { id: 'crossover-8', node_type: 'crossover', ref_id: 8, lane_id: 'lane-1', position: 0 },
+        { id: 'issue-40', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0 , label: 'Mister Miracle #Annual 1'},
+        { id: 'crossover-8', node_type: 'crossover', ref_id: 8, lane_id: 'lane-1', position: 0 , label: 'Fourth World'},
       ],
       created_at: '2026-08-12T00:00:00Z',
       updated_at: '2026-08-12T00:00:00Z',
@@ -987,8 +987,8 @@ describe('ContinuityPlannerPage', () => {
         { id: 'lane-2', name: 'Lane 2', order: 1 },
       ],
       nodes: [
-        { id: 'issue-40', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0 },
-        { id: 'crossover-8', node_type: 'crossover', ref_id: 8, lane_id: 'main', position: 1 },
+        { id: 'issue-40', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0 , label: 'Mister Miracle #Annual 1'},
+        { id: 'crossover-8', node_type: 'crossover', ref_id: 8, lane_id: 'main', position: 1 , label: 'Fourth World'},
       ],
       created_at: '2026-08-12T00:00:00Z',
       updated_at: '2026-08-12T00:00:00Z',
@@ -1000,8 +1000,8 @@ describe('ContinuityPlannerPage', () => {
       ordering_mode: 'informational',
       lanes: [{ id: 'main', name: 'Reading order', order: 0 }],
       nodes: [
-        { id: 'issue-40', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0 },
-        { id: 'crossover-8', node_type: 'crossover', ref_id: 8, lane_id: 'main', position: 1 },
+        { id: 'issue-40', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0 , label: 'Mister Miracle #Annual 1'},
+        { id: 'crossover-8', node_type: 'crossover', ref_id: 8, lane_id: 'main', position: 1 , label: 'Fourth World'},
       ],
       created_at: '2026-08-12T00:00:00Z',
       updated_at: '2026-08-12T00:00:00Z',

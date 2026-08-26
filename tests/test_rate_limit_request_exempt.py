@@ -20,7 +20,7 @@ async def test_request_aware_exempt_when_receives_request() -> None:
     reloaded_rate_limit_module = importlib.reload(rate_limit_module)
     limiter = reloaded_rate_limit_module.limiter
     limiter.reset()
-    path = "/api/test-rate-limit/request-aware-exempt"
+    path = "/api/v1/test-rate-limit/request-aware-exempt"
     temp_app = FastAPI()
     temp_app.state.limiter = limiter
     temp_app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -63,7 +63,7 @@ async def test_rate_limiting_can_be_disabled_after_module_import() -> None:
     limiter = reloaded_rate_limit_module.limiter
     limiter.reset()
 
-    path = "/api/test-rate-limit/post-import-toggle"
+    path = "/api/v1/test-rate-limit/post-import-toggle"
     temp_app = FastAPI()
     temp_app.state.limiter = limiter
     temp_app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)

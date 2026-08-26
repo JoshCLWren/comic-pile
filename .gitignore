@@ -140,7 +140,6 @@ dmypy.json
 .vscode/
 *.swp
 *.swo
-*~
 
 # OS
 .DS_Store
@@ -152,7 +151,14 @@ logs/
 
 # Temporary files
 *.tmp
+*.pid
+
+# Editor/LLM backup artifacts - never commit these
 *.bak
+*.backup
+*.orig
+*~
+
 .env.production
 
 # AI tool sessions and configuration

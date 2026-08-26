@@ -14,7 +14,7 @@ async def test_jump_to_position_works_for_large_distance(
     """Jump from position 1 to last position works correctly."""
     thread_id = sample_data["threads"][0].id
 
-    response = await auth_client.get("/api/threads/")
+    response = await auth_client.get("/api/v1/threads/")
     data = response.json()
     threads = data["threads"]
     active_threads = [t for t in threads if t["status"] == "active"]
@@ -37,7 +37,7 @@ async def test_jump_to_position_works_for_small_distance(
     async_db: AsyncSession,
 ) -> None:
     """Jump from last position to position 1 works correctly."""
-    response = await auth_client.get("/api/threads/")
+    response = await auth_client.get("/api/v1/threads/")
     data = response.json()
     threads = data["threads"]
     last_thread_id = threads[-1]["id"]
@@ -96,7 +96,7 @@ async def test_move_to_back_via_api(
     """Move an active thread to the normalized back."""
     thread_id = sample_data["threads"][0].id
 
-    response = await auth_client.get("/api/threads/")
+    response = await auth_client.get("/api/v1/threads/")
     data = response.json()
     threads = data["threads"]
     active_threads = [t for t in threads if t["status"] == "active"]

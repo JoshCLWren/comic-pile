@@ -5,7 +5,12 @@ import userEvent from '@testing-library/user-event'
 import { AuthProvider } from '../App'
 import Navigation from '../components/Navigation'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
+import { ToastProvider } from '../contexts/ToastProvider'
 import { readStoredThemePreference } from '../services/theme'
+import {
+  resetThemePreferenceSyncForTests,
+  setThemePreferenceRetryDelaysForTests,
+} from '../services/themePreferenceSync'
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
@@ -46,7 +51,9 @@ function renderNavigation() {
     <MemoryRouter initialEntries={['/']}>
       <AuthProvider>
         <BugReportRestoreProvider>
-          <Navigation onBugReportSubmit={vi.fn()} />
+          <ToastProvider>
+            <Navigation onBugReportSubmit={vi.fn()} />
+          </ToastProvider>
         </BugReportRestoreProvider>
       </AuthProvider>
     </MemoryRouter>,
@@ -57,6 +64,8 @@ describe('desktop appearance picker (issue #1792)', () => {
   beforeEach(() => {
     document.documentElement.removeAttribute('data-theme')
     localStorage.clear()
+    resetThemePreferenceSyncForTests()
+    setThemePreferenceRetryDelaysForTests([0, 0])
     mocks.get.mockReset()
     mocks.post.mockReset()
     mocks.patch.mockReset()
@@ -113,7 +122,7 @@ describe('desktop appearance picker (issue #1792)', () => {
     expect(readStoredThemePreference()).toBe('ink-gold')
   })
 
-  it('keeps the applied theme when the preference PATCH fails', async () => {
+  it('retries a transient preference failure and converges without an error', async () => {
     mocks.patch.mockRejectedValueOnce(axiosError(503))
     const user = userEvent.setup()
     renderNavigation()
@@ -121,9 +130,30 @@ describe('desktop appearance picker (issue #1792)', () => {
     await user.click(await screen.findByRole('button', { name: 'Command Center' }))
 
     expect(document.documentElement).toHaveAttribute('data-theme', 'command-center')
-    expect(screen.getByRole('button', { name: 'Command Center' })).toHaveAttribute('aria-pressed', 'true')
-    await waitFor(() => expect(mocks.patch).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(mocks.patch).toHaveBeenCalledTimes(2))
     expect(readStoredThemePreference()).toBe('command-center')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('shows one bounded error per outage episode despite repeated failing clicks', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.patch.mockRejectedValue(axiosError(503))
+    const user = userEvent.setup()
+    renderNavigation()
+
+    await user.click(await screen.findByRole('button', { name: 'Command Center' }))
+    await waitFor(() => expect(mocks.patch).toHaveBeenCalledTimes(3))
+
+    await user.click(screen.getByRole('button', { name: 'Ink Gold' }))
+    await waitFor(() => expect(mocks.patch.mock.calls.length).toBeGreaterThanOrEqual(4))
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
+
+    // Let any further retries from the second selection exhaust as well.
+    await waitFor(() => expect(mocks.patch.mock.calls.length).toBeGreaterThanOrEqual(6))
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+    expect(screen.getByRole('alert')).toHaveTextContent(/saving your preference failed/i)
+    expect(consoleError).toHaveBeenCalledTimes(1)
+    consoleError.mockRestore()
   })
 
   it('syncs the picker to a server-resolved theme applied after mount', async () => {

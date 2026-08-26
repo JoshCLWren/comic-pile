@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 import { RATING_THRESHOLD } from '../pages/RollPage/utils'
@@ -64,7 +65,7 @@ function ratingView(overrides: Record<string, unknown> = {}) {
     onRefreshThread: vi.fn(),
     ...overrides,
   }
-  return <RatingView {...defaults} />
+  return <MemoryRouter><RatingView {...defaults} /></MemoryRouter>
 }
 
 describe('RatingView action panel (issue #1406)', () => {
@@ -276,8 +277,15 @@ describe('RatingView responsive pillar contract', () => {
     const { container } = render(ratingView())
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
     const text = grid!.textContent ?? ''
-    expect(text.indexOf('The Comic')).toBeLessThan(text.indexOf('Reading Context'))
-    expect(text.indexOf('Reading Context')).toBeLessThan(text.indexOf('Your Context'))
+    // Hierarchy now uses reader questions instead of pillar names, but order is preserved
+    const hasNewHierarchy = text.includes('What am I reading?')
+    if (hasNewHierarchy) {
+      expect(text.indexOf('What am I reading?')).toBeLessThan(text.indexOf('Why this one / can I read it?'))
+      expect(text.indexOf('Why this one / can I read it?')).toBeLessThan(text.indexOf("What's connected?"))
+    } else {
+      expect(text.indexOf('The Comic')).toBeLessThan(text.indexOf('Reading Context'))
+      expect(text.indexOf('Reading Context')).toBeLessThan(text.indexOf('Your Context'))
+    }
     expect(text).not.toMatch(/\b0[123]\b/)
   })
 })

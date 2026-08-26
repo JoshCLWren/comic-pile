@@ -6,9 +6,57 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 DEFAULT_OUTPUT = Path("frontend/src/generated/openapi.json")
+
+# Bare ``/api`` domain paths retained in the client-facing schema. Everything
+# else under bare ``/api`` is a legacy compatibility alias or non-client
+# tooling that must not appear in the generated frontend client.
+CLIENT_EXEMPT_BARE_PATHS: Final[frozenset[str]] = frozenset({"/api/ping"})
+
+
+def is_client_schema_path(path: str) -> bool:
+    """Decide whether one schema path belongs in the generated client surface.
+
+    Args:
+        path: OpenAPI path key such as ``/api/v1/threads/``.
+
+    Returns:
+        True for infrastructure paths outside ``/api``, the exempt bare ping
+        path, and every canonical ``/api/v1`` route; False for all other bare
+        ``/api`` legacy aliases and tooling routes.
+    """
+    if not path.startswith("/api/"):
+        return True
+    if path in CLIENT_EXEMPT_BARE_PATHS:
+        return True
+    return path == "/api/v1" or path.startswith("/api/v1/")
+
+
+def prune_legacy_bare_paths(schema: dict[str, Any]) -> dict[str, Any]:
+    """Drop legacy unversioned ``/api`` domain paths from the client schema.
+
+    Args:
+        schema: OpenAPI document returned by FastAPI.
+
+    Returns:
+        The original document when every path already qualifies; otherwise a
+        copy whose ``paths`` mapping keeps only client-facing paths.
+    """
+    paths = schema.get("paths")
+    if not isinstance(paths, dict):
+        return schema
+
+    pruned_paths = {
+        path: operations
+        for path, operations in paths.items()
+        if is_client_schema_path(path)
+    }
+    if len(pruned_paths) == len(paths):
+        return schema
+
+    return {**schema, "paths": pruned_paths}
 
 
 def render_openapi_schema(schema: dict[str, Any]) -> str:
@@ -54,12 +102,12 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
-    """Export the application OpenAPI schema or verify generated output."""
+    """Export the client-facing OpenAPI schema or verify generated output."""
     args = _parse_args()
 
     from app.main import app
 
-    rendered = render_openapi_schema(app.openapi())
+    rendered = render_openapi_schema(prune_legacy_bare_paths(app.openapi()))
     if write_schema(args.output, rendered, check=args.check):
         action = "Verified" if args.check else "Wrote"
         print(f"{action} deterministic OpenAPI schema: {args.output}")
