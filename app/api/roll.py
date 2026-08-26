@@ -236,7 +236,7 @@ async def roll_dice(
         selected_result=selected_index + 1,
         selected_last_rating=selected_thread.last_rating,
         selected_last_activity_at=selected_thread.last_activity_at,
-        session_timezone=current_session.timezone,
+        session_timezone=None,
         captured_at=captured_at,
     )
 
@@ -429,7 +429,7 @@ async def override_roll(
         selected_result=0,
         selected_last_rating=override_thread.last_rating,
         selected_last_activity_at=override_thread.last_activity_at,
-        session_timezone=current_session.timezone,
+        session_timezone=None,
         captured_at=captured_at,
     )
 
