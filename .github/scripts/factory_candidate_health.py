@@ -96,7 +96,12 @@ def latest_attempt_evidence(
         model_match = MODEL_RE.search(body)
         outcome_match = OUTCOME_RE.search(body)
         updated_match = UPDATED_RE.search(body)
-        if not all((provider_match, model_match, outcome_match, updated_match)):
+        if (
+            provider_match is None
+            or model_match is None
+            or outcome_match is None
+            or updated_match is None
+        ):
             continue
         updated = parse_time(updated_match.group("updated"))
         if updated is None:
