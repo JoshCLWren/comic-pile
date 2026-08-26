@@ -36,10 +36,16 @@ def test_dashboard_surfaces_operational_state_in_one_page():
             "busy_workers": 20,
             "idle_workers": 20,
             "executable_capacity": 22,
-            "healthy_candidates": 18,
-            "degraded_candidates": 4,
-            "cooling_candidates": 3,
-            "unavailable_candidates": 2,
+            "executable_slot_capacity": 22,
+            "healthy_slots": 18,
+            "degraded_slots": 4,
+            "cooling_slots": 3,
+            "unavailable_slots": 2,
+            "executable_candidate_count": 6,
+            "healthy_candidates": 5,
+            "degraded_candidates": 1,
+            "cooling_candidates": 2,
+            "unavailable_candidates": 1,
             "pipeline": {
                 "review": 8,
                 "changes_requested": 21,
@@ -72,7 +78,10 @@ def test_dashboard_surfaces_operational_state_in_one_page():
     assert "-8" in rendered
     assert "target 15 · selected 15 · claims 14" in rendered
     assert "Executable capacity now" in rendered
+    assert "Executable slots" in rendered
+    assert "Executable provider/models" in rendered
     assert "22" in rendered
+    assert "6" in rendered
     assert "refreshes every 5 min" in rendered
 
 
@@ -94,10 +103,18 @@ def test_collect_snapshot_unpacks_demand_and_authoritative_capacity(
     )
     capacity = {
         "executable_capacity": 1,
-        "health_counts": {
+        "executable_slot_capacity": 1,
+        "slot_health_counts": {
             "healthy": 1,
             "degraded": 0,
             "cooling": 1,
+            "unavailable": 0,
+        },
+        "executable_candidate_count": 1,
+        "candidate_health_counts": {
+            "healthy": 1,
+            "degraded": 0,
+            "cooling": 0,
             "unavailable": 0,
         },
     }
@@ -118,5 +135,9 @@ def test_collect_snapshot_unpacks_demand_and_authoritative_capacity(
     assert snapshot["completion_demand"] == 7
     assert snapshot["production_demand"] == 3
     assert snapshot["executable_capacity"] == 1
+    assert snapshot["executable_slot_capacity"] == 1
+    assert snapshot["healthy_slots"] == 1
+    assert snapshot["cooling_slots"] == 1
+    assert snapshot["executable_candidate_count"] == 1
     assert snapshot["healthy_candidates"] == 1
-    assert snapshot["cooling_candidates"] == 1
+    assert snapshot["cooling_candidates"] == 0
