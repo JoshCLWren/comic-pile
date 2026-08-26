@@ -154,6 +154,34 @@ def test_model_interruption_cools_then_degrades() -> None:
     )
 
     assert recent.selected is None
+    assert recent.failure_outcome == "model_interruption"
+    assert old.selected is not None
+    assert old.selected.health_state == "degraded"
+
+
+def test_unknown_failure_fails_closed_then_degrades() -> None:
+    """Unknown failures cool first and recover only after the shared cooldown."""
+    recent = HEALTH.select_candidate(
+        [CANDIDATES[0]],
+        [evidence("vendor/a:free", "unknown_failure")],
+        worker=1,
+        now_epoch=NOW,
+    )
+    old = HEALTH.select_candidate(
+        [CANDIDATES[0]],
+        [
+            evidence(
+                "vendor/a:free",
+                "unknown_failure",
+                age=HEALTH.FAILURE_COOLDOWN_SECONDS + 1,
+            )
+        ],
+        worker=1,
+        now_epoch=NOW,
+    )
+
+    assert recent.selected is None
+    assert recent.failure_outcome == "unknown_failure"
     assert old.selected is not None
     assert old.selected.health_state == "degraded"
 
