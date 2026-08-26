@@ -36,7 +36,8 @@ load_dotenv(".env.test")
 TRUNCATE_TEST_DATA_SQL = text(
     "TRUNCATE TABLE sessions, events, threads, issues, snapshots, dependencies, "
     "revoked_tokens, failed_login_attempts, user_preferences, "
-    "taste_signals, taste_evidence, users "
+    "taste_signals, taste_evidence, users, "
+    "recommendation_contexts "
     "RESTART IDENTITY CASCADE;"
 )
 _SHARED_TEST_ENGINE: AsyncEngine | None = None
@@ -117,6 +118,7 @@ def _has_schema_drift(conn: Connection) -> bool:
         "user_preferences",
         "taste_signals",
         "taste_evidence",
+        "recommendation_contexts",
     }
 
     for table_name in required_table_names:

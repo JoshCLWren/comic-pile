@@ -30,7 +30,7 @@ from app.services.comicvine_taste_features import (
     _extract_characters,
     extract_taste_features,
 )
-from app.services.taste_bank import (
+from app.services.taste_bank_inference import (
     MAX_BASELINE_EVENTS,
     _FeatureObservationGroup,
     _compute_baseline_stats,

@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react'
 import Modal from './Modal'
 import { comicVineApi } from '../services/api'
 import { readingOrdersApi, type ReadingOrderSummary } from '../services/api-reading-orders'
+import { optimizedImageUrl } from '../services/imageDelivery'
 import { useToast } from '../contexts/useToast'
 
 interface AddToComicPileDialogProps {
@@ -108,7 +109,7 @@ export default function AddToComicPileDialog({
         <div className="flex items-start gap-3 p-3 rounded-xl bg-stone-800/50 border border-stone-700/50">
           {imageUrl && (
             <img
-              src={imageUrl}
+              src={optimizedImageUrl(imageUrl, 240) ?? imageUrl}
               alt=""
               className="w-12 h-16 object-cover rounded-lg shrink-0"
             />

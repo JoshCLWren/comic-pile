@@ -27,7 +27,7 @@ from app.schemas.taste_bank import (
     TasteBankSummaryResponse,
     TasteSignalVerdictUpdate,
 )
-from app.services.taste_bank import rebuild_user_taste_bank
+from app.services.taste_bank_inference import rebuild_user_taste_bank
 
 router = APIRouter(prefix="/api/v1/taste-bank", tags=["taste-bank"])
 

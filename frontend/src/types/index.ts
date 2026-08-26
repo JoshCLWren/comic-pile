@@ -146,6 +146,34 @@ export interface SessionCurrent {
   ladder_path?: string;
   active_thread?: SessionThread | null;
   snoozed_threads?: SessionThread[];
+  reading_bandwidth?: ReadingBandwidth | null;
+  reading_intent?: ReadingIntent | null;
+  reading_mode_source?: ReadingModeSource | null;
+  reading_mode_suggested?: boolean;
+}
+
+export type ReadingBandwidth = 'light' | 'balanced' | 'deep'
+export type ReadingIntent = 'momentum' | 'familiar' | 'explore' | 'random'
+export type ReadingModeSource = 'quiz' | 'manual'
+
+export interface ReadingModeState {
+  bandwidth: ReadingBandwidth | null
+  intent: ReadingIntent | null
+  source: ReadingModeSource | null
+  suggested: boolean
+}
+
+export interface QuizAnswerOption {
+  id: string
+  label: string
+  bandwidth?: ReadingBandwidth | null
+  intent?: ReadingIntent | null
+}
+
+export interface QuizQuestion {
+  id: string
+  prompt: string
+  answers: QuizAnswerOption[]
 }
 
 export interface SessionSummary {
@@ -226,8 +254,20 @@ export interface SessionListResponse {
   next_page_token: string | null;
 }
 
+export interface BlockingDependency {
+  thread_id: number
+  thread_title: string
+  issue_number: string
+  label: string
+}
+
 export interface BlockingInfoResponse {
-  blocking_reasons: string[];
+  blocking_reasons: string[]
+  blocking_dependencies?: BlockingDependency[]
+}
+
+export interface BatchBlockingInfoResponse {
+  threads: Record<string, BlockingInfoResponse>
 }
 
 export interface DependencyCreatePayload {
@@ -470,6 +510,8 @@ export interface RollResponse {
   total_issues: number | null;
   /** Reading progress percentage */
   reading_progress: string | null;
+  /** Concise, reader-facing reason for this roll selection (null when none) */
+  explanation?: string | null;
   /** Last rolled result for active thread context (when present) */
   last_rolled_result?: number | null;
 }
@@ -551,6 +593,7 @@ export interface ReaderContextCrossover {
   id: number
   name: string
   applies_to_current_issue: boolean
+  membership_kind: 'issue' | 'thread'
   next_member: ReaderContextNextMember | null
   average_rating: number | null
   ratings_count: number
@@ -598,6 +641,10 @@ export interface ReaderContextEdge {
   target_thread_id: number | null
   source_label: string | null
   target_label: string | null
+  /** Owned read status of the source endpoint ("read"/"unread"), when resolvable */
+  source_status?: string | null
+  /** Owned read status of the target endpoint ("read"/"unread"), when resolvable */
+  target_status?: string | null
   note: string | null
   explanation: string | null
 }

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CrossoversPage from '../pages/CrossoversPage'
 import { threadsApi } from '../services/api'
@@ -35,13 +36,21 @@ const api = vi.mocked(dependencyGroupsApi)
 const threadApi = vi.mocked(threadsApi)
 const issueApi = vi.mocked(issuesApi)
 
+function renderPage() {
+  return render(
+    <MemoryRouter>
+      <CrossoversPage />
+    </MemoryRouter>,
+  )
+}
+
 const crossover = {
   id: 7,
   name: 'Annihilation',
   created_at: '2026-08-06T00:00:00Z',
   memberships: [
-    { id: 1, issue_id: 31, thread_id: null },
-    { id: 2, issue_id: null, thread_id: 22 },
+    { id: 1, issue_id: 31, thread_id: null, series_title: 'Nova', issue_number: '2' },
+    { id: 2, issue_id: null, thread_id: 22, series_title: 'Nova', issue_number: null },
   ],
 }
 
@@ -117,25 +126,41 @@ beforeEach(() => {
 })
 
 describe('CrossoversPage membership editing', () => {
-  it('shows individual issue and thread memberships', async () => {
-    render(<CrossoversPage />)
+  it('shows individual issue and thread memberships with real comic metadata', async () => {
+    renderPage()
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
 
-    expect(screen.getByText('Issue 31')).toBeInTheDocument()
-    expect(screen.getByText('Thread 22')).toBeInTheDocument()
+    expect(screen.getByText('Nova #2')).toBeInTheDocument()
+    expect(screen.getByText('Nova (whole series)')).toBeInTheDocument()
+    expect(screen.queryByText(/Issue \d+/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Thread \d+/)).not.toBeInTheDocument()
     expect(screen.getByRole('list', { name: 'Annihilation members' })).toBeInTheDocument()
   })
 
+  it('renders a readable fallback when member metadata cannot be resolved', async () => {
+    api.list.mockResolvedValue([{
+      ...crossover,
+      memberships: [{ id: 9, issue_id: 99, thread_id: null, series_title: null, issue_number: null }],
+    }])
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*1 member/ }))
+
+    expect(screen.getByText('Unavailable comic')).toBeInTheDocument()
+    expect(screen.queryByText(/Issue \d+/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Thread \d+/)).not.toBeInTheDocument()
+  })
+
   it('adds a whole thread from the shared human-facing selector', async () => {
-    api.addMember.mockResolvedValue({ id: 3, issue_id: null, thread_id: 44 })
-    render(<CrossoversPage />)
+    api.addMember.mockResolvedValue({ id: 3, issue_id: null, thread_id: 44, series_title: 'Uncanny X-Men', issue_number: null })
+    renderPage()
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
 
     selectThread('Current thread of series', 'uncanny', 'Uncanny X-Men')
     expect(screen.getByLabelText('Current thread of series')).toHaveValue('Uncanny X-Men')
+
     fireEvent.click(screen.getByRole('button', { name: 'Add thread' }))
 
-    expect(await screen.findByText('Thread 44')).toBeInTheDocument()
+    expect(await screen.findByText('Uncanny X-Men (whole series)')).toBeInTheDocument()
     expect(api.addMember).toHaveBeenCalledWith(7, { thread_id: 44 })
     expect(screen.getByRole('status')).toHaveTextContent('Uncanny X-Men added to crossover as 1 thread member.')
   })
@@ -145,20 +170,20 @@ describe('CrossoversPage membership editing', () => {
       id: 8,
       name: 'Secret Invasion',
       created_at: '2026-08-06T00:00:00Z',
-      memberships: [{ id: 8, issue_id: 80, thread_id: null }],
+      memberships: [{ id: 8, issue_id: 80, thread_id: null, series_title: 'Mighty Avengers', issue_number: '12' }],
     }
     api.list.mockResolvedValue([crossover, unrelated])
-    api.addMember.mockResolvedValue({ id: 3, issue_id: null, thread_id: 44 })
+    api.addMember.mockResolvedValue({ id: 3, issue_id: null, thread_id: 44, series_title: 'Uncanny X-Men', issue_number: null })
     api.removeMember.mockResolvedValue(undefined)
-    render(<CrossoversPage />)
+    renderPage()
 
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
     selectThread('Current thread of series', 'uncanny', 'Uncanny X-Men')
     fireEvent.click(screen.getByRole('button', { name: 'Add thread' }))
-    expect(await screen.findByText('Thread 44')).toBeInTheDocument()
+    expect(await screen.findByText('Uncanny X-Men (whole series)')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Remove issue 31 from Annihilation' }))
-    await waitFor(() => expect(screen.queryByText('Issue 31')).not.toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Nova #2 from Annihilation' }))
+    await waitFor(() => expect(screen.queryByText('Nova #2')).not.toBeInTheDocument())
     expect(screen.getByRole('button', { name: /Secret Invasion.*1 member/ })).toBeInTheDocument()
   })
 
@@ -171,7 +196,7 @@ describe('CrossoversPage membership editing', () => {
       already_present_issue_ids: [],
     })
     api.get.mockResolvedValue(crossover)
-    render(<CrossoversPage />)
+    renderPage()
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
 
     selectThread('Comic series for issue range', 'Nova', 'Nova')
@@ -192,7 +217,7 @@ describe('CrossoversPage membership editing', () => {
       already_present_issue_ids: [],
     })
     api.get.mockRejectedValue(new Error('Refresh unavailable'))
-    render(<CrossoversPage />)
+    renderPage()
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
 
     selectThread('Comic series for issue range', 'Nova', 'Nova')
@@ -209,7 +234,7 @@ describe('CrossoversPage membership editing', () => {
 
   it('keeps the selected series when adding a whole-thread membership fails', async () => {
     api.addMember.mockRejectedValue(new Error('Thread lookup unavailable'))
-    render(<CrossoversPage />)
+    renderPage()
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
 
     selectThread('Current thread of series', 'uncanny', 'Uncanny X-Men')
@@ -221,7 +246,7 @@ describe('CrossoversPage membership editing', () => {
   })
 
   it('never exposes raw thread ID inputs in crossover membership forms', async () => {
-    render(<CrossoversPage />)
+    renderPage()
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
 
     expect(screen.queryByLabelText('Whole thread ID')).not.toBeInTheDocument()
@@ -232,7 +257,7 @@ describe('CrossoversPage membership editing', () => {
 
   it('shows a useful selector error when comics cannot be loaded', async () => {
     threadApi.list.mockRejectedValue(new Error('Comics unavailable'))
-    render(<CrossoversPage />)
+    renderPage()
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
 
     expect(await screen.findAllByRole('alert')).toEqual(expect.arrayContaining([
@@ -242,11 +267,11 @@ describe('CrossoversPage membership editing', () => {
 
   it('removes a membership without changing the crossover itself', async () => {
     api.removeMember.mockResolvedValue(undefined)
-    render(<CrossoversPage />)
+    renderPage()
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Remove issue 31 from Annihilation' }))
-    await waitFor(() => expect(screen.queryByText('Issue 31')).not.toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Nova #2 from Annihilation' }))
+    await waitFor(() => expect(screen.queryByText('Nova #2')).not.toBeInTheDocument())
     expect(api.removeMember).toHaveBeenCalledWith(7, 1)
     expect(screen.getByText('Annihilation')).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent('Comic removed from crossover.')
@@ -257,30 +282,30 @@ describe('CrossoversPage membership editing', () => {
     api.removeMember.mockImplementation(() => new Promise<void>((resolve) => {
       resolveRemoval = resolve
     }))
-    render(<CrossoversPage />)
+    renderPage()
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Remove issue 31 from Annihilation' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Remove thread 22 from Annihilation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Nova #2 from Annihilation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Nova (whole series) from Annihilation' }))
     expect(api.removeMember).toHaveBeenCalledTimes(1)
     resolveRemoval?.()
-    await waitFor(() => expect(screen.queryByText('Issue 31')).not.toBeInTheDocument())
-    expect(screen.getByText('Thread 22')).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText('Nova #2')).not.toBeInTheDocument())
+    expect(screen.getByText('Nova (whole series)')).toBeInTheDocument()
   })
 
   it('keeps membership visible when removal fails', async () => {
     api.removeMember.mockRejectedValue(new Error('Removal unavailable'))
-    render(<CrossoversPage />)
+    renderPage()
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Remove issue 31 from Annihilation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Nova #2 from Annihilation' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Removal unavailable')
-    expect(screen.getByText('Issue 31')).toBeInTheDocument()
+    expect(screen.getByText('Nova #2')).toBeInTheDocument()
   })
 
   it('honestly labels the series thread addition and reports one thread member created', async () => {
-    api.addMember.mockResolvedValue({ id: 3, issue_id: null, thread_id: 44 })
-    render(<CrossoversPage />)
+    api.addMember.mockResolvedValue({ id: 3, issue_id: null, thread_id: 44, series_title: 'Uncanny X-Men', issue_number: null })
+    renderPage()
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
 
     expect(screen.getByLabelText('Current thread of series')).toBeInTheDocument()
@@ -295,7 +320,7 @@ describe('CrossoversPage membership editing', () => {
   })
 
   it('shows no unfiltered dump on empty series search and requires typing', async () => {
-    render(<CrossoversPage />)
+    renderPage()
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
 
     expect(screen.getAllByText('Type to search comics')).toHaveLength(2)
@@ -310,7 +335,7 @@ describe('CrossoversPage membership editing', () => {
     const starman = { ...thread, id: 99, title: 'Starman', format: 'single issues', issues_remaining: 61, total_issues: 80 }
     const starmanV2 = { ...thread, id: 100, title: 'Starman (Vol. 2) (1994 - 2001)', format: 'single issues', issues_remaining: 5, total_issues: 10 }
     threadApi.list.mockResolvedValue({ threads: [starman, starmanV2], next_page_token: null })
-    render(<CrossoversPage />)
+    renderPage()
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
 
     fireEvent.change(screen.getByLabelText('Current thread of series'), { target: { value: 'Starman' } })

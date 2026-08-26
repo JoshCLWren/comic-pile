@@ -131,7 +131,7 @@ async def test_delta_undo_is_lifo_and_consumes_snapshots(
     await async_db.refresh(second_snapshot)
 
     stale_response = await auth_client.post(
-        f"/api/undo/{session.id}/undo/{first_snapshot.id}",
+        f"/api/v1/undo/{session.id}/undo/{first_snapshot.id}",
     )
     assert stale_response.status_code == 409
     assert stale_response.json()["detail"] == "Only the latest rating can be undone"
@@ -142,7 +142,7 @@ async def test_delta_undo_is_lifo_and_consumes_snapshots(
     assert second_thread.issues_remaining == 4
 
     second_undo = await auth_client.post(
-        f"/api/undo/{session.id}/undo/{second_snapshot.id}",
+        f"/api/v1/undo/{session.id}/undo/{second_snapshot.id}",
     )
     assert second_undo.status_code == 200
     assert second_undo.json()["current_die"] == 8
@@ -162,7 +162,7 @@ async def test_delta_undo_is_lifo_and_consumes_snapshots(
     assert remaining_snapshot_ids == [first_snapshot.id]
 
     first_undo = await auth_client.post(
-        f"/api/undo/{session.id}/undo/{first_snapshot.id}",
+        f"/api/v1/undo/{session.id}/undo/{first_snapshot.id}",
     )
     assert first_undo.status_code == 200
     assert first_undo.json()["current_die"] == 6
@@ -180,7 +180,7 @@ async def test_delta_undo_is_lifo_and_consumes_snapshots(
     assert remaining_snapshot_ids == []
 
     repeated_undo = await auth_client.post(
-        f"/api/undo/{session.id}/undo/{first_snapshot.id}",
+        f"/api/v1/undo/{session.id}/undo/{first_snapshot.id}",
     )
     assert repeated_undo.status_code == 404
 
@@ -213,17 +213,17 @@ async def test_session_apis_include_all_die_changing_events(
     assert await build_ladder_path(session.id, async_db) == "6 → 8 → 10 → 8"
     assert await get_current_die(session.id, async_db) == 8
 
-    session_response = await auth_client.get(f"/api/sessions/{session.id}")
+    session_response = await auth_client.get(f"/api/v1/sessions/{session.id}")
     assert session_response.status_code == 200
     assert session_response.json()["ladder_path"] == "6 → 8 → 10 → 8"
     assert session_response.json()["current_die"] == 8
 
-    details_response = await auth_client.get(f"/api/sessions/{session.id}/details")
+    details_response = await auth_client.get(f"/api/v1/sessions/{session.id}/details")
     assert details_response.status_code == 200
     assert details_response.json()["ladder_path"] == "6 → 8 → 10 → 8"
     assert details_response.json()["current_die"] == 8
 
-    list_response = await auth_client.get("/api/sessions/?page_size=200")
+    list_response = await auth_client.get("/api/v1/sessions/?page_size=200")
     assert list_response.status_code == 200
     listed_session = next(
         item for item in list_response.json()["sessions"] if item["id"] == session.id

@@ -1,4 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react'
+import type { BlockingDependency } from '../types'
 import { vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { ThreadPool } from '../pages/RollPage/components/ThreadPool'
@@ -22,19 +23,19 @@ const mockPool: RollBootstrapThread[] = [
 ]
 
 const mockBlockedThreads: RollBootstrapThread[] = []
-const mockBlockingReasonMap: Record<number, string[]> = {}
+const mockBlockingDependencyMap: Record<number, BlockingDependency[]> = {}
 const mockSnoozedThreads: Array<{ id: number; title: string; format: string }> = []
 
 function renderPool(overrides: Partial<{
   pool: RollBootstrapThread[]
   blockedThreads: RollBootstrapThread[]
-  blockingReasonMap: Record<number, string[]>
+  blockingDependencyMap: Record<number, BlockingDependency[]>
   blockedExpanded: boolean
 }> = {}) {
   const {
     pool = mockPool,
     blockedThreads = mockBlockedThreads,
-    blockingReasonMap = mockBlockingReasonMap,
+    blockingDependencyMap = mockBlockingDependencyMap,
     blockedExpanded = false,
   } = overrides
 
@@ -43,7 +44,7 @@ function renderPool(overrides: Partial<{
       <ThreadPool
         pool={pool}
         blockedThreads={blockedThreads}
-        blockingReasonMap={blockingReasonMap}
+        blockingDependencyMap={blockingDependencyMap}
         dieSize={20}
         isRatingView={false}
         isRolling={false}
@@ -114,7 +115,7 @@ describe('ThreadPool Component', () => {
     const { rerender } = renderPool({
       pool: mockPool,
       blockedThreads: [blockedThread],
-      blockingReasonMap: { 3: ['dependency'] },
+      blockingDependencyMap: { 3: [{ thread_id: 3, thread_title: 'Dependency Thread', issue_number: '9', label: 'dependency' }] },
     })
     // Inject the spy by re-rendering with the handler.
     rerender(
@@ -122,7 +123,7 @@ describe('ThreadPool Component', () => {
         <ThreadPool
           pool={mockPool}
           blockedThreads={[blockedThread]}
-          blockingReasonMap={{ 3: ['dependency'] }}
+          blockingDependencyMap={{ 3: [{ thread_id: 3, thread_title: 'Dependency Thread', issue_number: '9', label: 'dependency' }] }}
           dieSize={20}
           isRatingView={false}
           isRolling={false}
@@ -155,7 +156,7 @@ describe('ThreadPool Component', () => {
   })
 
   it('renders the empty-state when there is nothing to roll', () => {
-    renderPool({ pool: [], blockedThreads: [], blockingReasonMap: {} })
+    renderPool({ pool: [], blockedThreads: [], blockingDependencyMap: {} })
 
     expect(screen.getByText(/Nothing to roll yet/i)).toBeInTheDocument()
   })

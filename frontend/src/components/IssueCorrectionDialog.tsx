@@ -205,7 +205,7 @@ export default function IssueCorrectionDialog({
       >
         <div className="flex items-start justify-between gap-4 pb-4">
           <h2 id="issue-correction-title" className="text-xl font-black tracking-tight text-stone-200 uppercase">
-            Correct Issue Number
+            Fix Issue Number
           </h2>
           <button
             type="button"

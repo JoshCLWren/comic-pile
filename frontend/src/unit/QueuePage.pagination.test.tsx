@@ -22,6 +22,10 @@ vi.mock('../hooks/useSession', () => ({
   useSession: vi.fn(),
 }))
 
+vi.mock('../hooks/useQueueBlockingInfo', () => ({
+  useQueueBlockingInfo: vi.fn(() => ({})),
+}))
+
 vi.mock('../pages/QueuePage/useQueueFilters', () => ({
   useQueueFilters: vi.fn((threads: Array<{ id: number; title: string }> | null) => ({
     activeThreads: threads ?? [],

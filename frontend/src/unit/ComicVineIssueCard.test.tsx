@@ -5,7 +5,7 @@ import { ComicVineIssueCard } from '../pages/RollPage/components/ComicVineIssueC
 
 vi.mock('../services/api', async () => {
   const actual = await vi.importActual<typeof import('../services/api')>('../services/api')
-  return { ...actual, comicVineApi: { getIssueIntelligence: vi.fn() } }
+  return { ...actual, comicVineApi: { getIssueIntelligence: vi.fn(), importIssue: vi.fn() } }
 })
 
 vi.mock('../services/api-reading-orders', () => ({
@@ -25,10 +25,12 @@ vi.mock('../contexts/useToast', () => ({
 }))
 
 const getIntelligence = vi.mocked(comicVineApi.getIssueIntelligence)
+const importIssue = vi.mocked(comicVineApi.importIssue)
 
 describe('ComicVineIssueCard', () => {
   beforeEach(() => {
     getIntelligence.mockReset()
+    importIssue.mockReset()
   })
 
   it('progressively reveals metadata and mapped versus missing story-arc issues', async () => {
@@ -276,5 +278,154 @@ describe('ComicVineIssueCard', () => {
     expect(await screen.findByTestId('add-to-comicpile-dialog')).toBeInTheDocument()
     expect(screen.getByText('ComicVine Issue')).toBeInTheDocument()
     expect(screen.getByDisplayValue('Batman #126')).toBeInTheDocument()
+  })
+
+  it('expands and collapses story arc issues with Show more/Show fewer button', async () => {
+    const manyIssues = Array.from({ length: 8 }, (_, i) => ({
+      comicvine_issue_id: `${i + 1}`,
+      series_name: 'Series',
+      issue_number: `${i + 1}`,
+      name: `Issue ${i + 1}`,
+      cover_date: null,
+      comicvine_url: null,
+      comicpile_matches: [],
+    }))
+
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '600',
+      comicvine_url: null,
+      series_name: 'Many Issues',
+      series_id: 13,
+      issue_number: '1',
+      name: 'Issue',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [{
+        comicvine_arc_id: 1,
+        total_related_count: null,
+        name: 'Big Arc',
+        comicvine_url: null,
+        related_issues: manyIssues,
+      }],
+    })
+
+    render(<ComicVineIssueCard issueId={6} />)
+    await waitFor(() => expect(screen.getByText('Big Arc')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Comic details'))
+
+    // Initially only first 5 issues shown
+    expect(screen.getByText('Series #1')).toBeInTheDocument()
+    expect(screen.getByText('Issue 1')).toBeInTheDocument()
+    expect(screen.getByText('Series #5')).toBeInTheDocument()
+    expect(screen.getByText('Issue 5')).toBeInTheDocument()
+    expect(screen.queryByText('Series #6')).not.toBeInTheDocument()
+
+    // Button should say "Show all 8 issues" initially
+    const showMoreButton = screen.getByRole('button', { name: /show all 8 issues/i })
+    expect(showMoreButton).toBeInTheDocument()
+    fireEvent.click(showMoreButton)
+
+    await waitFor(() => expect(screen.getByText('Series #6')).toBeInTheDocument())
+    expect(screen.getByText('Issue 6')).toBeInTheDocument()
+    expect(screen.getByText('Series #8')).toBeInTheDocument()
+    expect(screen.getByText('Issue 8')).toBeInTheDocument()
+
+    // Show fewer button
+    const showLessButton = screen.getByRole('button', { name: /show fewer/i })
+    fireEvent.click(showLessButton)
+
+    await waitFor(() => expect(screen.getByText('Series #1')).toBeInTheDocument())
+    expect(screen.queryByText('Series #6')).not.toBeInTheDocument()
+  })
+
+  it('closes Add to ComicPile dialog when onClose is called', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '400',
+      comicvine_url: null,
+      series_name: 'Spider-Man',
+      series_id: 2,
+      issue_number: '50',
+      name: 'Amazing',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [{
+        comicvine_arc_id: 200,
+        name: 'Clone Saga',
+        comicvine_url: null,
+        total_related_count: 1,
+        related_issues: [
+          {
+            comicvine_issue_id: '401', series_name: 'Spider-Man', issue_number: '51',
+            name: null, cover_date: null, comicvine_url: null, comicpile_matches: [],
+          },
+        ],
+      }],
+    })
+
+    render(<ComicVineIssueCard issueId={6} />)
+    await waitFor(() => expect(screen.getByText('Spider-Man #50')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Comic details'))
+    const addButton = screen.getByRole('button', { name: /Add Spider-Man #51 to ComicPile/i })
+    fireEvent.click(addButton)
+    await waitFor(() => expect(screen.getByTestId('add-to-comicpile-dialog')).toBeInTheDocument())
+
+    const closeButton = screen.getByRole('button', { name: /Close/i })
+    fireEvent.click(closeButton)
+    await waitFor(() => expect(screen.queryByTestId('add-to-comicpile-dialog')).not.toBeInTheDocument())
+  })
+
+  it('calls onAdded callback when issue is added via dialog', async () => {
+    importIssue.mockResolvedValue({
+      thread_id: 42,
+      issue_id: 1,
+      external_identity_id: 1,
+      reading_order_id: null,
+      position: 1,
+      total_items: 1,
+    })
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '500',
+      comicvine_url: null,
+      series_name: 'X-Men',
+      series_id: 3,
+      issue_number: '100',
+      name: 'Mutant',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [{
+        comicvine_arc_id: 300,
+        name: 'Age of Apocalypse',
+        comicvine_url: null,
+        total_related_count: 1,
+        related_issues: [
+          {
+            comicvine_issue_id: '501', series_name: 'X-Men', issue_number: '101',
+            name: null, cover_date: null, comicvine_url: null, comicpile_matches: [],
+          },
+        ],
+      }],
+    })
+
+    render(<ComicVineIssueCard issueId={7} />)
+    await waitFor(() => expect(screen.getByText('X-Men #100')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Comic details'))
+    const addButton = screen.getByRole('button', { name: /Add X-Men #101 to ComicPile/i })
+    fireEvent.click(addButton)
+    await waitFor(() => expect(screen.getByTestId('add-to-comicpile-dialog')).toBeInTheDocument())
+
+    const confirmButton = screen.getByRole('button', { name: /Add to ComicPile/i })
+    fireEvent.click(confirmButton)
+    await waitFor(() => expect(screen.queryByTestId('add-to-comicpile-dialog')).not.toBeInTheDocument())
+    expect(importIssue).toHaveBeenCalled()
+    expect(getIntelligence).toHaveBeenCalledTimes(2)
   })
 })

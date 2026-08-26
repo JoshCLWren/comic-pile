@@ -25,6 +25,8 @@ on:
       - '.github/scripts/factory-gh-rest-shim.sh'
       - '.github/scripts/free-model-factory-worker.sh'
       - '.github/scripts/free-model-factory-worker-primitives.sh'
+      - '.github/scripts/factory_provider_candidates.py'
+      - '.github/scripts/factory_candidate_health.py'
       - '.github/scripts/kilo-auto-factory-run.sh'
       - '.github/free-model-factories.tsv'
 
@@ -390,7 +392,12 @@ jobs:
             workers="$(awk -F '\t' -v minute="$minute" '$4 == minute {print $1}' "$manifest" | jq -Rsc 'split("\n") | map(select(length > 0))')"
             echo "Scheduled :$(printf '%02d' "$minute") batch"
           else
-            workers='["6","39","46"]'
+            # A control-plane change should smoke one current lane per provider.
+            # Resolve these from the manifest so retired workers cannot remain
+            # embedded in dispatcher behavior.
+            workers="$(awk -F '\t' '
+              $0 !~ /^#/ && NF >= 3 && !seen[$2]++ {print $1}
+            ' "$manifest" | jq -Rsc 'split("\n") | map(select(length > 0))')"
           fi
 
           [[ "$workers" != '[]' ]] || { echo 'Dispatcher resolved no workers' >&2; exit 1; }

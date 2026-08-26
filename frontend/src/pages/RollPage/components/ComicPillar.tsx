@@ -93,7 +93,7 @@ export function ComicPillar({
                   }}
                   aria-label={`Copy ${threadTitle} ${issueNumber}`}
                 >
-                  {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Retry copy' : 'Copy'}
+                  {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Retry copy' : 'Copy title'}
                 </button>
                 <button
                   type="button"
@@ -104,9 +104,9 @@ export function ComicPillar({
                     border: '1px solid rgba(255,255,255,0.1)',
                     backgroundColor: 'rgba(255,255,255,0.05)',
                   }}
-                  aria-label="Correct issue number"
+                  aria-label="Fix issue number"
                 >
-                  Edit
+                  Fix issue #
                 </button>
               </div>
             ) : null}
@@ -169,7 +169,7 @@ export function ComicPillar({
               backgroundColor: 'rgba(255,255,255,0.05)',
             }}
           >
-            Wrong comic?
+            Wrong series?
           </button>
         </div>
       )}

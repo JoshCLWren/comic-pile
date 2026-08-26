@@ -60,7 +60,7 @@ async def test_snooze_endpoint_query_count(
     session.pending_thread_id = thread.id
     await async_db.commit()
 
-    snooze_resp = await auth_client.post("/api/snooze/")
+    snooze_resp = await auth_client.post("/api/v1/snooze/")
     assert snooze_resp.status_code == 200
 
     queries = int(snooze_resp.headers.get("X-App-DB-Queries", "0"))
