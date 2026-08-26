@@ -48,7 +48,8 @@ def test_selected_executor_metadata_reaches_worker_and_telemetry() -> None:
     assert f"MODEL: {selected_model}" in workflow
     assert f"FACTORY_MODEL: {selected_model}" in workflow
     assert f"FACTORY_RUNTIME_MODEL: {selected_runtime}" in workflow
-    assert "selected-from-live-provider-catalog" in workflow
+    assert "from-live-provider-catalog" in workflow
+    assert "health_state=" in workflow
 
 
 def test_discovery_failures_publish_normalized_outcomes() -> None:
