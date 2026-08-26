@@ -56,8 +56,6 @@ def evidence(
     trusted: bool = True,
 ) -> dict[str, object]:
     """Build evidence relative to the fixed test clock."""
-    from datetime import datetime, timezone
-
     timestamp = datetime.fromtimestamp(NOW - age, tz=timezone.utc)
     return {
         "author_association": "OWNER" if trusted else "NONE",
