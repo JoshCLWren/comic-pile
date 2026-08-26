@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""Run the completion drain at full healthy-fleet capacity under severe backlog."""
+"""Allocate completion workers from current demand and idle fleet capacity."""
 from __future__ import annotations
 
 import dataclasses
 import importlib.util
 import json
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+from factory_capacity_policy import FleetDemand, completion_worker_target
 
 TELEMETRY_MARKER = "<!-- factory-completion-funnel:v1 -->"
 TELEMETRY_ISSUE = "1093"
@@ -24,9 +27,111 @@ def load_controller():
     return module
 
 
+def raw_work_demand(policy, issues, prs) -> tuple[int, int]:
+    """Count independent completion and production demand before capacity policy.
+
+    The legacy candidate builder intentionally suppresses fresh issue intake once
+    completion backlog crosses a fixed threshold. That is an execution guard,
+    not a measurement of demand. Feeding it into the ratio allocator would make
+    production demand disappear at the old threshold and recreate the magic
+    number indirectly. Measure structurally eligible work here instead.
+    """
+    issue_map = {int(issue["number"]): issue for issue in issues}
+    completion = sum(policy.pr_is_static_candidate(pr, issue_map) for pr in prs)
+
+    suppressing_pr_issues = {
+        linked
+        for pr in prs
+        if (linked := policy.linked_issue_from_branch(pr.get("headRefName"))) is not None
+        and policy.pr_suppresses_issue_candidate(pr, issue_map)
+    }
+    production = sum(
+        policy.issue_is_static_candidate(
+            issue,
+            suppressing_pr_issues,
+            no_diff_attempts=0,
+        )
+        for issue in issues
+    )
+    return completion, production
+
+
+def current_demand(controller, *, now_epoch: int | None = None) -> tuple[FleetDemand, dict[str, object]]:
+    """Measure work demand against idle, evidence-backed executable capacity."""
+    work_controller = controller.load_controller()
+    policy = controller.load_policy()
+    issues = work_controller.list_issues()
+    prs = work_controller.list_prs()
+    completion, production = raw_work_demand(policy, issues, prs)
+
+    now_epoch = int(time.time()) if now_epoch is None else now_epoch
+    manifest = Path(__file__).resolve().parents[1] / "free-model-factories.tsv"
+    candidates = controller.load_manifest_candidates(manifest)
+    owned = controller.owned_worker_ids([*issues, *prs])
+    try:
+        comments = controller.registry_comments()
+        health = controller.latest_worker_health(
+            comments,
+            trusted=policy.comment_is_trusted,
+        )
+    except RuntimeError as exc:
+        print(
+            f"[factory-completion] capacity evidence unavailable; failing closed: {exc}",
+            file=sys.stderr,
+        )
+        health = {}
+    capacity = controller.capacity_report(candidates, health, now_epoch=now_epoch)
+    idle = sum(
+        candidate["worker"] not in owned
+        and controller.worker_is_executable(
+            candidate["worker"],
+            health,
+            now_epoch=now_epoch,
+        )
+        for candidate in candidates
+    )
+    demand = FleetDemand(completion=completion, production=production, idle_workers=idle)
+    return demand, capacity
+
+
+def configure_demand_selection(controller, *, target: int) -> None:
+    """Select completion workers from calculated demand instead of threshold tiers."""
+    controller.REVIEW_BACKLOG_LIMIT = 1
+    controller.completion_batch_size = lambda backlog: target if backlog > 0 else 0
+
+    def select_workers(
+        workers,
+        *,
+        review_backlog,
+        owned_workers=None,
+        health=None,
+        now_epoch=None,
+    ):
+        del review_backlog
+        owned_workers = owned_workers or set()
+        health = health or {}
+        now_epoch = int(time.time()) if now_epoch is None else now_epoch
+
+        healthy: list[str] = []
+        degraded: list[str] = []
+        for worker in workers:
+            if worker in owned_workers:
+                continue
+            state = controller.worker_health_state(worker, health, now_epoch=now_epoch)
+            if state == "healthy":
+                healthy.append(worker)
+            elif state == "degraded":
+                degraded.append(worker)
+
+        healthy.sort(key=int)
+        degraded.sort(key=int)
+        return (healthy + degraded)[:target]
+
+    controller.select_completion_workers = select_workers
+
+
 def persist_funnel_telemetry(controller, result: dict[str, object]) -> None:
-    """Persist one durable snapshot so scheduler and selection failures are visible."""
-    backlog = int(result.get("backlog") or 0)
+    """Persist demand, allocation, and claim results for operational verification."""
     selected = list(result.get("selected_workers") or [])
     assignments = list(result.get("assignments") or [])
     now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -34,7 +139,23 @@ def persist_funnel_telemetry(controller, result: dict[str, object]) -> None:
         [
             TELEMETRY_MARKER,
             "## Factory completion funnel",
-            f"Backlog: {backlog}",
+            f"Completion demand: {result.get('completion_demand', 0)}",
+            f"Production demand: {result.get('production_demand', 0)}",
+            f"Idle executable workers: {result.get('idle_workers', 0)}",
+            f"Executable capacity: {result.get('executable_capacity', 0)}",
+            "Candidate health: "
+            + json.dumps(result.get("health_counts", {}), sort_keys=True),
+            "Executable models: "
+            + (
+                ", ".join(
+                    f"{item.get('provider')}/{item.get('model')} (Factory {item.get('worker')})"
+                    for item in result.get("executable_candidates", [])
+                    if isinstance(item, dict)
+                )
+                or "none"
+            ),
+            f"Completion share: {float(result.get('completion_share', 0.0)):.3f}",
+            f"Completion target: {result.get('completion_target', 0)}",
             f"Workers selected: {len(selected)}",
             f"PR claims succeeded: {len(assignments)}",
             "Selected worker IDs: " + (", ".join(map(str, selected)) if selected else "none"),
@@ -70,43 +191,23 @@ def persist_funnel_telemetry(controller, result: dict[str, object]) -> None:
             ),
             "",
         )
-        if existing:
-            controller.run_gh(
-                [
-                    "api",
-                    "--method",
-                    "PATCH",
-                    f"repos/{controller.REPO}/issues/comments/{existing}",
-                    "-f",
-                    f"body={body}",
-                ]
-            )
-        else:
-            controller.run_gh(
-                [
-                    "api",
-                    "--method",
-                    "POST",
-                    f"repos/{controller.REPO}/issues/{TELEMETRY_ISSUE}/comments",
-                    "-f",
-                    f"body={body}",
-                ]
-            )
+        method = "PATCH" if existing else "POST"
+        endpoint = (
+            f"repos/{controller.REPO}/issues/comments/{existing}"
+            if existing
+            else f"repos/{controller.REPO}/issues/{TELEMETRY_ISSUE}/comments"
+        )
+        controller.run_gh(["api", "--method", method, endpoint, "-f", f"body={body}"])
     except RuntimeError as exc:
         print(f"[factory-completion] unable to persist funnel telemetry: {exc}", file=sys.stderr)
 
 
 def main() -> int:
     controller = load_controller()
+    demand, capacity = current_demand(controller)
+    target = completion_worker_target(demand)
+    configure_demand_selection(controller, target=target)
 
-    # Severe backlog means the completion lane is the fleet's primary job.
-    # Remove the artificial 12-worker ceiling and let the existing health,
-    # ownership, and review-capacity filters determine safe concurrency.
-    controller.HIGH_DRAIN_BATCH = 10_000
-
-    # A semantic reviewer needs a lease on the PR, not on the implementation
-    # issue that originally produced it. Reusing the implementation claim shape
-    # made one review consume two visible targets and distorted WIP telemetry.
     original_load_work_controller = controller.load_controller
 
     def load_pr_only_work_controller():
@@ -124,6 +225,16 @@ def main() -> int:
     controller.load_controller = load_pr_only_work_controller
 
     result = controller.assign_completion_batch()
+    result.update(
+        {
+            "completion_demand": demand.completion,
+            "production_demand": demand.production,
+            "idle_workers": demand.idle_workers,
+            "completion_share": demand.completion_share,
+            "completion_target": target,
+            **capacity,
+        }
+    )
     persist_funnel_telemetry(controller, result)
     print(json.dumps(result, sort_keys=True))
     return 0

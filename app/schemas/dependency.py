@@ -39,11 +39,21 @@ class DependencyNoteUpdate(BaseModel):
     note: str | None = Field(None, max_length=255)
 
 
+class BlockingDependency(BaseModel):
+    """A single dependency blocking a thread, described in reader language."""
+
+    thread_id: int
+    thread_title: str
+    issue_number: str
+    label: str
+
+
 class BlockingExplanation(BaseModel):
     """Schema for blocked thread explanation."""
 
     is_blocked: bool
     blocking_reasons: list[str]
+    blocking_dependencies: list[BlockingDependency] = Field(default_factory=list)
 
 
 class ThreadDependenciesResponse(BaseModel):

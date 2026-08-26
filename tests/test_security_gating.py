@@ -110,7 +110,7 @@ async def test_sensitive_headers_redacted_in_error_logs(
     """Authorization, Cookie, and Set-Cookie headers are redacted in error logs."""
     with caplog.at_level(logging.WARNING):
         _ = await client.post(
-            "/api/roll",
+            "/api/v1/roll",
             json={"faces": 6, "count": 1},
             headers={
                 "Authorization": "Bearer secret-token-123",
@@ -158,7 +158,7 @@ async def test_sensitive_json_keys_redacted_in_error_logs(
     }
 
     with caplog.at_level(logging.WARNING):
-        _ = await client.post("/api/roll", json=sensitive_data)
+        _ = await client.post("/api/v1/roll", json=sensitive_data)
 
     log_entries = [record for record in caplog.records if "Client Error" in record.message]
     assert len(log_entries) > 0
@@ -191,7 +191,7 @@ async def test_all_sensitive_json_keys_redacted(
     for sensitive_data in test_cases:
         caplog.clear()
         with caplog.at_level(logging.WARNING):
-            _ = await client.post("/api/roll", json=sensitive_data)
+            _ = await client.post("/api/v1/roll", json=sensitive_data)
 
         log_entries = [record for record in caplog.records if "Client Error" in record.message]
         if log_entries:
@@ -240,7 +240,7 @@ async def test_non_sensitive_body_not_redacted(
     safe_data = {"username": "testuser", "email": "test@example.com", "count": 5}
 
     with caplog.at_level(logging.WARNING):
-        _ = await client.post("/api/roll", json=safe_data)
+        _ = await client.post("/api/v1/roll", json=safe_data)
 
     log_entries = [record for record in caplog.records if "Client Error" in record.message]
     assert len(log_entries) > 0

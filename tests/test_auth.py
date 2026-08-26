@@ -26,7 +26,7 @@ class TestAuth:
             "password": "securepassword123",
         }
 
-        response = await client.post("/api/auth/register", json=user_data)
+        response = await client.post("/api/v1/auth/register", json=user_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -62,7 +62,7 @@ class TestAuth:
             "email": "test@example.com",
             "password": "password123",
         }
-        response = await client.post("/api/auth/register", json=user_data)
+        response = await client.post("/api/v1/auth/register", json=user_data)
         assert response.status_code == 200
 
         duplicate_data = {
@@ -70,7 +70,7 @@ class TestAuth:
             "email": "different@example.com",
             "password": "password456",
         }
-        response = await client.post("/api/auth/register", json=duplicate_data)
+        response = await client.post("/api/v1/auth/register", json=duplicate_data)
         assert response.status_code == 400
         assert "Username already registered" in response.json()["detail"]
 
@@ -84,7 +84,7 @@ class TestAuth:
             "email": "same@example.com",
             "password": "password123",
         }
-        response = await client.post("/api/auth/register", json=user_data)
+        response = await client.post("/api/v1/auth/register", json=user_data)
         assert response.status_code == 200
 
         duplicate_data = {
@@ -92,7 +92,7 @@ class TestAuth:
             "email": "same@example.com",
             "password": "password456",
         }
-        response = await client.post("/api/auth/register", json=duplicate_data)
+        response = await client.post("/api/v1/auth/register", json=duplicate_data)
         assert response.status_code == 400
         assert "Email already registered" in response.json()["detail"]
 
@@ -104,14 +104,14 @@ class TestAuth:
             "email": "login@example.com",
             "password": "mypassword123",
         }
-        response = await client.post("/api/auth/register", json=user_data)
+        response = await client.post("/api/v1/auth/register", json=user_data)
         assert response.status_code == 200
 
         login_data = {
             "username": "loginuser",
             "password": "mypassword123",
         }
-        response = await client.post("/api/auth/login", json=login_data)
+        response = await client.post("/api/v1/auth/login", json=login_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -126,7 +126,7 @@ class TestAuth:
             "username": "nonexistent",
             "password": "wrongpassword",
         }
-        response = await client.post("/api/auth/login", json=login_data)
+        response = await client.post("/api/v1/auth/login", json=login_data)
         assert response.status_code == 401
         assert "Incorrect username or password" in response.json()["detail"]
 
@@ -138,19 +138,19 @@ class TestAuth:
             "email": "refresh@example.com",
             "password": "password123",
         }
-        response = await client.post("/api/auth/register", json=user_data)
+        response = await client.post("/api/v1/auth/register", json=user_data)
         assert response.status_code == 200
 
         login_data = {
             "username": "refreshuser",
             "password": "password123",
         }
-        response = await client.post("/api/auth/login", json=login_data)
+        response = await client.post("/api/v1/auth/login", json=login_data)
         assert response.status_code == 200
         tokens = response.json()
 
         refresh_data = {"refresh_token": tokens["refresh_token"]}
-        response = await client.post("/api/auth/refresh", json=refresh_data)
+        response = await client.post("/api/v1/auth/refresh", json=refresh_data)
         assert response.status_code == 200
 
         new_tokens = response.json()
@@ -171,11 +171,11 @@ class TestAuth:
             "email": "cookie@example.com",
             "password": "password123",
         }
-        register_response = await client.post("/api/auth/register", json=user_data)
+        register_response = await client.post("/api/v1/auth/register", json=user_data)
         assert register_response.status_code == 200
 
         login_data = {"username": "cookieuser", "password": "password123"}
-        login_response = await client.post("/api/auth/login", json=login_data)
+        login_response = await client.post("/api/v1/auth/login", json=login_data)
         assert login_response.status_code == 200
 
         set_cookie = login_response.headers.get("set-cookie", "")
@@ -192,15 +192,15 @@ class TestAuth:
             "email": "cookie_refresh@example.com",
             "password": "password123",
         }
-        register_response = await client.post("/api/auth/register", json=user_data)
+        register_response = await client.post("/api/v1/auth/register", json=user_data)
         assert register_response.status_code == 200
 
         login_data = {"username": "cookie_refresh_user", "password": "password123"}
-        login_response = await client.post("/api/auth/login", json=login_data)
+        login_response = await client.post("/api/v1/auth/login", json=login_data)
         assert login_response.status_code == 200
         assert client.cookies.get("refresh_token") is not None
 
-        refresh_response = await client.post("/api/auth/refresh")
+        refresh_response = await client.post("/api/v1/auth/refresh")
         assert refresh_response.status_code == 200
         refreshed = refresh_response.json()
         assert "access_token" in refreshed
@@ -210,7 +210,7 @@ class TestAuth:
     async def test_refresh_token_invalid(self, client: AsyncClient) -> None:
         """Test refresh with invalid token fails."""
         refresh_data = {"refresh_token": "invalid.jwt.token"}
-        response = await client.post("/api/auth/refresh", json=refresh_data)
+        response = await client.post("/api/v1/auth/refresh", json=refresh_data)
         assert response.status_code == 401
         assert "Invalid refresh token" in response.json()["detail"]
 
@@ -218,7 +218,7 @@ class TestAuth:
     async def test_refresh_token_none(self, client: AsyncClient) -> None:
         """Test refresh with None token fails with 401 not 500."""
         refresh_data = {"refresh_token": None}
-        response = await client.post("/api/auth/refresh", json=refresh_data)
+        response = await client.post("/api/v1/auth/refresh", json=refresh_data)
         assert response.status_code == 422
 
     @pytest.mark.asyncio
@@ -231,19 +231,19 @@ class TestAuth:
             "email": "me@example.com",
             "password": "password123",
         }
-        response = await client.post("/api/auth/register", json=user_data)
+        response = await client.post("/api/v1/auth/register", json=user_data)
         assert response.status_code == 200
 
         login_data = {
             "username": "meuser",
             "password": "password123",
         }
-        response = await client.post("/api/auth/login", json=login_data)
+        response = await client.post("/api/v1/auth/login", json=login_data)
         assert response.status_code == 200
         tokens = response.json()
 
         headers = {"Authorization": f"Bearer {tokens['access_token']}"}
-        response = await client.get("/api/auth/me", headers=headers)
+        response = await client.get("/api/v1/auth/me", headers=headers)
         assert response.status_code == 200
 
         data = response.json()
@@ -254,7 +254,7 @@ class TestAuth:
     @pytest.mark.asyncio
     async def test_get_current_user_unauthenticated(self, client: AsyncClient) -> None:
         """Test getting current user info without authentication fails."""
-        response = await client.get("/api/auth/me")
+        response = await client.get("/api/v1/auth/me")
         assert response.status_code == 401
         assert "Not authenticated" in response.json()["detail"]
 
@@ -266,19 +266,19 @@ class TestAuth:
             "email": "logout@example.com",
             "password": "password123",
         }
-        response = await client.post("/api/auth/register", json=user_data)
+        response = await client.post("/api/v1/auth/register", json=user_data)
         assert response.status_code == 200
 
         login_data = {
             "username": "logoutuser",
             "password": "password123",
         }
-        response = await client.post("/api/auth/login", json=login_data)
+        response = await client.post("/api/v1/auth/login", json=login_data)
         assert response.status_code == 200
         tokens = response.json()
 
         headers = {"Authorization": f"Bearer {tokens['access_token']}"}
-        response = await client.post("/api/auth/logout", headers=headers)
+        response = await client.post("/api/v1/auth/logout", headers=headers)
         assert response.status_code == 200
         assert response.json() == {"message": "Successfully logged out"}
 
@@ -290,14 +290,14 @@ class TestAuth:
             "email": "logoutidempotent@example.com",
             "password": "password123",
         }
-        response = await client.post("/api/auth/register", json=user_data)
+        response = await client.post("/api/v1/auth/register", json=user_data)
         assert response.status_code == 200
 
         login_data = {
             "username": "logoutidempotentuser",
             "password": "password123",
         }
-        response = await client.post("/api/auth/login", json=login_data)
+        response = await client.post("/api/v1/auth/login", json=login_data)
         assert response.status_code == 200
         tokens = response.json()
 
@@ -351,16 +351,16 @@ class TestAccountLockout:
                 "email": "lockout@example.com",
                 "password": "password123",
             }
-            reg = await client.post("/api/auth/register", json=user_data)
+            reg = await client.post("/api/v1/auth/register", json=user_data)
             assert reg.status_code == 200
 
             wrong = {"username": "lockoutuser", "password": "wrongpw"}
             for i in range(5):
-                resp = await client.post("/api/auth/login", json=wrong)
+                resp = await client.post("/api/v1/auth/login", json=wrong)
                 assert resp.status_code == 401, f"Attempt {i + 1} should be 401"
 
             correct = {"username": "lockoutuser", "password": "password123"}
-            locked = await client.post("/api/auth/login", json=correct)
+            locked = await client.post("/api/v1/auth/login", json=correct)
             assert locked.status_code == 401
             assert "Incorrect username or password" in locked.json()["detail"]
 
@@ -373,23 +373,23 @@ class TestAccountLockout:
                 "email": "reset@example.com",
                 "password": "password123",
             }
-            reg = await client.post("/api/auth/register", json=user_data)
+            reg = await client.post("/api/v1/auth/register", json=user_data)
             assert reg.status_code == 200
 
             wrong = {"username": "resetworks", "password": "wrong"}
             for _ in range(4):
-                resp = await client.post("/api/auth/login", json=wrong)
+                resp = await client.post("/api/v1/auth/login", json=wrong)
                 assert resp.status_code == 401
 
             correct = {"username": "resetworks", "password": "password123"}
-            ok = await client.post("/api/auth/login", json=correct)
+            ok = await client.post("/api/v1/auth/login", json=correct)
             assert ok.status_code == 200
 
             for _ in range(4):
-                resp = await client.post("/api/auth/login", json=wrong)
+                resp = await client.post("/api/v1/auth/login", json=wrong)
                 assert resp.status_code == 401
 
-            ok2 = await client.post("/api/auth/login", json=correct)
+            ok2 = await client.post("/api/v1/auth/login", json=correct)
             assert ok2.status_code == 200
 
     @pytest.mark.asyncio
@@ -398,21 +398,21 @@ class TestAccountLockout:
         async with _create_committed_client(db_engine) as client:
             user_a = {"username": "user_a", "email": "a@example.com", "password": "pw123"}
             user_b = {"username": "user_b", "email": "b@example.com", "password": "pw456"}
-            reg_a = await client.post("/api/auth/register", json=user_a)
+            reg_a = await client.post("/api/v1/auth/register", json=user_a)
             assert reg_a.status_code == 200, f"user_a register: {reg_a.text}"
-            reg_b = await client.post("/api/auth/register", json=user_b)
+            reg_b = await client.post("/api/v1/auth/register", json=user_b)
             assert reg_b.status_code == 200, f"user_b register: {reg_b.text}"
 
             wrong_a = {"username": "user_a", "password": "wrong"}
             for _ in range(5):
-                resp = await client.post("/api/auth/login", json=wrong_a)
+                resp = await client.post("/api/v1/auth/login", json=wrong_a)
                 assert resp.status_code == 401
 
-            locked = await client.post("/api/auth/login", json=wrong_a)
+            locked = await client.post("/api/v1/auth/login", json=wrong_a)
             assert locked.status_code == 401
 
             correct_b = {"username": "user_b", "password": "pw456"}
-            ok = await client.post("/api/auth/login", json=correct_b)
+            ok = await client.post("/api/v1/auth/login", json=correct_b)
             assert ok.status_code == 200
 
     @pytest.mark.asyncio
@@ -424,13 +424,13 @@ class TestAccountLockout:
                 "email": "generic@example.com",
                 "password": "password123",
             }
-            await client.post("/api/auth/register", json=user_data)
+            await client.post("/api/v1/auth/register", json=user_data)
 
             wrong = {"username": "genericerr", "password": "wrong"}
             for _ in range(5):
-                await client.post("/api/auth/login", json=wrong)
+                await client.post("/api/v1/auth/login", json=wrong)
 
-            locked = await client.post("/api/auth/login", json=wrong)
+            locked = await client.post("/api/v1/auth/login", json=wrong)
             assert locked.status_code == 401
             assert locked.json()["detail"] == "Incorrect username or password"
 
@@ -440,7 +440,7 @@ class TestAccountLockout:
         async with _create_committed_client(db_engine) as client:
             for _ in range(9):
                 resp = await client.post(
-                    "/api/auth/login",
+                    "/api/v1/auth/login",
                     json={"username": f"noexist_{_}", "password": "wrong"},
                 )
                 assert resp.status_code == 401
@@ -450,14 +450,14 @@ class TestAccountLockout:
                 "email": "late@example.com",
                 "password": "password123",
             }
-            await client.post("/api/auth/register", json=user_data)
+            await client.post("/api/v1/auth/register", json=user_data)
 
             resp = await client.post(
-                "/api/auth/login",
+                "/api/v1/auth/login",
                 json={"username": "lateuser", "password": "wrong"},
             )
             assert resp.status_code == 401
 
             correct = {"username": "lateuser", "password": "password123"}
-            locked = await client.post("/api/auth/login", json=correct)
+            locked = await client.post("/api/v1/auth/login", json=correct)
             assert locked.status_code == 401

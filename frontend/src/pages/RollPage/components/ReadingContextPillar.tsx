@@ -1,9 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { ReadingOrder } from '../../../services/api-reading-orders'
-import type { ConnectedThreadInfo } from '../../../types'
+import type { ConnectedThreadInfo, ReaderContextLocalIssue, ReaderContextResponse } from '../../../types'
 import type { RatingThread } from '../types'
-import type { ReaderContextResponse } from '../../../types'
 import { issuesApi } from '../../../services/api-issues'
 import ContinuityCorrectionDialog from '../../../components/ContinuityCorrectionDialog'
 import { ContinuityReadinessSummary } from './ContinuityReadinessSummary'
@@ -31,6 +30,19 @@ function getSeriesNameFromContext(context: ReaderContextResponse): string | null
   return context.series.series_name ?? null
 }
 
+function relationLabel(relation: ReaderContextLocalIssue['relation'], seriesName: string | null): string {
+  switch (relation) {
+    case 'previous':
+      return seriesName ? `Earlier in ${seriesName}` : 'Earlier in this series'
+    case 'current':
+      return 'You are here'
+    case 'next':
+      return 'Next up'
+    case 'future':
+      return seriesName ? `Later in ${seriesName}` : 'Later in this series'
+  }
+}
+
 function EdgeEndpoint({
   label,
   fallbackLabel,
@@ -53,7 +65,7 @@ function EdgeEndpoint({
   return (
     <button
       type="button"
-      className="min-w-0 break-words text-left font-mono underline decoration-dotted underline-offset-2 text-[var(--theme-text-primary)]"
+      className="inline-flex min-h-6 items-center break-words text-left font-mono underline decoration-dotted underline-offset-2 text-[var(--theme-text-primary)]"
       style={endpointStyle}
       onClick={() => onOpen(threadId)}
       aria-label={`Open thread for ${label ?? fallbackLabel}`}
@@ -73,6 +85,7 @@ export function ReadingContextPillar({
 }: ReadingContextPillarProps) {
   const [isContinuityDialogOpen, setIsContinuityDialogOpen] = useState(false)
   const [isRouteExplanationOpen, setIsRouteExplanationOpen] = useState(false)
+  const [expandedIssueId, setExpandedIssueId] = useState<number | null>(null)
   const navigate = useNavigate()
   const [readerContext, setReaderContext] = useState<ReaderContextResponse | null>(null)
   const [readerContextError, setReaderContextError] = useState<string | null>(null)
@@ -150,7 +163,11 @@ export function ReadingContextPillar({
   const openCurrentThread = () => {
     if (activeRatingThread) navigate(`/thread/${activeRatingThread.id}`)
   }
-  const openCrossoversPage = () => navigate('/crossovers')
+  const openCrossover = (crossoverId: number, nextMemberIssueNumber?: string | null) => {
+    const params = new URLSearchParams({ group: String(crossoverId) })
+    if (nextMemberIssueNumber) params.set('starts_at', String(nextMemberIssueNumber))
+    navigate(`/crossovers?${params.toString()}`)
+  }
   const openThread = (threadId: number) => navigate(`/thread/${threadId}`)
 
   const renderEdgeExplanation = (edge: { explanation: string | null; note: string | null }) => {
@@ -226,13 +243,13 @@ export function ReadingContextPillar({
                 <button
                   key={crossover.id}
                   type="button"
-                  className="rounded-full px-3 py-1 font-bold text-[var(--theme-comic-accent)] transition hover:brightness-125"
+                  className="inline-flex min-h-7 items-center rounded-full px-3 font-bold text-[var(--theme-comic-accent)] transition hover:brightness-125 focus:ring-2 focus:ring-amber-500"
                   style={{
                     ...readingContextType('chipLabel'),
                     border: '1px solid rgba(212,137,14,0.4)',
                     backgroundColor: 'rgba(212, 137, 14, 0.12)',
                   }}
-                  onClick={openCrossoversPage}
+                  onClick={() => openCrossover(crossover.id)}
                   aria-label={`Open ${crossover.name} crossover`}
                 >
                   {crossover.name}
@@ -245,49 +262,114 @@ export function ReadingContextPillar({
             {[...previousIssues, ...(currentIssue ? [currentIssue] : []), ...nextIssues].map((issue) => {
               const isCurrent = issue.relation === 'current'
               const isPrevious = issue.relation === 'previous'
+              const isExpanded = expandedIssueId === issue.issue_id
+              const detailId = `chain-issue-context-${issue.issue_id}`
+              const toggleContext = () => setExpandedIssueId(isExpanded ? null : issue.issue_id)
               return (
                 <div
                   key={issue.issue_id}
-                  className={`group flex cursor-pointer items-center gap-3 ${isCurrent ? 'border-l-2 border-l-solid border-l-[var(--theme-continuity-accent)] pl-3' : 'pl-5'}`}
                   role="listitem"
-                  tabIndex={0}
-                  onClick={openCurrentThread}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCurrentThread(); } }}
-                  aria-label={`Open ${threadTitle} issue ${issue.issue_number}`}
+                  className={isCurrent ? 'border-l-2 border-l-solid border-l-[var(--theme-continuity-accent)] pl-3' : 'pl-5'}
                 >
-                  <div className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{
-                    backgroundColor: isCurrent ? 'var(--theme-continuity-accent)' :
-                                isPrevious ? 'rgba(6,182,212,0.3)' :
-                                'rgba(6,182,212,0.1)'
-                  }}></div>
+                  <button
+                    type="button"
+                    className={`flex w-full items-center gap-3 py-0.5 text-left ${isExpanded ? 'cursor-default' : 'group cursor-pointer'}`}
+                    onClick={toggleContext}
+                    aria-expanded={isExpanded}
+                    aria-controls={detailId}
+                    aria-label={`${isExpanded ? 'Hide' : 'Show'} context for ${seriesName} issue ${issue.issue_number}`}
+                  >
+                    <div className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{
+                      backgroundColor: isCurrent ? 'var(--theme-continuity-accent)' :
+                                  isPrevious ? 'rgba(6,182,212,0.3)' :
+                                  'rgba(6,182,212,0.1)'
+                    }}></div>
 
-                  <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-                      <span
-                        className="min-w-0 break-words font-mono text-[var(--theme-text-primary)]"
-                        style={readingContextType('primaryValue')}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                        <span
+                          className="min-w-0 break-words font-mono text-[var(--theme-text-primary)]"
+                          style={readingContextType('primaryValue')}
+                        >
+                          {issue.issue_number}
+                        </span>
+                        {isPrevious && issue.rating !== null && (
+                          <span
+                            className="whitespace-nowrap text-[var(--theme-comic-accent)]"
+                            style={readingContextType('metaLabel')}
+                            aria-label={`Your rating: ${issue.rating} stars`}
+                          >
+                            {ratingToStars(issue.rating)}
+                          </span>
+                        )}
+                        {isCurrent && (
+                          <span
+                            className="whitespace-nowrap font-bold uppercase tracking-wider text-[var(--theme-comic-accent)]"
+                            style={readingContextType('statLabel')}
+                          >
+                            You are here
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+
+                  {isExpanded && (
+                    <div
+                      id={detailId}
+                      className="mt-1 mb-1 ml-4 space-y-1.5 rounded-xl p-2.5"
+                      style={{ border: '1px solid rgba(6,182,212,0.25)', backgroundColor: 'rgba(6, 182, 212, 0.07)' }}
+                      aria-label={`Context for ${seriesName} issue ${issue.issue_number}`}
+                    >
+                      <p
+                        className="text-[9px] font-black uppercase tracking-[0.14em]"
+                        style={{ color: 'var(--theme-continuity-accent)' }}
                       >
-                        {issue.issue_number}
-                      </span>
-                      {isPrevious && issue.rating !== null && (
-                        <span
-                          className="whitespace-nowrap text-[var(--theme-comic-accent)]"
-                          style={readingContextType('metaLabel')}
-                          aria-label={`Your rating: ${issue.rating} stars`}
-                        >
-                          {ratingToStars(issue.rating)}
-                        </span>
+                        {relationLabel(issue.relation, seriesName)}
+                      </p>
+                      <p className="text-[10px] text-stone-400">
+                        Issue {issue.issue_number} · {issue.status === 'read' ? 'Already read' : 'Not read yet'}
+                        {isPrevious && issue.rating !== null ? ` · Your rating: ${ratingToStars(issue.rating)}` : ''}
+                      </p>
+                      {issue.crossover_memberships.length > 0 && (
+                        <div className="flex flex-wrap gap-1" aria-label={`Crossovers for issue ${issue.issue_number}`}>
+                          {issue.crossover_memberships.map((membership) => (
+                            <button
+                              key={membership.id}
+                              type="button"
+                              className="inline-flex min-h-6 items-center rounded-full px-2 font-bold transition focus:ring-2 focus:ring-amber-500"
+                              style={{
+                                ...readingContextType('chipLabel'),
+                                border: '1px solid rgba(212,137,14,0.4)',
+                                backgroundColor: 'rgba(212, 137, 14, 0.12)',
+                                color: 'rgb(250, 204, 139)',
+                              }}
+                              onClick={() => openCrossover(membership.id)}
+                              aria-label={`Open ${membership.name} crossover`}
+                            >
+                              {membership.name}
+                            </button>
+                          ))}
+                        </div>
                       )}
-                      {isCurrent && (
-                        <span
-                          className="whitespace-nowrap font-bold uppercase tracking-wider text-[var(--theme-comic-accent)]"
-                          style={readingContextType('statLabel')}
+                      {isCurrent && activeRatingThread && (
+                        <button
+                          type="button"
+                          className="inline-flex min-h-6 items-center rounded-lg px-2 font-black transition focus:ring-2"
+                          style={{
+                            ...readingContextType('chipLabel'),
+                            border: '1px solid rgba(6,182,212,0.4)',
+                            backgroundColor: 'rgba(6, 182, 212, 0.09)',
+                            color: 'var(--theme-continuity-accent)',
+                          }}
+                          onClick={openCurrentThread}
+                          aria-label={`Open ${threadTitle} thread`}
                         >
-                          You are here
-                        </span>
+                          Open {threadTitle}
+                        </button>
                       )}
                     </div>
-                  </div>
+                  )}
                 </div>
               )
             })}
@@ -339,13 +421,13 @@ export function ReadingContextPillar({
                   <button
                     key={crossover.id}
                     type="button"
-                    className="rounded-full px-3 py-1 font-bold text-[var(--theme-comic-accent)] transition hover:brightness-125"
+                    className="inline-flex min-h-7 items-center rounded-full px-3 font-bold text-[var(--theme-comic-accent)] transition hover:brightness-125 focus:ring-2 focus:ring-amber-500"
                     style={{
                       ...readingContextType('chipLabel'),
                       border: '1px solid rgba(212,137,14,0.4)',
                       backgroundColor: 'rgba(212, 137, 14, 0.12)',
                     }}
-                    onClick={openCrossoversPage}
+                    onClick={() => openCrossover(crossover.id)}
                     aria-label={`Open crossover ${crossover.name}`}
                   >
                     {crossover.name}
@@ -369,8 +451,8 @@ export function ReadingContextPillar({
                   type="button"
                   className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition hover:bg-white/5"
                   style={{ borderLeft: '3px solid rgb(250, 204, 139)', backgroundColor: 'rgba(250, 204, 139, 0.05)' }}
-                  onClick={openCrossoversPage}
-                  aria-label={`Open crossover ${crossover.name}`}
+                  onClick={() => openCrossover(crossover.id, crossover.next_member?.issue_number ?? null)}
+                  aria-label={`Open crossover ${crossover.name}${crossover.next_member ? `, starts at issue ${crossover.next_member.issue_number}` : ''}`}
                 >
                   <div className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: 'rgb(250, 204, 139)' }}></div>
                   <div className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -380,12 +462,18 @@ export function ReadingContextPillar({
                     >
                       {crossover.name}
                     </span>
-                    {crossover.next_member && (
+                    {crossover.next_member ? (
                       <span
                         className="whitespace-nowrap text-[var(--theme-text-muted)]"
                         style={readingContextType('metaLabel')}
                       >
                         — starts at #{crossover.next_member.issue_number}
+                      </span>
+                    ) : (
+                      <span className="italic text-[var(--theme-text-muted)]" style={readingContextType('metaLabel')}>
+                        {crossover.membership_kind === 'thread'
+                          ? 'issue unknown — membership covers a moving thread'
+                          : 'no upcoming issue'}
                       </span>
                     )}
                   </div>
@@ -404,7 +492,7 @@ export function ReadingContextPillar({
               className="font-bold text-[var(--theme-text-primary)]"
               style={readingContextType('sectionHeading')}
             >
-              Dependency &amp; Continuity Edges
+              Dependency & Continuity Edges
             </h3>
           </div>
 
