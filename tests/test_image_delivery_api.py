@@ -99,6 +99,7 @@ class TestVariantWidthBuckets:
         ],
     )
     def test_widths_snap_to_supported_buckets(self, requested: int, expected: int) -> None:
+        """Every requested width resolves to the expected supported bucket."""
         assert resolve_variant_width(requested) == expected
 
 
@@ -106,33 +107,41 @@ class TestSourceUrlValidation:
     """Only allowlisted, credential-free http(s) sources are accepted."""
 
     def test_accepts_allowlisted_https_source(self) -> None:
+        """A canonical allowlisted https URL passes validation unchanged."""
         assert validate_source_url(ALLOWED_SOURCE) == ALLOWED_SOURCE
 
     def test_accepts_allowlisted_legacy_host(self) -> None:
+        """The legacy www.comicvine.com image host is also accepted."""
         url = "https://www.comicvine.com/api/image/scale_large/1-2.jpg"
         assert validate_source_url(url) == url
 
     def test_rejects_disallowed_host(self) -> None:
+        """Hosts outside the allowlist are rejected."""
         with pytest.raises(InvalidImageSourceError):
             validate_source_url("https://evil.example.com/a/uploads/x.jpg")
 
     def test_rejects_non_http_scheme(self) -> None:
+        """Non-http(s) schemes are rejected even on allowlisted hosts."""
         with pytest.raises(InvalidImageSourceError):
             validate_source_url(f"ftp://{ALLOWED_HOST}/a/uploads/x.jpg")
 
     def test_rejects_file_scheme(self) -> None:
+        """Local file URLs are never accepted as remote sources."""
         with pytest.raises(InvalidImageSourceError):
             validate_source_url("file:///etc/passwd")
 
     def test_rejects_missing_host(self) -> None:
+        """URLs without a parseable host are rejected."""
         with pytest.raises(InvalidImageSourceError):
             validate_source_url("not-a-url")
 
     def test_rejects_embedded_credentials(self) -> None:
+        """URLs carrying embedded userinfo credentials are rejected."""
         with pytest.raises(InvalidImageSourceError):
             validate_source_url(f"https://user:pass@{ALLOWED_HOST}/a/uploads/x.jpg")
 
     def test_rejects_empty_and_oversized_urls(self) -> None:
+        """Empty and over-length source URLs are rejected."""
         with pytest.raises(InvalidImageSourceError):
             validate_source_url("")
         with pytest.raises(InvalidImageSourceError):
@@ -159,6 +168,7 @@ class TestSsrfGuard:
         address: str,
         flag: str,
     ) -> None:
+        """Each non-public address class trips the SSRF guard."""
         resolved = [ipaddress.ip_address(address)]
         assert getattr(resolved[0], flag), f"fixture address {address} must be {flag}"
         monkeypatch.setattr(
@@ -174,6 +184,7 @@ class TestSsrfGuard:
             asyncio.run(_check())
 
     def test_public_addresses_are_allowed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A publicly routable resolution passes the SSRF guard."""
         monkeypatch.setattr(
             image_delivery,
             "_resolve_addresses_blocking",
@@ -186,6 +197,7 @@ class TestSsrfGuard:
         asyncio.run(_check())
 
     def test_unresolvable_host_is_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """DNS resolution failure is treated as an invalid source."""
         def _raise(hostname: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
             raise OSError("resolution failed")
 
@@ -202,6 +214,7 @@ class TestUpstreamFetch:
     """Upstream fetching enforces status, type, redirect, and size limits."""
 
     async def test_returns_payload_and_media_type(self) -> None:
+        """A 200 image response yields its bytes and declared media type."""
         payload, media_type = await fetch_upstream(
             f"https://{ALLOWED_HOST}/cover.jpg",
             transport=_transport_with(_png_bytes()),
@@ -210,11 +223,13 @@ class TestUpstreamFetch:
         assert payload.startswith(b"\x89PNG\r\n\x1a\n")
 
     async def test_non_200_is_unavailable(self) -> None:
+        """Upstream error statuses surface as unavailability."""
         transport = httpx.MockTransport(lambda request: httpx.Response(500))
         with pytest.raises(UpstreamImageUnavailableError):
             await fetch_upstream(f"https://{ALLOWED_HOST}/cover.jpg", transport=transport)
 
     async def test_redirects_are_not_followed(self) -> None:
+        """Redirect responses are refused instead of followed cross-host."""
         def _redirect(request: httpx.Request) -> httpx.Response:
             return httpx.Response(302, headers={"location": "https://evil.example.com/x"})
 
@@ -223,6 +238,7 @@ class TestUpstreamFetch:
             await fetch_upstream(f"https://{ALLOWED_HOST}/cover.jpg", transport=transport)
 
     async def test_non_image_content_type_is_rejected(self) -> None:
+        """Non-image content types are rejected as unavailable."""
         transport = _transport_with(b"<html>not an image</html>", media_type="text/html")
         with pytest.raises(UpstreamImageUnavailableError):
             await fetch_upstream(f"https://{ALLOWED_HOST}/cover.jpg", transport=transport)
@@ -233,6 +249,7 @@ class TestUpstreamFetch:
         monkeypatch: pytest.MonkeyPatch,
         declare_length: bool,
     ) -> None:
+        """Oversized bodies are rejected with or without a declared length."""
         monkeypatch.setenv("IMAGE_OPTIMIZER_MAX_UPSTREAM_BYTES", "100")
         image_delivery.get_image_delivery_settings.cache_clear()
         try:
@@ -256,6 +273,7 @@ class TestOptimizeRemoteImage:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        """A large source is downscaled onto the requested WebP bucket."""
         _allow_all_resolver(monkeypatch)
         result = await optimize_remote_image(
             ALLOWED_SOURCE,
@@ -271,6 +289,7 @@ class TestOptimizeRemoteImage:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        """Sources already smaller than the bucket keep their dimensions."""
         _allow_all_resolver(monkeypatch)
         result = await optimize_remote_image(
             f"https://{ALLOWED_HOST}/small.jpg",
@@ -283,6 +302,7 @@ class TestOptimizeRemoteImage:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        """A failed transcode falls back to the original bytes and type."""
         _allow_all_resolver(monkeypatch)
         original = _png_bytes()
         monkeypatch.setattr(image_delivery, "transcode_to_webp", lambda payload, target_width: None)
@@ -297,6 +317,7 @@ class TestOptimizeRemoteImage:
         assert result.content == original
 
     async def test_invalid_source_never_reaches_the_network(self) -> None:
+        """Disallowed sources fail before any network request is made."""
         def _fail(request: httpx.Request) -> httpx.Response:
             raise AssertionError("network must not be touched for invalid sources")
 
@@ -332,6 +353,7 @@ class TestOptimizeEndpoint:
         client: httpx.AsyncClient,
         endpoint_url: str,
     ) -> None:
+        """Success serves WebP with long-lived edge cache headers."""
         _allow_all_resolver(monkeypatch)
         _canned_fetch(monkeypatch, _png_bytes(width=900, height=1350), "image/jpeg")
 
@@ -352,6 +374,7 @@ class TestOptimizeEndpoint:
         client: httpx.AsyncClient,
         endpoint_url: str,
     ) -> None:
+        """Disallowed hosts return 400 with a no-store cache header."""
         response = await client.get(
             endpoint_url,
             params={"url": "https://evil.example.com/x.jpg", "width": 240},
@@ -366,6 +389,7 @@ class TestOptimizeEndpoint:
         client: httpx.AsyncClient,
         endpoint_url: str,
     ) -> None:
+        """Private DNS resolution is rejected at the API layer without caching."""
         async def _private(hostname: str) -> None:
             raise InvalidImageSourceError("Upstream image host resolves to a non-public address")
 
@@ -382,6 +406,7 @@ class TestOptimizeEndpoint:
         client: httpx.AsyncClient,
         endpoint_url: str,
     ) -> None:
+        """Upstream unavailability is an uncached 404."""
         _allow_all_resolver(monkeypatch)
 
         async def _boom(
@@ -404,6 +429,7 @@ class TestOptimizeEndpoint:
         client: httpx.AsyncClient,
         endpoint_url: str,
     ) -> None:
+        """Out-of-range widths snap to the largest supported bucket."""
         _allow_all_resolver(monkeypatch)
         _canned_fetch(monkeypatch, _png_bytes(width=1600, height=2400), "image/jpeg")
 
@@ -420,6 +446,7 @@ class TestOptimizeEndpoint:
         client: httpx.AsyncClient,
         endpoint_url: str,
     ) -> None:
+        """A missing width is a request-validation failure."""
         response = await client.get(endpoint_url, params={"url": ALLOWED_SOURCE})
 
         assert response.status_code == 422
@@ -429,6 +456,7 @@ class TestOptimizeEndpoint:
         client: httpx.AsyncClient,
         endpoint_url: str,
     ) -> None:
+        """Widths outside the supported range fail request validation."""
         response = await client.get(endpoint_url, params={"url": ALLOWED_SOURCE, "width": 8})
 
         assert response.status_code == 422

@@ -62,10 +62,17 @@ describe('ComicIdentity', () => {
     render(<ComicIdentity issueId={1} />)
     await waitForLoaded()
 
-    // Cover image should be visible immediately (not in a collapsed card)
+    // Cover image should be visible immediately (not in a collapsed card) and
+    // served through the edge-cacheable optimizer with the canonical source.
     const cover = await screen.findByAltText('')
     expect(cover).toBeInTheDocument()
-    expect(cover).toHaveAttribute('src', 'https://images.example/100.jpg')
+    expect(cover).toHaveAttribute(
+      'src',
+      '/api/v1/images/optimize?url=https%3A%2F%2Fimages.example%2F100.jpg&width=720',
+    )
+    const srcSet = cover.getAttribute('srcset') ?? ''
+    expect(srcSet).toContain('/api/v1/images/optimize?url=https%3A%2F%2Fimages.example%2F100.jpg&width=240')
+    expect(srcSet).toContain('720w')
 
     // Series name and issue number
     expect(screen.getByText('Alpha #1')).toBeInTheDocument()
