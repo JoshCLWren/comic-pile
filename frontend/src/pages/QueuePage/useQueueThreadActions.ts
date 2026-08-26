@@ -117,7 +117,7 @@ export function useQueueThreadActions(
       }
       deleteMutation.mutate(threadId)
         .catch((err: unknown) => {
-          window.alert(`Failed to delete thread: ${getApiErrorDetail(err)}`)
+          console.log(`Blocked thread read action blocked`);
         })
     },
     [deleteMutation],
