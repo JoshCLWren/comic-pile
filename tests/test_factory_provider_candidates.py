@@ -93,7 +93,7 @@ def test_opencode_uses_project_available_cli_catalog() -> None:
 
 def test_invalid_catalog_fails_closed() -> None:
     """Malformed catalog responses produce no executable candidates."""
-    result = CANDIDATES.discover("nvidia", "service unavailable")
+    result = CANDIDATES.discover("openrouter-free", "service unavailable")
 
     assert result.status == "invalid"
     assert result.candidates == ()
