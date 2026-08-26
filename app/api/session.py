@@ -399,7 +399,9 @@ async def get_current_session(
             if active_session is None or not await is_active(
                 active_session.started_at, active_session.ended_at, db
             ):
-                active_session = await get_or_create(db, user_id=current_user.id)
+                # Extract timezone from request header
+                timezone = request.headers.get("X-Browser-Timezone")
+                active_session = await get_or_create(db, user_id=current_user.id, timezone=timezone)
 
             await db.refresh(active_session)
             active_session_id = active_session.id
@@ -439,6 +441,7 @@ async def get_current_session(
                 snoozed_thread_ids=active_session.snoozed_thread_ids or [],
                 snoozed_threads=snoozed_threads,
                 pending_thread_id=active_session.pending_thread_id,
+                timezone=active_session.timezone,
                 reading_bandwidth=active_session.reading_bandwidth,
                 reading_intent=active_session.reading_intent,
                 reading_mode_source=active_session.reading_mode_source,
@@ -707,6 +710,7 @@ async def get_session(
         has_restore_point=snapshot_count > 0,
         snapshot_count=snapshot_count,
         pending_thread_id=session.pending_thread_id,
+        timezone=session.timezone,
         reading_bandwidth=session.reading_bandwidth,
         reading_intent=session.reading_intent,
         reading_mode_source=session.reading_mode_source,
@@ -829,6 +833,7 @@ async def get_session_details(
         ladder_path=await build_ladder_path(session_obj.id, db),
         narrative_summary=await build_narrative_summary(session_id, db),
         current_die=await get_current_die(session_obj.id, db),
+        timezone=session_obj.timezone,
         events=formatted_events,
     )
 
@@ -1121,6 +1126,7 @@ async def restore_session_start(
                 has_restore_point=snapshot_count > 0,
                 snapshot_count=snapshot_count,
                 pending_thread_id=session.pending_thread_id,
+                timezone=session.timezone,
                 reading_bandwidth=session.reading_bandwidth,
                 reading_intent=session.reading_intent,
                 reading_mode_source=session.reading_mode_source,

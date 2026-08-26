@@ -83,13 +83,14 @@ export function RollHeader({
       </div>
       <div className={`items-center gap-1 md:gap-2 shrink-0 ${isRatingView ? 'hidden' : 'flex'}`}>
         <div id="die-selector">
-          <div className="hidden md:flex gap-2">
+          <div className="hidden md:flex gap-1">
             {DICE_LADDER.map((die) => (
               <button
                 key={die}
                 onClick={() => onSetDie(die)}
                 disabled={setDiePending}
-                className={`die-btn px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${
+                aria-pressed={die === currentDie}
+                className={`die-btn flex min-h-11 min-w-11 items-center justify-center px-2 text-[10px] font-black rounded-lg border transition-colors ${
                   die === currentDie
                     ? 'bg-amber-600/20 border-amber-600 text-amber-500'
                     : 'bg-white/5 border-white/10 hover:bg-white/10'
@@ -101,7 +102,8 @@ export function RollHeader({
             <button
               onClick={onClearManualDie}
               disabled={clearManualDiePending}
-              className={`px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${
+              aria-pressed={Boolean(bootstrap.manual_die)}
+              className={`flex min-h-11 min-w-11 items-center justify-center px-2 text-[10px] font-black rounded-lg border transition-colors ${
                 bootstrap.manual_die
                   ? 'bg-amber-500/20 border-amber-500 text-amber-400'
                   : 'bg-white/5 border-white/10 hover:bg-white/10'

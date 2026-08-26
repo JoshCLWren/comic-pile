@@ -18,8 +18,11 @@ from app.momentum import (
     _calculate_staleness_decay_hours,
     _decay_factor,
     compute_momentum_bonus,
+    compute_momentum_breakdown,
     weighted_momentum_selection,
     _MAX_MOMENTUM_BONUS,
+    MOMENTUM_RECENT_HIGH_RATING,
+    MOMENTUM_SAME_THREAD_MOMENTUM,
 )
 
 
@@ -122,8 +125,8 @@ async def test_pure_random_bypass_untouched() -> None:
     rows = [(FakeThread(id=1, last_rating=3.0, last_activity_at=now - timedelta(hours=1)), 5, "1")]
     # Manually construct bounded_rows matching roll tuple format.
     bounded_rows = [(rows[0][0], rows[0][1], rows[0][2])]
-    index, max_bonus = await weighted_momentum_selection(
-        db=None,  # type: ignore[arg-type]
+    index, max_bonus, breakdowns = await weighted_momentum_selection(
+        db=None,
         bounded_rows=bounded_rows,
         user_id=1,
         session_events=[],
@@ -131,6 +134,47 @@ async def test_pure_random_bypass_untouched() -> None:
     )
     assert index == 0
     assert max_bonus == 0.0
+    assert breakdowns[0].weight == pytest.approx(1.0)
+    assert breakdowns[0].factors == ()
+
+
+@pytest.mark.asyncio
+async def test_breakdown_reports_reason_codes_and_chooser_weight() -> None:
+    """Breakdown carries stable reason codes and the exact chooser weight."""
+    now = datetime.now(UTC)
+    thread = FakeThread(id=7, last_rating=5.0, last_activity_at=now - timedelta(hours=2))
+    streak_events = [
+        FakeEvent(type="rate", thread_id=7),
+        FakeEvent(type="roll", selected_thread_id=7),
+    ]
+    breakdown = compute_momentum_breakdown(thread, session_events=streak_events, now=now)
+    bonus = compute_momentum_bonus(thread, session_events=streak_events, now=now)
+    assert breakdown.candidate_id == 7
+    assert breakdown.weight == pytest.approx(1.0 + bonus)
+    assert MOMENTUM_RECENT_HIGH_RATING in breakdown.factors
+    assert MOMENTUM_SAME_THREAD_MOMENTUM in breakdown.factors
+
+
+@pytest.mark.asyncio
+async def test_selection_returns_per_candidate_weights_in_pool_order() -> None:
+    """Weighted selection exposes chooser weights and codes for every candidate."""
+    now = datetime.now(UTC)
+    hot = FakeThread(id=1, last_rating=5.0, last_activity_at=now - timedelta(hours=1))
+    cold = FakeThread(id=2, last_rating=None)
+    bounded_rows = [(hot, 3, "1"), (cold, 3, "2")]
+    _, max_bonus, breakdowns = await weighted_momentum_selection(
+        db=None,
+        bounded_rows=bounded_rows,
+        user_id=1,
+        session_events=[],
+        now=now,
+    )
+    assert [b.candidate_id for b in breakdowns] == [1, 2]
+    assert breakdowns[0].weight > 1.0
+    assert breakdowns[0].factors == (MOMENTUM_RECENT_HIGH_RATING,)
+    assert breakdowns[1].weight == pytest.approx(1.0)
+    assert breakdowns[1].factors == ()
+    assert max_bonus == pytest.approx(breakdowns[0].weight - 1.0)
 
 
 @pytest.mark.asyncio

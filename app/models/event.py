@@ -13,6 +13,7 @@ from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.issue import Issue
+    from app.models.recommendation_context import RecommendationContext
     from app.models.session import Session
     from app.models.snapshot import Snapshot
     from app.models.thread import Thread
@@ -105,6 +106,9 @@ class Event(Base):
     recommendation_context: Mapped[dict[str, object] | None] = mapped_column(
         JSON, nullable=True
     )
+    # Optional JSON metadata capturing decision context at event time (e.g.
+    # Snooze correction before/after bandwidth and reason codes).
+    context: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
 
     __table_args__ = (
         Index("ix_event_session_id", "session_id"),
@@ -128,4 +132,10 @@ class Event(Base):
     issue: Mapped[Issue | None] = relationship("Issue", foreign_keys=[issue_id], lazy="raise")
     snapshots: Mapped[list[Snapshot]] = relationship(
         "Snapshot", back_populates="event", cascade="all, delete-orphan", lazy="raise"
+    )
+    recommendation_context_record: Mapped[RecommendationContext | None] = relationship(
+        "RecommendationContext",
+        back_populates="event",
+        cascade="all, delete-orphan",
+        lazy="raise",
     )

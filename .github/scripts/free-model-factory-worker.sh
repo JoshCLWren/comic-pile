@@ -264,6 +264,8 @@ if (( assignment_status == 1 )); then
 fi
 
 if (( assignment_status != 0 )); then
+  # Exit 2 and 3 are reserved for controller invariant/read failures. The
+  # trusted workflow wrapper persists this source result after the process exits.
   release_owned_targets 'controller-assignment-read-failed' || true
   exit "$assignment_status"
 fi

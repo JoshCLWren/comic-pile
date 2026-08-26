@@ -648,7 +648,7 @@ async def test_reader_context_cross_thread_edge_without_expansion(
             "note": "cross-thread",
             "source_label": "Neighborhood #3",
             "target_label": "Distant #1",
-            "explanation": f"Blocked by issue #{issues[2].issue_number} in Neighborhood",
+            "explanation": f"Blocked by Neighborhood: #{issues[2].issue_number}",
         }
     ]
 
@@ -705,8 +705,8 @@ async def test_reader_context_dependency_explanations_hide_raw_thread_ids(
     edge = dependency_edges[0]
 
     expected = (
-        f"Blocked by issue #{source_issues[1].issue_number} "
-        "in Ultimate Universe: One Year In"
+        f"Blocked by Ultimate Universe: One Year In: "
+        f"#{source_issues[1].issue_number}"
     )
     assert edge["explanation"] == expected
     assert edge["source_thread_id"] == source_thread.id
