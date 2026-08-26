@@ -44,7 +44,7 @@ from app.schemas import (
 )
 from app.schemas.recommendation_context import CandidateFactor, RecommendationContextCreate
 from app.schemas.session import build_session_bandwidth_state
-from app.momentum import weighted_momentum_selection
+from app.momentum import MomentumCandidateWeight, weighted_momentum_selection
 from comic_pile.queue import get_bounded_roll_pool_rows
 from comic_pile.recommendation_selection import (
     DEFAULT_BANDWIDTH,
@@ -132,6 +132,16 @@ async def roll_dice(
             intent=selection_intent,
         )
         selected_index = selection.index
+        # Populate candidate_weights for pure-random bypass so recommendation
+        # context records uniform weights for all bounded candidates.
+        candidate_weights = [
+            MomentumCandidateWeight(
+                candidate_id=row[0].id if isinstance(row, tuple) else row.id,
+                weight=1.0,
+                factors=(),
+            )
+            for row in bounded_rows
+        ]
     else:
         # get_bounded_roll_pool_rows already applied the die cap, so the contextual
         # weighting below cannot draw from outside the active die pool.
