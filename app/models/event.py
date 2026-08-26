@@ -5,16 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import (
-    DateTime,
-    Float,
-    ForeignKey,
-    Index,
-    Integer,
-    JSON,
-    String,
-    Text,
-)
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -22,6 +13,7 @@ from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.issue import Issue
+    from app.models.recommendation_context import RecommendationContext
     from app.models.session import Session
     from app.models.snapshot import Snapshot
     from app.models.thread import Thread
@@ -48,16 +40,6 @@ class Event(Base):
           for the die after stepping up.
         - "unsnooze": User unsnoozed a thread. Uses `thread_id` to record which
           thread was removed from the snoozed list.
-
-    Recommendation Context:
-        New "roll" events persist ``recommendation_context``, a nullable
-        versioned JSON snapshot merging two observational contexts:
-        - Selection context (built by :mod:`app.services.recommendation_context`):
-          records the algorithm, die size, bounded candidate pool, and selected
-          thread's position at decision time.
-        - Effort context (built by :mod:`app.services.reading_effort`):
-          records the reading-effort estimate, band, source, and confidence.
-        Historical events with no snapshot remain valid.
 
     Thread ID Fields:
         This model has two thread reference fields with different purposes:
@@ -89,14 +71,6 @@ class Event(Base):
     # Used by: "roll" events to record which thread was randomly selected
     selected_thread_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     selection_method: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    # Versioned recommendation-context snapshot captured at roll time.
-    # Merges selection context (from app.services.recommendation_context) and
-    # effort context (from app.services.reading_effort) under "selection" and
-    # "effort" keys respectively. Column type matches the generic JSON column.
-    recommendation_context: Mapped[dict[str, object] | None] = mapped_column(
-        JSON(),
-        nullable=True,
-    )
     rating: Mapped[float | None] = mapped_column(Float, nullable=True)
     issues_read: Mapped[int | None] = mapped_column(Integer, nullable=True)
     queue_move: Mapped[str | None] = mapped_column(String(20), nullable=True)
@@ -125,6 +99,13 @@ class Event(Base):
     recommendation_reason_codes: Mapped[list[str] | None] = mapped_column(
         ARRAY(Text), nullable=True
     )
+    # Full recommendation context captured at decision time, including bandwidth,
+    # intent, taste bank factors, primary score, and affinity notes. Used by the
+    # explanation endpoint to reconstruct human-readable reasons without recomputing
+    # from potentially mutated current state.
+    recommendation_context: Mapped[dict[str, object] | None] = mapped_column(
+        JSON, nullable=True
+    )
     # Optional JSON metadata capturing decision context at event time (e.g.
     # Snooze correction before/after bandwidth and reason codes).
     context: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
@@ -151,4 +132,10 @@ class Event(Base):
     issue: Mapped[Issue | None] = relationship("Issue", foreign_keys=[issue_id], lazy="raise")
     snapshots: Mapped[list[Snapshot]] = relationship(
         "Snapshot", back_populates="event", cascade="all, delete-orphan", lazy="raise"
+    )
+    recommendation_context_record: Mapped[RecommendationContext | None] = relationship(
+        "RecommendationContext",
+        back_populates="event",
+        cascade="all, delete-orphan",
+        lazy="raise",
     )

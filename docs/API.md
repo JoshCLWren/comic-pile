@@ -328,10 +328,22 @@ written once at roll time and is never rewritten by later queue movement.
 Historical events without a snapshot remain valid, and the field is never
 returned by any API response; it exists for later analysis only.
 
-The payload merges two observational contexts under namespaced keys:
+The payload keeps the reading-effort decision context at the top level and
+stores the versioned selection snapshot under a namespaced key:
 
 ```json
 {
+  "context_version": 1,
+  "selected_candidate": {
+    "thread_id": 4,
+    "issue_id": 123,
+    "issue_number": "5",
+    "effort_minutes": 15.5,
+    "effort_band": "balanced",
+    "effort_source": "observed_thread",
+    "effort_confidence": 0.6,
+    "effort_sample_count": 3
+  },
   "selection": {
     "schema_version": 1,
     "algorithm_version": "legacy-unweighted-v1",
@@ -348,19 +360,6 @@ The payload merges two observational contexts under namespaced keys:
     "session_timezone": null,
     "local_hour": null,
     "daypart": null
-  },
-  "effort": {
-    "context_version": 1,
-    "selected_candidate": {
-      "thread_id": 4,
-      "issue_id": 123,
-      "issue_number": "5",
-      "effort_minutes": 15.5,
-      "effort_band": "balanced",
-      "effort_source": "observed_thread",
-      "effort_confidence": 0.6,
-      "effort_sample_count": 3
-    }
   }
 }
 ```
@@ -374,8 +373,9 @@ Selection context field notes (see
 - Override rolls record `selection_method: "override"`, `selected_result: 0`,
   and `selected_candidate_index: null`, always distinguishing manual picks from
   real draws.
-- `session_timezone`, `local_hour`, and `daypart` are reserved for the session
-  timezone phase and stay `null` until that data actually exists.
+- `session_timezone`, `local_hour`, and `daypart` come from the IANA timezone
+  persisted on the reading session (#1690). They are null when no usable
+  persisted timezone exists; unusable values fail safe to null.
 
 Effort context field notes (see `app/services/reading_effort.py`):
 

@@ -1,11 +1,13 @@
-"""Versioned recommendation-context snapshots persisted on roll events.
+"""Versioned recommendation-context selection snapshots persisted on roll events.
 
-Every new ``roll`` event carries a small, bounded JSON payload describing the
-decision-time context that existed when the roll happened: which algorithm ran,
-how big the die was, which bounded candidate set the selection drew from, and
-where the selected thread stood in the queue at that moment. Later queue
-changes cannot rewrite this history because the snapshot is captured before the
-event commits and is never updated afterward.
+Every new ``roll`` event carries a small, bounded JSON snapshot describing the
+decision-time selection context that existed when the roll happened: which
+algorithm ran, how big the die was, which bounded candidate set the selection
+drew from, and where the selected thread stood in the queue at that moment.
+The snapshot is stored under the ``selection`` key of the event's
+``recommendation_context`` payload, next to the reading-effort decision
+context. Later queue changes cannot rewrite this history because the snapshot
+is captured before the event commits and is never updated afterward.
 
 This module is instrumentation only. It never changes candidate ordering,
 random-selection probability, dice behavior, queue movement, or snooze
@@ -56,14 +58,19 @@ Field contract:
 - ``selected_last_rating`` / ``selected_last_activity_at``: The selected
   thread's last rating and last-activity timestamp exactly as seen at decision
   time. ``last_activity_at`` is serialized as an ISO 8601 UTC string.
-- ``session_timezone``: IANA timezone captured from #1690 when that phase
-  lands; always null until then rather than guessed.
+- ``session_timezone``: IANA timezone persisted on the reading session
+  (#1690) when available; null when the session has none rather than guessed.
 - ``local_hour`` / ``daypart``: Derived only when a usable persisted timezone
   exists. Dayparts: ``night`` (23-4), ``morning`` (5-11), ``afternoon``
   (12-17), ``evening`` (18-22). Unusable timezones fail safe to null.
 
-There is deliberately no effort-estimate key: no such signal exists yet, and
-the contract omits unknown data instead of inventing it.
+There is deliberately no effort-estimate key inside this snapshot: no such
+signal exists in this contract, and unknown data is omitted instead of
+invented. The reading-effort decision context (``context_version`` and
+``selected_candidate`` from :mod:`app.services.reading_effort`) is stored at
+the top level of ``Event.recommendation_context``; this module's snapshot is
+persisted alongside it under the namespaced ``selection`` key so both
+contracts remain independently versioned and validated.
 """
 
 from __future__ import annotations
@@ -188,7 +195,7 @@ def build_recommendation_context(
         selected_last_activity_at: Selected thread's last-activity timestamp at
             decision time.
         session_timezone: Persisted session IANA timezone when available;
-            callers omit it (or pass None) until #1690 provides one.
+            callers pass the persisted session timezone when available.
         captured_at: Instant used for local-time derivation; defaults to now.
 
     Returns:

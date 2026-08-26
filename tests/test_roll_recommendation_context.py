@@ -47,16 +47,20 @@ EXPECTED_ROLL_RESPONSE_KEYS = {
 
 
 def _extract_selection_context(payload: dict[str, object] | None) -> dict[str, object] | None:
-    """Extract the selection context from a merged recommendation context payload.
+    """Extract the selection snapshot from a stored recommendation context.
 
-    The merged payload has the structure:
+    The stored ``Event.recommendation_context`` payload keeps the effort
+    decision context at the top level and adds the versioned selection
+    snapshot under a namespaced key:
+
     {
-        "selection": {...selection context...},
-        "effort": {...effort context...}
+        "context_version": 1,
+        "selected_candidate": {...effort decision context...},
+        "selection": {...selection snapshot...}
     }
 
     Args:
-        payload: The merged recommendation context from Event.recommendation_context.
+        payload: The stored recommendation context from Event.recommendation_context.
 
     Returns:
         The selection context dict, or None if not present.
@@ -127,14 +131,24 @@ async def test_random_roll_persists_versioned_context(
     assert context.selected_last_rating == 3.5
     assert context.selected_last_activity_at == "2026-08-01T15:00:00+00:00"
 
-    # Session timezone arrives with #1690; until then the fields stay null.
+    # Session timezone arrives with #1690; fixtures without one stay null.
     assert context.session_timezone is None
     assert context.local_hour is None
     assert context.daypart is None
 
-    # The snapshot must round-trip as JSON exactly as stored.
+    # The effort decision context keeps its documented top-level contract keys
+    # alongside the namespaced selection snapshot (regression guard for the
+    # reading-effort acceptance suite).
     event = await _latest_roll_event(async_db)
-    assert json.loads(json.dumps(event.recommendation_context)) == event.recommendation_context
+    stored = event.recommendation_context
+    assert isinstance(stored, dict)
+    assert stored.get("context_version") == 1
+    selected_candidate = stored.get("selected_candidate")
+    assert isinstance(selected_candidate, dict)
+    assert selected_candidate.get("thread_id") == body["thread_id"]
+
+    # The snapshot must round-trip as JSON exactly as stored.
+    assert json.loads(json.dumps(stored)) == stored
 
 
 @pytest.mark.asyncio
@@ -186,13 +200,14 @@ async def test_context_candidates_match_bounded_pool_for_large_library(
     assert "Extra Series" not in serialized
     payload = event.recommendation_context
     assert isinstance(payload, dict)
-    # The merged payload has "selection" and "effort" keys; neither should
-    # contain thread titles or heavy metadata.
+    # The stored payload keeps the effort decision context at the top level and
+    # the selection snapshot under "selection"; neither carries heavy metadata.
     selection_payload = payload.get("selection", {})
-    effort_payload = payload.get("effort", {})
+    effort_payload = payload.get("selected_candidate", {})
     for key in ("title", "notes", "description"):
         assert key not in selection_payload
         assert key not in effort_payload
+        assert key not in payload
 
 
 @pytest.mark.asyncio
