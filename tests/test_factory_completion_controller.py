@@ -199,3 +199,65 @@ def test_capacity_report_names_only_executable_candidates():
             "health": "healthy",
         }
     ]
+
+
+def test_catalog_success_makes_peer_capability_slots_executable():
+    """A real model success proves capacity for idle slots sharing its catalog."""
+    comments = [
+        {
+            "author_association": "OWNER",
+            "body": (
+                "Worker: opencode-free-model-factory-39\n"
+                "Source: opencode-free\n"
+                "Model: model-a\n"
+                "Attempt outcome: success\n"
+                "Updated: 2026-08-24T12:00:00Z"
+            ),
+        }
+    ]
+    candidates = [
+        {"worker": "39", "provider": "opencode-free", "model": "model-a"},
+        {"worker": "40", "provider": "opencode-free", "model": "model-b"},
+    ]
+    now = controller.parse_time("2026-08-24T12:01:00Z")
+    assert now is not None
+
+    health = controller.latest_worker_health(
+        comments,
+        candidates=candidates,
+        now_epoch=now,
+    )
+
+    assert controller.worker_is_executable("39", health, now_epoch=now)
+    assert controller.worker_is_executable("40", health, now_epoch=now)
+
+
+def test_catalog_provider_cooling_suppresses_all_peer_slots():
+    """Provider-wide outage evidence removes every shared catalog slot."""
+    comments = [
+        {
+            "author_association": "OWNER",
+            "body": (
+                "Worker: opencode-free-model-factory-39\n"
+                "Source: opencode-free\n"
+                "Model: model-a\n"
+                "Attempt outcome: provider_unavailable\n"
+                "Updated: 2026-08-24T12:00:00Z"
+            ),
+        }
+    ]
+    candidates = [
+        {"worker": "39", "provider": "opencode-free", "model": "model-a"},
+        {"worker": "40", "provider": "opencode-free", "model": "model-b"},
+    ]
+    now = controller.parse_time("2026-08-24T12:01:00Z")
+    assert now is not None
+
+    health = controller.latest_worker_health(
+        comments,
+        candidates=candidates,
+        now_epoch=now,
+    )
+
+    assert controller.worker_health_state("39", health, now_epoch=now) == "cooling"
+    assert controller.worker_health_state("40", health, now_epoch=now) == "cooling"

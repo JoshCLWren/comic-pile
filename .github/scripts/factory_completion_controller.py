@@ -111,15 +111,91 @@ def cooldown_seconds(outcome: str | None) -> int:
     return 0
 
 
+def _catalog_worker_health(
+    comments: Iterable[Mapping[str, Any]],
+    candidates: Iterable[Mapping[str, str]],
+    *,
+    now_epoch: int,
+) -> dict[str, tuple[str, int]]:
+    """Project shared catalog candidate health onto capability worker slots."""
+    scripts = Path(__file__).resolve().parent
+    if str(scripts) not in sys.path:
+        sys.path.insert(0, str(scripts))
+    import factory_candidate_health as candidate_health
+    import factory_provider_candidates as provider_candidates
+
+    rows = tuple(candidates)
+    catalog_providers = {
+        provider
+        for provider, adapter in provider_candidates.ADAPTERS.items()
+        if adapter.mode != "runtime_only"
+    }
+    discovered: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for row in rows:
+        provider = str(row.get("provider") or "")
+        model = str(row.get("model") or "")
+        key = (provider, model)
+        if provider not in catalog_providers or not model or key in seen:
+            continue
+        seen.add(key)
+        discovered.append(
+            {
+                "provider": provider,
+                "model": model,
+                "runtime_model": model,
+                "discovered_by": "configured_policy",
+            }
+        )
+
+    ranked = candidate_health.rank_candidates(
+        discovered,
+        comments,
+        now_epoch=now_epoch,
+    )
+    priority = {
+        "healthy": 0,
+        "degraded": 1,
+        "unknown": 2,
+        "cooling": 3,
+        "unavailable": 4,
+    }
+    provider_states: dict[str, str] = {}
+    for item in ranked:
+        previous = provider_states.get(item.provider)
+        if previous is None or priority[item.health_state] < priority[previous]:
+            provider_states[item.provider] = item.health_state
+
+    state_evidence = {
+        "healthy": ("success", now_epoch),
+        "degraded": (
+            "model_interruption",
+            now_epoch - FAILURE_COOLDOWN_SECONDS - 1,
+        ),
+        "cooling": ("model_interruption", now_epoch),
+        "unavailable": ("model_unavailable", now_epoch),
+    }
+    projected: dict[str, tuple[str, int]] = {}
+    for row in rows:
+        state = provider_states.get(str(row.get("provider") or ""), "unknown")
+        evidence = state_evidence.get(state)
+        if evidence is not None:
+            projected[str(row["worker"])] = evidence
+    return projected
+
+
 def latest_worker_health(
     comments: Iterable[Mapping[str, Any]],
     *,
     trusted: Callable[[Mapping[str, Any]], bool] | None = None,
+    candidates: Iterable[Mapping[str, str]] | None = None,
+    now_epoch: int | None = None,
 ) -> dict[str, tuple[str, int]]:
-    """Return the newest trusted heartbeat outcome for each fixed worker."""
+    """Return worker health, sharing catalog-backed candidate evidence by provider."""
+    comment_rows = tuple(comments)
     latest: dict[str, tuple[str, int]] = {}
     priorities: dict[str, int] = {}
-    for comment in comments:
+    for comment in comment_rows:
         if trusted is not None and not trusted(comment):
             continue
         body = str(comment.get("body") or "")
@@ -135,16 +211,32 @@ def latest_worker_health(
         if updated is None:
             continue
         worker = worker_match.group("worker")
-        priority = 1 if attempt_match else 0
+        priority_value = 1 if attempt_match else 0
         previous = latest.get(worker)
         previous_priority = priorities.get(worker, -1)
-        if previous is None or priority > previous_priority or (
-            priority == previous_priority and updated > previous[1]
+        if previous is None or priority_value > previous_priority or (
+            priority_value == previous_priority and updated > previous[1]
         ):
             latest[worker] = (outcome_match.group("outcome").strip(), updated)
-            priorities[worker] = priority
-    return latest
+            priorities[worker] = priority_value
 
+    if candidates is None:
+        manifest = Path(__file__).resolve().parents[1] / "free-model-factories.tsv"
+        candidates = load_manifest_candidates(manifest)
+    now_epoch = int(time.time()) if now_epoch is None else now_epoch
+    trusted_comments = (
+        tuple(comment for comment in comment_rows if trusted(comment))
+        if trusted is not None
+        else comment_rows
+    )
+    latest.update(
+        _catalog_worker_health(
+            trusted_comments,
+            candidates,
+            now_epoch=now_epoch,
+        )
+    )
+    return latest
 
 def worker_health_state(
     worker: str,
