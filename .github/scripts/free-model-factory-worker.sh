@@ -206,7 +206,7 @@ select_controller_assignment() {
       return 3
     fi
     linked_issue="$(linked_issue_from_branch "$branch")"
-    pr_stage="$(jq -r --argjson pr "$pr" '.[] | select(.number == $pr) | [.labels[].name | select(. == "factory:review" or . == "factory:changes-requested" or . == "factory:conflict" or . == "factory:ci")] | first // empty' <<< "$pr_json")"
+    pr_stage="$(jq -r --argjson pr "$pr" '.[] | select(.number == $pr) | [.labels[].name | select(. == "factory:building" or . == "factory:review" or . == "factory:changes-requested" or . == "factory:conflict" or . == "factory:ci")] | first // empty' <<< "$pr_json")"
     if [[ -z "$pr_stage" ]]; then
       log "controller-leased PR #${pr} has no supported completion stage"
       return 3
