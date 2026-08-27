@@ -75,6 +75,41 @@ unclean_git_state_json() {
 source <(sed '/^ensure_owner_label$/,$d' .github/scripts/free-model-factory-worker-primitives.sh)
 source .github/scripts/factory-semantic-verdict.sh
 
+TERMINAL_OUTCOME_FILE="${RUNNER_TEMP:-/tmp}/factory-discovery-outcome"
+
+record_terminal_outcome() {
+  local outcome="$1" detail="$2"
+  case "$outcome" in
+    success|no_work|work_failure|provider_failure|provider_throttle|model_unavailable|model_policy_violation|environment_failure|control_plane_failure|unknown_failure) ;;
+    *)
+      echo "unsupported terminal factory outcome: ${outcome}" >&2
+      return 2
+      ;;
+  esac
+  detail="${detail//$'\n'/ }"
+  detail="${detail//$'\t'/ }"
+  printf '%s\t%s\n' "$outcome" "$detail" > "$TERMINAL_OUTCOME_FILE"
+}
+
+record_agent_failure_outcome() {
+  local status="$1" log_file="/tmp/opencode-factory-${WORKER}.log"
+  if [[ -f "$log_file" ]] && grep -Eqi '429|too many requests|rate.?limit|quota|throttl|capacity' "$log_file"; then
+    record_terminal_outcome provider_throttle "pinned provider/model session was throttled (agent exit ${status})"
+  elif [[ -f "$log_file" ]] && grep -Eqi 'model[^[:alnum:]]+(not found|unavailable|does not exist)|unknown model|invalid model|HTTP[^0-9]*(404|410)|404 Not Found|410 Gone' "$log_file"; then
+    record_terminal_outcome model_unavailable "pinned model became unavailable during execution (agent exit ${status})"
+  elif [[ -f "$log_file" ]] && grep -Eqi 'model[^\n]*(policy|guard)[^\n]*(blocked|rejected|denied)|model[^\n]*(blocked|rejected|denied)[^\n]*(policy|guard)' "$log_file"; then
+    record_terminal_outcome model_policy_violation "pinned model was rejected by provider/model policy (agent exit ${status})"
+  elif [[ -f "$log_file" ]] && grep -Eqi 'checkout failed|dependency install failed|disk full|no space left|docker daemon|runner environment|tool installation failed' "$log_file"; then
+    record_terminal_outcome environment_failure "worker environment failed during assigned execution (agent exit ${status})"
+  elif (( status == 124 || status == 137 || status == 143 )); then
+    record_terminal_outcome provider_failure "pinned provider/model session timed out or was interrupted after smoke succeeded (agent exit ${status})"
+  elif [[ -f "$log_file" ]] && grep -Eqi 'provider[^\n]*(error|unavailable|failed)|service unavailable|bad gateway|gateway timeout|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset|upstream[^\n]*(error|failed)' "$log_file"; then
+    record_terminal_outcome provider_failure "pinned provider/model execution failed after smoke succeeded (agent exit ${status})"
+  else
+    record_terminal_outcome unknown_failure "agent exited ${status} without enough evidence for a narrower failure class"
+  fi
+}
+
 nvidia_retry_after_seconds() {
   local runtime_model="$1" provider_model request response headers http_code retry_after target now seconds
   [[ "$SOURCE" == 'nvidia' ]] || return 1
@@ -152,7 +187,7 @@ run_agent() {
     mission="Implement the full closure-critical acceptance contract for this issue with code and focused tests. Do not stop at planning or optional polish."
   fi
 
-  prompt="You are external-model Factory ${WORKER} for JoshCLWren/comic-pile. Durable worker ID: ${WORKER_ID}. Source: ${SOURCE}. Requested model or route: ${MODEL}. Runtime selector: ${RUNTIME_MODEL}. Assigned target: ${target}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, docs/CHATGPT_FACTORY_PROMPT.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Follow the canonical product-first factory policy. ${mission} Work only on the assigned target during this agent invocation. Edit the checked-out branch, run focused validation, and use gh/GitHub when needed for review context. Do not commit or push; the wrapper persists changes. Do not switch models, providers, or routes. A provider failure is a result for this lane, not permission to fall back to another paid or unrequested route. Do not enable auto-merge, push main, touch production databases, or alter automation schedules."
+  prompt="You are external-model Factory ${WORKER} for JoshCLWren/comic-pile. Durable worker ID: ${WORKER_ID}. Source: ${SOURCE}. Requested model or route: ${MODEL}. Runtime selector: ${RUNTIME_MODEL}. Assigned target: ${target}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, docs/CHATGPT_FACTORY_PROMPT.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Follow the canonical product-first factory policy. ${mission} Work only on the assigned target during this agent invocation. Edit the checked-out branch, run focused validation, and use gh/GitHub when needed for review context. Do not commit or push; the wrapper persists changes. Do not merge or close the assigned pull request; the trusted wrapper and review controller own the final lifecycle transition after your terminal verdict. Do not switch models, providers, or routes. A provider failure is a result for this lane, not permission to fall back to another paid or unrequested route. Do not enable auto-merge, push main, touch production databases, or alter automation schedules."
 
   set +e
   bash "$TRUSTED_KILO_HELPER" \
@@ -260,6 +295,7 @@ set -e
 
 if (( assignment_status == 1 )); then
   log 'no control-plane assignment is leased to this worker; exiting without repo-wide selection'
+  record_terminal_outcome no_work 'no control-plane assignment was leased to this worker'
   exit 0
 fi
 
@@ -278,6 +314,7 @@ agent_timeout=$((available - 240))
 (( agent_timeout > 3000 )) && agent_timeout=3000
 if (( agent_timeout < 300 )); then
   log 'insufficient remaining budget for assigned work'
+  record_terminal_outcome environment_failure 'insufficient remaining runner budget for assigned work'
   exit 1
 fi
 
@@ -324,11 +361,36 @@ while :; do
   (( agent_timeout >= 300 )) || break
 done
 
+if [[ "$MODE" == 'pr' ]]; then
+  pr_lifecycle="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${NUMBER}" 2>/dev/null || true)"
+  if [[ -n "$pr_lifecycle" ]]; then
+    pr_state="$(jq -r '.state // empty' <<< "$pr_lifecycle")"
+    merged_at="$(jq -r '.merged_at // empty' <<< "$pr_lifecycle")"
+    observed_head="$(jq -r '.head.sha // empty' <<< "$pr_lifecycle")"
+    if [[ -n "$merged_at" ]]; then
+      if [[ "$observed_head" == "$EXPECTED_HEAD" ]]; then
+        log "factory_work_result_merged: PR #${NUMBER} merged at reviewed head ${EXPECTED_HEAD} during worker execution; skipping review controller"
+        record_terminal_outcome success "PR #${NUMBER} merged at the reviewed head during worker execution"
+        exit 0
+      fi
+      log "control_plane_failure: PR #${NUMBER} merged after its reviewed head changed from ${EXPECTED_HEAD} to ${observed_head}"
+      record_terminal_outcome control_plane_failure "PR #${NUMBER} merged after reviewed head changed"
+      exit 2
+    fi
+    if [[ "$pr_state" != 'open' ]]; then
+      log "control_plane_failure: PR #${NUMBER} closed before trusted review-controller handoff"
+      record_terminal_outcome control_plane_failure "PR #${NUMBER} closed before trusted review-controller handoff"
+      exit 2
+    fi
+  fi
+fi
+
 if [[ "$MODE" == 'issue' ]]; then
   if pr="$(persist_issue_pr "$NUMBER" "$BRANCH")"; then
     if ! record_pr_provenance "$pr" "$NUMBER"; then
       log "PR #${pr} could not prove the issue assignment survived through persistence; closing it fail-closed"
       gh pr close "$pr" --comment 'Closed because durable factory provenance could not be established before handoff.' >/dev/null 2>&1 || true
+      record_terminal_outcome control_plane_failure "PR #${pr} could not prove durable issue assignment provenance"
       log "assignment complete; remaining budget $(remaining)s"
       exit 0
     fi
@@ -336,12 +398,19 @@ if [[ "$MODE" == 'issue' ]]; then
     log "opened/updated PR #${pr} for issue #${NUMBER}"
     release_target "$NUMBER" 'factory:review' 'pr-opened-handoff' 'issue'
     release_target "$pr" 'factory:review' 'pr-opened-handoff' 'pr'
+    record_terminal_outcome success "issue #${NUMBER} produced PR #${pr} and handed it to review"
   elif (( transient_failure == 1 )); then
     log "issue #${NUMBER} produced no changes because the model was interrupted; releasing the lease"
     release_target "$NUMBER" 'factory:building' 'transient-model-interruption' 'issue'
+    record_agent_failure_outcome "$agent_status"
+  elif (( agent_status != 0 )); then
+    log "issue #${NUMBER} agent failed without persisted changes; releasing the lease"
+    release_target "$NUMBER" 'factory:building' 'agent-failed-handoff' 'issue'
+    record_agent_failure_outcome "$agent_status"
   else
     log "issue #${NUMBER} produced no persisted change; releasing the lease for another worker/model attempt"
     release_target "$NUMBER" 'factory:building' 'no-persisted-change-handoff' 'issue'
+    record_terminal_outcome no_work "issue #${NUMBER} produced no persisted change"
   fi
   log "assignment complete; remaining budget $(remaining)s"
   exit 0
@@ -350,18 +419,21 @@ fi
 if persist_pr_changes "$NUMBER" "$BRANCH"; then
   log "pushed repairs to PR #${NUMBER}; handing it to the merge controller for exact-head review"
   release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'repairs-pushed-handoff'
+  record_terminal_outcome success "PR #${NUMBER} repairs were persisted and handed to review"
   log "assignment complete; remaining budget $(remaining)s"
   exit 0
 fi
 
 if (( transient_failure == 1 )); then
   release_pr_and_issue "$NUMBER" "$BRANCH" "$ASSIGNED_PR_STAGE" 'transient-model-interruption'
+  record_agent_failure_outcome "$agent_status"
   log "assignment complete; remaining budget $(remaining)s"
   exit 0
 fi
 
 if (( agent_status != 0 )); then
   release_pr_and_issue "$NUMBER" "$BRANCH" "$ASSIGNED_PR_STAGE" 'review-agent-failed'
+  record_agent_failure_outcome "$agent_status"
   log "assignment complete; remaining budget $(remaining)s"
   exit 0
 fi
@@ -372,9 +444,11 @@ if [[ "$ASSIGNED_PR_STAGE" != 'factory:review' ]]; then
   if [[ "$repair_verdict" == 'approve' ]]; then
     log "repair attempt for PR #${NUMBER} found no persisted change and reports ready; handing off for independent review"
     release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'repair-no-change-ready-handoff'
+    record_terminal_outcome no_work "repair attempt for PR #${NUMBER} required no persisted change and handed off for review"
   else
     log "repair attempt for PR #${NUMBER} produced no persisted change; preserving ${ASSIGNED_PR_STAGE} without invoking the review controller"
     release_pr_and_issue "$NUMBER" "$BRANCH" "$ASSIGNED_PR_STAGE" 'repair-no-persisted-change-handoff'
+    record_terminal_outcome no_work "repair attempt for PR #${NUMBER} produced no persisted change"
   fi
   log "assignment complete; remaining budget $(remaining)s"
   exit 0
@@ -391,12 +465,14 @@ current_head="$(gh pr view "$NUMBER" --json headRefOid --jq .headRefOid 2>/dev/n
 if [[ "$current_head" != "$EXPECTED_HEAD" ]] || ! current_owner_is_self "$NUMBER"; then
   log "${FACTORY_SEMANTIC_STATUS_HEAD_CHANGED}: PR #${NUMBER} changed or lease was revoked during review"
   release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'semantic-review-head-changed'
+  record_terminal_outcome control_plane_failure "PR #${NUMBER} head or lease changed during semantic review"
   exit 0
 fi
 
 if factory_review_has_conflicting_terminal_markers "$review_log"; then
   log "${FACTORY_SEMANTIC_STATUS_CONFLICTING}: PR #${NUMBER} emitted contradictory semantic markers"
   release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'conflicting-semantic-verdict'
+  record_terminal_outcome work_failure "PR #${NUMBER} semantic review emitted contradictory terminal markers"
   exit 0
 fi
 
@@ -422,6 +498,7 @@ if [[ -z "$verdict" ]] && [[ "$SOURCE" != 'kilo-auto' ]] && factory_review_is_su
     if [[ "$current_head" != "$EXPECTED_HEAD" ]] || ! current_owner_is_self "$NUMBER"; then
       log "${FACTORY_SEMANTIC_STATUS_HEAD_CHANGED}: PR #${NUMBER} changed or lease was revoked during recovery"
       release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'semantic-review-head-changed'
+      record_terminal_outcome control_plane_failure "PR #${NUMBER} head or lease changed during semantic verdict recovery"
       exit 0
     fi
 
@@ -466,6 +543,7 @@ if [[ -z "$verdict" ]]; then
   } > "$diagnostic"
   gh issue comment "$NUMBER" --body-file "$diagnostic" >/dev/null 2>&1 || true
   release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' "$release_reason"
+  record_terminal_outcome work_failure "PR #${NUMBER} semantic review did not produce an authoritative terminal verdict"
   log "assignment complete; remaining budget $(remaining)s"
   exit 0
 fi
@@ -476,11 +554,19 @@ case "$verdict" in
   *) semantic_status="$FACTORY_SEMANTIC_STATUS_MISSING" ;;
 esac
 log "${semantic_status}: submitting ${verdict} semantic verdict for PR #${NUMBER} at reviewed head ${EXPECTED_HEAD}"
+set +e
 python3 "$TRUSTED_REVIEW_CONTROLLER" review \
   --worker "$WORKER" \
   --pr "$NUMBER" \
   --reviewed-head "$EXPECTED_HEAD" \
   --verdict "$verdict" \
   --review-log "$sanitized_review_log"
+controller_status=$?
+set -e
+if (( controller_status != 0 )); then
+  record_terminal_outcome control_plane_failure "trusted review controller failed for PR #${NUMBER} with exit status ${controller_status}"
+  exit "$controller_status"
+fi
+record_terminal_outcome success "PR #${NUMBER} semantic verdict completed through the trusted review controller"
 
 log "assignment complete; remaining budget $(remaining)s"
