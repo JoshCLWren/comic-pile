@@ -21,17 +21,27 @@ def test_completion_batch_size_scales_with_backlog():
     assert controller.completion_batch_size(80) == 12
 
 
-def test_health_cooldowns_distinguish_capacity_failures():
+def test_health_cooldowns_distinguish_canonical_capacity_failures():
     assert controller.cooldown_seconds("success") == 0
+    assert controller.cooldown_seconds("no_work") == 0
+    assert controller.cooldown_seconds("work_failure") == 0
+    assert controller.cooldown_seconds("provider_failure") == 15 * 60
+    assert controller.cooldown_seconds("provider_throttle") == 30 * 60
+    assert controller.cooldown_seconds("model_unavailable") == 6 * 60 * 60
+    assert controller.cooldown_seconds("model_policy_violation") == 6 * 60 * 60
+    assert controller.cooldown_seconds("environment_failure") == 15 * 60
+    assert controller.cooldown_seconds("control_plane_failure") == 15 * 60
+    assert controller.cooldown_seconds("unknown_failure") == 15 * 60
+
+
+def test_health_cooldowns_keep_legacy_records_readable():
     assert controller.cooldown_seconds("failure") == 15 * 60
     assert controller.cooldown_seconds("RATE LIMITED") == 30 * 60
     assert controller.cooldown_seconds("MODEL MISSING") == 6 * 60 * 60
-    assert controller.cooldown_seconds("model_unavailable") == 6 * 60 * 60
     assert controller.cooldown_seconds("provider_unavailable") == 30 * 60
     assert controller.cooldown_seconds("model_interruption") == 15 * 60
     assert controller.cooldown_seconds("worker_environment_failure") == 15 * 60
     assert controller.cooldown_seconds("no_change") == 0
-    assert controller.cooldown_seconds("work_failure") == 0
     assert controller.cooldown_seconds("policy_blocked") == 0
 
 
@@ -75,7 +85,7 @@ def test_newest_classified_attempt_replaces_older_attempt():
         {
             "body": (
                 "Worker: opencode-free-model-factory-41\n"
-                "Attempt outcome: provider_unavailable\n"
+                "Attempt outcome: provider_failure\n"
                 "Updated: 2026-08-24T11:00:00Z"
             )
         },
@@ -97,9 +107,9 @@ def test_completion_selection_skips_owned_and_cooling_workers():
     workers = [str(worker) for worker in range(6, 30)]
     health = {
         **dict.fromkeys(workers, ("success", now - 60)),
-        "6": ("failure", now - 60),
-        "10": ("RATE LIMITED", now - 60),
-        "14": ("MODEL MISSING", now - 60),
+        "6": ("provider_failure", now - 60),
+        "10": ("provider_throttle", now - 60),
+        "14": ("model_unavailable", now - 60),
     }
     selected = controller.select_completion_workers(
         workers,
@@ -149,7 +159,15 @@ def test_health_state_distinguishes_unavailable_cooling_and_recovery():
     assert (
         controller.worker_health_state(
             "41",
-            {"41": ("provider_unavailable", now - 60)},
+            {"41": ("model_policy_violation", now - 60)},
+            now_epoch=now,
+        )
+        == "unavailable"
+    )
+    assert (
+        controller.worker_health_state(
+            "41",
+            {"41": ("provider_throttle", now - 60)},
             now_epoch=now,
         )
         == "cooling"
@@ -157,7 +175,7 @@ def test_health_state_distinguishes_unavailable_cooling_and_recovery():
     assert (
         controller.worker_health_state(
             "41",
-            {"41": ("provider_unavailable", now - 3600)},
+            {"41": ("provider_failure", now - 3600)},
             now_epoch=now,
         )
         == "degraded"
@@ -170,6 +188,12 @@ def test_health_state_distinguishes_unavailable_cooling_and_recovery():
         )
         == "healthy"
     )
+
+
+def test_no_work_keeps_worker_executable():
+    assert controller.worker_health_state(
+        "41", {"41": ("no_work", 100)}, now_epoch=100
+    ) == "healthy"
 
 
 def test_capacity_report_names_only_executable_candidates():
@@ -266,7 +290,38 @@ def test_catalog_success_makes_peer_capability_slots_executable():
 
 
 def test_catalog_provider_cooling_suppresses_all_peer_slots():
-    """Provider-wide outage evidence removes every shared catalog slot."""
+    """Canonical provider-wide evidence removes every shared catalog slot."""
+    comments = [
+        {
+            "author_association": "OWNER",
+            "body": (
+                "Worker: opencode-free-model-factory-39\n"
+                "Source: opencode-free\n"
+                "Model: model-a\n"
+                "Attempt outcome: provider_failure\n"
+                "Updated: 2026-08-24T12:00:00Z"
+            ),
+        }
+    ]
+    candidates = [
+        {"worker": "39", "provider": "opencode-free", "model": "model-a"},
+        {"worker": "40", "provider": "opencode-free", "model": "model-b"},
+    ]
+    now = controller.parse_time("2026-08-24T12:01:00Z")
+    assert now is not None
+
+    health = controller.latest_worker_health(
+        comments,
+        candidates=candidates,
+        now_epoch=now,
+    )
+
+    assert controller.worker_health_state("39", health, now_epoch=now) == "cooling"
+    assert controller.worker_health_state("40", health, now_epoch=now) == "cooling"
+
+
+def test_legacy_catalog_provider_outage_still_suppresses_peer_slots():
+    """Historical provider_unavailable evidence remains actionable."""
     comments = [
         {
             "author_association": "OWNER",
