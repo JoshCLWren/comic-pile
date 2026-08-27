@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import axios from 'axios'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   ContinuityIssueRangeSelector,
   ContinuityThreadSelector,
@@ -341,6 +341,7 @@ export default function CrossoversPage() {
                       <span className="text-sm text-stone-500">{group.memberships.length} {group.memberships.length === 1 ? 'member' : 'members'}</span>
                     </button>
                     <div className="flex gap-2">
+                      <Link to={`/crossovers/${group.id}`} className="rounded-lg bg-amber-500 px-3 py-1 text-sm font-bold text-stone-950">View</Link>
                       <button type="button" onClick={() => { setEditingId(group.id); setEditingName(group.name) }} disabled={hasPendingMutation}>Rename</button>
                       <button type="button" onClick={() => void deleteGroup(group)} disabled={hasPendingMutation}>Delete</button>
                     </div>
