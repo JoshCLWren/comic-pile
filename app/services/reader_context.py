@@ -34,7 +34,6 @@ from app.schemas.reader_context import (
     ReaderContextSeries,
 )
 from app.services.ownership import get_owned_issue_or_404
-from comic_pile.dependencies import build_blocking_explanation
 
 COMICVINE_PROVIDER = "comicvine"
 MAX_RECENT_RATINGS = 5
@@ -545,13 +544,6 @@ def _build_local_issues(
     return issues
 
 
-def _safe_int(value: str | None) -> int | None:
-    try:
-        return int(value) if value is not None else None
-    except (TypeError, ValueError):
-        return None
-
-
 def _build_edge_explanation(
     kind: Literal["dependency", "continuity"],
     *,
@@ -562,7 +554,6 @@ def _build_edge_explanation(
     current_issue_id: int | None = None,
     source_issue_id: int | None = None,
     target_issue_id: int | None = None,
-    target_label: str | None = None,
     target_issue_number: str | None = None,
     satisfaction: str | None = None,
 ) -> str:
@@ -772,7 +763,6 @@ async def _local_edges(
                     current_issue_id=current_issue_id,
                     source_issue_id=dependency.source_issue_id,
                     target_issue_id=dependency.target_issue_id,
-                    target_label=_human_label(target_label),
                     target_issue_number=target_number,
                 ),
             )
@@ -810,7 +800,6 @@ async def _local_edges(
                     current_issue_id=current_issue_id,
                     source_issue_id=rule.source_id,
                     target_issue_id=rule.target_id,
-                    target_label=_human_label(target_label),
                     target_issue_number=target_number,
                     satisfaction=rule.satisfaction_type,
                 ),
