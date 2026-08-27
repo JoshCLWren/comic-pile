@@ -29,13 +29,33 @@ OUTCOME_RE = re.compile(
 UPDATED_RE = re.compile(r"(?m)^Updated:\s*(?P<updated>\S+)\s*$")
 HEALTHY_OUTCOMES = {
     "success",
+    "no_work",
     "work_failure",
+    # Historical aliases retained while durable records age out.
     "no_change",
     "policy_blocked",
 }
 IGNORED_MODEL_OUTCOMES = {
     "control_plane_failure",
+    "environment_failure",
+    # Historical alias.
     "worker_environment_failure",
+}
+PROVIDER_FAILURE_OUTCOMES = {
+    "provider_failure",
+    "provider_throttle",
+    # Historical aliases.
+    "provider_unavailable",
+    "provider_throttled",
+}
+PERMANENT_MODEL_OUTCOMES = {
+    "model_unavailable",
+    "model_policy_violation",
+}
+TRANSIENT_MODEL_OUTCOMES = {
+    "unknown_failure",
+    # Historical alias. New classifiers emit provider_failure instead.
+    "model_interruption",
 }
 
 
@@ -137,9 +157,14 @@ def _provider_state(
     if not relevant:
         return "unknown"
     newest = max(relevant, key=lambda item: item.updated)
-    if newest.outcome != "provider_unavailable":
+    if newest.outcome not in PROVIDER_FAILURE_OUTCOMES:
         return "healthy"
-    if now_epoch < newest.updated + RATE_LIMIT_COOLDOWN_SECONDS:
+    cooldown = (
+        RATE_LIMIT_COOLDOWN_SECONDS
+        if newest.outcome in {"provider_throttle", "provider_unavailable", "provider_throttled"}
+        else FAILURE_COOLDOWN_SECONDS
+    )
+    if now_epoch < newest.updated + cooldown:
         return "cooling"
     return "degraded"
 
@@ -157,15 +182,15 @@ def _model_state(
         return "unknown"
     if item.outcome in HEALTHY_OUTCOMES:
         return "healthy"
-    if item.outcome == "model_unavailable":
+    if item.outcome in PERMANENT_MODEL_OUTCOMES:
         return "unavailable"
     if item.outcome in IGNORED_MODEL_OUTCOMES:
         return "unknown"
-    if item.outcome in {"model_interruption", "unknown_failure"}:
+    if item.outcome in TRANSIENT_MODEL_OUTCOMES:
         if now_epoch < item.updated + FAILURE_COOLDOWN_SECONDS:
             return "cooling"
         return "degraded"
-    if item.outcome == "provider_unavailable":
+    if item.outcome in PROVIDER_FAILURE_OUTCOMES:
         return "unknown"
     return "unknown"
 
@@ -270,20 +295,29 @@ def select_candidate(
         if item is not None
     }
     if provider_cooling:
-        failure = "provider_unavailable"
-        detail = "provider-wide evidence is cooling all discovered candidates"
+        if "provider_throttle" in cooling_outcomes or "provider_throttled" in cooling_outcomes:
+            failure = "provider_throttle"
+            detail = "provider throttle evidence is cooling all discovered candidates"
+        else:
+            failure = "provider_failure"
+            detail = "provider failure evidence is cooling all discovered candidates"
     elif "unknown_failure" in cooling_outcomes:
         failure = "unknown_failure"
         detail = "unknown candidate failures are still cooling"
     elif "model_interruption" in cooling_outcomes:
-        failure = "model_interruption"
-        detail = "transient model interruptions are still cooling"
+        failure = "provider_failure"
+        detail = "legacy transient interruption evidence is still cooling"
     elif "cooling" in states:
         failure = "unknown_failure"
         detail = "all discovered candidates are cooling without safe attribution"
     elif states == {"unavailable"}:
-        failure = "model_unavailable"
-        detail = "all discovered candidates have permanent unavailable evidence"
+        model_policy_only = bool(ranked) and all(
+            (evidence.get((candidate.provider, candidate.model)) or AttemptEvidence("", "", "", 0)).outcome
+            == "model_policy_violation"
+            for candidate in ranked
+        )
+        failure = "model_policy_violation" if model_policy_only else "model_unavailable"
+        detail = "all discovered candidates have permanent model-scoped evidence"
     else:
         failure = "unknown_failure"
         detail = "no discovered candidate has executable health"

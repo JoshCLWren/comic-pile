@@ -11,6 +11,21 @@ import unittest
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+CANONICAL_OUTCOME_CLASSES = frozenset(
+    {
+        "success",
+        "no_work",
+        "work_failure",
+        "provider_failure",
+        "provider_throttle",
+        "model_unavailable",
+        "model_policy_violation",
+        "environment_failure",
+        "control_plane_failure",
+        "unknown_failure",
+    }
+)
+
 LOCK_RE = re.compile(
     r"Factory (?P<worker>\d+) locked: source=(?P<source>\S+) model=(?P<model>\S+) "
     r"runtime=(?P<runtime>\S+) minute=:(?P<minute>\d+) scheduler=(?P<scheduler>\S+) "
@@ -39,10 +54,19 @@ PROVIDER_RE = re.compile(
     r"econnreset|connection reset|model probe failed|failed the opencode compatibility probe",
     re.I,
 )
-
 MODEL_INTERRUPTION_RE = re.compile(
     r"stream (?:interrupted|aborted|closed)|inference abort(?:ed)?|"
     r"unexpected end of (?:stream|input)|incomplete (?:chunked read|response)",
+    re.I,
+)
+MODEL_POLICY_RE = re.compile(
+    r"content policy|model policy|safety policy|policy[_ -]?violation|"
+    r"(?:model|provider) .* rejected .* policy|not allowed .* policy",
+    re.I,
+)
+TRUSTED_GUARD_RE = re.compile(
+    r"(?:trusted )?(?:policy|guard) (?:blocked|rejected|denied)|"
+    r"(?:blocked|rejected|denied) by (?:trusted )?(?:policy|guard)",
     re.I,
 )
 CONTROL_PLANE_RE = re.compile(
@@ -59,11 +83,6 @@ WORK_FAILURE_RE = re.compile(
 ENVIRONMENT_RE = re.compile(
     r"checkout failed|failed to (?:checkout|install)|no space left on device|"
     r"docker: error response|(?:git|runner|tool installation) (?:failed|failure)",
-    re.I,
-)
-POLICY_BLOCKED_RE = re.compile(
-    r"(?:trusted )?(?:policy|guard) (?:blocked|rejected|denied)|"
-    r"(?:blocked|rejected|denied) by (?:trusted )?(?:policy|guard)",
     re.I,
 )
 NO_CHANGE_RE = re.compile(
@@ -157,12 +176,12 @@ def classify(log: str) -> Result:
             detail="exact OpenCode model proof succeeded and useful work was persisted",
         )
 
-    if POLICY_BLOCKED_RE.search(log):
+    if MODEL_POLICY_RE.search(log):
         return Result(
             **common,
-            outcome="POLICY BLOCKED",
-            outcome_class="policy_blocked",
-            detail="a trusted policy or guard intentionally rejected the action",
+            outcome="MODEL POLICY VIOLATION",
+            outcome_class="model_policy_violation",
+            detail="explicit provider/model policy evidence rejected this model invocation",
         )
 
     if CONTROL_PLANE_RE.search(log):
@@ -173,66 +192,81 @@ def classify(log: str) -> Result:
             detail="factory controller, dispatcher, lease, or lifecycle execution failed",
         )
 
-    if WORK_FAILURE_RE.search(log):
+    if WORK_FAILURE_RE.search(log) or TRUSTED_GUARD_RE.search(log):
         return Result(
             **common,
             outcome="WORK FAILURE",
             outcome_class="work_failure",
-            detail="code validation or actionable review findings require additional work",
+            detail="code validation, review findings, or a trusted work guard requires additional work",
         )
 
     if NO_CHANGE_RE.search(log) and target["number"]:
         return Result(
             **common,
-            outcome="NO CHANGE",
-            outcome_class="no_change",
+            outcome="NO WORK",
+            outcome_class="no_work",
             detail="the selected target received no useful persisted change",
-        )
-
-    if MODEL_INTERRUPTION_RE.search(log):
-        return Result(
-            **common,
-            outcome="MODEL INTERRUPTION",
-            outcome_class="model_interruption",
-            detail="model invocation started but its inference or response stream was interrupted",
         )
 
     if ENVIRONMENT_RE.search(log):
         return Result(
             **common,
-            outcome="NOT YET PROVEN" if not exact_proven else "WORKER ENVIRONMENT FAILURE",
-            outcome_class="worker_environment_failure",
+            outcome="NOT YET PROVEN" if not exact_proven else "ENVIRONMENT FAILURE",
+            outcome_class="environment_failure",
             detail="worker checkout, tooling, runner, or execution environment failed",
         )
 
     if RATE_LIMIT_RE.search(log):
         return Result(
             **common,
-            outcome="RATE LIMITED",
-            outcome_class="provider_unavailable",
-            detail="runtime evidence contains a provider rate-limit or capacity response",
+            outcome="PROVIDER THROTTLE",
+            outcome_class="provider_throttle",
+            detail="runtime evidence contains a provider rate-limit, quota, or capacity response",
         )
 
-    if TIMEOUT_RE.search(log) or CANCEL_RE.search(log):
+    if CANCEL_RE.search(log):
         return Result(
             **common,
-            outcome="TIMEOUT",
-            outcome_class="model_interruption" if exact_proven else "unknown_failure",
-            detail="the pinned-model run was cancelled or exceeded its runtime lease",
+            outcome="CONTROL PLANE FAILURE",
+            outcome_class="control_plane_failure",
+            detail="the factory job was cancelled before useful persistence",
+        )
+
+    if MODEL_INTERRUPTION_RE.search(log) or (TIMEOUT_RE.search(log) and exact_proven):
+        return Result(
+            **common,
+            outcome="PROVIDER FAILURE",
+            outcome_class="provider_failure",
+            detail="the model invocation started but its provider response was interrupted or timed out",
+        )
+
+    if TIMEOUT_RE.search(log):
+        return Result(
+            **common,
+            outcome="NOT YET PROVEN",
+            outcome_class="unknown_failure",
+            detail="execution timed out before exact model proof",
         )
 
     if exact_proven:
-        if PROVIDER_RE.search(log) or PROCESS_FAILURE_RE.search(log):
+        if PROVIDER_RE.search(log):
             return Result(
                 **common,
                 outcome="PROVIDER FAILURE",
-                outcome_class="provider_unavailable" if PROVIDER_RE.search(log) else "unknown_failure",
-                detail="the model proved itself, then the worker/provider runtime failed before useful persistence",
+                outcome_class="provider_failure",
+                detail="the model proved itself, then provider/runtime evidence failed before useful persistence",
+            )
+        if PROCESS_FAILURE_RE.search(log):
+            return Result(
+                **common,
+                outcome="UNKNOWN FAILURE",
+                outcome_class="unknown_failure",
+                detail="the model proved itself, then the worker exited without causal failure evidence",
             )
         return Result(
             **common,
             outcome="HEALTHY / IDLE",
-            outcome_class="no_change" if target["number"] else "success",
+            outcome_class="no_work",
             detail="exact OpenCode model proof succeeded but no useful work was persisted",
         )
 
@@ -241,7 +275,7 @@ def classify(log: str) -> Result:
         return Result(
             **common,
             outcome="PROVIDER FAILURE",
-            outcome_class="provider_unavailable" if PROVIDER_RE.search(log) else "unknown_failure",
+            outcome_class="provider_failure",
             detail="the exact OpenCode model invocation ran but did not return the proof token",
         )
 
@@ -269,6 +303,10 @@ class ClassifierTests(unittest.TestCase):
         "runtime=omniroute/oc/big-pickle minute=:15 scheduler=slot-15 configured=true\n"
     )
 
+    def assert_canonical(self, result: Result) -> None:
+        """Assert one emitted class belongs to the durable factory contract."""
+        self.assertIn(result.outcome_class, CANONICAL_OUTCOME_CLASSES)
+
     def test_productive(self) -> None:
         """Productive runs with proof token and persisted work are healthy."""
         result = classify(
@@ -282,19 +320,17 @@ class ClassifierTests(unittest.TestCase):
         self.assertTrue(result.persisted_work)
         self.assertEqual((result.selected_kind, result.selected_number), ("issue", "928"))
 
-    def test_idle(self) -> None:
-        """Proof without persisted work is classified as healthy idle."""
-        self.assertEqual(
-            classify(self.BASE + "FIXED_MODEL_OPENCODE_OK\nno selectable ordinary target\n").outcome,
-            "HEALTHY / IDLE",
-        )
+    def test_idle_is_no_work(self) -> None:
+        """Proof without selected or persisted work is canonical no_work."""
+        result = classify(self.BASE + "FIXED_MODEL_OPENCODE_OK\nno selectable ordinary target\n")
+        self.assertEqual(result.outcome, "HEALTHY / IDLE")
+        self.assertEqual(result.outcome_class, "no_work")
 
-    def test_rate_limited(self) -> None:
-        """Provider rate-limit responses map to RATE LIMITED."""
-        self.assertEqual(
-            classify(self.BASE + "ComicPile fixed-model smoke\nError: Too Many Requests 429\n").outcome,
-            "RATE LIMITED",
-        )
+    def test_rate_limited_is_provider_throttle(self) -> None:
+        """Provider rate-limit responses map to canonical provider_throttle."""
+        result = classify(self.BASE + "ComicPile fixed-model smoke\nError: Too Many Requests 429\n")
+        self.assertEqual(result.outcome, "PROVIDER THROTTLE")
+        self.assertEqual(result.outcome_class, "provider_throttle")
 
     def test_model_missing(self) -> None:
         """Missing pinned model exposure maps to MODEL MISSING."""
@@ -316,70 +352,78 @@ class ClassifierTests(unittest.TestCase):
         )
 
     def test_explicit_http_model_retirement_is_unavailable(self) -> None:
-        """HTTP 404 and 410 permanently identify an unavailable model."""
+        """HTTP 404 and 410 permanently identify an unavailable model only."""
         for response in ("HTTP 404", "HTTP status: 410", "410 Gone", "404 Not Found"):
             with self.subTest(response=response):
-                result = classify(self.BASE + f"model invocation failed: {response}\\n")
+                result = classify(self.BASE + f"model invocation failed: {response}\n")
                 self.assertEqual(result.outcome, "MODEL MISSING")
                 self.assertEqual(result.outcome_class, "model_unavailable")
 
-    def test_model_stream_interruption_is_distinct(self) -> None:
-        """Interrupted model responses do not become provider-wide failures."""
-        result = classify(self.BASE + "FIXED_MODEL_OPENCODE_OK\\nstream interrupted\\n")
-        self.assertEqual(result.outcome_class, "model_interruption")
+    def test_model_stream_interruption_is_provider_failure(self) -> None:
+        """Interrupted provider responses use the canonical transient provider failure."""
+        result = classify(self.BASE + "FIXED_MODEL_OPENCODE_OK\nstream interrupted\n")
+        self.assertEqual(result.outcome_class, "provider_failure")
 
     def test_control_plane_failure_is_distinct(self) -> None:
         """Controller lifecycle exceptions are not attributed to the model."""
-        result = classify(self.BASE + "FIXED_MODEL_OPENCODE_OK\\nlifecycle exception\\n")
+        result = classify(self.BASE + "FIXED_MODEL_OPENCODE_OK\nlifecycle exception\n")
         self.assertEqual(result.outcome_class, "control_plane_failure")
 
     def test_assignment_read_failure_is_control_plane(self) -> None:
         """Explicit controller assignment failures do not poison model health."""
         result = classify(
             self.BASE
-            + "FIXED_MODEL_OPENCODE_OK\\n"
-            + "released pr #1897 (controller-assignment-read-failed)\\n"
+            + "FIXED_MODEL_OPENCODE_OK\n"
+            + "released pr #1897 (controller-assignment-read-failed)\n"
         )
         self.assertEqual(result.outcome_class, "control_plane_failure")
 
     def test_work_failure_is_distinct(self) -> None:
         """Genuine failing tests remain repair work."""
-        result = classify(self.BASE + "FIXED_MODEL_OPENCODE_OK\\ntests failed\\n")
+        result = classify(self.BASE + "FIXED_MODEL_OPENCODE_OK\ntests failed\n")
         self.assertEqual(result.outcome_class, "work_failure")
 
-    def test_no_change_repair_is_distinct(self) -> None:
-        """Selected repairs without a diff retain their own outcome."""
+    def test_no_change_repair_is_no_work(self) -> None:
+        """Selected repairs without a diff use canonical no_work."""
         result = classify(
             self.BASE
-            + "FIXED_MODEL_OPENCODE_OK\\nchecked out pr #123 on branch\\nno changes\\n"
+            + "FIXED_MODEL_OPENCODE_OK\nchecked out pr #123 on branch\nno changes\n"
         )
-        self.assertEqual(result.outcome_class, "no_change")
+        self.assertEqual(result.outcome_class, "no_work")
 
     def test_unknown_failure_fails_closed(self) -> None:
-        """Unexplained process failures never become successful provider executions."""
+        """Unexplained process failures never become provider failures."""
         result = classify(
-            self.BASE + "FIXED_MODEL_OPENCODE_OK\\nProcess completed with exit code 1\\n"
+            self.BASE + "FIXED_MODEL_OPENCODE_OK\nProcess completed with exit code 1\n"
         )
         self.assertEqual(result.outcome_class, "unknown_failure")
 
     def test_environment_failure_is_distinct(self) -> None:
         """Runner and checkout failures do not poison model health."""
-        result = classify(self.BASE + "checkout failed\\n")
-        self.assertEqual(result.outcome_class, "worker_environment_failure")
+        result = classify(self.BASE + "checkout failed\n")
+        self.assertEqual(result.outcome_class, "environment_failure")
 
-    def test_policy_blocked_is_distinct(self) -> None:
-        """Trusted guard rejections remain intentional policy decisions."""
-        result = classify(self.BASE + "trusted guard rejected unsafe repair\\n")
-        self.assertEqual(result.outcome_class, "policy_blocked")
+    def test_trusted_guard_is_work_scoped(self) -> None:
+        """Internal work guards do not permanently poison a model."""
+        result = classify(self.BASE + "trusted guard rejected unsafe repair\n")
+        self.assertEqual(result.outcome_class, "work_failure")
 
-    def test_timeout(self) -> None:
-        """Exit code 124 and related signals map to TIMEOUT."""
-        self.assertEqual(
-            classify(
-                self.BASE + "ComicPile fixed-model smoke\nProcess completed with exit code 124\n"
-            ).outcome,
-            "TIMEOUT",
+    def test_explicit_model_policy_violation_is_model_scoped(self) -> None:
+        """Explicit provider/model policy evidence uses the model-scoped class."""
+        result = classify(self.BASE + "provider rejected request: content policy violation\n")
+        self.assertEqual(result.outcome_class, "model_policy_violation")
+
+    def test_timeout_after_proof_is_provider_failure(self) -> None:
+        """A provider timeout after proof is a canonical provider failure."""
+        result = classify(
+            self.BASE + "FIXED_MODEL_OPENCODE_OK\nProcess completed with exit code 124\n"
         )
+        self.assertEqual(result.outcome_class, "provider_failure")
+
+    def test_cancellation_is_control_plane_failure(self) -> None:
+        """Job cancellation is control-plane evidence, not provider health evidence."""
+        result = classify(self.BASE + "FIXED_MODEL_OPENCODE_OK\nThe operation was canceled.\n")
+        self.assertEqual(result.outcome_class, "control_plane_failure")
 
     def test_unconfigured(self) -> None:
         """Unconfigured lanes never invoke the model and stay unproven."""
@@ -387,38 +431,41 @@ class ClassifierTests(unittest.TestCase):
             "Factory 6 locked: source=nvidia model=z-ai/glm-5.2 "
             "runtime=nvidia/z-ai/glm-5.2 minute=:00 scheduler=slot-00 configured=false\n"
         )
-        self.assertEqual(classify(log).outcome, "NOT YET PROVEN")
+        result = classify(log)
+        self.assertEqual(result.outcome, "NOT YET PROVEN")
+        self.assert_canonical(result)
 
     def test_omniroute_setup_failure_is_unproven(self) -> None:
         """OmniRoute setup failures before proof remain NOT YET PROVEN."""
-        self.assertEqual(
-            classify(self.BASE + "docker: Error response from daemon\n").outcome,
-            "NOT YET PROVEN",
-        )
+        result = classify(self.BASE + "docker: Error response from daemon\n")
+        self.assertEqual(result.outcome, "NOT YET PROVEN")
+        self.assertEqual(result.outcome_class, "environment_failure")
 
     def test_failed_exact_smoke_is_provider_failure(self) -> None:
         """Smoke that reaches the provider without the proof token is a provider failure."""
-        self.assertEqual(
-            classify(
-                self.BASE
-                + "Smoke exact pinned model through OpenCode\nError: unexpected provider response\n"
-            ).outcome,
-            "PROVIDER FAILURE",
-        )
-
-    def test_post_proof_worker_failure_is_not_healthy(self) -> None:
-        """Post-proof process failures are classified as PROVIDER FAILURE."""
         result = classify(
             self.BASE
-            + "FIXED_MODEL_OPENCODE_OK\nRun continuous fixed-model factory session\n"
-            + "Process completed with exit code 1\n"
+            + "Smoke exact pinned model through OpenCode\nError: unexpected provider response\n"
         )
         self.assertEqual(result.outcome, "PROVIDER FAILURE")
+        self.assertEqual(result.outcome_class, "provider_failure")
 
-    def test_post_proof_cancellation_is_timeout(self) -> None:
-        """Post-proof cancellation is classified as TIMEOUT."""
-        result = classify(self.BASE + "FIXED_MODEL_OPENCODE_OK\nThe operation was canceled.\n")
-        self.assertEqual(result.outcome, "TIMEOUT")
+    def test_all_representative_results_use_canonical_taxonomy(self) -> None:
+        """Regression guard forbids legacy runtime outcome classes."""
+        logs = (
+            self.BASE + "FIXED_MODEL_OPENCODE_OK\nno selectable ordinary target\n",
+            self.BASE + "FIXED_MODEL_OPENCODE_OK\ntests failed\n",
+            self.BASE + "FIXED_MODEL_OPENCODE_OK\nprovider error 503\n",
+            self.BASE + "Error 429 Too Many Requests\n",
+            self.BASE + "model invocation failed: HTTP 404\n",
+            self.BASE + "content policy violation\n",
+            self.BASE + "checkout failed\n",
+            self.BASE + "FIXED_MODEL_OPENCODE_OK\nlifecycle failure\n",
+            self.BASE + "FIXED_MODEL_OPENCODE_OK\nProcess completed with exit code 1\n",
+        )
+        for log in logs:
+            with self.subTest(log=log):
+                self.assert_canonical(classify(log))
 
 
 def main() -> int:
