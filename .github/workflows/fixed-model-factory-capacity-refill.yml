@@ -102,16 +102,21 @@ jobs:
             fi
             attempt_outcome="$(sed -n 's/^Attempt outcome: //p' <<< "$attempt_body" | tail -1)"
             worker="$(sed -n 's/^Worker: opencode-free-model-factory-//p' <<< "$attempt_body" | tail -1)"
-            if [[ "$attempt_outcome" != success ]]; then
-              echo "Run ${COMPLETED_RUN_ID} ended as ${attempt_outcome:-unknown}; capacity is not proven healthy for immediate reuse"
-              exit 0
-            fi
+            case "$attempt_outcome" in
+              success|no_work|work_failure)
+                echo "Run ${COMPLETED_RUN_ID} ended as ${attempt_outcome}; Factory ${worker} capacity remains healthy"
+                ;;
+              *)
+                echo "Run ${COMPLETED_RUN_ID} ended as ${attempt_outcome:-unknown}; capacity is not proven healthy for immediate reuse"
+                exit 0
+                ;;
+            esac
             awk -F '\t' -v worker="$worker" '$1 == worker {found=1} END {exit !found}' "$manifest" || {
               echo "Durable outcome named unknown worker ${worker}; refusing refill" >&2
               exit 1
             }
             workers="$(jq -nc --arg worker "$worker" '[$worker]')"
-            echo "Run ${COMPLETED_RUN_ID} proved Factory ${worker} healthy; requesting its next assignment"
+            echo "Requesting Factory ${worker}'s next assignment immediately"
           else
             # Bootstrap is intentionally broad. GitHub has repeatedly dropped
             # the dispatcher's five-minute cron ticks, so a control-plane deploy
