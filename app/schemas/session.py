@@ -135,6 +135,8 @@ class SnoozeCorrectionInfo(BaseModel):
         default=False,
         description="True when repeated contradictory snoozes make the mode uncertain",
     )
+
+
 class ActiveThreadInfo(BaseModel):
     """Schema for active thread information in session response."""
 
@@ -236,7 +238,7 @@ class EventDetail(BaseModel):
 
     @field_serializer("timestamp")
     def serialize_timestamp(self, value: datetime) -> str:
-        """Serialize event timestamp to ISO 8601 format with timezone.
+        """Serialize datetime to ISO 8601 format with timezone.
 
         Ensures naive datetimes are treated as UTC for consistent serialization.
 
@@ -354,9 +356,9 @@ class SessionMode(BaseModel):
     bandwidth_confidence: float | None = Field(
         default=None, ge=0.0, le=1.0, description="Confidence in the bandwidth prediction"
     )
-    bandwidth_source: Literal["manual", "inferred"] | None = Field(
+    bandwidth_source: BandwidthSource | None = Field(
         default=None,
-        description="Origin of the bandwidth value: manual user override or algorithm inference",
+        description="Origin of the bandwidth value: inference, manual override, snooze, or quiz",
     )
     bandwidth_version: str | None = Field(
         default=None, description="Version tag for the bandwidth inference algorithm"
