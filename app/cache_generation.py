@@ -154,7 +154,8 @@ async def get_user_generation(client: GenerationCacheClient, user_id: int) -> in
     """
     key = generation_key(user_id)
     command_budget.record("generation_get")
-    raw_generation = await client.get(key)
+    reader = getattr(client, "get_generation", None) or client.get
+    raw_generation = await reader(key)
     if raw_generation is None:
         return 0
 
@@ -310,11 +311,14 @@ async def _atomic_generation_value_get(
     normalized = logical_key.removeprefix("cache:")
     value_prefix = f"{_VALUE_PREFIX}:{user_id}:g"
 
-    raw = await cache.eval_script(
-        _ATOMIC_GENERATION_READ_SCRIPT,
-        keys=[key],
-        args=[value_prefix, normalized],
-    )
+    if cache.provider_kind == "postgres":
+        raw = await cache.atomic_generation_read(key, value_prefix, normalized)
+    else:
+        raw = await cache.eval_script(
+            _ATOMIC_GENERATION_READ_SCRIPT,
+            keys=[key],
+            args=[value_prefix, normalized],
+        )
 
     command_budget.record("generation_value_get")
     if not isinstance(raw, (list, tuple)) or len(raw) != 2:

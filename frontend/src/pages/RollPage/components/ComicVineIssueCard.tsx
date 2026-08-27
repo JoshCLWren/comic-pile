@@ -4,6 +4,7 @@ import { type ComicVineRelatedIssue } from '../../../services/api'
 import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass, normalizeArcName, computeArcNeighborAnchors } from '../../../utils/comicIdentity'
 import AddToComicPileDialog from '../../../components/AddToComicPileDialog'
 import ImageWithLoading from '../../../components/ImageWithLoading'
+import { optimizedImageSrcSet, optimizedImageUrl } from '../../../services/imageDelivery'
 
 interface ComicVineIssueCardProps {
   issueId: number | null | undefined
@@ -73,7 +74,9 @@ export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
       <summary className="min-h-16 p-3 flex items-center gap-3 cursor-pointer list-none focus:ring-2 focus:ring-amber-500">
         {metadata.image_url && metadata.image_url !== failedImageUrl && (
           <ImageWithLoading
-            src={metadata.image_url}
+            src={optimizedImageUrl(metadata.image_url, 240) ?? metadata.image_url}
+            srcSet={optimizedImageSrcSet(metadata.image_url, [96, 240]) ?? undefined}
+            sizes="44px"
             alt=""
             loading="lazy"
             className="w-11 h-16 object-cover rounded-md bg-stone-900 shrink-0"
@@ -163,7 +166,7 @@ export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
                             <button
                               type="button"
                               onClick={() => handleAddToComicPile(identity, issue.comicvine_issue_id, issue.series_name, issue.issue_number, arc.related_issues)}
-                              className="text-[9px] font-bold text-amber-500 hover:text-amber-400 shrink-0 px-2 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 transition-colors"
+                              className="inline-flex min-h-6 items-center text-[9px] font-bold text-amber-500 hover:text-amber-400 shrink-0 px-2 rounded border border-amber-500/30 bg-amber-500/10 transition-colors focus:ring-2 focus:ring-amber-500"
                               aria-label={`Add ${identity.primary} to ComicPile`}
                             >
                               Add to ComicPile
@@ -188,7 +191,7 @@ export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
                       else next.add(arc.comicvine_arc_id)
                       return next
                     })}
-                    className="w-full text-left text-[10px] font-bold text-amber-500 hover:text-amber-400 py-1"
+                    className="w-full inline-flex min-h-6 items-center text-left text-[10px] font-bold text-amber-500 hover:text-amber-400 focus:ring-2 focus:ring-amber-500 rounded"
                     aria-expanded={isExpanded}
                   >
                     {isExpanded ? 'Show fewer' : `Show all ${arc.related_issues.length} issues`}

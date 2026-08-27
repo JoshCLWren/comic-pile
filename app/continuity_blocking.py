@@ -2,7 +2,7 @@
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.continuity_readiness import _issue_readiness, _load_snapshot
+from app.services.continuity_graph import issue_readiness, load_snapshot
 
 
 async def get_continuity_blocked_thread_ids(
@@ -15,10 +15,10 @@ async def get_continuity_blocked_thread_ids(
     the same snapshot. This keeps Queue/Roll blocked-state refreshes bounded instead
     of issuing one readiness query set per thread.
     """
-    snapshot = await _load_snapshot(db, user_id)
+    snapshot = await load_snapshot(db, user_id)
     blocked_thread_ids: set[int] = set()
     for thread_id, thread in snapshot.threads.items():
         issue_id = thread.next_unread_issue_id
-        if issue_id is not None and _issue_readiness(issue_id, snapshot):
+        if issue_id is not None and issue_readiness(issue_id, snapshot):
             blocked_thread_ids.add(thread_id)
     return blocked_thread_ids

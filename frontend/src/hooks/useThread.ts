@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { threadsApi } from '../services/api';
 import type { ReactivateThreadPayload, Thread, ThreadCreatePayload, ThreadUpdatePayload } from '../types';
 import { applyEditedThreadToQueuePages, invalidateAfterQueueMutation } from '../query/cacheEffects';
@@ -20,6 +20,7 @@ export function useStaleThreads(days?: number) {
   const { data, isPending, isError, refetch } = useQuery({
     queryKey: queryKeys.thread.summaries(),
     queryFn: () => threadsApi.listStale(days),
+    // Note: if 'days' needs to be part of the key, update queryKeys.thread.summaries
   });
 
   return {

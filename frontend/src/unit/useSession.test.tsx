@@ -1,6 +1,8 @@
-import { act, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { type ReactNode } from 'react'
+import axios from 'axios'
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { ReactNode } from 'react'
 import {
   useRestoreSessionStart,
   useSession,
@@ -25,12 +27,15 @@ vi.mock('../services/api', () => ({
 
 const mockedSessionApi = vi.mocked(sessionApi)
 
-function renderWithProvider<T>(hook: () => T) {
+function renderWithProvider<T>(hook: () => T): { result: { current: T } } {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   return renderHook(hook, {
-    innerWrapper: (children: ReactNode) => (
-      <CacheProvider>
-        <ToastProvider>{children}</ToastProvider>
-      </CacheProvider>
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>
+        <CacheProvider>
+          <ToastProvider>{children}</ToastProvider>
+        </CacheProvider>
+      </QueryClientProvider>
     ),
   })
 }
@@ -100,7 +105,6 @@ it('deduplicates sessions when loading more pages', async () => {
   })
 
   await waitFor(() => {
-    // id: 2 appears in both pages but should not be duplicated
     expect(result.current.data).toEqual([{ id: 1 }, { id: 2 }, { id: 3 }])
   })
 })
@@ -166,8 +170,10 @@ it('handles empty ids, non-Error failures, persisted session changes, and restor
   await act(async () => {
     await expect(restore.result.current.mutate(8)).rejects.toBe('restore failed')
   })
-  expect(restore.result.current.isError).toBe(true)
-  expect(restore.result.current.error?.message).toBe('Failed to restore session')
+  await waitFor(() => {
+    expect(restore.result.current.isError).toBe(true)
+    expect(restore.result.current.error?.message).toBe('Failed to restore session')
+  })
 })
 
 it('continues when session storage cannot be read or written', async () => {

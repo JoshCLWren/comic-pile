@@ -38,6 +38,7 @@ export interface ReaderContextCrossover {
   id: number
   name: string
   applies_to_current_issue: boolean
+  membership_kind: 'issue' | 'thread'
   next_member: ReaderContextCrossoverNextMember | null
   average_rating: number | null
   ratings_count: number

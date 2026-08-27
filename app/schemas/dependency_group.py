@@ -60,13 +60,21 @@ class DependencyGroupIssueRangeCreate(BaseModel):
 
 
 class DependencyGroupMemberResponse(BaseModel):
-    """One persisted group membership."""
+    """One persisted group membership with human-readable target metadata.
+
+    ``series_title`` carries the owning thread's title for both membership
+    kinds. For issue-level memberships, ``issue_number`` identifies the exact
+    issue inside that series. A missing value means the target could not be
+    resolved and the client must render a readable fallback instead of raw IDs.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     thread_id: int | None
     issue_id: int | None
+    series_title: str | None = None
+    issue_number: str | None = None
 
 
 class DependencyGroupIssueRangeResponse(BaseModel):

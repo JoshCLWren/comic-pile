@@ -1,5 +1,6 @@
-import { FormEvent, useCallback, useEffect, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import axios from 'axios'
+import { useSearchParams } from 'react-router-dom'
 import {
   ContinuityIssueRangeSelector,
   ContinuityThreadSelector,
@@ -9,6 +10,7 @@ import { threadsApi } from '../services/api'
 import {
   dependencyGroupsApi,
   type DependencyGroup,
+  type DependencyGroupMember,
 } from '../services/api-dependency-groups'
 import { issuesApi } from '../services/api-issues'
 import type { Issue, Thread } from '../types'
@@ -58,6 +60,18 @@ function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback
 }
 
+function memberLabel(member: DependencyGroupMember): string {
+  const seriesTitle = member.series_title?.trim()
+  const seriesName = seriesTitle ? seriesTitle : 'Unavailable comic'
+  if (member.issue_id !== null && member.issue_number?.trim()) {
+    return `${seriesName} #${member.issue_number}`
+  }
+  if (member.thread_id !== null) {
+    return `${seriesName} (whole series)`
+  }
+  return 'Unavailable comic'
+}
+
 export default function CrossoversPage() {
   const [groups, setGroups] = useState<DependencyGroup[]>([])
   const [threads, setThreads] = useState<Thread[]>([])
@@ -79,6 +93,10 @@ export default function CrossoversPage() {
   const [isLoadingRangeIssues, setIsLoadingRangeIssues] = useState(false)
   const [rangeLoadError, setRangeLoadError] = useState<string | null>(null)
   const [membershipMessage, setMembershipMessage] = useState<string | null>(null)
+  const [searchParams] = useSearchParams()
+  const requestedGroupId = searchParams.get('group')
+  const startsAtParam = searchParams.get('starts_at')
+  const deepLinkAppliedRef = useRef(false)
 
   const loadGroups = useCallback(async () => {
     setIsLoading(true)
@@ -106,6 +124,16 @@ export default function CrossoversPage() {
     void loadGroups()
     void loadThreads()
   }, [loadGroups, loadThreads])
+
+  useEffect(() => {
+    if (deepLinkAppliedRef.current) return
+    if (!requestedGroupId || groups.length === 0) return
+    const requestedId = Number(requestedGroupId)
+    if (!Number.isInteger(requestedId)) return
+    if (!groups.some((group) => group.id === requestedId)) return
+    deepLinkAppliedRef.current = true
+    setExpandedId(requestedId)
+  }, [requestedGroupId, groups])
 
   const clearRangeState = () => {
     setRangeThread(null)
@@ -321,14 +349,20 @@ export default function CrossoversPage() {
 
                 {isExpanded && !isEditing && (
                   <div className="mt-4 space-y-4 border-t border-stone-800 pt-4 text-sm text-stone-400">
+                    {requestedGroupId === String(group.id) && startsAtParam && (
+                      <p role="status" className="text-xs font-bold text-amber-500">Starts at #{startsAtParam}</p>
+                    )}
                     {group.memberships.length === 0 ? <p>This crossover has no comics yet.</p> : (
                       <ul className="grid gap-2" aria-label={`${group.name} members`}>
-                        {group.memberships.map((member) => (
-                          <li key={member.id} className="flex items-center justify-between gap-3 rounded-xl border border-stone-800 px-3 py-2">
-                            <span>{member.issue_id !== null ? `Issue ${member.issue_id}` : `Thread ${member.thread_id}`}</span>
-                            <button type="button" onClick={() => void removeMember(group.id, member.id)} disabled={hasPendingMutation} aria-label={`Remove ${member.issue_id !== null ? `issue ${member.issue_id}` : `thread ${member.thread_id}`} from ${group.name}`}>Remove</button>
-                          </li>
-                        ))}
+                        {group.memberships.map((member) => {
+                          const label = memberLabel(member)
+                          return (
+                            <li key={member.id} className="flex items-center justify-between gap-3 rounded-xl border border-stone-800 px-3 py-2">
+                              <span>{label}</span>
+                              <button type="button" onClick={() => void removeMember(group.id, member.id)} disabled={hasPendingMutation} aria-label={`Remove ${label} from ${group.name}`}>Remove</button>
+                            </li>
+                          )
+                        })}
                       </ul>
                     )}
 

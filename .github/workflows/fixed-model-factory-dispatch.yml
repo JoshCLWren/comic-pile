@@ -25,6 +25,8 @@ on:
       - '.github/scripts/factory-gh-rest-shim.sh'
       - '.github/scripts/free-model-factory-worker.sh'
       - '.github/scripts/free-model-factory-worker-primitives.sh'
+      - '.github/scripts/factory_provider_candidates.py'
+      - '.github/scripts/factory_candidate_health.py'
       - '.github/scripts/kilo-auto-factory-run.sh'
       - '.github/free-model-factories.tsv'
 
@@ -343,32 +345,61 @@ jobs:
               [[ -n "$run_id" ]] || continue
               worker="$(heartbeat_worker_for_run "$run_id")"
               echo "Canceling stale fixed-model entry run ${run_id}${worker:+ for Factory ${worker}}"
-              if ! gh run cancel "$run_id"; then
+              cancel_succeeded=false
+              status_from_cancel=false
+              run_status=""
+              conclusion=""
+              # GitHub can briefly report a queued run after the run completes
+              # between stale-run listing and the cancellation request.
+              for _ in {1..15}; do
+                cancel_output=""
+                if cancel_output="$(gh run cancel "$run_id" 2>&1)"; then
+                  cancel_succeeded=true
+                  break
+                fi
+                if grep -qi "workflow run that is completed" <<< "$cancel_output"; then
+                  echo "Stale fixed-model entry run ${run_id} completed before cancellation"
+                  cancel_succeeded=true
+                  status_from_cancel=true
+                  run_status=completed
+                  conclusion=cancelled
+                  break
+                fi
                 current_status="$(gh run view "$run_id" --json status --jq '.status')"
-                [[ "$current_status" == completed ]] || {
+                if [[ "$current_status" == completed ]]; then
+                  cancel_succeeded=true
+                  break
+                fi
+                [[ "$current_status" == queued || "$current_status" == in_progress ]] || {
                   echo "Unable to cancel stale fixed-model entry run ${run_id}; status=${current_status}" >&2
                   exit 1
                 }
-              fi
-
-              run_status=''
-              conclusion=''
-              # Bounded wait: 30s per run, not 180s. A hung run must not hold
-              # the dispatch concurrency group and starve the next cron tick;
-              # controller reconciliation recovers any lease it abandons.
-              for _ in {1..15}; do
-                read -r run_status conclusion < <(
-                  gh run view "$run_id" --json status,conclusion \
-                    --jq '[.status, (.conclusion // "")] | @tsv'
-                )
-                [[ "$run_status" == completed ]] && break
                 sleep 2
               done
+              [[ "$cancel_succeeded" == true ]] || {
+                echo "Unable to cancel stale fixed-model entry run ${run_id}; status=${current_status:-unknown}" >&2
+                exit 1
+              }
+
+              # If cancellation itself reported the run as completed, the
+              # status endpoint is known to be stale and must not overwrite it.
+              if [[ "$status_from_cancel" != true ]]; then
+                # Bounded wait: 30s per run, not 180s. A hung run must not hold
+                # the dispatch concurrency group and starve the next cron tick;
+                # controller reconciliation recovers any lease it abandons.
+                for _ in {1..15}; do
+                  read -r run_status conclusion < <(
+                    gh run view "$run_id" --json status,conclusion \
+                      --jq '[.status, (.conclusion // "")] | @tsv'
+                  )
+                  [[ "$run_status" == completed ]] && break
+                  sleep 2
+                done
+              fi
               [[ "$run_status" == completed ]] || {
                 echo "Stale fixed-model entry run ${run_id} did not reach a terminal state within 30s; leaving it to reconciliation" >&2
                 continue
               }
-
               if [[ "$conclusion" != cancelled ]]; then
                 echo "Run ${run_id} completed as ${conclusion:-unknown}; normal worker handoff remains authoritative"
                 continue
@@ -390,7 +421,12 @@ jobs:
             workers="$(awk -F '\t' -v minute="$minute" '$4 == minute {print $1}' "$manifest" | jq -Rsc 'split("\n") | map(select(length > 0))')"
             echo "Scheduled :$(printf '%02d' "$minute") batch"
           else
-            workers='["6","39","46"]'
+            # A control-plane change should smoke one current lane per provider.
+            # Resolve these from the manifest so retired workers cannot remain
+            # embedded in dispatcher behavior.
+            workers="$(awk -F '\t' '
+              $0 !~ /^#/ && NF >= 3 && !seen[$2]++ {print $1}
+            ' "$manifest" | jq -Rsc 'split("\n") | map(select(length > 0))')"
           fi
 
           [[ "$workers" != '[]' ]] || { echo 'Dispatcher resolved no workers' >&2; exit 1; }

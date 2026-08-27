@@ -248,6 +248,38 @@ async def _relevant_crossover_groups(
     return list(result.scalars())
 
 
+async def _thread_level_group_ids(
+    db: AsyncSession,
+    user_id: int,
+    thread_id: int,
+) -> set[int]:
+    """Return owned group ids with a thread-level membership on the thread.
+
+    A thread-level membership (``issue_id`` is ``NULL``) means the whole
+    thread participates in the crossover, so every issue in the thread is a
+    current-issue member and the "next member" resolves to the thread's next
+    unread issue rather than a single exact issue.
+
+    Args:
+        db: Async database session.
+        user_id: Group owner.
+        thread_id: Thread whose thread-level memberships are wanted.
+
+    Returns:
+        Set of group ids that hold a thread-level membership on the thread.
+    """
+    result = await db.execute(
+        select(DependencyGroupMembership.group_id)
+        .join(DependencyGroup, DependencyGroup.id == DependencyGroupMembership.group_id)
+        .where(
+            DependencyGroup.user_id == user_id,
+            DependencyGroupMembership.thread_id == thread_id,
+            DependencyGroupMembership.issue_id.is_(None),
+        )
+    )
+    return {int(row[0]) for row in result.all()}
+
+
 async def _group_exact_members(
     db: AsyncSession,
     user_id: int,
@@ -376,8 +408,14 @@ def _build_crossovers(
     current_position: int,
     thread_id: int,
     effective: dict[int, tuple[float, datetime]],
+    thread_level_group_ids: set[int],
+    next_unread: Issue | None,
 ) -> list[ReaderContextCrossover]:
     """Assemble crossover blocks for relevant owned groups.
+
+    Thread-level memberships make the whole thread a current-issue member and
+    resolve the "next member" to the thread's next unread issue when no exact
+    future member exists.
 
     Args:
         groups: Deterministically ordered relevant groups.
@@ -386,6 +424,8 @@ def _build_crossovers(
         current_position: Requested issue position inside the thread.
         thread_id: Requested issue's thread.
         effective: Effective ratings for relevant owned issues.
+        thread_level_group_ids: Groups with a thread-level membership on the thread.
+        next_unread: The thread's next unread issue, when one exists.
 
     Returns:
         Bounded crossover analytics blocks.
@@ -416,12 +456,19 @@ def _build_crossovers(
                 issue_id=nearest.id,
                 issue_number=nearest.issue_number,
             )
+        elif group.id in thread_level_group_ids and next_unread is not None:
+            next_member = ReaderContextCrossoverNextMember(
+                issue_id=next_unread.id,
+                issue_number=next_unread.issue_number,
+            )
+        is_thread_level = group.id in thread_level_group_ids
         member_ids = {member.id for member in members}
         crossovers.append(
             ReaderContextCrossover(
                 id=group.id,
                 name=group.name,
-                applies_to_current_issue=current_issue_id in member_ids,
+                applies_to_current_issue=current_issue_id in member_ids or is_thread_level,
+                membership_kind="thread" if is_thread_level else "issue",
                 next_member=next_member,
                 average_rating=average_rating,
                 ratings_count=len(member_ratings),
@@ -436,19 +483,26 @@ def _build_local_issues(
     neighborhood: list[Issue],
     current_issue_id: int,
     current_position: int,
+    thread_id: int,
     groups: list[DependencyGroup],
     members_by_group: dict[int, list[Issue]],
     effective: dict[int, tuple[float, datetime]],
+    thread_level_group_ids: set[int],
 ) -> list[ReaderContextLocalIssue]:
     """Assemble the bounded local-chain issue blocks.
+
+    Thread-level memberships apply to every issue in the thread, so they are
+    surfaced on each local-chain issue exactly like exact issue memberships.
 
     Args:
         neighborhood: Up to five thread issues centered on the requested issue.
         current_issue_id: Requested issue identifier.
         current_position: Requested issue position inside the thread.
+        thread_id: Requested issue's thread.
         groups: Deterministically ordered relevant groups.
         members_by_group: Exact owned issue members per group.
         effective: Effective ratings for relevant owned issues.
+        thread_level_group_ids: Groups with a thread-level membership on the thread.
 
     Returns:
         Bounded, position-ordered local-chain issues.
@@ -463,10 +517,18 @@ def _build_local_issues(
             relation = "next"
         else:
             relation = "future"
+        exact_member_group_ids = {
+            group.id
+            for group in groups
+            if candidate.id in {member.id for member in members_by_group.get(group.id, [])}
+        }
+        membership_group_ids = set(exact_member_group_ids)
+        if candidate.thread_id == thread_id:
+            membership_group_ids.update(thread_level_group_ids)
         memberships = [
             ReaderContextCrossoverMembership(id=group.id, name=group.name)
             for group in groups
-            if candidate.id in {member.id for member in members_by_group.get(group.id, [])}
+            if group.id in membership_group_ids
         ]
         rating = effective[candidate.id][0] if candidate.id in effective else None
         issues.append(
@@ -622,6 +684,11 @@ async def _local_edges(
             thread.id,
         )
 
+    def _issue_status(raw_issue_id: int) -> str | None:
+        """Return the owned read/unread status of one edge endpoint."""
+        issue = issue_map.get(raw_issue_id)
+        return issue.status if issue is not None else None
+
     edges: list[ReaderContextEdge] = []
 
     def _human_label(raw_label: str | None) -> str:
@@ -656,6 +723,8 @@ async def _local_edges(
                 target_issue_number=target_number,
                 source_thread_title=source_title,
                 target_thread_title=target_title,
+                source_status=_issue_status(dependency.source_issue_id),
+                target_status=_issue_status(dependency.target_issue_id),
                 note=dependency.note,
                 explanation=_build_edge_explanation(
                     "dependency",
@@ -687,6 +756,8 @@ async def _local_edges(
                 target_issue_number=target_number,
                 source_thread_title=source_title,
                 target_thread_title=target_title,
+                source_status=_issue_status(rule.source_id),
+                target_status=_issue_status(rule.target_id),
                 note=rule.note,
                 explanation=_build_edge_explanation(
                     "continuity",
@@ -761,6 +832,7 @@ async def get_reader_context(
         user_id,
         [group.id for group in groups],
     )
+    thread_level_group_ids = await _thread_level_group_ids(db, user_id, thread_id)
 
     rating_issue_ids = {candidate.id for candidate in series_issues}
     rating_issue_ids.update(candidate.id for candidate in neighborhood)
@@ -769,6 +841,15 @@ async def get_reader_context(
     for members in members_by_group.values():
         rating_issue_ids.update(member.id for member in members)
     effective = await _effective_ratings(db, rating_issue_ids)
+
+    next_unread = next(
+        (
+            candidate
+            for candidate in ordered_issues
+            if candidate.position > current_position and candidate.status != "read"
+        ),
+        None,
+    )
 
     series = _build_series(
         identity_source=identity_source,
@@ -785,14 +866,18 @@ async def get_reader_context(
         current_position=current_position,
         thread_id=thread_id,
         effective=effective,
+        thread_level_group_ids=thread_level_group_ids,
+        next_unread=next_unread,
     )
     local_issues = _build_local_issues(
         neighborhood=neighborhood,
         current_issue_id=issue_id,
         current_position=current_position,
+        thread_id=thread_id,
         groups=groups,
         members_by_group=members_by_group,
         effective=effective,
+        thread_level_group_ids=thread_level_group_ids,
     )
     edges = await _local_edges(
         db, user_id, {candidate.id for candidate in neighborhood}
