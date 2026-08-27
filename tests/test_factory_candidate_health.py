@@ -83,6 +83,19 @@ def test_successful_execution_is_preferred_to_unknown_candidate() -> None:
     assert result.selected.health_state == "healthy"
 
 
+def test_no_work_keeps_candidate_healthy() -> None:
+    """Canonical no_work proves executor health without requiring a diff."""
+    result = HEALTH.select_candidate(
+        [CANDIDATES[0]],
+        [evidence("vendor/a:free", "no_work")],
+        worker=1,
+        now_epoch=NOW,
+    )
+
+    assert result.selected is not None
+    assert result.selected.health_state == "healthy"
+
+
 def test_permanently_unavailable_model_is_excluded() -> None:
     """Explicit model retirement never remains executable capacity."""
     result = HEALTH.select_candidate(
@@ -101,8 +114,54 @@ def test_permanently_unavailable_model_is_excluded() -> None:
     assert result.selected.model == "vendor/b:free"
 
 
-def test_provider_outage_cools_every_provider_candidate() -> None:
-    """Recent provider-wide evidence prevents dispatch to another model."""
+def test_model_policy_violation_is_model_scoped() -> None:
+    """A permanent model policy failure does not blacklist sibling provider models."""
+    result = HEALTH.select_candidate(
+        CANDIDATES,
+        [
+            evidence("vendor/a:free", "model_policy_violation"),
+            evidence("vendor/b:free", "success"),
+        ],
+        worker=1,
+        now_epoch=NOW,
+    )
+
+    states = {candidate.model: candidate.health_state for candidate in result.candidates}
+    assert states["vendor/a:free"] == "unavailable"
+    assert states["vendor/b:free"] == "healthy"
+    assert result.selected is not None
+    assert result.selected.model == "vendor/b:free"
+
+
+def test_provider_failure_cools_every_provider_candidate() -> None:
+    """Recent canonical provider-wide failure prevents dispatch to sibling models."""
+    result = HEALTH.select_candidate(
+        CANDIDATES,
+        [evidence("vendor/a:free", "provider_failure")],
+        worker=1,
+        now_epoch=NOW,
+    )
+
+    assert result.selected is None
+    assert result.failure_outcome == "provider_failure"
+    assert {candidate.health_state for candidate in result.candidates} == {"cooling"}
+
+
+def test_provider_throttle_has_canonical_terminal_outcome() -> None:
+    """Rate-limit evidence cools the provider and preserves throttle attribution."""
+    result = HEALTH.select_candidate(
+        CANDIDATES,
+        [evidence("vendor/a:free", "provider_throttle")],
+        worker=1,
+        now_epoch=NOW,
+    )
+
+    assert result.selected is None
+    assert result.failure_outcome == "provider_throttle"
+
+
+def test_legacy_provider_outage_is_read_but_reemitted_canonically() -> None:
+    """Historical provider_unavailable evidence remains useful during migration."""
     result = HEALTH.select_candidate(
         CANDIDATES,
         [evidence("vendor/a:free", "provider_unavailable")],
@@ -111,7 +170,7 @@ def test_provider_outage_cools_every_provider_candidate() -> None:
     )
 
     assert result.selected is None
-    assert result.failure_outcome == "provider_unavailable"
+    assert result.failure_outcome == "provider_failure"
     assert {candidate.health_state for candidate in result.candidates} == {"cooling"}
 
 
@@ -120,7 +179,7 @@ def test_later_success_recovers_provider() -> None:
     result = HEALTH.select_candidate(
         CANDIDATES,
         [
-            evidence("vendor/a:free", "provider_unavailable", age=60),
+            evidence("vendor/a:free", "provider_failure", age=60),
             evidence("vendor/b:free", "success"),
         ],
         worker=1,
@@ -131,8 +190,8 @@ def test_later_success_recovers_provider() -> None:
     assert result.selected.model == "vendor/b:free"
 
 
-def test_model_interruption_cools_then_degrades() -> None:
-    """Transient model failures recover after the existing cooldown."""
+def test_legacy_model_interruption_cools_then_degrades() -> None:
+    """Historical interruption records remain readable but emit canonical failure."""
     recent = HEALTH.select_candidate(
         [CANDIDATES[0]],
         [evidence("vendor/a:free", "model_interruption")],
@@ -153,7 +212,7 @@ def test_model_interruption_cools_then_degrades() -> None:
     )
 
     assert recent.selected is None
-    assert recent.failure_outcome == "model_interruption"
+    assert recent.failure_outcome == "provider_failure"
     assert old.selected is not None
     assert old.selected.health_state == "degraded"
 
@@ -192,6 +251,22 @@ def test_control_plane_failure_does_not_poison_model() -> None:
         [
             evidence("vendor/a:free", "success", age=60),
             evidence("vendor/a:free", "control_plane_failure"),
+        ],
+        worker=1,
+        now_epoch=NOW,
+    )
+
+    assert result.selected is not None
+    assert result.selected.health_state == "healthy"
+
+
+def test_environment_failure_does_not_poison_model() -> None:
+    """Runner failures do not replace prior provider/model health evidence."""
+    result = HEALTH.select_candidate(
+        [CANDIDATES[0]],
+        [
+            evidence("vendor/a:free", "success", age=60),
+            evidence("vendor/a:free", "environment_failure"),
         ],
         worker=1,
         now_epoch=NOW,
