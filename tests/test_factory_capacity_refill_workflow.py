@@ -70,11 +70,15 @@ def test_stale_entry_runs_are_force_cancelled_before_reconciliation() -> None:
     """A ghost queued run must not preserve fixed-model leases forever."""
     text = _workflow_text()
 
+    stale_scan = 'for status in queued in_progress; do'
+    force_cancel = '/actions/runs/${run_id}/force-cancel'
+    reconcile = 'python3 "$controller" reconcile || true'
+
     assert 'stale_run_seconds=7200' in text
-    assert 'status in queued in_progress' not in text
-    assert 'for status in queued in_progress; do' in text
-    assert '/actions/runs/${run_id}/force-cancel' in text
-    assert 'python3 "$controller" reconcile || true' in text
+    assert stale_scan in text
+    assert force_cancel in text
+    assert reconcile in text
+    assert text.index(stale_scan) < text.index(force_cancel) < text.index(reconcile)
 
 
 def test_dispatch_failure_releases_assignment_and_continues_batch() -> None:
