@@ -199,7 +199,7 @@ run_agent() {
 
 select_controller_assignment() {
   local -a prs=() issues=()
-  local pr_json issue_json pr_numbers issue_numbers
+  local pr_json issue_json pr_numbers issue_numbers canonical_pr_json canonical_pr
   local pr branch linked_issue issue pr_stage
 
   if ! pr_json="$(gh pr list --state open --limit 200 --label "$OWNER" --json number,labels)"; then
@@ -260,8 +260,22 @@ select_controller_assignment() {
   fi
 
   if (( ${#issues[@]} == 1 )); then
+    issue="${issues[0]}"
+    if ! canonical_pr_json="$(gh pr list --state open --limit 500 --json number,headRefName)"; then
+      log "unable to verify canonical PR identity for controller-leased issue #${issue}"
+      return 3
+    fi
+    if ! canonical_pr="$(jq -r --arg issue "$issue" '[.[] | select((.headRefName // "") | test("^factory/[0-9]+-" + $issue + "-")) | .number] | first // empty' <<< "$canonical_pr_json")"; then
+      log "unable to parse canonical PR identity for controller-leased issue #${issue}"
+      return 3
+    fi
+    if [[ -n "$canonical_pr" ]]; then
+      log "controller invariant failed: ${OWNER} owns orphaned issue lease #${issue} while canonical open PR #${canonical_pr} exists"
+      return 2
+    fi
+
     MODE='issue'
-    NUMBER="${issues[0]}"
+    NUMBER="$issue"
     BRANCH="factory/${WORKER}-${NUMBER}-${BRANCH_SUFFIX}"
     return 0
   fi
