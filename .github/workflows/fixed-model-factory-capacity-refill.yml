@@ -84,7 +84,7 @@ jobs:
               exit 0
             }
             attempt_body="$(
-              gh api --paginate --slurp \
+              gh api --paginate \
                 "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
                 | jq -rs --arg run "$COMPLETED_RUN_ID" '
                     [
