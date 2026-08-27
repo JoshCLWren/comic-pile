@@ -11,6 +11,12 @@ def _workflow_text() -> str:
     return WORKFLOW.read_text(encoding='utf-8')
 
 
+def _outcome_gate() -> str:
+    """Return the shell case statement that decides immediate capacity reuse."""
+    text = _workflow_text()
+    return text.split('case "$attempt_outcome" in', 1)[1].split('esac', 1)[0]
+
+
 def test_healthy_entry_completion_refills_same_worker() -> None:
     """Provider-healthy terminal outcomes must reuse capacity immediately."""
     text = _workflow_text()
@@ -18,7 +24,7 @@ def test_healthy_entry_completion_refills_same_worker() -> None:
     assert "workflows: ['Fixed Model Factory Entry']" in text
     assert 'types: [completed]' in text
     assert 'Attempt outcome: ' in text
-    assert 'success|no_work|work_failure)' in text
+    assert 'success|no_work|work_failure)' in _outcome_gate()
     assert 'workers="$(jq -nc --arg worker "$worker" \'[$worker]\')"' in text
     assert 'python3 "$controller" assign --worker "$worker"' in text
     assert 'gh workflow run free-model-factory-entry.yml --ref main -f worker="$worker"' in text
@@ -35,13 +41,19 @@ def test_attempt_registry_pages_are_slurped_exactly_once() -> None:
 
 def test_unhealthy_failure_does_not_immediately_reuse_capacity() -> None:
     """Provider/model/control-plane failures must not cause a tight redispatch loop."""
-    text = _workflow_text()
+    gate = _outcome_gate()
 
-    assert 'capacity is not proven healthy for immediate reuse' in text
-    assert 'provider_failure' not in 'success|no_work|work_failure'
-    assert 'provider_throttle' not in 'success|no_work|work_failure'
-    assert 'model_unavailable' not in 'success|no_work|work_failure'
-    assert 'control_plane_failure' not in 'success|no_work|work_failure'
+    for outcome in (
+        'provider_failure',
+        'provider_throttle',
+        'model_unavailable',
+        'model_policy_violation',
+        'environment_failure',
+        'control_plane_failure',
+        'unknown_failure',
+    ):
+        assert outcome not in gate
+    assert 'capacity is not proven healthy for immediate reuse' in gate
 
 
 def test_control_plane_deploy_bootstraps_every_configured_slot() -> None:
