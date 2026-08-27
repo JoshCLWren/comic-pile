@@ -11,7 +11,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, cast
 sys.path.insert(0, os.path.dirname(__file__))
-from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, Candidate, build_candidates, comment_is_trusted, env_positive_int, item_is_unowned, labels_of, lease_is_stale, linked_issue_from_branch, no_diff_attempts_from_comments, order_candidates_for_worker, owner_of, plan_distinct_assignments)
+from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FIXED_LEASE_TTL_SECONDS, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, Candidate, build_candidates, comment_is_trusted, env_positive_int, item_is_unowned, labels_of, lease_is_stale, linked_issue_from_branch, no_diff_attempts_from_comments, order_candidates_for_worker, owner_of, plan_distinct_assignments)
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
 LEASE_ACTIVITY_PATTERNS = (
@@ -226,7 +226,7 @@ def load_no_diff_attempts(now_epoch: int | None=None) -> dict[int, int]:
 
 
 class ActiveWorkerResult(tuple[set[int], set[str]]):
-    """Pair of resolved workers and unresolved runs with set compatibility."""
+    """Pair of resolved workers and credible unresolved runs with set compatibility."""
 
     def __new__(cls, workers: set[int], unresolved: set[str]) -> ActiveWorkerResult:
         return tuple.__new__(cls, (workers, unresolved))
@@ -237,11 +237,74 @@ class ActiveWorkerResult(tuple[set[int], set[str]]):
         return tuple.__eq__(self, other)
 
 
+def github_timestamp_epoch(value: object) -> int | None:
+    """Parse one GitHub timestamp into epoch seconds when possible."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return int(datetime.fromisoformat(value.replace('Z', '+00:00')).timestamp())
+    except ValueError:
+        return None
+
+
+def unresolved_run_has_credible_liveness(run: dict[str, Any], *, now_epoch: int) -> bool:
+    """Return whether an unresolved active-status run still merits a safety fence."""
+    status = str(run.get('status') or '').lower()
+    if status not in ('queued', 'in_progress'):
+        return True
+    run_activity = [
+        epoch
+        for key in ('created_at', 'updated_at')
+        if (epoch := github_timestamp_epoch(run.get(key))) is not None
+    ]
+    if not run_activity:
+        return True
+    if now_epoch - max(run_activity) <= FIXED_LEASE_TTL_SECONDS:
+        return True
+    run_id = str(run.get('id') or '')
+    if not run_id.isdigit():
+        return True
+    try:
+        pages = gh_json(['api', '--paginate', '--slurp', f'repos/{REPO}/actions/runs/{run_id}/jobs?per_page=100'])
+    except RuntimeError:
+        return True
+    page_values = pages if isinstance(pages, list) else []
+    jobs: list[dict[str, Any]] = []
+    saw_jobs_payload = False
+    for page in page_values:
+        if not isinstance(page, dict):
+            continue
+        page_jobs = page.get('jobs')
+        if not isinstance(page_jobs, list):
+            continue
+        saw_jobs_payload = True
+        jobs.extend(job for job in page_jobs if isinstance(job, dict))
+    if not saw_jobs_payload:
+        return True
+    if not jobs:
+        return False
+    for job in jobs:
+        job_status = str(job.get('status') or '').lower()
+        if job_status in ('queued', 'in_progress'):
+            return True
+        job_activity = [
+            epoch
+            for key in ('started_at', 'completed_at')
+            if (epoch := github_timestamp_epoch(job.get(key))) is not None
+        ]
+        if not job_activity:
+            return True
+        if now_epoch - max(job_activity) <= FIXED_LEASE_TTL_SECONDS:
+            return True
+    return False
+
+
 def active_fixed_workers() -> ActiveWorkerResult:
-    """Return resolved workers and unresolved queued/running fixed-model runs."""
+    """Return resolved workers and credible unresolved active-status runs."""
     workers: set[int] = set()
     runs: list[dict[str, Any]] = []
     unresolved_run_ids: set[str] = set()
+    unresolved_runs: dict[str, dict[str, Any]] = {}
     for status in ('queued', 'in_progress'):
         try:
             pages = gh_json(['api', '--paginate', '--slurp', f'repos/{REPO}/actions/workflows/free-model-factory-entry.yml/runs?status={status}&per_page=100'])
@@ -259,13 +322,18 @@ def active_fixed_workers() -> ActiveWorkerResult:
             workers.add(int(match.group(1)))
             continue
         run_id = str(run.get('id') or '')
-        unresolved_run_ids.add(run_id or f'missing-run-id-{index}')
+        unresolved_id = run_id or f'missing-run-id-{index}'
+        unresolved_run_ids.add(unresolved_id)
+        if run_id:
+            unresolved_runs[run_id] = run
     numeric_unresolved = {value for value in unresolved_run_ids if value.isdigit()}
     if numeric_unresolved:
         try:
             pages = gh_json(['api', '--paginate', '--slurp', f'repos/{REPO}/issues/1093/comments?per_page=100'])
         except RuntimeError:
-            pages = None
+            return ActiveWorkerResult(workers, unresolved_run_ids)
+        if not isinstance(pages, list):
+            return ActiveWorkerResult(workers, unresolved_run_ids)
         for comment in flatten_pages(pages):
             if not comment_is_trusted(comment):
                 continue
@@ -275,6 +343,14 @@ def active_fixed_workers() -> ActiveWorkerResult:
             if run_match and worker_match and (run_match.group(1) in numeric_unresolved):
                 workers.add(int(worker_match.group(1)))
                 unresolved_run_ids.discard(run_match.group(1))
+    now_epoch = int(time.time())
+    for run_id, run in unresolved_runs.items():
+        if run_id not in unresolved_run_ids:
+            continue
+        if unresolved_run_has_credible_liveness(run, now_epoch=now_epoch):
+            continue
+        unresolved_run_ids.discard(run_id)
+        print(f'[factory-controller] ignoring expired unresolved active-status run {run_id}: no credible worker execution evidence', file=sys.stderr)
     return ActiveWorkerResult(workers, unresolved_run_ids)
 
 
