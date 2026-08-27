@@ -189,14 +189,11 @@ run_agent() {
 
   prompt="You are external-model Factory ${WORKER} for JoshCLWren/comic-pile. Durable worker ID: ${WORKER_ID}. Source: ${SOURCE}. Requested model or route: ${MODEL}. Runtime selector: ${RUNTIME_MODEL}. Assigned target: ${target}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, docs/CHATGPT_FACTORY_PROMPT.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Follow the canonical product-first factory policy. ${mission} Work only on the assigned target during this agent invocation. Edit the checked-out branch, run focused validation, and use gh/GitHub when needed for review context. Do not commit or push; the wrapper persists changes. Do not merge or close the assigned pull request; the trusted wrapper and review controller own the final lifecycle transition after your terminal verdict. Do not switch models, providers, or routes. A provider failure is a result for this lane, not permission to fall back to another paid or unrequested route. Do not enable auto-merge, push main, touch production databases, or alter automation schedules."
 
-  set +e
   bash "$TRUSTED_KILO_HELPER" \
     "$timeout_seconds" \
     "ComicPile Factory ${WORKER} · ${DISPLAY}" \
     "$prompt" \
-    "/tmp/opencode-factory-${WORKER}.log"
-  status=$?
-  set -e
+    "/tmp/opencode-factory-${WORKER}.log" || status=$?
   return "$status"
 }
 
