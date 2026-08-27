@@ -13,6 +13,9 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+CacheProvider = Literal["postgres", "redis", "off"]
+
+
 class DatabaseSettings(BaseSettings):
     """Database configuration settings."""
 
@@ -275,10 +278,15 @@ class GitHubSettings(BaseSettings):
 
 
 class RedisSettings(BaseSettings):
-    """Redis/Upstash caching configuration settings."""
+    """Cache provider configuration settings."""
 
     model_config = SettingsConfigDict(env_file=[".env.test", ".env", ".envrc"], extra="ignore")
 
+    cache_provider: CacheProvider = Field(
+        default="postgres",
+        description="Cache backend: postgres (default), redis, or off to disable caching",
+        json_schema_extra={"env": "CACHE_PROVIDER"},
+    )
     cache_enabled: bool = Field(
         default=False,
         description="Explicitly enable Redis caching; disabled by default in deployed environments",
@@ -317,12 +325,33 @@ class RedisSettings(BaseSettings):
 
     @property
     def is_configured(self) -> bool:
-        """Return whether caching is enabled and has a usable Redis configuration."""
-        if not self.cache_enabled:
-            return False
-        return bool(
-            (self.upstash_redis_rest_url and self.upstash_redis_rest_token) or self.redis_url
-        )
+        """Return whether caching is active for the resolved provider.
+
+        Delegates to :attr:`effective_provider` so ``cache_provider=postgres``
+        (the default) is considered configured even though it requires no
+        Redis credentials, while ``cache_provider=redis`` still requires
+        ``cache_enabled`` and Redis credentials, and ``off`` is never configured.
+        """
+        return self.effective_provider != "off"
+
+    @property
+    def effective_provider(self) -> Literal["postgres", "redis", "off"]:
+        """Return the resolved provider after applying credential gating.
+
+        When ``cache_provider=redis`` but credentials are absent, ``effective_provider``
+        returns ``off`` instead of ``redis`` so that callers never attempt to use a
+        backend that has not actually been configured.
+        """
+        if self.cache_provider == "off":
+            return "off"
+        if self.cache_provider == "redis":
+            if not self.cache_enabled:
+                return "off"
+            if not (
+                (self.upstash_redis_rest_url and self.upstash_redis_rest_token) or self.redis_url
+            ):
+                return "off"
+        return self.cache_provider
 
 
 class ImageDeliverySettings(BaseSettings):
