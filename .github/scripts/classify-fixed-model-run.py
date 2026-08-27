@@ -274,8 +274,8 @@ def classify(log: str) -> Result:
     if "ComicPile fixed-model smoke" in log or "Smoke exact pinned model through OpenCode" in log:
         return Result(
             **common,
-            outcome="PROVIDER FAILURE" if PROVIDER_RE.search(log) else "NOT YET PROVEN",
-            outcome_class="provider_failure" if PROVIDER_RE.search(log) else "unknown_failure",
+            outcome="PROVIDER FAILURE",
+            outcome_class="provider_failure",
             detail="the exact OpenCode model invocation ran but did not return the proof token",
         )
 
