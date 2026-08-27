@@ -11,6 +11,14 @@ def _worker_text() -> str:
     return WORKER.read_text(encoding='utf-8')
 
 
+def _function_body(name: str) -> str:
+    """Return one top-level shell function body from the worker."""
+    text = _worker_text()
+    start = text.index(f'{name}() {{')
+    end = text.index('\n}\n', start)
+    return text[start:end]
+
+
 def test_fixed_model_prompt_reserves_merge_and_close_for_controller() -> None:
     """Review agents must not race the trusted controller by merging directly."""
     text = _worker_text()
@@ -50,6 +58,17 @@ def test_timed_pinned_session_is_provider_failure_after_smoke() -> None:
         'record_terminal_outcome provider_failure '
         '"pinned provider/model session timed out or was interrupted after smoke succeeded'
     ) in text
+
+
+def test_kilo_run_agent_does_not_reenable_errexit_before_returning_status() -> None:
+    """Kilo exit 124 must reach the outer retry/classification loop."""
+    body = _function_body('run_agent')
+
+    assert 'bash "$TRUSTED_KILO_HELPER"' in body
+    assert '|| status=$?' in body
+    assert 'set +e' not in body
+    assert 'set -e' not in body
+    assert 'return "$status"' in body
 
 
 def test_throttle_and_model_missing_remain_distinct() -> None:
