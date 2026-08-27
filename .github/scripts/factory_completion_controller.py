@@ -92,17 +92,36 @@ def completion_batch_size(review_backlog: int) -> int:
 def cooldown_seconds(outcome: str | None) -> int:
     """Return how long a recently unhealthy worker should yield to healthy peers."""
     normalized = (outcome or "").strip().casefold()
-    if normalized in {"success", "work_failure", "no_change", "policy_blocked"}:
+    if normalized in {
+        "success",
+        "no_work",
+        "work_failure",
+        # Historical aliases retained while durable records age out.
+        "no_change",
+        "policy_blocked",
+    }:
         return 0
-    if normalized in {"model_unavailable", "model missing"} or "model missing" in normalized:
+    if normalized in {
+        "model_unavailable",
+        "model_policy_violation",
+        "model missing",
+    } or "model missing" in normalized:
         return MODEL_MISSING_COOLDOWN_SECONDS
-    if normalized in {"provider_unavailable", "rate limited"} or "rate limited" in normalized:
+    if normalized in {
+        "provider_throttle",
+        "provider_unavailable",
+        "provider_throttled",
+        "rate limited",
+    } or "rate limited" in normalized:
         return RATE_LIMIT_COOLDOWN_SECONDS
     if normalized in {
-        "model_interruption",
-        "worker_environment_failure",
+        "provider_failure",
+        "environment_failure",
         "control_plane_failure",
         "unknown_failure",
+        # Historical aliases.
+        "model_interruption",
+        "worker_environment_failure",
         "failure",
         "failed",
         "error",
@@ -169,10 +188,10 @@ def _catalog_worker_health(
     state_evidence = {
         "healthy": ("success", now_epoch),
         "degraded": (
-            "model_interruption",
+            "unknown_failure",
             now_epoch - FAILURE_COOLDOWN_SECONDS - 1,
         ),
-        "cooling": ("model_interruption", now_epoch),
+        "cooling": ("unknown_failure", now_epoch),
         "unavailable": ("model_unavailable", now_epoch),
     }
     projected: dict[str, tuple[str, int]] = {}
@@ -238,6 +257,7 @@ def latest_worker_health(
     )
     return latest
 
+
 def worker_health_state(
     worker: str,
     health: Mapping[str, tuple[str, int]],
@@ -252,14 +272,20 @@ def worker_health_state(
     normalized = (outcome or "").strip().casefold()
     if normalized in {
         "success",
+        "no_work",
         "healthy / productive",
         "healthy / idle",
         "work_failure",
+        # Historical aliases.
         "no_change",
         "policy_blocked",
     }:
         return "healthy"
-    if normalized in {"model_unavailable", "model missing"} or "model missing" in normalized:
+    if normalized in {
+        "model_unavailable",
+        "model_policy_violation",
+        "model missing",
+    } or "model missing" in normalized:
         return "unavailable"
     cooldown = cooldown_seconds(outcome)
     if cooldown > 0 and now_epoch < updated + cooldown:
