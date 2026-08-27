@@ -11,14 +11,14 @@ def _workflow_text() -> str:
     return WORKFLOW.read_text(encoding='utf-8')
 
 
-def test_successful_entry_completion_refills_same_worker() -> None:
-    """Healthy completed capacity must request another assignment immediately."""
+def test_healthy_entry_completion_refills_same_worker() -> None:
+    """Provider-healthy terminal outcomes must reuse capacity immediately."""
     text = _workflow_text()
 
     assert "workflows: ['Fixed Model Factory Entry']" in text
     assert 'types: [completed]' in text
     assert 'Attempt outcome: ' in text
-    assert 'if [[ "$attempt_outcome" != success ]]' in text
+    assert 'success|no_work|work_failure)' in text
     assert 'workers="$(jq -nc --arg worker "$worker" \'[$worker]\')"' in text
     assert 'python3 "$controller" assign --worker "$worker"' in text
     assert 'gh workflow run free-model-factory-entry.yml --ref main -f worker="$worker"' in text
@@ -33,12 +33,15 @@ def test_attempt_registry_pages_are_slurped_exactly_once() -> None:
     assert '| jq -rs --arg run "$COMPLETED_RUN_ID"' in text
 
 
-def test_failure_does_not_immediately_reuse_unhealthy_capacity() -> None:
-    """Provider/control-plane failures must not cause a tight redispatch loop."""
+def test_unhealthy_failure_does_not_immediately_reuse_capacity() -> None:
+    """Provider/model/control-plane failures must not cause a tight redispatch loop."""
     text = _workflow_text()
 
     assert 'capacity is not proven healthy for immediate reuse' in text
-    assert 'exit 0' in text
+    assert 'provider_failure' not in 'success|no_work|work_failure'
+    assert 'provider_throttle' not in 'success|no_work|work_failure'
+    assert 'model_unavailable' not in 'success|no_work|work_failure'
+    assert 'control_plane_failure' not in 'success|no_work|work_failure'
 
 
 def test_control_plane_deploy_bootstraps_every_configured_slot() -> None:
