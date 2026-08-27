@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 import types
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -28,7 +28,7 @@ def controller() -> types.ModuleType:
 
 def github_time(epoch: int) -> str:
     """Return one UTC epoch as a GitHub-style timestamp."""
-    return datetime.fromtimestamp(epoch, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+    return datetime.fromtimestamp(epoch, tz=UTC).isoformat().replace("+00:00", "Z")
 
 
 def unresolved_run(run_id: int, *, now: int, age_seconds: int) -> dict[str, object]:
