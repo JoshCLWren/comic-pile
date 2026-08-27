@@ -20,6 +20,7 @@ interface ReadingContextPillarProps {
   currentDie: number
   readerContext: ReaderContextResponse | null
   isReaderContextLoading: boolean
+  readerContextError: string | null
 }
 
 function ratingToStars(rating: number | null): string {
@@ -83,6 +84,7 @@ export function ReadingContextPillar({
   currentDie,
   readerContext,
   isReaderContextLoading,
+  readerContextError,
 }: ReadingContextPillarProps) {
   const [isContinuityDialogOpen, setIsContinuityDialogOpen] = useState(false)
   const [isRouteExplanationOpen, setIsRouteExplanationOpen] = useState(false)
@@ -371,6 +373,19 @@ export function ReadingContextPillar({
           <div className="h-3 w-24 animate-pulse rounded bg-white/5" />
           <div className="h-5 w-16 animate-pulse rounded bg-white/5" />
         </div>
+      ) : readerContextError && !readerContext ? (
+        <section aria-labelledby="reader-context-unavailable-heading" className="rounded-2xl p-3" style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'rgba(6, 182, 212, 0.09)' }}>
+          <h3
+            id="reader-context-unavailable-heading"
+            className="font-bold text-rose-300"
+            style={readingContextType('sectionHeading')}
+          >
+            Local reading context unavailable
+          </h3>
+          <p className="mt-1 text-stone-400" style={readingContextType('bodyCopy')}>
+            {readerContextError}
+          </p>
+        </section>
       ) : null}
 
       {readerContext && (dependencyEdges.length > 0 || continuityEdges.length > 0) && (

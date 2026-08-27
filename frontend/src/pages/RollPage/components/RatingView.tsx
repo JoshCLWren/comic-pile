@@ -26,8 +26,9 @@ interface RatingViewProps {
   onSnooze: () => void
   onCancel: () => void
   onRefreshThread: () => void
-  readerContext: ReaderContextResponse | null
-  isReaderContextLoading: boolean
+  readerContext?: ReaderContextResponse | null
+  isReaderContextLoading?: boolean
+  readerContextError?: string | null
 }
 
 export function RatingView({
@@ -47,8 +48,9 @@ export function RatingView({
   onSnooze,
   onCancel,
   onRefreshThread,
-  readerContext,
-  isReaderContextLoading,
+  readerContext = null,
+  isReaderContextLoading = false,
+  readerContextError = null,
 }: RatingViewProps) {
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
   const hasReadingContextContent = readingOrders.length > 0 || connectedThreads.length > 0
@@ -76,6 +78,7 @@ export function RatingView({
           currentDie={currentDie}
           readerContext={readerContext}
           isReaderContextLoading={isReaderContextLoading}
+          readerContextError={readerContextError}
         />
 
         <YourContextPillar

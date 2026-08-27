@@ -94,7 +94,7 @@ export default function RollPage() {
   const rollPool = useMemo(() => bootstrap?.roll_pool ?? [], [bootstrap?.roll_pool])
 
   const ratingIssueId = state.activeRatingThread?.issue_id ?? state.activeRatingThread?.next_issue_id ?? null
-  const { context: readerContext, isLoading: isReaderContextLoading } = useReaderContext(ratingIssueId)
+  const { context: readerContext, isLoading: isReaderContextLoading, error: readerContextError } = useReaderContext(ratingIssueId)
 
   useRollPendingSession({ state, bootstrap, rollPool })
 
@@ -293,6 +293,7 @@ export default function RollPage() {
                 onCancel={rating.handleCancelRating}
                 readerContext={readerContext}
                 isReaderContextLoading={isReaderContextLoading}
+                readerContextError={readerContextError?.message ?? null}
               />
             )}
 
