@@ -179,3 +179,84 @@ describe('ComicVineSearchDialog mode branching', () => {
     )
   })
 })
+
+describe('ComicVineSearchDialog issue #1695 fixes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    searchSeriesSpy.mockResolvedValue({ query: '', results: [mockSeries], total_available: 1 })
+    getSeriesIssuesSpy.mockResolvedValue({ comicvine_volume_id: 42, series_name: 'Stormwatch', issues: [mockIssue] })
+  })
+
+  it('auto-searches when dialog opens with a pre-filled threadTitle', async () => {
+    render(<ComicVineSearchDialog {...defaultProps({ threadTitle: 'Stormwatch Vol. 1' })} />)
+
+    await waitFor(() =>
+      expect(searchSeriesSpy).toHaveBeenCalledWith('Stormwatch Vol. 1', 10),
+    )
+  })
+
+  it('does not show "No series found" before any search is performed', async () => {
+    searchSeriesSpy.mockResolvedValue({ query: '', results: [], total_available: 0 })
+
+    render(<ComicVineSearchDialog {...defaultProps({ threadTitle: '' })} />)
+
+    expect(screen.queryByText('No series found. Try a different search term.')).not.toBeInTheDocument()
+    expect(screen.getByText('Type a series name to search ComicVine')).toBeInTheDocument()
+  })
+
+  it('shows "No series found" only after a search returns empty', async () => {
+    searchSeriesSpy.mockResolvedValue({ query: 'Nonexistent', results: [], total_available: 0 })
+
+    render(<ComicVineSearchDialog {...defaultProps({ threadTitle: '' })} />)
+
+    const input = screen.getByPlaceholderText('Search series title...')
+    fireEvent.change(input, { target: { value: 'Nonexistent' } })
+
+    await waitFor(() =>
+      expect(screen.getByText('No series found. Try a different search term.')).toBeInTheDocument(),
+    )
+  })
+
+  it('shows error message when search fails', async () => {
+    searchSeriesSpy.mockRejectedValue(new Error('Network error'))
+
+    render(<ComicVineSearchDialog {...defaultProps({ threadTitle: '' })} />)
+
+    const input = screen.getByPlaceholderText('Search series title...')
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Failed to search ComicVine. Please try again.'),
+    )
+  })
+
+  it('does not show "No series found" when an error is displayed', async () => {
+    searchSeriesSpy.mockRejectedValue(new Error('Network error'))
+
+    render(<ComicVineSearchDialog {...defaultProps({ threadTitle: '' })} />)
+
+    const input = screen.getByPlaceholderText('Search series title...')
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toBeInTheDocument(),
+    )
+    expect(screen.queryByText('No series found. Try a different search term.')).not.toBeInTheDocument()
+  })
+
+  it('shows neutral hint when query is cleared', async () => {
+    render(<ComicVineSearchDialog {...defaultProps({ threadTitle: 'Stormwatch' })} />)
+
+    await waitFor(() =>
+      expect(searchSeriesSpy).toHaveBeenCalled(),
+    )
+
+    const input = screen.getByPlaceholderText('Search series title...')
+    fireEvent.change(input, { target: { value: '' } })
+
+    await waitFor(() =>
+      expect(screen.getByText('Type a series name to search ComicVine')).toBeInTheDocument(),
+    )
+    expect(screen.queryByText('No series found. Try a different search term.')).not.toBeInTheDocument()
+  })
+})
