@@ -45,8 +45,9 @@ permissions:
 
 concurrency:
   group: fixed-model-factory-dispatch
-  # Keep one active chain. GitHub replaces an older pending member of the
-  # group when the watchdog and chain overlap, without cancelling live work.
+  # Every roster run creates its successor, so pending watchdog, recovery, and
+  # chain ticks must coalesce into one next run instead of multiplying chains.
+  queue: single
   cancel-in-progress: false
 
 jobs:
