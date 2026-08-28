@@ -14,7 +14,9 @@ import {
   createThread,
   getAuthToken,
   gotoQueue,
+  gotoRollPage,
   waitForQueueReady,
+  waitForRollPageReady,
 } from './helpers'
 
 async function getCsrfToken(
@@ -118,6 +120,33 @@ test.describe('DEP-001 + ORDER-001: Dependency and reading order', () => {
 
     const blockedItem = page.getByTestId('queue-thread-item').filter({ hasText: 'Dep Blocked' })
     await expect(blockedItem).toBeVisible({ timeout: 10000 })
+  })
+
+  test('reading order holds a dependent thread back from eligible reads', async ({
+    authenticatedPage,
+  }) => {
+    const page = authenticatedPage
+    const blocking = await createThread(page, {
+      title: 'Order Blocker',
+      format: 'Issue',
+      issues_remaining: 2,
+      total_issues: 2,
+    })
+    const blocked = await createThread(page, {
+      title: 'Order Blocked',
+      format: 'Issue',
+      issues_remaining: 2,
+      total_issues: 2,
+    })
+
+    await createDependency(page, blocking.id, blocked.id)
+
+    await gotoRollPage(page)
+    await waitForRollPageReady(page)
+
+    await expect(page.getByText(/hidden \(blocked by dependencies\)/i)).toBeVisible({
+      timeout: 15000,
+    })
   })
 
   test('issue-level dependency is created and visible', async ({

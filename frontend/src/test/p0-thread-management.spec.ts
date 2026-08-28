@@ -116,12 +116,9 @@ test.describe('THREAD-001: Thread management', () => {
     await expect(page.getByText('Detail View Thread')).toBeVisible({ timeout: 10000 })
 
     const threadItem = page.getByTestId('queue-thread-item').filter({ hasText: 'Detail View Thread' })
-    await threadItem.locator('button[aria-label="Thread actions"]').click()
-    const menu = page.getByRole('menu')
-    await expect(menu).toBeVisible()
-    await menu.getByRole('menuitem', { name: /read/i }).click()
+    await threadItem.getByRole('button', { name: /open detail view thread/i }).click()
 
-    await expect(page.locator('#thread-info h2')).toContainText('Detail View Thread', {
+    await expect(page.getByRole('heading', { name: 'Detail View Thread' })).toBeVisible({
       timeout: 10000,
     })
   })
