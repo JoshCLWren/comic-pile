@@ -58,7 +58,9 @@ def test_recovery_watchdog_dispatches_explicit_roster_mode():
 def test_roster_chain_is_serialized_and_keeps_hourly_watchdog():
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
+    assert "queue: single" in workflow
     assert "cancel-in-progress: false" in workflow
+    assert "queue: max" not in workflow
     assert "- cron: '7 * * * *'" in workflow
     assert "Self-perpetuate roster cadence" in workflow
     assert "inputs.mode == 'roster'" in workflow
