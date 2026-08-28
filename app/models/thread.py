@@ -88,16 +88,33 @@ class Thread(Base):
         "Issue", foreign_keys=[next_unread_issue_id], lazy="raise"
     )
 
-    def uses_issue_tracking(self) -> bool:
+def uses_issue_tracking(self) -> bool:
         """Check if thread has been migrated to issue tracking.
-
+        
         Threads with total_issues = NULL use old issues_remaining counter.
         Threads with total_issues != NULL use Issue records.
-
+        
         Returns:
             True if thread uses Issue tracking, False if using old counter system
         """
         return self.total_issues is not None
+
+    def normalize_format(self) -> str:
+        """Normalize format value to canonical form.
+        
+        - "Comic" and "Comics" both map to "Comic"
+        - "digital" is treated as "Digital" format
+        - All other values remain unchanged
+        
+        Returns:
+            Normalized format string
+        """
+        normalized_format = self.format.strip()
+        if normalized_format.lower() in ("comic", "comics"):
+            return "Comic"
+        elif normalized_format.lower() == "digital":
+            return "Digital"
+        return normalized_format
 
     async def get_issues_remaining(self, db: AsyncSession) -> int:
         """Get the count of remaining unread issues.

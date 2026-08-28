@@ -84,7 +84,7 @@ async def thread_to_response(
     issues_remaining_map: dict[int, int] | None = None,
 ) -> ThreadResponse:
     """Convert Thread model to ThreadResponse.
-
+    
     Args:
         thread: Thread model instance.
         db: Database session for computing issues_remaining (fallback only).
@@ -94,7 +94,7 @@ async def thread_to_response(
             When provided and the thread uses issue tracking, avoids a per-thread
             COUNT query. Single-thread callers may omit this to use the per-row
             fallback.
-
+    
     Returns:
         ThreadResponse schema.
     """
@@ -103,7 +103,15 @@ async def thread_to_response(
     else:
         issues_remaining = await thread.get_issues_remaining(db)
     reading_progress = thread.reading_progress
-
+    
+    # Normalize the format to canonical form
+    format_value = thread.format.strip()
+    if format_value.lower() in ("comic", "comics"):
+        format_value = "Comic"
+    elif format_value.lower() == "digital":
+        format_value = "Digital"
+    # All other values remain unchanged
+    
     next_unread_issue_id = thread.next_unread_issue_id
     next_unread_issue_number: str | None = None
     if next_unread_issue_id is not None:
@@ -113,11 +121,11 @@ async def thread_to_response(
             next_issue = await issue_repository.get_issue(db, next_unread_issue_id)
             if next_issue:
                 next_unread_issue_number = next_issue.issue_number
-
+    
     return ThreadResponse(
         id=thread.id,
         title=thread.title,
-        format=thread.format,
+        format=format_value,
         issues_remaining=issues_remaining,
         queue_position=thread.queue_position,
         status=thread.status,
@@ -126,6 +134,7 @@ async def thread_to_response(
         notes=thread.notes,
         is_test=thread.is_test,
         is_blocked=thread.is_blocked,
+        blocking_reasons=[],
         created_at=thread.created_at,
         total_issues=thread.total_issues,
         reading_progress=reading_progress,
@@ -158,29 +167,36 @@ async def threads_to_responses(threads: list[Thread], db: AsyncSession) -> list[
     ]
 
 
-def to_queue_list_item(tr: ThreadResponse) -> QueueThreadListItem:
+async def to_queue_list_item(tr: ThreadResponse) -> QueueThreadListItem:
     """Convert a full ThreadResponse to a narrow QueueThreadListItem.
-
+    
     Deliberately drops detail-only fields (last_rating, is_test,
     reading_progress, next_unread_issue_id) to reduce payload size for list
     views.
-
+    
     Args:
         tr: Full thread response.
-
+    
     Returns:
         Narrow list-item projection of the thread response.
     """
+    # Normalize the format to canonical form
+    format_value = tr.format.strip()
+    if format_value.lower() in ("comic", "comics"):
+        format_value = "Comic"
+    elif format_value.lower() == "digital":
+        format_value = "Digital"
+    # All other values remain unchanged
+    
     return QueueThreadListItem(
         id=tr.id,
         title=tr.title,
-        format=tr.format,
+        format=format_value,
         issues_remaining=tr.issues_remaining,
         queue_position=tr.queue_position,
         status=tr.status,
         is_blocked=tr.is_blocked,
         blocking_reasons=tr.blocking_reasons,
-        last_activity_at=tr.last_activity_at,
         total_issues=tr.total_issues,
         next_unread_issue_number=tr.next_unread_issue_number,
         notes=tr.notes,
@@ -280,15 +296,16 @@ async def list_queue_threads(
 
 async def completed_threads_html(db: AsyncSession, user_id: int) -> str:
     """Render completed threads as option elements for the reactivation modal.
-
+    
     Args:
         db: Database session.
         user_id: Owner of the threads.
-
+    
     Returns:
         HTML string with option elements for completed threads.
     """
     threads = await thread_repository.fetch_completed_threads(db, user_id)
+    # Normalize format values for display
     options = "\n".join(
         f'<option value="{thread.id}">{thread.title} ({thread.format})</option>'
         for thread in threads
@@ -323,28 +340,36 @@ async def create_thread_with_retry(
     db: AsyncSession, user_id: int, thread_data: ThreadCreate
 ) -> ThreadResponse:
     """Create a new thread at the end of the user's queue with deadlock retry.
-
+    
     Args:
         db: Database session.
         user_id: Owner of the new thread.
         thread_data: Thread creation data.
-
+    
     Returns:
         ThreadResponse with created thread details.
-
+    
     Raises:
         RuntimeError: If creation keeps deadlocking past the retry budget.
     """
     max_retries = 3
     initial_delay = 0.1
     retries = 0
-
+    
     while retries < max_retries:
         try:
             max_position = await thread_repository.max_queue_position(db, user_id)
+            # Normalize the format to canonical form
+            format_value = thread_data.format.strip()
+            if format_value.lower() in ("comic", "comics"):
+                format_value = "Comic"
+            elif format_value.lower() == "digital":
+                format_value = "Digital"
+            # All other values remain unchanged
+            
             new_thread = Thread(
                 title=thread_data.title,
-                format=thread_data.format,
+                format=format_value,
                 issues_remaining=thread_data.issues_remaining,
                 total_issues=thread_data.total_issues,
                 queue_position=max_position + 1,
@@ -355,7 +380,7 @@ async def create_thread_with_retry(
             await thread_repository.insert_thread(db, new_thread)
             await db.commit()
             await db.refresh(new_thread)
-
+            
             await invalidate_user_view(user_id)
             return await thread_to_response(new_thread, db)
         except OperationalError as e:
@@ -368,7 +393,7 @@ async def create_thread_with_retry(
                 await asyncio.sleep(delay)
             else:
                 raise
-
+    
     raise RuntimeError(f"Failed to create thread after {max_retries} retries")
 
 
@@ -397,20 +422,20 @@ async def update_thread(
     thread_id: int,
     thread_data: ThreadUpdate,
 ) -> ThreadResponse:
-    """Apply a partial update to an owned thread.
-
+"""Apply a partial update to an owned thread.
+    
     Only legacy (non-issue-tracked) threads honor manual ``issues_remaining``
     edits; such edits also drive the active/completed status transition.
-
+    
     Args:
         db: Database session.
         user_id: Owner that must own the thread.
         thread_id: Primary key of the thread.
         thread_data: Partial update data.
-
+    
     Returns:
         ThreadResponse with updated thread details.
-
+    
     Raises:
         NotFoundError: When the thread does not exist for this user.
     """
@@ -418,7 +443,14 @@ async def update_thread(
     if thread_data.title is not None:
         thread.title = thread_data.title
     if thread_data.format is not None:
-        thread.format = thread_data.format
+        # Normalize the format to canonical form
+        format_value = thread_data.format.strip()
+        if format_value.lower() in ("comic", "comics"):
+            format_value = "Comic"
+        elif format_value.lower() == "digital":
+            format_value = "Digital"
+        # All other values remain unchanged
+        thread.format = format_value
     if thread_data.issues_remaining is not None:
         if not thread.uses_issue_tracking():
             thread.issues_remaining = thread_data.issues_remaining
@@ -432,7 +464,7 @@ async def update_thread(
         thread.is_test = thread_data.is_test
     await db.commit()
     await db.refresh(thread)
-
+    
     await invalidate_user_view(user_id)
     return await thread_to_response(thread, db)
 
