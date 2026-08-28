@@ -11,7 +11,7 @@ vi.mock('../services/rollBootstrapApi', () => ({
   rollBootstrapApi: {
     get: vi.fn(),
   },
-}))
+})))
 
 const mockedBootstrap = vi.mocked(rollBootstrapApi.get)
 
@@ -73,23 +73,18 @@ describe('useRollBootstrap', () => {
     mockedBootstrap.mockResolvedValue(bootstrapResponse)
 
     const r = renderBootstrap()
-    console.error('DEBUG r:', r)
-    console.error('DEBUG r.result:', r.result)
-    console.error('DEBUG r.result.current:', r.result?.current)
-    console.error('DEBUG r.current:', r.current)
-    console.error('DEBUG r.error:', r.error)
 
     expect(r.result.current.isPending).toBe(true)
-    expect(result.current.data).toBeNull()
+    expect(r.result.current.data).toBeNull()
 
-    await waitFor(() => expect(result.current.isPending).toBe(false))
+    await waitFor(() => expect(r.result.current.isPending).toBe(false))
 
-    expect(result.current.data).toBe(bootstrapResponse)
-    expect(result.current.isError).toBe(false)
-    expect(result.current.error).toBeNull()
+    expect(r.result.current.data).toBe(bootstrapResponse)
+    expect(r.result.current.isError).toBe(false)
+    expect(r.result.current.error).toBeNull()
 
     await act(async () => {
-      await expect(result.current.refetch()).resolves.toBe(bootstrapResponse)
+      await expect(r.result.current.refetch()).resolves.toBe(bootstrapResponse)
     })
 
     expect(mockedBootstrap).toHaveBeenCalledTimes(2)
@@ -212,6 +207,8 @@ describe('useRollBootstrap', () => {
 
     expect(result.current.data).toBe(bootstrapResponse)
     expect(result.current.isError).toBe(false)
+    expect(result.current.error).toBeNull()
+    expect(result.current.isPending).toBe(false)
   })
 
   it('uses the anonymous storage key when the bootstrap has no user id', async () => {
@@ -225,7 +222,6 @@ describe('useRollBootstrap', () => {
     const { result } = renderBootstrap()
 
     await waitFor(() => expect(result.current.isPending).toBe(false))
-
     expect(result.current.data).toBe(anonymousResponse)
     expect(localStorage.getItem('comic_pile_last_session_id_anonymous')).toBe('7')
   })
@@ -237,7 +233,6 @@ describe('useRollBootstrap', () => {
     const { result } = renderBootstrap()
 
     await waitFor(() => expect(result.current.isPending).toBe(false))
-
     expect(result.current.data).toBe(bootstrapResponse)
     expect(result.current.isError).toBe(false)
     expect(localStorage.getItem('comic_pile_last_session_id_1')).toBe('1')
@@ -259,6 +254,8 @@ describe('useRollBootstrap', () => {
 
     expect(result.current.data).toEqual(reconciled)
     expect(result.current.isPending).toBe(false)
+    expect(result.current.isError).toBe(false)
+    expect(result.current.error).toBeNull()
 
     await act(async () => {
       initialRequest.resolve(bootstrapResponse)
