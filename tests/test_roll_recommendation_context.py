@@ -67,7 +67,10 @@ def _extract_selection_context(payload: dict[str, object] | None) -> dict[str, o
     """
     if not payload or not isinstance(payload, dict):
         return None
-    return payload.get("selection") if isinstance(payload.get("selection"), dict) else None
+    value = payload.get("selection")
+    if isinstance(value, dict):
+        return value
+    return None
 
 
 async def _latest_roll_event(async_db: AsyncSession) -> Event:
@@ -202,8 +205,10 @@ async def test_context_candidates_match_bounded_pool_for_large_library(
     assert isinstance(payload, dict)
     # The stored payload keeps the effort decision context at the top level and
     # the selection snapshot under "selection"; neither carries heavy metadata.
-    selection_payload = payload.get("selection", {})
-    effort_payload = payload.get("selected_candidate", {})
+    raw_selection = payload.get("selection", {})
+    selection_payload: dict[str, object] = raw_selection if isinstance(raw_selection, dict) else {}
+    raw_effort = payload.get("selected_candidate", {})
+    effort_payload: dict[str, object] = raw_effort if isinstance(raw_effort, dict) else {}
     for key in ("title", "notes", "description"):
         assert key not in selection_payload
         assert key not in effort_payload
