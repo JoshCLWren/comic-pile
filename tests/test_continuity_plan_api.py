@@ -463,11 +463,12 @@ async def test_delete_plan_cascades_owned_rules_and_leaves_unrelated_rules_intac
 ) -> None:
     """Deleting a plan removes only its generated rules; other users' and manual rules survive."""
     user = await get_or_create_user_async(async_db)
-    plan_issue = await _make_issue(async_db, user_id=user.id, suffix="plan")
+    plan_issue_1 = await _make_issue(async_db, user_id=user.id, suffix="plan1")
+    plan_issue_2 = await _make_issue(async_db, user_id=user.id, suffix="plan2")
     manual_issue = await _make_issue(async_db, user_id=user.id, suffix="manual")
     await async_db.commit()
 
-    plan_payload = _plan_payload([plan_issue.id], mode="strict_sequential")
+    plan_payload = _plan_payload([plan_issue_1.id, plan_issue_2.id], mode="strict_sequential")
     plan_payload["name"] = "Plan to delete"
     created = await auth_client.post("/api/v1/continuity-plans/", json=plan_payload)
     assert created.status_code == 201, created.text
@@ -484,7 +485,7 @@ async def test_delete_plan_cascades_owned_rules_and_leaves_unrelated_rules_intac
         source_type="issue",
         source_id=manual_issue.id,
         target_type="issue",
-        target_id=plan_issue.id,
+        target_id=plan_issue_1.id,
         satisfaction_type="item_read",
         note="manual-standalone",
     )
