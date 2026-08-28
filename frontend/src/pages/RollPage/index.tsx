@@ -17,6 +17,7 @@ import { useRate } from '../../hooks'
 import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 import { isDiceSide } from '../../components/diceTypes'
 import { threadsApi } from '../../services/api'
+import { useReaderContext } from '../../hooks/useReaderContext'
 import type { ThreadMetadata } from './types'
 import { useRollPageState } from './useRollPageState'
 import { useRollBootstrapSync } from './useRollBootstrapSync'
@@ -91,6 +92,9 @@ export default function RollPage() {
   })
 
   const rollPool = useMemo(() => bootstrap?.roll_pool ?? [], [bootstrap?.roll_pool])
+
+  const ratingIssueId = state.activeRatingThread?.issue_id ?? state.activeRatingThread?.next_issue_id ?? null
+  const { context: readerContext, isLoading: isReaderContextLoading, error: readerContextError } = useReaderContext(ratingIssueId)
 
   useRollPendingSession({ state, bootstrap, rollPool })
 
@@ -287,6 +291,9 @@ export default function RollPage() {
                 onSnooze={snooze.handleSnooze}
                 onRefreshThread={rating.handleRefreshThread}
                 onCancel={rating.handleCancelRating}
+                readerContext={readerContext}
+                isReaderContextLoading={isReaderContextLoading}
+                readerContextError={readerContextError?.message ?? null}
               />
             )}
 

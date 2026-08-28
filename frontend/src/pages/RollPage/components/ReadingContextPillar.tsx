@@ -1,9 +1,8 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { ReadingOrder } from '../../../services/api-reading-orders'
-import type { ConnectedThreadInfo, ReaderContextLocalIssue, ReaderContextResponse } from '../../../types'
+import type { ConnectedThreadInfo, ReaderContextResponse } from '../../../types'
 import type { RatingThread } from '../types'
-import { issuesApi } from '../../../services/api-issues'
 import ContinuityCorrectionDialog from '../../../components/ContinuityCorrectionDialog'
 import { ContinuityReadinessSummary } from './ContinuityReadinessSummary'
 import { ReadingOrderGroups } from './ReadingOrderGroups'
@@ -19,6 +18,9 @@ interface ReadingContextPillarProps {
   onRefreshThread: () => void
   rolledResult: number | null
   currentDie: number
+  readerContext: ReaderContextResponse | null
+  isReaderContextLoading: boolean
+  readerContextError: string | null
 }
 
 function ratingToStars(rating: number | null): string {
@@ -28,11 +30,7 @@ function ratingToStars(rating: number | null): string {
   return '★'.repeat(fullStars) + (hasHalf ? '½' : '')
 }
 
-function getSeriesNameFromContext(context: ReaderContextResponse): string | null {
-  return context.series.series_name ?? null
-}
-
-function relationLabel(relation: ReaderContextLocalIssue['relation'], seriesName: string | null): string {
+function relationLabel(relation: 'previous' | 'current' | 'next' | 'future', seriesName: string | null): string {
   switch (relation) {
     case 'previous':
       return seriesName ? `Earlier in ${seriesName}` : 'Earlier in this series'
@@ -84,73 +82,39 @@ export function ReadingContextPillar({
   onRefreshThread,
   rolledResult,
   currentDie,
+  readerContext,
+  isReaderContextLoading,
+  readerContextError,
 }: ReadingContextPillarProps) {
   const [isContinuityDialogOpen, setIsContinuityDialogOpen] = useState(false)
   const [isRouteExplanationOpen, setIsRouteExplanationOpen] = useState(false)
   const [expandedIssueId, setExpandedIssueId] = useState<number | null>(null)
   const navigate = useNavigate()
-  const [readerContext, setReaderContext] = useState<ReaderContextResponse | null>(null)
-  const [readerContextError, setReaderContextError] = useState<string | null>(null)
   const threadTitle = activeRatingThread?.title ?? 'Loading…'
   const issueNumber = activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number ?? null
   const issueId = activeRatingThread?.issue_id ?? activeRatingThread?.next_issue_id
   const readinessState = useContinuityReadiness(issueId)
 
-  useEffect(() => {
-    if (!activeRatingThread || !issueId) {
-      setReaderContext(null)
-      setReaderContextError(null)
-      return
-    }
+  const seriesName = useMemo(
+    () => readerContext ? (() => {
+      const context = readerContext
+      return context.series.series_name ?? null
+    })() : null,
+    [readerContext],
+  )
 
-    const abortController = new AbortController()
-    let isCurrent = true
-    const fetchReaderContext = async () => {
-      setReaderContextError(null)
-      try {
-        const response = await issuesApi.getReaderContext(issueId, { signal: abortController.signal })
-        if (isCurrent && !abortController.signal.aborted) {
-          setReaderContext(response)
-        }
-      } catch (error) {
-        if (isCurrent && !abortController.signal.aborted) {
-          console.error('Failed to fetch reader-context:', error)
-          setReaderContextError('Failed to load reading context')
-        }
-      }
-    }
-
-    fetchReaderContext()
-
-    return () => {
-      isCurrent = false
-      abortController.abort()
-    }
-  }, [activeRatingThread, issueId])
-
-  const seriesName = useMemo(() => readerContext ? getSeriesNameFromContext(readerContext) : null, [readerContext])
-
-  const currentIssue = useMemo(() => readerContext?.local_chain.issues.find(i => i.relation === 'current') ?? null, [readerContext])
-  const previousIssues = useMemo(() => readerContext?.local_chain.issues.filter(i => i.relation === 'previous') ?? [], [readerContext])
-  const nextIssues = useMemo(() => readerContext?.local_chain.issues.filter(i => i.relation === 'next' || i.relation === 'future') ?? [], [readerContext])
-
-  const allCrossoverMemberships = useMemo(() => {
-    if (!readerContext) return []
-    const seen = new Set<number>()
-    const memberships: { id: number; name: string }[] = []
-    for (const issue of readerContext.local_chain.issues) {
-      for (const m of issue.crossover_memberships) {
-        if (!seen.has(m.id)) {
-          seen.add(m.id)
-          memberships.push(m)
-        }
-      }
-    }
-    return memberships
-  }, [readerContext])
-
-  const currentCrossovers = useMemo(() => currentIssue?.crossover_memberships ?? [], [currentIssue])
-  const upcomingCrossovers = useMemo(() => readerContext?.crossovers.filter(c => !c.applies_to_current_issue) ?? [], [readerContext])
+  const currentIssue = useMemo(
+    () => readerContext?.local_chain.issues.find(i => i.relation === 'current') ?? null,
+    [readerContext],
+  )
+  const previousIssues = useMemo(
+    () => readerContext?.local_chain.issues.filter(i => i.relation === 'previous') ?? [],
+    [readerContext],
+  )
+  const nextIssues = useMemo(
+    () => readerContext?.local_chain.issues.filter(i => i.relation === 'next' || i.relation === 'future') ?? [],
+    [readerContext],
+  )
 
   const dependencyEdges = useMemo(() => readerContext?.local_chain.edges.filter(e => e.kind === 'dependency') ?? [], [readerContext])
   const continuityEdges = useMemo(() => readerContext?.local_chain.edges.filter(e => e.kind === 'continuity') ?? [], [readerContext])
@@ -248,27 +212,6 @@ export function ReadingContextPillar({
               Where you are in {seriesName}
             </h3>
           </div>
-
-          {allCrossoverMemberships.length > 0 && (
-            <div className="mb-3 flex flex-wrap gap-2" aria-label="Crossover memberships">
-              {allCrossoverMemberships.map((crossover) => (
-                <button
-                  key={crossover.id}
-                  type="button"
-                  className="inline-flex min-h-7 items-center rounded-full px-3 font-bold text-[var(--theme-comic-accent)] transition hover:brightness-125 focus:ring-2 focus:ring-amber-500"
-                  style={{
-                    ...readingContextType('chipLabel'),
-                    border: '1px solid rgba(212,137,14,0.4)',
-                    backgroundColor: 'rgba(212, 137, 14, 0.12)',
-                  }}
-                  onClick={() => openCrossover(crossover.id)}
-                  aria-label={`Open ${crossover.name} crossover`}
-                >
-                  {crossover.name}
-                </button>
-              ))}
-            </div>
-          )}
 
           <div className="space-y-2" role="list" aria-label="Series issues">
             {[...previousIssues, ...(currentIssue ? [currentIssue] : []), ...nextIssues].map((issue) => {
@@ -389,7 +332,12 @@ export function ReadingContextPillar({
         </section>
       )}
 
-      {readerContextError && !readerContext ? (
+      {isReaderContextLoading && !readerContext ? (
+        <div className="space-y-2 rounded-2xl p-3" style={{ border: '1px solid rgba(6,182,212,0.1)', backgroundColor: 'rgba(6, 182, 212, 0.04)' }}>
+          <div className="h-3 w-24 animate-pulse rounded bg-white/5" />
+          <div className="h-5 w-16 animate-pulse rounded bg-white/5" />
+        </div>
+      ) : readerContextError && !readerContext ? (
         <section aria-labelledby="reader-context-unavailable-heading" className="rounded-2xl p-3" style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'rgba(6, 182, 212, 0.09)' }}>
           <h3
             id="reader-context-unavailable-heading"
@@ -403,98 +351,6 @@ export function ReadingContextPillar({
           </p>
         </section>
       ) : null}
-
-      {readerContext && (currentCrossovers.length > 0 || upcomingCrossovers.length > 0) && (
-        <section aria-labelledby="exact-crossover-heading" className="rounded-2xl p-4" style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'rgba(6, 182, 212, 0.09)' }}>
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <h3
-              id="exact-crossover-heading"
-              className="font-bold text-[var(--theme-text-primary)]"
-              style={readingContextType('sectionHeading')}
-            >
-              Exact Crossover Context
-            </h3>
-          </div>
-
-          <p className="mb-3 text-[var(--theme-text-muted)]" style={readingContextType('bodyCopy')}>
-            Being part of a crossover doesn&apos;t block reading by itself.
-          </p>
-
-          {currentCrossovers.length > 0 && (
-            <div className="mb-4 space-y-2">
-              <div
-                className="mb-1 font-bold uppercase tracking-wider text-[var(--theme-text-muted)]"
-                style={readingContextType('statLabel')}
-              >
-                Current Issue Crossovers
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {currentCrossovers.map((crossover) => (
-                  <button
-                    key={crossover.id}
-                    type="button"
-                    className="inline-flex min-h-7 items-center rounded-full px-3 font-bold text-[var(--theme-comic-accent)] transition hover:brightness-125 focus:ring-2 focus:ring-amber-500"
-                    style={{
-                      ...readingContextType('chipLabel'),
-                      border: '1px solid rgba(212,137,14,0.4)',
-                      backgroundColor: 'rgba(212, 137, 14, 0.12)',
-                    }}
-                    onClick={() => openCrossover(crossover.id)}
-                    aria-label={`Open crossover ${crossover.name}`}
-                  >
-                    {crossover.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {upcomingCrossovers.length > 0 && (
-            <div className="space-y-2">
-              <div
-                className="mb-1 font-bold uppercase tracking-wider text-[var(--theme-text-muted)]"
-                style={readingContextType('statLabel')}
-              >
-                Upcoming Crossovers
-              </div>
-              {upcomingCrossovers.map((crossover) => (
-                <button
-                  key={crossover.id}
-                  type="button"
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition hover:bg-white/5"
-                  style={{ borderLeft: '3px solid rgb(250, 204, 139)', backgroundColor: 'rgba(250, 204, 139, 0.05)' }}
-                  onClick={() => openCrossover(crossover.id, crossover.next_member?.issue_number ?? null)}
-                  aria-label={`Open crossover ${crossover.name}${crossover.next_member ? `, starts at issue ${crossover.next_member.issue_number}` : ''}`}
-                >
-                  <div className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: 'rgb(250, 204, 139)' }}></div>
-                  <div className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                    <span
-                      className="min-w-0 break-words font-bold text-[var(--theme-text-primary)]"
-                      style={readingContextType('primaryValue')}
-                    >
-                      {crossover.name}
-                    </span>
-                    {crossover.next_member ? (
-                      <span
-                        className="whitespace-nowrap text-[var(--theme-text-muted)]"
-                        style={readingContextType('metaLabel')}
-                      >
-                        — starts at #{crossover.next_member.issue_number}
-                      </span>
-                    ) : (
-                      <span className="italic text-[var(--theme-text-muted)]" style={readingContextType('metaLabel')}>
-                        {crossover.membership_kind === 'thread'
-                          ? 'issue unknown — membership covers a moving thread'
-                          : 'no upcoming issue'}
-                      </span>
-                    )}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
 
       {readerContext && (dependencyEdges.length > 0 || continuityEdges.length > 0) && (
         <section aria-labelledby="dependency-edges-heading" className="rounded-2xl p-4" style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'rgba(6, 182, 212, 0.09)' }}>

@@ -1,5 +1,5 @@
 import Tooltip from '../../../components/Tooltip'
-import { useReaderContext } from '../../../hooks/useReaderContext'
+import type { ReaderContextResponse } from '../../../services/api-reader-context'
 import { RATING_THRESHOLD, getDieDirection } from '../utils'
 import type { RatingThread } from '../types'
 import { SeriesPanel } from './SeriesPanel'
@@ -11,6 +11,8 @@ interface YourContextPillarProps {
   rating: number
   predictedDie: number
   onUpdateRating: (value: string) => void
+  readerContext: ReaderContextResponse | null
+  isLoading: boolean
 }
 
 function ReaderContextLoading() {
@@ -29,11 +31,11 @@ export function YourContextPillar({
   rating,
   predictedDie,
   onUpdateRating,
+  readerContext,
+  isLoading,
 }: YourContextPillarProps) {
   const dieDirection = getDieDirection(currentDie, predictedDie)
   const isLastIssue = activeRatingThread?.issues_remaining === 1
-  const issueId = activeRatingThread?.issue_id ?? activeRatingThread?.next_issue_id ?? null
-  const { context, isLoading } = useReaderContext(issueId)
 
   return (
     <div className="w-full space-y-4">
@@ -43,10 +45,10 @@ export function YourContextPillar({
 
       {isLoading ? <ReaderContextLoading /> : null}
 
-      {!isLoading && context ? (
+      {readerContext ? (
         <>
-          <SeriesPanel series={context.series} />
-          <CrossoverAnalytics crossovers={context.crossovers} />
+          <SeriesPanel series={readerContext.series} />
+          <CrossoverAnalytics crossovers={readerContext.crossovers} />
         </>
       ) : null}
 
