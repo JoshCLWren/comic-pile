@@ -88,12 +88,12 @@ class Thread(Base):
         "Issue", foreign_keys=[next_unread_issue_id], lazy="raise"
     )
 
-def uses_issue_tracking(self) -> bool:
+    def uses_issue_tracking(self) -> bool:
         """Check if thread has been migrated to issue tracking.
-        
+
         Threads with total_issues = NULL use old issues_remaining counter.
         Threads with total_issues != NULL use Issue records.
-        
+
         Returns:
             True if thread uses Issue tracking, False if using old counter system
         """

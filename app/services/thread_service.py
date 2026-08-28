@@ -140,7 +140,6 @@ async def thread_to_response(
         reading_progress=reading_progress,
         next_unread_issue_id=next_unread_issue_id,
         next_unread_issue_number=next_unread_issue_number,
-        blocking_reasons=[],
     )
 
 
@@ -167,7 +166,7 @@ async def threads_to_responses(threads: list[Thread], db: AsyncSession) -> list[
     ]
 
 
-async def to_queue_list_item(tr: ThreadResponse) -> QueueThreadListItem:
+def to_queue_list_item(tr: ThreadResponse) -> QueueThreadListItem:
     """Convert a full ThreadResponse to a narrow QueueThreadListItem.
     
     Deliberately drops detail-only fields (last_rating, is_test,
@@ -195,6 +194,7 @@ async def to_queue_list_item(tr: ThreadResponse) -> QueueThreadListItem:
         issues_remaining=tr.issues_remaining,
         queue_position=tr.queue_position,
         status=tr.status,
+        last_activity_at=tr.last_activity_at,
         is_blocked=tr.is_blocked,
         blocking_reasons=tr.blocking_reasons,
         total_issues=tr.total_issues,
@@ -305,9 +305,8 @@ async def completed_threads_html(db: AsyncSession, user_id: int) -> str:
         HTML string with option elements for completed threads.
     """
     threads = await thread_repository.fetch_completed_threads(db, user_id)
-    # Normalize format values for display
     options = "\n".join(
-        f'<option value="{thread.id}">{thread.title} ({thread.format})</option>'
+        f'<option value="{thread.id}">{thread.title} ({thread.normalize_format()})</option>'
         for thread in threads
     )
     return f'<option value="">Select a completed thread...</option>\n{options}'
@@ -329,7 +328,7 @@ async def active_threads_html(db: AsyncSession, user_id: int) -> str:
         f'<input type="radio" name="thread_id" value="{thread.id}" id="thread-{thread.id}" class="mr-3">'
         f'<label for="thread-{thread.id}" class="flex-1 cursor-pointer">'
         f'<span class="font-medium">{thread.title}</span>'
-        f'<span class="text-sm text-gray-500 ml-2">({thread.format})</span>'
+        f'<span class="text-sm text-gray-500 ml-2">({thread.normalize_format()})</span>'
         f"</label></div>"
         for thread in threads
     )
@@ -422,20 +421,20 @@ async def update_thread(
     thread_id: int,
     thread_data: ThreadUpdate,
 ) -> ThreadResponse:
-"""Apply a partial update to an owned thread.
-    
+    """Apply a partial update to an owned thread.
+
     Only legacy (non-issue-tracked) threads honor manual ``issues_remaining``
     edits; such edits also drive the active/completed status transition.
-    
+
     Args:
         db: Database session.
         user_id: Owner that must own the thread.
         thread_id: Primary key of the thread.
         thread_data: Partial update data.
-    
+
     Returns:
         ThreadResponse with updated thread details.
-    
+
     Raises:
         NotFoundError: When the thread does not exist for this user.
     """

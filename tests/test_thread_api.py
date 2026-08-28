@@ -1005,3 +1005,108 @@ async def test_set_current_issue_preserves_already_read_issues_after_target(
     assert data["issue_number"] == "9"
     assert data["next_issue_number"] == "9"
 
+
+@pytest.mark.asyncio
+async def test_create_thread_normalizes_format_variants(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Thread creation normalizes Comic/Comics/digital to canonical forms."""
+    user = await get_or_create_user_async(async_db)
+
+    cases = [
+        ("Comic", "Comic"),
+        ("Comics", "Comic"),
+        ("comic", "Comic"),
+        ("comics", "Comic"),
+        ("digital", "Digital"),
+        ("Digital", "Digital"),
+        ("Trade Paperback", "Trade Paperback"),
+    ]
+
+    for raw, expected in cases:
+        response = await auth_client.post(
+            "/api/v1/threads/",
+            json={"title": f"Thread {raw}", "format": raw, "issues_remaining": 1},
+        )
+        assert response.status_code == 201, f"Failed for {raw}: {response.text}"
+        data = response.json()
+        assert data["format"] == expected, f"Expected {expected} for {raw}, got {data['format']}"
+
+        result = await async_db.execute(
+            select(Thread).where(Thread.id == data["id"])
+        )
+        db_thread = result.scalar_one()
+        assert db_thread.format == expected, f"DB format mismatch for {raw}"
+
+
+@pytest.mark.asyncio
+async def test_update_thread_normalizes_format_variants(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Thread update normalizes Comic/Comics/digital to canonical forms."""
+    user = await get_or_create_user_async(async_db)
+
+    thread = Thread(
+        title="Format Test",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    cases = [
+        ("Comics", "Comic"),
+        ("comics", "Comic"),
+        ("digital", "Digital"),
+        ("Manga", "Manga"),
+    ]
+
+    for raw, expected in cases:
+        response = await auth_client.put(
+            f"/api/v1/threads/{thread.id}",
+            json={"format": raw},
+        )
+        assert response.status_code == 200, f"Failed for {raw}: {response.text}"
+        data = response.json()
+        assert data["format"] == expected, f"Expected {expected} for {raw}, got {data['format']}"
+
+        await async_db.refresh(thread)
+        assert thread.format == expected, f"DB format mismatch for {raw}"
+
+
+@pytest.mark.asyncio
+async def test_queue_items_show_normalized_format(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Queue list items render normalized format values."""
+    user = await get_or_create_user_async(async_db)
+
+    for fmt in ("Comics", "digital", "Manga"):
+        thread = Thread(
+            title=f"Test {fmt}",
+            format=fmt,
+            issues_remaining=1,
+            queue_position=1,
+            status="active",
+            user_id=user.id,
+            created_at=datetime.now(UTC),
+        )
+        async_db.add(thread)
+    await async_db.commit()
+
+    response = await auth_client.get("/api/v1/threads/")
+    assert response.status_code == 200
+    data = response.json()
+
+    formats = {item["format"] for item in data["threads"]}
+    assert "Comic" in formats
+    assert "Digital" in formats
+    assert "Manga" in formats
+    assert "Comics" not in formats
+    assert "digital" not in formats
+

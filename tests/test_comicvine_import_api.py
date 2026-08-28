@@ -24,7 +24,7 @@ async def _make_thread(
     thread = Thread(
         user_id=user_id,
         title=title,
-        format="Comics",
+        format="Comic",
         issues_remaining=1,
         total_issues=1,
         queue_position=1,
@@ -79,7 +79,7 @@ async def test_import_preserves_exact_comicvine_identity(
     assert thread is not None
     assert thread.user_id == default_user.id
     assert thread.title == "Batman #125"
-    assert thread.format == "Comics"
+    assert thread.format == "Comic"
     assert thread.total_issues == 1
 
     issue = await async_db.get(Issue, body["issue_id"])
