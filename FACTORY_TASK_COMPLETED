@@ -1,0 +1,1 @@
+Task completed: Deleted stray .github/scripts/factory-review-controller.py.bak file as requested in issue #1682. Verified no other stray backup files exist in repository outside dependency/venv directories.
