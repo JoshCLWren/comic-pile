@@ -1,8 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ReadingContextPillar } from '../pages/RollPage/components/ReadingContextPillar'
-import { issuesApi } from '../services/api-issues'
 import type { ReaderContextResponse } from '../types'
 
 const navigateSpy = vi.fn()
@@ -11,12 +10,6 @@ vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom')
   return { ...actual, useNavigate: () => navigateSpy }
 })
-
-vi.mock('../services/api-issues', () => ({
-  issuesApi: {
-    getReaderContext: vi.fn(),
-  },
-}))
 
 vi.mock('../components/ContinuityCorrectionDialog', () => ({ default: () => null }))
 vi.mock('../pages/RollPage/components/ContinuityReadinessSummary', () => ({
@@ -28,8 +21,16 @@ vi.mock('../pages/RollPage/components/ReadingOrderGroups', () => ({
 vi.mock('../pages/RollPage/components/ReadingRouteExplanation', () => ({
   ReadingRouteExplanation: () => null,
 }))
+vi.mock('../hooks/useContinuityReadiness', () => ({
+  useContinuityReadiness: () => ({ readiness: null, isLoading: false, error: null, refetch: vi.fn() }),
+}))
+vi.mock('../pages/RollPage/components/ReadingPathPanel', () => ({
+  ReadingPathPanel: () => null,
+}))
 
-const getReaderContextMock = issuesApi.getReaderContext as ReturnType<typeof vi.fn>
+beforeEach(() => {
+  navigateSpy.mockClear()
+})
 
 const activeRatingThread = {
   id: 42,
@@ -60,18 +61,7 @@ function buildContext(overrides: Partial<ReaderContextResponse> = {}): ReaderCon
       highest_rating: null,
       lowest_rating: null,
     },
-    crossovers: [
-      {
-        id: 7,
-        name: 'Ultimate Universe Reading Order',
-        applies_to_current_issue: false,
-        membership_kind: 'issue' as const,
-        next_member: { issue_id: 205, issue_number: '14' },
-        average_rating: null,
-        ratings_count: 0,
-        read_count: 0,
-      },
-    ],
+    crossovers: [],
     local_chain: {
       issues: [
         {
@@ -124,7 +114,7 @@ function buildContext(overrides: Partial<ReaderContextResponse> = {}): ReaderCon
   }
 }
 
-function renderPillar() {
+function renderPillar(context: ReaderContextResponse) {
   return render(
     <ReadingContextPillar
       activeRatingThread={activeRatingThread}
@@ -133,25 +123,129 @@ function renderPillar() {
       onRefreshThread={vi.fn()}
       rolledResult={null}
       currentDie={10}
+      readerContext={context}
+      isReaderContextLoading={false}
+      readerContextError={null}
     />,
   )
 }
 
-describe('ReadingContextPillar navigation (issue #1670)', () => {
-  it('navigates to the thread when a series-chain node is clicked or keyed', async () => {
-    getReaderContextMock.mockResolvedValue(buildContext())
-    renderPillar()
+describe('ReadingContextPillar navigation (issue #1877)', () => {
+  it('opens the selected chain node\'s own context instead of navigating to the active thread', async () => {
+    renderPillar(buildContext())
 
-    const node = await screen.findByRole('listitem', { name: /open saga issue 5/i })
-    await userEvent.setup().click(node)
-    expect(navigateSpy).toHaveBeenCalledWith('/thread/42')
+    const previousNode = await screen.findByRole('button', { name: 'Show context for Ultimate Black Panther issue 3' })
+    await userEvent.setup().click(previousNode)
 
-    fireEvent.keyDown(node, { key: 'Enter' })
-    expect(navigateSpy).toHaveBeenLastCalledWith('/thread/42')
+    expect(previousNode).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('Issue 3 · Already read · Your rating: ★★★½')).toBeVisible()
+    expect(navigateSpy).not.toHaveBeenCalled()
   })
 
-  it('links each crossover name in the crossover panel to the crossovers page', async () => {
-    getReaderContextMock.mockResolvedValue(
+  it('produces different contexts when different chain nodes are selected', async () => {
+    renderPillar(buildContext())
+
+    const previousNode = await screen.findByRole('button', { name: 'Show context for Ultimate Black Panther issue 3' })
+    const currentNode = screen.getByRole('button', { name: 'Show context for Ultimate Black Panther issue 5' })
+
+    await userEvent.setup().click(previousNode)
+    const previousPanel = screen.getByLabelText('Context for Ultimate Black Panther issue 3')
+    expect(within(previousPanel).getByText('Earlier in Ultimate Black Panther')).toBeVisible()
+
+    await userEvent.setup().click(currentNode)
+    expect(screen.queryByLabelText('Context for Ultimate Black Panther issue 3')).not.toBeInTheDocument()
+    const currentPanel = screen.getByLabelText('Context for Ultimate Black Panther issue 5')
+    expect(within(currentPanel).getByText('Issue 5 · Not read yet')).toBeVisible()
+    expect(within(currentPanel).getByRole('button', { name: 'Open Saga thread' })).toBeVisible()
+  })
+
+  it('exposes the active-thread surface from the current node\'s own context', async () => {
+    renderPillar(buildContext())
+
+    const currentNode = await screen.findByRole('button', { name: 'Show context for Ultimate Black Panther issue 5' })
+    await userEvent.setup().click(currentNode)
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Open Saga thread' }))
+    expect(navigateSpy).toHaveBeenCalledTimes(1)
+    expect(navigateSpy).toHaveBeenCalledWith('/thread/42')
+  })
+
+  it('activates chain nodes consistently by pointer, Enter, and Space', async () => {
+    const user = userEvent.setup()
+    renderPillar(buildContext())
+
+    const node = await screen.findByRole('button', { name: 'Show context for Ultimate Black Panther issue 3' })
+    await user.click(node)
+    expect(node).toHaveAttribute('aria-expanded', 'true')
+
+    await user.keyboard('{Enter}')
+    expect(node).toHaveAttribute('aria-expanded', 'false')
+
+    await user.keyboard(' ')
+    expect(node).toHaveAttribute('aria-expanded', 'true')
+    expect(navigateSpy).not.toHaveBeenCalled()
+  })
+
+  it('links edge endpoint buttons deep to their threads', async () => {
+    renderPillar(
+      buildContext({
+        local_chain: {
+          issues: [
+            ...buildContext().local_chain.issues.slice(0, 1),
+            {
+              issue_id: 100,
+              issue_number: '5',
+              position: 4,
+              status: 'unread',
+              relation: 'current',
+              rating: null,
+              crossover_memberships: [{ id: 9, name: 'Animal Man' }],
+            },
+          ],
+          edges: [
+            {
+              id: 21,
+              kind: 'dependency' as const,
+              source_issue_id: 98,
+              target_issue_id: 100,
+              source_thread_id: 42,
+              target_thread_id: 7,
+              source_label: 'Saga #3',
+              target_label: 'Saga #5',
+              note: null,
+              explanation: 'Read first',
+            },
+          ],
+        },
+      }),
+    )
+
+    await screen.findByText('Dependency & Continuity Edges')
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Open thread for Saga #3' }))
+    expect(navigateSpy).toHaveBeenCalledWith('/thread/42')
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Open thread for Saga #5' }))
+    expect(navigateSpy).toHaveBeenCalledWith('/thread/7')
+  })
+
+  it('links both dependency edge endpoints to their threads and shows the explanation', async () => {
+    renderPillar(buildContext())
+
+    const sources = await screen.findAllByRole('button', { name: 'Open thread for Saga #3' })
+    expect(sources).toHaveLength(2)
+    const targets = screen.getAllByRole('button', { name: 'Open thread for Saga #5' })
+    expect(targets).toHaveLength(2)
+    await userEvent.setup().click(sources[0])
+    expect(navigateSpy).toHaveBeenLastCalledWith('/thread/42')
+
+    await userEvent.setup().click(targets[1])
+    expect(navigateSpy).toHaveBeenLastCalledWith('/thread/42')
+    expect(screen.getAllByText('Blocked by issue #3 in Saga')).toHaveLength(1)
+    expect(screen.getByText('Saga #3 must be read before Saga #5')).toBeVisible()
+  })
+
+  it('links membership chips in expanded issue detail to their specific crossovers', async () => {
+    renderPillar(
       buildContext({
         local_chain: {
           issues: [
@@ -170,59 +264,24 @@ describe('ReadingContextPillar navigation (issue #1670)', () => {
         },
       }),
     )
-    renderPillar()
 
-    await screen.findByText('Exact Crossover Context')
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Open crossover Animal Man' }))
-    expect(navigateSpy).toHaveBeenLastCalledWith('/crossovers')
+    const expandButton = await screen.findByRole('button', { name: /Show context for Ultimate Black Panther issue 5/ })
+    await userEvent.setup().click(expandButton)
 
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Open crossover Ultimate Universe Reading Order' }))
-    expect(navigateSpy).toHaveBeenLastCalledWith('/crossovers')
-  })
-
-  it('states where an upcoming crossover begins instead of a bare placeholder', async () => {
-    getReaderContextMock.mockResolvedValue(buildContext())
-    renderPillar()
-
-    expect(await screen.findByText(/starts at #14/)).toBeVisible()
-  })
-
-  it('links both dependency edge endpoints to their threads and shows the explanation', async () => {
-    getReaderContextMock.mockResolvedValue(buildContext())
-    renderPillar()
-
-    const sources = await screen.findAllByRole('button', { name: 'Open thread for Saga #3' })
-    expect(sources).toHaveLength(2)
-    const targets = screen.getAllByRole('button', { name: 'Open thread for Saga #5' })
-    expect(targets).toHaveLength(2)
-    await userEvent.setup().click(sources[0])
-    expect(navigateSpy).toHaveBeenLastCalledWith('/thread/42')
-
-    await userEvent.setup().click(targets[1])
-    expect(navigateSpy).toHaveBeenLastCalledWith('/thread/42')
-    expect(screen.getAllByText('Blocked by issue #3 in Saga')).toHaveLength(1)
-    expect(screen.getByText('Saga #3 must be read before Saga #5')).toBeVisible()
-  })
-
-  it('links the membership chips above the series strip to the crossovers page', async () => {
-    getReaderContextMock.mockResolvedValue(buildContext())
-    renderPillar()
-
-    const chip = await screen.findByRole('button', { name: 'Open Ultimate Universe Reading Order crossover' })
+    const chip = await screen.findByRole('button', { name: 'Open Animal Man crossover' })
     await userEvent.setup().click(chip)
-    expect(navigateSpy).toHaveBeenLastCalledWith('/crossovers')
+    expect(navigateSpy).toHaveBeenLastCalledWith('/crossovers?group=9')
   })
 
   it('labels incoming dependency edges "Blocked by:" without counts', async () => {
-    getReaderContextMock.mockResolvedValue(buildContext())
-    renderPillar()
+    renderPillar(buildContext())
 
     expect(await screen.findByText('Blocked by:')).toBeVisible()
     expect(screen.queryByText(/1 edges/)).not.toBeInTheDocument()
   })
 
   it('labels outgoing dependency edges "Blocks:"', async () => {
-    getReaderContextMock.mockResolvedValue(
+    renderPillar(
       buildContext({
         local_chain: {
           issues: buildContext().local_chain.issues,
@@ -243,13 +302,12 @@ describe('ReadingContextPillar navigation (issue #1670)', () => {
         },
       }),
     )
-    renderPillar()
 
     expect(await screen.findByText('Blocks:')).toBeVisible()
   })
 
   it('suppresses empty panels and falls back to note copy when no explanation exists', async () => {
-    getReaderContextMock.mockResolvedValue(
+    renderPillar(
       buildContext({
         crossovers: [],
         local_chain: {
@@ -281,12 +339,8 @@ describe('ReadingContextPillar navigation (issue #1670)', () => {
         },
       }),
     )
-    renderPillar()
 
     await screen.findByText('Continuity:')
-    expect(screen.queryByText(/Current Issue Crossovers/i)).not.toBeInTheDocument()
-    expect(screen.queryByText(/Upcoming Crossovers/i)).not.toBeInTheDocument()
-    expect(screen.queryByText(/0 upcoming/i)).not.toBeInTheDocument()
     expect(screen.getByText('#100')).toBeVisible()
     expect(screen.getByText('#101')).toBeVisible()
     expect(screen.getByText('checkpoint')).toBeVisible()

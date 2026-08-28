@@ -20,7 +20,10 @@ vi.mock('../services/api', () => {
   return {
     default: client,
     threadsApi: { get: vi.fn() },
-    dependenciesApi: { getIssueDependencies: vi.fn().mockResolvedValue({ incoming: [], outgoing: [] }) },
+    dependenciesApi: {
+      getIssueDependencies: vi.fn().mockResolvedValue({ incoming: [], outgoing: [] }),
+      getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),
+    },
   }
 })
 vi.mock('../services/api-issues', () => ({ issuesApi: { list: vi.fn() } }))

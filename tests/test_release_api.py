@@ -235,6 +235,113 @@ async def test_public_release_payload_rejects_placeholder_content(
     )
 
 
+@pytest.mark.parametrize(
+    ("field", "offending", "fragment"),
+    [
+        ("title", "incomplete #1551 fix for roll recovery", "#1551"),
+        ("title", "Roll history now loads instantly (Phase 2 and 3)", "Phase 2"),
+        ("summary", "Added source_roll_event_id instrumentation detail.", "source_roll_event_id"),
+        ("summary", "This update is still incomplete but shipped anyway.", "incomplete"),
+        ("category", "wip cleanup", "wip"),
+        ("title", "Smoother appearnence for saved piles", "appearnence"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_public_release_payload_rejects_internal_engineering_artifacts(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    field: str,
+    offending: str,
+    fragment: str,
+) -> None:
+    """Public published copy containing internal artifacts never reaches What's New.
+
+    Args:
+        auth_client: Authenticated async API client.
+        monkeypatch: Pytest environment patch helper.
+        field: The release field receiving the offending copy.
+        offending: Offending reader-facing copy.
+        fragment: The exact internal fragment expected in the rejection message.
+
+    Returns:
+        None.
+    """
+    monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
+    headers = {"X-Release-Writer-Token": "writer-secret"}
+    payload = _release_payload(pr_number=1213, merge_sha="7" * 40)
+    payload[field] = offending
+
+    response = await auth_client.put("/api/v1/releases/", json=payload, headers=headers)
+
+    assert response.status_code == 422
+    errors = response.json()["errors"]
+    assert any(
+        f"Value error, {field} must use reader-facing product language" in error["message"]
+        or f"Value error, {field} must be spell-checked before publication" in error["message"]
+        for error in errors
+    )
+    assert any(fragment in error["message"] for error in errors)
+
+
+@pytest.mark.asyncio
+async def test_internal_and_draft_releases_may_reference_engineering_detail(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The reader-facing gate only governs public published releases.
+
+    Args:
+        auth_client: Authenticated async API client.
+        monkeypatch: Pytest environment patch helper.
+
+    Returns:
+        None.
+    """
+    monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
+    headers = {"X-Release-Writer-Token": "writer-secret"}
+
+    internal = _release_payload(pr_number=1214, merge_sha="6" * 40)
+    internal["visibility"] = "internal"
+    internal["title"] = "Internal change (PR #1214)"
+    internal["summary"] = "Tracks source_roll_event_id backfill for Phase 2."
+    internal_response = await auth_client.put(
+        "/api/v1/releases/",
+        json=internal,
+        headers=headers,
+    )
+    assert internal_response.status_code == 200
+
+    draft = _release_payload(pr_number=1215, merge_sha="5" * 40)
+    draft["status"] = "draft"
+    draft["title"] = "Draft: incomplete #1551 fix"
+    draft_response = await auth_client.put("/api/v1/releases/", json=draft, headers=headers)
+    assert draft_response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_public_release_body_may_carry_engineering_detail(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Engineering notes in the non-rendered body stay allowed for diagnostics.
+
+    Args:
+        auth_client: Authenticated async API client.
+        monkeypatch: Pytest environment patch helper.
+
+    Returns:
+        None.
+    """
+    monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
+    headers = {"X-Release-Writer-Token": "writer-secret"}
+    payload = _release_payload(pr_number=1216, merge_sha="4" * 40)
+    payload["body"] = "Engineering follow-up tracked in issue #1551 (source_roll_event_id)."
+
+    response = await auth_client.put("/api/v1/releases/", json=payload, headers=headers)
+
+    assert response.status_code == 200
+
+
 @pytest.mark.asyncio
 async def test_release_retract_requires_writer_credential(
     auth_client: AsyncClient,

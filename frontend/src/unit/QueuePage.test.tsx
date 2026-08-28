@@ -18,6 +18,7 @@ import {
   useShuffleQueue,
 } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
+import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { threadsApi, dependenciesApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
@@ -46,6 +47,10 @@ vi.mock('../hooks/useSession', () => ({
 vi.mock('../hooks/useSnooze', () => ({
   useSnooze: vi.fn(),
   useUnsnooze: vi.fn(),
+}))
+
+vi.mock('../hooks/useQueueBlockingInfo', () => ({
+  useQueueBlockingInfo: vi.fn(() => ({})),
 }))
 
 vi.mock('../services/api', () => ({
@@ -84,6 +89,7 @@ const mockedUseMoveToBack = vi.mocked(useMoveToBack) as any
 const mockedUseMoveToPosition = vi.mocked(useMoveToPosition) as any
 const mockedUseShuffleQueue = vi.mocked(useShuffleQueue) as any
 const mockedUseSession = vi.mocked(useSession) as any
+const mockedUseQueueBlockingInfo = vi.mocked(useQueueBlockingInfo) as any
 const mockedUseBugReportRestore = vi.mocked(useBugReportRestore) as any
 const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
 const mockedUseSnooze = vi.mocked(useSnooze) as any
@@ -479,11 +485,15 @@ describe('Keyboard Accessibility', () => {
   const user = userEvent.setup()
   const deleteMutation = { mutate: vi.fn().mockRejectedValue(new Error('delete failed')), isPending: false }
   mockedUseDeleteThread.mockReturnValue(deleteMutation)
-  mockedUseQueueThreads.mockReturnValue({ data: [{ id: 1, title: 'Blocked', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 2, is_blocked: true, total_issues: null, blocking_reasons: [] }], isPending: false, refetch: vi.fn() })
+  mockedUseQueueThreads.mockReturnValue({ data: [{ id: 1, title: 'Blocked', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 2, is_blocked: true, total_issues: null, blocking_reasons: ['Blocked by: Prequel'] }], isPending: false, refetch: vi.fn() })
+  mockedUseQueueBlockingInfo.mockReturnValue({ 1: [{ label: 'Blocked by: Prequel' }] })
   vi.stubGlobal('confirm', vi.fn(() => true))
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  await user.click(screen.getByLabelText('Read'))
-  expect(alert).toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'))
+  const readButton = screen.getByLabelText('Read')
+  expect(readButton).toBeDisabled()
+  expect(readButton).toHaveAttribute('title', expect.stringContaining('Blocked by: Prequel'))
+  expect(mockedThreadsApi.setPending).not.toHaveBeenCalled()
+  expect(alert).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'))
   await user.click(screen.getByLabelText('Delete'))
   await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('delete failed')))
 })

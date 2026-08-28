@@ -1,29 +1,24 @@
-"""Thread CRUD API endpoints."""
+"""Thread CRUD API endpoints.
 
-import asyncio
-import logging
-from datetime import UTC, datetime, timedelta
+Thin routing layer: authentication, request/response schema validation,
+HTTP status mapping, and rate limiting/caching decorators. Business logic
+lives in ``app/services/thread_service.py``; query construction lives in
+``app/repositories/``.
+"""
+
 from typing import Annotated
-
-import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import delete as sa_delete
-from sqlalchemy import select, update
-from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.cache import TTL, cached
-from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
 from app.middleware import limiter
-from app.models import Event, Issue, Thread
 from app.models.user import User
 from app.schemas import (
     MigrateToIssuesRequest,
-    QueueThreadListItem,
     QueueThreadListResponse,
     ReactivateRequest,
     RollResponse,
@@ -35,109 +30,35 @@ from app.schemas import (
     ThreadUpdate,
 )
 from app.schemas.migration import MigrateToIssuesSimpleRequest
-from app.services.ownership import get_owned_thread_or_404
-from app.services.thread_issue_stats import load_next_issue_numbers, load_unread_counts
-from comic_pile.session import get_current_die, get_or_create
+from app.services import thread_service
+from app.services.errors import (
+    ConflictError,
+    ForbiddenError,
+    InvalidRequestError,
+    NotFoundError,
+    ServiceError,
+)
 
 router = APIRouter(tags=["threads"])
 
-logger = logging.getLogger(__name__)
+_ERROR_STATUS: dict[type[ServiceError], int] = {
+    NotFoundError: status.HTTP_404_NOT_FOUND,
+    InvalidRequestError: status.HTTP_400_BAD_REQUEST,
+    ConflictError: status.HTTP_409_CONFLICT,
+    ForbiddenError: status.HTTP_403_FORBIDDEN,
+}
 
 
-async def thread_to_response(
-    thread: Thread,
-    db: AsyncSession,
-    issue_number_map: dict[int, str] | None = None,
-    issues_remaining_map: dict[int, int] | None = None,
-) -> ThreadResponse:
-    """Convert Thread model to ThreadResponse.
+def _map_service_error(exc: ServiceError) -> HTTPException:
+    """Translate a domain error into its HTTP equivalent.
 
     Args:
-        thread: Thread model instance
-        db: Database session for computing issues_remaining (fallback only)
-        issue_number_map: Pre-fetched mapping of issue ID → issue_number.
-            When provided, avoids per-thread DB lookups for next_unread_issue_number.
-        issues_remaining_map: Pre-fetched mapping of thread ID → unread count.
-            When provided and the thread uses issue tracking, avoids a per-thread
-            COUNT query. Single-thread callers may omit this to use the per-row
-            fallback.
+        exc: Domain error raised by a service function.
 
     Returns:
-        ThreadResponse schema
+        HTTPException carrying the mapped status code and client-safe detail.
     """
-    if issues_remaining_map is not None and thread.uses_issue_tracking():
-        issues_remaining = issues_remaining_map.get(thread.id, 0)
-    else:
-        issues_remaining = await thread.get_issues_remaining(db)
-    reading_progress = thread.reading_progress
-
-    next_unread_issue_id = thread.next_unread_issue_id
-    next_unread_issue_number: str | None = None
-    if next_unread_issue_id is not None:
-        if issue_number_map is not None:
-            next_unread_issue_number = issue_number_map.get(next_unread_issue_id)
-        else:
-            next_issue = await db.get(Issue, next_unread_issue_id)
-            if next_issue:
-                next_unread_issue_number = next_issue.issue_number
-
-    return ThreadResponse(
-        id=thread.id,
-        title=thread.title,
-        format=thread.format,
-        issues_remaining=issues_remaining,
-        queue_position=thread.queue_position,
-        status=thread.status,
-        last_rating=thread.last_rating,
-        last_activity_at=thread.last_activity_at,
-        notes=thread.notes,
-        is_test=thread.is_test,
-        is_blocked=thread.is_blocked,
-        created_at=thread.created_at,
-        total_issues=thread.total_issues,
-        reading_progress=reading_progress,
-        next_unread_issue_id=next_unread_issue_id,
-        next_unread_issue_number=next_unread_issue_number,
-        blocking_reasons=[],
-    )
-
-
-async def _threads_to_responses(threads: list[Thread], db: AsyncSession) -> list[ThreadResponse]:
-    """Convert a list of Thread models to ThreadResponses with batched lookups."""
-    issue_map = await load_next_issue_numbers(threads, db)
-    remaining_map = await load_unread_counts(threads, db)
-    return [
-        await thread_to_response(
-            thread,
-            db,
-            issue_number_map=issue_map,
-            issues_remaining_map=remaining_map,
-        )
-        for thread in threads
-    ]
-
-
-def _to_queue_list_item(tr: ThreadResponse) -> QueueThreadListItem:
-    """Convert a full ThreadResponse to a narrow QueueThreadListItem.
-
-    Deliberately drops detail-only fields (last_rating, is_test, reading_progress,
-    next_unread_issue_id) to reduce payload size for list views.
-    """
-    return QueueThreadListItem(
-        id=tr.id,
-        title=tr.title,
-        format=tr.format,
-        issues_remaining=tr.issues_remaining,
-        queue_position=tr.queue_position,
-        status=tr.status,
-        is_blocked=tr.is_blocked,
-        blocking_reasons=tr.blocking_reasons,
-        last_activity_at=tr.last_activity_at,
-        total_issues=tr.total_issues,
-        next_unread_issue_number=tr.next_unread_issue_number,
-        notes=tr.notes,
-        created_at=tr.created_at,
-    )
+    return HTTPException(status_code=_ERROR_STATUS[type(exc)], detail=exc.detail)
 
 
 @router.get("/stale", response_model=list[ThreadResponse])
@@ -146,29 +67,11 @@ async def list_stale_threads(
     db: AsyncSession = Depends(get_db),
     days: int = 30,
 ) -> list[ThreadResponse]:
-    """List threads not read in specified days (default 30).
-
-    Args:
-        current_user: The authenticated user making the request.
-        db: SQLAlchemy session for database operations.
-        days: Number of days to consider threads stale.
-
-    Returns:
-        List of ThreadResponse objects for stale threads.
-    """
-    from datetime import timedelta
-
-    cutoff_date = datetime.now(UTC) - timedelta(days=days)
-    result = await db.execute(
-        select(Thread)
-        .where(Thread.user_id == current_user.id)
-        .where(Thread.status == "active")
-        .where(Thread.is_blocked.is_(False))
-        .where((Thread.last_activity_at < cutoff_date) | (Thread.last_activity_at.is_(None)))
-        .order_by(Thread.last_activity_at.asc().nullsfirst())
-    )
-    threads = list(result.scalars().all())
-    return await _threads_to_responses(threads, db)
+    """List the authenticated user's threads not read in ``days`` (default 30)."""
+    try:
+        return await thread_service.list_stale_thread_responses(db, current_user.id, days)
+    except ServiceError as exc:
+        raise _map_service_error(exc) from exc
 
 
 @router.get("/", response_model=QueueThreadListResponse)
@@ -196,36 +99,25 @@ async def list_threads(
     """List threads with deterministic cursor-based pagination.
 
     Every retained sort has a deterministic cursor contract with stable
-    tie-breakers so that search results remain correct across multiple
-    pages.  Changing ``search`` or ``sort`` invalidates any prior cursor.
+    tie-breakers so that search results remain correct across multiple pages.
+    Changing ``search`` or ``sort`` invalidates any prior cursor.
 
     Args:
         request: FastAPI request object for rate limiting.
         search: Optional case-insensitive title search filter.
         sort: Sort order – ``position`` (default), ``title``, or ``created``.
-        page_size: Number of threads to return per page (default 50, max 200).
+        page_size: Threads per page (default 50, max 200).
         page_token: Opaque cursor token for pagination continuation.
         current_user: The authenticated user making the request.
         db: SQLAlchemy session for database operations.
 
     Returns:
-        QueueThreadListResponse with paginated threads and next_page_token if more exist.
+        Paginated queue items plus ``next_page_token`` when more pages exist.
 
     Raises:
         HTTPException: If a retired ``collection_id`` query parameter is present,
             the sort value is unsupported, or the page token is stale/malformed.
     """
-    from app.services.queue_pagination import (
-        QueueCursor,
-        QueueSort,
-        build_cursor_filter,
-        build_cursor_values_from_row,
-        build_sort_order,
-        decode_queue_cursor,
-        encode_queue_cursor,
-        normalize_queue_search,
-    )
-
     if "collection_id" in request.query_params:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -238,62 +130,17 @@ async def list_threads(
             detail="sort must be one of: position, title, created",
         )
 
-    validated_sort: QueueSort = sort
-    normalized_search = normalize_queue_search(search)
-
-    query = select(Thread).where(Thread.user_id == current_user.id)
-
-    if normalized_search:
-        query = query.where(Thread.title.ilike(f"%{normalized_search}%"))
-
-    # Apply deterministic sort order with tie-breakers
-    for col in build_sort_order(validated_sort):
-        query = query.order_by(col)
-
-    # Decode and apply opaque cursor-based pagination
-    if page_token:
-        try:
-            cursor = decode_queue_cursor(
-                page_token, sort=validated_sort, search=search
-            )
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(exc),
-            ) from exc
-        query = query.where(build_cursor_filter(cursor))
-
-    # Query for page_size + 1 to detect if there's a next page
-    query = query.limit(page_size + 1)
-    result = await db.execute(query)
-    threads = list(result.scalars().all())
-
-    # Check if there are more pages
-    has_more = len(threads) > page_size
-
-    # Only return the first page_size items
-    threads_to_return = threads[:page_size]
-
-    thread_responses = await _threads_to_responses(threads_to_return, db)
-
-    # Convert full ThreadResponse to narrow QueueThreadListItem for list views
-    queue_items = [_to_queue_list_item(tr) for tr in thread_responses]
-
-    # Build opaque next_page_token from the last row
-    next_token = None
-    if has_more and threads_to_return:
-        last = threads_to_return[-1]
-        cursor = QueueCursor(
-            sort=validated_sort,
-            search=normalized_search,
-            values=build_cursor_values_from_row(validated_sort, last),
+    try:
+        return await thread_service.list_queue_threads(
+            db,
+            current_user.id,
+            search=search,
+            sort=sort,
+            page_size=page_size,
+            page_token=page_token,
         )
-        next_token = encode_queue_cursor(cursor)
-
-    return QueueThreadListResponse(
-        threads=queue_items,
-        next_page_token=next_token,
-    )
+    except ServiceError as exc:
+        raise _map_service_error(exc) from exc
 
 
 @router.get("/completed", response_class=HTMLResponse)
@@ -302,28 +149,8 @@ async def list_completed_threads(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> str:
-    """List completed threads for reactivation modal.
-
-    Args:
-        request: FastAPI request object.
-        current_user: The authenticated user making the request.
-        db: SQLAlchemy session for database operations.
-
-    Returns:
-        HTML string with option elements for completed threads.
-    """
-    result = await db.execute(
-        select(Thread)
-        .where(Thread.user_id == current_user.id)
-        .where(Thread.status == "completed")
-        .order_by(Thread.created_at.desc())
-    )
-    threads = result.scalars().all()
-    options = "\n".join(
-        f'<option value="{thread.id}">{thread.title} ({thread.format})</option>'
-        for thread in threads
-    )
-    return f'<option value="">Select a completed thread...</option>\n{options}'
+    """Render completed threads as options for the reactivation modal."""
+    return await thread_service.completed_threads_html(db, current_user.id)
 
 
 @router.get("/active", response_class=HTMLResponse)
@@ -332,33 +159,8 @@ async def list_active_threads(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> str:
-    """List active threads for override modal.
-
-    Args:
-        request: FastAPI request object.
-        current_user: The authenticated user making the request.
-        db: SQLAlchemy session for database operations.
-
-    Returns:
-        HTML string with radio button elements for active threads.
-    """
-    result = await db.execute(
-        select(Thread)
-        .where(Thread.user_id == current_user.id)
-        .where(Thread.status == "active")
-        .order_by(Thread.queue_position)
-    )
-    threads = result.scalars().all()
-    items = "\n".join(
-        f'<div class="flex items-center p-2 hover:bg-gray-50 rounded">'
-        f'<input type="radio" name="thread_id" value="{thread.id}" id="thread-{thread.id}" class="mr-3">'
-        f'<label for="thread-{thread.id}" class="flex-1 cursor-pointer">'
-        f'<span class="font-medium">{thread.title}</span>'
-        f'<span class="text-sm text-gray-500 ml-2">({thread.format})</span>'
-        f"</label></div>"
-        for thread in threads
-    )
-    return items or '<p class="text-gray-500 text-center py-4">No active threads available</p>'
+    """Render active threads as radio buttons for the override modal."""
+    return await thread_service.active_threads_html(db, current_user.id)
 
 
 @router.post("/", response_model=ThreadResponse, status_code=status.HTTP_201_CREATED)
@@ -369,7 +171,7 @@ async def create_thread(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> ThreadResponse:
-    """Create a new thread.
+    """Create a new thread at the end of the user's queue.
 
     Args:
         request: FastAPI request object for rate limiting.
@@ -379,50 +181,8 @@ async def create_thread(
 
     Returns:
         ThreadResponse with created thread details.
-
-    Raises:
-        RuntimeError: If failed after max retries.
     """
-    max_retries = 3
-    initial_delay = 0.1
-    retries = 0
-
-    while retries < max_retries:
-        try:
-            result = await db.execute(
-                select(Thread.queue_position)
-                .where(Thread.user_id == current_user.id)
-                .order_by(Thread.queue_position.desc())
-            )
-            max_position = result.scalar() or 0
-            new_thread = Thread(
-                title=thread_data.title,
-                format=thread_data.format,
-                issues_remaining=thread_data.issues_remaining,
-                total_issues=thread_data.total_issues,
-                queue_position=max_position + 1,
-                user_id=current_user.id,
-                notes=thread_data.notes,
-                is_test=thread_data.is_test,
-            )
-            db.add(new_thread)
-            await db.commit()
-            await db.refresh(new_thread)
-
-            await invalidate_user_view(current_user.id)
-            return await thread_to_response(new_thread, db)
-        except OperationalError as e:
-            if "deadlock" in str(e).lower():
-                await db.rollback()
-                retries += 1
-                if retries >= max_retries:
-                    raise
-                delay = initial_delay * (2 ** (retries - 1))
-                await asyncio.sleep(delay)
-            else:
-                raise
-
-    raise RuntimeError(f"Failed to create thread after {max_retries} retries")
+    return await thread_service.create_thread_with_retry(db, current_user.id, thread_data)
 
 
 @router.get("/{thread_id}", response_model=ThreadDetail)
@@ -432,22 +192,15 @@ async def get_thread(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> ThreadDetail:
-    """Get a single thread by ID.
-
-    Args:
-        thread_id: The thread ID to retrieve.
-        current_user: The authenticated user making the request.
-        db: SQLAlchemy session for database operations.
-
-    Returns:
-        ThreadDetail with thread details.
+    """Get a single owned thread by ID.
 
     Raises:
-        HTTPException: If thread not found.
+        HTTPException: 404 when the thread does not exist for this user.
     """
-    thread = await get_owned_thread_or_404(db, current_user.id, thread_id)
-    tr = await thread_to_response(thread, db)
-    return ThreadDetail(**tr.model_dump())
+    try:
+        return await thread_service.get_thread_detail(db, current_user.id, thread_id)
+    except ServiceError as exc:
+        raise _map_service_error(exc) from exc
 
 
 @router.put("/{thread_id}", response_model=ThreadResponse)
@@ -457,7 +210,7 @@ async def update_thread(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> ThreadResponse:
-    """Update a thread.
+    """Update an owned thread.
 
     Args:
         thread_id: The thread ID to update.
@@ -467,31 +220,11 @@ async def update_thread(
 
     Returns:
         ThreadResponse with updated thread details.
-
-    Raises:
-        HTTPException: If thread not found.
     """
-    thread = await get_owned_thread_or_404(db, current_user.id, thread_id)
-    if thread_data.title is not None:
-        thread.title = thread_data.title
-    if thread_data.format is not None:
-        thread.format = thread_data.format
-    if thread_data.issues_remaining is not None:
-        if not thread.uses_issue_tracking():
-            thread.issues_remaining = thread_data.issues_remaining
-            if thread.issues_remaining == 0:
-                thread.status = "completed"
-            else:
-                thread.status = "active"
-    if thread_data.notes is not None:
-        thread.notes = thread_data.notes
-    if thread_data.is_test is not None:
-        thread.is_test = thread_data.is_test
-    await db.commit()
-    await db.refresh(thread)
-
-    await invalidate_user_view(current_user.id)
-    return await thread_to_response(thread, db)
+    try:
+        return await thread_service.update_thread(db, current_user.id, thread_id, thread_data)
+    except ServiceError as exc:
+        raise _map_service_error(exc) from exc
 
 
 @router.delete("/{thread_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -500,137 +233,15 @@ async def delete_thread(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    """Delete a thread.
-
-    Args:
-        thread_id: The thread ID to delete.
-        current_user: The authenticated user making the request.
-        db: SQLAlchemy session for database operations.
+    """Delete a thread and prune dependent session/continuity state.
 
     Raises:
-        HTTPException: If thread not found.
+        HTTPException: 404 when not found; 400 when deletion is refused.
     """
-    thread = await get_owned_thread_or_404(db, current_user.id, thread_id)
-
-    from app.models import Session as SessionModel
-
-    await db.execute(
-        update(SessionModel)
-        .where(SessionModel.pending_thread_id == thread_id)
-        .values(pending_thread_id=None)
-    )
-
-    # Collect issue ids that will disappear with the thread for plan cleanup.
-    issue_ids_result = await db.execute(select(Issue.id).where(Issue.thread_id == thread_id))
-    deleted_issue_ids: set[int] = set(issue_ids_result.scalars().all())
-
-    delete_event = Event(
-        type="delete",
-        timestamp=datetime.now(UTC),
-        thread_id=None,
-    )
-    db.add(delete_event)
     try:
-        # Prune continuity plans that reference this thread or its issues.
-        # This prevents orphaned steps that would otherwise 404 on reopen.
-        from app.models.continuity_plan import ContinuityPlan
-        from app.models.continuity_rule import ContinuityRule
-
-        plans_result = await db.execute(
-            select(ContinuityPlan).where(ContinuityPlan.user_id == current_user.id)
-        )
-        for plan in plans_result.scalars().all():
-            original = list(plan.nodes_json or [])
-            pruned: list[dict[str, object]] = []
-            changed = False
-            for node in original:
-                try:
-                    ntype = str(node.get("node_type", ""))
-                    ref = int(node.get("ref_id", 0))
-                except (TypeError, ValueError):
-                    pruned.append(node)
-                    continue
-                if ntype == "thread" and ref == thread_id:
-                    changed = True
-                    continue
-                if ntype == "issue" and ref in deleted_issue_ids:
-                    changed = True
-                    continue
-                pruned.append(node)
-            if changed:
-                # Renormalize contiguous positions per lane after removal.
-                by_lane: dict[str, list[dict[str, object]]] = {}
-                for n in pruned:
-                    by_lane.setdefault(str(n.get("lane_id", "")), []).append(n)
-                normalized: list[dict[str, object]] = []
-                for _lane_id, lane_nodes in by_lane.items():
-                    lane_nodes.sort(key=lambda x: int(x.get("position", 0)))  # type: ignore[arg-type]
-                    for idx, n in enumerate(lane_nodes):
-                        n["position"] = idx
-                        normalized.append(n)
-                plan.nodes_json = normalized
-                # Remove plan-owned rules that pointed at deleted issues.
-                marker = f"continuity-plan:{plan.id}"
-                if deleted_issue_ids:
-                    await db.execute(
-                        sa_delete(ContinuityRule).where(
-                            ContinuityRule.user_id == current_user.id,
-                            ContinuityRule.note == marker,
-                            (
-                                (ContinuityRule.source_type == "issue")
-                                & (ContinuityRule.source_id.in_(deleted_issue_ids))
-                            )
-                            | (
-                                (ContinuityRule.target_type == "issue")
-                                & (ContinuityRule.target_id.in_(deleted_issue_ids))
-                            ),
-                        )
-                    )
-                # If strict plan now has <2 nodes, remove remaining linear edges
-                if len(pruned) < 2:
-                    await db.execute(
-                        sa_delete(ContinuityRule).where(
-                            ContinuityRule.user_id == current_user.id,
-                            ContinuityRule.note == marker,
-                        )
-                    )
-
-        # Delete any continuity rules (non-plan-owned) that directly reference deleted issues.
-        if deleted_issue_ids:
-            await db.execute(
-                sa_delete(ContinuityRule).where(
-                    ContinuityRule.user_id == current_user.id,
-                    (
-                        (ContinuityRule.source_type == "issue")
-                        & (ContinuityRule.source_id.in_(deleted_issue_ids))
-                    )
-                    | (
-                        (ContinuityRule.target_type == "issue")
-                        & (ContinuityRule.target_id.in_(deleted_issue_ids))
-                    ),
-                )
-            )
-
-        from comic_pile.dependencies import refresh_user_blocked_status
-
-        await refresh_user_blocked_status(current_user.id, db)
-
-        await db.delete(thread)
-        await db.commit()
-        await invalidate_user_view(current_user.id)
-    except IntegrityError as exc:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot delete thread: {exc}",
-        ) from exc
-    except Exception as exc:
-        await db.rollback()
-        logger.exception("Unexpected error deleting thread %s", thread_id)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot delete thread: {exc}",
-        ) from exc
+        await thread_service.delete_thread(db, current_user.id, thread_id)
+    except ServiceError as exc:
+        raise _map_service_error(exc) from exc
 
 
 @router.post("/reactivate", response_model=ThreadResponse)
@@ -641,87 +252,14 @@ async def reactivate_thread(
 ) -> ThreadResponse:
     """Reactivate a completed thread by adding more issues.
 
-    Args:
-        request: Reactivation request with thread_id and issues_to_add.
-        current_user: The authenticated user making the request.
-        db: SQLAlchemy session for database operations.
-
-    Returns:
-        ThreadResponse with reactivated thread details.
-
     Raises:
-        HTTPException: If thread not found, not completed, or issues_to_add invalid.
+        HTTPException: 404 when not found; 400 when not completed or the issue
+            count is invalid.
     """
-    thread = await get_owned_thread_or_404(db, current_user.id, request.thread_id)
-    if thread.status != "completed":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Thread {request.thread_id} is not completed",
-        )
-    if request.issues_to_add <= 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Must add at least 1 issue",
-        )
-
-    await db.execute(
-        update(Thread)
-        .where(Thread.user_id == current_user.id)
-        .where(Thread.status == "active")
-        .values(queue_position=Thread.queue_position + 1)
-    )
-
-    if thread.uses_issue_tracking():
-        from app.models import Issue
-        from sqlalchemy import select
-
-        locked_issues = await db.execute(
-            select(Issue.issue_number, Issue.position)
-            .where(Issue.thread_id == thread.id)
-            .with_for_update()
-        )
-        existing_issue_rows = locked_issues.all()
-        existing_total = len(existing_issue_rows)
-        max_position = max((row.position for row in existing_issue_rows), default=0)
-        max_numeric_issue_number = max(
-            (int(row.issue_number) for row in existing_issue_rows if row.issue_number.isdigit()),
-            default=0,
-        )
-
-        first_new_issue = None
-        for i in range(
-            max_numeric_issue_number + 1,
-            max_numeric_issue_number + request.issues_to_add + 1,
-        ):
-            max_position += 1
-            new_issue = Issue(
-                thread_id=thread.id,
-                issue_number=str(i),
-                status="unread",
-                position=max_position,
-            )
-            if first_new_issue is None:
-                first_new_issue = new_issue
-            db.add(new_issue)
-
-        await db.flush()
-
-        thread.total_issues = existing_total + request.issues_to_add
-        thread.reading_progress = "in_progress"
-        thread.issues_remaining = request.issues_to_add
-
-        if first_new_issue:
-            thread.next_unread_issue_id = first_new_issue.id
-    else:
-        thread.issues_remaining = request.issues_to_add
-
-    thread.status = "active"
-    thread.queue_position = 1
-    await db.commit()
-    await db.refresh(thread)
-
-    await invalidate_user_view(current_user.id)
-    return await thread_to_response(thread, db)
+    try:
+        return await thread_service.reactivate_completed_thread(db, current_user.id, request)
+    except ServiceError as exc:
+        raise _map_service_error(exc) from exc
 
 
 @router.post("/{thread_id}/set-pending", response_model=RollResponse)
@@ -732,104 +270,13 @@ async def set_pending_thread(
 ) -> RollResponse:
     """Set a thread as pending for rating (manual selection).
 
-    Args:
-        thread_id: The thread ID to set as pending.
-        current_user: The authenticated user making the request.
-        db: SQLAlchemy session for database operations.
-
-    Returns:
-        RollResponse with the selected thread details.
-
     Raises:
-        HTTPException: If thread not found.
+        HTTPException: 404 when not found; 400 when inactive, blocked, or out of issues.
     """
-    thread = await get_owned_thread_or_404(db, current_user.id, thread_id)
-
-    if thread.status != "active":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Thread {thread_id} is not active",
-        )
-
-    thread_id_int = thread.id
-    thread_title = thread.title
-    thread_format = thread.format
-    thread_issues = thread.issues_remaining
-    thread_position = thread.queue_position
-    thread_total_issues = thread.total_issues
-    thread_reading_progress = thread.reading_progress
-    thread_next_unread_issue_id = thread.next_unread_issue_id
-
-    thread_issue_id = None
-    thread_issue_number = None
-    if thread.uses_issue_tracking() and thread_next_unread_issue_id:
-        from app.models import Issue
-
-        issue_result = await db.execute(
-            select(Issue).where(Issue.id == thread_next_unread_issue_id)
-        )
-        next_issue = issue_result.scalar_one_or_none()
-        if next_issue:
-            thread_issue_id = next_issue.id
-            thread_issue_number = next_issue.issue_number
-
-    if thread_issues <= 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Thread {thread_id} has no issues remaining",
-        )
-
-    current_session = await get_or_create(db, user_id=current_user.id)
-    current_session_id = current_session.id
-    current_die = await get_current_die(current_session_id, db)
-
-    snoozed_ids = (
-        list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
-    )
-    snoozed_count = len(snoozed_ids)
-    offset = snoozed_count
-
-    # Manual selection sets pending directly; no random roll is performed.
-    result = 0
-    event = Event(
-        type="roll",
-        session_id=current_session_id,
-        selected_thread_id=thread_id_int,
-        die=current_die,
-        result=result,
-        selection_method="manual",
-    )
-    db.add(event)
-
-    current_session.pending_thread_id = thread_id_int
-    current_session.pending_thread_updated_at = datetime.now(UTC)
-
-    if thread_id_int in snoozed_ids:
-        snoozed_ids.remove(thread_id_int)
-        current_session.snoozed_thread_ids = snoozed_ids
-        offset = len(snoozed_ids)
-        snoozed_count = len(snoozed_ids)
-
-    await db.commit()
-    await invalidate_user_view(current_user.id)
-
-    return RollResponse(
-        thread_id=thread_id_int,
-        title=thread_title,
-        format=thread_format,
-        issues_remaining=thread_issues,
-        queue_position=thread_position,
-        die_size=current_die,
-        result=result,
-        offset=offset,
-        snoozed_count=snoozed_count,
-        issue_id=thread_issue_id,
-        issue_number=thread_issue_number,
-        next_issue_id=thread_issue_id,
-        next_issue_number=thread_issue_number,
-        total_issues=thread_total_issues,
-        reading_progress=thread_reading_progress,
-    )
+    try:
+        return await thread_service.set_pending_thread(db, current_user.id, thread_id)
+    except ServiceError as exc:
+        raise _map_service_error(exc) from exc
 
 
 @router.put("/{thread_id}/test-backdate", response_model=ThreadResponse)
@@ -839,35 +286,23 @@ async def backdate_thread_for_testing(
     db: AsyncSession = Depends(get_db),
     days_ago: int = Query(..., ge=1, le=3650, description="Number of days to backdate the thread"),
 ) -> ThreadResponse:
-    """Test-only endpoint to backdate a thread's last_activity_at for E2E testing.
-
-    This endpoint is only available when TEST_ENVIRONMENT is set.
+    """Backdate a thread's last_activity_at (test environments only).
 
     Args:
         thread_id: The thread ID to backdate.
-        days_ago: Number of days to set last_activity_back (1-3650).
         current_user: The authenticated user making the request.
         db: SQLAlchemy session for database operations.
+        days_ago: Number of days to backdate last_activity_at (1-3650).
 
     Returns:
         ThreadResponse with updated thread details.
-
-    Raises:
-        HTTPException: If not in test environment, thread not found, or thread doesn't belong to user.
     """
-    if not os.getenv("TEST_ENVIRONMENT"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This endpoint is only available in test environment",
+    try:
+        return await thread_service.backdate_thread_for_testing(
+            db, current_user.id, thread_id, days_ago
         )
-
-    thread = await get_owned_thread_or_404(db, current_user.id, thread_id)
-
-    thread.last_activity_at = datetime.now(UTC) - timedelta(days=days_ago)
-    await db.commit()
-    await invalidate_user_view(current_user.id)
-
-    return await thread_to_response(thread, db)
+    except ServiceError as exc:
+        raise _map_service_error(exc) from exc
 
 
 @router.post("/{thread_id}:migrateToIssues", response_model=ThreadResponse)
@@ -877,46 +312,24 @@ async def migrate_thread_to_issues(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> ThreadResponse:
-    """Migrate an old-style thread to use issue tracking.
+    """Migrate an old-style thread to issue tracking (#1..total_issues).
 
-    Creates issue records #1 through total_issues.
-    Marks #1 through last_issue_read as read.
-    Updates thread with issue tracking fields.
-
-    Args:
-        thread_id: The thread ID to migrate
-        request: Migration data with last_issue_read and total_issues
-        current_user: The authenticated user
-        db: Database session
-
-    Returns:
-        ThreadResponse with updated thread
+    Marks #1 through ``last_issue_read`` as read and updates the thread's
+    issue-tracking fields.
 
     Raises:
-        HTTPException: 404 if thread not found, 400 if validation fails
+        HTTPException: 404 if thread not found, 400 if validation fails.
     """
-    thread = await get_owned_thread_or_404(db, current_user.id, thread_id)
-
-    if thread.total_issues is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Thread {thread_id} already uses issue tracking",
+    try:
+        return await thread_service.migrate_thread_to_issues(
+            db,
+            current_user.id,
+            thread_id,
+            last_issue_read=request.last_issue_read,
+            total_issues=request.total_issues,
         )
-
-    if request.last_issue_read > request.total_issues:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="last_issue_read cannot exceed total_issues",
-        )
-
-    await thread.migrate_to_issues(request.last_issue_read, request.total_issues, db)
-
-    response = await thread_to_response(thread, db)
-
-    await db.commit()
-    await invalidate_user_view(current_user.id)
-
-    return response
+    except ServiceError as exc:
+        raise _map_service_error(exc) from exc
 
 
 @router.post("/{thread_id}:migrateToIssuesSimple", response_model=ThreadResponse)
@@ -926,110 +339,23 @@ async def migrate_thread_to_issues_simple(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> ThreadResponse:
-    """Simplified migration: infer total_issues from current state.
+    """Simplified migration inferred from the issue just rated.
 
-    If user just read issue N, then issues 1-(N-1) were read previously,
-    and issue N is what they just rated (should be unread for the rating flow).
-
-    This endpoint infers total_issues from issues_remaining + issue_number,
-    marks issues 1 through (issue_number-1) as READ,
-    marks issue issue_number as UNREAD (so the rating can mark it read),
-    and sets next_unread_issue_id to point to issue_number.
-
-    Args:
-        thread_id: The thread ID to migrate
-        request: Migration data with issue_number being the issue just rated
-        current_user: The authenticated user
-        db: Database session
-
-    Returns:
-        ThreadResponse with updated thread
+    Marks earlier issues read, keeps the rated issue unread so the rating
+    flow can mark it read, and points ``next_unread_issue_id`` at it.
 
     Raises:
-        HTTPException: 404 if thread not found, 400 if validation fails
+        HTTPException: 404 if thread not found, 400 if validation fails.
     """
-    thread = await get_owned_thread_or_404(db, current_user.id, thread_id)
-
-    if thread.total_issues is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Thread {thread_id} already uses issue tracking",
+    try:
+        return await thread_service.migrate_thread_to_issues_simple(
+            db,
+            current_user.id,
+            thread_id,
+            issue_number=request.issue_number,
         )
-
-    issue_number = request.issue_number
-
-    from sqlalchemy import select
-    from app.models import Issue
-
-    result = await db.execute(
-        select(Issue).where(Issue.thread_id == thread_id).where(Issue.issue_number == issue_number)
-    )
-    current_issue = result.scalar_one_or_none()
-
-    if not current_issue:
-        try:
-            issue_num_int = int(issue_number)
-            total_issues = issue_num_int + max(thread.issues_remaining - 1, 0)
-
-            for i in range(1, total_issues + 1):
-                if i < issue_num_int:
-                    issue_status = "read"
-                    read_at = datetime.now(UTC)
-                else:
-                    issue_status = "unread"
-                    read_at = None
-
-                issue = Issue(
-                    thread_id=thread.id,
-                    issue_number=str(i),
-                    status=issue_status,
-                    read_at=read_at,
-                    position=i,
-                )
-                db.add(issue)
-
-            result = await db.execute(
-                select(Issue)
-                .where(Issue.thread_id == thread_id)
-                .where(Issue.issue_number == issue_number)
-            )
-            current_issue = result.scalar_one_or_none()
-
-            if not current_issue:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Failed to create issue '{issue_number}'. Please add it via Edit Thread first.",
-                )
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Non-numeric issue '{issue_number}' not found in thread. Please add it via Edit Thread first.",
-            ) from None
-
-    result = await db.execute(
-        select(Issue).where(Issue.thread_id == thread_id).order_by(Issue.position)
-    )
-    all_issues = result.scalars().all()
-
-    for issue in all_issues:
-        if issue.position < current_issue.position:
-            if issue.status != "read":
-                issue.status = "read"
-                issue.read_at = datetime.now(UTC)
-        elif issue.position == current_issue.position:
-            issue.status = "unread"
-            issue.read_at = None
-
-    thread.total_issues = len(all_issues)
-    thread.next_unread_issue_id = current_issue.id
-    thread.reading_progress = "in_progress"
-
-    response = await thread_to_response(thread, db)
-
-    await db.commit()
-    await invalidate_user_view(current_user.id)
-
-    return response
+    except ServiceError as exc:
+        raise _map_service_error(exc) from exc
 
 
 @router.post("/{thread_id}:setCurrentIssue", response_model=SetCurrentIssueResponse)
@@ -1041,103 +367,18 @@ async def set_current_issue(
 ) -> SetCurrentIssueResponse:
     """Atomically correct the current issue for an active thread.
 
-    Marks every issue before the target as read, ensures the target is
-    unread, updates ``thread.next_unread_issue_id``, and pins
-    ``session.pending_issue_id`` so the active roll reflects the corrected
-    position immediately.
-
-    Args:
-        thread_id: The thread whose current issue should be corrected.
-        request: Target issue number.
-        current_user: Authenticated user.
-        db: Async database session.
-
-    Returns:
-        SetCurrentIssueResponse with the corrected thread and issue info.
+    Marks every earlier issue read, ensures the target is unread, updates
+    ``thread.next_unread_issue_id``, and pins ``session.pending_issue_id``.
 
     Raises:
-        HTTPException: 404 if thread not found, 400 for validation errors.
+        HTTPException: 404 if thread or issue not found, 400 for validation errors.
     """
-    thread = await get_owned_thread_or_404(db, current_user.id, thread_id)
-
-    if thread.status != "active":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Thread {thread_id} is not active",
+    try:
+        return await thread_service.set_current_issue(
+            db,
+            current_user.id,
+            thread_id,
+            issue_number=request.issue_number,
         )
-
-    if not thread.uses_issue_tracking():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Thread {thread_id} does not use issue tracking",
-        )
-
-    target_number = request.issue_number.strip()
-
-    result = await db.execute(
-        select(Issue)
-        .where(Issue.thread_id == thread_id)
-        .where(Issue.issue_number == target_number)
-    )
-    target_issue = result.scalar_one_or_none()
-
-    if not target_issue:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue '{target_number}' not found in thread {thread_id}",
-        )
-
-    result = await db.execute(
-        select(Issue)
-        .where(Issue.thread_id == thread_id)
-        .order_by(Issue.position)
-    )
-    all_issues = list(result.scalars().all())
-
-    now = datetime.now(UTC)
-    for issue in all_issues:
-        if issue.position < target_issue.position:
-            if issue.status != "read":
-                issue.status = "read"
-                issue.read_at = now
-        elif issue.position == target_issue.position:
-            if issue.status != "unread":
-                issue.status = "unread"
-                issue.read_at = None
-
-    thread.total_issues = len(all_issues)
-    thread.next_unread_issue_id = target_issue.id
-    thread.reading_progress = "in_progress"
-    thread.issues_remaining = await thread.get_issues_remaining(db)
-
-    target_issue_id = target_issue.id
-    target_issue_number = target_issue.issue_number
-
-    issues_remaining = thread.issues_remaining
-    total_issues = thread.total_issues
-    reading_progress = thread.reading_progress
-    queue_position = thread.queue_position
-    thread_title = thread.title
-    thread_format = thread.format
-
-    current_session = await get_or_create(db, user_id=current_user.id)
-    current_session.pending_thread_id = thread_id
-    current_session.pending_issue_id = target_issue_id
-    current_session.pending_thread_updated_at = now
-
-    await db.commit()
-    await invalidate_user_view(current_user.id)
-
-    return SetCurrentIssueResponse(
-        thread_id=thread_id,
-        title=thread_title,
-        format=thread_format,
-        issues_remaining=issues_remaining,
-        queue_position=queue_position,
-        issue_id=target_issue_id,
-        issue_number=target_issue_number,
-        next_issue_id=target_issue_id,
-        next_issue_number=target_issue_number,
-        total_issues=total_issues,
-        reading_progress=reading_progress,
-    )
+    except ServiceError as exc:
+        raise _map_service_error(exc) from exc

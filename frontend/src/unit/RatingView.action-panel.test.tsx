@@ -63,6 +63,9 @@ function ratingView(overrides: Record<string, unknown> = {}) {
     onSnooze: vi.fn(),
     onCancel: vi.fn(),
     onRefreshThread: vi.fn(),
+    readerContext: null,
+    isReaderContextLoading: false,
+    readerContextError: null,
     ...overrides,
   }
   return <MemoryRouter><RatingView {...defaults} /></MemoryRouter>

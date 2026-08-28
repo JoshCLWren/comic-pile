@@ -6,7 +6,6 @@ import {
   READING_CONTEXT_TYPE_FLOORS,
   type ReadingContextTypeRole,
 } from '../pages/RollPage/readingContextTypography'
-import { issuesApi } from '../services/api-issues'
 import type { ReaderContextResponse } from '../types'
 
 const navigateSpy = vi.fn()
@@ -15,12 +14,6 @@ vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom')
   return { ...actual, useNavigate: () => navigateSpy }
 })
-
-vi.mock('../services/api-issues', () => ({
-  issuesApi: {
-    getReaderContext: vi.fn(),
-  },
-}))
 
 vi.mock('../components/ContinuityCorrectionDialog', () => ({ default: () => null }))
 vi.mock('../pages/RollPage/components/ContinuityReadinessSummary', () => ({
@@ -32,8 +25,12 @@ vi.mock('../pages/RollPage/components/ReadingOrderGroups', () => ({
 vi.mock('../pages/RollPage/components/ReadingRouteExplanation', () => ({
   ReadingRouteExplanation: () => null,
 }))
-
-const getReaderContextMock = issuesApi.getReaderContext as ReturnType<typeof vi.fn>
+vi.mock('../hooks/useContinuityReadiness', () => ({
+  useContinuityReadiness: () => ({ readiness: null, isLoading: false, error: null, refetch: vi.fn() }),
+}))
+vi.mock('../pages/RollPage/components/ReadingPathPanel', () => ({
+  ReadingPathPanel: () => null,
+}))
 
 const activeRatingThread = {
   id: 42,
@@ -64,18 +61,7 @@ function buildContext(): ReaderContextResponse {
       highest_rating: null,
       lowest_rating: null,
     },
-    crossovers: [
-      {
-        id: 7,
-        name: 'Ultimate Universe Reading Order',
-        applies_to_current_issue: false,
-        membership_kind: 'issue' as const,
-        next_member: { issue_id: 205, issue_number: '14' },
-        average_rating: null,
-        ratings_count: 0,
-        read_count: 0,
-      },
-    ],
+    crossovers: [],
     local_chain: {
       issues: [
         {
@@ -146,7 +132,7 @@ describe('ReadingContextPillar rendered typography (#1873)', () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1920 })
     window.dispatchEvent(new Event('resize'))
 
-    getReaderContextMock.mockResolvedValue(buildContext())
+    const context = buildContext()
     const { container } = render(
       <ReadingContextPillar
         activeRatingThread={activeRatingThread}
@@ -155,6 +141,9 @@ describe('ReadingContextPillar rendered typography (#1873)', () => {
         onRefreshThread={vi.fn()}
         rolledResult={7}
         currentDie={20}
+        readerContext={context}
+        isReaderContextLoading={false}
+        readerContextError={null}
       />,
     )
 
@@ -169,30 +158,18 @@ describe('ReadingContextPillar rendered typography (#1873)', () => {
       'sectionHeading',
     )
 
-    const currentIssueRow = screen.getByRole('listitem', { name: /open saga issue 5/i })
+    const currentIssueButton = screen.getByRole('button', {
+      name: /show context for ultimate black panther issue 5/i,
+    })
+    const currentIssueRow = currentIssueButton.closest('[role="listitem"]') as HTMLElement
     expectComputedFontSize(within(currentIssueRow).getByText('5'), 'primaryValue')
 
-    const ratedIssueRow = screen.getByRole('listitem', { name: /open saga issue 3/i })
+    const ratedIssueButton = screen.getByRole('button', {
+      name: /show context for ultimate black panther issue 3/i,
+    })
+    const ratedIssueRow = ratedIssueButton.closest('[role="listitem"]') as HTMLElement
     expectComputedFontSize(
       within(ratedIssueRow).getByLabelText('Your rating: 3.5 stars'),
-      'metaLabel',
-    )
-
-    const membershipChip = screen.getByRole('button', {
-      name: 'Open Ultimate Universe Reading Order crossover',
-    })
-    expectComputedFontSize(membershipChip, 'chipLabel')
-
-    const upcomingCrossoverName = screen.getByRole('button', {
-      name: 'Open crossover Ultimate Universe Reading Order',
-    })
-    expectReadable(
-      within(upcomingCrossoverName).getByText('Ultimate Universe Reading Order'),
-      READING_CONTEXT_TYPE_FLOORS.primaryValue,
-      'upcoming crossover name',
-    )
-    expectComputedFontSize(
-      within(upcomingCrossoverName).getByText('— starts at #14'),
       'metaLabel',
     )
 
@@ -203,16 +180,10 @@ describe('ReadingContextPillar rendered typography (#1873)', () => {
       screen.getByText('Blocked by issue #3 in Saga (thread #42)'),
       'bodyCopy',
     )
-    expectComputedFontSize(
-      screen.getByText("Being part of a crossover doesn't block reading by itself."),
-      'bodyCopy',
-    )
 
     const allText = container.querySelectorAll<HTMLElement>('*')
     for (const element of allText) {
       if (element.textContent?.trim() === '') continue
-      // jsdom computes only explicitly-set sizes; inherited sizes resolve in
-      // real browsers to the 16px root default, so unstyled nodes are safe.
       const rendered = window.getComputedStyle(element).fontSize
       if (rendered === '') continue
       expectReadable(element, READING_CONTEXT_TYPE_FLOORS.statLabel, element.tagName)

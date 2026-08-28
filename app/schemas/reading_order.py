@@ -94,3 +94,12 @@ class ReadingOrderProjectionResult(BaseModel):
     updated_count: int = Field(ge=0)
     kept_count: int = Field(ge=0)
     total_positions: int = Field(ge=0)
+
+
+class ReadingOrderAdoptRequest(BaseModel):
+    """Request to adopt a legacy reading order into the canonical plan."""
+
+    reading_order_id: int = Field(gt=0)
+    plan_name: str | None = Field(default=None, min_length=1, max_length=200)
+    lane_id: str = Field(default="adopted", min_length=1, max_length=80)
+    lane_name: str = Field(default="Adopted", min_length=1, max_length=120)

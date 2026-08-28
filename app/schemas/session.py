@@ -135,6 +135,8 @@ class SnoozeCorrectionInfo(BaseModel):
         default=False,
         description="True when repeated contradictory snoozes make the mode uncertain",
     )
+
+
 class ActiveThreadInfo(BaseModel):
     """Schema for active thread information in session response."""
 
@@ -181,6 +183,7 @@ class SessionResponse(BaseModel):
     snoozed_thread_ids: list[int] = []
     snoozed_threads: list[SnoozedThreadInfo] = []
     pending_thread_id: int | None = None
+    timezone: str | None = None
     reading_bandwidth: str | None = None
     reading_intent: str | None = None
     reading_mode_source: str | None = None
@@ -235,7 +238,7 @@ class EventDetail(BaseModel):
 
     @field_serializer("timestamp")
     def serialize_timestamp(self, value: datetime) -> str:
-        """Serialize event timestamp to ISO 8601 format with timezone.
+        """Serialize datetime to ISO 8601 format with timezone.
 
         Ensures naive datetimes are treated as UTC for consistent serialization.
 
@@ -258,6 +261,7 @@ class SessionDetailsResponse(BaseModel):
     ladder_path: str
     narrative_summary: dict[str, list[str]]
     current_die: int
+    timezone: str | None = None
     events: list[EventDetail]
 
     @field_serializer("started_at", "ended_at")
@@ -288,8 +292,8 @@ class SessionListItem(BaseModel):
     """Schema for a single session in the history list view.
 
     A deliberate subset of SessionResponse. The list view does not need
-    snoozed_thread_ids, snoozed_threads, or pending_thread_id, which
-    reduces payload size for session history lists.
+    snoozed_thread_ids, snoozed_threads, pending_thread_id, or timezone,
+    which reduces payload size for session history lists.
     """
 
     id: int
@@ -352,9 +356,9 @@ class SessionMode(BaseModel):
     bandwidth_confidence: float | None = Field(
         default=None, ge=0.0, le=1.0, description="Confidence in the bandwidth prediction"
     )
-    bandwidth_source: Literal["manual", "inferred"] | None = Field(
+    bandwidth_source: BandwidthSource | None = Field(
         default=None,
-        description="Origin of the bandwidth value: manual user override or algorithm inference",
+        description="Origin of the bandwidth value: inference, manual override, snooze, or quiz",
     )
     bandwidth_version: str | None = Field(
         default=None, description="Version tag for the bandwidth inference algorithm"

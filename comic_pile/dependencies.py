@@ -45,6 +45,17 @@ async def get_blocked_thread_ids(user_id: int, db: AsyncSession) -> set[int]:
     return await _get_blocked_thread_ids_uncached(user_id, db)
 
 
+class BlockingDependency:
+    """A single dependency blocking a thread, described in reader language."""
+
+    def __init__(self, thread_id: int, thread_title: str, issue_number: str) -> None:
+        """Store blocker identity and derive the reader-facing label."""
+        self.thread_id = thread_id
+        self.thread_title = thread_title
+        self.issue_number = str(issue_number)
+        self.label = build_blocking_explanation(issue_number, thread_title)
+
+
 def build_blocking_explanation(issue_number: str, thread_title: str) -> str:
     """Return the shared human-readable blocked-by sentence for one dependency edge.
 
@@ -60,10 +71,15 @@ def build_blocking_explanation(issue_number: str, thread_title: str) -> str:
     Returns:
         A concise blocked-by sentence.
     """
-    return f"Blocked by issue #{issue_number} in {thread_title}"
+    return f"Blocked by {thread_title}: #{issue_number}"
 
 
-async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSession) -> list[str]:
+def format_blocking_reason(dependency: BlockingDependency) -> str:
+    """Legacy plain-text reason retained for backward-compatible consumers."""
+    return build_blocking_explanation(dependency.issue_number, dependency.thread_title)
+
+
+async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSession) -> list[BlockingDependency]:
     """Human-readable reasons a thread is blocked."""
     source_issue = Issue.__table__.alias("source_issue")
     next_unread_issue = Issue.__table__.alias("next_unread_issue")
@@ -72,6 +88,7 @@ async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSessi
 
     issue_result = await db.execute(
         select(
+            source_thread.c.id,
             source_thread.c.title,
             source_issue.c.id,
             source_issue.c.issue_number,
@@ -92,8 +109,8 @@ async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSessi
         .distinct()
     )
     return [
-        build_blocking_explanation(issue_number, thread_title)
-        for thread_title, _issue_id, issue_number in issue_result.all()
+        BlockingDependency(thread_id=thread_id_val, thread_title=thread_title, issue_number=str(issue_number))
+        for thread_id_val, thread_title, _issue_id, issue_number in issue_result.all()
     ]
 
 
@@ -101,7 +118,7 @@ async def get_blocking_explanations_batch(
     thread_ids: list[int],
     user_id: int,
     db: AsyncSession,
-) -> dict[int, list[str]]:
+) -> dict[int, list[BlockingDependency]]:
     """Human-readable blocking reasons for multiple threads in one query."""
     if not thread_ids:
         return {}
@@ -114,6 +131,7 @@ async def get_blocking_explanations_batch(
     result = await db.execute(
         select(
             target_thread.c.id,
+            source_thread.c.id,
             source_thread.c.title,
             source_issue.c.id,
             source_issue.c.issue_number,
@@ -132,10 +150,10 @@ async def get_blocking_explanations_batch(
         .where(target_thread.c.next_unread_issue_id.isnot(None))
     )
 
-    reasons_map: dict[int, list[str]] = {}
-    for target_tid, src_title, _src_iid, src_issue_num in result.all():
+    reasons_map: dict[int, list[BlockingDependency]] = {}
+    for target_tid, src_tid, src_title, _src_iid, src_issue_num in result.all():
         reasons_map.setdefault(target_tid, []).append(
-            build_blocking_explanation(src_issue_num, src_title)
+            BlockingDependency(thread_id=src_tid, thread_title=src_title, issue_number=str(src_issue_num))
         )
     return reasons_map
 

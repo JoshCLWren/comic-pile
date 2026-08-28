@@ -169,7 +169,6 @@ export function useQueueThreadActions(
   const handleThreadRead = useCallback(
     async (thread: Thread) => {
       if (thread.is_blocked) {
-        window.alert('Cannot read yet:\n\nThis thread is blocked by a dependency.')
         return
       }
       try {

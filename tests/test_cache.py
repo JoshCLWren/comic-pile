@@ -416,15 +416,21 @@ async def test_cache_reinitialize_resets_open_circuit() -> None:
     settings = get_redis_settings()
     assert settings.redis_url is not None
 
-    for _ in range(cache._circuit_breaker.failure_threshold):
-        cache._circuit_breaker.record_failure()
-    assert cache._circuit_breaker.state == CircuitState.OPEN
+    # Access the backend's circuit breaker
+    backend = cache._backend
+    assert backend is not None, "Cache backend not initialized"
+    for _ in range(backend._circuit_breaker.failure_threshold):
+        backend._circuit_breaker.record_failure()
+    assert backend._circuit_breaker.state == CircuitState.OPEN
 
     await cache.close()
     await cache.initialize(local_url=settings.redis_url)
 
     assert cache.is_initialized
-    assert cache._circuit_breaker.state == CircuitState.CLOSED
+    # After reinitialize, we have a new backend
+    new_backend = cache._backend
+    assert new_backend is not None
+    assert new_backend._circuit_breaker.state == CircuitState.CLOSED
     assert await cache.set("cache:test_reconnect:", "healthy", ttl=30)
     assert await cache.get("cache:test_reconnect:") == "healthy"
 
