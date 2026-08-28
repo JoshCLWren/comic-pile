@@ -16,6 +16,7 @@ from app.database import get_db
 from app.access_control import require_internal_ops_routes
 from app.models import Event, Thread, User
 from app.models import Session as SessionModel
+from app.models.thread import normalize_format_value
 
 router = APIRouter(
     prefix="/admin", tags=["admin"], dependencies=[Depends(require_internal_ops_routes)]
@@ -134,7 +135,7 @@ async def export_csv(db: Annotated[AsyncSession, Depends(get_db)]) -> StreamingR
     writer.writerow(["title", "format", "issues_remaining"])
 
     for thread in threads:
-        writer.writerow([thread.title, thread.format, thread.issues_remaining])
+        writer.writerow([thread.title, normalize_format_value(thread.format), thread.issues_remaining])
 
     output.seek(0)
 
@@ -179,7 +180,7 @@ async def export_json(db: Annotated[AsyncSession, Depends(get_db)]) -> Streaming
             {
                 "id": thread.id,
                 "title": thread.title,
-                "format": thread.format,
+                "format": normalize_format_value(thread.format),
                 "issues_remaining": thread.issues_remaining,
                 "queue_position": thread.queue_position,
                 "status": thread.status,

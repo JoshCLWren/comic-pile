@@ -1011,8 +1011,6 @@ async def test_create_thread_normalizes_format_variants(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
     """Thread creation normalizes Comic/Comics/digital to canonical forms."""
-    user = await get_or_create_user_async(async_db)
-
     cases = [
         ("Comic", "Comic"),
         ("Comics", "Comic"),
@@ -1109,4 +1107,42 @@ async def test_queue_items_show_normalized_format(
     assert "Manga" in formats
     assert "Comics" not in formats
     assert "digital" not in formats
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("Comic", "Comic"),
+        ("Comics", "Comic"),
+        ("comic", "Comic"),
+        ("COMICS", "Comic"),
+        (" digital ", "Digital"),
+        ("Digital", "Digital"),
+        ("Trade Paperback", "Trade Paperback"),
+        ("Manga", "Manga"),
+        ("Other", "Other"),
+    ],
+)
+def test_normalize_format_value_maps_variants(raw: str, expected: str) -> None:
+    """Every incoherent production variant maps into the canonical vocabulary."""
+    from app.models.thread import normalize_format_value
+
+    assert normalize_format_value(raw) == expected
+
+
+def test_normalize_format_value_preserves_unknown_formats() -> None:
+    """Unknown formats are normalized without loss, not dropped or coerced."""
+    from app.models.thread import normalize_format_value
+
+    assert normalize_format_value("Webtoon") == "Webtoon"
+    assert normalize_format_value("  Graphic Novel  ") == "Graphic Novel"
+
+
+def test_normalize_format_value_covers_issue_variants_with_no_data_loss() -> None:
+    """Issue #1647 variants collapse into a single canonical set (no loss)."""
+    from app.models.thread import normalize_format_value
+
+    source_values = ["Comic", "Comics", "comic", "digital", "Digital"]
+    normalized = {normalize_format_value(value) for value in source_values}
+    assert normalized == {"Comic", "Digital"}
 

@@ -22,6 +22,7 @@ from app.database import get_db
 from app.middleware import limiter
 from app.models import DependencyGroup, DependencyGroupMembership, Event, Issue, Session, Thread
 from app.models.recommendation_context import RecommendationContext
+from app.models.thread import normalize_format_value
 from app.models.user import User
 from app.roll_recovery import build_roll_recovery
 from app.services.explanation_projection import get_primary_explanation
@@ -240,7 +241,7 @@ async def roll_dice(
 
     selected_thread_id = selected_thread.id
     selected_thread_title = selected_thread.title
-    selected_thread_format = selected_thread.format
+    selected_thread_format = normalize_format_value(selected_thread.format)
     selected_thread_queue_position = selected_thread.queue_position
 
     # Capture bounded candidate IDs in exact selection order for recommendation context
@@ -468,7 +469,7 @@ async def override_roll(
 
     override_thread_id = override_thread.id
     override_thread_title = override_thread.title
-    override_thread_format = override_thread.format
+    override_thread_format = normalize_format_value(override_thread.format)
     override_thread_queue_position = override_thread.queue_position
 
     override_thread_issues_remaining = await override_thread.get_issues_remaining(db)
@@ -888,7 +889,7 @@ async def roll_bootstrap(
         RollBootstrapThread(
             id=row.id,
             title=row.title,
-            format=row.format,
+            format=normalize_format_value(row.format),
             issue_id=row.issue_id,
             issue_number=row.issue_number,
             route_labels=list(row.route_labels or []),
@@ -904,7 +905,9 @@ async def roll_bootstrap(
             .where(Thread.id.in_(snoozed_ids))
         )
         snoozed_threads = [
-            RollBootstrapThread(id=row.id, title=row.title, format=row.format)
+            RollBootstrapThread(
+                id=row.id, title=row.title, format=normalize_format_value(row.format)
+            )
             for row in snoozed_result.all()
         ]
 
@@ -926,7 +929,9 @@ async def roll_bootstrap(
         .limit(20)
     )
     blocked_threads = [
-        RollBootstrapThread(id=row.id, title=row.title, format=row.format)
+        RollBootstrapThread(
+            id=row.id, title=row.title, format=normalize_format_value(row.format)
+        )
         for row in blocked_result.all()
     ]
     snoozed_count = len(snoozed_threads)
@@ -964,7 +969,7 @@ async def roll_bootstrap(
             stale_thread = RollBootstrapThread(
                 id=stale_row.id,
                 title=stale_row.title,
-                format=stale_row.format,
+                format=normalize_format_value(stale_row.format),
                 last_activity_at=stale_last_activity,
             )
 

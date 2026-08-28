@@ -14,6 +14,7 @@ from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Snapshot, Thread
 from app.models import Session as SessionModel
+from app.models.thread import normalize_format_value
 from app.models.user import User
 from app.schemas import ActiveThreadInfo, SessionResponse
 from app.schemas.session import (
@@ -91,7 +92,7 @@ async def get_active_thread_info(
     return event.selected_thread_id, ActiveThreadInfo(
         id=thread.id,
         title=thread.title,
-        format=thread.format,
+        format=normalize_format_value(thread.format),
         issues_remaining=thread.issues_remaining,
         queue_position=thread.queue_position,
         last_rolled_result=event.result,
@@ -138,7 +139,7 @@ async def build_session_response(
             active_thread_info = ActiveThreadInfo(
                 id=thread.id,
                 title=thread.title,
-                format=thread.format,
+                format=normalize_format_value(thread.format),
                 issues_remaining=thread.issues_remaining,
                 queue_position=thread.queue_position,
                 last_rolled_result=None,
@@ -309,7 +310,7 @@ async def snooze_thread(
             pre_active_thread = ActiveThreadInfo(
                 id=active_thread.id,
                 title=active_thread.title,
-                format=active_thread.format,
+                format=normalize_format_value(active_thread.format),
                 issues_remaining=active_thread.issues_remaining,
                 queue_position=active_thread.queue_position,
                 last_rolled_result=roll_result,

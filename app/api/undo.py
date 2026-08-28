@@ -14,6 +14,7 @@ from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
 from app.models import Event, Issue, Snapshot, Thread
 from app.models import Session as SessionModel
+from app.models.thread import normalize_format_value
 from app.models.user import User
 from app.schemas import ActiveThreadInfo, SessionResponse
 from app.services.snapshot_contract import (
@@ -174,7 +175,7 @@ async def _restore_thread_from_state(
         if "title" in state:
             thread.title = state["title"]
         if "format" in state:
-            thread.format = state["format"]
+            thread.format = normalize_format_value(state["format"])
         if "issues_remaining" in state:
             thread.issues_remaining = state["issues_remaining"]
         if "last_rating" in state:
@@ -546,7 +547,7 @@ async def undo_to_snapshot(
                     pre_active_info = ActiveThreadInfo(
                         id=pre_thread.id,
                         title=pre_thread.title,
-                        format=pre_thread.format,
+                        format=normalize_format_value(pre_thread.format),
                         issues_remaining=pre_thread.issues_remaining,
                         queue_position=pre_thread.queue_position,
                         last_rolled_result=pre_active_event.result,

@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache_invalidation import invalidate_user_view
 from app.models import Event, Issue, Thread
+from app.models.thread import normalize_format_value
 from app.repositories import (
     continuity_repository,
     issue_repository,
@@ -103,15 +104,9 @@ async def thread_to_response(
     else:
         issues_remaining = await thread.get_issues_remaining(db)
     reading_progress = thread.reading_progress
-    
-    # Normalize the format to canonical form
-    format_value = thread.format.strip()
-    if format_value.lower() in ("comic", "comics"):
-        format_value = "Comic"
-    elif format_value.lower() == "digital":
-        format_value = "Digital"
-    # All other values remain unchanged
-    
+
+    format_value = normalize_format_value(thread.format)
+
     next_unread_issue_id = thread.next_unread_issue_id
     next_unread_issue_number: str | None = None
     if next_unread_issue_id is not None:
@@ -179,14 +174,8 @@ def to_queue_list_item(tr: ThreadResponse) -> QueueThreadListItem:
     Returns:
         Narrow list-item projection of the thread response.
     """
-    # Normalize the format to canonical form
-    format_value = tr.format.strip()
-    if format_value.lower() in ("comic", "comics"):
-        format_value = "Comic"
-    elif format_value.lower() == "digital":
-        format_value = "Digital"
-    # All other values remain unchanged
-    
+    format_value = normalize_format_value(tr.format)
+
     return QueueThreadListItem(
         id=tr.id,
         title=tr.title,
@@ -358,14 +347,8 @@ async def create_thread_with_retry(
     while retries < max_retries:
         try:
             max_position = await thread_repository.max_queue_position(db, user_id)
-            # Normalize the format to canonical form
-            format_value = thread_data.format.strip()
-            if format_value.lower() in ("comic", "comics"):
-                format_value = "Comic"
-            elif format_value.lower() == "digital":
-                format_value = "Digital"
-            # All other values remain unchanged
-            
+            format_value = normalize_format_value(thread_data.format)
+
             new_thread = Thread(
                 title=thread_data.title,
                 format=format_value,
@@ -442,14 +425,7 @@ async def update_thread(
     if thread_data.title is not None:
         thread.title = thread_data.title
     if thread_data.format is not None:
-        # Normalize the format to canonical form
-        format_value = thread_data.format.strip()
-        if format_value.lower() in ("comic", "comics"):
-            format_value = "Comic"
-        elif format_value.lower() == "digital":
-            format_value = "Digital"
-        # All other values remain unchanged
-        thread.format = format_value
+        thread.format = normalize_format_value(thread_data.format)
     if thread_data.issues_remaining is not None:
         if not thread.uses_issue_tracking():
             thread.issues_remaining = thread_data.issues_remaining
@@ -673,7 +649,7 @@ async def set_pending_thread(
 
     thread_id_int = thread.id
     thread_title = thread.title
-    thread_format = thread.format
+    thread_format = normalize_format_value(thread.format)
     thread_issues = thread.issues_remaining
     thread_position = thread.queue_position
     thread_total_issues = thread.total_issues
@@ -995,7 +971,7 @@ async def set_current_issue(
     reading_progress = thread.reading_progress
     queue_position = thread.queue_position
     thread_title = thread.title
-    thread_format = thread.format
+    thread_format = normalize_format_value(thread.format)
 
     current_session = await get_or_create(db, user_id=user_id)
     current_session.pending_thread_id = thread_id

@@ -23,6 +23,31 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 from app.models.issue import Issue
 
+# Canonical format vocabulary. "Comic"/"Comics" collapse to "Comic" and the
+# free-form "digital" medium is promoted to the "Digital" format.
+_FORMAT_NORMALIZATION: dict[str, str] = {
+    "comic": "Comic",
+    "comics": "Comic",
+    "digital": "Digital",
+}
+
+
+def normalize_format_value(format_value: str) -> str:
+    """Normalize a raw format string to the canonical vocabulary.
+
+    Trims surrounding whitespace, then maps case-insensitively known variants
+    ("Comic"/"Comics" -> "Comic", "digital" -> "Digital"). Any other value is
+    returned trimmed and unchanged so unknown formats are preserved.
+
+    Args:
+        format_value: Raw format string from storage or user input.
+
+    Returns:
+        Canonicalized format string.
+    """
+    stripped = format_value.strip()
+    return _FORMAT_NORMALIZATION.get(stripped.lower(), stripped)
+
 if TYPE_CHECKING:
     from app.models.event import Event
     from app.models.user import User
@@ -100,21 +125,14 @@ class Thread(Base):
         return self.total_issues is not None
 
     def normalize_format(self) -> str:
-        """Normalize format value to canonical form.
-        
-        - "Comic" and "Comics" both map to "Comic"
-        - "digital" is treated as "Digital" format
-        - All other values remain unchanged
-        
+        """Normalize this thread's stored format value to canonical form.
+
+        Delegates to :func:`normalize_format_value`.
+
         Returns:
-            Normalized format string
+            Normalized format string.
         """
-        normalized_format = self.format.strip()
-        if normalized_format.lower() in ("comic", "comics"):
-            return "Comic"
-        elif normalized_format.lower() == "digital":
-            return "Digital"
-        return normalized_format
+        return normalize_format_value(self.format)
 
     async def get_issues_remaining(self, db: AsyncSession) -> int:
         """Get the count of remaining unread issues.
