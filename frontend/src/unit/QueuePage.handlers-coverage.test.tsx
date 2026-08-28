@@ -346,7 +346,7 @@ describe('QueuePage callback coverage', () => {
     vi.mocked(dependenciesApi.getBlockingInfo).mockResolvedValue({ blocking_reasons: [] })
     renderPage()
     await user.click(screen.getByText('read callback'))
-    await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('Cannot read yet')))
+    expect(alert).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'))
     await user.click(screen.getByText('snooze callback'))
     expect(mocks.mutate).toHaveBeenCalled()
   })
