@@ -1,7 +1,7 @@
 """Add the taste evidence table for rebuildable Taste Bank inference.
 
 Revision ID: c86100000001
-Revises: c86000000001
+Revises: 05f8245be921
 Create Date: 2026-08-25 00:00:00.000000
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "c86100000001"
-down_revision: str | Sequence[str] | None = "c86000000001"
+down_revision: str | Sequence[str] | None = "05f8245be921"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

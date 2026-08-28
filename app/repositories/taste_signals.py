@@ -15,6 +15,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.taste_signal import TasteSignal
 
 
+async def list_for_user_by_confidence(
+    db: AsyncSession, user_id: int
+) -> list[TasteSignal]:
+    """Return every taste signal owned by one user, ordered by confidence.
+
+    Args:
+        db: Async database session.
+        user_id: Owning user id.
+
+    Returns:
+        All signals for the user, highest confidence first.
+    """
+    result = await db.execute(
+        select(TasteSignal)
+        .where(TasteSignal.user_id == user_id)
+        .order_by(TasteSignal.confidence.desc())
+    )
+    return list(result.scalars().all())
+
+
 async def list_for_user(db: AsyncSession, user_id: int) -> list[TasteSignal]:
     """Return every taste signal owned by one user.
 

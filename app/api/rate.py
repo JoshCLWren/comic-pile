@@ -579,6 +579,7 @@ async def rate_thread(
 
     try:
         await rebuild_user_taste_bank(db, user_id)
+        await db.commit()
     except Exception:
         pass
 

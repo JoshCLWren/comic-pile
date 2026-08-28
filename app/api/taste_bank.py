@@ -14,7 +14,6 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -26,6 +25,11 @@ from app.schemas.taste_bank import (
     TasteBankSignalResponse,
     TasteBankSummaryResponse,
     TasteSignalVerdictUpdate,
+)
+from app.services.taste_bank import (
+    get_user_taste_bank,
+    get_user_taste_signal,
+    update_signal_verdict,
 )
 from app.services.taste_bank_inference import rebuild_user_taste_bank
 
@@ -100,12 +104,7 @@ async def get_user_taste_bank(
             detail="You can only access your own taste bank",
         )
 
-    result = await db.execute(
-        select(TasteSignal)
-        .where(TasteSignal.user_id == user_id)
-        .order_by(TasteSignal.confidence.desc())
-    )
-    signals = result.scalars().all()
+    signals = await get_user_taste_bank(db, user_id)
 
     high_confidence = sum(1 for s in signals if (s.confidence or 0.0) >= 0.7)
     explicit_verdict = sum(1 for s in signals if s.user_verdict is not None)
@@ -148,6 +147,7 @@ async def rebuild_user_taste_bank_endpoint(
         )
 
     signals = await rebuild_user_taste_bank(db, user_id)
+    await db.commit()
 
     return TasteBankRebuildResponse(
         signals_rebuilt=len(signals),
@@ -179,26 +179,17 @@ async def update_signal_verdict(
     Returns:
         Updated taste signal.
     """
-    result = await db.execute(select(TasteSignal).where(TasteSignal.id == signal_id))
-    signal = result.scalar_one_or_none()
+    signal = await get_user_taste_signal(db, current_user.id, signal_id)
     if signal is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Taste signal {signal_id} not found",
         )
 
-    if signal.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only update your own taste signals",
-        )
-
     signal.user_verdict = verdict_update.verdict
     signal.verdict_at = datetime.now(UTC)
-    # A user verdict is authoritative evidence; floor confidence accordingly.
     signal.confidence = max(signal.confidence or 0.0, 0.8)
 
+    response = _signal_to_response(signal)
     await db.commit()
-    await db.refresh(signal)
-
-    return _signal_to_response(signal)
+    return response

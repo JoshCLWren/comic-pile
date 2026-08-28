@@ -199,6 +199,61 @@ async def dismiss_discovery(
     return signal
 
 
+async def get_user_taste_bank(
+    db: AsyncSession, user_id: int
+) -> list[TasteSignal]:
+    """Return the authenticated user's complete Taste Bank.
+
+    Args:
+        db: Async database session.
+        user_id: Authenticated user id.
+
+    Returns:
+        All signals for the user ordered by confidence descending.
+    """
+    return await taste_signals_repository.list_for_user_by_confidence(db, user_id)
+
+
+async def get_user_taste_signal(
+    db: AsyncSession, user_id: int, signal_id: int
+) -> TasteSignal | None:
+    """Return one Taste Bank signal scoped to its owner.
+
+    Args:
+        db: Async database session.
+        user_id: Authenticated owner id.
+        signal_id: Primary key of the targeted signal.
+
+    Returns:
+        The owned signal, or ``None`` when missing or foreign.
+    """
+    return await taste_signals_repository.get_owned(
+        db, signal_id=signal_id, user_id=user_id
+    )
+
+
+async def update_signal_verdict(
+    db: AsyncSession, signal: TasteSignal, verdict: str
+) -> TasteSignal:
+    """Apply an explicit user verdict to a Taste Bank signal.
+
+    Args:
+        db: Async database session.
+        signal: Persisted signal to update.
+        verdict: Stable user decision (``confirmed``, ``sometimes``, or
+            ``rejected``).
+
+    Returns:
+        The updated signal with the new verdict applied.
+    """
+    now = taste_signals_repository.utc_now()
+    signal.user_verdict = verdict
+    signal.verdict_at = now
+    signal.confidence = max(signal.confidence or 0.0, 0.8)
+    await taste_signals_repository.commit(db)
+    return signal
+
+
 __all__ = [
     "DISMISSAL_SUPPRESSION",
     "DISMISSAL_SUPPRESSION_DAYS",
