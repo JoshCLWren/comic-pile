@@ -448,7 +448,7 @@ jobs:
             }
             offer_count="$max_per_tick"
             (( offer_count <= total )) || offer_count="$total"
-            offset="$(( (GITHUB_RUN_NUMBER - 1) % total ))"
+            offset="$(( ((GITHUB_RUN_NUMBER - 1) * offer_count) % total ))"
             workers="$(printf '%s\n%s\n' "$roster" "$roster" \
               | tail -n +"$((offset + 1))" | head -n "$offer_count" \
               | jq -Rsc 'split("\n") | map(select(length > 0))')"
