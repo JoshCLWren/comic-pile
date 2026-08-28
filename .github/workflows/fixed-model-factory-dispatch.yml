@@ -2,12 +2,19 @@ name: Fixed Model Factory Dispatcher
 
 on:
   schedule:
-    # Single timer instead of twelve: GitHub silently drops scheduled
-    # occurrences under load, and fewer timers means a smaller drop surface.
-    # The minute is resolved from the clock at runtime, not from the event.
-    - cron: '*/5 * * * *'
+    # Watchdog only. Roster-mode workflow_dispatch runs maintain the real
+    # five-minute chain without relying on GitHub's throttled cron delivery.
+    - cron: '7 * * * *'
   workflow_dispatch:
     inputs:
+      mode:
+        description: Dispatch strategy when no explicit worker is supplied
+        required: true
+        default: smoke
+        type: choice
+        options:
+          - smoke
+          - roster
       worker:
         description: Optional active external Factory; blank runs the strategy smoke set
         required: false
@@ -38,7 +45,9 @@ permissions:
 
 concurrency:
   group: fixed-model-factory-dispatch
-  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+  # Keep one active chain. GitHub replaces an older pending member of the
+  # group when the watchdog and chain overlap, without cancelling live work.
+  cancel-in-progress: false
 
 jobs:
   dispatch:
@@ -239,6 +248,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           DEPLOY_SHA: ${{ github.sha }}
           DISPATCH_WORKER: ${{ inputs.worker }}
+          DISPATCH_MODE: ${{ inputs.mode }}
         run: |
           set -Eeuo pipefail
           manifest='.github/free-model-factories.tsv'
@@ -429,7 +439,7 @@ jobs:
           if [[ "$EVENT_NAME" == workflow_dispatch && -n "${DISPATCH_WORKER:-}" ]]; then
             awk -F '\t' -v worker="$DISPATCH_WORKER" '$1 == worker {found=1} END {exit !found}' "$manifest"
             workers="$(jq -nc --arg worker "$DISPATCH_WORKER" '[$worker]')"
-          elif [[ "$EVENT_NAME" == schedule ]]; then
+          elif [[ "$EVENT_NAME" == schedule || ( "$EVENT_NAME" == workflow_dispatch && "$DISPATCH_MODE" == roster ) ]]; then
             # Scheduled delivery is roughly hourly regardless of the requested
             # cron cadence. Offer the roster and let centralized assignment
             # lease only work that has real capacity.
@@ -477,3 +487,18 @@ jobs:
             echo "${dispatch_failures} worker dispatch(es) failed after retries; later workers were still attempted" >&2
             exit 1
           fi
+
+      - name: Self-perpetuate roster cadence
+        if: always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'roster'))
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          # GitHub throttles scheduled delivery to roughly hourly. Roster-mode
+          # dispatch is not subject to that throttle, so chain the next tick.
+          # The hourly cron and recovery workflow restart a broken chain.
+          sleep 240
+          gh workflow run fixed-model-factory-dispatch.yml \
+            --repo "$GITHUB_REPOSITORY" --ref main -f mode=roster
