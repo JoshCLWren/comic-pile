@@ -1,4 +1,3 @@
-import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   dependencyGroupsApi,
@@ -14,8 +13,8 @@ interface DependencyGroupsState {
 }
 
 export function useDependencyGroups(threadId: number | null | undefined): DependencyGroupsState {
-  const { data, isPending, isError, error, refetch } = useQuery({
-    queryKey: queryKeys.dependencyGroups.forThread(threadId),
+  const { data, isPending, isError, error } = useQuery({
+    queryKey: queryKeys.dependencyGroups.forThread(threadId!),
     queryFn: async () => {
       if (threadId == null) {
         return [];

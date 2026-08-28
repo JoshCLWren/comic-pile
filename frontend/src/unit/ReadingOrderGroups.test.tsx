@@ -102,7 +102,7 @@ describe('ReadingOrderGroups', () => {
     mockedIsAmbiguousNetworkFailure.mockReset()
     mockedIsAmbiguousNetworkFailure.mockReturnValue(false)
     mockedUseRollBootstrap.mockReturnValue({
-      data: null,
+      data: undefined,
       isPending: false,
       isError: false,
       error: null,
@@ -111,7 +111,7 @@ describe('ReadingOrderGroups', () => {
   })
 
   it('renders nothing when there is no active thread', () => {
-    mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: false, error: null })
+    mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: false, isError: false, error: null })
 
     const { container } = renderGroups(null)
 
@@ -120,7 +120,7 @@ describe('ReadingOrderGroups', () => {
   })
 
   it('announces crossover loading without showing stale names', () => {
-    mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: true, error: null })
+    mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: true, isError: false, error: null })
 
     renderGroups(17)
 
@@ -132,6 +132,7 @@ describe('ReadingOrderGroups', () => {
     mockedUseDependencyGroups.mockReturnValue({
       groups: [],
       isLoading: false,
+      isError: true,
       error: new Error('network failed'),
     })
 
@@ -141,7 +142,7 @@ describe('ReadingOrderGroups', () => {
   })
 
   it('does not add an empty section for threads without crossovers', () => {
-    mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: false, error: null })
+    mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: false, isError: false, error: null })
 
     const { container } = renderGroups(17)
 
@@ -155,6 +156,7 @@ describe('ReadingOrderGroups', () => {
         { id: 2, name: 'A deliberately long crossover name for narrow mobile screens' },
       ],
       isLoading: false,
+      isError: false,
       error: null,
     })
 
@@ -170,7 +172,7 @@ describe('ReadingOrderGroups', () => {
 
   it('switches to the selected readable prerequisite and publishes fresh Roll state', async () => {
     const user = userEvent.setup()
-    mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: false, error: null })
+    mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: false, isError: false, error: null })
     mockedUseRollBootstrap.mockReturnValue({
       data: bootstrapWithRecovery,
       isPending: false,
@@ -197,7 +199,7 @@ describe('ReadingOrderGroups', () => {
 
   it('reports a successful switch separately when refreshing guidance fails', async () => {
     const user = userEvent.setup()
-    mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: false, error: null })
+    mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: false, isError: false, error: null })
     mockedUseRollBootstrap.mockReturnValue({
       data: bootstrapWithRecovery,
       isPending: false,
@@ -224,7 +226,7 @@ describe('ReadingOrderGroups', () => {
 
   it('keeps the original roll and refreshes guidance when the switch becomes stale', async () => {
     const user = userEvent.setup()
-    mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: false, error: null })
+    mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: false, isError: false, error: null })
     mockedUseRollBootstrap.mockReturnValue({
       data: bootstrapWithRecovery,
       isPending: false,
@@ -245,7 +247,7 @@ describe('ReadingOrderGroups', () => {
 
   it('uses neutral copy when a network failure leaves the switch outcome ambiguous', async () => {
     const user = userEvent.setup()
-    mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: false, error: null })
+    mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: false, isError: false, error: null })
     mockedUseRollBootstrap.mockReturnValue({
       data: bootstrapWithRecovery,
       isPending: false,

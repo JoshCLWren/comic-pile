@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   continuityPlansApi,
@@ -19,7 +19,7 @@ export function usePlanReadiness(
   refreshKey = 0,
 ): PlanReadinessState {
   const { data, isPending, isError, error, refetch } = useQuery({
-    queryKey: queryKeys.continuityPlans.readiness(planId, refreshKey),
+    queryKey: queryKeys.continuityPlans.readiness(planId!, refreshKey),
     queryFn: async () => {
       if (planId == null || !Number.isInteger(planId) || planId <= 0) {
         return null;

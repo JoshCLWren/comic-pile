@@ -73,7 +73,7 @@ export default function QueueThreadCard({
     crossoverGroups === undefined ? [thread.id] : [],
   )
   const resolvedCrossoverGroups = crossoverGroups ?? fallbackCrossoverGroups.groupsByThreadId[thread.id] ?? []
-  const resolvedCrossoverGroupsLoading = crossoverGroupsLoading ?? fallbackCrossoverGroups.isPending
+  const resolvedCrossoverGroupsLoading = crossoverGroupsLoading ?? fallbackCrossoverGroups.isLoading
   const resolvedCrossoverGroupsError = crossoverGroupsError ?? Boolean(fallbackCrossoverGroups.error)
 
   const isInteractiveTarget = (target: EventTarget | null, card: HTMLDivElement) => {

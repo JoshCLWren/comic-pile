@@ -194,7 +194,7 @@ it('handles missing threads and API errors', async () => {
   await waitFor(() => expect(screen.getByText('missing')).toBeInTheDocument())
   mockedThreadsApiGet.mockResolvedValueOnce(null as never)
   renderPage()
-  await waitFor(() => expect(screen.getByText('Thread not found')).toBeInTheDocument()
+  await waitFor(() => expect(screen.getByText('Thread not found')).toBeInTheDocument())
 })
 
 it('navigates back and survives issue and edit failures', async () => {

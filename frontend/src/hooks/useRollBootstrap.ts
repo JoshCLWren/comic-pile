@@ -98,7 +98,8 @@ export function useRollBootstrap() {
     }
 
     // Otherwise, refetch the query
-    return refetch();
+    const result = await refetch();
+    return result.data;
   }, [refetch]);
 
   return { data, isPending, isError, error, refetch: refetchBootstrap };

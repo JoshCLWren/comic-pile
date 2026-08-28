@@ -1,4 +1,4 @@
-import { renderHook, waitFor, act } from '@testing-library/react'
+import { waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { type ReactNode } from 'react'
 import axios from 'axios'
@@ -66,7 +66,7 @@ describe('mutation hook success and failure paths', () => {
   it('runs queue and rating mutations', async () => {
     const position = renderHook(() => useMoveToPosition(), { wrapper: createWrapper() }); await act(async () => await position.result.current.mutate({ id: 1, position: 2 }))
     const front = renderHook(() => useMoveToFront(), { wrapper: createWrapper() }); await act(async () => await front.result.current.mutate(1))
-    const back = renderHook(() => useMoveToBack(), { wrapper: createWrapper() }); await act(async () => await back.result.current.mutate())
+    const back = renderHook(() => useMoveToBack(), { wrapper: createWrapper() }); await act(async () => await back.result.current.mutate(1))
     const shuffle = renderHook(() => useShuffleQueue(), { wrapper: createWrapper() }); await act(async () => await shuffle.result.current.mutate())
     expect(front.result.current.isError).toBe(false)
     const rate = renderHook(() => useRate(), { wrapper: createWrapper() })

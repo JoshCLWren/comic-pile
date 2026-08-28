@@ -1,9 +1,8 @@
-import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '../query/queryKeys';
 
 export function usePingHeartbeat() {
-  const { data, isPending, isError, error, refetch } = useQuery({
+  const { isPending, isError } = useQuery({
     queryKey: queryKeys.ping.heartbeat(),
     queryFn: async () => {
       if (document.visibilityState === 'visible') {

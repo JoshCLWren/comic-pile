@@ -38,7 +38,7 @@ export default function ThreadDetailView() {
   const [isDependencyOpen, setIsDependencyOpen] = useState(false)
   const {
     groupsByThreadId: crossoverGroupsByThreadId,
-    isPending: crossoversPending,
+    isLoading: crossoversPending,
     error: crossoversError,
   } = useCrossoverGroups(thread ? [thread.id] : [])
 

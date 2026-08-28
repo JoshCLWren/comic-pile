@@ -31,7 +31,7 @@ export function useContinuityReadiness(
   const enabled = issueId != null && !skip
 
   const query = useQuery({
-    queryKey: enabled ? queryKeys.continuity.readiness('issue', issueId) : undefined,
+    queryKey: enabled ? queryKeys.continuity.readiness('issue', issueId!) : ['continuity', 'readiness', 'disabled'] as const,
     queryFn: async () => {
       if (!enabled) {
         throw new Error('No issue ID')

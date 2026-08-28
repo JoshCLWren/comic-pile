@@ -1,4 +1,3 @@
-import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   readerContextApi,
@@ -18,7 +17,7 @@ export function useReaderContext(
   issueId: number | null | undefined,
 ): ReaderContextState {
   const { data, isPending, isError, error, refetch } = useQuery({
-    queryKey: queryKeys.readerContext.issue(issueId),
+    queryKey: queryKeys.readerContext.issue(issueId!),
     queryFn: async () => {
       if (issueId == null) {
         return null;

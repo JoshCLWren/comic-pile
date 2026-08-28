@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   tasteApi,
@@ -8,11 +8,14 @@ import {
 import { queryKeys } from '../query/queryKeys'
 
 interface TasteDiscoveriesState {
+  current: TasteDiscovery | null
   discoveries: TasteDiscovery[]
   isLoading: boolean
   isError: boolean
   error: Error | null
   refetch: () => void
+  respond: (verdict: TasteVerdict) => Promise<boolean>
+  dismiss: () => Promise<boolean>
 }
 
 /**
@@ -33,21 +36,15 @@ export function useTasteDiscoveries(): TasteDiscoveriesState {
 
   const pendingIdsRef = useRef(new Set<number>())
 
-  const removeCurrent = useCallback((signalId: number) => {
-    setDiscoveries((previous) => ({
-      ...previous,
-      discoveries: previous.discoveries.filter((item) => item.id !== signalId),
-    }))
-  }, [setDiscoveries])
-
-  // We need to use useState for the discoveries since we're modifying it based on user actions
-  // But we'll derive the initial value from the query data
   const [discoveries, setDiscoveries] = useState<TasteDiscovery[]>([])
 
-  // Synchronize discoveries state with query data
   useEffect(() => {
     setDiscoveries(data ?? [])
   }, [data, setDiscoveries])
+
+  const removeCurrent = useCallback((signalId: number) => {
+    setDiscoveries((previous) => previous.filter((item) => item.id !== signalId))
+  }, [setDiscoveries])
 
   const respond = useCallback(
     async (verdict: TasteVerdict): Promise<boolean> => {
@@ -87,6 +84,7 @@ export function useTasteDiscoveries(): TasteDiscoveriesState {
 
   return {
     current: discoveries.length > 0 ? discoveries[0] : null,
+    discoveries,
     isLoading: isPending,
     isError,
     error,

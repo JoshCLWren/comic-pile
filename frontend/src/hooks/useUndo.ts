@@ -1,16 +1,15 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   undoApi,
-  type SessionSnapshotsResponse,
 } from '../services/api';
 import { getApiErrorDetail } from '../utils/apiError';
-import type { UndoPayload } from '../types/index.ts';
+import type { UndoPayload, SessionSnapshotsResponse } from '../types/index.ts';
 import { queryKeys } from '../query/queryKeys';
 
 export function useSnapshots(sessionId: number | string | null | undefined) {
   const { data, isPending, isError, error, refetch } = useQuery({
-    queryKey: queryKeys.undo.snapshots(sessionId),
+    queryKey: queryKeys.undo.snapshots(sessionId ?? ''),
     queryFn: async () => {
       if (!sessionId) {
         return null;

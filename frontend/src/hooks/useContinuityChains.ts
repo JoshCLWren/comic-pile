@@ -1,4 +1,3 @@
-import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   continuityReadinessApi,
@@ -18,7 +17,7 @@ export function useContinuityChains(
   issueId: number | null | undefined,
 ): ContinuityChainsState {
   const { data, isPending, isError, error, refetch } = useQuery({
-    queryKey: queryKeys.continuity.chains('issue', issueId),
+    queryKey: queryKeys.continuity.chains('issue', issueId!),
     queryFn: async () => {
       if (issueId == null) {
         return null;

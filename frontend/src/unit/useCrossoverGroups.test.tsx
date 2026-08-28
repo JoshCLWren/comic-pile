@@ -20,7 +20,7 @@ describe('useCrossoverGroups', () => {
   it('returns an immediate empty state when no thread ids are requested', async () => {
     const { result } = renderHook(() => useCrossoverGroups([]))
 
-    await waitFor(() => expect(result.current.isPending).toBe(false))
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
     expect(result.current.groupsByThreadId).toEqual({})
     expect(result.current.error).toBeNull()
     expect(listForThreads).not.toHaveBeenCalled()
@@ -33,7 +33,7 @@ describe('useCrossoverGroups', () => {
 
     const { result } = renderHook(() => useCrossoverGroups([3, 2, 3]))
 
-    await waitFor(() => expect(result.current.isPending).toBe(false))
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
     expect(listForThreads).toHaveBeenCalledWith([2, 3])
     expect(result.current.groupsByThreadId[2]).toHaveLength(1)
     expect(result.current.groupsByThreadId[3]).toEqual([])
@@ -45,8 +45,8 @@ describe('useCrossoverGroups', () => {
     const first = renderHook(() => useCrossoverGroups([1]))
     const second = renderHook(() => useCrossoverGroups([2]))
 
-    await waitFor(() => expect(first.result.current.isPending).toBe(false))
-    await waitFor(() => expect(second.result.current.isPending).toBe(false))
+    await waitFor(() => expect(first.result.current.isLoading).toBe(false))
+    await waitFor(() => expect(second.result.current.isLoading).toBe(false))
     expect(listForThreads).toHaveBeenCalledTimes(1)
     expect(listForThreads).toHaveBeenCalledWith([1, 2])
   })
@@ -57,7 +57,7 @@ describe('useCrossoverGroups', () => {
 
     const { result } = renderHook(() => useCrossoverGroups(ids))
 
-    await waitFor(() => expect(result.current.isPending).toBe(false))
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
     expect(listForThreads).toHaveBeenCalledTimes(2)
     expect(listForThreads.mock.calls[0][0]).toHaveLength(200)
     expect(listForThreads.mock.calls[1][0]).toEqual([201])
@@ -68,7 +68,7 @@ describe('useCrossoverGroups', () => {
 
     const { result } = renderHook(() => useCrossoverGroups([9]))
 
-    await waitFor(() => expect(result.current.isPending).toBe(false))
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
     expect(result.current.error).toEqual(new Error('Failed to load crossovers'))
     expect(result.current.groupsByThreadId).toEqual({})
   })
@@ -79,7 +79,7 @@ describe('useCrossoverGroups', () => {
 
     const { result } = renderHook(() => useCrossoverGroups([9]))
 
-    await waitFor(() => expect(result.current.isPending).toBe(false))
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
     expect(result.current.error).toBe(failure)
   })
 
@@ -97,7 +97,7 @@ describe('useCrossoverGroups', () => {
     await waitFor(() => expect(listForThreads).toHaveBeenCalledTimes(1))
     rerender({ ids: [2] })
     await waitFor(() => expect(listForThreads).toHaveBeenCalledTimes(2))
-    await waitFor(() => expect(result.current.isPending).toBe(false))
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
 
     await act(async () => {
       resolveFirst({ 1: [] })
