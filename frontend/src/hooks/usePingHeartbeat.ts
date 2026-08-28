@@ -1,47 +1,19 @@
-import { useEffect, useRef } from 'react'
-
-const PING_INTERVAL_MS = 4 * 60 * 1000
+import { useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '../query/queryKeys';
 
 export function usePingHeartbeat() {
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  useEffect(() => {
-    const sendPing = () => {
+  const { data, isPending, isError, error, refetch } = useQuery({
+    queryKey: queryKeys.ping.heartbeat(),
+    queryFn: async () => {
       if (document.visibilityState === 'visible') {
-        void fetch('/api/ping', { method: 'GET', cache: 'no-store' }).catch(() => {})
+        await fetch('/api/ping', { method: 'GET', cache: 'no-store' });
       }
-    }
+      return null;
+    },
+    refetchInterval: 4 * 60 * 1000, // 4 minutes
+    staleTime: Infinity, // Never consider data stale
+  });
 
-    const startInterval = () => {
-      if (intervalRef.current !== null) return
-      sendPing()
-      intervalRef.current = setInterval(sendPing, PING_INTERVAL_MS)
-    }
-
-    const stopInterval = () => {
-      if (intervalRef.current !== null) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
-    }
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        startInterval()
-      } else {
-        stopInterval()
-      }
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-
-    if (document.visibilityState === 'visible') {
-      startInterval()
-    }
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      stopInterval()
-    }
-  }, [])
+  return { isPending, isError };
 }

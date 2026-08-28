@@ -118,4 +118,16 @@ export const queryKeys = {
     all: ['continuityPlans'] as const,
     readiness: (planId: number, refreshKey: number = 0) => ['continuityPlans', 'readiness', planId, refreshKey] as const,
   },
+  taste: {
+    all: ['taste'] as const,
+    discoveries: () => ['taste', 'discoveries'] as const,
+  },
+  readerContext: {
+    all: ['readerContext'] as const,
+    issue: (issueId: number) => ['readerContext', 'issue', issueId] as const,
+  },
+  ping: {
+    all: ['ping'] as const,
+    heartbeat: () => ['ping', 'heartbeat'] as const,
+  },
 } as const

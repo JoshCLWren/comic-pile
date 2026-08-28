@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { RollBootstrapResponse } from '../types/rollBootstrap';
 import { rollBootstrapApi } from '../services/rollBootstrapApi';
 import { useToast } from '../contexts/useToast';
 import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from './rollMutationReconciliation';
+import { queryKeys } from '../query/queryKeys';
 
 const STORAGE_KEY_PREFIX = 'comic_pile_last_session_id';
 
@@ -16,24 +18,15 @@ export function resolveBrowserTimezone(): string | undefined {
 }
 
 export function useRollBootstrap() {
-  const [data, setData] = useState<RollBootstrapResponse | null>(null);
-  const [isPending, setIsPending] = useState(true);
-  const [isError, setIsError] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
   const { showToast } = useToast();
   const lastNotifiedSessionIdRef = useRef<number | null>(null);
   const justReconciledRef = useRef<RollBootstrapResponse | null>(null);
   const reconciliationExpiryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const requestGenerationRef = useRef(0);
 
-  const fetchBootstrap = useCallback(async () => {
-    const requestGeneration = ++requestGenerationRef.current;
-    setIsPending(true);
-    setIsError(false);
-    setError(null);
-    try {
+  const { data, isPending, isError, error, refetch } = useQuery({
+    queryKey: queryKeys.roll.bootstrap(),
+    queryFn: async () => {
       const result = await rollBootstrapApi.get(resolveBrowserTimezone());
-      if (requestGeneration !== requestGenerationRef.current) return result;
 
       const currentSessionId = result.session_id;
       const currentUserId = result.user_id ?? 'anonymous';
@@ -65,20 +58,34 @@ export function useRollBootstrap() {
         // Persisting the session ID is best effort and must not hide the API result.
       }
 
-      setData(result);
       return result;
-    } catch (err: unknown) {
-      const normalized = err instanceof Error ? err : new Error('Failed to fetch roll bootstrap');
-      if (requestGeneration === requestGenerationRef.current) {
-        setIsError(true);
-        setError(normalized);
-      }
-      throw normalized;
-    } finally {
-      if (requestGeneration === requestGenerationRef.current) setIsPending(false);
-    }
-  }, [showToast]);
+    },
+  });
 
+  // Handle reconciled bootstrap data from mutations
+  useEffect(() => {
+    const handleReconciledBootstrap = (event: Event) => {
+      const reconciled = (event as CustomEvent<RollBootstrapResponse>).detail;
+      if (!reconciled) return;
+
+      // Update the query data with the reconciled bootstrap
+      // We don't increment request generation here as we're not making a new request
+      justReconciledRef.current = reconciled;
+      if (reconciliationExpiryRef.current) clearTimeout(reconciliationExpiryRef.current);
+      reconciliationExpiryRef.current = setTimeout(() => {
+        if (justReconciledRef.current === reconciled) justReconciledRef.current = null;
+        reconciliationExpiryRef.current = null;
+      }, 0);
+    };
+
+    window.addEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, handleReconciledBootstrap);
+    return () => {
+      window.removeEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, handleReconciledBootstrap);
+      if (reconciliationExpiryRef.current) clearTimeout(reconciliationExpiryRef.current);
+    };
+  }, []);
+
+  // Custom refetch function that returns reconciled data if available
   const refetchBootstrap = useCallback(async () => {
     const reconciled = justReconciledRef.current;
     if (reconciled) {
@@ -90,40 +97,9 @@ export function useRollBootstrap() {
       return reconciled;
     }
 
-    return fetchBootstrap();
-  }, [fetchBootstrap]);
-
-  useEffect(() => {
-    // Defer the request by one microtask so consumers can reliably observe the
-    // initial loading state before even an already-resolved test or cache value settles.
-    void Promise.resolve().then(fetchBootstrap).catch(() => undefined);
-  }, [fetchBootstrap]);
-
-  useEffect(() => {
-    const handleReconciledBootstrap = (event: Event) => {
-      const reconciled = (event as CustomEvent<RollBootstrapResponse>).detail;
-      if (!reconciled) return;
-
-      requestGenerationRef.current += 1;
-      justReconciledRef.current = reconciled;
-      if (reconciliationExpiryRef.current) clearTimeout(reconciliationExpiryRef.current);
-      reconciliationExpiryRef.current = setTimeout(() => {
-        if (justReconciledRef.current === reconciled) justReconciledRef.current = null;
-        reconciliationExpiryRef.current = null;
-      }, 0);
-
-      setData(reconciled);
-      setIsPending(false);
-      setIsError(false);
-      setError(null);
-    };
-
-    window.addEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, handleReconciledBootstrap);
-    return () => {
-      window.removeEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, handleReconciledBootstrap);
-      if (reconciliationExpiryRef.current) clearTimeout(reconciliationExpiryRef.current);
-    };
-  }, []);
+    // Otherwise, refetch the query
+    return refetch();
+  }, [refetch]);
 
   return { data, isPending, isError, error, refetch: refetchBootstrap };
 }
