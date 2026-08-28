@@ -154,7 +154,7 @@ export default function Modal({
     <OverlayPortal layer="dialog">
       <div
         ref={setOverlayElement}
-        className={`fixed inset-0 flex items-center justify-center overflow-x-hidden pb-[max(1rem,env(safe-area-inset-bottom))] ${overlayClassName || ''}`}
+        className={`fixed inset-0 flex items-end md:items-center justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] ${overlayClassName || ''}`}
         style={{ zIndex: 60 }}
       >
         <div
@@ -168,7 +168,7 @@ export default function Modal({
           ref={modalRef}
           data-testid={testId}
           tabIndex={-1}
-          className="relative w-full max-w-full max-w-lg md:max-w-lg h-full max-h-[calc(100dvh-1rem)] md:max-h-[85vh] flex flex-col overflow-hidden rounded-t-2xl md:rounded-lg animate-slide-up md:animate-fade-in"
+          className="relative w-full max-w-lg h-[calc(100dvh-1rem)] md:h-auto modal-card max-h-[calc(100dvh-1rem)] md:max-h-[85vh] flex flex-col overflow-hidden rounded-t-2xl md:rounded-lg animate-slide-up md:animate-fade-in pb-[env(safe-area-inset-bottom)]"
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}
