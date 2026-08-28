@@ -116,21 +116,6 @@ export function ReadingContextPillar({
     [readerContext],
   )
 
-  const allCrossoverMemberships = useMemo(() => {
-    if (!readerContext) return []
-    const seen = new Set<number>()
-    const memberships: { id: number; name: string }[] = []
-    for (const issue of readerContext.local_chain.issues) {
-      for (const m of issue.crossover_memberships) {
-        if (!seen.has(m.id)) {
-          seen.add(m.id)
-          memberships.push(m)
-        }
-      }
-    }
-    return memberships
-  }, [readerContext])
-
   const dependencyEdges = useMemo(() => readerContext?.local_chain.edges.filter(e => e.kind === 'dependency') ?? [], [readerContext])
   const continuityEdges = useMemo(() => readerContext?.local_chain.edges.filter(e => e.kind === 'continuity') ?? [], [readerContext])
 
@@ -227,27 +212,6 @@ export function ReadingContextPillar({
               Where you are in {seriesName}
             </h3>
           </div>
-
-          {allCrossoverMemberships.length > 0 && (
-            <div className="mb-3 flex flex-wrap gap-2" aria-label="Crossover memberships">
-              {allCrossoverMemberships.map((crossover) => (
-                <button
-                  key={crossover.id}
-                  type="button"
-                  className="inline-flex min-h-7 items-center rounded-full px-3 font-bold text-[var(--theme-comic-accent)] transition hover:brightness-125 focus:ring-2 focus:ring-amber-500"
-                  style={{
-                    ...readingContextType('chipLabel'),
-                    border: '1px solid rgba(212,137,14,0.4)',
-                    backgroundColor: 'rgba(212, 137, 14, 0.12)',
-                  }}
-                  onClick={() => openCrossover(crossover.id)}
-                  aria-label={`Open ${crossover.name} crossover`}
-                >
-                  {crossover.name}
-                </button>
-              ))}
-            </div>
-          )}
 
           <div className="space-y-2" role="list" aria-label="Series issues">
             {[...previousIssues, ...(currentIssue ? [currentIssue] : []), ...nextIssues].map((issue) => {

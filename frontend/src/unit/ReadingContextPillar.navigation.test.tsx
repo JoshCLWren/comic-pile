@@ -244,7 +244,7 @@ describe('ReadingContextPillar navigation (issue #1877)', () => {
     expect(screen.getByText('Saga #3 must be read before Saga #5')).toBeVisible()
   })
 
-  it('links the membership chips above the series strip to their specific crossovers', async () => {
+  it('links membership chips in expanded issue detail to their specific crossovers', async () => {
     renderPillar(
       buildContext({
         local_chain: {
@@ -264,6 +264,9 @@ describe('ReadingContextPillar navigation (issue #1877)', () => {
         },
       }),
     )
+
+    const expandButton = await screen.findByRole('button', { name: /Show context for Ultimate Black Panther issue 5/ })
+    await userEvent.setup().click(expandButton)
 
     const chip = await screen.findByRole('button', { name: 'Open Animal Man crossover' })
     await userEvent.setup().click(chip)
