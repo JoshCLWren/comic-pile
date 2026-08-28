@@ -1,7 +1,7 @@
 """Add the taste_signals table for the Taste Bank inference model.
 
-Revision ID: c85800000001
-Revises: c85400000001
+Revision ID: c86000000001
+Revises: 05f8245be921
 Create Date: 2026-08-26 00:00:00.000000
 
 """
@@ -13,8 +13,8 @@ from sqlalchemy import ForeignKey
 
 from alembic import op
 
-revision: str = "c85800000001"
-down_revision: str | Sequence[str] | None = "c85400000001"
+revision: str = "c86000000001"
+down_revision: str | Sequence[str] | None = "05f8245be921"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

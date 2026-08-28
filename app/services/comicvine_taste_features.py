@@ -178,10 +178,11 @@ def _extract_publisher(metadata: dict[str, object]) -> list[TasteFeature]:
         List containing one TasteFeature with signal_type="publisher", or an
         empty list when no publisher is present.
     """
+    volume = metadata.get("volume")
     publisher = (
         _string(metadata.get("publisher"))
         or _string(metadata.get("publisher_name"))
-        or _string((metadata.get("volume") or {}).get("publisher_name"))
+        or _string(volume.get("publisher_name") if isinstance(volume, dict) else None)
     )
     if not publisher:
         return []
@@ -208,10 +209,11 @@ def _extract_era(metadata: dict[str, object]) -> list[TasteFeature]:
         List containing one TasteFeature with signal_type="era", or an empty
         list when no parseable date is present.
     """
+    volume = metadata.get("volume")
     date_str = (
         _string(metadata.get("cover_date"))
         or _string(metadata.get("store_date"))
-        or _string((metadata.get("volume") or {}).get("start_year"))
+        or _string(volume.get("start_year") if isinstance(volume, dict) else None)
     )
 
     if not date_str:
