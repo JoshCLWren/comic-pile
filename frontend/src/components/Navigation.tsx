@@ -302,7 +302,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   return (
     <>
       <nav
-        className="fixed bottom-0 left-0 top-0 z-40 hidden w-56 flex-col border-r border-[var(--glass-border)] bg-[var(--bg-darker)] md:flex"
+        className="fixed bottom-0 left-0 top-0 z-40 hidden w-72 flex-col border-r border-[var(--glass-border)] bg-[var(--bg-darker)] md:flex"
         role="navigation"
         aria-label="Desktop navigation"
       >
@@ -320,7 +320,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
             <span className="block truncate text-xs font-medium text-[var(--theme-text-muted)]">{username}</span>
           ) : null}
           <div
-            className="mt-2 flex items-center gap-1 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-1"
+            className="mt-2 flex flex-wrap items-center justify-center gap-1 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-1"
             role="group"
             aria-label="Appearance"
           >
