@@ -17,3 +17,14 @@ def test_pages_workflow_uses_supported_first_deploy_configuration() -> None:
     assert "actions/upload-pages-artifact@v4" in workflow
     assert "actions/deploy-pages@v5" in workflow
     assert "cancel-in-progress: false" in workflow
+
+
+def test_pages_workflow_proves_the_public_dashboard_updated() -> None:
+    """Do not treat an accepted Pages artifact as proof that the public site updated."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "Verify Pages publishing mode" in workflow
+    assert 'build_type\" != \"workflow\"' in workflow
+    assert "Verify public dashboard freshness" in workflow
+    assert "factory-pages-check=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" in workflow
+    assert "generated within the last 30 minutes" in workflow
