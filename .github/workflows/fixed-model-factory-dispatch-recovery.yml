@@ -62,5 +62,6 @@ jobs:
           echo 'Fixed-model heartbeats are stale; dispatching recovery run.'
           gh workflow run fixed-model-factory-dispatch.yml \
             --repo "$GITHUB_REPOSITORY" \
-            --ref main
+            --ref main \
+            -f mode=roster
           echo 'Recovery dispatcher requested.'
