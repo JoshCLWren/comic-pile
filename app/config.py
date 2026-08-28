@@ -229,12 +229,15 @@ class RatingSettings(BaseSettings):
 class RecommendationSettings(BaseSettings):
     """Recommendation-quality diagnostics and algorithm versioning settings."""
 
-    model_config = SettingsConfigDict(env_file=[".env.test", ".env", ".envrc"], extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=[".env.test", ".env", ".envrc"],
+        extra="ignore",
+        env_prefix="RECOMMENDATION_",
+    )
 
     algorithm_version: str = Field(
         default="v1-contextual",
         description="Canonical recommendation algorithm version identifier used in diagnostics",
-        json_schema_extra={"env": "RECOMMENDATION_ALGORITHM_VERSION"},
     )
     control_mode: Literal["contextual", "legacy"] = Field(
         default="contextual",
@@ -242,7 +245,6 @@ class RecommendationSettings(BaseSettings):
             "Active recommendation control mode. 'legacy' forces unweighted selection "
             "while leaving instrumentation active."
         ),
-        json_schema_extra={"env": "RECOMMENDATION_CONTROL_MODE"},
     )
 
 
