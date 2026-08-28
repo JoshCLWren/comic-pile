@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import axios from 'axios'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   ContinuityIssueRangeSelector,
   ContinuityThreadSelector,
@@ -10,6 +10,7 @@ import { threadsApi } from '../services/api'
 import {
   dependencyGroupsApi,
   type DependencyGroup,
+  type DependencyGroupMember,
 } from '../services/api-dependency-groups'
 import { issuesApi } from '../services/api-issues'
 import type { Issue, Thread } from '../types'
@@ -57,6 +58,18 @@ function errorMessage(error: unknown, fallback: string): string {
     if (typeof detail === 'string' && detail.trim()) return detail
   }
   return error instanceof Error && error.message ? error.message : fallback
+}
+
+function memberLabel(member: DependencyGroupMember): string {
+  const seriesTitle = member.series_title?.trim()
+  const seriesName = seriesTitle ? seriesTitle : 'Unavailable comic'
+  if (member.issue_id !== null && member.issue_number?.trim()) {
+    return `${seriesName} #${member.issue_number}`
+  }
+  if (member.thread_id !== null) {
+    return `${seriesName} (whole series)`
+  }
+  return 'Unavailable comic'
 }
 
 export default function CrossoversPage() {
@@ -328,6 +341,7 @@ export default function CrossoversPage() {
                       <span className="text-sm text-stone-500">{group.memberships.length} {group.memberships.length === 1 ? 'member' : 'members'}</span>
                     </button>
                     <div className="flex gap-2">
+                      <Link to={`/crossovers/${group.id}`} className="rounded-lg bg-amber-500 px-3 py-1 text-sm font-bold text-stone-950">View</Link>
                       <button type="button" onClick={() => { setEditingId(group.id); setEditingName(group.name) }} disabled={hasPendingMutation}>Rename</button>
                       <button type="button" onClick={() => void deleteGroup(group)} disabled={hasPendingMutation}>Delete</button>
                     </div>
@@ -341,12 +355,15 @@ export default function CrossoversPage() {
                     )}
                     {group.memberships.length === 0 ? <p>This crossover has no comics yet.</p> : (
                       <ul className="grid gap-2" aria-label={`${group.name} members`}>
-                        {group.memberships.map((member) => (
-                          <li key={member.id} className="flex items-center justify-between gap-3 rounded-xl border border-stone-800 px-3 py-2">
-                            <span>{member.issue_id !== null ? `Issue ${member.issue_id}` : `Thread ${member.thread_id}`}</span>
-                            <button type="button" onClick={() => void removeMember(group.id, member.id)} disabled={hasPendingMutation} aria-label={`Remove ${member.issue_id !== null ? `issue ${member.issue_id}` : `thread ${member.thread_id}`} from ${group.name}`}>Remove</button>
-                          </li>
-                        ))}
+                        {group.memberships.map((member) => {
+                          const label = memberLabel(member)
+                          return (
+                            <li key={member.id} className="flex items-center justify-between gap-3 rounded-xl border border-stone-800 px-3 py-2">
+                              <span>{label}</span>
+                              <button type="button" onClick={() => void removeMember(group.id, member.id)} disabled={hasPendingMutation} aria-label={`Remove ${label} from ${group.name}`}>Remove</button>
+                            </li>
+                          )
+                        })}
                       </ul>
                     )}
 

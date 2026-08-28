@@ -91,6 +91,8 @@ class ReaderContextEdge(BaseModel):
     target_issue_number: str | None = None
     source_thread_title: str | None = None
     target_thread_title: str | None = None
+    source_status: str | None = None
+    target_status: str | None = None
     note: str | None = None
     explanation: str | None = None
 

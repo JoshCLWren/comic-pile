@@ -386,6 +386,7 @@ check-prod-assets:  ## Validate deployed frontend assets (make check-prod-assets
 	@bash scripts/check_frontend_assets.sh "$(PROD_BASE_URL)"
 
 railway-control-baseline:  ## Run the safe read-only Railway control baseline
+	@mkdir -p benchmarks/results
 	@uv run python scripts/railway_loadtest.py \
 		--profile control-safe \
 		--concurrency 1 --concurrency 2 --concurrency 4 --concurrency 8 \
@@ -393,12 +394,14 @@ railway-control-baseline:  ## Run the safe read-only Railway control baseline
 		--run-set control-smoke
 
 railway-control-results:  ## Run the longer safe control matrix through concurrency 32
+	@mkdir -p benchmarks/results
 	@uv run python scripts/railway_loadtest.py \
 		--profile control-safe --preset results \
 		--run-set control-results \
 		--metadata-output benchmarks/control-environment.json
 
 railway-control-c32-diagnostic:  ## Run one isolated concurrency-32 control diagnostic
+	@mkdir -p benchmarks/results
 	@uv run python scripts/railway_loadtest.py \
 		--profile control-safe --preset c32-diagnostic \
 		--run-set control-c32-diagnostic \
@@ -406,6 +409,7 @@ railway-control-c32-diagnostic:  ## Run one isolated concurrency-32 control diag
 		--metadata-output benchmarks/control-environment-c32-diagnostic.json
 
 railway-control-compare:  ## Compare only timestamped control-results runs
+	@mkdir -p benchmarks/results
 	@if [ -z "$(RAILWAY_CONTROL_RESULTS)" ]; then \
 		echo "No control-results files found under benchmarks/results/" >&2; \
 		exit 1; \
@@ -416,6 +420,7 @@ railway-control-compare:  ## Compare only timestamped control-results runs
 		--csv benchmarks/results/control-results-comparison.csv
 
 railway-control-c32-compare:  ## Compare only isolated concurrency-32 diagnostic runs
+	@mkdir -p benchmarks/results
 	@if [ -z "$(RAILWAY_CONTROL_C32_RESULTS)" ]; then \
 		echo "No control-c32-diagnostic files found under benchmarks/results/" >&2; \
 		exit 1; \

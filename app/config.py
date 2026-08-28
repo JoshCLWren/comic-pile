@@ -13,6 +13,9 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+CacheProvider = Literal["postgres", "redis", "off"]
+
+
 class DatabaseSettings(BaseSettings):
     """Database configuration settings."""
 
@@ -275,10 +278,15 @@ class GitHubSettings(BaseSettings):
 
 
 class RedisSettings(BaseSettings):
-    """Redis/Upstash caching configuration settings."""
+    """Cache provider configuration settings."""
 
     model_config = SettingsConfigDict(env_file=[".env.test", ".env", ".envrc"], extra="ignore")
 
+    cache_provider: CacheProvider = Field(
+        default="postgres",
+        description="Cache backend: postgres (default), redis, or off to disable caching",
+        json_schema_extra={"env": "CACHE_PROVIDER"},
+    )
     cache_enabled: bool = Field(
         default=False,
         description="Explicitly enable Redis caching; disabled by default in deployed environments",
@@ -317,12 +325,74 @@ class RedisSettings(BaseSettings):
 
     @property
     def is_configured(self) -> bool:
-        """Return whether caching is enabled and has a usable Redis configuration."""
-        if not self.cache_enabled:
-            return False
-        return bool(
-            (self.upstash_redis_rest_url and self.upstash_redis_rest_token) or self.redis_url
-        )
+        """Return whether caching is active for the resolved provider.
+
+        Delegates to :attr:`effective_provider` so ``cache_provider=postgres``
+        (the default) is considered configured even though it requires no
+        Redis credentials, while ``cache_provider=redis`` still requires
+        ``cache_enabled`` and Redis credentials, and ``off`` is never configured.
+        """
+        return self.effective_provider != "off"
+
+    @property
+    def effective_provider(self) -> Literal["postgres", "redis", "off"]:
+        """Return the resolved provider after applying credential gating.
+
+        When ``cache_provider=redis`` but credentials are absent, ``effective_provider``
+        returns ``off`` instead of ``redis`` so that callers never attempt to use a
+        backend that has not actually been configured.
+        """
+        if self.cache_provider == "off":
+            return "off"
+        if self.cache_provider == "redis":
+            if not self.cache_enabled:
+                return "off"
+            if not (
+                (self.upstash_redis_rest_url and self.upstash_redis_rest_token) or self.redis_url
+            ):
+                return "off"
+        return self.cache_provider
+
+
+class ImageDeliverySettings(BaseSettings):
+    """Remote comic cover image optimization settings."""
+
+    model_config = SettingsConfigDict(env_file=[".env.test", ".env", ".envrc"], extra="ignore")
+
+    image_optimizer_allowed_hosts: str = Field(
+        default="comicvine.gamespot.com,www.comicvine.com,comicvine.com",
+        description=(
+            "Comma-separated upstream image hosts the optimizer may fetch. "
+            "Any host outside this list is rejected so the endpoint cannot become "
+            "an open proxy."
+        ),
+        json_schema_extra={"env": "IMAGE_OPTIMIZER_ALLOWED_HOSTS"},
+    )
+    image_optimizer_max_upstream_bytes: int = Field(
+        default=4_000_000,
+        ge=1,
+        le=50_000_000,
+        description=(
+            "Maximum accepted upstream image payload size in bytes. Kept below "
+            "Vercel's ~4.5 MB serverless response limit so even an untransformed "
+            "passthrough fits a single function response."
+        ),
+        json_schema_extra={"env": "IMAGE_OPTIMIZER_MAX_UPSTREAM_BYTES"},
+    )
+    image_optimizer_upstream_timeout_seconds: float = Field(
+        default=10.0,
+        ge=1.0,
+        le=60.0,
+        description="Total timeout for fetching an upstream cover image.",
+        json_schema_extra={"env": "IMAGE_OPTIMIZER_UPSTREAM_TIMEOUT_SECONDS"},
+    )
+    image_optimizer_webp_quality: int = Field(
+        default=80,
+        ge=1,
+        le=100,
+        description="WebP encoder quality used for resized variants.",
+        json_schema_extra={"env": "IMAGE_OPTIMIZER_WEBP_QUALITY"},
+    )
 
 
 class Settings(BaseSettings):
@@ -364,6 +434,11 @@ class Settings(BaseSettings):
     def recommendation(self) -> RecommendationSettings:
         """Get recommendation settings."""
         return get_recommendation_settings()
+
+    @property
+    def image_delivery(self) -> ImageDeliverySettings:
+        """Get remote image delivery settings."""
+        return get_image_delivery_settings()
 
 
 @lru_cache
@@ -415,6 +490,12 @@ def get_recommendation_settings() -> RecommendationSettings:
 
 
 @lru_cache
+def get_image_delivery_settings() -> ImageDeliverySettings:
+    """Get cached remote image delivery settings instance."""
+    return ImageDeliverySettings()
+
+
+@lru_cache
 def get_settings() -> Settings:
     """Get cached main settings instance."""
     return Settings()
@@ -430,4 +511,5 @@ def clear_settings_cache() -> None:
     get_github_settings.cache_clear()
     get_redis_settings.cache_clear()
     get_recommendation_settings.cache_clear()
+    get_image_delivery_settings.cache_clear()
     get_settings.cache_clear()

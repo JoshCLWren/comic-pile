@@ -203,6 +203,12 @@ tooling. Within-series `Issue.position` is never compiled into blocking
 `ContinuityRule` edges unless the user explicitly chooses
 `strict_sequential`. See [READING_PLAN_CANONICAL_MODEL.md](READING_PLAN_CANONICAL_MODEL.md).
 
+### Repository Layer (`app/repositories/`)
+
+- Package for SQLAlchemy query construction and persistence by model family (`thread_repository`, `session_repository`, `issue_repository`, `continuity_repository`).
+- Returns ORM models or plain tuples; never HTTP types or response schemas.
+- Services (`app/services/`) own business logic and transaction boundaries.
+
 ## Related Documentation
 
 - [READING_PLAN_CANONICAL_MODEL.md](READING_PLAN_CANONICAL_MODEL.md): Canonical reader-order decision record for #1619

@@ -387,3 +387,17 @@ def test_entry_run_name_exposes_queued_worker_identity() -> None:
     ).read_text(encoding="utf-8")
 
     assert "run-name: Factory ${{ inputs.worker }} · fixed-model entry" in entry
+
+
+def test_worker_accepts_in_progress_pr_handoff_from_controller() -> None:
+    """A leased building PR runs as PR work instead of a control-plane failure."""
+    worker = (
+        REPO_ROOT / ".github/scripts/free-model-factory-worker.sh"
+    ).read_text(encoding="utf-8")
+
+    assert (
+        '. == "factory:building" or . == "factory:review" '
+        'or . == "factory:changes-requested"'
+    ) in worker
+    assert "ASSIGNED_PR_STAGE" in worker
+    assert "repair-no-change-ready-handoff" in worker

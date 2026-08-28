@@ -90,7 +90,11 @@ def test_build_session_bandwidth_state_normalizes_legacy_garbage():
 @pytest.mark.asyncio
 async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
     """Do not expose a foreign snoozed ID or omit fields required by RollPage."""
-    current_session = _mode_session(id=55, snoozed_thread_ids=[101, 202])
+    current_session = _mode_session(
+        id=55,
+        snoozed_thread_ids=[101, 202],
+        timezone=None,
+    )
     current_user = SimpleNamespace(id=7)
     owned_snoozed = SimpleNamespace(id=101, title="Owned", format="ongoing")
 
@@ -150,7 +154,7 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
 @pytest.mark.asyncio
 async def test_bootstrap_roll_pool_is_never_paginated_below_current_die(monkeypatch):
     """A d100 bootstrap may return all 100 eligible faces instead of a smaller summary page."""
-    current_session = _mode_session(id=55, manual_die=100)
+    current_session = _mode_session(id=55, manual_die=100, timezone=None)
     current_user = SimpleNamespace(id=7)
     pool_rows = [
         SimpleNamespace(
@@ -448,6 +452,7 @@ async def test_bootstrap_session_mode_defaults_when_no_fields_set(monkeypatch):
         manual_die=None,
         pending_thread_id=None,
         snoozed_thread_ids=[],
+        timezone=None,
         active_bandwidth=None,
         predicted_bandwidth=None,
         bandwidth_confidence=None,
@@ -509,6 +514,7 @@ async def test_bootstrap_session_mode_reflects_stored_fields(monkeypatch):
         manual_die=None,
         pending_thread_id=None,
         snoozed_thread_ids=[],
+        timezone=None,
         active_bandwidth="light",
         predicted_bandwidth="light",
         bandwidth_confidence=0.82,
@@ -572,6 +578,7 @@ async def test_bootstrap_session_mode_includes_guidance(monkeypatch):
         manual_die=None,
         pending_thread_id=None,
         snoozed_thread_ids=[],
+        timezone=None,
         active_bandwidth=None,
         predicted_bandwidth="light",
         bandwidth_confidence=0.82,

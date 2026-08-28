@@ -45,6 +45,8 @@ from collections.abc import Awaitable, Callable
 from typing import Any, ParamSpec, Protocol, TypeVar, cast
 
 import redis.asyncio as aioredis
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from upstash_redis.asyncio import Redis as UpstashRedis
 
 logger = logging.getLogger(__name__)
@@ -54,7 +56,9 @@ T = TypeVar("T")
 
 __all__ = [
     "CacheClient",
+    "PostgresCache",
     "TTL",
+    "UpstashCache",
     "cache",
     "cached",
     "generate_cache_key",
@@ -461,7 +465,7 @@ def _has_user_cache_scope(
     return False
 
 
-class RedisCache:
+class UpstashCache:
     """Internal transport implementing CacheClient over Upstash REST or local Redis.
 
     Adds lazy connection lifecycle, a circuit breaker, and JSON value codecs on
@@ -469,9 +473,9 @@ class RedisCache:
     ``cache`` instance instead of constructing this class directly.
     """
 
-    _instance: RedisCache | None = None
+    _instance: UpstashCache | None = None
 
-    def __new__(cls) -> RedisCache:
+    def __new__(cls) -> UpstashCache:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False
@@ -573,6 +577,22 @@ class RedisCache:
         if client is None:
             raise RuntimeError("Cache client is unavailable")
         return await client.incr(key)
+
+    async def get_generation(self, key: str) -> int:
+        """Read a generation/integer counter value, defaulting to zero."""
+        client = self._client
+        if not self.is_initialized or client is None:
+            return 0
+        try:
+            raw = await client.get(key)
+        except Exception:
+            return 0
+        if raw is None:
+            return 0
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return 0
 
     async def eval_script(self, script: str, keys: list[str], args: list[str]) -> Any:
         """Run one Lua script atomically using each transport's convention.
@@ -704,6 +724,512 @@ class RedisCache:
             return 0
 
 
-# Process-wide provider instance; created after its concrete transport above so
-# callers binding to ``cache`` never need to name the implementing class.
-cache = RedisCache()
+# --- Postgres provider -------------------------------------------------------
+#
+# A provider backed by the application's primary Postgres database. It implements
+# the same :class:`CacheClient` contract as the Redis transport so callers and the
+# generation namespace are backend-agnostic. Values are JSON-serialized and stored
+# in ``cache_entries`` (namespace, cache_key, JSONB value); per-user generation
+# counters live in ``cache_generations``. The schema ships with migration
+# c85500000001 and is verified by tests/test_cache_schema.py.
+
+_CACHE_NAMESPACE = "app"
+# cache_entries.expires_at is NOT NULL, so TTL-less entries receive this sentinel
+# window instead of modeling a nullable expiry in SQL.
+_NO_TTL_SECONDS = 60 * 60 * 24 * 30
+
+
+class PostgresCache:
+    """CacheClient implementation backed by Postgres (RESP-free, Valkey-ready).
+
+    This provider keeps the Redis-protocol client generic by not depending on any
+    RESP/Upstash specifics; it speaks SQL only. After repeated failures it demotes
+    to fail-open for the process lifetime so a sick database never turns optional
+    caching into a request dependency (no per-request ping-pong).
+    """
+
+    _instance: PostgresCache | None = None
+
+    def __new__(cls) -> PostgresCache:
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+
+    def __init__(self) -> None:
+        if getattr(self, "_initialized", False):
+            return
+        self._engine: AsyncEngine | None = None
+        self._circuit_breaker = CircuitBreaker(name="postgres-cache")
+        self._initialized = False
+        self._demoted = False
+
+    @property
+    def is_initialized(self) -> bool:
+        return self._initialized and not self._demoted and self._engine is not None
+
+    def _maybe_demote(self) -> None:
+        """Permanently fail-open for the process lifetime after repeated failures."""
+        if self._circuit_breaker.state == CircuitState.OPEN:
+            self._demoted = True
+
+    async def initialize(self, database_url: str) -> None:
+        """Create an async engine and verify connectivity.
+
+        Args:
+            database_url: ``postgresql+asyncpg://`` connection string.
+
+        Raises:
+            Exception: If the engine cannot be created or Postgres is unreachable.
+        """
+        if self._initialized:
+            logger.warning("Postgres cache already initialized")
+            return
+        # Reuse a small dedicated pool; the cache is best-effort, not a primary path.
+        self._engine = create_async_engine(
+            database_url,
+            pool_size=2,
+            max_overflow=0,
+            pool_pre_ping=True,
+            connect_args={"timeout": _CONNECT_TIMEOUT_SECONDS},
+        )
+        await self.ping()
+        self._circuit_breaker.reset()
+        self._initialized = True
+        self._demoted = False
+        logger.info("Postgres cache configured")
+
+    async def close(self) -> None:
+        if self._engine is not None:
+            engine = self._engine
+            self._engine = None
+            self._initialized = False
+            await engine.dispose()
+            logger.info("Postgres cache closed")
+
+    async def ping(self) -> None:
+        """Verify database connectivity; raise when unavailable.
+
+        Raises:
+            RuntimeError: If the cache has not been initialized.
+        """
+        engine = self._engine
+        if engine is None:
+            raise RuntimeError("Cache is not initialized")
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+
+    def record_failure(self) -> None:
+        """Record one externally observed failure and apply the demotion policy."""
+        self._circuit_breaker.record_failure()
+        self._maybe_demote()
+
+    async def get(self, key: str) -> Any | None:
+        engine = self._engine
+        if (
+            engine is None
+            or not self.is_initialized
+            or not self._circuit_breaker.can_attempt()
+        ):
+            return None
+        try:
+            async with engine.connect() as conn:
+                result = await conn.execute(
+                    text(
+                        "SELECT value FROM cache_entries "
+                        "WHERE namespace = :ns AND cache_key = :k AND expires_at > now()"
+                    ),
+                    {"ns": _CACHE_NAMESPACE, "k": key},
+                )
+                row = result.scalar_one_or_none()
+            self._circuit_breaker.record_success()
+            if row is None:
+                return None
+            if isinstance(row, str):
+                return _reconstruct_value(json.loads(row))
+            # SQLAlchemy+asyncpg may return already-decoded JSONB (dict/list)
+            return _reconstruct_value(row)
+        except Exception as e:
+            self._circuit_breaker.record_failure()
+            self._maybe_demote()
+            logger.warning("Postgres cache get failed: %s", e)
+            return None
+
+    async def set(self, key: str, value: Any, ttl: int | None = None) -> bool:
+        engine = self._engine
+        if (
+            engine is None
+            or not self.is_initialized
+            or not self._circuit_breaker.can_attempt()
+        ):
+            return False
+        if ttl is not None and ttl <= 0:
+            return await self.delete(key)
+        effective_ttl = ttl if ttl is not None else _NO_TTL_SECONDS
+        try:
+            prepared = _prepare_value(value)
+            data = json.dumps(prepared, default=str)
+            async with engine.begin() as conn:
+                await conn.execute(
+                    text(
+                        "INSERT INTO cache_entries (namespace, cache_key, value, "
+                        "expires_at, created_at) "
+                        "VALUES (:ns, :k, CAST(:v AS JSONB), "
+                        "now() + make_interval(secs => :t), now()) "
+                        "ON CONFLICT (namespace, cache_key) DO UPDATE "
+                        "SET value = EXCLUDED.value, expires_at = EXCLUDED.expires_at"
+                    ),
+                    {"ns": _CACHE_NAMESPACE, "k": key, "v": data, "t": effective_ttl},
+                )
+            self._circuit_breaker.record_success()
+            return True
+        except Exception as e:
+            self._circuit_breaker.record_failure()
+            self._maybe_demote()
+            logger.warning("Postgres cache set failed: %s", e)
+            return False
+
+    async def delete(self, key: str) -> bool:
+        engine = self._engine
+        if (
+            engine is None
+            or not self.is_initialized
+            or not self._circuit_breaker.can_attempt()
+        ):
+            return False
+        try:
+            async with engine.begin() as conn:
+                result = await conn.execute(
+                    text(
+                        "DELETE FROM cache_entries "
+                        "WHERE namespace = :ns AND cache_key = :k RETURNING cache_key"
+                    ),
+                    {"ns": _CACHE_NAMESPACE, "k": key},
+                )
+                deleted = len(result.fetchall())
+            self._circuit_breaker.record_success()
+            return deleted > 0
+        except Exception as e:
+            self._circuit_breaker.record_failure()
+            self._maybe_demote()
+            logger.warning("Postgres cache delete failed: %s", e)
+            return False
+
+    async def clear_pattern(self, pattern: str) -> int:
+        engine = self._engine
+        if (
+            engine is None
+            or not self.is_initialized
+            or not self._circuit_breaker.can_attempt()
+        ):
+            return 0
+        like = pattern.replace("*", "%").replace("?", "_")
+        try:
+            async with engine.begin() as conn:
+                result = await conn.execute(
+                    text(
+                        "DELETE FROM cache_entries "
+                        "WHERE namespace = :ns AND cache_key LIKE :pat RETURNING cache_key"
+                    ),
+                    {"ns": _CACHE_NAMESPACE, "pat": like},
+                )
+                deleted = len(result.fetchall())
+            self._circuit_breaker.record_success()
+            return deleted
+        except Exception as e:
+            self._circuit_breaker.record_failure()
+            self._maybe_demote()
+            logger.warning("Postgres cache clear_pattern failed: %s", e)
+            return 0
+
+    async def incr(self, key: str) -> int:
+        """Increment one generation counter row.
+
+        Deliberately bypasses the circuit breaker so user-cache invalidation
+        keeps its existing fail-open semantics.
+
+        Args:
+            key: Generation-counter scope key.
+
+        Returns:
+            Newly incremented counter value.
+
+        Raises:
+            RuntimeError: If the cache has not been initialized.
+        """
+        engine = self._engine
+        if engine is None or not self.is_initialized:
+            raise RuntimeError("Cache is not initialized")
+        try:
+            async with engine.begin() as conn:
+                result = await conn.execute(
+                    text(
+                        "INSERT INTO cache_generations (scope, generation) VALUES (:s, 1) "
+                        "ON CONFLICT (scope) DO UPDATE "
+                        "SET generation = cache_generations.generation + 1 "
+                        "RETURNING generation"
+                    ),
+                    {"s": key},
+                )
+                value = result.scalar_one()
+            self._circuit_breaker.record_success()
+            return int(value)
+        except Exception as e:
+            self._circuit_breaker.record_failure()
+            self._maybe_demote()
+            logger.warning("Postgres cache incr failed: %s", e)
+            raise
+
+    async def get_generation(self, key: str) -> int:
+        """Read a generation/integer counter value, defaulting to zero."""
+        engine = self._engine
+        if engine is None or not self.is_initialized:
+            return 0
+        try:
+            async with engine.connect() as conn:
+                row = await conn.execute(
+                    text("SELECT generation FROM cache_generations WHERE scope = :s"),
+                    {"s": key},
+                )
+                value = row.scalar_one_or_none()
+            self._circuit_breaker.record_success()
+            return int(value) if value is not None else 0
+        except Exception as e:
+            self._circuit_breaker.record_failure()
+            self._maybe_demote()
+            logger.warning("Postgres cache get_generation failed: %s", e)
+            return 0
+
+    async def atomic_generation_read(
+        self, generation_key: str, value_prefix: str, normalized: str
+    ) -> list[Any]:
+        """Read the active generation and matching value atomically (Postgres).
+
+        Mirrors the Redis Lua path: returns ``[generation, raw_value]`` where
+        ``raw_value`` is the stored JSON payload (or ``None`` on a miss).
+        The payload may be returned as decoded JSONB (dict/list) or as text,
+        depending on the asyncpg/SQLAlchemy decoding.
+        """
+        engine = self._engine
+        if engine is None or not self.is_initialized:
+            return [0, None]
+        try:
+            async with engine.begin() as conn:
+                gen_row = await conn.execute(
+                    text("SELECT generation FROM cache_generations WHERE scope = :s"),
+                    {"s": generation_key},
+                )
+                gen = gen_row.scalar_one_or_none()
+                generation = int(gen) if gen is not None else 0
+                value_key = f"{value_prefix}{generation}:{normalized}"
+                val_row = await conn.execute(
+                    text(
+                        "SELECT value FROM cache_entries "
+                        "WHERE namespace = :ns AND cache_key = :k AND expires_at > now()"
+                    ),
+                    {"ns": _CACHE_NAMESPACE, "k": value_key},
+                )
+                raw = val_row.scalar_one_or_none()
+                # Normalize JSONB payload to text for the shared decode path:
+                # Postgres may return already-decoded dict/list; callers expect
+                # a JSON text string akin to the Redis transport.
+                if isinstance(raw, (dict, list)):
+                    raw = json.dumps(raw)
+                elif isinstance(raw, bytes):
+                    raw = raw.decode()
+            self._circuit_breaker.record_success()
+            return [generation, raw]
+        except Exception as e:
+            self._circuit_breaker.record_failure()
+            self._maybe_demote()
+            logger.warning("Postgres generation read failed: %s", e)
+            return [0, None]
+
+    def decode_value(self, raw: object) -> Any:
+        """Decode a stored cache payload back into Python objects.
+
+        Args:
+            raw: Stored payload as text, bytes, or already-decoded JSONB.
+
+        Returns:
+            Reconstructed value with tagged containers restored.
+
+        Raises:
+            ValueError: If the payload is not JSON text or a decoded JSON value.
+        """
+        if isinstance(raw, (dict, list)):
+            return _reconstruct_value(raw)
+        if isinstance(raw, bytes):
+            raw = raw.decode()
+        elif not isinstance(raw, str):
+            raise ValueError("Cached value must be JSON text")
+        return _reconstruct_value(json.loads(raw))
+
+
+# --- Provider router ---------------------------------------------------------
+#
+# ``cache`` is a single stable process-wide instance. Startup selects the backend
+# (Postgres or Redis) once; callers and :mod:`app.cache_generation` always bind to
+# this same object, so swapping the backend never strands a previously imported
+# reference the way reassigning the module global would.
+
+
+class CacheRouter:
+    """Routes caller-facing cache operations to the configured backend."""
+
+    def __init__(self) -> None:
+        self._backend: Any = None
+        self._provider_kind = "off"
+        self._demoted = False
+        # Kept for backward-compatible test teardown that pokes these attributes.
+        self._client: Any = None
+        self._initialized = False
+
+    # -- configuration --------------------------------------------------------
+
+    async def _build_backend(self, provider: str, **kwargs: Any) -> Any:
+        if provider == "postgres":
+            backend = PostgresCache()
+            # Singletons may carry state from a previous configuration; force a
+            # deterministic rebuild so configure() always yields a fresh backend.
+            await backend.close()
+            await backend.initialize(database_url=kwargs["database_url"])
+            return backend
+        if provider == "redis":
+            backend = UpstashCache()
+            await backend.close()
+            await backend.initialize(
+                url=kwargs.get("url"),
+                token=kwargs.get("token"),
+                local_url=kwargs.get("local_url"),
+            )
+            return backend
+        raise ValueError(f"Unknown cache provider: {provider}")
+
+    async def configure(self, provider: str, **kwargs: Any) -> None:
+        """Select and initialize the configured backend provider.
+
+        Raises:
+            Exception: When the chosen backend fails to initialize; callers
+                should catch this and invoke :meth:`demote`.
+        """
+        backend = await self._build_backend(provider, **kwargs)
+        self._backend = backend
+        self._provider_kind = provider
+        self._demoted = False
+        self._client = getattr(backend, "_client", None)
+        self._initialized = True
+
+    async def initialize(
+        self,
+        url: str | None = None,
+        token: str | None = None,
+        local_url: str | None = None,
+    ) -> None:
+        """Backward-compatible redis initialization used by tests/fixtures."""
+        await self.configure(
+            "redis", url=url, token=token, local_url=local_url
+        )
+
+    async def demote(self) -> None:
+        """Permanently fail-open for the process lifetime."""
+        self._demoted = True
+        self._provider_kind = "off"
+        self._initialized = False
+        self._client = None
+        backend = self._backend
+        self._backend = None
+        if backend is not None:
+            try:
+                await backend.close()
+            except Exception as exc:  # pragma: no cover - best effort teardown
+                logger.warning("Cache backend teardown failed: %s", exc)
+
+    async def close(self) -> None:
+        backend = self._backend
+        self._backend = None
+        self._client = None
+        self._initialized = False
+        self._provider_kind = "off"
+        self._demoted = False
+        if backend is not None:
+            await backend.close()
+
+    # -- introspection --------------------------------------------------------
+
+    @property
+    def is_initialized(self) -> bool:
+        return (
+            self._backend is not None
+            and self._backend.is_initialized
+            and not self._demoted
+        )
+
+    @property
+    def provider_kind(self) -> str:
+        return self._provider_kind
+
+    # -- delegated operations -------------------------------------------------
+
+    async def ping(self) -> None:
+        if self._backend is None or self._demoted:
+            raise RuntimeError("Cache is not initialized")
+        await self._backend.ping()
+
+    def record_failure(self) -> None:
+        if self._backend is not None:
+            self._backend.record_failure()
+
+    async def get(self, key: str) -> Any | None:
+        if self._backend is None or self._demoted:
+            return None
+        return await self._backend.get(key)
+
+    async def set(self, key: str, value: Any, ttl: int | None = None) -> bool:
+        if self._backend is None or self._demoted:
+            return False
+        return await self._backend.set(key, value, ttl=ttl)
+
+    async def delete(self, key: str) -> bool:
+        if self._backend is None or self._demoted:
+            return False
+        return await self._backend.delete(key)
+
+    async def clear_pattern(self, pattern: str) -> int:
+        if self._backend is None or self._demoted:
+            return 0
+        return await self._backend.clear_pattern(pattern)
+
+    async def incr(self, key: str) -> int:
+        if self._backend is None or self._demoted:
+            raise RuntimeError("Cache is not initialized")
+        return await self._backend.incr(key)
+
+    async def get_generation(self, key: str) -> int:
+        if self._backend is None or self._demoted:
+            return 0
+        return await self._backend.get_generation(key)
+
+    async def eval_script(self, script: str, keys: list[str], args: list[str]) -> Any:
+        if self._backend is None or self._demoted:
+            raise RuntimeError("Cache is not initialized")
+        return await self._backend.eval_script(script, keys=keys, args=args)
+
+    async def atomic_generation_read(
+        self, generation_key: str, value_prefix: str, normalized: str
+    ) -> list[Any]:
+        if self._backend is None or self._demoted:
+            return [0, None]
+        return await self._backend.atomic_generation_read(
+            generation_key, value_prefix, normalized
+        )
+
+    def decode_value(self, raw: object) -> Any:
+        if self._backend is None:
+            raise RuntimeError("Cache is not initialized")
+        return self._backend.decode_value(raw)
+
+
+# Process-wide provider instance. Callers depend only on this object; the active
+# backend (Postgres or Redis) is chosen once at startup via ``cache.configure``.
+cache = CacheRouter()

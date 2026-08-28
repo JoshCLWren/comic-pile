@@ -37,8 +37,8 @@ const annihilation = {
   name: 'Annihilation',
   created_at: '2026-08-06T00:00:00Z',
   memberships: [
-    { id: 1, issue_id: 11, thread_id: null },
-    { id: 2, issue_id: null, thread_id: 22 },
+    { id: 1, issue_id: 11, thread_id: null, series_title: 'Nova', issue_number: '11' },
+    { id: 2, issue_id: null, thread_id: 22, series_title: 'Nova', issue_number: null },
   ],
 }
 
@@ -72,7 +72,7 @@ describe('CrossoversPage deep links (issue #1877)', () => {
 
     const annihilationButton = screen.getByRole('button', { name: /Annihilation.*2 members/ })
     expect(annihilationButton).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.queryByText('Issue 11')).not.toBeInTheDocument()
+    expect(screen.queryByText('Nova #11')).not.toBeInTheDocument()
   })
 
   it('retains carried starts-at context inside the deep-linked crossover detail', async () => {
@@ -80,7 +80,7 @@ describe('CrossoversPage deep links (issue #1877)', () => {
 
     const annihilationButton = await screen.findByRole('button', { name: /Annihilation.*2 members/ })
     expect(await screen.findByText('Starts at #14')).toBeVisible()
-    expect(screen.getByText('Issue 11')).toBeVisible()
+    expect(screen.getByText('Nova #11')).toBeVisible()
     expect(annihilationButton).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByRole('button', { name: /Secret Wars.*0 members/ })).toHaveAttribute('aria-expanded', 'false')
   })
@@ -88,7 +88,7 @@ describe('CrossoversPage deep links (issue #1877)', () => {
   it('omits starts-at context when the deep link does not carry it', async () => {
     renderPage('/crossovers?group=7')
 
-    expect(await screen.findByText('Issue 11')).toBeVisible()
+    expect(await screen.findByText('Nova #11')).toBeVisible()
     expect(screen.queryByText('Starts at #14')).not.toBeInTheDocument()
   })
 

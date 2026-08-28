@@ -4,8 +4,9 @@ import json
 import logging
 import random
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
 from sqlalchemy import Text, func, or_, select
 from sqlalchemy.dialects.postgresql import ARRAY
@@ -21,9 +22,14 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.middleware import limiter
 from app.models import DependencyGroup, DependencyGroupMembership, Event, Issue, Session, Thread
+from app.models.recommendation_context import RecommendationContext
 from app.models.user import User
 from app.roll_recovery import build_roll_recovery
 from app.services.explanation_projection import get_primary_explanation
+from app.services.reading_effort import (
+    build_recommendation_context,
+    compute_effort_estimate,
+)
 from app.services.recommendation_explanation import RecommendationExplanationProjection
 from app.schemas import (
     ExplainableFactorResponse,
@@ -37,7 +43,9 @@ from app.schemas import (
     SessionModeResponse,
     SessionModeUpdateRequest,
 )
+from app.schemas.recommendation_context import CandidateFactor, RecommendationContextCreate
 from app.schemas.session import build_session_bandwidth_state
+from app.momentum import MomentumCandidateWeight, weighted_momentum_selection
 from comic_pile.queue import get_bounded_roll_pool_rows
 from comic_pile.recommendation_selection import (
     DEFAULT_BANDWIDTH,
@@ -49,7 +57,6 @@ from comic_pile.recommendation_selection import (
     select_from_pool,
 )
 from comic_pile.session import get_current_die_for_session, get_or_create
-from app.momentum import weighted_momentum_selection
 from app.recommendation_version import (
     get_current_algorithm_version,
     get_current_control_state,
@@ -127,6 +134,7 @@ async def roll_dice(
     algorithm_control_state = get_current_control_state()
 
     max_bonus = 0.0
+    candidate_weights: list = []
     if resolved_mode is SelectionMode.PURE_RANDOM_BYPASS:
         selection = select_from_pool(
             pool_size,
@@ -134,6 +142,16 @@ async def roll_dice(
             intent=selection_intent,
         )
         selected_index = selection.index
+        # Populate candidate_weights for pure-random bypass so recommendation
+        # context records uniform weights for all bounded candidates.
+        candidate_weights = [
+            MomentumCandidateWeight(
+                candidate_id=row[0].id if isinstance(row, tuple) else row.id,
+                weight=1.0,
+                factors=(),
+            )
+            for row in bounded_rows
+        ]
     elif is_legacy_mode_enabled():
         # Safe legacy rollback: recover unweighted Roll behavior by skipping
         # contextual momentum weighting entirely. This is a pure uniform draw,
@@ -151,7 +169,7 @@ async def roll_dice(
             select(Event).where(Event.session_id == current_session_id)
         )
         session_events = list(session_events_result.scalars().all())
-        selected_index, max_bonus = await weighted_momentum_selection(
+        selected_index, max_bonus, candidate_weights = await weighted_momentum_selection(
             db=db,
             bounded_rows=bounded_rows,
             user_id=user_id,
@@ -195,6 +213,21 @@ async def roll_dice(
                 selected_thread_issue_id = next_issue.id
                 selected_thread_issue_number = next_issue.issue_number
 
+    # Decision-time context is purely observational: it records the estimate
+    # that existed when this roll happened and never changes the selection.
+    effort_estimate = await compute_effort_estimate(
+        db,
+        user_id=user_id,
+        thread_id=selected_thread_id,
+        issue_id=selected_thread_issue_id,
+    )
+    recommendation_context = build_recommendation_context(
+        effort_estimate,
+        thread_id=selected_thread_id,
+        issue_id=selected_thread_issue_id,
+        issue_number=selected_thread_issue_number,
+    )
+
     event = Event(
         type="roll",
         session_id=current_session_id,
@@ -205,6 +238,7 @@ async def roll_dice(
         recommendation_reason_codes=recommendation_reason_codes,
         algorithm_version=algorithm_version,
         algorithm_control_state=algorithm_control_state,
+        recommendation_context=recommendation_context,
         issue_id=selected_thread_issue_id,
         issue_number=selected_thread_issue_number,
     )
@@ -219,6 +253,55 @@ async def roll_dice(
         pool_size,
     )
 
+    # Record recommendation context for auditability: capture the active
+    # session reading mode so any roll can be reproduced and explained
+    # from persisted data alone.
+    has_explicit_mode = bool(current_session.active_intent)
+    context_data = RecommendationContextCreate(
+        schema_version=1,
+        intent=normalize_intent(selection_intent).value,
+        intent_source=current_session.intent_source or "default",
+        intent_confidence=1.0 if has_explicit_mode else 0.0,
+        bandwidth=normalize_bandwidth(selection_bandwidth).value,
+        bandwidth_source=current_session.bandwidth_source or "default",
+        bandwidth_confidence=current_session.bandwidth_confidence or 0.0,
+        candidate_factors=[
+            CandidateFactor(
+                candidate_id=breakdown.candidate_id,
+                factors=list(breakdown.factors),
+                weight=breakdown.weight,
+            )
+            for breakdown in candidate_weights
+        ]
+        if candidate_weights
+        else None,
+        final_weight=candidate_weights[selected_index].weight
+        if candidate_weights
+        else None,
+        random_bypass=max_bonus <= 0.0,
+        balanced_neutrality=max_bonus <= 0.0,
+    )
+
+    # Flush event to get its ID for the recommendation context FK
+    await db.flush()
+
+    rec_context = RecommendationContext(
+        event_id=event.id,
+        schema_version=context_data.schema_version,
+        intent=context_data.intent,
+        intent_source=context_data.intent_source,
+        intent_confidence=context_data.intent_confidence,
+        bandwidth=context_data.bandwidth,
+        bandwidth_source=context_data.bandwidth_source,
+        bandwidth_confidence=context_data.bandwidth_confidence,
+        candidate_factors=[f.model_dump() for f in context_data.candidate_factors]
+        if context_data.candidate_factors
+        else None,
+        final_weight=context_data.final_weight,
+        random_bypass=context_data.random_bypass,
+        balanced_neutrality=context_data.balanced_neutrality,
+    )
+    db.add(rec_context)
     if current_session:
         current_session.pending_thread_id = selected_thread_id
         current_session.pending_thread_updated_at = datetime.now(UTC)
@@ -352,6 +435,21 @@ async def override_roll(
     algorithm_version = get_current_algorithm_version()
     algorithm_control_state = get_current_control_state()
 
+    # Decision-time context is purely observational: it records the estimate
+    # that existed when this roll happened and never changes the selection.
+    effort_estimate = await compute_effort_estimate(
+        db,
+        user_id=current_user.id,
+        thread_id=override_thread_id,
+        issue_id=override_thread_issue_id,
+    )
+    recommendation_context = build_recommendation_context(
+        effort_estimate,
+        thread_id=override_thread_id,
+        issue_id=override_thread_issue_id,
+        issue_number=override_thread_issue_number,
+    )
+
     event = Event(
         type="roll",
         session_id=current_session_id,
@@ -362,10 +460,48 @@ async def override_roll(
         recommendation_reason_codes=[],
         algorithm_version=algorithm_version,
         algorithm_control_state=algorithm_control_state,
+        recommendation_context=recommendation_context,
         issue_id=override_thread_issue_id,
         issue_number=override_thread_issue_number,
     )
     db.add(event)
+
+    # Record recommendation context for override selection
+    # Override is a manual selection, not a weighted recommendation
+    context_data = RecommendationContextCreate(
+        schema_version=1,
+        intent="balanced",
+        intent_source="manual_override",
+        intent_confidence=1.0,
+        bandwidth="balanced",
+        bandwidth_source="manual_override",
+        bandwidth_confidence=1.0,
+        candidate_factors=None,
+        final_weight=1.0,
+        random_bypass=False,
+        balanced_neutrality=True,
+    )
+
+    # Flush event to get its ID for the recommendation context FK
+    await db.flush()
+
+    rec_context = RecommendationContext(
+        event_id=event.id,
+        schema_version=context_data.schema_version,
+        intent=context_data.intent,
+        intent_source=context_data.intent_source,
+        intent_confidence=context_data.intent_confidence,
+        bandwidth=context_data.bandwidth,
+        bandwidth_source=context_data.bandwidth_source,
+        bandwidth_confidence=context_data.bandwidth_confidence,
+        candidate_factors=[f.model_dump() for f in context_data.candidate_factors]
+        if context_data.candidate_factors
+        else None,
+        final_weight=context_data.final_weight,
+        random_bypass=context_data.random_bypass,
+        balanced_neutrality=context_data.balanced_neutrality,
+    )
+    db.add(rec_context)
 
     current_session.pending_thread_id = override_thread_id
     current_session.pending_thread_updated_at = datetime.now(UTC)
@@ -405,7 +541,7 @@ async def set_manual_die(
     """Set manual die size for current session.
 
     Args:
-        die: The die size to set (must be 4, 6, 8, 10, 12, 20, 30, 50, or 100).
+        die: The die size to set (must be one of: 4, 6, 8, 10, 12, 20, 30, 50, or 100).
         current_user: The authenticated user making the request.
         db: SQLAlchemy session for database operations.
 
@@ -479,9 +615,6 @@ async def update_session_mode(
 
     Returns:
         SessionModeResponse with the updated canonical mode state.
-
-    Raises:
-        HTTPException: If an invalid enum value is supplied.
     """
     current_session = await get_or_create(db, user_id=current_user.id, existing_user=current_user)
 
@@ -552,6 +685,7 @@ async def update_session_mode(
 async def roll_bootstrap(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
+    timezone: str | None = Query(default=None, description="Browser IANA timezone identifier"),
 ) -> RollBootstrapResponse:
     """Return bounded bootstrap data for the Roll initial render.
 
@@ -561,6 +695,9 @@ async def roll_bootstrap(
     Args:
         current_user: The authenticated user.
         db: Async database session.
+        timezone: Optional browser-resolved IANA timezone identifier captured once
+            per active reading session. Invalid or unusable values leave the field
+            unset and never break the bootstrap response.
 
     Returns:
         RollBootstrapResponse with session state, bounded pool, snoozed/blocked/stale summaries.
@@ -568,6 +705,22 @@ async def roll_bootstrap(
     user_id = current_user.id
     current_session = await get_or_create(db, user_id=user_id, existing_user=current_user)
     await db.refresh(current_session)
+
+    # Capture browser IANA timezone once for the active session if not already set.
+    # Invalid values fail safely: the field remains unset and roll continues.
+    if timezone is not None and current_session.timezone is None:
+        try:
+            candidate_timezone = timezone.strip()
+            if candidate_timezone and len(candidate_timezone) <= 100:
+                # Resolving through ZoneInfo rejects malformed identifiers such as
+                # "Not/AZone" while accepting real IANA names like "America/Chicago".
+                ZoneInfo(candidate_timezone)
+                current_session.timezone = candidate_timezone
+                await db.commit()
+                await db.refresh(current_session)
+        except Exception:
+            # Any failure during timezone persistence must not break roll.
+            pass
 
     current_session_id = current_session.id
 
@@ -757,6 +910,7 @@ async def roll_bootstrap(
         stale_thread=stale_thread,
         session_id=current_session_id,
         user_id=user_id,
+        timezone=current_session.timezone,
     )
 
 

@@ -34,9 +34,22 @@ jobs:
           # failing=UNAVAILABLE which opens/refreshes main-breakage instead
           # of silently treating an outage as green.
           total="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '.total_count // 0' 2>/dev/null || echo UNAVAILABLE)"
-          failing="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '[.check_runs[] | select(.conclusion=="FAILURE" or .conclusion=="TIMED_OUT" or .conclusion=="CANCELLED" or .conclusion=="STARTUP_FAILURE")] | length' 2>/dev/null || echo UNAVAILABLE)"
-          failing_names="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq -r '[.check_runs[] | select(.conclusion=="FAILURE" or .conclusion=="TIMED_OUT") | .name] | join(", ")' 2>/dev/null || true)"
-          if [[ "$total" == "UNAVAILABLE" ]]; then
+          failing="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '
+            [.check_runs[]
+             | select((.conclusion // "" | ascii_downcase) as $c
+                      | $c=="failure" or $c=="timed_out"
+                        or $c=="cancelled" or $c=="startup_failure")]
+            | length
+          ' 2>/dev/null || echo UNAVAILABLE)"
+          failing_names="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq -r '
+            [.check_runs[]
+             | select((.conclusion // "" | ascii_downcase) as $c
+                      | $c=="failure" or $c=="timed_out")
+             | .name]
+            | join(", ")
+          ' 2>/dev/null || true)"
+          echo "Main health API result: sha=${sha} total_count=${total} failing=${failing}"
+          if [[ "$total" == "UNAVAILABLE" || "$failing" == "UNAVAILABLE" ]]; then
             echo "GitHub API unavailable proving main health at ${sha}; reporting failure so breakage stays visible" >&2
             echo "failing=1" >> "$GITHUB_OUTPUT"
             echo "total=0" >> "$GITHUB_OUTPUT"

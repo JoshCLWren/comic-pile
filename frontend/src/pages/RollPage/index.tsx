@@ -12,6 +12,7 @@ import {
 } from '../../hooks/useRoll'
 import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../../hooks/useQueue'
+import { useTasteDiscoveries } from '../../hooks/useTasteDiscoveries'
 import { useRate } from '../../hooks'
 import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 import { isDiceSide } from '../../components/diceTypes'
@@ -29,6 +30,7 @@ import { RatingView } from './components/RatingView'
 import { ThreadPool } from './components/ThreadPool'
 import { RollHeader } from './components/RollHeader'
 import { RollModals } from './components/RollModals'
+import { TasteDiscoveryCard } from './components/TasteDiscoveryCard'
 import ReadingModeLauncher from '../../components/ReadingModeLauncher'
 
 /**
@@ -78,6 +80,7 @@ export default function RollPage() {
   const shuffleQueueMutation = useShuffleQueue()
   const rateMutation = useRate()
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
+  const tasteDiscoveries = useTasteDiscoveries()
 
   useRollBootstrapSync({
     state,
@@ -284,6 +287,14 @@ export default function RollPage() {
                 onSnooze={snooze.handleSnooze}
                 onRefreshThread={rating.handleRefreshThread}
                 onCancel={rating.handleCancelRating}
+              />
+            )}
+
+            {!state.isRatingView && (
+              <TasteDiscoveryCard
+                discovery={tasteDiscoveries.current}
+                onRespond={tasteDiscoveries.respond}
+                onDismiss={tasteDiscoveries.dismiss}
               />
             )}
 

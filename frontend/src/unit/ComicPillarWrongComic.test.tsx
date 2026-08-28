@@ -94,7 +94,7 @@ describe('ComicPillar Wrong comic? flow', () => {
   it('routes a correction opened via Wrong comic? to the replace endpoint', async () => {
     render(<ComicPillar activeRatingThread={confirmedThread} onRefreshThread={vi.fn()} />)
 
-    const wrongComicButton = await screen.findByRole('button', { name: 'Wrong comic?' })
+    const wrongComicButton = await screen.findByRole('button', { name: 'Wrong series?' })
     fireEvent.click(wrongComicButton)
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
@@ -169,7 +169,7 @@ describe('ComicPillar confirmed mapping display', () => {
 
     expect(screen.queryByText(/ComicVine #\d+/)).not.toBeInTheDocument()
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Wrong comic?' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Wrong series?' }))
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
 
     fireEvent.change(screen.getByPlaceholderText('Search series title...'), {

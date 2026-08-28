@@ -26,6 +26,9 @@ FAILURE_COOLDOWN_SECONDS = 15 * 60
 MODEL_MISSING_COOLDOWN_SECONDS = 6 * 60 * 60
 WORKER_RE = re.compile(r"(?m)^Worker:\s*opencode-free-model-factory-(?P<worker>\d+)\s*$")
 OUTCOME_RE = re.compile(r"(?m)^Outcome:\s*(?P<outcome>.+?)\s*$")
+ATTEMPT_OUTCOME_RE = re.compile(
+    r"(?m)^Attempt outcome:\s*(?P<outcome>[a-z][a-z0-9_]+)\s*$"
+)
 UPDATED_RE = re.compile(r"(?m)^Updated:\s*(?P<updated>\S+)\s*$")
 OWNER_RE = re.compile(r"^factory:(?P<worker>\d+)$")
 
@@ -89,28 +92,137 @@ def completion_batch_size(review_backlog: int) -> int:
 def cooldown_seconds(outcome: str | None) -> int:
     """Return how long a recently unhealthy worker should yield to healthy peers."""
     normalized = (outcome or "").strip().casefold()
-    if "model missing" in normalized:
+    if normalized in {
+        "success",
+        "no_work",
+        "work_failure",
+        # Historical aliases retained while durable records age out.
+        "no_change",
+        "policy_blocked",
+    }:
+        return 0
+    if normalized in {
+        "model_unavailable",
+        "model_policy_violation",
+        "model missing",
+    } or "model missing" in normalized:
         return MODEL_MISSING_COOLDOWN_SECONDS
-    if "rate limited" in normalized:
+    if normalized in {
+        "provider_throttle",
+        "provider_unavailable",
+        "provider_throttled",
+        "rate limited",
+    } or "rate limited" in normalized:
         return RATE_LIMIT_COOLDOWN_SECONDS
-    if normalized in {"failure", "failed", "error"} or "failure" in normalized:
+    if normalized in {
+        "provider_failure",
+        "environment_failure",
+        "control_plane_failure",
+        "unknown_failure",
+        # Historical aliases.
+        "model_interruption",
+        "worker_environment_failure",
+        "failure",
+        "failed",
+        "error",
+    } or "failure" in normalized:
         return FAILURE_COOLDOWN_SECONDS
     return 0
+
+
+def _catalog_worker_health(
+    comments: Iterable[Mapping[str, Any]],
+    candidates: Iterable[Mapping[str, str]],
+    *,
+    now_epoch: int,
+) -> dict[str, tuple[str, int]]:
+    """Project shared catalog candidate health onto capability worker slots."""
+    scripts = Path(__file__).resolve().parent
+    if str(scripts) not in sys.path:
+        sys.path.insert(0, str(scripts))
+    import factory_candidate_health as candidate_health
+    import factory_provider_candidates as provider_candidates
+
+    rows = tuple(candidates)
+    catalog_providers = {
+        provider
+        for provider, adapter in provider_candidates.ADAPTERS.items()
+        if adapter.mode != "runtime_only"
+    }
+    discovered: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for row in rows:
+        provider = str(row.get("provider") or "")
+        model = str(row.get("model") or "")
+        key = (provider, model)
+        if provider not in catalog_providers or not model or key in seen:
+            continue
+        seen.add(key)
+        discovered.append(
+            {
+                "provider": provider,
+                "model": model,
+                "runtime_model": model,
+                "discovered_by": "configured_policy",
+            }
+        )
+
+    ranked = candidate_health.rank_candidates(
+        discovered,
+        comments,
+        now_epoch=now_epoch,
+    )
+    priority = {
+        "healthy": 0,
+        "degraded": 1,
+        "unknown": 2,
+        "cooling": 3,
+        "unavailable": 4,
+    }
+    provider_states: dict[str, str] = {}
+    for item in ranked:
+        previous = provider_states.get(item.provider)
+        if previous is None or priority[item.health_state] < priority[previous]:
+            provider_states[item.provider] = item.health_state
+
+    state_evidence = {
+        "healthy": ("success", now_epoch),
+        "degraded": (
+            "unknown_failure",
+            now_epoch - FAILURE_COOLDOWN_SECONDS - 1,
+        ),
+        "cooling": ("unknown_failure", now_epoch),
+        "unavailable": ("model_unavailable", now_epoch),
+    }
+    projected: dict[str, tuple[str, int]] = {}
+    for row in rows:
+        state = provider_states.get(str(row.get("provider") or ""), "unknown")
+        evidence = state_evidence.get(state)
+        if evidence is not None:
+            projected[str(row["worker"])] = evidence
+    return projected
 
 
 def latest_worker_health(
     comments: Iterable[Mapping[str, Any]],
     *,
     trusted: Callable[[Mapping[str, Any]], bool] | None = None,
+    candidates: Iterable[Mapping[str, str]] | None = None,
+    now_epoch: int | None = None,
 ) -> dict[str, tuple[str, int]]:
-    """Return the newest trusted heartbeat outcome for each fixed worker."""
+    """Return worker health, sharing catalog-backed candidate evidence by provider."""
+    comment_rows = tuple(comments)
     latest: dict[str, tuple[str, int]] = {}
-    for comment in comments:
+    priorities: dict[str, int] = {}
+    for comment in comment_rows:
         if trusted is not None and not trusted(comment):
             continue
         body = str(comment.get("body") or "")
         worker_match = WORKER_RE.search(body)
-        outcome_match = OUTCOME_RE.search(body)
+        # Classified attempt evidence is authoritative for health. Legacy
+        # heartbeat outcomes remain supported while existing records age out.
+        attempt_match = ATTEMPT_OUTCOME_RE.search(body)
+        outcome_match = attempt_match or OUTCOME_RE.search(body)
         updated_match = UPDATED_RE.search(body)
         if not worker_match or not outcome_match or not updated_match:
             continue
@@ -118,10 +230,79 @@ def latest_worker_health(
         if updated is None:
             continue
         worker = worker_match.group("worker")
+        priority_value = 1 if attempt_match else 0
         previous = latest.get(worker)
-        if previous is None or updated > previous[1]:
+        previous_priority = priorities.get(worker, -1)
+        if previous is None or priority_value > previous_priority or (
+            priority_value == previous_priority and updated > previous[1]
+        ):
             latest[worker] = (outcome_match.group("outcome").strip(), updated)
+            priorities[worker] = priority_value
+
+    if candidates is None:
+        manifest = Path(__file__).resolve().parents[1] / "free-model-factories.tsv"
+        candidates = load_manifest_candidates(manifest)
+    now_epoch = int(time.time()) if now_epoch is None else now_epoch
+    trusted_comments = (
+        tuple(comment for comment in comment_rows if trusted(comment))
+        if trusted is not None
+        else comment_rows
+    )
+    latest.update(
+        _catalog_worker_health(
+            trusted_comments,
+            candidates,
+            now_epoch=now_epoch,
+        )
+    )
     return latest
+
+
+def worker_health_state(
+    worker: str,
+    health: Mapping[str, tuple[str, int]],
+    *,
+    now_epoch: int,
+) -> str:
+    """Return the evidence-derived runtime health state for one worker."""
+    status = health.get(worker)
+    if status is None:
+        return "unknown"
+    outcome, updated = status
+    normalized = (outcome or "").strip().casefold()
+    if normalized in {
+        "success",
+        "no_work",
+        "healthy / productive",
+        "healthy / idle",
+        "work_failure",
+        # Historical aliases.
+        "no_change",
+        "policy_blocked",
+    }:
+        return "healthy"
+    if normalized in {
+        "model_unavailable",
+        "model_policy_violation",
+        "model missing",
+    } or "model missing" in normalized:
+        return "unavailable"
+    cooldown = cooldown_seconds(outcome)
+    if cooldown > 0 and now_epoch < updated + cooldown:
+        return "cooling"
+    if cooldown > 0:
+        return "degraded"
+    return "unknown"
+
+
+def worker_is_executable(
+    worker: str,
+    health: Mapping[str, tuple[str, int]],
+    *,
+    now_epoch: int,
+) -> bool:
+    """Return whether runtime evidence permits dispatch to one worker."""
+    return worker_health_state(worker, health, now_epoch=now_epoch) in {"healthy", "degraded"}
 
 
 def worker_is_cooling(
@@ -158,7 +339,7 @@ def select_completion_workers(
         worker
         for worker in workers
         if worker not in owned_workers
-        and not worker_is_cooling(worker, health, now_epoch=now_epoch)
+        and worker_is_executable(worker, health, now_epoch=now_epoch)
     ]
     eligible.sort(
         key=lambda worker: (
@@ -182,17 +363,105 @@ def flatten_pages(value: object | None) -> list[dict[str, Any]]:
     return result
 
 
-def load_manifest_workers(path: Path) -> list[str]:
-    """Read current configured worker IDs from the fixed-model manifest."""
-    workers: list[str] = []
+def load_manifest_candidates(path: Path) -> list[dict[str, str]]:
+    """Read configured worker, provider, and model candidates from the manifest."""
+    candidates: list[dict[str, str]] = []
     for raw_line in path.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
-        worker = line.split("\t", 1)[0].strip()
-        if worker.isdigit():
-            workers.append(worker)
-    return workers
+        fields = line.split("\t")
+        if len(fields) < 3 or not fields[0].strip().isdigit():
+            continue
+        candidates.append(
+            {
+                "worker": fields[0].strip(),
+                "provider": fields[1].strip(),
+                "model": fields[2].strip(),
+            }
+        )
+    return candidates
+
+
+def load_manifest_workers(path: Path) -> list[str]:
+    """Read current configured worker IDs from the fixed-model manifest."""
+    return [candidate["worker"] for candidate in load_manifest_candidates(path)]
+
+
+def capacity_report(
+    candidates: Iterable[Mapping[str, str]],
+    health: Mapping[str, tuple[str, int]],
+    *,
+    now_epoch: int,
+) -> dict[str, object]:
+    """Return distinct candidate health separately from executable slot capacity."""
+    slot_states = {
+        "unknown": 0,
+        "healthy": 0,
+        "degraded": 0,
+        "cooling": 0,
+        "unavailable": 0,
+    }
+    executable_slots: list[dict[str, str]] = []
+    slot_details: list[dict[str, str]] = []
+    candidate_details: dict[tuple[str, str], tuple[dict[str, str], int]] = {}
+    for candidate in candidates:
+        worker = str(candidate["worker"])
+        provider = str(candidate["provider"])
+        model = str(candidate["model"])
+        state = worker_health_state(worker, health, now_epoch=now_epoch)
+        slot_states[state] += 1
+        detail = {
+            "worker": worker,
+            "provider": provider,
+            "model": model,
+            "health": state,
+        }
+        slot_details.append(detail)
+        if state in {"healthy", "degraded"}:
+            executable_slots.append(detail)
+
+        status = health.get(worker)
+        updated = status[1] if status is not None else -1
+        provider_model = {
+            "provider": provider,
+            "model": model,
+            "health": state,
+        }
+        key = (provider, model)
+        previous = candidate_details.get(key)
+        if previous is None or updated > previous[1]:
+            candidate_details[key] = (provider_model, updated)
+
+    provider_models = [
+        detail
+        for detail, _updated in sorted(
+            candidate_details.values(),
+            key=lambda item: (item[0]["provider"], item[0]["model"]),
+        )
+    ]
+    candidate_states = dict.fromkeys(slot_states, 0)
+    for detail in provider_models:
+        candidate_states[detail["health"]] += 1
+    executable_provider_models = [
+        detail
+        for detail in provider_models
+        if detail["health"] in {"healthy", "degraded"}
+    ]
+    return {
+        # Keep the established slot fields stable for allocation callers.
+        "executable_capacity": len(executable_slots),
+        "health_counts": slot_states,
+        "executable_candidates": executable_slots,
+        "candidates": slot_details,
+        # Candidate fields never count repeated numbered slots as distinct models.
+        "executable_slot_capacity": len(executable_slots),
+        "slot_health_counts": slot_states,
+        "executable_candidate_count": len(executable_provider_models),
+        "candidate_health_counts": candidate_states,
+        "executable_provider_models": executable_provider_models,
+        "provider_models": provider_models,
+    }
 
 
 def load_controller() -> Any:

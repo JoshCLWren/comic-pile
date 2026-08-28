@@ -645,10 +645,12 @@ async def test_reader_context_cross_thread_edge_without_expansion(
             "target_issue_number": other_issues[0].issue_number,
             "source_thread_title": "Neighborhood",
             "target_thread_title": "Distant",
+            "source_status": "read",
+            "target_status": "read",
             "note": "cross-thread",
             "source_label": "Neighborhood #3",
             "target_label": "Distant #1",
-            "explanation": f"Blocked by Neighborhood: #{issues[2].issue_number}",
+            "explanation": "Neighborhood #3 can be read now. Distant #1 waits on it.",
         }
     ]
 
@@ -705,8 +707,8 @@ async def test_reader_context_dependency_explanations_hide_raw_thread_ids(
     edge = dependency_edges[0]
 
     expected = (
-        f"Blocked by Ultimate Universe: One Year In: "
-        f"#{source_issues[1].issue_number}"
+        f"You must read Ultimate Universe: One Year In "
+        f"#{source_issues[1].issue_number} first"
     )
     assert edge["explanation"] == expected
     assert edge["source_thread_id"] == source_thread.id
@@ -766,12 +768,73 @@ async def test_reader_context_continuity_rule_edges(
             "target_issue_number": issues[3].issue_number,
             "source_thread_title": "Rules",
             "target_thread_title": "Rules",
+            "source_status": "read",
+            "target_status": "read",
             "note": "directive",
             "source_label": "Rules #2",
             "target_label": "Rules #4",
             "explanation": "Rules #2 must be read before Rules #4",
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_reader_context_edge_statuses_orient_prerequisites(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Edge payloads carry each endpoint's owned read status for orientation.
+
+    Issue #1916 fixture: the path into the active issue crosses threads, so
+    the reader-facing prerequisite presentation needs authoritative read
+    state for every endpoint instead of guessing from arrow direction.
+    """
+    manhunter_thread, mm = await _make_thread(
+        async_db,
+        default_user,
+        title="Absolute Martian Manhunter",
+        issue_count=4,
+        queue_position=1,
+        read_through=1,
+    )
+    _evil_thread, evil = await _make_thread(
+        async_db,
+        default_user,
+        title="Absolute Evil",
+        issue_count=1,
+        queue_position=2,
+    )
+    into_evil = ContinuityRule(
+        user_id=default_user.id,
+        source_type="issue",
+        source_id=mm[0].id,
+        target_type="issue",
+        target_id=evil[0].id,
+        satisfaction_type="item_read",
+    )
+    into_current = ContinuityRule(
+        user_id=default_user.id,
+        source_type="issue",
+        source_id=evil[0].id,
+        target_type="issue",
+        target_id=mm[1].id,
+        satisfaction_type="item_read",
+    )
+    async_db.add_all([into_evil, into_current])
+    await async_db.flush()
+
+    response = await auth_client.get(f"/api/v1/issues/{mm[1].id}/reader-context")
+
+    assert response.status_code == 200
+    edges = {
+        edge["source_issue_id"]: edge
+        for edge in response.json()["local_chain"]["edges"]
+    }
+    assert edges[mm[0].id]["source_status"] == "read"
+    assert edges[mm[0].id]["target_status"] == "unread"
+    assert edges[evil[0].id]["source_status"] == "unread"
+    assert edges[evil[0].id]["target_status"] == "unread"
 
 
 @pytest.mark.asyncio
@@ -886,3 +949,136 @@ async def test_reader_context_edge_labels_expose_issue_number_and_thread_title(
     assert edge["target_issue_number"] == "1"
     assert edge["target_thread_title"] == "Targeter"
     assert edge["note"] == "cross-team"
+
+
+@pytest.mark.asyncio
+async def test_reader_context_dependency_explanation_asymmetric_prerequisite(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """When the current issue is the prerequisite, copy says it can be read now.
+
+    Regression coverage for issue #1882: Cable #62 → X-Force #83 style edges
+    must not present the served comic as blocked merely because it unlocks a
+    downstream issue.
+    """
+    cable_thread, cable_issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Cable",
+        issue_count=2,
+        queue_position=1,
+        read_through=1,
+    )
+    xforce_thread, xforce_issues = await _make_thread(
+        async_db,
+        default_user,
+        title="X-Force",
+        issue_count=2,
+        queue_position=2,
+        read_through=0,
+    )
+    dependency = Dependency(
+        source_issue_id=cable_issues[1].id,
+        target_issue_id=xforce_issues[0].id,
+        note="cable-to-xforce",
+    )
+    async_db.add(dependency)
+    await async_db.flush()
+
+    response = await auth_client.get(
+        f"/api/v1/issues/{cable_issues[1].id}/reader-context"
+    )
+
+    assert response.status_code == 200
+    edges = response.json()["local_chain"]["edges"]
+    dep_edges = [edge for edge in edges if edge["kind"] == "dependency"]
+    assert len(dep_edges) == 1
+    edge = dep_edges[0]
+    assert edge["explanation"] == (
+        "Cable #2 can be read now. X-Force #1 waits on it."
+    )
+
+
+@pytest.mark.asyncio
+async def test_reader_context_dependency_explanation_asymmetric_target(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """When the current issue is the target, copy says the source must be read first.
+
+    Regression coverage for issue #1882: the served comic must not be presented
+    as readable when a prerequisite is unread.
+    """
+    ultimate_thread, ultimate_issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Ultimate Spider-Man",
+        issue_count=6,
+        queue_position=1,
+        read_through=4,
+    )
+    dependency = Dependency(
+        source_issue_id=ultimate_issues[3].id,
+        target_issue_id=ultimate_issues[5].id,
+        note="ultimate-block",
+    )
+    async_db.add(dependency)
+    await async_db.flush()
+
+    response = await auth_client.get(
+        f"/api/v1/issues/{ultimate_issues[5].id}/reader-context"
+    )
+
+    assert response.status_code == 200
+    edges = response.json()["local_chain"]["edges"]
+    dep_edges = [edge for edge in edges if edge["kind"] == "dependency"]
+    assert len(dep_edges) == 1
+    edge = dep_edges[0]
+    assert edge["explanation"] == (
+        "You must read Ultimate Spider-Man #4 first"
+    )
+
+
+@pytest.mark.asyncio
+async def test_reader_context_dependency_explanation_neutral_when_unrelated(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """When the current issue is neither source nor target, copy stays symmetric.
+
+    Issue #1882 acceptance: downstream-unlock information must remain distinct
+    from current readiness. An edge between two other issues should not imply
+    anything about the served comic.
+    """
+    _thread, issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Chain",
+        issue_count=5,
+        queue_position=1,
+        read_through=5,
+    )
+    dependency = Dependency(
+        source_issue_id=issues[0].id,
+        target_issue_id=issues[4].id,
+        note="far-jump",
+    )
+    async_db.add(dependency)
+    await async_db.flush()
+
+    response = await auth_client.get(
+        f"/api/v1/issues/{issues[2].id}/reader-context"
+    )
+
+    assert response.status_code == 200
+    edges = response.json()["local_chain"]["edges"]
+    dep_edges = [edge for edge in edges if edge["kind"] == "dependency"]
+    assert len(dep_edges) == 1
+    edge = dep_edges[0]
+    assert edge["explanation"] == (
+        "Chain #1 can be read, but blocks Chain #5"
+    )
