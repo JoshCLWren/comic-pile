@@ -77,7 +77,9 @@ const secondIssue = {
 }
 
 beforeEach(() => {
-  window.localStorage.clear()
+  if (typeof window !== "undefined") {
+      window.localStorage.clear();
+    }
   mocks.get.mockReset()
   mocks.create.mockReset()
   mocks.update.mockReset()
