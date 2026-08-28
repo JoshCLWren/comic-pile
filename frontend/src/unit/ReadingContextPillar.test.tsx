@@ -304,37 +304,6 @@ describe('ReadingContextPillar loading and error states', () => {
 })
 
 describe('ReadingContextPillar relation label variants', () => {
-  it('renders future relation label without series name', async () => {
-    const context: ReaderContextResponse = {
-      ...baseContext,
-      series: {
-        ...baseContext.series,
-        series_name: null,
-      },
-      local_chain: {
-        issues: [
-          {
-            issue_id: 200,
-            issue_number: '10',
-            position: 5,
-            status: 'unread',
-            relation: 'future',
-            rating: null,
-            crossover_memberships: [],
-          },
-        ],
-        edges: [],
-      },
-    }
-
-    renderPillar(context)
-
-    const button = await screen.findByRole('button', { name: /Show context for .* issue 10/ })
-    await userEvent.setup().click(button)
-
-    expect(screen.getByText('Later in this series')).toBeVisible()
-  })
-
   it('renders future relation label with series name', async () => {
     const context: ReaderContextResponse = {
       ...baseContext,
@@ -365,12 +334,47 @@ describe('ReadingContextPillar relation label variants', () => {
 
     expect(screen.getByText('Later in Amazing Spider-Man')).toBeVisible()
   })
+
+  it('renders next relation label', async () => {
+    const context: ReaderContextResponse = {
+      ...baseContext,
+      series: {
+        ...baseContext.series,
+        series_name: 'Saga',
+      },
+      local_chain: {
+        issues: [
+          {
+            issue_id: 200,
+            issue_number: '10',
+            position: 5,
+            status: 'unread',
+            relation: 'next',
+            rating: null,
+            crossover_memberships: [],
+          },
+        ],
+        edges: [],
+      },
+    }
+
+    renderPillar(context)
+
+    const button = await screen.findByRole('button', { name: /Show context for Saga issue 10/ })
+    await userEvent.setup().click(button)
+
+    expect(screen.getByText('Next up')).toBeVisible()
+  })
 })
 
 describe('ReadingContextPillar crossover membership chips', () => {
   it('renders crossover membership chips and navigates on click', async () => {
     const context: ReaderContextResponse = {
       ...baseContext,
+      series: {
+        ...baseContext.series,
+        series_name: 'Animal Man',
+      },
       local_chain: {
         issues: [
           {
@@ -389,7 +393,7 @@ describe('ReadingContextPillar crossover membership chips', () => {
 
     renderPillar(context)
 
-    const button = await screen.findByRole('button', { name: /Show context for .* issue 2/ })
+    const button = await screen.findByRole('button', { name: /Show context for Animal Man issue 2/ })
     await userEvent.setup().click(button)
 
     const chip = screen.getByRole('button', { name: 'Open Annihilation crossover' })
