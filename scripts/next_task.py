@@ -78,6 +78,19 @@ def _has_unresolved_dependency(issue: IssuePayload, closed_numbers: set[int]) ->
     return bool(references - closed_numbers)
 
 
+def _child_numbers(body: str, issue_number: int) -> set[int]:
+    """Extract child issue numbers from checkbox-style references in the body.
+
+    Only matches ``- [ ] #NNN`` or ``- [x] #NNN`` lines, ignoring unrelated
+    issue references such as "Related prior work".
+    """
+    return {
+        int(num)
+        for num in re.findall(r"- \[[ x]\] #(\d+)", body)
+        if int(num) != issue_number
+    }
+
+
 def _is_epic_ready_for_acceptance(issue: IssuePayload, closed_numbers: set[int]) -> bool:
     """Return whether an epic/PRD issue is ready for product acceptance.
 
@@ -89,12 +102,10 @@ def _is_epic_ready_for_acceptance(issue: IssuePayload, closed_numbers: set[int])
         return False
     body = issue.get("body") or ""
     issue_number = issue["number"]
-    child_numbers = {
-        int(num) for num in re.findall(r"#(\d+)", body) if num.isdigit() and int(num) != issue_number
-    }
-    if not child_numbers:
+    child_nums = _child_numbers(body, issue_number)
+    if not child_nums:
         return False
-    return child_numbers.issubset(closed_numbers)
+    return child_nums.issubset(closed_numbers)
 
 
 def select_next(issues: list[IssuePayload], closed_numbers: set[int]) -> Candidate | None:
