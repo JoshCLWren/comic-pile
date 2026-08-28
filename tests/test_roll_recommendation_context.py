@@ -9,6 +9,7 @@ selection behavior is unchanged.
 
 import json
 from datetime import UTC, datetime
+from typing import cast
 
 import pytest
 from httpx import AsyncClient
@@ -69,7 +70,7 @@ def _extract_selection_context(payload: dict[str, object] | None) -> dict[str, o
         return None
     value = payload.get("selection")
     if isinstance(value, dict):
-        return value
+        return cast(dict[str, object], value)
     return None
 
 
