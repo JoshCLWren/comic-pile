@@ -11,6 +11,11 @@ export interface ContinuityPlanLane {
   order: number
 }
 
+export interface ConvergenceGateTarget {
+  node_type: ContinuityPlanNodeType
+  node_id: string
+}
+
 export interface ContinuityPlanNode {
   id: string
   node_type: ContinuityPlanNodeType
@@ -18,6 +23,8 @@ export interface ContinuityPlanNode {
   lane_id: string
   position: number
   label?: string | null
+  is_checkpoint?: boolean
+  convergence_gate?: ConvergenceGateTarget[]
 }
 
 export interface ContinuityPlanWrite {

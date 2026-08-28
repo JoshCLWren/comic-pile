@@ -101,7 +101,21 @@ async def _replace_compiled_rules(
     plan: ContinuityPlan,
     payload: ContinuityPlanWrite,
 ) -> bool:
-    """Replace only rules owned by this plan and compile strict linear intent explicitly."""
+    """Replace only rules owned by this plan and compile plan semantics into rules.
+
+    This compiles:
+    1. Strict-sequential adjacent edges (existing behavior)
+    2. Checkpoint rules from nodes with ``is_checkpoint=True``
+    3. Converged rules from nodes with ``convergence_gate`` entries
+
+    Checkpoint semantics: a node marked as checkpoint blocks the next node in
+    the same lane until the checkpoint node is read.
+
+    Convergence semantics: a node with convergence targets is blocked until all
+    referenced upstream nodes are read.
+
+    Returns True when all rules compiled without cycle conflicts.
+    """
     marker = _marker(plan.id)
     await db.execute(
         delete(ContinuityRule).where(
@@ -109,21 +123,113 @@ async def _replace_compiled_rules(
             ContinuityRule.note == marker,
         )
     )
-    if payload.ordering_mode != "strict_sequential" or len(payload.nodes) < 2:
+
+    # Build node lookup for convergence gate resolution
+    node_map: dict[str, ContinuityPlanNode] = {node.id: node for node in payload.nodes}
+
+    # Build per-lane ordered node lists for checkpoint next-node lookup
+    nodes_by_lane: dict[str, list[ContinuityPlanNode]] = {}
+    for node in payload.nodes:
+        nodes_by_lane.setdefault(node.lane_id, []).append(node)
+    for lane_nodes in nodes_by_lane.values():
+        lane_nodes.sort(key=lambda n: n.position)
+
+    # Collect all edges to compile (for cycle detection)
+    edges_to_add: list[tuple[str, int, str, int, str, object]] = []
+
+    # 1. Strict-sequential adjacent edges
+    if payload.ordering_mode == "strict_sequential" and len(payload.nodes) >= 2:
+        ordered = sorted(payload.nodes, key=lambda node: node.position)
+        for source, target in zip(ordered, ordered[1:], strict=False):
+            edges_to_add.append((
+                source.node_type, source.ref_id,
+                target.node_type, target.ref_id,
+                "item_read", None,
+            ))
+
+    # 2. Checkpoint rules: checkpoint node blocks the next node in the same lane
+    for node in payload.nodes:
+        if not node.is_checkpoint:
+            continue
+        lane_nodes = nodes_by_lane.get(node.lane_id, [])
+        node_index = next(
+            (i for i, n in enumerate(lane_nodes) if n.id == node.id), None
+        )
+        if node_index is None or node_index >= len(lane_nodes) - 1:
+            continue
+        next_node = lane_nodes[node_index + 1]
+        checkpoint_issue_id = node.ref_id if node.node_type == "issue" else None
+        edges_to_add.append((
+            node.node_type, node.ref_id,
+            next_node.node_type, next_node.ref_id,
+            "checkpoint", checkpoint_issue_id,
+        ))
+
+    # 3. Converged rules: node waits for all convergence gate targets
+    for node in payload.nodes:
+        if not node.convergence_gate:
+            continue
+        gate_targets = []
+        for target in node.convergence_gate:
+            resolved = node_map.get(target.node_id)
+            if resolved is None:
+                continue
+            gate_targets.append({
+                "type": resolved.node_type,
+                "id": resolved.ref_id,
+            })
+        if not gate_targets:
+            continue
+        edges_to_add.append((
+            node.node_type, node.ref_id,
+            node.node_type, node.ref_id,
+            "converged", gate_targets,
+        ))
+
+    if not edges_to_add:
         return True
 
-    ordered = sorted(payload.nodes, key=lambda node: node.position)
-    for source, target in zip(ordered, ordered[1:], strict=False):
-        source_type = cast(ContinuityNodeType, source.node_type)
-        target_type = cast(ContinuityNodeType, target.node_type)
+    # Check for plan-level cycles using in-memory graph
+    all_plan_keys: set[tuple[str, int]] = set()
+    for node in payload.nodes:
+        if node.node_type in {"issue", "crossover"}:
+            all_plan_keys.add((node.node_type, node.ref_id))
+    graph_edges: list[tuple[tuple[str, int], tuple[str, int]]] = []
+    for source_type, source_id, target_type, target_id, _sat, _extra in edges_to_add:
+        source_key = (source_type, source_id)
+        target_key = (target_type, target_id)
+        if source_key in all_plan_keys and target_key in all_plan_keys:
+            graph_edges.append((source_key, target_key))
+
+    from app.continuity_plan_readiness import _detect_plan_cycles
+    cycle_nodes = _detect_plan_cycles(sorted(all_plan_keys), graph_edges)
+    if cycle_nodes:
+        cycle_node = next(iter(cycle_nodes))
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "plan_convergence_cycle",
+                "node_type": cycle_node[0],
+                "node_id": cycle_node[1],
+            },
+        )
+
+    # Persist the compiled rules
+    for (
+        source_type, source_id,
+        target_type, target_id,
+        satisfaction_type, extra,
+    ) in edges_to_add:
+        source_type_cast = cast(ContinuityNodeType, source_type)
+        target_type_cast = cast(ContinuityNodeType, target_type)
         existing = (
             await db.execute(
                 select(ContinuityRule).where(
                     ContinuityRule.user_id == user_id,
-                    ContinuityRule.source_type == source_type,
-                    ContinuityRule.source_id == source.ref_id,
-                    ContinuityRule.target_type == target_type,
-                    ContinuityRule.target_id == target.ref_id,
+                    ContinuityRule.source_type == source_type_cast,
+                    ContinuityRule.source_id == source_id,
+                    ContinuityRule.target_type == target_type_cast,
+                    ContinuityRule.target_id == target_id,
                 )
             )
         ).scalar_one_or_none()
@@ -134,37 +240,40 @@ async def _replace_compiled_rules(
                 status_code=409,
                 detail={
                     "code": "plan_rule_conflict",
-                    "source_node_id": source.id,
-                    "target_node_id": target.id,
+                    "source_node_id": f"{source_type}-{source_id}",
+                    "target_node_id": f"{target_type}-{target_id}",
                 },
             )
         if await _would_create_cycle(
             db,
             user_id=user_id,
-            source_type=source_type,
-            source_id=source.ref_id,
-            target_type=target_type,
-            target_id=target.ref_id,
+            source_type=source_type_cast,
+            source_id=source_id,
+            target_type=target_type_cast,
+            target_id=target_id,
         ):
             raise HTTPException(
                 status_code=409,
                 detail={
                     "code": "continuity_cycle",
-                    "source_node_id": source.id,
-                    "target_node_id": target.id,
+                    "source_node_id": f"{source_type}-{source_id}",
+                    "target_node_id": f"{target_type}-{target_id}",
                 },
             )
-        db.add(
-            ContinuityRule(
-                user_id=user_id,
-                source_type=source_type,
-                source_id=source.ref_id,
-                target_type=target_type,
-                target_id=target.ref_id,
-                satisfaction_type="item_read",
-                note=marker,
-            )
-        )
+        rule_kwargs: dict[str, object] = {
+            "user_id": user_id,
+            "source_type": source_type_cast,
+            "source_id": source_id,
+            "target_type": target_type_cast,
+            "target_id": target_id,
+            "satisfaction_type": satisfaction_type,
+            "note": marker,
+        }
+        if satisfaction_type == "checkpoint" and extra is not None:
+            rule_kwargs["checkpoint_issue_id"] = extra
+        if satisfaction_type == "converged" and extra is not None:
+            rule_kwargs["convergence_targets"] = extra
+        db.add(ContinuityRule(**rule_kwargs))
         await db.flush()
     return True
 

@@ -57,6 +57,13 @@ class CBLPlacement(BaseModel):
     position: int
 
 
+class ConvergenceGateTarget(BaseModel):
+    """A node a convergence gate waits for."""
+
+    node_type: PlanNodeType
+    node_id: str = Field(min_length=1, max_length=80)
+
+
 class ContinuityPlanNode(BaseModel):
     """One ordered reference in a continuity plan."""
 
@@ -79,6 +86,10 @@ class ContinuityPlanNode(BaseModel):
     # Reader override fields (user can modify independently of source)
     reader_role: ReaderRole | None = None
     reader_optional: bool | None = None
+
+    # Plan-level checkpoint/convergence semantics
+    is_checkpoint: bool = False
+    convergence_gate: list[ConvergenceGateTarget] = Field(default_factory=list)
 
 
 class ContinuityPlanWrite(BaseModel):
@@ -104,6 +115,7 @@ class ContinuityPlanWrite(BaseModel):
         known_lanes = set(lane_ids)
         if any(node.lane_id not in known_lanes for node in self.nodes):
             raise ValueError("every node must reference an existing lane")
+        known_node_ids = set(node_ids)
         positions_by_lane: dict[str, list[int]] = {}
         for node in self.nodes:
             positions_by_lane.setdefault(node.lane_id, []).append(node.position)
@@ -117,6 +129,24 @@ class ContinuityPlanWrite(BaseModel):
             positions = sorted(node.position for node in self.nodes)
             if positions != list(range(len(positions))):
                 raise ValueError("strict sequential positions must be contiguous starting at zero")
+        # Validate convergence gate references
+        for node in self.nodes:
+            if node.convergence_gate:
+                gate_ids = [target.node_id for target in node.convergence_gate]
+                if len(gate_ids) != len(set(gate_ids)):
+                    raise ValueError(
+                        f"convergence gate on node '{node.id}' contains duplicate targets"
+                    )
+                for target in node.convergence_gate:
+                    if target.node_id == node.id:
+                        raise ValueError(
+                            f"convergence gate on node '{node.id}' cannot wait for itself"
+                        )
+                    if target.node_id not in known_node_ids:
+                        raise ValueError(
+                            f"convergence gate on node '{node.id}' references "
+                            f"unknown node '{target.node_id}'"
+                        )
         return self
 
 
