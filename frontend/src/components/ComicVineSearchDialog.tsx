@@ -108,11 +108,12 @@ export default function ComicVineSearchDialog({
 
   const handleQueryChange = useCallback((value: string) => {
     setQuery(value)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
     if (!value.trim()) {
       setHasSearched(false)
       setSeriesResults([])
+      return
     }
-    if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => handleSearch(value), 350)
   }, [handleSearch])
 
