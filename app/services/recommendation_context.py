@@ -24,6 +24,7 @@ Compatibility contract
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 
 from app.models import Thread
@@ -42,6 +43,16 @@ _CANDIDATE_EFFORT_KEYS = (
     "effort_confidence",
     "effort_sample_count",
 )
+
+
+@dataclass(frozen=True)
+class ContextCandidate:
+    """One candidate in the bounded die pool for recommendation context."""
+
+    thread_id: int
+    queue_position: int
+    last_rating: float | None
+    last_activity_at: datetime | None
 
 
 def _serialize_timestamp(value: datetime | None) -> str | None:
@@ -229,3 +240,95 @@ def candidate_efforts_from_context(
                 effort_values[key] = value
         normalized.append({"thread_id": _int_or_none(raw.get("thread_id")), **effort_values})
     return normalized
+
+
+def _serialize_timestamp_for_context(value: datetime | None) -> str | None:
+    """Serialize a timestamp to ISO-8601, or None."""
+    if value is None:
+        return None
+    return value.isoformat()
+
+
+def build_recommendation_context(
+    selection_method: str,
+    die_size: int,
+    candidates: Sequence[ContextCandidate],
+    selected_index: int,
+    result: int,
+    efforts_by_thread: Mapping[int, EffortEstimate],
+    *,
+    session_timezone: str | None = None,
+    local_hour: int | None = None,
+    daypart: str | None = None,
+    algorithm_version: str = "effort-v2",
+) -> dict[str, object]:
+    """Build a v2 recommendation context payload with candidate pool.
+
+    Args:
+        selection_method: The method used for selection (e.g. "random", "override").
+        die_size: The die size used for this roll.
+        candidates: Ordered candidate pool in selection order.
+        selected_index: Index of the selected candidate in the pool.
+        result: The roll result (1-indexed).
+        efforts_by_thread: Effort estimates keyed by thread ID.
+        session_timezone: Captured timezone, if available.
+        local_hour: Captured local hour, if available.
+        daypart: Captured daypart, if available.
+        algorithm_version: Version identifier for the algorithm.
+
+    Returns:
+        JSON-serializable v2 recommendation context dict.
+
+    Raises:
+        ValueError: If candidates is empty or selected_index is out of range.
+    """
+    if not candidates:
+        raise ValueError("candidates must not be empty")
+    if selected_index < 0 or selected_index >= len(candidates):
+        raise ValueError(f"selected_index {selected_index} out of range for {len(candidates)} candidates")
+
+    neutral = neutral_estimate()
+    candidate_dicts: list[dict[str, object]] = []
+    for cand in candidates:
+        estimate = efforts_by_thread.get(cand.thread_id, neutral)
+        candidate_dicts.append({
+            "thread_id": cand.thread_id,
+            "queue_position": cand.queue_position,
+            "last_rating": cand.last_rating,
+            "last_activity_at": _serialize_timestamp_for_context(cand.last_activity_at),
+            "effort_minutes": round(estimate.minutes, 2) if estimate.minutes is not None else None,
+            "effort_band": estimate.band,
+            "effort_source": estimate.source.value,
+            "effort_confidence": round(estimate.confidence, 3),
+            "effort_sample_count": estimate.sample_count,
+        })
+
+    selected_cand = candidates[selected_index]
+    selected_estimate = efforts_by_thread.get(selected_cand.thread_id, neutral)
+    selected_block = {
+        "thread_id": selected_cand.thread_id,
+        "candidate_index": selected_index,
+        "result": result,
+        "queue_position": selected_cand.queue_position,
+        "last_rating": selected_cand.last_rating,
+        "last_activity_at": _serialize_timestamp_for_context(selected_cand.last_activity_at),
+        "effort": {
+            "minutes": round(selected_estimate.minutes, 2) if selected_estimate.minutes is not None else None,
+            "band": selected_estimate.band,
+            "source": selected_estimate.source.value,
+            "confidence": round(selected_estimate.confidence, 3),
+        },
+    }
+
+    return {
+        "context_version": RECOMMENDATION_CONTEXT_VERSION,
+        "algorithm_version": algorithm_version,
+        "selection_method": selection_method,
+        "die_size": die_size,
+        "pool_size": len(candidates),
+        "session_timezone": session_timezone,
+        "local_hour": local_hour,
+        "daypart": daypart,
+        "selected": selected_block,
+        "candidates": candidate_dicts,
+    }

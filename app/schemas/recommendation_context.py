@@ -13,7 +13,6 @@ class CandidateFactor(BaseModel):
     candidate_id: int
     factors: list[str] = Field(default_factory=list)
     weight: float = Field(..., ge=0.0, description="Final combined weight after caps")
-    # Reading-effort estimates at decision time (issue #1704)
     effort_minutes: float | None = Field(default=None, ge=0.0)
     effort_band: str | None = Field(default=None, max_length=20)
     effort_source: str | None = Field(default=None, max_length=30)

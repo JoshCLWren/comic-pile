@@ -24,28 +24,11 @@ Recommendation-context snapshot contract
 Roll events may persist a ``recommendation_context`` JSON payload recording
 the effort estimate that existed at decision time:
 
-Version history:
-
-``context_version = 1``
-    Baseline shape: ``{"context_version": 1, "selected_candidate":
-    {...effort fields...}}`` where ``selected_candidate`` carries
-    ``thread_id``, ``issue_id``, ``issue_number``, ``effort_minutes``,
-    ``effort_band``, ``effort_source``, ``effort_confidence``, and
-    ``effort_sample_count``.
-
-``context_version = 2`` (current; issue #1704)
-    Extends v1 additively with a bounded candidate-pool snapshot: an
-    ordered ``candidates`` list mirroring the die pool in exact selection
-    order, where each entry carries scalar decision-time fields plus
-    ``effort_minutes``, ``effort_band``, ``effort_source``,
-    ``effort_confidence``, and ``effort_sample_count``. The payload stays
-    bounded by the current die pool; full thread objects and heavy
-    metadata are never serialized.
+``{"context_version": 1, "selected_candidate": {...effort fields...}}``
 
 ``RECOMMENDATION_CONTEXT_VERSION`` is bumped whenever the payload shape
 changes incompatibly. Readers must tolerate historical rows with a NULL or
-missing payload and unknown versions, treating them as neutral. Unknown
-keys are ignored, so v1 readers of v2 payloads keep working unchanged.
+missing payload and unknown versions, treating them as neutral.
 """
 
 from __future__ import annotations
@@ -69,6 +52,8 @@ from app.models import (
     Thread,
     ThreadExternalSeriesMapping,
 )
+
+logger = logging.getLogger(__name__)
 
 # --- Centralized, documented thresholds -----------------------------------
 #
@@ -114,11 +99,11 @@ ERA_PRIOR_MODERN_MINUTES: Final[float] = 17.0
 
 _YEAR_PATTERN: Final[re.Pattern[str]] = re.compile(r"(19|20)\d{2}")
 
-RECOMMENDATION_CONTEXT_VERSION: Final[int] = 2
+RECOMMENDATION_CONTEXT_VERSION: Final[int] = 1
 RECOMMENDATION_CONTEXT_VERSION_KEY: Final[str] = "context_version"
 RECOMMENDATION_CONTEXT_CANDIDATE_KEY: Final[str] = "selected_candidate"
 
-logger = logging.getLogger(__name__)
+EFFORT_SOURCE_UNKNOWN: Final[str] = "unknown"
 
 
 class EstimateSource(StrEnum):
@@ -128,6 +113,10 @@ class EstimateSource(StrEnum):
     OBSERVED_THREAD = "observed_thread"
     ERA_PRIOR = "era_prior"
     UNKNOWN = "unknown"
+
+
+_VALID_BANDS: Final[frozenset[str]] = frozenset({"light", "balanced", "deep", "unknown"})
+_VALID_SOURCES: Final[frozenset[str]] = frozenset({s.value for s in EstimateSource})
 
 
 class ExclusionReason(StrEnum):
@@ -169,6 +158,24 @@ class EffortEstimate:
     source: EstimateSource
     confidence: float
     sample_count: int
+
+    def __post_init__(self) -> None:
+        if self.band not in _VALID_BANDS:
+            raise ValueError(f"Invalid band {self.band!r}; expected one of {_VALID_BANDS}")
+        source_val = self.source.value if isinstance(self.source, EstimateSource) else str(self.source)
+        if source_val not in _VALID_SOURCES:
+            raise ValueError(f"Invalid source {source_val!r}; expected one of {_VALID_SOURCES}")
+        if self.confidence < 0.0 or self.confidence > 1.0:
+            raise ValueError(f"Confidence {self.confidence} out of [0, 1] range")
+
+
+NEUTRAL_EFFORT_ESTIMATE: EffortEstimate = EffortEstimate(
+    minutes=None,
+    band="unknown",
+    source=EstimateSource.UNKNOWN,
+    confidence=UNKNOWN_CONFIDENCE,
+    sample_count=0,
+)
 
 
 def neutral_estimate() -> EffortEstimate:
@@ -526,6 +533,44 @@ async def compute_effort_estimate(
     return resolve_effort_estimate(issue_aggregate, thread_aggregate, era_minutes)
 
 
+def build_recommendation_context(
+    estimate: EffortEstimate,
+    *,
+    thread_id: int,
+    issue_id: int | None,
+    issue_number: str | None,
+) -> dict[str, object]:
+    """Build the versioned decision-time recommendation-context payload.
+
+    The payload is bounded to the selected candidate; it records the
+    estimate/source that existed at decision time for later analysis.
+
+    Args:
+        estimate: The resolved effort estimate.
+        thread_id: Selected thread id.
+        issue_id: Selected next unread issue id, if any.
+        issue_number: Selected issue number, if any.
+
+    Returns:
+        JSON-serializable context dict tagged with
+        ``RECOMMENDATION_CONTEXT_VERSION``.
+    """
+    candidate: dict[str, object] = {
+        "thread_id": thread_id,
+        "issue_id": issue_id,
+        "issue_number": issue_number,
+        "effort_minutes": round(estimate.minutes, 2) if estimate.minutes is not None else None,
+        "effort_band": estimate.band,
+        "effort_source": estimate.source.value,
+        "effort_confidence": round(estimate.confidence, 3),
+        "effort_sample_count": estimate.sample_count,
+    }
+    return {
+        RECOMMENDATION_CONTEXT_VERSION_KEY: RECOMMENDATION_CONTEXT_VERSION,
+        RECOMMENDATION_CONTEXT_CANDIDATE_KEY: candidate,
+    }
+
+
 async def compute_pool_effort_estimates(
     db: AsyncSession, *, user_id: int, threads: Sequence[Thread]
 ) -> dict[int, EffortEstimate]:
@@ -587,39 +632,39 @@ async def compute_pool_effort_estimates(
         return {}
 
 
-def build_recommendation_context(
-    estimate: EffortEstimate,
-    *,
-    thread_id: int,
-    issue_id: int | None,
-    issue_number: str | None,
-) -> dict[str, object]:
-    """Build the versioned decision-time recommendation-context payload.
-
-    The payload is bounded to the selected candidate; it records the
-    estimate/source that existed at decision time for later analysis.
+def selected_effort_estimate(
+    efforts: dict[int, EffortEstimate], thread_id: int | None
+) -> EffortEstimate:
+    """Return the effort estimate for the selected thread, or neutral.
 
     Args:
-        estimate: The resolved effort estimate.
-        thread_id: Selected thread id.
-        issue_id: Selected next unread issue id, if any.
-        issue_number: Selected issue number, if any.
+        efforts: Mapping of thread ID to effort estimate.
+        thread_id: Selected thread, or None.
 
     Returns:
-        JSON-serializable context dict tagged with
-        ``RECOMMENDATION_CONTEXT_VERSION``.
+        The estimate for the thread, or ``NEUTRAL_EFFORT_ESTIMATE``.
     """
-    candidate: dict[str, object] = {
-        "thread_id": thread_id,
-        "issue_id": issue_id,
-        "issue_number": issue_number,
-        "effort_minutes": round(estimate.minutes, 2) if estimate.minutes is not None else None,
-        "effort_band": estimate.band,
-        "effort_source": estimate.source.value,
-        "effort_confidence": round(estimate.confidence, 3),
-        "effort_sample_count": estimate.sample_count,
-    }
-    return {
-        RECOMMENDATION_CONTEXT_VERSION_KEY: RECOMMENDATION_CONTEXT_VERSION,
-        RECOMMENDATION_CONTEXT_CANDIDATE_KEY: candidate,
-    }
+    if thread_id is None:
+        return NEUTRAL_EFFORT_ESTIMATE
+    return efforts.get(thread_id, NEUTRAL_EFFORT_ESTIMATE)
+
+
+async def resolve_candidate_efforts(
+    db: AsyncSession, threads: Sequence[Thread]
+) -> dict[int, EffortEstimate]:
+    """Resolve effort estimates for a list of candidate threads.
+
+    Thin wrapper over :func:`compute_pool_effort_estimates` that derives
+    the user_id from the first thread. Returns empty mapping on failure.
+
+    Args:
+        db: Async database session.
+        threads: Candidate threads.
+
+    Returns:
+        Mapping of thread ID to effort estimate.
+    """
+    if not threads:
+        return {}
+    user_id = threads[0].user_id
+    return await compute_pool_effort_estimates(db, user_id=user_id, threads=threads)

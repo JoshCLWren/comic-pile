@@ -233,6 +233,78 @@ class RecommendationExplanationProjection:
         """Translate a single selection-method value into an explanation.
 
         Args:
+            selection_method: ``Event.selection_method`` value at roll time
+                (e.g., ``"random"``).
+
+        Returns:
+            ExplainableFactor for recognized methods, ``None`` otherwise.
+        """
+        return _selection_label(selection_method)
+
+    @staticmethod
+    def translate_taste_bank_factor(
+        tb_factor: dict[str, Any],
+    ) -> ExplainableFactor | None:
+        """Translate a single Taste Bank factor dict into an explanation.
+
+        Args:
+            tb_factor: One element of ``taste_bank_factors``. Must carry a
+                ``"code"`` string key.
+
+        Returns:
+            ExplainableFactor for recognized codes, ``None`` otherwise.
+        """
+        return _taste_bank_label(tb_factor)
+
+    @staticmethod
+    def translate_primary_score(
+        primary_score: dict[str, Any],
+    ) -> ExplainableFactor | None:
+        """Translate a primary-score block into an explanation.
+
+        Args:
+            primary_score: The ``primary_score`` dict from recommendation
+                context. Only the ``"code"`` key is inspected; raw numeric
+                scores are never exposed.
+
+        Returns:
+            ExplainableFactor for recognized codes, ``None`` otherwise.
+        """
+        return _primary_score_label(primary_score)
+
+    @staticmethod
+    def project_recommendation_context(
+        context: dict[str, Any] | None,
+        *,
+        selection_method: str | None = None,
+        max_factors: int = MAX_EXPLANATIONS,
+    ) -> list[ExplainableFactor]:
+        """Transform a persisted recommendation context into ordered explanations.
+
+        Derives explanations from the ``bandwidth``, ``intent``,
+        ``taste_bank_factors``, ``primary_score``, and ``affinity_notes``
+        keys of the supplied context dict. A ``selection_method`` override is
+        used to determine the random-selection explanation when the selection
+        path does not derive a contextual reason.
+
+        Factor ordering is deterministic:
+        1. Bandwidth explanation (at most one).
+        2. Intent explanation (at most one).
+        3. Taste Bank explanations (up to two, in provided order).
+        4. Primary-score explanation (at most one).
+        5. Affinity-notes explanations (in provided order).
+        6. Selection-method explanation (at most one, appended when other
+           factors are present or when context is absent altogether). Legacy
+           contexts that record ``intent_random`` without an explicit
+           selection method still receive the random-bypass explanation.
+
+        Unknown codes in any factor list are silently skipped.
+
+        Args:
+            context: Persisted recommendation context recorded at decision time.
+                Typically deserialized from the JSON column on the Event
+                record. A ``None`` value or non-dict value is treated as empty
+                context.
             selection_method: The ``Event.selection_method`` value to use as a
                 fallback/selection explanation. Defaults to ``None``.
             max_factors: Maximum number of explanation factors to return.
