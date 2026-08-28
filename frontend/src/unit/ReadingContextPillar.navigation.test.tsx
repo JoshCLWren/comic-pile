@@ -186,7 +186,7 @@ describe('ReadingContextPillar navigation (issue #1877)', () => {
     expect(navigateSpy).not.toHaveBeenCalled()
   })
 
-  it('links every crossover chip to its specific deep-linked destination, not the generic page', async () => {
+  it('links edge endpoint buttons deep to their threads', async () => {
     renderPillar(
       buildContext({
         local_chain: {
@@ -202,14 +202,30 @@ describe('ReadingContextPillar navigation (issue #1877)', () => {
               crossover_memberships: [{ id: 9, name: 'Animal Man' }],
             },
           ],
-          edges: [],
+          edges: [
+            {
+              id: 21,
+              kind: 'dependency' as const,
+              source_issue_id: 98,
+              target_issue_id: 100,
+              source_thread_id: 42,
+              target_thread_id: 7,
+              source_label: 'Saga #3',
+              target_label: 'Saga #5',
+              note: null,
+              explanation: 'Read first',
+            },
+          ],
         },
       }),
     )
 
     await screen.findByText('Dependency & Continuity Edges')
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Open Animal Man crossover' }))
-    expect(navigateSpy).toHaveBeenLastCalledWith('/crossovers?group=9')
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Open thread for Saga #3' }))
+    expect(navigateSpy).toHaveBeenCalledWith('/thread/42')
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Open thread for Saga #5' }))
+    expect(navigateSpy).toHaveBeenCalledWith('/thread/7')
   })
 
   it('links both dependency edge endpoints to their threads and shows the explanation', async () => {
