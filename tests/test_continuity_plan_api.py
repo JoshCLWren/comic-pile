@@ -13,7 +13,6 @@ from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.issue import Issue
 from app.models.thread import Thread
-from app.models.user import User
 from tests.conftest import get_or_create_user_async
 
 
@@ -429,7 +428,6 @@ async def test_list_plans_does_not_leak_other_users_plans(
     """Only plans owned by the authenticated user appear in the list."""
     from app.models.user import User as _User
 
-    user = await get_or_create_user_async(async_db)
     other = _User(username="other_list_user", created_at=datetime.now(UTC))
     async_db.add(other)
     await async_db.flush()
