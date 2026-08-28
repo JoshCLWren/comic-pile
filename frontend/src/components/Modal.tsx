@@ -154,7 +154,7 @@ export default function Modal({
     <OverlayPortal layer="dialog">
       <div
         ref={setOverlayElement}
-        className={`fixed inset-0 flex items-end md:items-center justify-center md:px-4 ${overlayClassName || ''}`}
+        className={`fixed inset-0 flex items-end md:items-center justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] ${overlayClassName || ''}`}
         style={{ zIndex: 60 }}
       >
         <div
