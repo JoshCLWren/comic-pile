@@ -168,8 +168,10 @@ def test_controller_uses_only_canonical_worker_issue_branch_shape(
     assert controller.linked_issue_from_branch("factory/401-repair") is None
 
 
-def test_draft_pr_does_not_make_linked_issue_disappear(controller: types.ModuleType) -> None:
-    """Verify draft pr does not make linked issue disappear."""
+def test_draft_pr_suppresses_linked_issue_until_pr_closes(
+    controller: types.ModuleType,
+) -> None:
+    """A draft canonical PR still owns issue identity until explicitly closed."""
     candidates = controller.build_candidates(
         [issue(411, "bug", "user-reported", "factory:unowned")],
         [
@@ -182,15 +184,13 @@ def test_draft_pr_does_not_make_linked_issue_disappear(controller: types.ModuleT
             )
         ],
     )
-    assert [(candidate.kind, candidate.number) for candidate in candidates] == [
-        ("issue", 411)
-    ]
+    assert candidates == []
 
 
-def test_blocked_pr_does_not_make_unblocked_linked_issue_disappear(
+def test_blocked_pr_suppresses_linked_issue_until_pr_closes(
     controller: types.ModuleType,
 ) -> None:
-    """Verify blocked pr does not make unblocked linked issue disappear."""
+    """A blocked canonical PR cannot silently spawn a replacement implementation."""
     candidates = controller.build_candidates(
         [issue(412, "bug", "user-reported", "factory:unowned")],
         [
@@ -203,9 +203,7 @@ def test_blocked_pr_does_not_make_unblocked_linked_issue_disappear(
             )
         ],
     )
-    assert [(candidate.kind, candidate.number) for candidate in candidates] == [
-        ("issue", 412)
-    ]
+    assert candidates == []
 
 
 def test_ready_pr_is_reserved_for_merge_controller_and_suppresses_duplicate_issue(

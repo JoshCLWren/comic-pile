@@ -61,6 +61,12 @@ export const dependencyGroupsApi = {
     )
   },
 
+  plansForGroup: async (groupId: number): Promise<DependencyGroupSummary[]> => {
+    return api.get<DependencyGroupSummary[]>(
+      `/v1/reading-order-groups/${groupId}/plans`,
+    )
+  },
+
   listForThreads: async (
     threadIds: number[],
   ): Promise<Record<number, DependencyGroupSummary[]>> => {

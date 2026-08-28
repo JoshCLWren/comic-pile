@@ -5,7 +5,7 @@ from typing import ClassVar, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.continuity_readiness import ContinuityBlocker
-from app.schemas.session import ActiveThreadInfo, SessionBandwidthState, SessionMode
+from app.schemas.session import ActiveThreadInfo, BandwidthSource, SessionBandwidthState, SessionMode
 from comic_pile.recommendation_selection import Bandwidth, Intent
 
 
@@ -100,7 +100,7 @@ class SessionModeResponse(BaseModel):
     active_bandwidth: str | None
     predicted_bandwidth: str | None
     bandwidth_confidence: float | None = None
-    bandwidth_source: Literal["manual", "inferred"] | None = None
+    bandwidth_source: BandwidthSource | None = None
     bandwidth_version: str | None = None
     active_intent: str | None
     predicted_intent: str | None

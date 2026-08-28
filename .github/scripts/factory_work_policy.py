@@ -305,23 +305,17 @@ def pr_suppresses_issue_candidate(pr: dict[str, Any], issue_map: dict[int, dict[
     """Return whether this open factory PR is canonical work for its issue.
 
     Once a canonical factory PR exists, the linked issue must not become fresh
-    implementation work again just because the PR is temporarily ineligible.
-    The exception is an unblocked user-reported bug: a draft or blocked PR must
-    not make urgent product work disappear from the executable queue.
+    implementation work again for any reason. If an old PR is no longer worth
+    repairing, it must be explicitly closed before the issue can re-enter fresh
+    implementation. Urgency changes ranking, never canonical PR identity.
     """
+    del issue_map  # Kept in the signature for compatibility with existing callers.
     head = str(pr.get('headRefName') or '')
-    if (
-        str(pr.get('state') or 'OPEN').upper() != 'OPEN'
-        or not head.startswith('factory/')
-    ):
-        return False
-    linked = linked_issue_from_branch(head)
-    if linked is None:
-        return False
-    issue_labels = labels_of(issue_map.get(linked, {}))
-    urgent_issue = "user-reported" in issue_labels and "bug" in issue_labels
-    temporarily_ineligible = bool(pr.get("isDraft")) or bool(labels_of(pr) & BLOCKED_LABELS)
-    return not (urgent_issue and temporarily_ineligible and not issue_labels & BLOCKED_LABELS)
+    return (
+        str(pr.get('state') or 'OPEN').upper() == 'OPEN'
+        and head.startswith('factory/')
+        and linked_issue_from_branch(head) is not None
+    )
 
 
 def build_candidates(

@@ -12,6 +12,7 @@ from app.config import get_session_settings
 from app.models import Event, Issue, Session, Snapshot, Thread, User
 from app.performance_diagnostics import get_request_diagnostics
 from app.services.snapshot_contract import USES_ISSUE_TRACKING_KEY
+from comic_pile.bandwidth import clear_ephemeral_bandwidth, initialize_session_bandwidth
 
 logger = logging.getLogger(__name__)
 _session_creation_lock = asyncio.Lock()
@@ -114,6 +115,29 @@ async def resolve_current_session(db: AsyncSession, user_id: int) -> Session | N
     """
     session, _ = await _resolve_current_session_with_candidate_count(db, user_id)
     return session
+
+
+async def _ensure_initialized_bandwidth(db: AsyncSession, session: Session) -> Session:
+    """Apply one-time inferred bandwidth initialization to a reusable session.
+
+    Sessions already recording bandwidth state pass through untouched so
+    bootstrap requests never recompute or overwrite explicit overrides. The
+    commit here persists exactly the initialization write; the configured
+    session factory does not expire instances on commit, so the returned
+    session stays usable for the caller.
+
+    Args:
+        db: Async database session used for initialization persistence.
+        session: The resolved current reading session.
+
+    Returns:
+        The same session with initialized (or preserved) bandwidth state.
+    """
+    if session.bandwidth_source is not None:
+        return session
+    initialized = await initialize_session_bandwidth(db, session)
+    await db.commit()
+    return initialized
 
 
 def _log_session_resolution(
@@ -317,6 +341,7 @@ async def get_or_create(
                 user_id,
             )
             if active_session:
+                active_session = await _ensure_initialized_bandwidth(db, active_session)
                 _log_session_resolution(
                     user_id=user_id,
                     session=active_session,
@@ -342,6 +367,7 @@ async def get_or_create(
                     await _resolve_current_session_with_candidate_count(db, user_id)
                 )
                 if active_session:
+                    active_session = await _ensure_initialized_bandwidth(db, active_session)
                     _log_session_resolution(
                         user_id=user_id,
                         session=active_session,
@@ -352,6 +378,9 @@ async def get_or_create(
 
                 new_session = Session(start_die=start_die, user_id=user_id, timezone=timezone)
                 db.add(new_session)
+                # Phase 2 (issue #1708): initialize inferred bandwidth exactly
+                # once, atomically with the session-start snapshot commit.
+                await initialize_session_bandwidth(db, new_session)
                 await create_session_start_snapshot(db, new_session)
                 await db.commit()
                 await db.refresh(new_session)
@@ -378,11 +407,17 @@ async def get_or_create(
 
 
 async def end_session(session_id: int, db: AsyncSession) -> None:
-    """Mark a session as ended."""
+    """Mark a session as ended and terminate its ephemeral bandwidth state.
+
+    Args:
+        session_id: ID of the session to end.
+        db: Async database session used for persistence.
+    """
     session_result = await db.execute(select(Session).where(Session.id == session_id))
     session = session_result.scalar_one_or_none()
     if session:
         session.ended_at = datetime.now(UTC)
+        clear_ephemeral_bandwidth(session)
         await db.commit()
 
 

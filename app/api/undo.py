@@ -23,6 +23,7 @@ from app.services.snapshot_contract import (
     SNAPSHOT_VERSION_KEY,
     USES_ISSUE_TRACKING_KEY,
 )
+from comic_pile.bandwidth import restore_ephemeral_bandwidth
 
 router = APIRouter(tags=["undo"])
 
@@ -366,6 +367,7 @@ async def _restore_from_delta_snapshot(
             session.ended_at = _deserialize_datetime(session_state["ended_at"])
         if "snoozed_thread_ids" in session_state:
             session.snoozed_thread_ids = session_state["snoozed_thread_ids"]
+        restore_ephemeral_bandwidth(session, session_state)
 
 
 async def _record_undo_event(

@@ -45,6 +45,7 @@ from app.services.queue_pagination import (
 )
 from app.services.thread_issue_stats import load_next_issue_numbers, load_unread_counts
 from comic_pile.session import get_current_die, get_or_create
+from comic_pile.dependencies import format_blocking_reason, get_blocking_explanations
 
 logger = logging.getLogger(__name__)
 
@@ -625,12 +626,19 @@ async def set_pending_thread(
 
     Raises:
         NotFoundError: When the thread does not exist for this user.
-        InvalidRequestError: When the thread is not active or has no issues left.
+        InvalidRequestError: When the thread is not active, blocked, or has no issues left.
     """
     thread = await _require_owned_thread(db, user_id, thread_id)
 
     if thread.status != "active":
         raise InvalidRequestError(f"Thread {thread_id} is not active")
+
+    if thread.is_blocked:
+        dependencies = await get_blocking_explanations(thread_id, user_id, db)
+        reason = ""
+        if dependencies:
+            reason = f": {format_blocking_reason(dependencies[0])}"
+        raise InvalidRequestError(f"Thread {thread_id} is blocked by a dependency{reason}")
 
     thread_id_int = thread.id
     thread_title = thread.title

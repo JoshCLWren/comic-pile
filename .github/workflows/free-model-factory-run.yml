@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       worker:
-        description: Durable fixed-model factory number
+        description: Durable factory executor slot
         required: true
         type: string
     secrets:
@@ -70,7 +70,7 @@ jobs:
           set -Eeuo pipefail
           git remote set-url origin "https://x-access-token:${PR_REBASE_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-      - name: Resolve fixed lane
+      - name: Resolve executor slot policy
         id: lane
         shell: bash
         env:
@@ -94,16 +94,11 @@ jobs:
               configured=true
               reason='configured'
               ;;
-            opencode-free)
-              runtime_model="opencode/${model}"
-              branch_suffix='opencode-free'
+            opencode-free|openrouter-free)
+              runtime_model="${source%-free}/${model}"
+              branch_suffix='catalog-free'
               configured=true
-              reason='configured-keyless'
-              ;;
-            openrouter-free)
-              runtime_model="openrouter/${model}"
-              branch_suffix='openrouter'
-              if [[ -n "${OPENROUTER_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-OPENROUTER_API_KEY'; fi
+              reason='catalog-backed-free-code-slot'
               ;;
             kilo-auto)
               runtime_model="kilo/${model}"
@@ -143,12 +138,11 @@ jobs:
         shell: bash
         env:
           WORKER: ${{ steps.lane.outputs.worker }}
-          DISPLAY: ${{ steps.lane.outputs.display }}
-          SOURCE: ${{ steps.lane.outputs.source }}
+
         run: |
           set -Eeuo pipefail
           label="factory:${WORKER}"
-          description="Fixed-model Factory ${WORKER}: ${DISPLAY} via ${SOURCE}"
+          description="Factory ${WORKER}: code and review executor slot"
           if gh api "repos/${GITHUB_REPOSITORY}/labels/factory%3A${WORKER}" >/dev/null 2>&1; then
             gh api --method PATCH "repos/${GITHUB_REPOSITORY}/labels/factory%3A${WORKER}" \
               -f name="$label" -f color='5319e7' -f description="$description" >/dev/null
@@ -212,66 +206,107 @@ jobs:
           LANE_MODEL: ${{ steps.lane.outputs.model }}
           LANE_RUNTIME_MODEL: ${{ steps.lane.outputs.runtime_model }}
           LANE_DISPLAY: ${{ steps.lane.outputs.display }}
+          LANE_BRANCH_SUFFIX: ${{ steps.lane.outputs.branch_suffix }}
         run: |
           set -Eeuo pipefail
-          catalog="$RUNNER_TEMP/factory-provider-catalog"
           discovery_outcome="$RUNNER_TEMP/factory-discovery-outcome"
 
           case "$SOURCE" in
-            opencode-free)
-              if ! opencode models opencode --refresh > "$catalog"; then
-                printf 'provider_unavailable\tOpenCode model discovery command failed\n' > "$discovery_outcome"
-                exit 1
-              fi
-              ;;
-            openrouter-free)
-              if ! curl --silent --show-error --fail-with-body \
-                --connect-timeout 5 --max-time 30 \
-                --header "Authorization: Bearer ${OPENROUTER_API_KEY}" \
-                https://openrouter.ai/api/v1/models > "$catalog"; then
-                printf 'provider_unavailable\tOpenRouter model catalog request failed\n' > "$discovery_outcome"
-                exit 1
-              fi
-              ;;
             nvidia|kilo-auto|omniroute-opencode)
               # These adapters cannot enumerate reliably. Preserve the lane
               # request and let the existing real invocation/probe prove it.
               {
+                echo "source=$SOURCE"
                 echo "model=$LANE_MODEL"
                 echo "runtime_model=$LANE_RUNTIME_MODEL"
                 echo "display=$LANE_DISPLAY"
+                echo "branch_suffix=$LANE_BRANCH_SUFFIX"
                 echo "reason=selected-by-runtime-evidence"
               } >> "$GITHUB_OUTPUT"
               exit 0
               ;;
+            opencode-free|openrouter-free) ;;
             *)
               printf 'control_plane_failure\tUnsupported provider adapter: %s\n' "$SOURCE" > "$discovery_outcome"
               exit 1
               ;;
           esac
 
-          configured_args=()
-          while IFS= read -r configured_model; do
-            [[ -n "$configured_model" ]] || continue
-            configured_args+=(--configured-model "$configured_model")
-          done < <(
-            awk -F '\t' -v source="$SOURCE" \
-              '$0 !~ /^#/ && $2 == source {print $3}' \
-              .github/free-model-factories.tsv | sort -u
-          )
+          discover_provider() {
+            local provider="$1"
+            local catalog="$2"
+            local configured_args=()
+            while IFS= read -r configured_model; do
+              [[ -n "$configured_model" ]] || continue
+              configured_args+=(--configured-model "$configured_model")
+            done < <(
+              awk -F '\t' -v source="$provider" \
+                '$0 !~ /^#/ && $2 == source {print $3}' \
+                .github/free-model-factories.tsv | sort -u
+            )
+            python3 .github/scripts/factory_provider_candidates.py \
+              --provider "$provider" --catalog "$catalog" \
+              "${configured_args[@]}"
+          }
 
-          discovery="$(python3 .github/scripts/factory_provider_candidates.py \
-            --provider "$SOURCE" --catalog "$catalog" "${configured_args[@]}")"
-          discovery_status="$(jq -r '.status' <<< "$discovery")"
-          candidate_count="$(jq '.candidates | length' <<< "$discovery")"
-          if [[ "$discovery_status" != available || "$candidate_count" == 0 ]]; then
-            printf 'model_unavailable\t%s catalog exposed no policy-eligible candidate\n' "$SOURCE" > "$discovery_outcome"
+          catalog_candidates='[]'
+          catalog_successes=0
+          catalog_failures=()
+
+          opencode_catalog="$RUNNER_TEMP/factory-opencode-catalog"
+          if opencode models opencode --refresh > "$opencode_catalog"; then
+            opencode_discovery="$(discover_provider opencode-free "$opencode_catalog")"
+            if [[ "$(jq -r '.status' <<< "$opencode_discovery")" != invalid ]]; then
+              catalog_successes=$((catalog_successes + 1))
+              candidates="$(jq -c '.candidates // []' <<< "$opencode_discovery")"
+              catalog_candidates="$(jq -cn \
+                --argjson left "$catalog_candidates" --argjson right "$candidates" \
+                '$left + $right | unique_by([.provider, .model])')"
+            else
+              catalog_failures+=('OpenCode returned an invalid model catalog')
+            fi
+          else
+            catalog_failures+=('OpenCode model discovery command failed')
+          fi
+
+          if [[ -n "${OPENROUTER_API_KEY:-}" ]]; then
+            openrouter_catalog="$RUNNER_TEMP/factory-openrouter-catalog"
+            if curl --silent --show-error --fail-with-body \
+              --connect-timeout 5 --max-time 30 \
+              --header "Authorization: Bearer ${OPENROUTER_API_KEY}" \
+              https://openrouter.ai/api/v1/models > "$openrouter_catalog"; then
+              openrouter_discovery="$(discover_provider openrouter-free "$openrouter_catalog")"
+              if [[ "$(jq -r '.status' <<< "$openrouter_discovery")" != invalid ]]; then
+                catalog_successes=$((catalog_successes + 1))
+                candidates="$(jq -c '.candidates // []' <<< "$openrouter_discovery")"
+                catalog_candidates="$(jq -cn \
+                  --argjson left "$catalog_candidates" --argjson right "$candidates" \
+                  '$left + $right | unique_by([.provider, .model])')"
+              else
+                catalog_failures+=('OpenRouter returned an invalid model catalog')
+              fi
+            else
+              catalog_failures+=('OpenRouter model catalog request failed')
+            fi
+          fi
+
+          candidate_count="$(jq 'length' <<< "$catalog_candidates")"
+          if (( candidate_count == 0 )); then
+            if (( catalog_successes == 0 )); then
+              IFS=';' failure_detail="${catalog_failures[*]}"
+              printf 'provider_unavailable\t%s\n' \
+                "${failure_detail:-No catalog provider was executable}" > "$discovery_outcome"
+            else
+              printf 'model_unavailable\tLive catalogs exposed no policy-eligible candidate\n' \
+                > "$discovery_outcome"
+            fi
             exit 1
           fi
 
           discovery_file="$RUNNER_TEMP/factory-provider-discovery.json"
           comments_file="$RUNNER_TEMP/factory-attempt-comments.json"
-          printf '%s\n' "$discovery" > "$discovery_file"
+          jq -cn --argjson candidates "$catalog_candidates" \
+            '{candidates: $candidates}' > "$discovery_file"
           if ! gh api --paginate --slurp \
             "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
             > "$comments_file"; then
@@ -282,24 +317,36 @@ jobs:
           selection="$(python3 .github/scripts/factory_candidate_health.py \
             --discovery "$discovery_file" --comments "$comments_file" \
             --worker "$WORKER")"
+          source="$(jq -r '.selected.provider // empty' <<< "$selection")"
           model="$(jq -r '.selected.model // empty' <<< "$selection")"
           runtime_model="$(jq -r '.selected.runtime_model // empty' <<< "$selection")"
           health_state="$(jq -r '.selected.health_state // empty' <<< "$selection")"
-          if [[ -z "$model" || -z "$runtime_model" ]]; then
+          if [[ -z "$source" || -z "$model" || -z "$runtime_model" ]]; then
             failure_outcome="$(jq -r '.failure_outcome // "unknown_failure"' <<< "$selection")"
             failure_detail="$(jq -r '.detail // "candidate health selection failed"' <<< "$selection")"
             printf '%s\t%s\n' "$failure_outcome" "$failure_detail" > "$discovery_outcome"
             exit 1
           fi
 
+          case "$source" in
+            opencode-free) branch_suffix='opencode-free' ;;
+            openrouter-free) branch_suffix='openrouter' ;;
+            *)
+              printf 'control_plane_failure\tSelected unsupported catalog provider: %s\n' \
+                "$source" > "$discovery_outcome"
+              exit 1
+              ;;
+          esac
           {
+            echo "source=$source"
             echo "model=$model"
             echo "runtime_model=$runtime_model"
-            echo "display=${SOURCE} · ${model}"
+            echo "display=${source} · ${model}"
+            echo "branch_suffix=$branch_suffix"
             echo "reason=selected-${health_state}-from-live-provider-catalog"
           } >> "$GITHUB_OUTPUT"
           printf 'Factory %s selected executor: provider=%s model=%s runtime=%s health=%s\n' \
-            "$WORKER" "$SOURCE" "$model" "$runtime_model" "$health_state"
+            "$WORKER" "$source" "$model" "$runtime_model" "$health_state"
 
       - name: Report selected executor heartbeat
         if: always()
@@ -307,7 +354,7 @@ jobs:
         env:
           WORKER: ${{ steps.lane.outputs.worker }}
           MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
-          SOURCE: ${{ steps.lane.outputs.source }}
+          SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
           MINUTE: ${{ steps.lane.outputs.minute }}
           CONFIGURED: ${{ steps.lane.outputs.configured }}
           REASON: ${{ steps.executor.outputs.reason || steps.lane.outputs.reason }}
@@ -335,7 +382,7 @@ jobs:
           fi
 
       - name: Create ephemeral OmniRoute runtime secrets
-        if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source == 'omniroute-opencode'
+        if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'omniroute-opencode'
         shell: bash
         env:
           WORKER: ${{ steps.lane.outputs.worker }}
@@ -367,7 +414,7 @@ jobs:
           chmod 600 "$runtime_env" "$RUNNER_TEMP/omniroute-initial-password"
 
       - name: Start fixed OmniRoute lane
-        if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source == 'omniroute-opencode'
+        if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'omniroute-opencode'
         shell: bash
         env:
           WORKER: ${{ steps.lane.outputs.worker }}
@@ -465,7 +512,7 @@ jobs:
           chmod 600 "$HOME/.config/opencode/opencode.json"
 
       - name: Probe pinned NVIDIA model before OpenCode smoke
-        if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source == 'nvidia'
+        if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'nvidia'
         shell: bash
         env:
           MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
@@ -520,7 +567,7 @@ jobs:
           echo "NVIDIA probe succeeded for ${MODEL}"
 
       - name: Smoke exact pinned model through OpenCode
-        if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source != 'kilo-auto'
+        if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) != 'kilo-auto'
         shell: bash
         env:
           RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
@@ -557,7 +604,7 @@ jobs:
           [[ -z "$(git status --porcelain)" ]] || { echo 'Model smoke modified the worktree' >&2; exit 1; }
 
       - name: Smoke Kilo Auto Free through Kilo CLI
-        if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source == 'kilo-auto'
+        if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'kilo-auto'
         shell: bash
         env:
           FACTORY_RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
@@ -617,11 +664,11 @@ jobs:
         if: steps.lane.outputs.configured == 'true'
         env:
           FACTORY_WORKER: ${{ steps.lane.outputs.worker }}
-          FACTORY_SOURCE: ${{ steps.lane.outputs.source }}
+          FACTORY_SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
           FACTORY_MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
           FACTORY_RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
           FACTORY_DISPLAY: ${{ steps.executor.outputs.display || steps.lane.outputs.display }}
-          FACTORY_BRANCH_SUFFIX: ${{ steps.lane.outputs.branch_suffix }}
+          FACTORY_BRANCH_SUFFIX: ${{ steps.executor.outputs.branch_suffix || steps.lane.outputs.branch_suffix }}
         run: |
           set +e
           bash .github/scripts/free-model-factory-worker.sh
@@ -638,7 +685,7 @@ jobs:
         env:
           WORKER: ${{ steps.lane.outputs.worker }}
           MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
-          SOURCE: ${{ steps.lane.outputs.source }}
+          SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
           MINUTE: ${{ steps.lane.outputs.minute }}
           CONFIGURED: ${{ steps.lane.outputs.configured }}
           REASON: ${{ steps.executor.outputs.reason || steps.lane.outputs.reason }}

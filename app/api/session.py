@@ -26,7 +26,7 @@ from app.schemas import (
     SnapshotResponse,
     SnapshotsListResponse,
 )
-from app.schemas.session import SnoozedThreadInfo
+from app.schemas.session import SnoozedThreadInfo, build_session_bandwidth_state
 from app.services.ownership import get_owned_session_or_404
 from app.services.session_history_projection import project_session_history_events
 from app.services.thread_issue_stats import load_next_issue_numbers, load_unread_counts
@@ -446,6 +446,13 @@ async def get_current_session(
                 reading_intent=active_session.reading_intent,
                 reading_mode_source=active_session.reading_mode_source,
                 reading_mode_suggested=active_session.reading_mode_suggested,
+                bandwidth=build_session_bandwidth_state(
+                    predicted_bandwidth=active_session.predicted_bandwidth,
+                    active_bandwidth=active_session.active_bandwidth,
+                    confidence=active_session.bandwidth_confidence,
+                    source=active_session.bandwidth_source,
+                    mode_version=active_session.bandwidth_version,
+                ),
             )
         except OperationalError as e:
             if "deadlock" in str(e).lower():
@@ -715,6 +722,13 @@ async def get_session(
         reading_intent=session.reading_intent,
         reading_mode_source=session.reading_mode_source,
         reading_mode_suggested=session.reading_mode_suggested,
+        bandwidth=build_session_bandwidth_state(
+            predicted_bandwidth=session.predicted_bandwidth,
+            active_bandwidth=session.active_bandwidth,
+            confidence=session.bandwidth_confidence,
+            source=session.bandwidth_source,
+            mode_version=session.bandwidth_version,
+        ),
     )
 
 
@@ -1131,6 +1145,13 @@ async def restore_session_start(
                 reading_intent=session.reading_intent,
                 reading_mode_source=session.reading_mode_source,
                 reading_mode_suggested=session.reading_mode_suggested,
+                bandwidth=build_session_bandwidth_state(
+                    predicted_bandwidth=session.predicted_bandwidth,
+                    active_bandwidth=session.active_bandwidth,
+                    confidence=session.bandwidth_confidence,
+                    source=session.bandwidth_source,
+                    mode_version=session.bandwidth_version,
+                ),
             )
         except OperationalError as e:
             if "deadlock" in str(e).lower():

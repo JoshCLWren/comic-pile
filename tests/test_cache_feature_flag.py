@@ -1,4 +1,4 @@
-"""Regression tests for the explicit Redis cache feature gate."""
+"""Regression tests for the explicit cache feature gate."""
 
 from collections.abc import Awaitable, Callable
 from typing import cast
@@ -6,13 +6,14 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from app.cache import RedisCache, cached
+from app.cache import UpstashCache, cached
 from app.config import RedisSettings
 
 
 def redis_settings(**values: bool | str | None) -> RedisSettings:
     """Build isolated Redis settings without reading ambient Redis credentials."""
     isolated_values: dict[str, bool | str | None] = {
+        "cache_provider": "redis",
         "cache_enabled": False,
         "upstash_redis_rest_url": None,
         "upstash_redis_rest_token": None,
@@ -20,6 +21,29 @@ def redis_settings(**values: bool | str | None) -> RedisSettings:
     }
     isolated_values.update(values)
     return RedisSettings.model_validate(isolated_values)
+
+
+def test_postgres_provider_is_default_and_configured() -> None:
+    """Postgres provider is the default and is considered configured without extra flags."""
+    settings = RedisSettings.model_validate(
+        {
+            "cache_provider": "postgres",
+            "cache_enabled": False,
+            "upstash_redis_rest_url": None,
+            "upstash_redis_rest_token": None,
+            "redis_url": None,
+        }
+    )
+    assert settings.cache_provider == "postgres"
+    assert settings.effective_provider == "postgres"
+    assert settings.is_configured is True
+
+
+def test_off_provider_is_never_configured() -> None:
+    """CACHE_PROVIDER=off disables caching regardless of credentials."""
+    settings = redis_settings(cache_provider="off", cache_enabled=True, redis_url="redis://localhost:6379/0")
+    assert settings.effective_provider == "off"
+    assert settings.is_configured is False
 
 
 def test_cache_defaults_to_disabled_with_remote_credentials_present() -> None:
@@ -70,6 +94,8 @@ async def test_disabled_cache_reads_fall_through_without_remote_commands(monkeyp
     remote_client = AsyncMock()
     monkeypatch.setattr(cache_module.cache, "_initialized", False)
     monkeypatch.setattr(cache_module.cache, "_client", remote_client)
+    monkeypatch.setattr(cache_module.cache, "_backend", None)
+    monkeypatch.setattr(cache_module.cache, "_demoted", True)
     wrapped = AsyncMock(return_value={"source": "database"})
 
     @cached(ttl=60)
@@ -85,7 +111,7 @@ async def test_disabled_cache_reads_fall_through_without_remote_commands(monkeyp
 @pytest.mark.asyncio
 async def test_uninitialized_cache_invalidation_makes_no_remote_calls() -> None:
     """Disabled invalidation remains a safe no-op."""
-    cache_client = RedisCache()
+    cache_client = UpstashCache()
     remote_client = AsyncMock()
     cache_client._initialized = False
     cache_client._client = remote_client
@@ -104,6 +130,7 @@ async def test_upstash_initialization_does_not_ping_remote_service(monkeypatch) 
     remote_client = AsyncMock()
     monkeypatch.setattr(cache_module.cache, "_initialized", False)
     monkeypatch.setattr(cache_module.cache, "_client", None)
+    monkeypatch.setattr(cache_module.cache, "_backend", None)
     monkeypatch.setattr(cache_module, "UpstashRedis", lambda **_: remote_client)
 
     await cache_module.cache.initialize(
@@ -125,6 +152,7 @@ async def test_local_redis_initialization_does_not_ping_service(monkeypatch) -> 
     from_url = Mock(return_value=local_client)
     monkeypatch.setattr(cache_module.cache, "_initialized", False)
     monkeypatch.setattr(cache_module.cache, "_client", None)
+    monkeypatch.setattr(cache_module.cache, "_backend", None)
     monkeypatch.setattr(cache_module.aioredis.Redis, "from_url", from_url)
 
     await cache_module.cache.initialize(local_url="redis://localhost:6379/0")

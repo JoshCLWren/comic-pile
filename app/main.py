@@ -139,8 +139,8 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         Configured FastAPI application instance.
     """
     app_settings = get_app_settings()
-
     _configure_logging(app_settings.environment)
+    startup_state: dict[str, str] = {}
 
     app = FastAPI(
         title="Dice-Driven Comic Tracker",
@@ -456,6 +456,39 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
             return _serve_spa_index_response()
 
+    async def _init_provided_cache(
+        provider_name: str,
+        startup_state: dict[str, str],
+        config: dict[str, str],
+    ) -> None:
+        """Initialize the configured cache provider with demotion support.
+
+        The process-wide ``cache`` router is reconfigured in place so that every
+        importer keeps using the same singleton. On persistent failure the
+        provider is demoted to fail-open for the process lifetime; optional
+        caching never becomes a request dependency.
+
+        Args:
+            provider_name: ``"postgres"`` or ``"redis"``.
+            startup_state: Shared dict between startup and shutdown events.
+            config: Provider-specific keyword arguments for ``cache.configure``.
+        """
+        try:
+            await cache.configure(provider_name, **config)
+            startup_state["cache_provider_type"] = provider_name
+            logger.info(
+                "Cache provider '%s' initialized successfully", provider_name
+            )
+        except Exception as exc:
+            logger.error(
+                "Cache provider '%s' startup failed: %s - "
+                "Demoting to fail-open for process lifetime",
+                provider_name,
+                exc,
+            )
+            await cache.demote()
+            startup_state["cache_provider_type"] = "demoted-off"
+
     @app.on_event("startup")
     async def startup_event():
         """Initialize database and cache on application startup."""
@@ -463,20 +496,49 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         await compute_startup_duration()
 
         redis_settings = get_redis_settings()
-        if redis_settings.is_configured:
+        provider = redis_settings.effective_provider
+
+        if provider == "off":
+            logger.info("CACHE_PROVIDER=off - caching disabled")
+            return
+
+        if provider == "postgres":
+            await _init_provided_cache(
+                "postgres",
+                startup_state,
+                {"database_url": get_database_settings().async_url},
+            )
+            return
+
+        if provider == "redis":
             if redis_settings.upstash_redis_rest_url and redis_settings.upstash_redis_rest_token:
-                await cache.initialize(
-                    url=redis_settings.upstash_redis_rest_url,
-                    token=redis_settings.upstash_redis_rest_token,
+                await _init_provided_cache(
+                    "redis",
+                    startup_state,
+                    {
+                        "url": redis_settings.upstash_redis_rest_url,
+                        "token": redis_settings.upstash_redis_rest_token,
+                    },
                 )
             elif redis_settings.redis_url:
-                await cache.initialize(local_url=redis_settings.redis_url)
-        else:
-            logger.info("Redis cache not configured - caching disabled")
+                await _init_provided_cache(
+                    "redis",
+                    startup_state,
+                    {"local_url": redis_settings.redis_url},
+                )
+            else:
+                logger.warning(
+                    "Redis credentials absent for CACHE_PROVIDER=redis; caching disabled"
+                )
+            return
 
     @app.on_event("shutdown")
     async def shutdown_event():
         """Close cache connection on application shutdown."""
+        logger.info(
+            "Shutting down cache (provider=%s)",
+            startup_state.get("cache_provider_type", "unconfigured"),
+        )
         await cache.close()
 
     return app

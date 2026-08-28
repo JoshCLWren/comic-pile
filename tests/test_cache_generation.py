@@ -7,7 +7,7 @@ import json
 import pytest
 
 from app import cache_generation
-from app.cache import cache, cached
+from app.cache import cache, UpstashCache, cached
 from app.cache_generation import (
     _atomic_generation_value_get,
     bump_user_generation,
@@ -137,15 +137,26 @@ async def test_invalid_user_id_does_not_consume_generation_budget() -> None:
     assert command_budget.total == 0
 
 
+def _install_mock_backend(monkeypatch: pytest.MonkeyPatch, mock_client) -> UpstashCache:
+    """Install a mock backend for testing."""
+    mock_backend = UpstashCache()
+    mock_backend._initialized = True
+    mock_backend._client = mock_client
+    mock_backend._is_upstash = True
+    mock_backend._circuit_breaker.reset()
+    monkeypatch.setattr(cache, "_backend", mock_backend)
+    monkeypatch.setattr(cache, "_initialized", True)
+    monkeypatch.setattr(cache, "_demoted", False)
+    return mock_backend
+
+
 @pytest.mark.asyncio
 async def test_atomic_read_keeps_generation_and_value_in_one_snapshot(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Prevent invalidation from interleaving generation and value lookups."""
     client = AtomicReadClient()
-    monkeypatch.setattr(cache, "_client", client)
-    monkeypatch.setattr(cache, "_initialized", True)
-    monkeypatch.setattr(cache, "_is_upstash", True)
+    _install_mock_backend(monkeypatch, client)
 
     generation, cache_hit, value = await _atomic_generation_value_get(7, "cache:load:7:")
 
@@ -161,9 +172,7 @@ async def test_atomic_read_keeps_generation_and_value_in_one_snapshot(
 async def test_generation_cached_preserves_cached_none(monkeypatch: pytest.MonkeyPatch) -> None:
     """Treat a stored JSON null as a cache hit when falsy caching is enabled."""
     client = NullValueClient()
-    monkeypatch.setattr(cache, "_client", client)
-    monkeypatch.setattr(cache, "_initialized", True)
-    monkeypatch.setattr(cache, "_is_upstash", True)
+    _install_mock_backend(monkeypatch, client)
 
     executions = 0
 

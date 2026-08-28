@@ -4,8 +4,8 @@ from collections.abc import Sequence
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import or_, select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import func, or_, select
+from sqlalchemy.dialects.postgresql import JSONB, insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -14,6 +14,7 @@ from app.auth import get_current_user
 from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
 from app.models import DependencyGroup, DependencyGroupMembership, Issue, Thread
+from app.models.continuity_plan import ContinuityPlan
 from app.models.user import User
 from app.schemas.dependency_group import (
     DependencyGroupCreate,
@@ -441,6 +442,39 @@ async def add_member(
     response = (await _member_responses(db, [member]))[0]
     await _refresh_crossover_blocked_state(current_user.id, db)
     return response
+
+
+@router.get(
+    "/{group_id}/plans",
+    response_model=list[DependencyGroupSummary],
+    description="List continuity plans that reference this crossover as a node.",
+)
+async def list_crossover_plans(
+    group_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> list[DependencyGroupSummary]:
+    """List continuity plans containing this crossover as a node.
+
+    Args:
+        group_id: The dependency group identifier.
+        current_user: The authenticated group and plan owner.
+        db: The asynchronous database session.
+
+    Returns:
+        Distinct plan summaries ordered by name and identifier.
+    """
+    await _owned_group(db, group_id, current_user.id)
+    crossover_node = {"node_type": "crossover", "ref_id": group_id}
+    result = await db.execute(
+        select(ContinuityPlan.id, ContinuityPlan.name)
+        .where(
+            ContinuityPlan.user_id == current_user.id,
+            func.cast(ContinuityPlan.nodes_json, JSONB).contains([crossover_node]),
+        )
+        .order_by(ContinuityPlan.name, ContinuityPlan.id)
+    )
+    return [DependencyGroupSummary(id=row.id, name=row.name) for row in result]
 
 
 @router.delete(

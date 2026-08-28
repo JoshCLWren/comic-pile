@@ -182,7 +182,7 @@ describe('useQueueThreadActions', () => {
     )
 
     await result.current.handleThreadRead(makeThread({ id: 7, is_blocked: true }))
-    expect(window.alert).toHaveBeenCalled()
+    expect(window.alert).not.toHaveBeenCalled()
     expect(navigate).not.toHaveBeenCalled()
 
     await result.current.handleThreadRead(makeThread({ id: 8 }))

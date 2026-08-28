@@ -23,10 +23,21 @@ interface NavigationProps {
   onBugReportSubmit: BugReportSubmit
 }
 
+type NavIconName =
+  | 'roll'
+  | 'queue'
+  | 'history'
+  | 'crossovers'
+  | 'planner'
+  | 'new'
+  | 'help'
+  | 'glossary'
+  | 'more'
+
 interface NavItem {
   path: string
   label: string
-  icon: string
+  icon: NavIconName
   ariaLabel: string
 }
 
@@ -50,74 +61,93 @@ const APPEARANCE_OPTIONS: Array<{ id: ThemeId; label: string; ariaLabel: string;
   { id: 'command-center', label: 'Command Center', ariaLabel: 'Command center theme', mobileClassName: 'classic:text-stone-400 ink-gold:text-stone-400 command-center:text-stone-100' },
 ]
 
-function NavIcon({ name }: { name: string }) {
-  const icons: Record<string, React.ReactNode> = {
+function NavIcon({ name }: { name: NavIconName }) {
+  const icons: Record<NavIconName, React.ReactNode> = {
     roll: (
       <>
-        <circle cx="12" cy="12" r="10"></circle>
-        <path d="M8 8h4v8H8"></path>
-        <path d="M12 8h4v8h-4"></path>
+        <rect x="3" y="3" width="18" height="18" rx="4"></rect>
+        <circle cx="8" cy="8" r="1" fill="currentColor" stroke="none"></circle>
+        <circle cx="16" cy="8" r="1" fill="currentColor" stroke="none"></circle>
+        <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"></circle>
+        <circle cx="8" cy="16" r="1" fill="currentColor" stroke="none"></circle>
+        <circle cx="16" cy="16" r="1" fill="currentColor" stroke="none"></circle>
       </>
     ),
     queue: (
       <>
-        <path d="M4 4v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4"></path>
-        <path d="M8 4v16"></path>
-        <path d="M12 4v16"></path>
-        <line x1="4" y1="10" x2="20" y2="10"></line>
+        <circle cx="5" cy="6" r="1" fill="currentColor" stroke="none"></circle>
+        <circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"></circle>
+        <circle cx="5" cy="18" r="1" fill="currentColor" stroke="none"></circle>
+        <path d="M9 6h11"></path>
+        <path d="M9 12h11"></path>
+        <path d="M9 18h11"></path>
       </>
     ),
     history: (
       <>
-        <path d="M13.5 20q-5.775-4.3-7.5-10"></path>
-        <path d="M7 10l4-4 4 4"></path>
-        <path d="M11 14H4"></path>
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+        <path d="M3 3v5h5"></path>
+        <path d="M12 7v5l4 2"></path>
       </>
     ),
     crossovers: (
       <>
-        <path d="M10 6V4a2 2 0 0 1 2-2 2 2 0 0 1 2 2v2"></path>
-        <path d="M6 18v2a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-2"></path>
-        <path d="M12 12H4"></path>
-        <path d="M8 6l4-4 4 4"></path>
-        <path d="M4 18h16"></path>
+        <path d="M4 7h3.5c2.5 0 3.5 2 4.5 5s2 5 4.5 5H20"></path>
+        <path d="m17 14 3 3-3 3"></path>
+        <path d="M4 17h3.5c1.4 0 2.4-.7 3.2-2"></path>
+        <path d="M13.3 9c.8-1.3 1.8-2 3.2-2H20"></path>
+        <path d="m17 4 3 3-3 3"></path>
       </>
     ),
     planner: (
       <>
-        <circle cx="12" cy="12" r="10"></circle>
-        <path d="M8 12h8"></path>
-        <path d="M12 8v8"></path>
+        <circle cx="12" cy="12" r="9"></circle>
+        <path d="m15.5 8.5-2 5-5 2 2-5 5-2Z"></path>
       </>
     ),
     new: (
       <>
-        <circle cx="12" cy="12" r="10"></circle>
-        <path d="M16 8v6a2 2 0 0 1-2 2h-4"></path>
-        <path d="M12 8v6"></path>
-        <line x1="8" y1="8" x2="16" y2="16"></line>
+        <path d="m12 3-1.35 4.15a2 2 0 0 1-1.3 1.3L5.2 9.8l4.15 1.35a2 2 0 0 1 1.3 1.3L12 16.6l1.35-4.15a2 2 0 0 1 1.3-1.3L18.8 9.8l-4.15-1.35a2 2 0 0 1-1.3-1.3L12 3Z"></path>
+        <path d="m19 16-.55 1.45L17 18l1.45.55L19 20l.55-1.45L21 18l-1.45-.55L19 16Z"></path>
       </>
     ),
     help: (
       <>
-        <circle cx="12" cy="12" r="10"></circle>
-        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        <circle cx="12" cy="12" r="9"></circle>
+        <path d="M9.75 9a2.5 2.5 0 1 1 3.5 2.3c-.8.35-1.25.9-1.25 1.7v.25"></path>
+        <circle cx="12" cy="17" r=".75" fill="currentColor" stroke="none"></circle>
       </>
     ),
     glossary: (
       <>
-        <path d="M4 4v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4H4z"></path>
-        <path d="M8 8h8"></path>
-        <path d="M8 12h8"></path>
-        <path d="M8 16h8"></path>
+        <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H11a3 3 0 0 1 3 3v17a3 3 0 0 0-3-3H6.5A2.5 2.5 0 0 0 4 21.5v-17Z"></path>
+        <path d="M20 4.5A2.5 2.5 0 0 0 17.5 2H14"></path>
+        <path d="M20 4.5v17A2.5 2.5 0 0 0 17.5 19H14"></path>
+      </>
+    ),
+    more: (
+      <>
+        <circle cx="12" cy="12" r="9"></circle>
+        <circle cx="8" cy="12" r="1" fill="currentColor" stroke="none"></circle>
+        <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"></circle>
+        <circle cx="16" cy="12" r="1" fill="currentColor" stroke="none"></circle>
       </>
     ),
   }
 
   return (
-    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {icons[name] ?? icons.roll}
+    <svg
+      className="h-6 w-6"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      data-nav-icon={name}
+    >
+      {icons[name]}
     </svg>
   )
 }
@@ -332,12 +362,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
               className={navItemClass(isMoreOpen || isMoreRoute)}
               aria-label="More pages"
             >
-              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <circle cx="8" cy="12" r="1" fill="currentColor" stroke="none"></circle>
-                <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"></circle>
-                <circle cx="16" cy="12" r="1" fill="currentColor" stroke="none"></circle>
-              </svg>
+              <NavIcon name="more" />
               <span className="nav-label text-[9px] font-bold uppercase tracking-wide md:text-[10px] md:tracking-widest">More</span>
             </button>
           )}

@@ -91,6 +91,9 @@ function renderRatingView(overrides: Partial<React.ComponentProps<typeof RatingV
         dismissIsPending={false}
         readingOrders={[]}
         connectedThreads={[connectedThread]}
+        readerContext={null}
+        isReaderContextLoading={false}
+        readerContextError={null}
         {...callbacks}
         {...overrides}
       />

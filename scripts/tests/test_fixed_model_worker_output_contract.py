@@ -133,6 +133,16 @@ def test_checkout_target_records_expected_head() -> None:
     assert 'EXPECTED_HEAD="$(git rev-parse HEAD)"' in body
 
 
+def test_worker_rejects_orphaned_issue_lease_when_canonical_pr_exists() -> None:
+    """A concurrent PR lease release cannot turn repair work into new issue work."""
+    body = _function_body('select_controller_assignment')
+
+    assert 'gh pr list --state open --limit 500 --json number,headRefName' in body
+    assert 'test("^factory/[0-9]+-" + $issue + "-")' in body
+    assert 'owns orphaned issue lease' in body
+    assert 'while canonical open PR #${canonical_pr} exists' in body
+
+
 def test_omniroute_and_nvidia_workers_reject_unclean_git_state() -> None:
     """Every factory wrapper must fail closed on model-created merge state."""
     for path in (Path('.github/scripts/omniroute-factory-worker.sh'), Path('.github/scripts/nvidia-factory-worker.sh')):

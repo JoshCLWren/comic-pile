@@ -271,7 +271,7 @@ async def set_pending_thread(
     """Set a thread as pending for rating (manual selection).
 
     Raises:
-        HTTPException: 404 when not found; 400 when inactive or out of issues.
+        HTTPException: 404 when not found; 400 when inactive, blocked, or out of issues.
     """
     try:
         return await thread_service.set_pending_thread(db, current_user.id, thread_id)
