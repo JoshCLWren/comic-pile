@@ -54,7 +54,10 @@ def _reference_list(metadata: dict[str, object], *keys: str) -> list[dict[str, o
     for key in keys:
         value = metadata.get(key)
         if isinstance(value, list):
-            return [item for item in value if isinstance(item, dict)]
+            items: list[dict[str, object]] = [
+                item for item in value if isinstance(item, dict)
+            ]
+            return items
     return []
 
 

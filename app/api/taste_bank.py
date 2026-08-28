@@ -26,7 +26,10 @@ from app.schemas.taste_bank import (
     TasteBankSummaryResponse,
     TasteSignalVerdictUpdate,
 )
-from app.services.taste_bank import update_signal_verdict as svc_update_signal_verdict
+from app.services.taste_bank import (
+    get_user_taste_bank as svc_get_user_taste_bank,
+    get_user_taste_signal as svc_get_user_taste_signal,
+)
 from app.services.taste_bank_inference import rebuild_user_taste_bank
 
 router = APIRouter(prefix="/api/v1/taste-bank", tags=["taste-bank"])
@@ -100,7 +103,7 @@ async def get_user_taste_bank(
             detail="You can only access your own taste bank",
         )
 
-    signals = await get_user_taste_bank(db, user_id)
+    signals = await svc_get_user_taste_bank(db, user_id)
 
     high_confidence = sum(1 for s in signals if (s.confidence or 0.0) >= 0.7)
     explicit_verdict = sum(1 for s in signals if s.user_verdict is not None)
@@ -175,7 +178,7 @@ async def update_signal_verdict(
     Returns:
         Updated taste signal.
     """
-    signal = await get_user_taste_signal(db, current_user.id, signal_id)
+    signal = await svc_get_user_taste_signal(db, current_user.id, signal_id)
     if signal is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
