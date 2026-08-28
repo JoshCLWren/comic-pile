@@ -438,10 +438,21 @@ jobs:
               echo "MAX_WORKERS_PER_TICK must be a positive integer" >&2
               exit 1
             }
-            workers="$(awk -F '\t' '
+            roster="$(awk -F '\t' '
               $0 !~ /^#/ && NF >= 4 {print $1}
-            ' "$manifest" | head -n "$max_per_tick"               | jq -Rsc 'split("\n") | map(select(length > 0))')"
-            echo "Scheduled batch: offering $(jq -r 'length' <<<"$workers") workers (cap ${max_per_tick})"
+            ' "$manifest")"
+            total="$(wc -l <<<"$roster")"
+            (( total > 0 )) || {
+              echo "Factory manifest contains no scheduled workers" >&2
+              exit 1
+            }
+            offer_count="$max_per_tick"
+            (( offer_count <= total )) || offer_count="$total"
+            offset="$(( ((GITHUB_RUN_NUMBER - 1) * offer_count) % total ))"
+            workers="$(printf '%s\n%s\n' "$roster" "$roster" \
+              | tail -n +"$((offset + 1))" | head -n "$offer_count" \
+              | jq -Rsc 'split("\n") | map(select(length > 0))')"
+            echo "Scheduled batch: offering $(jq -r 'length' <<<"$workers") workers (cap ${max_per_tick}, offset ${offset}/${total})"
           else
             # A control-plane change should smoke one current lane per provider.
             # Resolve these from the manifest so retired workers cannot remain
