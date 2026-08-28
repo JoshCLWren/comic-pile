@@ -493,12 +493,13 @@ class TestInferTasteBankPositive:
             baseline_thread.issues_remaining = max(0, baseline_thread.issues_remaining - 1)
         await async_db.commit()
 
-        # Now test feature with above-baseline ratings
-        thread = await _create_thread(async_db, user, title="Spider-Man", queue_pos=2)
-        issue = await _create_issue(async_db, thread, number="1")
+        # Now test feature with above-baseline ratings across multiple threads/sessions
+        # to demonstrate evidence diversity boosting confidence
+        thread1 = await _create_thread(async_db, user, title="Spider-Man v1", queue_pos=2)
+        issue1 = await _create_issue(async_db, thread1, number="1")
         await _add_confirmed_identity(
             async_db,
-            issue,
+            issue1,
             {
                 "person_credits": [{"name": "Stan Lee", "role": "writer"}],
                 "publisher": "Marvel",
@@ -506,14 +507,30 @@ class TestInferTasteBankPositive:
             },
         )
 
-        session = await _create_session(async_db, user)
+        thread2 = await _create_thread(async_db, user, title="Spider-Man v2", queue_pos=3)
+        issue2 = await _create_issue(async_db, thread2, number="1")
+        await _add_confirmed_identity(
+            async_db,
+            issue2,
+            {
+                "person_credits": [{"name": "Stan Lee", "role": "writer"}],
+                "publisher": "Marvel",
+                "cover_date": "1999-01-01",
+            },
+        )
 
-        for _ in range(6):
-            await _add_rate_event(
-                async_db, user, thread, issue, 5.0, session.id
-            )
-            thread.issues_remaining -= 1
-            thread.last_rating = 5.0
+        session1 = await _create_session(async_db, user)
+        session2 = await _create_session(async_db, user)
+
+        # 3 ratings in thread1/session1, 3 ratings in thread2/session2 = 6 total
+        for _ in range(3):
+            await _add_rate_event(async_db, user, thread1, issue1, 5.0, session1.id)
+            thread1.issues_remaining -= 1
+            thread1.last_rating = 5.0
+        for _ in range(3):
+            await _add_rate_event(async_db, user, thread2, issue2, 5.0, session2.id)
+            thread2.issues_remaining -= 1
+            thread2.last_rating = 5.0
 
         await async_db.commit()
 
@@ -525,7 +542,10 @@ class TestInferTasteBankPositive:
         assert stan_lee.affinity_estimate is not None
         assert stan_lee.affinity_estimate > 0.3
         assert stan_lee.confidence is not None
+        # With cross-thread and cross-session diversity, confidence should be >= 0.2
         assert stan_lee.confidence >= 0.2
+        assert stan_lee.distinct_thread_count == 2
+        assert stan_lee.evidence_count == 6
 
 
 class TestInferTasteBankSparse:
@@ -914,10 +934,25 @@ class TestInferTasteBankNegative:
         """Strong repeated below-baseline ratings should produce negative affinity."""
         user = await _create_user(async_db, username="negative_affinity_1")
 
+        # Establish baseline with high ratings on different content
+        baseline_thread = await _create_thread(async_db, user, title="Favorite Series", queue_pos=1)
+        baseline_issue = await _create_issue(async_db, baseline_thread, number="1")
+        await _add_confirmed_identity(
+            async_db,
+            baseline_issue,
+            {"publisher": "Baseline Comics", "cover_date": "2000-01-01"},
+        )
+        baseline_session = await _create_session(async_db, user)
+        for rating in [5.0, 5.0, 5.0]:
+            await _add_rate_event(async_db, user, baseline_thread, baseline_issue, rating, baseline_session.id)
+            baseline_thread.issues_remaining = max(0, baseline_thread.issues_remaining - 1)
+        await async_db.commit()
+
+        # Now test feature with below-baseline ratings across multiple threads/sessions
         threads = []
         issues = []
         for i, title in enumerate(["Series A", "Series B", "Series C"], 1):
-            thread = await _create_thread(async_db, user, title=title, queue_pos=i)
+            thread = await _create_thread(async_db, user, title=title, queue_pos=i + 1)
             issue = await _create_issue(async_db, thread, number="1")
             await _add_confirmed_identity(
                 async_db,
