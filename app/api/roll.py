@@ -196,7 +196,7 @@ async def roll_dice(
 
     # Compute effort estimates for all candidates in the bounded pool
     effort_estimates = []
-    for thread, unread_count, issue_number in bounded_rows:
+    for thread, _unread_count, _issue_number in bounded_rows:
         issue_id = thread.next_unread_issue_id if thread.uses_issue_tracking() else None
         effort_estimate = await compute_effort_estimate(
             db,
@@ -261,7 +261,7 @@ async def roll_dice(
                 effort_confidence=round(effort_estimate.confidence, 3),
                 effort_sample_count=effort_estimate.sample_count,
             )
-            for breakdown, effort_estimate in zip(candidate_weights, effort_estimates)
+            for breakdown, effort_estimate in zip(candidate_weights, effort_estimates, strict=True)
         ]
         if candidate_weights
         else None,
