@@ -43,6 +43,19 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
+      - name: Verify Pages publishing mode
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          config="$(gh api "repos/${GITHUB_REPOSITORY}/pages")"
+          echo "Pages configuration: $(jq -c '{build_type,status,html_url,source}' <<<"$config")"
+          build_type="$(jq -r '.build_type // "unknown"' <<<"$config")"
+          if [[ "$build_type" != "workflow" ]]; then
+            echo "::error::GitHub Pages build_type is '$build_type'; expected 'workflow'. Set Settings > Pages > Source to GitHub Actions."
+            exit 1
+          fi
+
       - name: Upload dashboard
         uses: actions/upload-pages-artifact@v4
         with:
@@ -58,3 +71,38 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
+
+      - name: Verify public dashboard freshness
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          set -euo pipefail
+          url="${PAGE_URL%/}/?factory-pages-check=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          expected='Can the fleet move work, and which factories are actually useful?'
+          for attempt in {1..18}; do
+            body="$(curl --fail --silent --show-error --location \
+              -H 'Cache-Control: no-cache' \
+              -H 'Pragma: no-cache' \
+              "$url" 2>/dev/null || true)"
+            if grep -Fq "$expected" <<<"$body"; then
+              generated="$(grep -oE 'Generated [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z' <<<"$body" \
+                | head -n 1 | cut -d' ' -f2)"
+              if [[ -n "$generated" ]] && python3 - "$generated" <<'PY'
+          from datetime import datetime, timezone
+          import sys
+
+          generated = datetime.fromisoformat(sys.argv[1].replace("Z", "+00:00"))
+          age = (datetime.now(timezone.utc) - generated).total_seconds()
+          raise SystemExit(0 if -60 <= age <= 1800 else 1)
+          PY
+              then
+                echo "Verified live dashboard at $PAGE_URL (generated $generated)."
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          echo "::error::Pages deployment reported success, but $PAGE_URL is not serving a dashboard generated within the last 30 minutes."
+          echo "Response headers:"
+          curl --silent --show-error --head "$url" || true
+          exit 1
