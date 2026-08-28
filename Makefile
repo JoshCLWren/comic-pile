@@ -1,4 +1,4 @@
-.PHONY: help init setup next-task start-task lint verify verify-e2e pytest sync venv githook install-githook
+.PHONY: help init setup next-task start-task lint verify verify-e2e pytest sync venv githook install-githook tidy
 .PHONY: create-phase1 create-phase2 create-phase3 create-phase4 create-phase5 create-phase6 create-phase7 create-phase8 create-phase9
 .PHONY: merge-phase1 merge-phase2 merge-phase3 merge-phase4 merge-phase5 merge-phase6 merge-phase7 merge-phase8 merge-phase9
 .PHONY: dev dev-api test seed seed-dev migrate db-up db-down worktrees status test-integration deploy-prod prod-migrate deploy-prod-migrate dev-all dev-frontend
@@ -32,6 +32,10 @@ PORT ?= 8000
 
 help:  ## Show this help message
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+tidy:  ## Sweep local generated artifacts
+	rm -rf playwright-report/ htmlcov/ .coverage coverage.xml dogfood-output/ .playwright-mcp/ frontend/test-results/ frontend/coverage/ .pytest_cache/ .ruff_cache/
+	find . -maxdepth 1 -name "*.png" -type f -delete
 
 init:  ## Initialize project with new name (Usage: make init NAME=your-project)
 	@if [ -z "$(NAME)" ]; then echo "Usage: make init NAME=your-project"; exit 1; fi
