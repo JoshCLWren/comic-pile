@@ -234,6 +234,21 @@ Success hierarchy:
 - truthful no-work completion when the shared executable pool is empty;
 - optional PR polishing while executable issues remain: policy failure.
 
+## Product acceptance for PRDs and epics
+
+Child closure is evidence of progress, not sufficient evidence that a product epic's acceptance scenarios work. Parent PRD and epic issues require an explicit product-acceptance stage before they may be marked complete.
+
+See [`docs/PRODUCT_ACCEPTANCE_PROTOCOL.md`](PRODUCT_ACCEPTANCE_PROTOCOL.md) for the full acceptance workflow, comment structure, and regression targets.
+
+Key rules for factory workers:
+
+- When all children of a parent PRD/epic are closed, the parent is not automatically done. The next action is acceptance verification against integrated current `main`.
+- Acceptance must verify each parent acceptance criterion as pass/fail/not-applicable with evidence. UI/workflow criteria require focused Chromium/E2E coverage or equivalent reproducible browser verification.
+- A failed criterion must produce or reference an executable follow-up issue. The parent remains open.
+- Factory metadata must not close a parent solely because GitHub sub-issue completion reaches 100%.
+- Duplicate factory PRs that attempt to close already-delivered child work do not satisfy product acceptance.
+- The acceptance report is posted as a durable comment on the parent issue using the `<!-- product-acceptance:v1 -->` marker.
+
 ## Markers and leases
 
 Use the existing canonical marker schemas:
@@ -249,6 +264,7 @@ Use the existing canonical marker schemas:
 - needs human: `<!-- comic-pile-factory-needs-human-v2:<sha-or-issue> -->`
 - released: `<!-- comic-pile-factory-claim-released-v3:<target>:<worker>:<epoch>:<reason> -->`
 - merge closure: `<!-- comic-pile-factory-merge-closure-v1:pr-<pr>:issue-<issue> -->`
+- product acceptance: `<!-- product-acceptance:v1 -->`
 
 ## Durable resume packet
 
