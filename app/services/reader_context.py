@@ -34,7 +34,6 @@ from app.schemas.reader_context import (
     ReaderContextSeries,
 )
 from app.services.ownership import get_owned_issue_or_404
-from comic_pile.dependencies import build_blocking_explanation
 
 COMICVINE_PROVIDER = "comicvine"
 MAX_RECENT_RATINGS = 5
@@ -552,32 +551,55 @@ def _build_edge_explanation(
     target_label: str,
     source_issue_number: str | None,
     source_thread_title: str | None,
+    current_issue_id: int | None = None,
+    source_issue_id: int | None = None,
+    target_issue_id: int | None = None,
+    target_issue_number: str | None = None,
     satisfaction: str | None = None,
 ) -> str:
     """Return a human-readable sentence explaining a persisted reader-context edge.
 
-    Dependency edges reuse ``build_blocking_explanation`` — the same copy
-    generator as the queue's blocked-threads list — so wording stays consistent
-    app-wide. Explanations identify comics with human identity only; raw
-    internal database identifiers must never be rendered. Continuity edges use
-    truthful per-satisfaction templates because their gate can differ from the
-    source endpoint.
+    Dependency edges use asymmetric copy relative to the current issue: when the
+    current issue is the prerequisite the copy reads "you can read X now, Y
+    waits on it"; when the current issue is the target the copy reads "you must
+    read X first". Continuity edges use truthful per-satisfaction templates whose
+    gate can differ from the source endpoint. Explanations identify comics with
+    human identity only; raw internal database identifiers must never be
+    rendered.
 
     Args:
         kind: The type of edge.
         source_label: Human-readable source label (thread title + issue number).
         target_label: Human-readable target label (thread title + issue number).
-        source_issue_number: Source issue number, when resolvable.
-        source_thread_title: Source thread title, when resolvable.
+        source_issue_number: Source sequential issue number, when resolvable.
+        source_thread_title: Thread title owning the source issue.
+        current_issue_id: The active rolled issue id; None falls back to symmetric copy.
+        source_issue_id: Database id of the source issue (required for direction).
+        target_issue_id: Database id of the target issue (required for direction).
+        target_label: Human-readable target label, duplicated so dependency
+            clauses can reference the downstream endpoint without re-tokenising.
+        target_issue_number: Target sequential issue number for dependency output.
         satisfaction: Continuity-rule satisfaction type, for continuity edges.
 
     Returns:
         A concise explanation sentence.
     """
     if kind == "dependency":
-        if source_issue_number is not None and source_thread_title is not None:
-            return build_blocking_explanation(source_issue_number, source_thread_title)
-        return f"Blocked by {source_label}"
+        if current_issue_id is not None and source_issue_id is not None and current_issue_id == source_issue_id:
+            downstream = (
+                f"{target_label or 'An issue'} waits on it"
+                if target_label
+                else "An issue waits on it"
+            )
+            return f"{source_label} can be read now. {downstream}."
+        if current_issue_id is not None and target_issue_id is not None and current_issue_id == target_issue_id:
+            return f"You must read {source_label} first"
+        readable = (
+            f"{source_label} can be read"
+            if source_label and source_thread_title
+            else "This issue can be read"
+        )
+        return f"{readable}, but blocks {target_label}" if target_issue_number and target_label else readable
     if satisfaction in ("item_read", "all_members_read"):
         return f"{source_label} must be read before {target_label}"
     return f"{target_label} waits on a continuity checkpoint before it can be read"
@@ -587,12 +609,15 @@ async def _local_edges(
     db: AsyncSession,
     user_id: int,
     neighborhood_ids: set[int],
+    current_issue_id: int,
 ) -> list[ReaderContextEdge]:
     """Load bounded one-hop dependency/continuity edges touching the neighborhood.
 
     Each edge carries human-readable source and target labels (issue number
     plus thread title) plus both thread identifiers so callers can link each
     endpoint to its thread without surfacing raw database identifiers.
+    ``current_issue_id`` drives asymmetric explanation copy so the reader
+    context always shows the direction relative to the currently served comic.
 
     Continuity rules mirrored from legacy dependencies are excluded so each
     persisted edge is represented exactly once. Only edges whose endpoint
@@ -603,6 +628,9 @@ async def _local_edges(
         db: Async database session.
         user_id: Authenticated owner of the requested issue.
         neighborhood_ids: Local-chain issue identifiers.
+        current_issue_id: The issue being served by the active roll; necessary
+            for reader-facing explanation copy that distinguishes outgoing
+            prerequisites from incoming blockers.
 
     Returns:
         At most 20 deterministically ordered one-hop edges.
@@ -732,6 +760,10 @@ async def _local_edges(
                     target_label=_human_label(target_label),
                     source_issue_number=source_number,
                     source_thread_title=source_title,
+                    current_issue_id=current_issue_id,
+                    source_issue_id=dependency.source_issue_id,
+                    target_issue_id=dependency.target_issue_id,
+                    target_issue_number=target_number,
                 ),
             )
         )
@@ -765,6 +797,10 @@ async def _local_edges(
                     target_label=_human_label(target_label),
                     source_issue_number=source_number,
                     source_thread_title=source_title,
+                    current_issue_id=current_issue_id,
+                    source_issue_id=rule.source_id,
+                    target_issue_id=rule.target_id,
+                    target_issue_number=target_number,
                     satisfaction=rule.satisfaction_type,
                 ),
             )
@@ -880,7 +916,7 @@ async def get_reader_context(
         thread_level_group_ids=thread_level_group_ids,
     )
     edges = await _local_edges(
-        db, user_id, {candidate.id for candidate in neighborhood}
+        db, user_id, {candidate.id for candidate in neighborhood}, issue_id
     )
 
     return ReaderContextResponse(
