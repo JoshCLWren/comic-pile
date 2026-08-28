@@ -1,5 +1,5 @@
 import Tooltip from '../../../components/Tooltip'
-import type { ReaderContextCrossover, ReaderContextResponse } from '../../../services/api-reader-context'
+import type { ReaderContextResponse } from '../../../services/api-reader-context'
 import { RATING_THRESHOLD, getDieDirection } from '../utils'
 import type { RatingThread } from '../types'
 import { SeriesPanel } from './SeriesPanel'

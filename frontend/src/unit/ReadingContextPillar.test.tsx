@@ -4,11 +4,6 @@ import { MemoryRouter } from 'react-router-dom'
 import { ReadingContextPillar } from '../pages/RollPage/components/ReadingContextPillar'
 import type { ReaderContextResponse } from '../types'
 
-vi.mock('../services/api-issues', () => ({
-  issuesApi: {
-    getReaderContext: vi.fn(),
-  },
-}))
 vi.mock('../pages/RollPage/components/ReadingOrderGroups', () => ({
   ReadingOrderGroups: () => null,
 }))
@@ -21,8 +16,6 @@ vi.mock('../pages/RollPage/components/ReadingPathPanel', () => ({
 vi.mock('../pages/RollPage/components/ContinuityReadinessSummary', () => ({
   ContinuityReadinessSummary: () => null,
 }))
-
-import { issuesApi } from '../services/api-issues'
 
 const ratingThread = {
   id: 7,
@@ -70,7 +63,6 @@ const baseContext: ReaderContextResponse = {
 }
 
 function renderPillar(context: ReaderContextResponse) {
-  vi.mocked(issuesApi.getReaderContext).mockResolvedValue(context)
   return render(
     <MemoryRouter>
       <ReadingContextPillar
@@ -80,27 +72,18 @@ function renderPillar(context: ReaderContextResponse) {
         onRefreshThread={vi.fn()}
         rolledResult={null}
         currentDie={6}
+        readerContext={context}
+        isReaderContextLoading={false}
+        readerContextError={null}
       />
     </MemoryRouter>,
   )
 }
 
-describe('ReadingContextPillar thread-level crossover', () => {
-  it('shows a thread-level membership under Current Issue Crossovers and never renders #?', async () => {
+describe('ReadingContextPillar dependency and continuity edges', () => {
+  it('renders dependency and continuity edges when present', async () => {
     const context: ReaderContextResponse = {
       ...baseContext,
-      crossovers: [
-        {
-          id: 55,
-          name: 'Swamp Thing AUDIT-TEST',
-          applies_to_current_issue: true,
-          membership_kind: 'thread',
-          next_member: null,
-          average_rating: null,
-          ratings_count: 0,
-          read_count: 0,
-        },
-      ],
       local_chain: {
         issues: [
           {
@@ -110,49 +93,37 @@ describe('ReadingContextPillar thread-level crossover', () => {
             status: 'unread',
             relation: 'current',
             rating: null,
-            crossover_memberships: [
-              { id: 55, name: 'Swamp Thing AUDIT-TEST' },
-            ],
+            crossover_memberships: [],
           },
         ],
-        edges: [],
+        edges: [
+          {
+            id: 11,
+            kind: 'dependency',
+            source_issue_id: 98,
+            target_issue_id: 101,
+            source_thread_id: 7,
+            target_thread_id: 7,
+            source_label: 'Animal Man',
+            target_label: 'Swamp Thing',
+            note: null,
+            explanation: 'Blocked by Animal Man',
+          },
+        ],
       },
     }
 
     renderPillar(context)
 
     await waitFor(() =>
-      expect(screen.getByText('Swamp Thing AUDIT-TEST')).toBeInTheDocument(),
+      expect(screen.getByText('Dependency & Continuity Edges')).toBeInTheDocument(),
     )
-    expect(screen.getByText(/Current Issue Crossovers/i)).toBeInTheDocument()
-    expect(screen.queryByText('#?')).not.toBeInTheDocument()
+    expect(screen.getByText('Blocked by Animal Man')).toBeVisible()
   })
 
-  it('renders words instead of #? when an upcoming crossover cannot resolve a member', async () => {
-    const context: ReaderContextResponse = {
-      ...baseContext,
-      crossovers: [
-        {
-          id: 56,
-          name: 'Moving Thread Crossover',
-          applies_to_current_issue: false,
-          membership_kind: 'thread',
-          next_member: null,
-          average_rating: null,
-          ratings_count: 0,
-          read_count: 0,
-        },
-      ],
-    }
+  it('suppresses empty panels when no edges exist', async () => {
+    renderPillar(baseContext)
 
-    renderPillar(context)
-
-    await waitFor(() =>
-      expect(screen.getByText('Moving Thread Crossover')).toBeInTheDocument(),
-    )
-    expect(screen.queryByText('#?')).not.toBeInTheDocument()
-    expect(
-      screen.getByText(/issue unknown — membership covers a moving thread/i),
-    ).toBeInTheDocument()
+    expect(screen.queryByText('Dependency & Continuity Edges')).not.toBeInTheDocument()
   })
 })
