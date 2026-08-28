@@ -1,9 +1,11 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 import { RATING_THRESHOLD } from '../pages/RollPage/utils'
+import { renderWithClient as render } from './queryTestWrapper'
+
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 
 vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
@@ -28,6 +30,30 @@ vi.mock('../hooks/useReaderContext', () => ({
   useReaderContext: () => ({
     context: null,
     isLoading: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+}))
+vi.mock('../hooks/useContinuityReadiness', () => ({
+  useContinuityReadiness: () => ({
+    readiness: null,
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+}))
+vi.mock('../hooks/useDependencyGroups', () => ({
+  useDependencyGroups: () => ({
+    groups: [],
+    isLoading: false,
+    error: null,
+  }),
+}))
+vi.mock('../hooks/useRollBootstrap', () => ({
+  useRollBootstrap: () => ({
+    data: null,
+    isPending: false,
+    isError: false,
     error: null,
     refetch: vi.fn(),
   }),

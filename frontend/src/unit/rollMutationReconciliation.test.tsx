@@ -1,4 +1,4 @@
-import { act, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../contexts/ToastProvider'
 import {
@@ -10,7 +10,6 @@ import {
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
-import { renderHookWithClient as renderHook } from './queryTestWrapper'
 
 vi.mock('../services/rollBootstrapApi', () => ({
   rollBootstrapApi: {
@@ -19,7 +18,7 @@ vi.mock('../services/rollBootstrapApi', () => ({
 }))
 
 const mockedBootstrap = vi.mocked(rollBootstrapApi.get)
-const innerWrapper = ({ children }: { children: React.ReactNode }) => (
+const wrapper = ({ children }: { children: React.ReactNode }) => (
   <ToastProvider>{children}</ToastProvider>
 )
 
@@ -111,7 +110,7 @@ describe('Roll mutation reconciliation', () => {
     const reconciled = bootstrapState(8, null)
     mockedBootstrap.mockResolvedValue(initial)
 
-    const { result } = renderHook(() => useRollBootstrap(), { innerWrapper })
+    const { result } = renderHook(() => useRollBootstrap(), { wrapper })
     await waitFor(() => expect(result.current.data).toBe(initial))
 
     act(() => {
@@ -145,7 +144,7 @@ describe('Roll mutation reconciliation', () => {
     const later = bootstrapState(10, 9)
     mockedBootstrap.mockResolvedValueOnce(initial).mockResolvedValueOnce(later)
 
-    const { result } = renderHook(() => useRollBootstrap(), { innerWrapper })
+    const { result } = renderHook(() => useRollBootstrap(), { wrapper })
     await waitFor(() => expect(result.current.data).toBe(initial))
 
     vi.useFakeTimers()
@@ -174,7 +173,7 @@ describe('Roll mutation reconciliation', () => {
     const initial = bootstrapState(6, 7)
     mockedBootstrap.mockResolvedValue(initial)
 
-    const { result, unmount } = renderHook(() => useRollBootstrap(), { innerWrapper })
+    const { result, unmount } = renderHook(() => useRollBootstrap(), { wrapper })
     await waitFor(() => expect(result.current.data).toBe(initial))
 
     act(() => {
