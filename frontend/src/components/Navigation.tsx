@@ -301,11 +301,11 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
 
   return (
     <>
-      <nav
-        className="fixed bottom-0 left-0 top-0 z-40 hidden w-56 flex-col border-r border-[var(--glass-border)] bg-[var(--bg-darker)] md:flex"
-        role="navigation"
-        aria-label="Desktop navigation"
-      >
+<nav
+  className="fixed bottom-0 left-0 top-0 z-40 hidden w-72 flex-col border-r border-[var(--glass-border)] bg-[var(--bg-darker)] md:flex"
+  role="navigation"
+  aria-label="Desktop navigation"
+>
         <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 py-4">
           {MAIN_NAV_ITEMS.map((item) => renderNavItem(item, isActive(item.path), true))}
           <div className="my-2 border-t border-[var(--glass-border)]" aria-hidden="true" />
@@ -319,11 +319,11 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
           ) : username ? (
             <span className="block truncate text-xs font-medium text-[var(--theme-text-muted)]">{username}</span>
           ) : null}
-          <div
-            className="mt-2 flex items-center gap-1 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-1"
-            role="group"
-            aria-label="Appearance"
-          >
+<div
+  className="mt-2 flex flex-wrap items-center justify-center gap-1 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-1"
+  role="group"
+  aria-label="Appearance"
+>
             <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--theme-text-muted)' }}>Theme</span>
             {APPEARANCE_OPTIONS.map((option) => (
               <button
