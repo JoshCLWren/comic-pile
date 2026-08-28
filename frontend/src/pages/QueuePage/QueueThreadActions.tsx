@@ -47,7 +47,13 @@ export default function QueueThreadActions({
       role="group"
       aria-label={`Actions for ${title}`}
     >
-      <button type="button" aria-label="Read" disabled={readDisabled} title={readDisabled ? readDisabledReason ?? 'Blocked by dependency' : undefined} onClick={stopCardClick(onRead)} className="px-3 py-2 rounded-lg bg-amber-600/20 text-amber-300 text-xs font-bold hover:bg-amber-600/30 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-amber-600/20">📖 Read</button>
+      {readDisabled ? (
+        <Tooltip content={readDisabledReason ?? 'Blocked by dependency'}>
+          <button type="button" aria-label="Read" disabled title={readDisabledReason ?? 'Blocked by dependency'} onClick={(event: React.MouseEvent<HTMLButtonElement>) => event.stopPropagation()} className="px-3 py-2 rounded-lg bg-amber-600/20 text-amber-300 text-xs font-bold hover:bg-amber-600/30 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-amber-600/20">📖 Read</button>
+        </Tooltip>
+      ) : (
+        <button type="button" aria-label="Read" onClick={stopCardClick(onRead)} className="px-3 py-2 rounded-lg bg-amber-600/20 text-amber-300 text-xs font-bold hover:bg-amber-600/30">📖 Read</button>
+      )}
       <button type="button" aria-label="Edit" onClick={stopCardClick(onEdit)} className="px-3 py-2 rounded-lg bg-white/5 text-stone-300 text-xs font-bold hover:bg-white/10">✏️ Edit</button>
       <Tooltip content={snoozeTooltip}>
         <button
