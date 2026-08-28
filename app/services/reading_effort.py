@@ -24,7 +24,7 @@ Recommendation-context snapshot contract
 Roll events may persist a ``recommendation_context`` JSON payload recording
 the effort estimate that existed at decision time:
 
-``{"context_version": 1, "selected_candidate": {...effort fields...}}``
+``{"context_version": 2, "selected_candidate": {...effort fields...}}``
 
 ``RECOMMENDATION_CONTEXT_VERSION`` is bumped whenever the payload shape
 changes incompatibly. Readers must tolerate historical rows with a NULL or
@@ -99,7 +99,7 @@ ERA_PRIOR_MODERN_MINUTES: Final[float] = 17.0
 
 _YEAR_PATTERN: Final[re.Pattern[str]] = re.compile(r"(19|20)\d{2}")
 
-RECOMMENDATION_CONTEXT_VERSION: Final[int] = 1
+RECOMMENDATION_CONTEXT_VERSION: Final[int] = 2
 RECOMMENDATION_CONTEXT_VERSION_KEY: Final[str] = "context_version"
 RECOMMENDATION_CONTEXT_CANDIDATE_KEY: Final[str] = "selected_candidate"
 
