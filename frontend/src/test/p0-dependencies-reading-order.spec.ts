@@ -39,11 +39,18 @@ async function createDependency(
 ): Promise<void> {
   const token = await getAuthToken(page)
   const csrf = await getCsrfToken(page, token)
+
+  const sourceIssues = await listIssues(page, sourceId)
+  const targetIssues = await listIssues(page, targetId)
+
+  const sourceIssue = sourceIssues.sort((a, b) => b.position - a.position)[0]
+  const targetIssue = targetIssues.sort((a, b) => a.position - b.position)[0]
+
   const response = await page.request.post('/api/v1/dependencies/', {
     data: {
-      source_type: 'thread',
-      source_id: sourceId,
-      target_id: targetId,
+      source_type: 'issue',
+      source_id: sourceIssue.id,
+      target_id: targetIssue.id,
     },
     headers: {
       'Content-Type': 'application/json',
@@ -92,8 +99,8 @@ test.describe('DEP-001 + ORDER-001: Dependency and reading order', () => {
       headers: { Authorization: `Bearer ${token}` },
     })
     expect(response.ok()).toBeTruthy()
-    const deps = (await response.json()) as { dependencies: unknown[] }
-    expect(deps.dependencies.length).toBeGreaterThanOrEqual(1)
+    const data = await response.json()
+    expect((data.blocking?.length || 0) + (data.blocked_by?.length || 0)).toBeGreaterThanOrEqual(1)
   })
 
   test('blocked thread shows dependency indicator in queue', async ({
@@ -191,8 +198,8 @@ test.describe('DEP-001 + ORDER-001: Dependency and reading order', () => {
       headers: { Authorization: `Bearer ${token}` },
     })
     expect(depsResponse.ok()).toBeTruthy()
-    const deps = (await depsResponse.json()) as { dependencies: unknown[] }
-    expect(deps.dependencies.length).toBeGreaterThanOrEqual(1)
+    const depsData = await depsResponse.json()
+    expect((depsData.incoming?.length || 0) + (depsData.outgoing?.length || 0)).toBeGreaterThanOrEqual(1)
   })
 
   test('dependency can be deleted', async ({ authenticatedPage }) => {
@@ -216,10 +223,11 @@ test.describe('DEP-001 + ORDER-001: Dependency and reading order', () => {
     const depsResponse = await page.request.get(`/api/v1/threads/${threadB.id}/dependencies`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-    const deps = (await depsResponse.json()) as { dependencies: Array<{ id: number }> }
-    expect(deps.dependencies.length).toBeGreaterThanOrEqual(1)
+    const depsData = await depsResponse.json()
+    const allDeps = [...(depsData.blocking || []), ...(depsData.blocked_by || [])]
+    expect(allDeps.length).toBeGreaterThanOrEqual(1)
 
-    const depId = deps.dependencies[0].id
+    const depId = allDeps[0].id
     const csrf = await getCsrfToken(page, token)
     const deleteResponse = await page.request.delete(`/api/v1/dependencies/${depId}`, {
       headers: {
