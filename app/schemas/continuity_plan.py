@@ -132,6 +132,10 @@ class ContinuityPlanWrite(BaseModel):
         # Validate convergence gate references
         for node in self.nodes:
             if node.convergence_gate:
+                if node.node_type not in ("issue", "crossover"):
+                    raise ValueError(
+                        f"convergence gate on node '{node.id}' is only allowed on issue/crossover nodes"
+                    )
                 gate_ids = [target.node_id for target in node.convergence_gate]
                 if len(gate_ids) != len(set(gate_ids)):
                     raise ValueError(

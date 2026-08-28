@@ -198,7 +198,11 @@ async def _replace_compiled_rules(
     for source_type, source_id, target_type, target_id, _sat, _extra in edges_to_add:
         source_key = (source_type, source_id)
         target_key = (target_type, target_id)
-        if source_key in all_plan_keys and target_key in all_plan_keys:
+        if (
+            source_key in all_plan_keys
+            and target_key in all_plan_keys
+            and source_key != target_key
+        ):
             graph_edges.append((source_key, target_key))
 
     from app.continuity_plan_readiness import _detect_plan_cycles
@@ -244,7 +248,7 @@ async def _replace_compiled_rules(
                     "target_node_id": f"{target_type}-{target_id}",
                 },
             )
-        if await _would_create_cycle(
+        if satisfaction_type != "converged" and await _would_create_cycle(
             db,
             user_id=user_id,
             source_type=source_type_cast,
