@@ -1,8 +1,8 @@
 """Add recommendation algorithm version and control state to Event
 
-Revision ID: c85900000001
-Revises: c85800000001
-Create Date: 2026-08-25 00:00:00.000000
+Revision ID: c85c00000001
+Revises: 05f8245be921
+Create Date: 2026-08-28 00:00:00.000000
 
 """
 from collections.abc import Sequence
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "c85900000001"
-down_revision: str | Sequence[str] | None = "c85800000001"
+revision: str = "c85c00000001"
+down_revision: str | Sequence[str] | None = "05f8245be921"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

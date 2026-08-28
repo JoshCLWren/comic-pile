@@ -32,7 +32,7 @@ async def test_roll_contextual_mode_records_canonical_version(
     _ = sample_data
 
     # Ensure contextual mode (default)
-    with patch.dict(os.environ, {"RECOMMENDATION_CONTROL_MODE": "contextual"}, clear=True):
+    with patch.dict(os.environ, {"RECOMMENDATION_CONTROL_MODE": "contextual"}):
         clear_settings_cache()
 
         response = await auth_client.post("/api/roll/")
@@ -55,7 +55,7 @@ async def test_roll_legacy_mode_records_legacy_version(
     """Roll in legacy mode records legacy algorithm version and legacy control state."""
     _ = sample_data
 
-    with patch.dict(os.environ, {"RECOMMENDATION_CONTROL_MODE": "legacy"}, clear=True):
+    with patch.dict(os.environ, {"RECOMMENDATION_CONTROL_MODE": "legacy"}):
         clear_settings_cache()
 
         response = await auth_client.post("/api/roll/")
@@ -78,7 +78,7 @@ async def test_roll_legacy_mode_uses_pure_random_selection(
     """Legacy mode uses pure random selection (reason code = pure_random)."""
     _ = sample_data
 
-    with patch.dict(os.environ, {"RECOMMENDATION_CONTROL_MODE": "legacy"}, clear=True):
+    with patch.dict(os.environ, {"RECOMMENDATION_CONTROL_MODE": "legacy"}):
         clear_settings_cache()
 
         response = await auth_client.post("/api/roll/")
@@ -113,7 +113,7 @@ async def test_roll_random_intent_bypass_records_contextual_version(
     await async_db.commit()
 
     # Ensure contextual mode (not legacy)
-    with patch.dict(os.environ, {"RECOMMENDATION_CONTROL_MODE": "contextual"}, clear=True):
+    with patch.dict(os.environ, {"RECOMMENDATION_CONTROL_MODE": "contextual"}):
         clear_settings_cache()
 
         response = await auth_client.post("/api/roll/")
@@ -149,7 +149,7 @@ async def test_roll_random_intent_bypass_independent_of_legacy_mode(
     await async_db.commit()
 
     # Both legacy mode AND random intent active - legacy mode determines version/state
-    with patch.dict(os.environ, {"RECOMMENDATION_CONTROL_MODE": "legacy"}, clear=True):
+    with patch.dict(os.environ, {"RECOMMENDATION_CONTROL_MODE": "legacy"}):
         clear_settings_cache()
 
         response = await auth_client.post("/api/roll/")
@@ -184,7 +184,7 @@ async def test_roll_contextual_mode_with_momentum_records_weighted_reason(
     target_thread.last_activity_at = None  # Will be set by roll
     await async_db.commit()
 
-    with patch.dict(os.environ, {"RECOMMENDATION_CONTROL_MODE": "contextual"}, clear=True):
+    with patch.dict(os.environ, {"RECOMMENDATION_CONTROL_MODE": "contextual"}):
         clear_settings_cache()
 
         # Roll once
@@ -209,7 +209,7 @@ async def test_override_roll_records_algorithm_version(
     """Override roll records algorithm version and control state with empty reason codes."""
     _ = sample_data
 
-    with patch.dict(os.environ, {"RECOMMENDATION_CONTROL_MODE": "contextual"}, clear=True):
+    with patch.dict(os.environ, {"RECOMMENDATION_CONTROL_MODE": "contextual"}):
         clear_settings_cache()
 
         thread_id = sample_data["threads"][0].id
@@ -240,7 +240,7 @@ async def test_transition_legacy_to_contextual_resumes_safely(
     user_id = sample_data["user"].id
 
     # First roll in legacy mode
-    with patch.dict(os.environ, {"RECOMMENDATION_CONTROL_MODE": "legacy"}, clear=True):
+    with patch.dict(os.environ, {"RECOMMENDATION_CONTROL_MODE": "legacy"}):
         clear_settings_cache()
         response = await auth_client.post("/api/roll/")
         assert response.status_code == 200
@@ -256,7 +256,7 @@ async def test_transition_legacy_to_contextual_resumes_safely(
     await auth_client.post("/api/roll/dismiss-pending")
 
     # Second roll in contextual mode
-    with patch.dict(os.environ, {"RECOMMENDATION_CONTROL_MODE": "contextual"}, clear=True):
+    with patch.dict(os.environ, {"RECOMMENDATION_CONTROL_MODE": "contextual"}):
         clear_settings_cache()
         response = await auth_client.post("/api/roll/")
         assert response.status_code == 200
