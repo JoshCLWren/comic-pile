@@ -70,18 +70,19 @@ class TestLegacyModeEnabled:
             assert is_legacy_mode_enabled() is True
 
     def test_case_sensitivity(self) -> None:
-        """Control mode values are case-sensitive literals."""
+        """Control mode values are case-sensitive; 'Legacy' is invalid and fails safe."""
         with patch.dict(os.environ, {"RECOMMENDATION_CONTROL_MODE": "Legacy"}):
             clear_settings_cache()
-            # "Legacy" != "legacy" so should default to contextual
+            # "Legacy" != "legacy" so Pydantic Literal validation rejects it;
+            # is_legacy_mode_enabled catches the error and defaults to contextual.
             assert is_legacy_mode_enabled() is False
 
     def test_invalid_mode_defaults_to_contextual(self) -> None:
-        """Invalid control_mode values fall back to contextual (disabled)."""
+        """Invalid control_mode values fail safe to contextual (disabled)."""
         with patch.dict(os.environ, {"RECOMMENDATION_CONTROL_MODE": "invalid"}):
             clear_settings_cache()
-            # Pydantic Literal validation should reject, but if it passes,
-            # the equality check will fail and return False
+            # Pydantic Literal validation rejects the value;
+            # is_legacy_mode_enabled catches the error and defaults to contextual.
             assert is_legacy_mode_enabled() is False
 
 

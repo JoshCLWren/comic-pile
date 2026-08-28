@@ -7,7 +7,11 @@ selection, and leaves all durable data untouched.
 
 from __future__ import annotations
 
+import logging
+
 from app.config import get_recommendation_settings
+
+logger = logging.getLogger(__name__)
 
 # Canonical recommendation algorithm version used when contextual
 # weighting is active.
@@ -29,8 +33,15 @@ def is_legacy_mode_enabled() -> bool:
     A forced legacy run records ``LEGACY_ALGORITHM_VERSION`` and
     ``ALGORITHM_CONTROL_STATE_LEGACY_UNWEIGHTED`` in the roll event so
     metrics remain distinguishable.
+
+    If the configuration is invalid (e.g., unrecognized control mode value),
+    the function fails safe to contextual mode (legacy disabled).
     """
-    recommendation_settings = get_recommendation_settings()
+    try:
+        recommendation_settings = get_recommendation_settings()
+    except Exception:
+        logger.warning("Invalid recommendation settings; defaulting to contextual mode")
+        return False
     return recommendation_settings.control_mode == "legacy"
 
 
